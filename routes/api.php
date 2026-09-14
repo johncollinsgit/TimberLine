@@ -196,3 +196,6 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
             });
     });
 });
+
+Route::post('/trajectory/webhooks/plaid', [\App\Http\Controllers\Trajectory\WebhookController::class, 'plaid'])->middleware('throttle:120,1');
+Route::post('/trajectory/webhooks/sms', [\App\Http\Controllers\Trajectory\WebhookController::class, 'sms'])->middleware('throttle:60,1');

@@ -64,6 +64,8 @@ $catalog = [
     ],
 
     'capabilities' => [
+        'trajectory.personal' => ['display_name' => 'Personal trajectory', 'module_key' => 'trajectory'],
+        'trajectory.business' => ['display_name' => 'Business trajectory', 'module_key' => 'trajectory'],
         'dashboard.overview' => [
             'display_name' => 'Overview dashboard',
             'description' => 'Baseline overview and shell access.',
@@ -1305,6 +1307,18 @@ $catalog = [
                 'help_text' => 'QuickBooks access is owner/admin only, tenant-scoped, and imported on demand during beta.',
             ],
             'capabilities' => ['quickbooks.sync'],
+        ],
+        'trajectory' => [
+            'display_name' => 'Trajectory',
+            'description' => 'Know what is due, where money goes, and where your household and business are headed.',
+            'status' => 'beta', 'market_state' => 'INTERNAL_ONLY', 'channels' => ['both'],
+            'classification' => 'tenant-add-on', 'activation_policy' => 'operator_only',
+            'included_in_plans' => [], 'default_enabled' => false, 'default_setup_status' => 'not_started',
+            'dependencies' => [], 'billing_mode' => 'custom',
+            'visibility' => ['public_site' => false, 'app_store' => false, 'mobile_store' => false],
+            'cta_routing' => 'contact', 'category' => 'accounting', 'setup_effort' => 'guided',
+            'capabilities' => ['trajectory.personal', 'trajectory.business'],
+            'packages' => ['personal' => ['trajectory.personal'], 'business' => ['trajectory.business'], 'both' => ['trajectory.personal', 'trajectory.business']],
         ],
         'accounting_command_center' => [
             'display_name' => 'Accounting Command Center',

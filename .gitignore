@@ -28,3 +28,5 @@ yarn-error.log
 /test-results/click-path/
 /test-results/
 /.lighthouseci/
+
+/output/trajectory/

@@ -2656,3 +2656,15 @@
 - The agreement presents the $299 / $89 / $149 founder schedule, the exact
   monthly content-service limits, exclusions, photo-use responsibilities, and
   the Stripe recurring-authorization path before an operator sends it.
+
+## 2026-09-14 — Trajectory pilot dashboard
+
+- Added responsive Overview, Transactions, Bills & Goals, Wealth & Debt, Business,
+  and Connections views within the existing Everbranch shell and visual tokens.
+- Added actual/projected cash charts, scenario comparisons, spending heatmap,
+  category and period charts, debt payoff curves, metal basis/value, net-worth
+  history and household-support revenue targets, with accessible chart tables.
+- Added reviewed import, exact split, classification/undo, plan editing, partner
+  invitation, bank setup and SMS opt-in dialogs. Missing provider data and
+  provisional estimates remain explicit. Local desktop/phone browser checks
+  exercise charts, scenario selection, goals, corrections and saved preferences.

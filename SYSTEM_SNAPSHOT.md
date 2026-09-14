@@ -1758,3 +1758,21 @@ Scope guard:
   environment, refuses wildcard rollout, adds only one validated tenant slug,
   refreshes cached configuration with rollback on failure, and re-runs the safe
   agreement-readiness report.
+
+## Trajectory private financial planning Branch (2026-09-14)
+
+- `/trajectory` adds isolated household/business spaces, explicit partner sharing
+  and links, exact transaction allocations, reviewed imports and reconciliation,
+  bill schedules, goals, scenarios, debt estimates, reliance targets, and asset/
+  metals tracking. Trajectory is independent of Accounting Command Center.
+- Default-disabled pilot access uses the canonical module catalog/entitlements;
+  household membership never grants business financial access. Public checkout
+  remains closed and pilot preparation creates no charges or provider links.
+- Plaid bank synchronization, GoldAPI quotes and existing Twilio delivery are
+  adapters requiring provisioned provider access. QuickBooks snapshots remain
+  accounting truth; native sales/material evidence is read-only and non-additive.
+- The additive twelve-table schema and its MySQL recovery fixture preserve
+  records on rollback. Runbook: `docs/operations/trajectory-runbook.md`.
+- Real household/Modern Forestry statement reconciliation, production provider
+  acceptance and Stripe subscription lifecycle activation remain release gates;
+  local fictional data does not establish production readiness.
