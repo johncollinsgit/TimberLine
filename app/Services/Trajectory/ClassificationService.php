@@ -15,7 +15,7 @@ class ClassificationService
                 return [...$rule->data['classification'], 'reviewed' => true, 'explanation' => 'Your exact merchant rule: '.$rule->name];
             }
         }
-        $ambiguous = preg_match('/\b(amazon|amzn|walmart|wal-mart|target|paypal|venmo|transfer|payment|square|sq)\b/i', $merchant);
+        $ambiguous = preg_match('/\b(amazon|amzn|walmart|wal-mart|target|ebay|etsy|costco|paypal|venmo|transfer|payment|square|sq)\b/i', $merchant);
         $category = in_array($providerCategory, config('trajectory.categories'), true) ? $providerCategory : 'uncategorized';
         $defaults = $space->settings['discretionary_categories'] ?? config('trajectory.discretionary_defaults');
 

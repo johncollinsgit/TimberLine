@@ -26,13 +26,14 @@ class MedicalSharingService
         $today = now($space->timezone)->toDateString();
         if ($kind === 'medical_need') {
             abort_if(($data['submitted_on'] ?? $today) > $today, 422, 'Submission dates cannot be in the future.');
-            abort_if($data['status'] !== 'not_submitted' && empty($data['submitted_on']), 422, 'Record when this need was submitted.');
+            abort_if(! in_array($data['status'], ['not_submitted', 'unknown'], true) && empty($data['submitted_on']), 422, 'Record when this need was submitted.');
         }
         if ($kind === 'medical_bill') {
-            abort_if($data['billed_on'] > $today, 422, 'Record actual bills only.');
+            abort_if(($data['billed_on'] ?? '') > $today, 422, 'Record actual bills only.');
             abort_if($rows->where('kind', $kind)->contains(fn ($r) => ClassificationService::merchant($r->data['provider']) === ClassificationService::merchant($data['provider']) && mb_strtolower(trim($r->data['reference'])) === mb_strtolower(trim($data['reference']))), 422, 'This provider invoice is already tracked.');
             $paid = $rows->where('kind', 'medical_payment')->filter(fn ($r) => $record && ($r->data['medical_bill_record_id'] ?? null) === $record->id)->sum(fn ($r) => $r->data['amount_cents']);
             abort_if($data['billed_cents'] < $data['adjustment_cents'] + $data['paid_before_tracking_cents'] + $paid, 422, 'Adjustments and payments cannot exceed the bill.');
+            abort_if($data['confirmed'] && empty($data['next_due_on']), 422, 'Confirm the next unpaid date before confirming the plan.');
             abort_if($data['confirmed'] && $data['payment_cents'] <= 0 && $data['billed_cents'] > $data['adjustment_cents'] + $data['paid_before_tracking_cents'] + $paid, 422, 'Enter a positive payment for the remaining balance.');
             abort_if($record && $record->data['medical_need_record_id'] !== $data['medical_need_record_id'] && $rows->where('kind', 'medical_payment')->contains(fn ($r) => ($r->data['medical_bill_record_id'] ?? null) === $record->id), 422, 'Reassign payments before moving a bill to another need.');
             $candidate = new Record(['kind' => $kind, 'data' => $data]);
@@ -121,7 +122,7 @@ class MedicalSharingService
     /** Explicit invoice matches first, then consolidated provider payments oldest invoice first. */
     private function allocatePayments(Collection $records): array
     {
-        $bills = $records->where('kind', 'medical_bill')->sortBy(fn ($r) => $r->data['billed_on'].':'.str_pad((string) $r->id, 12, '0', STR_PAD_LEFT));
+        $bills = $records->where('kind', 'medical_bill')->sortBy(fn ($r) => ($r->data['billed_on'] ?? '9999-12-31').':'.str_pad((string) $r->id, 12, '0', STR_PAD_LEFT));
         $remaining = $bills->mapWithKeys(fn ($r) => [$r->id => max(0, $r->data['billed_cents'] - $r->data['adjustment_cents'] - $r->data['paid_before_tracking_cents'])])->all();
         $paid = [];
         $evidence = [];
@@ -186,8 +187,8 @@ class MedicalSharingService
                 $owed = max(0, $d['billed_cents'] - $d['adjustment_cents'] - $paid);
                 $bills[] = ['id' => $bill->id, 'name' => $bill->name, ...$d, 'paid_cents' => $paid, 'owed_cents' => $owed, 'evidence_ids' => array_values(array_unique($allocation['evidence'][$bill->id] ?? []))];
                 // Retain settled records to suppress a replaced perpetual provider schedule.
-                $debts[] = ['id' => $bill->id, 'name' => $bill->name, 'kind' => 'medical', 'medical_need_id' => $need->id, 'balance_cents' => $owed, 'apr_bps' => 0, 'payment_cents' => $d['confirmed'] ? $d['payment_cents'] : 0, 'next_due_on' => $d['next_due_on'] > $today->toDateString() ? $d['next_due_on'] : $today->addDay()->toDateString(), 'recurring_record_id' => $d['recurring_record_id'] ?? null];
-                if ($owed > 0 && (! $d['confirmed'] || $d['next_due_on'] <= $today->toDateString())) {
+                $debts[] = ['id' => $bill->id, 'name' => $bill->name, 'kind' => 'medical', 'medical_need_id' => $need->id, 'balance_cents' => $owed, 'apr_bps' => 0, 'payment_cents' => $d['confirmed'] ? $d['payment_cents'] : 0, 'next_due_on' => ($d['next_due_on'] ?? '') > $today->toDateString() ? $d['next_due_on'] : $today->addDay()->toDateString(), 'recurring_record_id' => $d['recurring_record_id'] ?? null];
+                if ($owed > 0 && (! $d['confirmed'] || ($d['next_due_on'] ?? '') <= $today->toDateString())) {
                     $issues[] = 'Review the payment amount and next unpaid date for '.$bill->name.'. Due or overdue confirmed payments are provisionally scheduled tomorrow.';
                 }
             }

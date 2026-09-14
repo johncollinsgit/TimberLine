@@ -3,6 +3,8 @@
 use App\Http\Controllers\Trajectory\TrajectoryController as Trajectory;
 use Illuminate\Support\Facades\Route;
 
+Route::get('/trajectory/welcome', fn () => view('trajectory.welcome'))->name('trajectory.welcome');
+
 Route::middleware(['auth', 'verified', 'throttle:120,1'])->prefix('trajectory')->group(function (): void {
     Route::get('/', [Trajectory::class, 'index'])->name('trajectory.index');
     Route::post('/invites/accept', [Trajectory::class, 'acceptInvite'])->name('trajectory.acceptInvite');

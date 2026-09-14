@@ -17,6 +17,14 @@ assert.equal(new URL(url).hostname, '127.0.0.1', 'This mutating browser test is 
   await page.goto(`${url}/trajectory`);
   await page.getByText('Where you’re headed', { exact: true }).waitFor();
   await page.screenshot({ path: 'output/trajectory/overview.png' });
+  await page.getByRole('heading', { name: 'Your subscriptions', exact: true }).waitFor();
+  await page.getByRole('heading', { name: 'Upcoming loan payments', exact: true }).waitFor();
+  for (const [tab, heading] of [['accounts','Your accounts'],['history','The story behind your spending'],['budget','Give every category a direction']]) {
+    await page.locator(`[data-tab="${tab}"]`).click();
+    await page.getByRole('heading', { name: heading, exact: true }).waitFor();
+    await page.screenshot({ path: `output/trajectory/${tab}.png` });
+  }
+  await page.locator('[data-tab="overview"]').click();
   await page.locator('#tr-scenario').selectOption({ label: 'Spend 20% less' });
   await page.waitForResponse(r => r.url().includes('scenario_id=') && r.status() === 200);
   await page.locator('[data-chart="tr-forecast"]').click();

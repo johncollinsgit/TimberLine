@@ -235,3 +235,21 @@ corrections, duplicate/overpayment rejection, leap-day payoff, recurring
 replacement, and household/business authorization. The local browser smoke
 covers creating needs, bills and expected shares plus accessible chart tables.
 No new migration or production medical data is required to enable this feature.
+
+## Standalone shell and private household imports (2026-09-14)
+
+Marketing lives at `/trajectory/welcome`; authenticated finance remains at `/trajectory` with its own navigation and a return link to Everbranch. No separate identity store or new public checkout is introduced. All API membership and entitlement checks remain server-side.
+
+Concierge import (private files; default is a full validating rollback):
+
+```sh
+php artisan trajectory:import-household --owner=verified-owner@example.com --space=HOUSEHOLD_ID --transactions=/private/monarch.csv --observations=/private/observations.json --chase=/private/chase.csv --chase-account=card-key --balances=/private/monarch-balances.csv
+```
+
+Only add `--apply` after inspecting the validated private payload and verifying the intended household. Accounts require an explicit kind, a dated balance or null, and a source. The manifest supports dated budget targets, strictly validated observed statement transactions, evidence corrections to exact source IDs and amounts, and ordered record references. It does not create users, enable provider access, invite partners, activate billing, or send messages. Corrections replay without overwriting later user reviews. Never import the same account from two aggregators as independent ledgers; reconcile that source identity first.
+
+Monarch CSV preserves its original row and source categories; Chase preserves posted activity with stable occurrence identities for identical legitimate purchases. Cash balance exports only include explicitly typed cash accounts. Unknown/manual liability rows are excluded, and cash observations never fabricate a historical net-worth series. Budget imports retain their source version; the latest dated version is the default comparison, not a sum of old plans. Receipts are evidence until matched to a posted transaction.
+
+Subscriptions show confirmed schedules and unconfirmed receipt/history evidence separately. Expired/canceled evidence never establishes a future renewal. Payment notices add only the verified next payment when no linked schedule/debt already covers it. Missing APRs and future minimums remain coverage gaps, with unknown card purchases affecting debt rather than immediate cash. Recorded interest by account replaces overlapping lender period totals; a YTD total cannot fabricate individual monthly charges. Fine-weight metal lots avoid applying purity twice; gross-weight lots apply purity before troy-ounce valuation.
+
+Validation: run `tests/Feature/Trajectory`, the complete existing suite including Shopify gates, `npm run build`, and `tests/e2e/trajectory-smoke.cjs` against the isolated fictional local fixture. The smoke script checks standalone accounts/history/budget navigation, subscription/payment cards, chart evidence, existing medical sharing, and mobile width. No schema change is required for these encrypted record additions. Run the migration linter anyway; production release remains GitHub test/build plus migration safety gate, then Forge atomic activation. Rollback disables the Branch without deleting records.

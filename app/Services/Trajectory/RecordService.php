@@ -26,6 +26,7 @@ class RecordService
             $rules[$key] = [...$rules[$key], ...match ($field['type']) {
                 'money' => ['integer', 'between:-100000000000,100000000000'],
                 'percent' => ['integer', 'between:0,10000'],
+                'rate' => ['integer', 'between:0,100000'],
                 'integer' => ['integer', 'min:0', 'max:1000000000'],
                 'debt_record', 'recurring_record', 'medical_need_record', 'medical_bill_record' => ['integer', Rule::exists('trajectory_records', 'id')->where('space_id', $space->id)->where('kind', substr($field['type'], 0, -7))->where('active', true)],
                 'account' => ['integer', Rule::exists('trajectory_accounts', 'id')->where('space_id', $space->id)],
@@ -45,12 +46,49 @@ class RecordService
             if (! isset($data[$key])) {
                 continue;
             }
-            if (in_array($field['type'], ['money', 'percent', 'integer', 'account', 'debt_record', 'recurring_record', 'medical_need_record', 'medical_bill_record'], true)) {
+            if (in_array($field['type'], ['money', 'percent', 'rate', 'integer', 'account', 'debt_record', 'recurring_record', 'medical_need_record', 'medical_bill_record'], true)) {
                 $data[$key] = (int) $data[$key];
             }
             if ($field['type'] === 'boolean') {
                 $data[$key] = (bool) $data[$key];
             }
+        }
+        if ($kind === 'debt' && ! empty($data['cash_cadence'])) {
+            abort_unless(! empty($data['cash_payment_cents']) && ! empty($data['cash_next_due_on']), 422, 'A separate cash schedule needs its amount and next withdrawal date.');
+        }
+        if ($kind === 'receipt') {
+            abort_unless($data['amount_cents'] > 0 && $data['purchased_on'] <= now($space->timezone)->toDateString(), 422, 'Use an actual receipt date and positive total.');
+            if (! empty($data['transaction_id'])) {
+                $tx = Transaction::where('space_id', $space->id)->findOrFail($data['transaction_id']);
+                abort_unless(! $tx->pending && ! $tx->removed && $tx->amount_cents === -$data['amount_cents'], 422, 'Match a posted purchase with the same total.');
+            }
+        }
+        if ($kind === 'interest_statement') {
+            abort_unless($data['period_start'] <= $data['period_end'] && $data['period_end'] <= now($space->timezone)->toDateString(), 422, 'Use a completed interest observation period.');
+            abort_unless(in_array(Account::findOrFail($data['account_id'])->kind, ['credit', 'loan'], true), 422, 'Choose a debt account.');
+        }
+        if ($kind === 'payment_notice') {
+            abort_unless(in_array(Account::findOrFail($data['account_id'])->kind, ['credit', 'loan'], true), 422, 'Choose a loan or credit account.');
+            abort_unless($data['amount_cents'] > 0, 422, 'Payment must be positive.');
+            if (! empty($data['payment_account_id'])) {
+                abort_unless(Account::findOrFail($data['payment_account_id'])->kind === 'cash', 422, 'Choose a cash payment account.');
+            }
+        }
+        if ($kind === 'medical_bill' && ! isset($data['billed_on'])) {
+            $data['billed_on'] = null;
+        }
+        if ($kind === 'medical_bill' && ! isset($data['next_due_on'])) {
+            $data['next_due_on'] = null;
+        }
+        if ($kind === 'debt' && ($data['interest_method'] ?? 'monthly') === 'actual_365') {
+            abort_unless(! empty($data['interest_paid_through']) && $data['interest_paid_through'] < $data['next_due_on'], 422, 'Daily interest needs the previous paid-through date before the next payment.');
+            abort_if(! empty($data['cash_cadence']), 422, 'Daily interest uses the loan payment cadence directly.');
+        }
+        if ($kind === 'debt') {
+            foreach (['balance_cents', 'payment_cents', 'escrow_cents', 'fees_cents', 'cash_payment_cents'] as $field) {
+                abort_if(($data[$field] ?? 0) < 0, 422, 'Debt amounts cannot be negative.');
+            }
+            abort_if(($data['opening_accrued_interest_cents'] ?? 0) < 0, 422, 'Opening accrued interest cannot be negative.');
         }
         if ($kind === 'metal') {
             abort_unless($data['purity_bps'] > 0, 422, 'Purity must be positive.');
@@ -65,7 +103,8 @@ class RecordService
             abort_unless($data['period_end'] >= $data['period_start'], 422);
         }
         if ($kind === 'debt' && ! empty($data['account_id'])) {
-            abort_unless(in_array(Account::findOrFail($data['account_id'])->kind, ['credit', 'loan'], true), 422, 'Link a credit or loan account.');
+            $account = Account::findOrFail($data['account_id']);
+            abort_unless($account->kind === ($data['kind'] === 'credit' ? 'credit' : 'loan'), 422, 'Debt type must match the linked account.');
         }
         if (! empty($data['transaction_id'])) {
             abort_unless(Transaction::where('space_id', $space->id)->whereKey($data['transaction_id'])->exists(), 422);
@@ -94,6 +133,11 @@ class RecordService
             $this->validate($space, $kind, $data);
             if (str_starts_with($kind, 'medical_')) {
                 $data = app(MedicalSharingService::class)->prepare($space, $kind, $data, $record);
+            }
+            if ($kind === 'interest_statement') {
+                foreach (Record::where('space_id', $space->id)->where('kind', 'interest_statement')->where('active', true)->get() as $other) {
+                    abort_if($other->id !== $record?->id && $other->data['account_id'] === $data['account_id'] && $other->data['period_start'] <= $data['period_end'] && $other->data['period_end'] >= $data['period_start'], 422, 'Interest observation periods for the same debt must not overlap. Edit the existing statement.');
+                }
             }
             if ($kind === 'debt' && ! empty($data['account_id'])) {
                 foreach (Record::where('space_id', $space->id)->where('kind', 'debt')->where('active', true)->get() as $other) {
