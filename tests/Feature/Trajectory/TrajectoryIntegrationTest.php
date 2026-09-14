@@ -260,3 +260,16 @@ it('returns older evidence by authorized allocation and keeps daily income consi
     $view = app(\App\Services\Trajectory\DashboardService::class)->build($this->space);
     expect(array_sum(array_column($view['daily_series'], 'income_cents')))->toBe($view['summary']['income_cents']);
 });
+
+it('nets refunds before estimating spending reductions and savings opportunities', function (): void {
+    $this->account->update(['history_start' => now()->subDays(90)]);
+    app(LedgerService::class)->ingest($this->account, [
+        ['id' => 'purchased', 'date' => now()->subDays(2)->toDateString(), 'merchant' => 'Shop', 'amount_cents' => -18000, 'category' => 'shopping'],
+        ['id' => 'returned', 'date' => now()->subDay()->toDateString(), 'merchant' => 'Shop', 'amount_cents' => 9000, 'category' => 'shopping'],
+    ]);
+    $scenario = Record::create(['space_id' => $this->space->id, 'kind' => 'scenario', 'name' => 'Half the net shopping', 'data' => ['spending_reduction_bps' => 5000, 'reduction_category' => 'shopping']]);
+    $data = app(\App\Services\Trajectory\DashboardService::class)->build($this->space, 'month', $scenario->id);
+    expect($data['forecast']['daily'][0]['cash_cents'])->toBe(99900)
+        ->and($data['comparison']['daily'][0]['cash_cents'])->toBe(99950)
+        ->and($data['recommendations'][0]['monthly_savings_cents'])->toBe(3000);
+});

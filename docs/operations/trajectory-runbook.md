@@ -93,7 +93,8 @@ duplicates do not become consumption. Review classifications and transfer pairs
 before relying on totals; equal amounts alone do not prove a transfer.
 
 Forecasts use the latest 90 complete days, per-account history coverage,
-confirmed schedules and reviewed debts. Credit purchases accrue on debt until
+confirmed schedules and reviewed debts. Refunds offset category spending before
+scenario reductions and savings estimates; they are not earned income. Credit purchases accrue on debt until
 payment. Essential-variable bills remain estimates; opt-in seasonal estimates
 require at least a year and 12 matching records. Link debt terms to an existing
 recurring bill to replace it rather than count the payment twice. Savings goals
