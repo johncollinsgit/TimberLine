@@ -47,7 +47,15 @@ class PlaidService
         if ($connection) {
             $payload['access_token'] = $connection->access_token;
         } else {
-            $payload += ['products' => ['transactions'], 'optional_products' => ['liabilities'], 'transactions' => ['days_requested' => 730]];
+            // Transactions is required for cash timing. Investments and liabilities are
+            // consented during Link but fetched only for compatible selected accounts,
+            // preserving bank availability and avoiding product charges for accounts
+            // where Trajectory has no applicable evidence to retrieve.
+            $payload += [
+                'products' => ['transactions'],
+                'additional_consented_products' => ['investments', 'liabilities'],
+                'transactions' => ['days_requested' => 730],
+            ];
         }
         if (config('trajectory.plaid.webhook_url')) {
             $payload['webhook'] = config('trajectory.plaid.webhook_url');
@@ -130,6 +138,7 @@ class PlaidService
                 $connection->update(['cursor' => $cursor, 'synced_at' => now(), 'status' => 'connected']);
             });
             $this->liabilities($connection);
+            $this->investments($connection);
         });
     }
 
@@ -141,6 +150,39 @@ class PlaidService
             $connection->update(['coverage' => ['liabilities' => $data['liabilities'] ?? [], 'observed_at' => now()->toIso8601String()]]);
         } catch (\Throwable) {
             // Transactions can be complete while debt metadata is unsupported.
+        }
+    }
+
+    public function investments(Connection $connection): void
+    {
+        try {
+            $data = $this->call('/investments/holdings/get', ['access_token' => $connection->access_token]);
+            DB::transaction(function () use ($connection, $data): void {
+                $connection = Connection::whereKey($connection->id)->lockForUpdate()->firstOrFail();
+                if ($connection->status === 'disconnected') {
+                    return;
+                }
+                $supported = 0;
+                foreach ($data['accounts'] ?? [] as $account) {
+                    if (($account['balances']['iso_currency_code'] ?? null) !== 'USD' || empty($account['account_id'])) {
+                        continue;
+                    }
+                    Account::updateOrCreate(['source_key' => 'plaid:'.$connection->id.':'.$account['account_id']], [
+                        'space_id' => $connection->space_id,
+                        'connection_id' => $connection->id,
+                        'name' => $account['name'] ?? 'Investment account',
+                        'kind' => 'investment',
+                        'balance_cents' => isset($account['balances']['current']) ? Money::cents($account['balances']['current']) : null,
+                        'observed_at' => now(),
+                    ]);
+                    $supported++;
+                }
+                $coverage = $connection->coverage ?? [];
+                $coverage['investments'] = ['account_count' => $supported, 'observed_at' => now()->toIso8601String()];
+                $connection->update(['coverage' => $coverage]);
+            });
+        } catch (\Throwable) {
+            // Transactions can be complete while investment data is unavailable.
         }
     }
 

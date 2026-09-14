@@ -80,6 +80,36 @@ it('does not charge credit purchases to cash until the scheduled payment', funct
     expect($data['daily'][0]['cash_cents'])->toBe(100000)->and($data['daily'][0]['debt_cents'])->toBe(1000)->and($data['daily'][1]['cash_cents'])->toBe(98000);
 });
 
+it('requests two years of transactions and consents to compatible debt and investment data', function (): void {
+    config(['trajectory.plaid.client_id' => 'fixture', 'trajectory.plaid.secret' => 'fixture', 'trajectory.plaid.environment' => 'sandbox']);
+    Http::fake(['*/link/token/create' => Http::response(['link_token' => 'link-fixture', 'expiration' => now()->addHour()->toIso8601String()])]);
+
+    $link = app(PlaidService::class)->link($this->space);
+
+    expect($link['link_token'])->toBe('link-fixture');
+    Http::assertSent(function (\Illuminate\Http\Client\Request $request): bool {
+        return str_ends_with($request->url(), '/link/token/create')
+            && $request['products'] === ['transactions']
+            && $request['additional_consented_products'] === ['investments', 'liabilities']
+            && $request['transactions']['days_requested'] === 730;
+    });
+});
+
+it('adds supported USD investment accounts to net-worth evidence without assuming holdings', function (): void {
+    config(['trajectory.plaid.client_id' => 'fixture', 'trajectory.plaid.secret' => 'fixture', 'trajectory.plaid.environment' => 'sandbox']);
+    $connection = Connection::create(['space_id' => $this->space->id, 'external_id' => 'investment-item', 'access_token' => 'fixture-token']);
+    Http::fake(['*/investments/holdings/get' => Http::response(['accounts' => [[
+        'account_id' => 'brokerage-a', 'name' => 'Brokerage', 'balances' => ['current' => 321.09, 'iso_currency_code' => 'USD'],
+    ]]])]);
+
+    app(PlaidService::class)->investments($connection);
+
+    expect(Account::where('source_key', 'plaid:'.$connection->id.':brokerage-a')->firstOrFail())
+        ->kind->toBe('investment')
+        ->balance_cents->toBe(32109)
+        ->and($connection->fresh()->coverage['investments']['account_count'])->toBe(1);
+});
+
 it('keeps failed bank pagination atomic and commits the cursor with complete changes', function (): void {
     config(['trajectory.plaid.client_id' => 'fixture', 'trajectory.plaid.secret' => 'fixture', 'trajectory.plaid.environment' => 'sandbox']);
     $connection = Connection::create(['space_id' => $this->space->id, 'external_id' => 'item-fixture', 'access_token' => 'secret-fixture']);
