@@ -93,7 +93,7 @@ class ProjectionService
                 $income = is_array($budget) ? $budget['income'] : max(0, $budget);
                 $expense = is_array($budget) ? $budget['expense'] : min(0, $budget);
                 $reducible = ! empty($scenario['reduction_category']) ? ($budget['categories'][$scenario['reduction_category']] ?? 0) : $expense;
-                $amount = $income + $expense + Money::ratio(-$reducible, $reduction, 10000);
+                $amount = $income + $expense + Money::ratio(max(0, -$reducible), $reduction, 10000);
                 if (isset($credit[$accountId])) {
                     $debts[$credit[$accountId]]['current'] -= $amount;
                 } else {

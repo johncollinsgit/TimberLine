@@ -63,7 +63,7 @@ class DashboardService
             }
             // Spending follows allocations; account cash/debt timing follows the complete source movement.
             $entry['amount_cents'] = (int) ($sourceAmounts[$entry['id']] ?? $entry['amount_cents']);
-            $bucket = $entry['amount_cents'] < 0 ? 'expense' : 'income';
+            $bucket = in_array($entry['flow'], ['expense', 'refund'], true) || $entry['amount_cents'] < 0 ? 'expense' : 'income';
             $dailyByAccount[$entry['account_id']] ??= ['income' => 0, 'expense' => 0, 'categories' => []];
             $dailyByAccount[$entry['account_id']][$bucket] += $entry['amount_cents'];
             if ($bucket === 'expense') {
@@ -137,9 +137,12 @@ class DashboardService
         $assetTotal = $cash + (int) $accounts->where('kind', 'investment')->sum('balance_cents') + (int) collect($assets)->sum('value_cents') + (int) collect($metals)->sum('value_cents');
         $netComplete = ! $accounts->contains(fn ($a) => $a->balance_cents === null) && ! collect($metals)->contains(fn ($m) => $m['value_cents'] === null);
         $recommendations = [];
-        $waste = $historical->where('bullshit_spending', true)->where('flow', 'expense');
+        $waste = $historical->where('bullshit_spending', true)->whereIn('flow', ['expense', 'refund']);
         foreach ($waste->groupBy('category') as $category => $rows) {
-            $monthly = Money::ratio(-(int) $rows->sum('amount_cents'), 30, max(1, $days));
+            $monthly = Money::ratio(max(0, -(int) $rows->sum('amount_cents')), 30, max(1, $days));
+            if ($monthly === 0) {
+                continue;
+            }
             $recommendations[] = ['title' => 'Reduce '.$category, 'category' => $category, 'monthly_savings_cents' => $monthly, 'yearly_cash_impact_cents' => $monthly * 12, 'evidence_ids' => $rows->pluck('id')->all(), 'explanation' => 'Based on your Bullshit Spending profile and the observed period.'];
         }
         $goals = array_map(function ($goal) use ($today): array {
