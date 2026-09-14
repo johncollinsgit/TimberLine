@@ -2680,3 +2680,9 @@
 - Expected sharing and unmatched records show coverage clearly. Bank transaction
   review opens linked medical records for corrections; the forecast drilldown
   now shows medical reserves beside savings-goal reserves.
+
+## 2026-09-14 — Trajectory full-width workspace
+
+- Removed the shared reading-column limit and Trajectory's own width cap on
+  Trajectory pages. Charts and tables now fill the available width beside the
+  sidebar, with responsive outer gutters and no extra nested horizontal padding.
