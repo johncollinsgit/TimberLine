@@ -12,7 +12,7 @@ function boot() {
   const date = (v) => v ? new Date(v.slice(0,10)+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}) : 'Not observed';
   const title = (s) => s.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
   const spaces = JSON.parse(root.dataset.spaces || '[]');
-  let active = spaces[0]?.id, data, tab = 'overview', charts = [], chartTables = {}, filter = {}, scenarioId = '', formAction;
+  let active = spaces[0]?.id, data, evidenceRows=null, tab = 'overview', charts = [], chartTables = {}, filter = {}, scenarioId = '', formAction;
   $('#tr-space').innerHTML = spaces.map(s=>`<option value="${s.id}">${esc(s.name)} · ${s.kind==='household'?'Personal':'Business'}</option>`).join('');
   const api = async (path, method='GET', body=null) => {
     const headers = {Accept:'application/json','X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]')?.content || ''};
@@ -26,6 +26,7 @@ function boot() {
   const notice = (message) => {$('#tr-feedback').textContent=message;$('#tr-feedback').hidden=false;};
   const load = async () => {
     if (!active) {$('#tr-context').textContent='Your private financial workspace';$('#tr-content').innerHTML='<div class="tr-empty"><h2>Your next chapter starts here.</h2>Your Trajectory pilot has not been enabled yet.<br>Once enabled, connect an account or import a statement to begin.</div>';$('#tr-add').disabled=true;return;}
+    evidenceRows=null;
     $('#tr-content').classList.add('tr-loading');$('#tr-content').setAttribute('aria-busy','true');
     try {data=await api(endpoint(`/dashboard?range=${$('#tr-range').value}${scenarioId?`&scenario_id=${scenarioId}`:''}`));render();}
     catch(e){notice(e.message);}
@@ -42,7 +43,14 @@ function boot() {
     const instance=new Chart(canvas,{type,data:{labels,datasets},options:{responsive:true,maintainAspectRatio:false,animation:!matchMedia('(prefers-reduced-motion: reduce)').matches,interaction:{intersect:false,mode:'index'},plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:7,font:{size:11},padding:20}},tooltip:{callbacks:{label:(ctx)=>`${ctx.dataset.label || ctx.label}: ${money(ctx.parsed.y ?? ctx.parsed)}`}}},scales:type==='doughnut'?{}:{x:{grid:{display:false},ticks:{maxTicksLimit:8,font:{size:10}}},y:{grid:{color:'#edf1ed'},border:{display:false},ticks:{callback:(v)=>money(v),font:{size:10}}}},onClick:(event,elements)=>{if(elements[0]&&click)click(elements[0].index);}}});charts.push(instance);
   };
   const line = (label,values,color,fill=false) => ({label,data:values,borderColor:color,backgroundColor:color+'14',fill,tension:.2,borderWidth:2,pointRadius:0,pointHitRadius:12});
-  const showTransactions = (next) => {filter=next;tab='transactions';render();};
+  const showTransactions = async (next) => {
+    const requestedSpace=active;
+    try {
+      const records=(next.ids||next.date)?await api(endpoint('/evidence'),'POST',next):null;
+      if(requestedSpace!==active)return;
+      evidenceRows=records;filter=next;tab='transactions';render();
+    } catch(e){notice(e.message);}
+  };
   function render() {
     charts.forEach(c=>c.destroy());charts=[];chartTables={};
     root.querySelectorAll('[data-tab]').forEach(b=>{if(b.dataset.tab===tab)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
@@ -84,7 +92,7 @@ function boot() {
     $('#tr-scenario')?.addEventListener('change',e=>{scenarioId=e.target.value;load();});
   }
   function transactions() {
-    let rows=data.transactions;
+    let rows=evidenceRows??data.transactions;
     if(filter.category)rows=rows.filter(t=>t.category===filter.category);
     if(filter.date)rows=rows.filter(t=>t.date===filter.date);
     if(filter.review)rows=rows.filter(t=>!t.reviewed);
@@ -184,7 +192,7 @@ function boot() {
   }
   root.addEventListener('click',async e=>{
     const target=e.target.closest('[data-action]');if(!target)return;
-    const a=target.dataset.action,id=Number(target.dataset.id),r=data?.records.find(r=>r.id===id),tx=data?.transactions.find(t=>t.id===id);
+    const a=target.dataset.action,id=Number(target.dataset.id),r=data?.records.find(r=>r.id===id),tx=[...(evidenceRows||[]),...(data?.transactions||[])].find(t=>t.id===id);
     try {
       if(['overview','bills','assets','business','connections','transactions'].includes(a)){tab=a;render();}
       else if(a==='add')recordForm(target.dataset.kind);

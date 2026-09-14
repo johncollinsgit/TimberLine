@@ -244,3 +244,19 @@ it('denies business staff and household partners company financial routes', func
     $this->getJson('/trajectory/spaces/'.$this->space->id.'/combined?business_id='.$business->id)->assertForbidden();
     $this->getJson('/trajectory/spaces/'.$business->id.'/reconciliation')->assertForbidden();
 });
+
+it('returns older evidence by authorized allocation and keeps daily income consistent', function (): void {
+    app(LedgerService::class)->ingest($this->account, [
+        ['id' => 'old-evidence', 'date' => now()->subMonths(2)->toDateString(), 'merchant' => 'Old shopping', 'amount_cents' => -9900, 'category' => 'shopping'],
+        ['id' => 'owner-out', 'date' => now()->toDateString(), 'merchant' => 'Owner pay', 'amount_cents' => -10000],
+    ]);
+    $old = Transaction::where('amount_cents', -9900)->first();
+    $out = Transaction::where('amount_cents', -10000)->first();
+    $out->update(['flow' => 'owner_wages', 'reviewed' => true]);
+    $this->actingAs($this->user)->postJson('/trajectory/spaces/'.$this->space->id.'/evidence', ['ids' => [$old->id]])->assertOk()->assertJsonPath('0.amount_cents', -9900);
+    $other = User::factory()->create(['is_active' => true]);
+    [$otherSpace] = app(PilotService::class)->prepare($other, null, true);
+    $this->actingAs($other)->postJson('/trajectory/spaces/'.$otherSpace->id.'/evidence', ['ids' => [$old->id]])->assertOk()->assertExactJson([]);
+    $view = app(\App\Services\Trajectory\DashboardService::class)->build($this->space);
+    expect(array_sum(array_column($view['daily_series'], 'income_cents')))->toBe($view['summary']['income_cents']);
+});

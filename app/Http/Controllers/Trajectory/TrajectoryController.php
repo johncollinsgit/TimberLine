@@ -42,6 +42,14 @@ class TrajectoryController extends Controller
         return response()->json($dashboard->build($space, $data['range'] ?? 'month', $data['scenario_id'] ?? null))->header('Cache-Control', 'private, no-store');
     }
 
+    public function evidence(Request $request, Space $space, FinanceAccess $access, LedgerService $ledger)
+    {
+        $access->authorize($request->user(), $space);
+        $data = $request->validate(['ids' => 'required_without:date|array|min:1|max:5000', 'ids.*' => 'integer', 'date' => 'required_without:ids|date_format:Y-m-d|before_or_equal:today']);
+
+        return response()->json($ledger->entries($space, $data['date'] ?? null, $data['date'] ?? null, $data['ids'] ?? null))->header('Cache-Control', 'private, no-store');
+    }
+
     public function account(Request $request, Space $space, FinanceAccess $access)
     {
         $access->authorize($request->user(), $space);

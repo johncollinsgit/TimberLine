@@ -13,6 +13,7 @@ Route::middleware(['auth', 'verified', 'throttle:120,1'])->prefix('trajectory')-
         Route::post('/sms/verify', [Trajectory::class, 'verifySms'])->name('trajectory.verifySms')->middleware('throttle:3,10');
         Route::post('/sms/confirm', [Trajectory::class, 'confirmSms'])->name('trajectory.confirmSms')->middleware('throttle:5,10');
         Route::get('/dashboard', [Trajectory::class, 'dashboard'])->name('trajectory.dashboard');
+        Route::post('/evidence', [Trajectory::class, 'evidence'])->name('trajectory.evidence');
         Route::post('/accounts', [Trajectory::class, 'account'])->name('trajectory.account');
         Route::patch('/accounts/{account}', [Trajectory::class, 'updateAccount'])->name('trajectory.updateAccount');
         Route::patch('/transactions/{transaction}', [Trajectory::class, 'classify'])->name('trajectory.classify');

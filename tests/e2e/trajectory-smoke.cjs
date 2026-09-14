@@ -22,6 +22,12 @@ assert.equal(new URL(url).hostname, '127.0.0.1', 'This mutating browser test is 
   await page.locator('[data-chart="tr-forecast"]').click();
   await page.getByRole('dialog').getByRole('table').waitFor();
   await page.locator('#tr-close').click();
+  await page.locator('[data-action="recommendation"]').first().click();
+  const evidenceResponse = page.waitForResponse(r => r.url().endsWith('/evidence') && r.status() === 200);
+  await page.getByRole('button', { name: 'View evidence', exact: true }).click();
+  const evidence = await (await evidenceResponse).json();
+  assert.ok(evidence.length > 0, 'Recommendations must open their supporting transactions.');
+  await page.locator('.tr-table tbody tr').first().waitFor();
   await page.locator('[data-tab="bills"]').click();
   await page.getByRole('button', { name: 'Add goal', exact: true }).click();
   const goalName = `Browser test goal ${Date.now()}`;
@@ -57,5 +63,5 @@ assert.equal(new URL(url).hostname, '127.0.0.1', 'This mutating browser test is 
   assert.ok(bounds.x + bounds.width <= 391, 'Trajectory should fit a phone viewport.');
   assert.deepEqual(errors, []);
   await browser.close();
-  console.log('PASS: login, charts, scenario comparison, accessible chart tables, goal creation, transaction review, saved spending preferences, wealth view, and mobile layout.');
+  console.log('PASS: login, charts, scenario comparison, accessible chart tables, historical recommendation evidence, goal creation, transaction review, saved spending preferences, wealth view, and mobile layout.');
 })().catch(error => { console.error(error); process.exit(1); });

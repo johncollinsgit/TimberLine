@@ -121,7 +121,7 @@ class DashboardService
         $spending = $selected->whereIn('flow', ['expense', 'refund']);
         $income = $selected->whereIn('flow', ['income', 'owner_wages', 'owner_distribution'])->where('amount_cents', '>', 0)->sum('amount_cents');
         $categories = $spending->groupBy('category')->map(fn ($rows, $category) => ['category' => $category, 'amount_cents' => -(int) $rows->sum('amount_cents'), 'ids' => $rows->pluck('id')->all()])->values()->all();
-        $dailySeries = $selected->groupBy('date')->map(fn ($rows, $date) => ['date' => $date, 'income_cents' => (int) $rows->whereIn('flow', ['income', 'owner_wages', 'owner_distribution'])->sum('amount_cents'), 'spending_cents' => -(int) $rows->whereIn('flow', ['expense', 'refund'])->sum('amount_cents')])->values()->all();
+        $dailySeries = $selected->groupBy('date')->map(fn ($rows, $date) => ['date' => $date, 'income_cents' => (int) $rows->whereIn('flow', ['income', 'owner_wages', 'owner_distribution'])->where('amount_cents', '>', 0)->sum('amount_cents'), 'spending_cents' => -(int) $rows->whereIn('flow', ['expense', 'refund'])->sum('amount_cents')])->values()->all();
         $interest = $entries->where('category', 'interest')->where('flow', 'expense');
         $debtRows = [];
         foreach ($debts as $debt) {

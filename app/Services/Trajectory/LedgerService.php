@@ -114,9 +114,12 @@ class LedgerService
         });
     }
 
-    public function entries(Space $space, ?string $start = null, ?string $end = null): array
+    public function entries(Space $space, ?string $start = null, ?string $end = null, ?array $ids = null): array
     {
         $query = Allocation::where('trajectory_allocations.space_id', $space->id)->join('trajectory_transactions as t', 't.id', '=', 'transaction_id')->where('t.removed', false)->where('t.pending', false);
+        if ($ids !== null) {
+            $query->whereIn('t.id', $ids);
+        }
         if ($start) {
             $query->where('t.posted_on', '>=', $start);
         }
