@@ -15,7 +15,7 @@ class ReconciliationService
         $access = app(FinanceAccess::class);
         $access->authorize($user, $space);
         $ids = $access->spaces($user)->pluck('id')->all();
-        $rows = Transaction::whereIn('space_id', $ids)->where('removed', false)->where('pending', false)->where('posted_on', '>=', now()->subDays(90))->latest('posted_on')->limit(1500)->get();
+        $rows = Transaction::whereIn('space_id', $ids)->where('removed', false)->where('pending', false)->whereNotIn('flow', ['medical_payment', 'medical_share', 'medical_membership'])->where('posted_on', '>=', now()->subDays(90))->latest('posted_on')->limit(1500)->get();
         $candidates = [];
         foreach ($rows->where('space_id', $space->id) as $a) {
             foreach ($rows as $b) {
@@ -50,6 +50,7 @@ class ReconciliationService
             $right = $rows->firstWhere('id', $input['right_id']);
             foreach ($rows as $tx) {
                 app(FinanceAccess::class)->authorize($user, Space::findOrFail($tx->space_id));
+                app(MedicalSharingService::class)->assertUnbound($tx);
             }
             abort_unless($left->version === $input['left_version'] && $right->version === $input['right_version'], 409);
             abort_unless($left->account_id !== $right->account_id, 422);
@@ -98,6 +99,6 @@ class ReconciliationService
         $ambiguous = $equity->contains(fn ($r) => empty($r->data['linked_business_space_id']));
         $combinedWorth = $ambiguous ? null : $personalSummary['net_worth_cents'] + $businessSummary['net_worth_cents'] - $excludedEquity;
 
-        return ['net_worth_cents' => $combinedWorth, 'excluded_business_equity_cents' => $excludedEquity, 'net_worth_complete' => ! $ambiguous && $personalSummary['net_worth_complete'] && $businessSummary['net_worth_complete'], 'net_worth_setup' => $ambiguous ? 'Link every business-equity valuation to its business before combining net worth.' : null, 'household' => $house->name, 'business' => $business->name, 'owner_income_cents' => (int) $ownerIn->sum('amount_cents'), 'company_owner_outflow_cents' => -(int) $companyOut->sum('amount_cents'), 'eliminated_transfers_cents' => $matched, 'unmatched_owner_income_cents' => (int) $ownerIn->sum('amount_cents') - $matched, 'household_spending_cents' => -(int) $personal->whereIn('flow', ['expense', 'refund'])->sum('amount_cents'), 'external_income_cents' => (int) $personal->merge($company)->where('flow', 'income')->sum('amount_cents'), 'external_spending_cents' => -(int) $personal->merge($company)->whereIn('flow', ['expense', 'refund'])->sum('amount_cents')];
+        return ['net_worth_cents' => $combinedWorth, 'excluded_business_equity_cents' => $excludedEquity, 'net_worth_complete' => ! $ambiguous && $personalSummary['net_worth_complete'] && $businessSummary['net_worth_complete'], 'net_worth_setup' => $ambiguous ? 'Link every business-equity valuation to its business before combining net worth.' : null, 'household' => $house->name, 'business' => $business->name, 'owner_income_cents' => (int) $ownerIn->sum('amount_cents'), 'company_owner_outflow_cents' => -(int) $companyOut->sum('amount_cents'), 'eliminated_transfers_cents' => $matched, 'unmatched_owner_income_cents' => (int) $ownerIn->sum('amount_cents') - $matched, 'household_spending_cents' => -(int) $personal->whereIn('flow', ['expense', 'refund', 'medical_payment', 'medical_membership'])->sum('amount_cents'), 'external_income_cents' => (int) $personal->merge($company)->where('flow', 'income')->sum('amount_cents'), 'external_spending_cents' => -(int) $personal->merge($company)->whereIn('flow', ['expense', 'refund', 'medical_payment', 'medical_membership'])->sum('amount_cents')];
     }
 }

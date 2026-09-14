@@ -3,3 +3,5 @@
 .tr-app h1,.tr-app h2{font-family:Inter,system-ui,sans-serif}.tr-tabs button{background:transparent}.tr-tabs button:hover{background:transparent}
 
 .tr-app .tr-chart-data{font-size:11px;padding:5px 0;border:0;color:#346c52;margin-top:10px;background:transparent;text-decoration:underline}
+
+.tr-medical-flow{grid-template-columns:repeat(3,minmax(0,1fr))}.tr-medical-flow>div{min-width:0;overflow-wrap:anywhere}.tr-medical-need .tr-actions,.tr-medical-need .tr-small-actions{flex-wrap:wrap}.tr-medical-need .tr-row{flex-wrap:wrap}.tr-medical-need{overflow-wrap:anywhere}@media(max-width:700px){.tr-medical-flow{grid-template-columns:1fr}.tr-medical-need .tr-small-actions{justify-content:flex-start}}

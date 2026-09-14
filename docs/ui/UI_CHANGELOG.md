@@ -2668,3 +2668,15 @@
   invitation, bank setup and SMS opt-in dialogs. Missing provider data and
   provisional estimates remain explicit. Local desktop/phone browser checks
   exercise charts, scenario selection, goals, corrections and saved preferences.
+
+## 2026-09-14 — Trajectory medical sharing
+
+- Added a household Medical sharing tab with provider debt, paid amounts,
+  received shares, reserved cash, and an interactive costs/sharing chart with
+  accessible data tables and need drilldown.
+- Added Samaritan need/submission tracking, Prisma invoice defaults, upfront and
+  consolidated payment recording, expected-to-received share editing, statement
+  matching, and monthly contribution tracking for changing recipients.
+- Expected sharing and unmatched records show coverage clearly. Bank transaction
+  review opens linked medical records for corrections; the forecast drilldown
+  now shows medical reserves beside savings-goal reserves.

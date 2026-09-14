@@ -1221,3 +1221,16 @@ Do not skip upward on this ladder without documenting why the simpler level was 
 - Public subscription packages are preparation only. Do not invent prices or
   remove checkout's hard gate without production access and Stripe lifecycle
   acceptance. Rollback disables the Branch and preserves financial records.
+
+### Medical sharing in Trajectory
+
+- Read the medical-sharing section in `docs/operations/trajectory-runbook.md`.
+  Needs, bills, provider payments, member shares and monthly contributions are
+  household-only encrypted records, not accounting or clinical records.
+- Preserve `medical_payment`, `medical_share`, and `medical_membership` flow
+  semantics: actual payments count in gross spending; receipts do not become
+  earnings; none repeat from history. Monthly contribution matches use their
+  existing confirmed recurring schedule. Never mutate a linked source through
+  classification, split, reconciliation, SMS, or asset matching.
+- Run MedicalSharingTest plus the existing Trajectory tests and browser smoke
+  after changes. No schema change was needed for the sharing workflow.

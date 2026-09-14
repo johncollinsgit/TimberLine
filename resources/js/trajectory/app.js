@@ -55,11 +55,12 @@ function boot() {
     charts.forEach(c=>c.destroy());charts=[];chartTables={};
     root.querySelectorAll('[data-tab]').forEach(b=>{if(b.dataset.tab===tab)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});
     $('#tr-context').textContent=`${date(data.range.start)} – ${date(data.range.end)} · ${data.coverage.history_days} days of baseline history${data.coverage.provisional?' · Provisional forecast':''}`;
-    const views={overview,transactions,bills,assets,business,connections};
+    const views={overview,transactions,bills,medical,assets,business,connections};
     $('#tr-content').innerHTML=views[tab]();
     if(tab==='overview') drawOverview();
     if(tab==='assets') drawAssets();
     if(tab==='business') drawBusiness();
+    if(tab==='medical') drawMedical();
   }
   function overview() {
     const summary=data.summary, end=data.forecast.daily.at(-1);
@@ -82,7 +83,7 @@ function boot() {
     const rows=data.forecast.daily;
     const history=data.net_worth_history.filter(h=>h.date<=data.range.end && h.cash_cents!==undefined).slice(-90);
     const prefix=history.map(()=>null);
-    const sets=[line('Observed cash',history.map(h=>h.cash_cents).concat(rows.map(()=>null)),'#345547'),line('Current path · cash',prefix.concat(rows.map(r=>r.cash_cents)),'#8fada1'),line('Available after goals',prefix.concat(rows.map(r=>r.available_cents)),'#176b52',true)];
+    const sets=[line('Observed cash',history.map(h=>h.cash_cents).concat(rows.map(()=>null)),'#345547'),line('Current path · cash',prefix.concat(rows.map(r=>r.cash_cents)),'#8fada1'),line('Available after reserves',prefix.concat(rows.map(r=>r.available_cents)),'#176b52',true)];
     if(data.comparison)sets.push({...line('Scenario · available',prefix.concat(data.comparison.daily.map(r=>r.available_cents)),'#b48836'),borderDash:[5,4]});
     chart('tr-forecast','line',history.map(r=>date(r.date)).concat(rows.map(r=>date(r.date))),sets,i=>i<history.length?showTransactions({date:history[i].date}):forecastDetail(rows[i-history.length]));
     chart('tr-cashflow','bar',data.daily_series.map(r=>date(r.date)),[{label:'Income',data:data.daily_series.map(r=>r.income_cents),backgroundColor:'#4c8d72',borderRadius:3},{label:'Spending',data:data.daily_series.map(r=>r.spending_cents),backgroundColor:'#d9b896',borderRadius:3}],i=>showTransactions({date:data.daily_series[i].date}));
@@ -104,6 +105,31 @@ function boot() {
     const scheduleRecords=data.records.filter(r=>r.kind==='recurring');
     const goals=data.goals.map(g=>`<div class="tr-goal"><div class="tr-labels"><strong>${esc(g.name)}</strong>${btn('Edit','edit',`data-id="${g.id}"`)}</div><div class="tr-progress"><i style="width:${Math.min(100,g.saved_cents/Math.max(1,g.target_cents)*100)}%"></i></div><div class="tr-labels tr-subtle"><span>${money(g.saved_cents)} of ${money(g.target_cents)}</span><span>${date(g.target_on)}</span></div><p class="tr-subtle">${g.on_track?'On track':'Increase contributions'} · ${money(g.required_monthly_cents)}/month needed</p></div>`).join('');
     return `<div class="tr-grid equal">${panel('Bills and recurring income',scheduleRecords.length?scheduleRecords.map(r=>`<div class="tr-row"><div><strong>${esc(r.name)}</strong><div class="tr-subtle">${esc(title(r.data.cadence))} · ${date(r.data.next_due_on)} · ${r.data.confirmed?'Confirmed':'Needs confirmation'}</div></div><div class="tr-small-actions"><span>${money(r.data.amount_cents)}</span>${btn('Edit','edit',`data-id="${r.id}"`)}</div></div>`).join(''):empty('Add your mortgage, utilities, subscriptions, and payday.'),btn('Add bill','add','data-kind="recurring"'))}${panel('Savings goals',goals||empty('Give your future a target: emergency cash, a purchase, or paying down debt.'),btn('Add goal','add','data-kind="goal"'))}</div>${panel('Detected recurring patterns',data.recurring_suggestions.length?data.recurring_suggestions.map((r,i)=>`<div class="tr-row"><div><strong>${esc(r.name)}</strong><div class="tr-subtle">${esc(title(r.data.cadence))} · ${money(r.data.amount_cents)} · ${r.evidence_ids.length} supporting transactions</div></div>${btn('Review schedule','recurring-suggestion',`data-index="${i}"`)}</div>`).join(''):empty('Recurring suggestions appear after at least three reasonably spaced transactions.'))}`;
+  }
+  function medical() {
+    const m=data.medical;
+    if(!m)return empty('Medical sharing is private to your household. Choose your Personal space.');
+    const records=data.records.filter(r=>['medical_payment','medical_share','medical_membership'].includes(r.kind));
+    return `<div class="tr-notice">Track Prisma bills and Samaritan Ministries sharing from submission through payment. Received shares reimburse medical costs; expected shares stay outside income, net worth, and the baseline forecast.</div>
+      <div class="tr-metrics">${metric('Still owed to providers',m.owed_cents,'Included in liabilities')}${metric('Paid to providers',m.paid_cents,'Opening payments + tracked payments')}${metric('Shares received',m.received_cents,'Actual receipts, separate from earnings')}${metric('Reserved for bills',m.reserve_cents,'Held from available cash')}</div>
+      <div class="tr-actions tr-block">${btn('Add medical need','add','data-kind="medical_need"')}${btn('Monthly membership / share','membership')}${btn('Record monthly contribution','add','data-kind="medical_membership"')}</div>
+      <p class="tr-subtle">Monthly membership contributions are a separate recurring health expense. Enter the amount as a negative number and confirm its payment account. Use Record monthly contribution to match each imported payment, including payments sent to different members. Those matches use the confirmed schedule without repeating historical payments. Provider plans here assume no interest and payments from cash; track lender financing separately.</p>
+      ${m.issues.map(i=>`<div class="tr-notice">${esc(i)}</div>`).join('')}
+      ${m.needs.length?panel('Medical costs and sharing by need',plot('tr-medical','Medical bills, provider payments, received and expected shares')):''}
+      ${m.needs.map(n=>panel(n.name,`<div class="tr-block tr-medical-need"><p class="tr-subtle">${esc(n.ministry)} · ${esc(title(n.status))}${n.submitted_on?' · Submitted '+date(n.submitted_on):''}</p><div class="tr-flow tr-medical-flow"><div>Paid to providers<strong>${money(n.paid_cents)}</strong></div><div>Still owed<strong>${money(n.owed_cents)}</strong></div><div>Shares received<strong>${money(n.received_cents)}</strong></div></div><p class="tr-subtle">Net paid after received sharing: ${money(n.net_paid_cents)}. Expected payments: ${money(n.expected_cents)} (unconfirmed). Remaining reviewed sharing target: ${money(n.remaining_sharing_cents)}. Reserved cash: ${money(n.reserve_cents)}.</p>
+      <div class="tr-actions">${btn('Add provider bill','medical-child',`data-kind="medical_bill" data-parent-key="medical_need_record_id" data-id="${n.id}"`)}${btn('Pay across provider invoices','medical-child',`data-kind="medical_payment" data-parent-key="medical_need_record_id" data-id="${n.id}"`)}${btn('Record expected / received share','medical-child',`data-kind="medical_share" data-parent-key="medical_need_record_id" data-id="${n.id}"`)}${n.evidence_ids.length?btn('Share deposit evidence','medical-evidence',`data-ids="${esc(JSON.stringify(n.evidence_ids))}"`):''}</div>
+      ${n.bills.map(b=>`<div class="tr-row"><div><strong>${esc(b.name)} · ${esc(b.provider)}</strong><div class="tr-subtle">Invoice ${esc(b.reference)} · Net bill ${money(b.billed_cents-b.adjustment_cents)}<br>Paid ${money(b.paid_cents)} · Owed ${money(b.owed_cents)} · Next payment ${date(b.next_due_on)}${b.confirmed?'':' · Plan needs review'}</div></div><div class="tr-small-actions">${btn('Edit bill','edit',`data-id="${b.id}"`)}${btn('Record provider payment','medical-child',`data-kind="medical_payment" data-parent-key="medical_bill_record_id" data-id="${b.id}"`)}${b.evidence_ids.length?btn('Payment evidence','medical-evidence',`data-ids="${esc(JSON.stringify(b.evidence_ids))}"`):''}</div></div>`).join('')||empty('Add each provider invoice once, including any amount paid upfront.')}</div>`,btn('Edit need','edit',`data-id="${n.id}"`))).join('')||empty('Start with a medical need, then add its bills, provider payments, and incoming shares. Multiple bills and multiple monthly receipts can belong to one need.')}
+      ${panel('Payment and sharing history',records.map(r=>`<div class="tr-row"><div><strong>${esc(r.name)}</strong><div class="tr-subtle">${r.kind==='medical_payment'?'Paid to provider':r.kind==='medical_membership'?'Monthly contribution':title(r.data.status)+' share'} · ${date(r.data.paid_on)} · ${r.data.transaction_id?'Statement #'+r.data.transaction_id:'Manual / unmatched'}</div></div><div>${money(r.data.amount_cents)} ${btn('Edit','edit',`data-id="${r.id}"`)}</div></div>`).join('')||empty('Record payments as they happen. Change an expected share to received when it arrives; do not add the same receipt twice.'))}`;
+  }
+  function drawMedical(){
+    if(!data.medical?.needs.length)return;
+    const needs=data.medical.needs;
+    chart('tr-medical','bar',needs.map(n=>n.name),[
+      {label:'Net provider bills',data:needs.map(n=>n.paid_cents+n.owed_cents),backgroundColor:'#6b869c'},
+      {label:'Paid to providers',data:needs.map(n=>n.paid_cents),backgroundColor:'#397c5e'},
+      {label:'Shares received',data:needs.map(n=>n.received_cents),backgroundColor:'#b48836'},
+      {label:'Expected shares (excluded from forecast)',data:needs.map(n=>n.expected_cents),backgroundColor:'#d7d5cb'}
+    ],i=>recordForm('medical_need',data.records.find(r=>r.id===needs[i].id)));
   }
   function assets() {
     const s=data.summary;
@@ -145,14 +171,15 @@ function boot() {
   }
   function recordForm(kind,record=null,preset={}) {
     const d=record?.data||preset;
-    const defaults={confirmed:false,reviewed:false,priority:1,purity_bps:9999,quantity:1,weight:1,distribution_retention_bps:10000};
+    const defaults={ministry:'Samaritan Ministries',provider:'Prisma Health',reserve_shares:true,confirmed:false,reviewed:false,priority:1,purity_bps:9999,quantity:1,weight:1,distribution_retention_bps:10000};
     let html=field('name','Name','text',record?.name||preset.name||'',null,true);
     for(const [key,def] of Object.entries(data.definitions[kind])) {
-      let value=d[key]??defaults[key]??(['money','percent'].includes(def.type)?0:'');
-      if(['money','percent'].includes(def.type))value=value/100;
-      const choices=['debt_record','recurring_record'].includes(def.type)?[{value:'',label:'Choose a record'},...data.records.filter(r=>r.kind===def.type.replace('_record','')).map(r=>({value:r.id,label:r.name}))]:def.type==='account'?[{value:'',label:'Select account'},...data.accounts.map(a=>({value:a.id,label:a.name}))]:def.type==='category'?(def.required?data.category_options:[{value:'',label:'All categories'},...data.category_options]):def.choices;
+      let value=d[key]??defaults[key]??(['money','percent'].includes(def.type)&&def.required?0:'');
+      if(['money','percent'].includes(def.type)&&value!=='')value=value/100;
+      const choices=def.type.endsWith('_record')?[{value:'',label:'Choose a record'},...data.records.filter(r=>r.kind===def.type.slice(0,-7)).map(r=>({value:r.id,label:r.name}))]:def.type==='account'?[{value:'',label:'Select account'},...data.accounts.map(a=>({value:a.id,label:a.name}))]:def.type==='category'?(def.required?data.category_options:[{value:'',label:'All categories'},...data.category_options]):def.choices;
       html+=field(key,def.label,def.type==='boolean'?'checkbox':def.type==='date'?'date':['money','percent','decimal','integer'].includes(def.type)?'number':'text',value,choices);
     }
+    if(kind.startsWith('medical_'))html=`<p class="tr-subtle tr-block">Track financial references only. Submit bills through your ministry separately. Expected shares are never guaranteed income. Matching a statement row prevents duplicate spending; a manual record does not change bank cash.</p>`+html+(record?`<div class="tr-actions tr-block">${btn('Remove record','medical-remove',`data-id="${record.id}"`)}</div>`:'');
     dialog(`${record?'Edit':'Add'} ${title(kind)}`,html,async values=>{
       const payload={};
       for(const [key,def] of Object.entries(data.definitions[kind])) {
@@ -160,18 +187,20 @@ function boot() {
         if(def.type==='boolean')v=v==='on';
         else if(v===''&&!def.required)continue;
         else if(['money','percent'].includes(def.type))v=minor(v);
-        else if(['integer','account','debt_record','recurring_record'].includes(def.type))v=Number(v);
+        else if((['integer','account'].includes(def.type)||def.type.endsWith('_record')))v=Number(v);
         payload[key]=v;
       }
       await api(endpoint(record?`/records/${record.id}`:'/records'),record?'PATCH':'POST',{kind,name:values.get('name'),data:payload,version:record?.version});
     });
   }
   function chooseAdd() {
-    const kinds=['recurring','goal','debt','asset','metal','scenario',...(data?.business?['payroll','reliance']:[])];
+    const kinds=['recurring','goal','debt','asset','metal','scenario',...(data?.business?['payroll','reliance']:['medical_need','medical_bill','medical_payment','medical_share','medical_membership'])];
     dialog('Add to your plan',`<div class="tr-choices tr-block">${kinds.map(k=>btn(title(k),'choose-kind',`data-kind="${k}"`)).join('')}</div>`,null);
   }
   function transactionForm(tx) {
-    dialog('Review transaction',`<p class="tr-subtle">${esc(tx.merchant)} · ${precise(tx.amount_cents)}<br>${esc(tx.explanation)}</p>${field('category','Category','text',tx.category,data.category_options)}${field('flow','Money movement','text',tx.flow,['expense','income','refund','transfer','card_payment','asset_transfer','owner_wages','owner_distribution','reimbursement','debt_payment','duplicate'])}${field('face_punched','Face Punched · unexpected, one time','checkbox',tx.face_punched)}${field('bullshit_spending','Bullshit Spending · unnecessary to me','checkbox',tx.bullshit_spending)}${field('learn','Remember an exact merchant rule','checkbox',false)}<div class="tr-actions tr-block">${btn('Split personal / business','split',`data-id="${tx.id}"`)}${btn('Undo last review','undo',`data-id="${tx.id}"`)}</div>`,async v=>{await api(endpoint(`/transactions/${tx.id}`),'PATCH',{version:tx.version,category:v.get('category'),flow:v.get('flow'),face_punched:v.get('face_punched')==='on',bullshit_spending:v.get('bullshit_spending')==='on',learn:v.get('learn')==='on'});});
+    const matched=data.records.find(r=>['medical_payment','medical_share','medical_membership'].includes(r.kind)&&r.data.transaction_id===tx.id);
+    if(matched){recordForm(matched.kind,matched);return;}
+    dialog('Review transaction',`<p class="tr-subtle">${esc(tx.merchant)} · ${precise(tx.amount_cents)}<br>${esc(tx.explanation)}</p>${field('category','Category','text',tx.category,data.category_options)}${field('flow','Money movement','text',tx.flow,['expense','income','refund','transfer','card_payment','asset_transfer','owner_wages','owner_distribution','reimbursement','debt_payment','duplicate'])}${field('face_punched','Face Punched · unexpected, one time','checkbox',tx.face_punched)}${field('bullshit_spending','Bullshit Spending · unnecessary to me','checkbox',tx.bullshit_spending)}${field('learn','Remember an exact merchant rule','checkbox',false)}<div class="tr-actions tr-block">${btn('Split personal / business','split',`data-id="${tx.id}"`)}${btn('Undo last review','undo',`data-id="${tx.id}"`)}${data.space.kind==='household'&&tx.amount_cents<0?btn('Match monthly sharing contribution','membership-match',`data-id="${tx.id}"`):''}${data.space.kind==='household'?btn('Match medical payment / share','medical-match',`data-id="${tx.id}"`):''}</div>`,async v=>{await api(endpoint(`/transactions/${tx.id}`),'PATCH',{version:tx.version,category:v.get('category'),flow:v.get('flow'),face_punched:v.get('face_punched')==='on',bullshit_spending:v.get('bullshit_spending')==='on',learn:v.get('learn')==='on'});});
   }
   function importForm(kind='transactions') {
     const columns=kind==='transactions'?'id,date,merchant,amount,category':Object.keys(data.definitions.payroll).join(',');
@@ -183,7 +212,7 @@ function boot() {
     },'Preview');
   }
   function forecastDetail(row) {
-    dialog(`Projected ${date(row.date)}`,`<div class="tr-block"><div class="tr-row">Cash <strong>${money(row.cash_cents)}</strong></div><div class="tr-row">Available after goals <strong>${money(row.available_cents)}</strong></div><div class="tr-row">Reserved for goals <strong>${money(row.goal_reserve_cents)}</strong></div>${data.bills.filter(b=>b.date===row.date).map(b=>`<div class="tr-row">${esc(b.name)}<strong>${money(b.amount_cents)}</strong></div>`).join('')}<p class="tr-subtle">This projection includes confirmed schedules, estimated variable spending, debt payments, and goal reserves. Edit those inputs in Bills & goals or Wealth & debt.</p></div>`,null);
+    dialog(`Projected ${date(row.date)}`,`<div class="tr-block"><div class="tr-row">Cash <strong>${money(row.cash_cents)}</strong></div><div class="tr-row">Available after reserves <strong>${money(row.available_cents)}</strong></div><div class="tr-row">Reserved for goals <strong>${money(row.goal_reserve_cents)}</strong></div><div class="tr-row">Reserved for medical bills <strong>${money(row.medical_reserve_cents||0)}</strong></div>${data.bills.filter(b=>b.date===row.date).map(b=>`<div class="tr-row">${esc(b.name)}<strong>${money(b.amount_cents)}</strong></div>`).join('')}<p class="tr-subtle">This projection includes confirmed schedules, estimated variable spending, debt payments, and goal reserves. Edit those inputs in Bills & goals or Wealth & debt.</p></div>`,null);
   }
   async function connect(connectionId=null) {
     const token=await api(endpoint('/banks/link'),'POST',{connection_id:connectionId});
@@ -194,7 +223,13 @@ function boot() {
     const target=e.target.closest('[data-action]');if(!target)return;
     const a=target.dataset.action,id=Number(target.dataset.id),r=data?.records.find(r=>r.id===id),tx=[...(evidenceRows||[]),...(data?.transactions||[])].find(t=>t.id===id);
     try {
-      if(['overview','bills','assets','business','connections','transactions'].includes(a)){tab=a;render();}
+      if(['overview','bills','assets','business','connections','transactions','medical'].includes(a)){tab=a;render();}
+      else if(a==='membership')recordForm('recurring',null,{name:'Monthly Samaritan sharing',merchant:'Samaritan Ministries',cadence:'monthly',category:'health',expense_type:'fixed',amount_cents:0});
+      else if(a==='medical-child')recordForm(target.dataset.kind,null,{[target.dataset.parentKey]:id});
+      else if(a==='membership-match'){$('#tr-dialog').close();recordForm('medical_membership',null,{name:tx.merchant,transaction_id:tx.id,paid_on:tx.date,amount_cents:Math.abs(tx.amount_cents)});}
+      else if(a==='medical-match'){$('#tr-dialog').close();recordForm(tx.amount_cents<0?'medical_payment':'medical_share',null,{name:tx.merchant,transaction_id:tx.id,paid_on:tx.date,amount_cents:Math.abs(tx.amount_cents),status:'received'});}
+      else if(a==='medical-evidence')showTransactions({ids:JSON.parse(target.dataset.ids)});
+      else if(a==='medical-remove'){$('#tr-dialog').close();dialog('Remove this medical record?',`<p class="tr-subtle">Dependent records must be removed or reassigned first. Any matched statement row returns to its previous classification. Audit history is preserved.</p>`,async()=>{await api(endpoint(`/records/${id}`),'DELETE',{version:r.version});},'Remove record');}
       else if(a==='add')recordForm(target.dataset.kind);
       else if(a==='choose-kind'){$('#tr-dialog').close();recordForm(target.dataset.kind);}
       else if(a==='chart-data'){
