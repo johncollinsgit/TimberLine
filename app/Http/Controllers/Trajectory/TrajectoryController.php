@@ -37,17 +37,21 @@ class TrajectoryController extends Controller
     public function dashboard(Request $request, Space $space, FinanceAccess $access, DashboardService $dashboard)
     {
         $access->authorize($request->user(), $space);
-        $data = $request->validate(['range' => ['nullable', Rule::in(['day', 'week', 'month', 'year'])], 'scenario_id' => ['nullable', 'integer']]);
+        $data = $request->validate(['range' => ['nullable', Rule::in(['day', 'week', 'month', 'year', 'all', 'custom'])], 'scenario_id' => ['nullable', 'integer'], 'from' => 'required_if:range,custom|nullable|date_format:Y-m-d|before_or_equal:today|after_or_equal:1900-01-01', 'through' => 'required_if:range,custom|nullable|date_format:Y-m-d|after_or_equal:from|before_or_equal:today', 'seasonal' => 'sometimes|boolean']);
 
-        return response()->json($dashboard->build($space, $data['range'] ?? 'month', $data['scenario_id'] ?? null))->header('Cache-Control', 'private, no-store');
+        return response()->json($dashboard->build($space, $data['range'] ?? 'month', $data['scenario_id'] ?? null, $data['from'] ?? null, $data['through'] ?? null, (bool) ($data['seasonal'] ?? false)))->header('Cache-Control', 'private, no-store');
     }
 
     public function evidence(Request $request, Space $space, FinanceAccess $access, LedgerService $ledger)
     {
         $access->authorize($request->user(), $space);
-        $data = $request->validate(['ids' => 'required_without:date|array|min:1|max:5000', 'ids.*' => 'integer', 'date' => 'required_without:ids|date_format:Y-m-d|before_or_equal:today']);
+        $data = $request->validate(['ids' => 'required_without_all:date,account_id|array|min:1|max:5000', 'ids.*' => 'integer', 'date' => 'required_without_all:ids,account_id|date_format:Y-m-d|before_or_equal:today', 'account_id' => 'sometimes|integer']);
 
-        return response()->json($ledger->entries($space, $data['date'] ?? null, $data['date'] ?? null, $data['ids'] ?? null))->header('Cache-Control', 'private, no-store');
+        if (isset($data['account_id'])) {
+            Account::where('space_id', $space->id)->findOrFail($data['account_id']);
+        }
+
+        return response()->json($ledger->entries($space, $data['date'] ?? null, $data['date'] ?? null, $data['ids'] ?? null, $data['account_id'] ?? null))->header('Cache-Control', 'private, no-store');
     }
 
     public function account(Request $request, Space $space, FinanceAccess $access)
@@ -146,13 +150,20 @@ class TrajectoryController extends Controller
     public function previewImport(Request $request, Space $space, FinanceAccess $access)
     {
         $access->authorize($request->user(), $space);
-        $data = $request->validate(['file' => 'required|file|max:5120|mimes:csv,txt,xlsx', 'kind' => ['required', Rule::in(['transactions', 'payroll'])], 'account_id' => 'nullable|integer']);
+        $data = $request->validate(['file' => 'required|file|max:5120|mimes:csv,txt,xlsx', 'kind' => ['required', Rule::in(['transactions', 'payroll', 'monarch'])], 'account_id' => 'nullable|integer']);
         $account = null;
         if ($data['kind'] === 'transactions') {
             $account = Account::where('space_id', $space->id)->whereKey($data['account_id'] ?? 0)->firstOrFail();
         }
         abort_if($data['kind'] === 'payroll' && $space->kind !== 'business', 422);
         $file = $request->file('file');
+        if ($data['kind'] === 'monarch') {
+            $rows = app(\App\Services\Trajectory\MonarchImportService::class)->read($file->getRealPath());
+            $token = Str::random(48);
+            Cache::put('trajectory:import:'.hash('sha256', $token), encrypt(['user_id' => $request->user()->id, 'space_id' => $space->id, 'kind' => 'monarch', 'rows' => $rows]), now()->addMinutes(20));
+
+            return response()->json(['token' => $token, 'count' => count($rows), 'preview' => array_slice($rows, 0, 15), 'accounts' => array_values(array_unique(array_column($rows, 'source_account')))]);
+        }
         if ($file->getClientOriginalExtension() === 'xlsx') {
             $reader = new \PhpOffice\PhpSpreadsheet\Reader\Xlsx;
             $reader->setReadDataOnly(true);
@@ -199,14 +210,16 @@ class TrajectoryController extends Controller
     public function confirmImport(Request $request, Space $space, FinanceAccess $access)
     {
         $access->authorize($request->user(), $space);
-        $request->validate(['token' => 'required|string|max:100']);
+        $request->validate(['token' => 'required|string|max:100', 'account_kinds' => 'sometimes|array|max:100', 'account_kinds.*' => ['required', Rule::in(['cash', 'credit', 'loan', 'investment'])]]);
         $key = 'trajectory:import:'.hash('sha256', $request->input('token'));
         $cached = Cache::get($key);
         abort_unless($cached, 410, 'Import preview expired.');
         $payload = decrypt($cached);
         abort_unless($payload['user_id'] === $request->user()->id && $payload['space_id'] === $space->id, 403);
         DB::transaction(function () use ($payload, $request, $space): void {
-            if ($payload['kind'] === 'transactions') {
+            if ($payload['kind'] === 'monarch') {
+                app(\App\Services\Trajectory\MonarchImportService::class)->import($request->user(), $space, $payload['rows'], $request->input('account_kinds', []));
+            } elseif ($payload['kind'] === 'transactions') {
                 $account = Account::where('space_id', $space->id)->findOrFail($payload['account_id']);
                 app(LedgerService::class)->ingest($account, $payload['rows']);
                 $account->update(['history_start' => Transaction::where('account_id', $account->id)->min('posted_on')]);

@@ -1,4 +1,12 @@
 # START HERE
+## Trajectory standalone experience and evidence imports (2026-09-14)
+
+Trajectory has its own public `/trajectory/welcome` page and full-width authenticated `/trajectory` navigation. It reuses Everbranch login, finance spaces, financial permissions, and entitlements; the Back to Everbranch link does not change financial access. Personal-only use remains independent of company books. Checkout remains disabled until configured prices and lifecycle readiness pass.
+
+The dashboard includes subscription evidence, upcoming loan payments, account cash history, historical month comparison, dated budget versions, receipts, and interest by account. Imported cash history is not net-worth history. Unknown card terms leave purchases on the card liability and do not invent cash payments or APRs. Monthly and actual/365 biweekly debt calculations retain decimal rates; separate mortgage withdrawals expose the suspense/allocation assumption.
+
+`trajectory:import-household` imports private Monarch history, optional Chase CSV and Monarch balance history, dated account observations, budgets, receipts, and reviewed financial records. It requires an existing verified household owner and entitlement. The default executes validation inside a rolled-back transaction; `--apply` commits atomically. Import identities, audited evidence corrections, and record replay markers preserve subsequent user corrections. Keep every real input, receipt, screenshot, database, and financial export outside git and public fixtures. See `docs/operations/trajectory-runbook.md`.
+
 
 ## Level Foundations transcription bridge (2026-09-07)
 

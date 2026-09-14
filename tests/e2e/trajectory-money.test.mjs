@@ -16,3 +16,10 @@ test('percentage allocations round one side and preserve the original remainder'
   assert.equal(percentShare(amount, '100'), amount);
   assert.throws(() => percentShare(amount, '101'));
 });
+
+test('mortgage rates retain three decimal places', async () => {
+  const { rateMillis } = await import('../../resources/js/trajectory/money.js');
+  assert.equal(rateMillis('2.375'), 2375);
+  assert.equal(rateMillis('0'), 0);
+  assert.throws(() => rateMillis('2.3751'));
+});

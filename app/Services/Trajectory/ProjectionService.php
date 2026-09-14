@@ -31,21 +31,58 @@ class ProjectionService
         return $dates;
     }
 
+    public function monthlyInterest(int $balance, array $debt): int
+    {
+        return isset($debt['rate_millis']) ? Money::ratio($balance, $debt['rate_millis'], 1200000) : Money::ratio($balance, $debt['apr_bps'], 120000);
+    }
+
+    public function periodInterest(int $balance, array $debt, CarbonImmutable $date, ?CarbonImmutable $previous): int
+    {
+        if (($debt['interest_method'] ?? 'monthly') !== 'actual_365') {
+            return $this->monthlyInterest($balance, $debt);
+        }
+        $previous ??= CarbonImmutable::parse($debt['interest_paid_through']);
+        $days = max(0, (int) $previous->diffInDays($date, false));
+
+        return Money::ratio($balance, ($debt['rate_millis'] ?? $debt['apr_bps'] * 10) * $days, 36500000);
+    }
+
+    private function monthlyContribution(int $cents, array $debt): int
+    {
+        return match ($debt['payment_cadence'] ?? 'monthly') {
+            'biweekly' => Money::ratio($cents, 12, 26),
+            'weekly' => Money::ratio($cents, 12, 52),
+            default => $cents,
+        };
+    }
+
+    private function debtDate(CarbonImmutable $due, int $period, array $debt): CarbonImmutable
+    {
+        return match ($debt['payment_cadence'] ?? 'monthly') {
+            'weekly' => $due->addDays(7 * $period),
+            'biweekly' => $due->addDays(14 * $period),
+            default => $due->addMonthsNoOverflow($period),
+        };
+    }
+
     public function debt(array $debt, int $extraCents = 0): array
     {
         $balance = $debt['balance_cents'];
         $totalInterest = 0;
         $rows = [];
         $due = CarbonImmutable::parse($debt['next_due_on']);
+        $previous = null;
         for ($month = 0; $balance > 0 && $month < 1200; $month++) {
-            $interest = Money::ratio($balance, $debt['apr_bps'], 120000);
-            $payment = min($balance + $interest, $debt['payment_cents'] + $extraCents);
+            $date = $this->debtDate($due, $month, $debt);
+            $interest = $this->periodInterest($balance, $debt, $date, $previous);
+            $previous = $date;
+            $payment = min($balance + $interest, $debt['payment_cents'] + $this->monthlyContribution($extraCents, $debt));
             if ($payment <= $interest) {
                 return ['status' => 'not_amortizing', 'interest_cents' => null, 'payoff_on' => null, 'rows' => $rows];
             }
             $balance -= $payment - $interest;
             $totalInterest += $interest;
-            $rows[] = ['date' => $due->addMonthsNoOverflow($month)->toDateString(), 'balance_cents' => $balance, 'interest_cents' => $interest, 'payment_cents' => $payment, 'principal_cents' => $payment - $interest];
+            $rows[] = ['date' => $date->toDateString(), 'balance_cents' => $balance, 'interest_cents' => $interest, 'payment_cents' => $payment, 'principal_cents' => $payment - $interest];
         }
 
         return ['status' => $balance === 0 ? 'projected' : 'beyond_horizon', 'interest_cents' => $balance === 0 ? $totalInterest : null, 'payoff_on' => $balance === 0 ? ($rows[count($rows) - 1]['date'] ?? null) : null, 'rows' => $rows];
@@ -63,7 +100,16 @@ class ProjectionService
             if (($debt['kind'] ?? '') === 'credit' && ! empty($debt['account_id'])) {
                 $credit[$debt['account_id']] = $index;
             }
-            foreach ($this->occurrences([...$debt, 'cadence' => 'monthly'], $from, $until) as $date) {
+            if (! empty($debt['unknown_terms'])) {
+                continue;
+            }
+            $debts[$index]['cash_held_cents'] = 0;
+            if (! empty($debt['cash_cadence'])) {
+                foreach ($this->occurrences(['cadence' => $debt['cash_cadence'], 'next_due_on' => $debt['cash_next_due_on']], $from, $until) as $date) {
+                    $events[$date][] = ['cash_debt' => $index];
+                }
+            }
+            foreach ($this->occurrences([...$debt, 'cadence' => $debt['payment_cadence'] ?? 'monthly'], $from, $until) as $date) {
                 $events[$date][] = ['debt' => $index];
             }
         }
@@ -92,6 +138,11 @@ class ProjectionService
             foreach ($dailyByAccount as $accountId => $budget) {
                 $income = is_array($budget) ? $budget['income'] : max(0, $budget);
                 $expense = is_array($budget) ? $budget['expense'] : min(0, $budget);
+                if (is_array($budget) && isset($budget['seasonal'][$date->month])) {
+                    $season = $budget['seasonal'][$date->month];
+                    $expense = Money::ratio($season['expense_total'], $date->day, $date->daysInMonth) - Money::ratio($season['expense_total'], $date->day - 1, $date->daysInMonth);
+                    $budget['categories'] = array_map(fn ($v) => Money::ratio($v, $date->day, $date->daysInMonth) - Money::ratio($v, $date->day - 1, $date->daysInMonth), $season['categories_total']);
+                }
                 $reducible = ! empty($scenario['reduction_category']) ? ($budget['categories'][$scenario['reduction_category']] ?? 0) : $expense;
                 $amount = $income + $expense + Money::ratio(max(0, -$reducible), $reduction, 10000);
                 if (isset($credit[$accountId])) {
@@ -101,27 +152,35 @@ class ProjectionService
                 }
             }
             foreach ($events[$key] ?? [] as $event) {
-                if (isset($event['debt'])) {
+                if (isset($event['cash_debt'])) {
+                    $d = $debts[$event['cash_debt']];
+                    if ($d['current'] > 0) {
+                        $withdrawal = min($d['cash_payment_cents'], max(0, $d['current'] + $this->monthlyInterest($d['current'], $d) + ($d['escrow_cents'] ?? 0) + ($d['fees_cents'] ?? 0) - $d['cash_held_cents']));
+                        $flow -= $withdrawal;
+                        $debts[$event['cash_debt']]['cash_held_cents'] += $withdrawal;
+                    }
+                } elseif (isset($event['debt'])) {
                     $index = $event['debt'];
                     $debt = $debts[$index];
                     if ($debt['current'] <= 0) {
                         continue;
                     }
-                    $interest = Money::ratio(max(0, $debt['current']), $debt['apr_bps'], 120000);
+                    $interest = $this->periodInterest(max(0, $debt['current']), $debt, $date, isset($debt['last_payment_date']) ? CarbonImmutable::parse($debt['last_payment_date']) : null);
+                    $debts[$index]['last_payment_date'] = $key;
                     $goalExtra = 0;
                     foreach ($goals as $goal) {
                         if (($goal['goal_type'] ?? '') === 'debt_paydown' && ($goal['debt_record_id'] ?? null) === ($debt['id'] ?? -1)) {
-                            $goalExtra += min($goal['remaining_cents'], $goal['monthly_cents']);
+                            $goalExtra += min($goal['remaining_cents'], $this->monthlyContribution($goal['monthly_cents'], $debt));
                         }
                     }
-                    $basePayment = $debt['payment_cents'] + (($debt['kind'] ?? '') === 'medical' ? 0 : ($scenario['extra_debt_payment_cents'] ?? 0));
+                    $basePayment = $debt['payment_cents'] + (($debt['kind'] ?? '') === 'medical' ? 0 : $this->monthlyContribution($scenario['extra_debt_payment_cents'] ?? 0, $debt));
                     $payment = min(max(0, $debt['current']) + $interest, $basePayment + $goalExtra);
                     $goalPaid = max(0, $payment - $basePayment);
                     foreach ($goals as $i => $goal) {
                         if (($goal['goal_type'] ?? '') !== 'debt_paydown' || ($goal['debt_record_id'] ?? null) !== ($debt['id'] ?? -1)) {
                             continue;
                         }
-                        $applied = min($goalPaid, $goal['remaining_cents'], $goal['monthly_cents']);
+                        $applied = min($goalPaid, $goal['remaining_cents'], $this->monthlyContribution($goal['monthly_cents'], $debt));
                         $goals[$i]['remaining_cents'] -= $applied;
                         $goalPaid -= $applied;
                     }
@@ -130,11 +189,20 @@ class ProjectionService
                         $needId = $debt['medical_need_id'];
                         $medicalReserves[$needId] = max(0, ($medicalReserves[$needId] ?? 0) - $payment);
                     }
-                    $flow -= $payment + ($debt['escrow_cents'] ?? 0) + ($debt['fees_cents'] ?? 0);
+                    if (empty($debt['cash_cadence'])) {
+                        $flow -= $payment + ($debt['escrow_cents'] ?? 0) + ($debt['fees_cents'] ?? 0);
+                    } else {
+                        $flow -= max(0, $payment - $debt['payment_cents']);
+                        $debts[$index]['cash_held_cents'] = max(0, $debt['cash_held_cents'] - min($payment, $debt['payment_cents']) - ($debt['escrow_cents'] ?? 0) - ($debt['fees_cents'] ?? 0));
+                    }
                 } elseif (isset($credit[$event['account_id'] ?? 0])) {
                     $debts[$credit[$event['account_id']]]['current'] -= $event['amount_cents'];
                 } else {
                     $flow += $event['amount_cents'];
+                    if (isset($credit[$event['debt_account_id'] ?? 0])) {
+                        $index = $credit[$event['debt_account_id']];
+                        $debts[$index]['current'] = max(0, $debts[$index]['current'] + $event['amount_cents']);
+                    }
                 }
             }
             if (($scenario['shock_on'] ?? null) === $key) {
@@ -164,7 +232,7 @@ class ProjectionService
         }
 
         return ['daily' => $daily, 'monthly' => $monthly, 'first_shortfall_on' => $shortfall, 'cash_change_cents' => $cashDelta,
-            'assumptions' => ['Monthly interest estimate; lender daily accrual may differ.', 'Asset prices held constant.', 'Expected medical shares are excluded; received shares may be reserved until provider payments consume them.', 'Goals reserve available cash without reducing net worth.', 'No automatic increase in income or spending.', 'Debt-associated escrow and fees stop at payoff; model ongoing property taxes and insurance as separate bills.']];
+            'assumptions' => ['Interest uses the reviewed monthly or actual/365 method; lender posting and rounding can differ.', collect($dailyByAccount)->contains(fn ($b) => is_array($b) && ! empty($b['seasonal'])) ? 'Seasonal view: variable spending repeats the latest available complete matching calendar month; missing months use the recent baseline. Prior behavior may not recur.' : 'Variable spending uses the latest 90 complete days, limited by imported account history.', 'Asset prices held constant.', 'Expected medical shares are excluded; received shares may be reserved until provider payments consume them.', 'Goals reserve available cash without reducing net worth.', 'No automatic increase in income or spending.', 'Separate mortgage withdrawal schedules model cash timing; lender suspense allocation and accelerated payoff need reconciliation.', 'Debt-associated escrow and fees stop at payoff; model ongoing property taxes and insurance as separate bills.']];
     }
 
     public function reliance(array $data): array

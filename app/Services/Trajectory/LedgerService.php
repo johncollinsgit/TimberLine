@@ -27,6 +27,11 @@ class LedgerService
                     $tx = Transaction::where('account_id', $account->id)->where('source_key', $pendingKey)->lockForUpdate()->first();
                 }
                 $classification = $tx?->reviewed ? [] : app(ClassificationService::class)->suggest($space, $row['merchant'], $row['amount_cents'], $row['category'] ?? null);
+                if (! $tx?->reviewed && in_array($row['source_provider'] ?? null, ['monarch_csv', 'chase_csv', 'observed_statement'], true) && ! str_starts_with($classification['explanation'] ?? '', 'Your exact merchant rule:')) {
+                    $profileFlag = $classification['bullshit_spending'] ?? false;
+                    $classification = $row['import_classification'];
+                    $classification['bullshit_spending'] = $profileFlag && $classification['flow'] === 'expense';
+                }
                 $oldAmount = $tx?->amount_cents;
                 $tx ??= new Transaction;
                 $tx->fill([
@@ -116,9 +121,12 @@ class LedgerService
         });
     }
 
-    public function entries(Space $space, ?string $start = null, ?string $end = null, ?array $ids = null): array
+    public function entries(Space $space, ?string $start = null, ?string $end = null, ?array $ids = null, ?int $accountId = null): array
     {
         $query = Allocation::where('trajectory_allocations.space_id', $space->id)->join('trajectory_transactions as t', 't.id', '=', 'transaction_id')->where('t.removed', false)->where('t.pending', false);
+        if ($accountId !== null) {
+            $query->where('t.space_id', $space->id)->where('t.account_id', $accountId);
+        }
         if ($ids !== null) {
             $query->whereIn('t.id', $ids);
         }

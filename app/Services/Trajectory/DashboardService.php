@@ -15,14 +15,21 @@ use Carbon\CarbonImmutable;
 
 class DashboardService
 {
-    public function build(Space $space, string $range = 'month', ?int $scenarioId = null): array
+    public function build(Space $space, string $range = 'month', ?int $scenarioId = null, ?string $from = null, ?string $through = null, bool $seasonal = false): array
     {
         $today = CarbonImmutable::now($space->timezone)->startOfDay();
         $start = match ($range) {
             'day' => $today, 'week' => $today->startOfWeek(), 'year' => $today->startOfYear(), default => $today->startOfMonth()
         };
         $entries = collect(app(LedgerService::class)->entries($space, null, $today->toDateString()));
-        $selected = $entries->where('date', '>=', $start->toDateString())->values();
+        if ($range === 'all') {
+            $start = $entries->isNotEmpty() ? CarbonImmutable::parse($entries->min('date'), $space->timezone) : $start;
+        }
+        if ($range === 'custom' && $from && $through) {
+            $start = CarbonImmutable::parse($from, $space->timezone);
+        }
+        $end = $range === 'custom' && $through ? CarbonImmutable::parse($through, $space->timezone) : $today;
+        $selected = $entries->where('date', '>=', $start->toDateString())->where('date', '<=', $end->toDateString())->values();
         $accounts = Account::where('space_id', $space->id)->get();
         $records = Record::where('space_id', $space->id)->where('active', true)->whereNotIn('kind', ['sms'])->get();
         $plans = fn ($kind) => $records->where('kind', $kind)->map(fn ($r) => [...$r->data, 'id' => $r->id, 'name' => $r->name])->values()->all();
@@ -44,7 +51,7 @@ class DashboardService
         foreach ($debts as &$debt) {
             $account = $accounts->firstWhere('id', $debt['account_id'] ?? null);
             if ($account && $account->balance_cents !== null) {
-                $debt['balance_cents'] = max(0, $account->balance_cents);
+                $debt['balance_cents'] = max(0, $account->balance_cents - ($debt['opening_accrued_interest_cents'] ?? 0));
             }
         }
         unset($debt);
@@ -78,8 +85,13 @@ class DashboardService
                 $dailyByAccount[$id][$bucket] = is_array($sum) ? array_map(fn ($v) => Money::ratio($v, 1, $denominator), $sum) : Money::ratio($sum, 1, $denominator);
             }
         }
+        $seasonalSources = $seasonal ? app(HistoryService::class)->seasonal($entries, $accounts, $schedules, $today) : [];
+        foreach ($seasonalSources as $id => $months) {
+            $dailyByAccount[$id] ??= ['income' => 0, 'expense' => 0, 'categories' => []];
+            $dailyByAccount[$id]['seasonal'] = $months;
+        }
         $cash = (int) $accounts->where('kind', 'cash')->sum('balance_cents');
-        $blockers = $medical['issues'];
+        $blockers = [...$medical['issues'], ...($space->settings['coverage_notes'] ?? [])];
         if ($accounts->whereIn('kind', ['cash', 'credit'])->contains(fn ($a) => ! $a->history_start || $a->history_start->gt($today->subDays(90)))) {
             $blockers[] = 'Some spending accounts have less than 90 days of history.';
         }
@@ -97,13 +109,33 @@ class DashboardService
                 $blockers[] = 'Review payment terms for '.$a->name.'.';
             }
         }
+        $unresolvedDeposits = \App\Models\Trajectory\Transaction::where('space_id', $space->id)->where('reviewed', false)->where('flow', 'transfer')->where('amount_cents', '>', 0)->where('pending', false)->where('removed', false)->whereDate('posted_on', '>=', $today->subDays(90))->get()->filter(fn ($t) => preg_match('/DEPOSIT|CASHOUT/i', $t->source['original']['Original Statement'] ?? ''));
+        if ($unresolvedDeposits->isNotEmpty()) {
+            array_unshift($blockers, 'Incoming deposits need purpose review before relying on this forecast. Company income, medical shares, and transfers have different effects.');
+        }
+        // Verified next-payment notices fill cash timing only until full debt terms are known.
+        // A matching debt plan already contains the payment and takes precedence.
+        foreach ($plans('payment_notice') as $notice) {
+            if (! $notice['confirmed'] || $notice['due_on'] <= $today->toDateString() || collect($debts)->contains('account_id', $notice['account_id']) || collect($schedules)->contains('id', $notice['recurring_record_id'] ?? null)) {
+                continue;
+            }
+            $schedules[] = ['id' => $notice['id'], 'name' => $notice['name'], 'merchant' => '', 'account_id' => $notice['payment_account_id'] ?? 0, 'amount_cents' => -$notice['amount_cents'], 'debt_account_id' => $notice['account_id'], 'next_due_on' => $notice['due_on'], 'cadence' => 'once', 'expense_type' => 'fixed', 'category' => 'uncategorized', 'confirmed' => true];
+        }
+        // Unknown card terms must not turn card purchases into immediate cash spending.
+        // Keep known liabilities and purchases, with no invented APR or future minimums.
+        $forecastDebts = $debts;
+        foreach ($accounts->whereIn('kind', ['credit', 'loan']) as $account) {
+            if (! collect($debts)->contains('account_id', $account->id)) {
+                $forecastDebts[] = ['account_id' => $account->id, 'kind' => $account->kind, 'balance_cents' => max(0, $account->balance_cents ?? 0), 'unknown_terms' => true];
+            }
+        }
         $projection = app(ProjectionService::class);
-        $baseline = $projection->forecast($cash, $dailyByAccount, $schedules, $debts, $plans('goal'), [], $today, 60, $medical['reserves']);
+        $baseline = $projection->forecast($cash, $dailyByAccount, $schedules, $forecastDebts, $plans('goal'), [], $today, 60, $medical['reserves']);
         $scenario = $scenarioId ? $records->where('kind', 'scenario')->firstWhere('id', $scenarioId) : null;
         if ($scenarioId) {
             abort_unless($scenario, 404);
         }
-        $comparison = $scenario ? $projection->forecast($cash, $dailyByAccount, $schedules, $debts, $plans('goal'), $scenario->data, $today, 60, $medical['reserves']) : null;
+        $comparison = $scenario ? $projection->forecast($cash, $dailyByAccount, $schedules, $forecastDebts, $plans('goal'), $scenario->data, $today, 60, $medical['reserves']) : null;
         $bills = [];
         $replaced = array_filter(array_column($debts, 'recurring_record_id'));
         foreach ($schedules as $schedule) {
@@ -124,8 +156,8 @@ class DashboardService
 
                 continue;
             }
-            foreach ($projection->occurrences([...$debt, 'cadence' => 'monthly'], $today, $today->addDays(45)) as $date) {
-                $bills[] = ['date' => $date, 'name' => $debt['name'], 'amount_cents' => -($debt['payment_cents'] + ($debt['escrow_cents'] ?? 0) + ($debt['fees_cents'] ?? 0)), 'record_id' => $debt['id'], 'estimated' => true];
+            foreach ($projection->occurrences([...$debt, 'cadence' => $debt['cash_cadence'] ?? $debt['payment_cadence'] ?? 'monthly', 'next_due_on' => $debt['cash_next_due_on'] ?? $debt['next_due_on']], $today, $today->addDays(45)) as $date) {
+                $bills[] = ['date' => $date, 'name' => $debt['name'], 'amount_cents' => -($debt['cash_payment_cents'] ?? ($debt['payment_cents'] + ($debt['escrow_cents'] ?? 0) + ($debt['fees_cents'] ?? 0))), 'record_id' => $debt['id'], 'estimated' => true];
             }
         }
         usort($bills, fn ($a, $b) => strcmp($a['date'], $b['date']));
@@ -133,20 +165,29 @@ class DashboardService
         $income = $selected->whereIn('flow', ['income', 'owner_wages', 'owner_distribution'])->where('amount_cents', '>', 0)->sum('amount_cents');
         $categories = $spending->groupBy('category')->map(fn ($rows, $category) => ['category' => $category, 'amount_cents' => -(int) $rows->sum('amount_cents'), 'ids' => $rows->pluck('id')->all()])->values()->all();
         $dailySeries = $selected->groupBy('date')->map(fn ($rows, $date) => ['date' => $date, 'income_cents' => (int) $rows->whereIn('flow', ['income', 'owner_wages', 'owner_distribution'])->where('amount_cents', '>', 0)->sum('amount_cents'), 'spending_cents' => -(int) $rows->whereIn('flow', ['expense', 'refund', 'medical_payment', 'medical_membership'])->sum('amount_cents')])->values()->all();
+        $interestStatements = $plans('interest_statement');
+        $interestService = app(InterestService::class);
         $interest = $entries->where('category', 'interest')->where('flow', 'expense');
         $debtRows = [];
         foreach ($debts as $debt) {
             $debtInterest = empty($debt['account_id']) ? collect() : $interest->where('account_id', $debt['account_id']);
+            $debtStatements = array_values(array_filter($interestStatements, fn ($s) => $s['account_id'] === ($debt['account_id'] ?? null)));
             $payoff = $projection->debt($debt);
             $extra = $projection->debt($debt, $debt['kind'] === 'medical' ? 0 : ($scenario?->data['extra_debt_payment_cents'] ?? 0));
-            $debtRows[] = [...$debt, 'projection' => $payoff, 'recorded_interest_cents' => -(int) $debtInterest->sum('amount_cents'), 'selected_interest_cents' => -(int) $debtInterest->where('date', '>=', $start->toDateString())->sum('amount_cents'), 'ytd_interest_cents' => -(int) $debtInterest->where('date', '>=', $today->startOfYear()->toDateString())->sum('amount_cents'), 'interest_savings_cents' => $payoff['interest_cents'] !== null && $extra['interest_cents'] !== null ? $payoff['interest_cents'] - $extra['interest_cents'] : null];
+            $debtRows[] = [...$debt, 'projection' => $payoff, 'recorded_interest_cents' => $interestService->total($debtInterest, $debtStatements), 'selected_interest_cents' => $interestService->total($debtInterest, $debtStatements, $start->toDateString(), $end->toDateString()), 'ytd_interest_cents' => $interestService->total($debtInterest, $debtStatements, $today->startOfYear()->toDateString(), $today->toDateString()), 'interest_savings_cents' => $payoff['interest_cents'] !== null && $extra['interest_cents'] !== null ? $payoff['interest_cents'] - $extra['interest_cents'] : null];
         }
+        $interestByAccount = $accounts->whereIn('kind', ['credit', 'loan'])->map(function ($account) use ($interest, $interestStatements, $interestService, $start, $end, $today) {
+            $charges = $interest->where('account_id', $account->id);
+            $statements = array_values(array_filter($interestStatements, fn ($s) => $s['account_id'] === $account->id));
+
+            return ['account_id' => $account->id, 'name' => $account->name, 'recorded_cents' => $interestService->total($charges, $statements), 'selected_cents' => $interestService->total($charges, $statements, $start->toDateString(), $end->toDateString()), 'ytd_cents' => $interestService->total($charges, $statements, $today->startOfYear()->toDateString(), $today->toDateString()), 'ids' => $charges->pluck('id')->all(), 'has_evidence' => $charges->isNotEmpty() || count($statements) > 0];
+        })->values()->all();
         $quotes = $records->contains('kind', 'metal') ? app(MetalsService::class)->quotes() : ['status' => 'not_requested', 'prices' => []];
         $metals = array_map(fn ($lot) => [...$lot, ...app(MetalsService::class)->value($lot, $quotes['prices'][$lot['metal']]['price_cents'] ?? null)], $plans('metal'));
         $assets = $plans('asset');
         $liabilities = (int) $accounts->whereIn('kind', ['credit', 'loan'])->sum('balance_cents') + (int) collect($debts)->filter(fn ($d) => empty($d['account_id']))->sum('balance_cents');
         $assetTotal = $cash + (int) $accounts->where('kind', 'investment')->sum('balance_cents') + (int) collect($assets)->sum('value_cents') + (int) collect($metals)->sum('value_cents');
-        $netComplete = empty($medical['issues']) && ! $accounts->contains(fn ($a) => $a->balance_cents === null) && ! collect($metals)->contains(fn ($m) => $m['value_cents'] === null);
+        $netComplete = empty($space->settings['coverage_notes'] ?? []) && empty($medical['issues']) && ! $accounts->contains(fn ($a) => $a->balance_cents === null) && ! collect($metals)->contains(fn ($m) => $m['value_cents'] === null);
         $recommendations = [];
         $waste = $historical->where('bullshit_spending', true)->whereIn('flow', ['expense', 'refund', 'medical_payment', 'medical_membership']);
         foreach ($waste->groupBy('category') as $category => $rows) {
@@ -164,18 +205,24 @@ class DashboardService
         }, $plans('goal'));
 
         return [
-            'space' => $space->only(['id', 'name', 'kind', 'currency', 'timezone']), 'range' => ['key' => $range, 'start' => $start->toDateString(), 'end' => $today->toDateString()],
-            'summary' => ['income_cents' => (int) $income, 'spending_cents' => -(int) $spending->sum('amount_cents'), 'cash_cents' => $cash, 'net_worth_cents' => $assetTotal - $liabilities, 'net_worth_complete' => $netComplete, 'assets_cents' => $assetTotal, 'liabilities_cents' => $liabilities, 'review_count' => $entries->where('reviewed', false)->count(), 'selected_interest_cents' => -(int) $interest->where('date', '>=', $start->toDateString())->sum('amount_cents'), 'ytd_interest_cents' => -(int) $interest->where('date', '>=', $today->startOfYear()->toDateString())->sum('amount_cents'), 'recorded_interest_cents' => -(int) $interest->sum('amount_cents'), 'projected_interest_cents' => collect($debtRows)->contains(fn ($d) => $d['projection']['interest_cents'] === null) ? null : (int) collect($debtRows)->sum(fn ($d) => $d['projection']['interest_cents'])],
+            'space' => $space->only(['id', 'name', 'kind', 'currency', 'timezone']), 'range' => ['key' => $range, 'start' => $start->toDateString(), 'end' => $end->toDateString()],
+            'unresolved_deposits' => ['amount_cents' => (int) $unresolvedDeposits->sum('amount_cents'), 'ids' => $unresolvedDeposits->pluck('id')->all()],
+            'summary' => ['income_cents' => (int) $income, 'spending_cents' => -(int) $spending->sum('amount_cents'), 'cash_cents' => $cash, 'net_worth_cents' => $assetTotal - $liabilities, 'net_worth_complete' => $netComplete, 'assets_cents' => $assetTotal, 'liabilities_cents' => $liabilities, 'review_count' => $entries->where('reviewed', false)->count(), 'selected_interest_cents' => $interestService->total($interest, $interestStatements, $start->toDateString(), $end->toDateString()), 'ytd_interest_cents' => $interestService->total($interest, $interestStatements, $today->startOfYear()->toDateString(), $today->toDateString()), 'recorded_interest_cents' => $interestService->total($interest, $interestStatements), 'projected_interest_cents' => count($forecastDebts) > count($debts) || collect($debtRows)->contains(fn ($d) => $d['projection']['interest_cents'] === null) ? null : (int) collect($debtRows)->sum(fn ($d) => $d['projection']['interest_cents'])],
             'coverage' => ['history_days' => $days, 'provisional' => $days < 90 || count($blockers) > 0, 'blockers' => $blockers, 'history_start' => $historyStart?->toDateString()],
             'accounts' => $accounts->map(fn ($a) => $a->only(['id', 'name', 'kind', 'balance_cents', 'history_start', 'observed_at']))->all(),
             'connections' => Connection::where('space_id', $space->id)->get()->map(fn ($c) => $c->only(['id', 'status', 'institution_name', 'synced_at']))->all(),
             'medical' => $space->kind === 'household' ? $medical : null,
+            'interest_by_account' => $interestByAccount, 'interest_statements' => $interestStatements,
+            'commitments' => app(CommitmentsService::class)->summary($records, $entries, $accounts, $today),
+            'history' => app(HistoryService::class)->summarize($entries, $accounts, $today),
+            'seasonality' => ['enabled' => $seasonal, 'sources' => $seasonalSources],
             'transactions' => $selected->reverse()->values()->all(), 'categories' => $categories, 'daily_series' => $dailySeries,
             'debt_suggestions' => app(PlaidService::class)->debtSuggestions($space), 'forecast' => $baseline, 'comparison' => $comparison, 'bills' => $bills, 'goals' => $goals, 'debts' => $debtRows, 'assets' => $assets, 'metals' => $metals, 'quotes' => $quotes,
             'recommendations' => $recommendations, 'recurring_suggestions' => $this->recurringSuggestions($entries, $schedules),
             'records' => $records->whereNotIn('kind', ['payroll'])->values()->all(),
-            'net_worth_history' => Snapshot::where('space_id', $space->id)->orderBy('observed_on')->get()->map(fn ($s) => ['date' => $s->observed_on->toDateString(), ...$s->data])->all(),
-            'business' => $space->kind === 'business' ? $this->business($space, $start, $today, $records) : null,
+            'cash_history' => Snapshot::where('space_id', $space->id)->orderBy('observed_on')->get()->filter(fn ($s) => isset($s->data['imported_cash_cents']))->map(fn ($s) => ['date' => $s->observed_on->toDateString(), 'cash_cents' => $s->data['imported_cash_cents'], 'accounts' => $s->data['imported_cash_accounts'], 'source' => $s->data['cash_source']])->values()->all(),
+            'net_worth_history' => Snapshot::where('space_id', $space->id)->orderBy('observed_on')->get()->filter(fn ($s) => isset($s->data['net_worth_cents']))->map(fn ($s) => ['date' => $s->observed_on->toDateString(), ...$s->data])->values()->all(),
+            'business' => $space->kind === 'business' ? $this->business($space, $start, $end, $records) : null,
             'providers' => ['plaid' => app(PlaidService::class)->ready(), 'metals' => filled(config('trajectory.goldapi_key')), 'sms' => (bool) config('trajectory.sms_enabled')],
             'settings' => ['discretionary_categories' => $space->settings['discretionary_categories'] ?? config('trajectory.discretionary_defaults')],
             'definitions' => config('trajectory_records'), 'category_options' => config('trajectory.categories'),

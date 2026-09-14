@@ -48,7 +48,7 @@ class MetalsService
         if ($lot['unit'] === 'troy_ounce') {
             $grams = $grams->multipliedBy('31.1034768');
         }
-        $fineOunces = $grams->multipliedBy($quantity)->multipliedBy($lot['purity_bps'])->dividedBy('311034.768', 12, RoundingMode::HALF_UP);
+        $fineOunces = $grams->multipliedBy($quantity)->multipliedBy(($lot['weight_basis'] ?? 'gross') === 'fine' ? 10000 : $lot['purity_bps'])->dividedBy('311034.768', 12, RoundingMode::HALF_UP);
         $value = $priceCents === null ? null : $fineOunces->multipliedBy($priceCents)->toScale(0, RoundingMode::HALF_UP)->toInt();
 
         return ['fine_troy_ounces' => (string) $fineOunces, 'value_cents' => $value, 'cost_basis_cents' => $lot['cost_basis_cents'], 'gain_cents' => $value === null ? null : $value - $lot['cost_basis_cents'], 'resale_value_cents' => $value === null ? null : $value + ($lot['resale_adjustment_cents'] ?? 0)];

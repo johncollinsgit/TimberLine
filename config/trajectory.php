@@ -13,6 +13,6 @@ return [
         'redirect_uri' => env('PLAID_REDIRECT_URI'),
     ],
     'goldapi_key' => env('GOLDAPI_KEY'),
-    'categories' => ['housing', 'utilities', 'groceries', 'transport', 'health', 'insurance', 'education', 'dining', 'delivery_fees', 'entertainment', 'shopping', 'alcohol', 'tobacco', 'gambling', 'subscriptions', 'materials', 'payroll', 'fees', 'interest', 'income', 'uncategorized'],
+    'categories' => ['giving', 'travel', 'taxes', 'housing', 'utilities', 'groceries', 'transport', 'health', 'insurance', 'education', 'dining', 'delivery_fees', 'entertainment', 'shopping', 'alcohol', 'tobacco', 'gambling', 'subscriptions', 'materials', 'payroll', 'fees', 'interest', 'income', 'uncategorized'],
     'discretionary_defaults' => ['gambling', 'tobacco', 'alcohol', 'delivery_fees', 'entertainment', 'shopping'],
 ];
