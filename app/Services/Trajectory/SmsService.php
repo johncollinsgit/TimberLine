@@ -90,7 +90,7 @@ class SmsService
                 return;
             }
             $tx = Transaction::where('space_id', $space->id)->whereKey($notification->transaction_id)->lockForUpdate()->first();
-            if (! $tx || $tx->removed || $tx->pending || $tx->updated_at->gt($notification->created_at)) {
+            if (! $tx || str_starts_with($tx->flow, 'medical_') || $tx->removed || $tx->pending || $tx->updated_at->gt($notification->created_at)) {
                 return;
             }
             app(LedgerService::class)->classify($user, $space, $tx, ['version' => $tx->version, 'category' => $tx->category, 'flow' => $tx->flow, 'face_punched' => $matches[2] === 'FACE', 'bullshit_spending' => $matches[2] === 'BS']);

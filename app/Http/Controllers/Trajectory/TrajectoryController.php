@@ -86,6 +86,7 @@ class TrajectoryController extends Controller
         $request->validate(['version' => 'required|integer']);
         DB::transaction(function () use ($request, $space, $transaction): void {
             $tx = Transaction::whereKey($transaction->id)->lockForUpdate()->firstOrFail();
+            app(\App\Services\Trajectory\MedicalSharingService::class)->assertUnbound($tx);
             abort_unless($tx->version === (int) $request->input('version'), 409);
             $event = Event::where('space_id', $space->id)->where('record_id', $tx->id)->whereIn('action', ['classify', 'undo_classify'])->latest('id')->first();
             abort_unless($event && $event->action === 'classify' && ($event->after['version'] ?? null) === $tx->version, 409, 'Only the latest classification can be undone.');
@@ -121,8 +122,10 @@ class TrajectoryController extends Controller
         abort_unless($record->space_id === $space->id, 404);
         $data = $request->validate(['version' => 'required|integer']);
         DB::transaction(function () use ($record, $space, $request, $data): void {
+            Space::whereKey($space->id)->lockForUpdate()->firstOrFail();
             $record = Record::whereKey($record->id)->lockForUpdate()->firstOrFail();
-            abort_unless($record->version === $data['version'], 409);
+            abort_unless($record->active && $record->version === $data['version'], 409);
+            app(\App\Services\Trajectory\MedicalSharingService::class)->archive($request->user(), $space, $record);
             $record->update(['active' => false, 'version' => $record->version + 1]);
             Event::create(['space_id' => $space->id, 'actor_id' => $request->user()->id, 'action' => 'archive_'.$record->kind, 'record_id' => $record->id]);
         });

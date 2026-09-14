@@ -8,7 +8,7 @@
         <div id="tr-feedback" role="status" aria-live="polite" hidden></div>
         <div id="tr-invite" hidden class="tr-notice">You have a household invitation. <button id="tr-accept">Accept invitation</button></div>
         <nav class="tr-tabs" aria-label="Trajectory sections">
-            @foreach(['overview'=>'Overview','transactions'=>'Transactions','bills'=>'Bills & goals','assets'=>'Wealth & debt','business'=>'Business','connections'=>'Connections'] as $key=>$label)
+            @foreach(['overview'=>'Overview','transactions'=>'Transactions','bills'=>'Bills & goals','medical'=>'Medical sharing','assets'=>'Wealth & debt','business'=>'Business','connections'=>'Connections'] as $key=>$label)
             <button data-tab="{{ $key }}" @if($key==='overview') aria-current="page" @endif>{{ $label }}</button>
             @endforeach
         </nav>

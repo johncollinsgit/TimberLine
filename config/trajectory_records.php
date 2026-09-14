@@ -1,6 +1,48 @@
 <?php
 
 return [
+    'medical_need' => [
+        'ministry' => ['label' => 'Sharing ministry', 'type' => 'text', 'required' => true],
+        'reference' => ['label' => 'Need reference (optional)', 'type' => 'text', 'required' => false],
+        'status' => ['label' => 'Submission status', 'type' => 'select', 'required' => true, 'choices' => ['not_submitted', 'submitted', 'in_review', 'sharing', 'closed']],
+        'submitted_on' => ['label' => 'Submitted on', 'type' => 'date', 'required' => false],
+        'sharing_target_cents' => ['label' => 'Reviewed sharing amount (optional; not guaranteed)', 'type' => 'money', 'required' => false],
+        'reserve_shares' => ['label' => 'Reserve received shares for this need’s unpaid bills', 'type' => 'boolean', 'required' => true],
+    ],
+    'medical_bill' => [
+        'medical_need_record_id' => ['label' => 'Medical need', 'type' => 'medical_need_record', 'required' => true],
+        'provider' => ['label' => 'Provider', 'type' => 'text', 'required' => true],
+        'reference' => ['label' => 'Invoice reference (unique per provider)', 'type' => 'text', 'required' => true],
+        'billed_on' => ['label' => 'Bill date', 'type' => 'date', 'required' => true],
+        'billed_cents' => ['label' => 'Original bill', 'type' => 'money', 'required' => true],
+        'adjustment_cents' => ['label' => 'Discounts / adjustments reducing the bill', 'type' => 'money', 'required' => true],
+        'paid_before_tracking_cents' => ['label' => 'Already paid before tracked payments (do not repeat below)', 'type' => 'money', 'required' => true],
+        'payment_cents' => ['label' => 'Monthly payment (or full balance for upfront payment)', 'type' => 'money', 'required' => true],
+        'next_due_on' => ['label' => 'Next unpaid payment date', 'type' => 'date', 'required' => true],
+        'confirmed' => ['label' => 'Interest-free plan reviewed; no separate debt record duplicates this bill', 'type' => 'boolean', 'required' => true],
+        'recurring_record_id' => ['label' => 'Replace existing provider payment schedule (optional)', 'type' => 'recurring_record', 'required' => false],
+    ],
+    'medical_payment' => [
+        'medical_need_record_id' => ['label' => 'Medical need (for a payment across invoices)', 'type' => 'medical_need_record', 'required' => false],
+        'medical_bill_record_id' => ['label' => 'Specific bill (optional; otherwise oldest provider bills first)', 'type' => 'medical_bill_record', 'required' => false],
+        'provider' => ['label' => 'Provider paid (for payments across invoices)', 'type' => 'text', 'required' => false],
+        'amount_cents' => ['label' => 'Amount paid to provider', 'type' => 'money', 'required' => true],
+        'paid_on' => ['label' => 'Payment date', 'type' => 'date', 'required' => true],
+        'transaction_id' => ['label' => 'Matching statement transaction ID (optional)', 'type' => 'integer', 'required' => false],
+    ],
+    'medical_membership' => [
+        'recurring_record_id' => ['label' => 'Monthly membership / sharing schedule', 'type' => 'recurring_record', 'required' => true],
+        'amount_cents' => ['label' => 'Contribution paid', 'type' => 'money', 'required' => true],
+        'paid_on' => ['label' => 'Payment date', 'type' => 'date', 'required' => true],
+        'transaction_id' => ['label' => 'Matching contribution transaction ID', 'type' => 'integer', 'required' => true],
+    ],
+    'medical_share' => [
+        'medical_need_record_id' => ['label' => 'Medical need', 'type' => 'medical_need_record', 'required' => true],
+        'amount_cents' => ['label' => 'Share amount', 'type' => 'money', 'required' => true],
+        'status' => ['label' => 'Payment status', 'type' => 'select', 'required' => true, 'choices' => ['expected', 'received']],
+        'paid_on' => ['label' => 'Expected or received date', 'type' => 'date', 'required' => true],
+        'transaction_id' => ['label' => 'Matching deposit transaction ID (received only; optional)', 'type' => 'integer', 'required' => false],
+    ],
     'recurring' => [
         'account_id' => [
             'label' => 'Payment account',

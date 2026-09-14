@@ -19,6 +19,7 @@ class RecordService
         $definition = config('trajectory_records.'.$kind);
         abort_unless(is_array($definition), 422);
         abort_if(in_array($kind, ['payroll', 'reliance'], true) && $space->kind !== 'business', 422);
+        abort_if(str_starts_with($kind, 'medical_') && $space->kind !== 'household', 422, 'Medical sharing belongs to a private household.');
         $rules = [];
         foreach ($definition as $key => $field) {
             $rules[$key] = [$field['required'] ? 'required' : 'nullable'];
@@ -26,7 +27,7 @@ class RecordService
                 'money' => ['integer', 'between:-100000000000,100000000000'],
                 'percent' => ['integer', 'between:0,10000'],
                 'integer' => ['integer', 'min:0', 'max:1000000000'],
-                'debt_record', 'recurring_record' => ['integer', Rule::exists('trajectory_records', 'id')->where('space_id', $space->id)->where('kind', $field['type'] === 'debt_record' ? 'debt' : 'recurring')->where('active', true)],
+                'debt_record', 'recurring_record', 'medical_need_record', 'medical_bill_record' => ['integer', Rule::exists('trajectory_records', 'id')->where('space_id', $space->id)->where('kind', substr($field['type'], 0, -7))->where('active', true)],
                 'account' => ['integer', Rule::exists('trajectory_accounts', 'id')->where('space_id', $space->id)],
                 'decimal' => ['regex:/^\d{1,8}(\.\d{1,8})?$/', 'numeric', 'gt:0'],
                 'date' => ['date_format:Y-m-d', 'after_or_equal:1900-01-01', 'before:2200-01-01'],
@@ -44,7 +45,7 @@ class RecordService
             if (! isset($data[$key])) {
                 continue;
             }
-            if (in_array($field['type'], ['money', 'percent', 'integer', 'account', 'debt_record', 'recurring_record'], true)) {
+            if (in_array($field['type'], ['money', 'percent', 'integer', 'account', 'debt_record', 'recurring_record', 'medical_need_record', 'medical_bill_record'], true)) {
                 $data[$key] = (int) $data[$key];
             }
             if ($field['type'] === 'boolean') {
@@ -87,7 +88,12 @@ class RecordService
             Space::whereKey($space->id)->lockForUpdate()->firstOrFail();
             if ($record) {
                 $record = Record::where('space_id', $space->id)->whereKey($record->id)->lockForUpdate()->firstOrFail();
-                abort_unless($record->kind === $kind && $record->version === $version, 409);
+                abort_unless($record->active && $record->kind === $kind && $record->version === $version, 409);
+            }
+            // Revalidate references while holding the space lock, including concurrent archive changes.
+            $this->validate($space, $kind, $data);
+            if (str_starts_with($kind, 'medical_')) {
+                $data = app(MedicalSharingService::class)->prepare($space, $kind, $data, $record);
             }
             if ($kind === 'debt' && ! empty($data['account_id'])) {
                 foreach (Record::where('space_id', $space->id)->where('kind', 'debt')->where('active', true)->get() as $other) {
@@ -114,6 +120,9 @@ class RecordService
                     }
                 }
             }
+            if ($kind === 'debt' && ! empty($data['recurring_record_id'])) {
+                abort_if(Record::where('space_id', $space->id)->where('active', true)->whereIn('kind', ['medical_bill', 'debt', 'medical_membership'])->get()->contains(fn ($r) => $r->id !== $record?->id && ($r->data['recurring_record_id'] ?? null) === $data['recurring_record_id']), 422, 'This schedule is already replaced.');
+            }
             $before = $record?->data;
             $record ??= new Record(['space_id' => $space->id, 'kind' => $kind]);
             $record->fill(['name' => $name, 'data' => $data, 'version' => $record->exists ? $record->version + 1 : 1])->save();
@@ -121,6 +130,7 @@ class RecordService
                 $tx = Transaction::where('space_id', $space->id)->whereKey($data['transaction_id'])->lockForUpdate()->firstOrFail();
                 app(LedgerService::class)->classify($user, $space, $tx, ['version' => $tx->version, 'flow' => 'asset_transfer', 'category' => $tx->category, 'face_punched' => false, 'bullshit_spending' => false]);
             }
+            app(MedicalSharingService::class)->syncMatch($user, $space, $record, $before);
             Event::create(['space_id' => $space->id, 'actor_id' => $user->id, 'action' => 'save_'.$kind, 'record_id' => $record->id, 'before' => $before, 'after' => $data]);
 
             return $record;

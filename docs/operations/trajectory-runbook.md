@@ -173,3 +173,65 @@ entitlement. Do not drop the new tables or reverse the migration in production;
 retain bank history, corrections, lots and audit records. Feature-off stops
 access, bank synchronization, snapshots and notification processing without
 changing Shopify, Square, QuickBooks, or existing subscriptions.
+
+## Medical sharing: Samaritan Ministries and provider bills
+
+The household-only Medical sharing tab keeps ministry needs, provider invoices,
+provider payments, incoming member shares, and monthly contribution matches in
+encrypted Trajectory records. It does not connect to a Samaritan API or submit
+bills. Members still manage submission and eligibility with the ministry; see
+[Samaritan Ministries](https://samaritanministries.org/). No eligibility percentage,
+sharing guarantee, or medical advice is inferred.
+
+1. Create a need, record its ministry reference, submission date/status, and an
+   optional reviewed sharing target. Do not enter diagnoses in financial labels.
+2. Add each provider invoice once with its original amount, discounts, and
+   payments made before tracking. Do not record an opening payment again as a
+   tracked payment. The provider invoice reference prevents duplicate entry.
+3. Review each invoice's remaining monthly payment and next unpaid date. These
+   plans explicitly assume zero interest and payments from cash. Set the payment
+   to the remaining balance for a planned upfront payment. Use an existing
+   recurring-schedule replacement when applicable; do not also record the same
+   provider balance as a separate debt. Financed lender balances belong in debt
+   records after the provider is paid.
+4. Record provider payments against one invoice, or choose a need/provider to
+   allocate a consolidated payment to its oldest invoices. Explicit invoice
+   matches allocate first. Amounts are integer cents and cannot exceed available
+   invoices. Link the exact unsplit household statement row and posted date.
+5. Record each expected member share, then change that row to received when the
+   payment arrives. Multiple receipts can belong to one need. Link received
+   deposits to bank evidence. Expected shares are excluded from income, assets,
+   and all baseline/scenario cash forecasts; the expected amount remains visible.
+6. Create a separate negative monthly recurring health contribution. Match each
+   actual monthly payment using **Record monthly contribution**, even if the
+   recipient changes. These matches use that schedule without adding a second
+   historical-spending estimate and never pay down a provider invoice.
+
+Received shares never reduce provider balances. By default, the need reserves
+`min(unpaid bills, max(0, received shares - provider payments))` from available
+cash. This reimburses prior upfront payments first and holds excess receipts
+for unpaid bills. The household can disable the reserve per need. Provider
+payments release the reserve as cash leaves, avoiding a double subtraction.
+Provider balances enter net-worth liabilities. Payments stop at payoff, including
+replaced recurring schedules, with final payments capped to the remaining bill.
+Due/overdue confirmed payments are provisionally placed tomorrow and flagged for
+review; unconfirmed plans flag forecast coverage rather than invent payments.
+
+A manual payment/receipt record updates the medical tracker only. It never
+fabricates an observed bank balance or adds a second imported expense. The UI
+flags unmatched actuals; match statement rows and update observed balances.
+Medical payment and contribution flows count once in gross spending, while
+received sharing remains separate from earnings. Medical evidence cannot be
+split into business books, reclassified by SMS, reused for an asset, or reconciled
+as a transfer while linked. Edit/unlink or remove the medical record first;
+unlinking restores its previous classification and preserves audit history.
+Changed/removed bank evidence is flagged and excluded from medical payment
+calculations until reviewed. Dependent references prevent orphaned records.
+
+Acceptance: `tests/Feature/Trajectory/MedicalSharingTest.php` covers upfront
+payments, delayed/expected receipts, reserve release, consolidated invoices,
+monthly contribution recipients, exact import matching, source amendments,
+corrections, duplicate/overpayment rejection, leap-day payoff, recurring
+replacement, and household/business authorization. The local browser smoke
+covers creating needs, bills and expected shares plus accessible chart tables.
+No new migration or production medical data is required to enable this feature.

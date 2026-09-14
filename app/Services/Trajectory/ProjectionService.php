@@ -52,7 +52,7 @@ class ProjectionService
     }
 
     /** Signed recurring amounts; negative is outflow. Credit spending changes debt, not cash. */
-    public function forecast(int $cash, array $dailyByAccount, array $schedules, array $debts, array $goals, array $scenario, CarbonImmutable $today, int $months = 60): array
+    public function forecast(int $cash, array $dailyByAccount, array $schedules, array $debts, array $goals, array $scenario, CarbonImmutable $today, int $months = 60, array $medicalReserves = []): array
     {
         $from = $today->addDay()->startOfDay();
         $until = $today->addMonthsNoOverflow($months);
@@ -114,7 +114,7 @@ class ProjectionService
                             $goalExtra += min($goal['remaining_cents'], $goal['monthly_cents']);
                         }
                     }
-                    $basePayment = $debt['payment_cents'] + ($scenario['extra_debt_payment_cents'] ?? 0);
+                    $basePayment = $debt['payment_cents'] + (($debt['kind'] ?? '') === 'medical' ? 0 : ($scenario['extra_debt_payment_cents'] ?? 0));
                     $payment = min(max(0, $debt['current']) + $interest, $basePayment + $goalExtra);
                     $goalPaid = max(0, $payment - $basePayment);
                     foreach ($goals as $i => $goal) {
@@ -126,6 +126,10 @@ class ProjectionService
                         $goalPaid -= $applied;
                     }
                     $debts[$index]['current'] += $interest - $payment;
+                    if (isset($debt['medical_need_id'])) {
+                        $needId = $debt['medical_need_id'];
+                        $medicalReserves[$needId] = max(0, ($medicalReserves[$needId] ?? 0) - $payment);
+                    }
                     $flow -= $payment + ($debt['escrow_cents'] ?? 0) + ($debt['fees_cents'] ?? 0);
                 } elseif (isset($credit[$event['account_id'] ?? 0])) {
                     $debts[$credit[$event['account_id']]]['current'] -= $event['amount_cents'];
@@ -146,11 +150,11 @@ class ProjectionService
                 $goals[$i]['remaining_cents'] -= $contribution;
                 $savedForGoals += $contribution;
             }
-            $available = $cash - $savedForGoals;
+            $available = $cash - $savedForGoals - array_sum($medicalReserves);
             if ($available < 0 && $shortfall === null) {
                 $shortfall = $key;
             }
-            $row = ['date' => $key, 'cash_cents' => $cash, 'available_cents' => $available, 'goal_reserve_cents' => $savedForGoals, 'debt_cents' => array_sum(array_column($debts, 'current'))];
+            $row = ['date' => $key, 'cash_cents' => $cash, 'available_cents' => $available, 'goal_reserve_cents' => $savedForGoals, 'medical_reserve_cents' => array_sum($medicalReserves), 'debt_cents' => array_sum(array_column($debts, 'current'))];
             if ($date->lte($today->addYear())) {
                 $daily[] = $row;
             }
@@ -160,7 +164,7 @@ class ProjectionService
         }
 
         return ['daily' => $daily, 'monthly' => $monthly, 'first_shortfall_on' => $shortfall, 'cash_change_cents' => $cashDelta,
-            'assumptions' => ['Monthly interest estimate; lender daily accrual may differ.', 'Asset prices held constant.', 'Goals reserve available cash without reducing net worth.', 'No automatic increase in income or spending.', 'Debt-associated escrow and fees stop at payoff; model ongoing property taxes and insurance as separate bills.']];
+            'assumptions' => ['Monthly interest estimate; lender daily accrual may differ.', 'Asset prices held constant.', 'Expected medical shares are excluded; received shares may be reserved until provider payments consume them.', 'Goals reserve available cash without reducing net worth.', 'No automatic increase in income or spending.', 'Debt-associated escrow and fees stop at payoff; model ongoing property taxes and insurance as separate bills.']];
     }
 
     public function reliance(array $data): array

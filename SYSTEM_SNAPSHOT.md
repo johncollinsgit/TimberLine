@@ -1776,3 +1776,16 @@ Scope guard:
 - Real household/Modern Forestry statement reconciliation, production provider
   acceptance and Stripe subscription lifecycle activation remain release gates;
   local fictional data does not establish production readiness.
+
+### Trajectory medical sharing (2026-09-14)
+
+- The private household Medical sharing tab tracks ministry needs, provider
+  invoices, upfront/installment payments, expected/received shares, and monthly
+  contribution matches. Samaritan Ministries and Prisma Health are editable
+  form defaults; there is no direct ministry API or automatic submission.
+- `MedicalSharingService` uses encrypted records, exact statement matching,
+  allocation of consolidated provider payments, reversible classifications, and
+  dependency/household guards. Medical costs remain separate from owner income.
+- Interest-free provider plans contribute liabilities and stop at payoff;
+  received-share reserves reduce available cash and release with payments.
+  Expected shares never fund baseline forecasts or increase net worth.
