@@ -24,7 +24,16 @@ beforeEach(function (): void {
 });
 
 test('household financial data is private even from platform administrators', function (): void {
-    $this->actingAs($this->owner)->getJson('/trajectory/spaces/'.$this->space->id.'/dashboard')->assertOk()->assertJsonPath('summary.cash_cents', 500000);
+    $this->space->update(['settings' => [
+        ...$this->space->settings,
+        'pending_bank_connections' => [
+            'first_citizens' => ['institution' => 'First Citizens', 'status' => 'setup_required', 'note' => 'Authenticated exports imported.'],
+        ],
+    ]]);
+    $this->actingAs($this->owner)->getJson('/trajectory/spaces/'.$this->space->id.'/dashboard')
+        ->assertOk()
+        ->assertJsonPath('summary.cash_cents', 500000)
+        ->assertJsonPath('settings.pending_bank_connections.first_citizens.institution', 'First Citizens');
     $stranger = User::factory()->create(['role' => 'platform_admin', 'is_active' => true, 'email_verified_at' => now()]);
     $this->actingAs($stranger)->getJson('/trajectory/spaces/'.$this->space->id.'/dashboard')->assertForbidden();
     config(['trajectory.enabled' => false]);
