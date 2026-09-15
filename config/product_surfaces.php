@@ -107,13 +107,13 @@ return [
         'review_email_by_tenant_slug' => [
             'modern-forestry' => env(
                 'WHOLESALE_APPLICATION_REVIEW_EMAIL_MODERN_FORESTRY_WHOLESALE',
-                env('WHOLESALE_APPLICATION_REVIEW_EMAIL', 'modernforestryteam@gmail.com')
+                'info@theforestrystudio.com'
             ),
             // Legacy alias for applications created before the wholesale
             // storefront was correctly modeled as a store on tenant 1.
             'modern-forestry-wholesale' => env(
                 'WHOLESALE_APPLICATION_REVIEW_EMAIL_MODERN_FORESTRY_WHOLESALE',
-                env('WHOLESALE_APPLICATION_REVIEW_EMAIL', 'modernforestryteam@gmail.com')
+                'info@theforestrystudio.com'
             ),
         ],
         'wholesale_storefront_tenant_slug' => env(

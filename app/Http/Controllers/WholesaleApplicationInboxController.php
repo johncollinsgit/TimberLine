@@ -119,7 +119,7 @@ class WholesaleApplicationInboxController extends Controller
 
             return redirect()
                 ->route('admin.wholesale.applications.show', $accessRequest)
-                ->with('status', 'Wholesale application approved and activation email sent.');
+                ->with('status', 'Wholesale access granted. The welcome email is queued for delivery.');
         } catch (\DomainException $e) {
             return redirect()
                 ->route('admin.wholesale.applications.show', $accessRequest)
@@ -154,7 +154,7 @@ class WholesaleApplicationInboxController extends Controller
 
             return redirect()
                 ->route('admin.wholesale.applications.show', $accessRequest)
-                ->with('status', 'Wholesale application rejected.');
+                ->with('status', 'Wholesale application denied. The decision email is queued for delivery.');
         } catch (\DomainException $e) {
             return redirect()
                 ->route('admin.wholesale.applications.show', $accessRequest)
@@ -189,7 +189,7 @@ class WholesaleApplicationInboxController extends Controller
 
             return redirect()
                 ->route('admin.wholesale.applications.show', $accessRequest)
-                ->with('status', 'Activation email resend processed.');
+                ->with('status', 'Welcome email queued for delivery.');
         } catch (\DomainException $e) {
             return redirect()
                 ->route('admin.wholesale.applications.show', $accessRequest)

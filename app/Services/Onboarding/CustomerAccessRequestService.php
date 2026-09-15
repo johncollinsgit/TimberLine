@@ -3,6 +3,7 @@
 namespace App\Services\Onboarding;
 
 use App\Models\CustomerAccessRequest;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -96,6 +97,10 @@ class CustomerAccessRequestService
 
         return DB::transaction(function () use ($intent, $applicationKind, $email, $name, $company, $businessType, $teamSize, $timeline, $importPath, $mobileInterest, $website, $message, $phone, $city, $state, $zip, $country, $address, $address2, $retailLicenseNumber, $position, $referral, $currentSuppliers, $contactPreference, $agreementAccepted, $requestedSlug, $preferredPlanKey, $addonsInterest): CustomerAccessRequest {
             $normalizedSlug = $this->normalizeSlug($requestedSlug);
+            // Serialize duplicate submissions per wholesale tenant, including first insert.
+            if ($applicationKind === CustomerAccessRequest::KIND_WHOLESALE_APPLICATION) {
+                Tenant::query()->where('slug', $normalizedSlug)->lockForUpdate()->firstOrFail();
+            }
 
             $existing = $this->findOpenRequest($email, $normalizedSlug, $applicationKind);
             if ($existing) {
@@ -103,6 +108,10 @@ class CustomerAccessRequestService
                     throw ValidationException::withMessages([
                         'email' => 'This request has been rejected. Please contact sales for next steps.',
                     ]);
+                }
+
+                if ($applicationKind === CustomerAccessRequest::KIND_WHOLESALE_APPLICATION && $existing->status === 'approved') {
+                    return $existing;
                 }
 
                 $existing->forceFill([
@@ -142,7 +151,7 @@ class CustomerAccessRequestService
 
             $user = User::query()->where('email', $email)->first();
 
-            if (! $user) {
+            if (! $user && $applicationKind !== CustomerAccessRequest::KIND_WHOLESALE_APPLICATION) {
                 $user = User::query()->create([
                     'name' => $name,
                     'email' => $email,
@@ -187,7 +196,7 @@ class CustomerAccessRequestService
                     'preferred_plan_key' => $preferredPlanKey !== '' ? $preferredPlanKey : null,
                     'addons_interest' => $addonsInterest !== [] ? $addonsInterest : null,
                 ],
-                'user_id' => (int) $user->id,
+                'user_id' => $user?->id,
             ]);
 
             return $request;
@@ -203,10 +212,18 @@ class CustomerAccessRequestService
         $query = CustomerAccessRequest::query()
             ->where('email', $email)
             ->where('application_kind', $applicationKind)
-            ->whereIn('status', ['pending', 'approved'])
+            ->whereIn('status', $applicationKind === CustomerAccessRequest::KIND_WHOLESALE_APPLICATION ? ['pending', 'approved', 'rejected'] : ['pending', 'approved'])
             ->orderByDesc('id');
 
-        if ($normalizedSlug !== null) {
+        if ($applicationKind === CustomerAccessRequest::KIND_WHOLESALE_APPLICATION && $normalizedSlug !== null) {
+            $tenantId = Tenant::where('slug', $normalizedSlug)->value('id');
+            $query->where(function ($scope) use ($tenantId, $normalizedSlug) {
+                $scope->where('requested_tenant_slug', $normalizedSlug);
+                if ($tenantId) {
+                    $scope->orWhere('tenant_id', $tenantId);
+                }
+            });
+        } elseif ($normalizedSlug !== null) {
             $query->where('requested_tenant_slug', $normalizedSlug);
         } else {
             $query->whereNull('requested_tenant_slug');

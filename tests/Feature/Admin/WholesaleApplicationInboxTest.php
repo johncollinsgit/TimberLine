@@ -7,7 +7,6 @@ use App\Models\ShopifyStore;
 use App\Models\Tenant;
 use App\Models\TenantForm;
 use App\Models\User;
-use App\Notifications\ApprovalPasswordSetupNotification;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
@@ -225,13 +224,14 @@ test('admin can approve wholesale application directly from the inbox detail pag
         ->assertRedirect(route('admin.wholesale.applications.show', $accessRequest));
 
     $accessRequest->refresh();
-    $user = User::query()->where('email', 'approve-me@example.com')->firstOrFail();
+    $user = User::query()->where('email', 'approve-me@example.com')->first();
+    expect($user)->toBeNull();
 
     expect((string) $accessRequest->status)->toBe('approved')
-        ->and((string) ($accessRequest->decision_note ?? ''))->toBe('Looks good.')
-        ->and((bool) $user->is_active)->toBeTrue();
+        ->and((string) ($accessRequest->decision_note ?? ''))->toBe('Looks good.');
 
-    Notification::assertSentToTimes($user, ApprovalPasswordSetupNotification::class, 1);
+    expect(data_get($accessRequest->metadata, 'delivery.decision.status'))->toBe('pending');
+    Notification::assertNothingSent();
 });
 
 test('admin can reject wholesale application directly from the inbox detail page', function (): void {

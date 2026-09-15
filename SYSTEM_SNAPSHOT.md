@@ -1,4 +1,15 @@
 # SYSTEM SNAPSHOT
+
+## Wholesale application reliability (2026-09-15)
+
+Wholesale applications now commit a tenant-owned request, form mirror, and durable
+review-notification state before returning a receipt. The minute scheduler retries
+failed review/decision emails and the detail page shows delivery status. Review
+email defaults to info@theforestrystudio.com; links launch the wholesale Shopify
+Admin app. Approval requires a successful Shopify wholesale tag sync and never
+activates an internal user or grants tenant membership. Buyer emails use Shopify
+account activation/login, not Everbranch password setup. See
+`docs/operations/wholesale-application-reliability.md`.
 ## Trajectory standalone experience and evidence imports (2026-09-14)
 
 Trajectory has its own public `/trajectory/welcome` page and full-width authenticated `/trajectory` navigation. It reuses Everbranch login, finance spaces, financial permissions, and entitlements; the Back to Everbranch link does not change financial access. Personal-only use remains independent of company books. Checkout remains disabled until configured prices and lifecycle readiness pass.
@@ -1797,3 +1808,5 @@ Scope guard:
 - Interest-free provider plans contribute liabilities and stop at payoff;
   received-share reserves reduce available cash and release with payments.
   Expected shares never fund baseline forecasts or increase net worth.
+
+Wholesale application reviewers may use the tenant membership role `wholesale_reviewer`. It authorizes only wholesale application decisions for that tenant and requires active membership; it does not grant a global admin role or platform-access approval. See the wholesale application reliability runbook.
