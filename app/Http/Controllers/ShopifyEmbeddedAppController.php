@@ -1084,6 +1084,11 @@ class ShopifyEmbeddedAppController extends Controller
 
         $this->assertWholesaleApplication($accessRequest, Tenant::query()->find($mappedTenantId));
 
+        if (empty($context['shopify_admin_email'])) {
+            $token = $request->bearerToken() ?: $request->header('X-Shopify-Session-Token') ?: $request->input('shopify_session_token', '');
+            $context['shopify_admin_email'] = app(\App\Services\Shopify\ShopifyAdminIdentityResolver::class)
+                ->emailForVerifiedSession($context, (string) $token);
+        }
         $actor = $this->resolveWholesaleWorkspaceActor($context, $mappedTenantId);
         if (! $actor instanceof User) {
             $message = 'Approval actions require an Everbranch operator account that matches your Shopify admin email.';

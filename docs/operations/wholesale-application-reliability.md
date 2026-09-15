@@ -73,3 +73,32 @@ tenant ownership. Assign the existing user to Modern Forestry with that role
 through an audited membership change; preserve its global role. Revoke by
 setting membership_active=false or removing that role. No new credentials or
 operator accounts are needed. Other team members must be explicitly provisioned.
+
+## Live verification and button routing repair
+
+Release d6d5e7d went live through the normal gate. Internal applications WF-6 and
+WF-7 received durable receipts and form records, and both review emails arrived
+at info@theforestrystudio.com through the scheduled delivery worker. Historical
+IDs 2–5 were mirrored without changing decisions or sending email. Existing
+user 9 received the audited Modern Forestry wholesale_reviewer membership.
+
+The Safari approval test exposed a separate browser behavior: button.formAction
+returns the current document URL when the button lacks a formaction attribute.
+The event handler now uses the form action unless an explicit override exists.
+No CSRF exclusions were added; the correct decision endpoints already validate
+Shopify session tokens. Run `node --test tests/e2e/wholesale-application-actions.test.mjs`
+for the real-browser regression covering approve, deny, and resend.
+
+Review email deep links also resolve the installed embedded app ID through
+ShopifyEmbeddedAppCredentials, matching the embedded shell. The integration
+client ID can differ from the installed review app and must not be used here.
+
+The decision handler resolves a missing staff email via Shopify's online token
+exchange only after validating the session signature, audience, shop, and
+expiry. The returned staff ID must match the signed subject and email_verified
+must be true. Only the email is cached for five minutes; online access tokens
+are discarded. Existing active reviewer membership is still required. This
+follows https://shopify.dev/docs/apps/build/authentication-authorization/access-tokens.
+
+Follow-up validation: 2,581 PHP tests / 18,315 assertions passed, plus the real
+browser action-routing regression. No changes to CSRF exclusions or app scopes.

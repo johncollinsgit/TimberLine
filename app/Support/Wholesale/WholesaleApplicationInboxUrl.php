@@ -52,7 +52,7 @@ class WholesaleApplicationInboxUrl
     {
         $store = \App\Services\Shopify\ShopifyStores::find('wholesale', true);
         $shop = (string) ($store['shop'] ?? '');
-        $clientId = (string) ($store['client_id'] ?? '');
+        $clientId = $store ? (string) app(\App\Services\Shopify\ShopifyEmbeddedAppCredentials::class)->clientIdForStore($store) : '';
         if (preg_match('/^([a-z0-9-]+)\.myshopify\.com$/', $shop, $matches) && $clientId !== '') {
             $relative = strtok($path, '?');
 

@@ -369,7 +369,8 @@
                     const submitter = event.submitter instanceof HTMLButtonElement
                         ? event.submitter
                         : form.querySelector('[data-embedded-approval-button]');
-                    const actionUrl = submitter?.formAction || form.action;
+                    // formAction defaults to the current page when its attribute is absent.
+                    const actionUrl = submitter?.hasAttribute('formaction') ? submitter.formAction : form.action;
                     const originalLabel = submitter?.textContent || '';
 
                     form.dataset.embeddedSubmitting = 'true';
