@@ -1808,3 +1808,5 @@ Scope guard:
 - Interest-free provider plans contribute liabilities and stop at payoff;
   received-share reserves reduce available cash and release with payments.
   Expected shares never fund baseline forecasts or increase net worth.
+
+Wholesale application reviewers may use the tenant membership role `wholesale_reviewer`. It authorizes only wholesale application decisions for that tenant and requires active membership; it does not grant a global admin role or platform-access approval. See the wholesale application reliability runbook.

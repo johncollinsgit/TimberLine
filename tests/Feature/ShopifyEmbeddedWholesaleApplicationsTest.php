@@ -394,3 +394,16 @@ test('shopify embedded wholesale app does not auto provision an unknown shopify 
 
     Notification::assertNothingSent();
 });
+
+test('a scoped wholesale reviewer can decide through Shopify without a global admin role', function () {
+    Notification::fake();
+    $request = seedEmbeddedWholesaleApplication('reviewer-test@example.com');
+    $actor = User::factory()->create(['email' => 'team@example.com', 'role' => 'pouring', 'is_active' => true]);
+    $actor->tenants()->attach($request->tenant_id, ['role' => 'wholesale_reviewer', 'membership_active' => true]);
+    $response = $this->withHeaders([
+        'Authorization' => 'Bearer '.wholesaleShopifySessionToken(['email' => $actor->email]),
+        'Accept' => 'application/json',
+    ])->post(route('shopify.app.wholesale.applications.reject', ['accessRequest' => $request, 'store_key' => 'wholesale']));
+    $response->assertOk()->assertJsonPath('ok', true);
+    expect($request->fresh()->status)->toBe('rejected')->and($actor->fresh()->role)->toBe('pouring');
+});

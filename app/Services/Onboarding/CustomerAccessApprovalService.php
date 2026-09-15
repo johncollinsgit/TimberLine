@@ -525,6 +525,10 @@ class CustomerAccessApprovalService
             return;
         }
 
+        if ($request->isWholesaleApplication() && app(WholesaleApplicationReviewerAccess::class)->allows($actor, $request->tenant_id)) {
+            return;
+        }
+
         $tenantId = is_numeric($request->tenant_id) && (int) $request->tenant_id > 0
             ? (int) $request->tenant_id
             : Tenant::query()

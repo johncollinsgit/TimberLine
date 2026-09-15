@@ -116,3 +116,23 @@ test('legacy tenant aliases reuse the same application after tenant consolidatio
     $this->postJson($this->url, $this->payload)->assertOk()->assertJsonPath('receipt', 'WF-'.$request->id);
     expect(CustomerAccessRequest::count())->toBe(1)->and(FormSubmission::count())->toBe(1);
 });
+
+test('reviewer permission is tenant scoped revocable and cannot approve platform access', function () {
+    $this->postJson($this->url, $this->payload)->assertOk();
+    $request = CustomerAccessRequest::firstOrFail();
+    $actor = User::factory()->create(['role' => 'pouring', 'is_active' => true]);
+    $other = Tenant::create(['name' => 'Other', 'slug' => 'other']);
+    $actor->tenants()->attach($other->id, ['role' => 'wholesale_reviewer', 'membership_active' => true]);
+    $service = app(CustomerAccessApprovalService::class);
+    expect(fn () => $service->reject($request->id, $actor->id))->toThrow(DomainException::class);
+    $actor->tenants()->attach($this->tenant->id, ['role' => 'wholesale_reviewer', 'membership_active' => false]);
+    expect(fn () => $service->reject($request->id, $actor->id))->toThrow(DomainException::class);
+    $actor->tenants()->updateExistingPivot($this->tenant->id, ['membership_active' => true]);
+    $platform = $request->replicate();
+    $platform->application_kind = CustomerAccessRequest::KIND_PLATFORM_ACCESS;
+    $platform->save();
+    expect(fn () => $service->reject($platform->id, $actor->id))->toThrow(DomainException::class);
+    $actor->update(['is_active' => false]);
+    expect(fn () => $service->reject($request->id, $actor->id))->toThrow(DomainException::class);
+    expect($request->fresh()->status)->toBe('pending');
+});

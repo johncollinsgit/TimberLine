@@ -58,5 +58,18 @@ page sitemap and rendered forms were checked: the current application and
 general contact page are the active capture paths; registration directs to apply.
 Three legacy utility pages returned intermittent Shopify 503 responses.
 
-Local release checks: 2,574 tests / 18,293 assertions, Modern Forestry 150 tests /
+Local release checks: 2,576 tests / 18,303 assertions, Modern Forestry 150 tests /
 805 assertions, Pint and frontend build passed.
+
+## Team reviewer access
+
+The signed-in Shopify account is info@theforestrystudio.com. Its existing backend
+user (ID 9) was active with global role pouring and no tenant membership, so
+Shopify identity verification alone could not authorize a decision. The tenant
+membership role `wholesale_reviewer` permits wholesale application decisions
+only; it does not satisfy global admin, platform-access approval, or other
+wholesale mutation checks. It requires active user and membership, and matching
+tenant ownership. Assign the existing user to Modern Forestry with that role
+through an audited membership change; preserve its global role. Revoke by
+setting membership_active=false or removing that role. No new credentials or
+operator accounts are needed. Other team members must be explicitly provisioned.

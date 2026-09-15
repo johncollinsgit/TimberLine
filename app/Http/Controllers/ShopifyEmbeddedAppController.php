@@ -484,7 +484,7 @@ class ShopifyEmbeddedAppController extends Controller
             'tenantSlug' => $tenant?->slug,
             'contextToken' => isset($resolved['context']) ? $contextService->issueContextToken($resolved['context']) : null,
             'actor' => $actor,
-            'canManageApproval' => $this->canManageWholesaleApprovals($actor),
+            'canManageApproval' => $this->canReviewWholesaleApplications($actor, $tenantId),
         ]), $workspaceState['httpStatus']));
     }
 
@@ -905,7 +905,7 @@ class ShopifyEmbeddedAppController extends Controller
         }
 
         $actor = $this->resolveWholesaleWorkspaceActor($resolved['context'] ?? null, $tenantId);
-        $canManageApproval = $this->canManageWholesaleApprovals($actor);
+        $canManageApproval = $this->canReviewWholesaleApplications($actor, $tenantId);
 
         $response = $probe->time('view_render', fn (): Response => $this->embeddedResponse(
             response()->view('shopify.wholesale-applications-show', [
@@ -1100,8 +1100,8 @@ class ShopifyEmbeddedAppController extends Controller
             return redirect()->to($redirectUrl)->with('error', $message);
         }
 
-        if (! $this->canManageWholesaleApprovals($actor)) {
-            $message = 'Your account can review applications here, but approval actions are reserved for wholesale operators.';
+        if (! $this->canReviewWholesaleApplications($actor, $mappedTenantId)) {
+            $message = 'Your account can view applications here, but decisions require wholesale reviewer access.';
             $redirectUrl = $this->wholesaleEmbeddedRoute($request, 'shopify.app.wholesale.applications.show', ['accessRequest' => (int) $accessRequest->id], (string) ($context['host'] ?? null));
 
             if ($request->expectsJson()) {
@@ -1290,6 +1290,12 @@ class ShopifyEmbeddedAppController extends Controller
         }
 
         return null;
+    }
+
+    protected function canReviewWholesaleApplications(?User $user, ?int $tenantId): bool
+    {
+        return $this->canManageWholesaleApprovals($user)
+            || app(\App\Services\Onboarding\WholesaleApplicationReviewerAccess::class)->allows($user, $tenantId);
     }
 
     protected function canManageWholesaleApprovals(?User $user): bool
