@@ -3,6 +3,7 @@
 - Buyer application uses a single page and a verified receipt, with retained inputs on failure.
 - Review actions appear first on mobile, remain beside the details on desktop, and display team/buyer delivery state.
 - Review notification links open Shopify Admin directly; Back to applications returns to the inbox.
+- The inbox explains that access is verified when deciding an application; it no longer labels valid Shopify reviewers as read-only before that check.
 
 # UI Changelog
 

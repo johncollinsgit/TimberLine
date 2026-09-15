@@ -472,7 +472,7 @@ class ShopifyEmbeddedAppController extends Controller
             'host' => $resolved['host'] ?? null,
             'storeLabel' => $resolved['storeLabel'] ?? 'Wholesale Store',
             'headline' => $this->headlineForStatus($workspaceState['status'], 'Wholesale Applications'),
-            'subheadline' => $this->subheadlineForStatus($workspaceState['status'], 'Review, approve, and track tenant-owned wholesale applications in one place.'),
+            'subheadline' => $this->subheadlineForStatus($workspaceState['status'], 'Review, approve, and track wholesale applications in one place.'),
             'appNavigation' => $this->wholesaleEmbeddedNavigation($tenantId, 'applications'),
             'pageActions' => [],
             'pageSubnav' => [],
