@@ -2692,3 +2692,7 @@
 - Removed the shared reading-column limit and Trajectory's own width cap on
   Trajectory pages. Charts and tables now fill the available width beside the
   sidebar, with responsive outer gutters and no extra nested horizontal padding.
+
+### 2026-09-15 — Wholesale decision routing
+
+- Approve and Deny now post to their form endpoints; Resend honors its explicit button override. This fixes the embedded Safari CSRF symptom caused by posting back to the detail page.

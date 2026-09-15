@@ -407,3 +407,48 @@ test('a scoped wholesale reviewer can decide through Shopify without a global ad
     $response->assertOk()->assertJsonPath('ok', true);
     expect($request->fresh()->status)->toBe('rejected')->and($actor->fresh()->role)->toBe('pouring');
 });
+
+test('review emails link to the installed embedded app rather than the integration client', function () {
+    $request = seedEmbeddedWholesaleApplication();
+    config([
+        'services.shopify.stores.wholesale.client_id' => 'integration-client',
+        'services.shopify.stores.wholesale.client_secret' => 'integration-secret',
+        'services.shopify.stores.wholesale.embedded_client_id' => 'review-app-client',
+        'services.shopify.stores.wholesale.embedded_client_secret' => 'review-app-secret',
+    ]);
+    $url = app(\App\Support\Wholesale\WholesaleApplicationInboxUrl::class)->detailUrl($request);
+    expect($url)->toContain('/apps/review-app-client/shopify/app/wholesale/applications/'.$request->id)
+        ->not->toContain('integration-client');
+});
+
+test('a real-shaped Shopify token resolves its staff identity before a scoped reviewer decision', function () {
+    Notification::fake();
+    $request = seedEmbeddedWholesaleApplication('real-token@example.com');
+    $actor = User::factory()->create(['email' => 'staff@example.com', 'role' => 'pouring', 'is_active' => true]);
+    $actor->tenants()->attach($request->tenant_id, ['role' => 'wholesale_reviewer', 'membership_active' => true]);
+    Http::fake(['*/admin/oauth/access_token' => Http::response([
+        'access_token' => 'discard-this-online-token',
+        'associated_user' => ['id' => 431, 'email' => $actor->email, 'email_verified' => true],
+    ])]);
+    $this->withHeaders([
+        'Authorization' => 'Bearer '.wholesaleShopifySessionToken(['email' => null, 'sub' => '431']),
+        'Accept' => 'application/json',
+    ])->post(route('shopify.app.wholesale.applications.reject', ['accessRequest' => $request, 'store_key' => 'wholesale']))
+        ->assertOk()->assertJsonPath('ok', true);
+    expect($request->fresh()->status)->toBe('rejected');
+    Http::assertSent(fn (HttpRequest $r) => $r['requested_token_type'] === 'urn:shopify:params:oauth:token-type:online-access-token');
+});
+
+test('Shopify staff identity lookup rejects mismatched users unverified emails and provider failures', function ($userId, $verified, $httpStatus) {
+    $request = seedEmbeddedWholesaleApplication('identity-failure@example.com');
+    $actor = User::factory()->create(['email' => 'staff@example.com', 'role' => 'pouring', 'is_active' => true]);
+    $actor->tenants()->attach($request->tenant_id, ['role' => 'wholesale_reviewer', 'membership_active' => true]);
+    Http::fake(['*/admin/oauth/access_token' => Http::response([
+        'associated_user' => ['id' => $userId, 'email' => $actor->email, 'email_verified' => $verified],
+    ], $httpStatus)]);
+    $this->withHeaders([
+        'Authorization' => 'Bearer '.wholesaleShopifySessionToken(['email' => null, 'sub' => '431']),
+        'Accept' => 'application/json',
+    ])->post(route('shopify.app.wholesale.applications.reject', ['accessRequest' => $request, 'store_key' => 'wholesale']))->assertForbidden();
+    expect($request->fresh()->status)->toBe('pending');
+})->with([[999, true, 200], [431, false, 200], [431, true, 503]]);

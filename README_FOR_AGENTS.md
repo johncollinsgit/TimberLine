@@ -1255,3 +1255,5 @@ Do not skip upward on this ladder without documenting why the simpler level was 
   after changes. No schema change was needed for the sharing workflow.
 
 Wholesale application reviewers may use the tenant membership role `wholesale_reviewer`. It authorizes only wholesale application decisions for that tenant and requires active membership; it does not grant a global admin role or platform-access approval. See the wholesale application reliability runbook.
+
+Wholesale reviewer decisions resolve missing Shopify staff emails through verified online token exchange. Match the returned staff ID and verified email before looking up existing tenant reviewer membership; do not trust the store contact email as the acting staff identity.
