@@ -215,7 +215,15 @@ class CustomerAccessRequestService
             ->whereIn('status', $applicationKind === CustomerAccessRequest::KIND_WHOLESALE_APPLICATION ? ['pending', 'approved', 'rejected'] : ['pending', 'approved'])
             ->orderByDesc('id');
 
-        if ($normalizedSlug !== null) {
+        if ($applicationKind === CustomerAccessRequest::KIND_WHOLESALE_APPLICATION && $normalizedSlug !== null) {
+            $tenantId = Tenant::where('slug', $normalizedSlug)->value('id');
+            $query->where(function ($scope) use ($tenantId, $normalizedSlug) {
+                $scope->where('requested_tenant_slug', $normalizedSlug);
+                if ($tenantId) {
+                    $scope->orWhere('tenant_id', $tenantId);
+                }
+            });
+        } elseif ($normalizedSlug !== null) {
             $query->where('requested_tenant_slug', $normalizedSlug);
         } else {
             $query->whereNull('requested_tenant_slug');

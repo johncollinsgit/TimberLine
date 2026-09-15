@@ -58,5 +58,5 @@ page sitemap and rendered forms were checked: the current application and
 general contact page are the active capture paths; registration directs to apply.
 Three legacy utility pages returned intermittent Shopify 503 responses.
 
-Local release checks: 2,573 tests / 18,288 assertions, Modern Forestry 150 tests /
+Local release checks: 2,574 tests / 18,293 assertions, Modern Forestry 150 tests /
 805 assertions, Pint and frontend build passed.

@@ -107,3 +107,12 @@ test('denial is idempotent emails once and cannot be overwritten by a repeated s
     $mail = (new WholesaleApplicationDecisionNotification($request->fresh()))->toMail(new \Illuminate\Notifications\AnonymousNotifiable);
     expect(implode(' ', $mail->introLines))->not->toContain('Internal note');
 });
+
+test('legacy tenant aliases reuse the same application after tenant consolidation', function () {
+    Notification::fake();
+    $this->postJson($this->url, $this->payload)->assertOk();
+    $request = CustomerAccessRequest::firstOrFail();
+    $request->update(['requested_tenant_slug' => 'modern-forestry-wholesale']);
+    $this->postJson($this->url, $this->payload)->assertOk()->assertJsonPath('receipt', 'WF-'.$request->id);
+    expect(CustomerAccessRequest::count())->toBe(1)->and(FormSubmission::count())->toBe(1);
+});
