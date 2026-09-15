@@ -916,7 +916,7 @@ class ShopifyEmbeddedAppController extends Controller
                 'host' => $resolved['host'] ?? null,
                 'storeLabel' => $resolved['storeLabel'] ?? 'Wholesale Store',
                 'headline' => $this->headlineForStatus($workspaceState['status'], 'Wholesale Application Review'),
-                'subheadline' => $this->subheadlineForStatus($workspaceState['status'], 'Review this application and approve or reject it without leaving Shopify Admin.'),
+                'subheadline' => $this->subheadlineForStatus($workspaceState['status'], 'Review this application and approve or deny it without leaving Shopify Admin.'),
                 'appNavigation' => $this->wholesaleEmbeddedNavigation($tenantId, 'applications'),
                 'pageActions' => [],
                 'pageSubnav' => [],
@@ -1518,7 +1518,7 @@ class ShopifyEmbeddedAppController extends Controller
                 ['label' => 'Submitted', 'value' => optional($accessRequest->created_at)->format('F j, Y \a\t g:i A') ?: '—'],
                 ['label' => 'Tenant', 'value' => $accessRequest->tenant?->name ?? 'Wholesale workspace'],
                 ['label' => 'Tenant slug', 'value' => $accessRequest->requested_tenant_slug ?: ($accessRequest->tenant?->slug ?? '—')],
-                ['label' => 'Shopify user record', 'value' => $accessRequest->user?->email ?? 'Not linked yet'],
+                ['label' => 'Shopify access', 'value' => data_get($accessRequest->metadata, 'shopify_access') === 'ready' ? 'Granted' : 'Not granted by this application'],
                 ['label' => 'Submission capture', 'value' => $accessRequest->formSubmission?->id ? 'Captured' : 'Missing'],
             ],
         ];

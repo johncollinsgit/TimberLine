@@ -47,8 +47,16 @@ that every attempted application since then failed.
 - Production review email can be overridden by tenant access-profile metadata or
   `WHOLESALE_APPLICATION_REVIEW_EMAIL_MODERN_FORESTRY_WHOLESALE`; verify both at
   release. The requested Modern Forestry destination is info@theforestrystudio.com.
-- UI changes publish only the application section and its two assets. Retain the
+- UI changes publish only the application section, its two assets, and the legacy long-form template. Retain the
   downloaded live theme for rollback; the old GitHub theme backup was stale.
 - Verify with two explicitly marked internal test applications, one approved and
   one denied. Confirm saved form, staff mail, Shopify tag on approved only,
   customer mail, duplicate suppression, and no internal staff access.
+
+The legacy long-form template delegates to the canonical section. The published
+page sitemap and rendered forms were checked: the current application and
+general contact page are the active capture paths; registration directs to apply.
+Three legacy utility pages returned intermittent Shopify 503 responses.
+
+Local release checks: 2,573 tests / 18,288 assertions, Modern Forestry 150 tests /
+805 assertions, Pint and frontend build passed.
