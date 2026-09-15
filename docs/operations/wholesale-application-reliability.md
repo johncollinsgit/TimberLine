@@ -102,3 +102,33 @@ follows https://shopify.dev/docs/apps/build/authentication-authorization/access-
 
 Follow-up validation: 2,581 PHP tests / 18,315 assertions passed, plus the real
 browser action-routing regression. No changes to CSRF exclusions or app scopes.
+
+## Completed production checks — 2026-09-15
+
+- Release `1b7b475b` matched GitHub `main`, the active Forge release checkout,
+  and `/ready`. The additional manual workflow was cancelled before deployment.
+- Safari approved WF-6 and denied WF-7 through the embedded controls. WF-6 has
+  Shopify customer 27550057103441 and the wholesale tag; WF-7 has no Shopify
+  customer. Neither test created an internal user.
+- Scheduled review mail arrived at info@theforestrystudio.com; approval and
+  denial mail arrived at the internal buyer aliases. The approval link rendered
+  Shopify's account activation form. Password creation and authenticated buyer
+  checkout were not performed.
+- The installed wholesale review app requires its existing dedicated embedded
+  client ID and secret in runtime configuration. Verify the resolved client ID
+  and email deep link, without printing secrets. Integration credentials alone
+  are not interchangeable with the installed app credentials.
+- A Forge environment-editor replacement unexpectedly changed unrelated lines.
+  The exact original environment was restored, with only the two intended
+  embedded-app settings appended, and compared byte for byte. Configuration
+  was refreshed with RELEASE_ID derived from the active checkout. Environment
+  saves that recache config without this value can make `/ready` report unknown
+  even when the checkout is current; investigate the checkout before redeploying.
+- The four application theme files were pushed to the existing live Trade
+  theme 136969355345. No other theme files were replaced. A public-page retry
+  returned WF-6 again without creating a duplicate or changing its decision.
+- A September 14 resale-certificate email from Anna Middleton / The Willow
+  Whole Health Market exists in the wholesale mailbox. The team's September 15
+  reply asks whether she submitted online. No matching backend application or
+  Shopify customer was found. Preserve this as a recovery lead, not evidence of
+  a confirmed successful submission or authorization to approve her.

@@ -46,7 +46,7 @@
                     @if ($canManageApproval)
                         Signed in as {{ $actor?->email }}.
                     @else
-                        Read-only mode until your Shopify admin email matches a wholesale operator.
+                        Open an application to review it. Shopify verifies your access when you approve or deny.
                     @endif
                 </div>
             </div>
@@ -106,10 +106,7 @@
         <section class="fb-page-surface overflow-hidden">
             <div class="border-b border-zinc-200 px-6 py-4">
                 <div class="text-sm font-semibold text-zinc-950">
-                    {{ $tenant?->name ?? 'Wholesale tenant' }}
-                </div>
-                <div class="mt-1 text-sm text-zinc-600">
-                    Tenant slug: <span class="font-mono text-xs text-zinc-700">{{ $tenant?->slug ?? $tenantSlug }}</span>
+                    {{ $tenant?->name ?? 'Wholesale applications' }}
                 </div>
             </div>
 
