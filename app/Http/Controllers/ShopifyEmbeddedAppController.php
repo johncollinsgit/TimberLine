@@ -948,7 +948,7 @@ class ShopifyEmbeddedAppController extends Controller
             $contextService,
             fn (int $actorUserId, ?string $note) => $approvalService->approve((int) $accessRequest->id, $actorUserId, $note),
             'decision_note',
-            'Wholesale application approved and activation email sent.'
+            'Wholesale access granted. The welcome email is queued for delivery.'
         );
     }
 
@@ -964,7 +964,7 @@ class ShopifyEmbeddedAppController extends Controller
             $contextService,
             fn (int $actorUserId, ?string $note) => $approvalService->reject((int) $accessRequest->id, $actorUserId, $note),
             'rejection_note',
-            'Wholesale application rejected.'
+            'Wholesale application denied. The decision email is queued for delivery.'
         );
     }
 
@@ -980,7 +980,7 @@ class ShopifyEmbeddedAppController extends Controller
             $contextService,
             fn (int $actorUserId, ?string $note) => $approvalService->resendActivation((int) $accessRequest->id, $actorUserId, $note),
             'decision_note',
-            'Activation email resend processed.'
+            'Welcome email queued for delivery.'
         );
     }
 

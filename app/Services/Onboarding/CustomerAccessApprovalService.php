@@ -30,6 +30,10 @@ class CustomerAccessApprovalService
         $actor = $this->actorOrFail($actorUserId);
         $this->assertActorAuthorized($actor, $this->requestOrFail($requestId));
 
+        if ($this->requestOrFail($requestId)->isWholesaleApplication()) {
+            return app(WholesaleApplicationDecisionService::class)->decide($requestId, $actorUserId, 'approved', $decisionNote);
+        }
+
         $decisionNote = $this->normalizeNote($decisionNote);
 
         /** @var array{request:CustomerAccessRequest,tenant:?Tenant,user:User,should_send:bool,preferred_host:?string,before:array<string,mixed>,after:array<string,mixed>} $result */
@@ -234,6 +238,10 @@ class CustomerAccessApprovalService
         $actor = $this->actorOrFail($actorUserId);
         $this->assertActorAuthorized($actor, $this->requestOrFail($requestId));
 
+        if ($this->requestOrFail($requestId)->isWholesaleApplication()) {
+            return app(WholesaleApplicationDecisionService::class)->decide($requestId, $actorUserId, 'rejected', $rejectionNote);
+        }
+
         $rejectionNote = $this->normalizeNote($rejectionNote);
 
         return DB::transaction(function () use ($requestId, $actorUserId, $rejectionNote): CustomerAccessRequest {
@@ -288,6 +296,10 @@ class CustomerAccessApprovalService
     {
         $actor = $this->actorOrFail($actorUserId);
         $this->assertActorAuthorized($actor, $this->requestOrFail($requestId));
+
+        if ($this->requestOrFail($requestId)->isWholesaleApplication()) {
+            return app(WholesaleApplicationDecisionService::class)->resend($requestId, $actorUserId);
+        }
 
         $decisionNote = $this->normalizeNote($decisionNote);
         $throttleSeconds = max(5, min(600, $throttleSeconds));

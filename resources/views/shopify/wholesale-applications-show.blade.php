@@ -57,17 +57,13 @@
                     <span class="inline-flex rounded-full border px-3 py-1.5 text-xs font-semibold {{ $badgeClasses }}">
                         {{ \Illuminate\Support\Str::headline((string) $accessRequest->status) }}
                     </span>
-                    @if ($accessRequest->user)
-                        <span class="inline-flex rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700">
-                            User record: {{ $accessRequest->user->is_active ? 'active' : 'inactive' }}
-                        </span>
-                    @endif
+
                 </div>
             </div>
         </section>
 
         <section class="flex items-center justify-between gap-3">
-            <a href="{{ $embeddedUrl(route('shopify.app.wholesale', ['store_key' => 'wholesale'], false)) }}" class="inline-flex rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">
+            <a href="{{ $embeddedUrl(route('shopify.app.wholesale.applications', ['store_key' => 'wholesale'], false)) }}" class="inline-flex rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">
                 Back to applications
             </a>
             <div class="text-sm text-zinc-600" data-embedded-identity-label aria-live="polite">
@@ -146,16 +142,23 @@
                 </section>
             </div>
 
-            <div class="space-y-6">
+            <div class="order-first space-y-6 lg:order-last lg:sticky lg:top-6 lg:self-start">
                 <section class="fb-page-surface p-6">
                     <div class="text-sm font-semibold text-zinc-950">Review actions</div>
+                    <p class="mt-2 text-sm text-zinc-600">Approval unlocks wholesale shopping and emails the buyer. Denial emails a courteous update. Notes stay internal.</p>
+                    <dl class="mt-4 space-y-2 border-y border-zinc-200 py-3 text-xs">
+                        @foreach (['review' => 'Team notification', 'decision' => 'Buyer email'] as $kind => $label)
+                            @php($deliveryStatus = data_get($accessRequest->metadata, 'delivery.'.$kind.'.status'))
+                            <div class="flex justify-between gap-3"><dt>{{ $label }}</dt><dd class="font-medium">{{ match($deliveryStatus) { 'sent' => 'Sent to mail provider', 'failed' => 'Retry scheduled', 'pending' => 'Queued', default => 'Not recorded' } }}</dd></div>
+                        @endforeach
+                    </dl>
                     @if (filled($contextToken))
                         <div class="mt-3 space-y-4">
                             <p class="text-sm text-zinc-600" data-embedded-approval-help aria-live="polite">
                                 @if ($canManageApproval)
                                     Approval actions are ready.
                                 @else
-                                    Choose Approve or Reject to verify your Shopify admin identity.
+                                    Choose Approve or Deny to verify your Shopify admin identity.
                                 @endif
                             </p>
 
@@ -173,26 +176,26 @@
                                     >{{ old('decision_note', (string) ($accessRequest->decision_note ?? '')) }}</textarea>
                                 </label>
                                 <div class="flex flex-wrap gap-2">
-                                    @if ($accessRequest->status !== 'approved')
+                                    @if ($accessRequest->status === 'pending')
                                         <button type="submit" class="rounded-full bg-emerald-700 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60" data-embedded-approval-button data-embedded-pending-label="Approving…">
                                             Approve application
                                         </button>
                                     @endif
                                     @if ($accessRequest->status === 'approved')
                                         <button type="submit" formaction="{{ $embeddedUrl(route('shopify.app.wholesale.applications.resend-activation', ['accessRequest' => $accessRequest, 'store_key' => 'wholesale'], false)) }}" class="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60" data-embedded-approval-button data-embedded-pending-label="Sending…">
-                                            Resend activation
+                                            Resend welcome email
                                         </button>
                                     @endif
                                 </div>
                             </form>
 
-                            @if ($accessRequest->status !== 'approved')
+                            @if ($accessRequest->status === 'pending')
                                 <form method="POST" action="{{ $embeddedUrl(route('shopify.app.wholesale.applications.reject', ['accessRequest' => $accessRequest, 'store_key' => 'wholesale'], false)) }}" class="space-y-3" data-embedded-approval-form>
                                     @csrf
                                     <input type="hidden" name="context_token" value="{{ $contextToken }}">
                                     <input type="hidden" name="shopify_session_token" value="" data-embedded-session-token-input>
                                     <label class="block space-y-2">
-                                        <span class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Rejection note</span>
+                                        <span class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Internal denial note</span>
                                         <textarea
                                             name="rejection_note"
                                             rows="3"
@@ -201,7 +204,7 @@
                                         >{{ old('rejection_note', (string) ($accessRequest->rejection_note ?? '')) }}</textarea>
                                     </label>
                                     <button type="submit" class="rounded-full bg-rose-700 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-60" data-embedded-approval-button data-embedded-pending-label="Rejecting…">
-                                        Reject application
+                                        Deny application
                                     </button>
                                 </form>
                             @endif

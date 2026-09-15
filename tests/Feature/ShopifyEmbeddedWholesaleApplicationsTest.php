@@ -8,7 +8,6 @@ use App\Models\FormTemplate;
 use App\Models\Tenant;
 use App\Models\TenantForm;
 use App\Models\User;
-use App\Notifications\ApprovalPasswordSetupNotification;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Facades\Http;
@@ -248,11 +247,11 @@ test('shopify embedded wholesale app can approve through a mapped shopify admin 
         ->assertJsonPath('ok', true);
 
     $accessRequest->refresh();
-    $user = User::query()->where('email', 'approve-me@example.com')->firstOrFail();
+    $user = User::query()->where('email', 'approve-me@example.com')->first();
+    expect($user)->toBeNull();
 
     expect((string) $accessRequest->status)->toBe('approved')
-        ->and((string) ($accessRequest->decision_note ?? ''))->toBe('Looks good.')
-        ->and((bool) $user->is_active)->toBeTrue();
+        ->and((string) ($accessRequest->decision_note ?? ''))->toBe('Looks good.');
 
     Http::assertSent(function (HttpRequest $request): bool {
         $payload = json_decode($request->body(), true);
@@ -261,7 +260,8 @@ test('shopify embedded wholesale app can approve through a mapped shopify admin 
         return str_contains($query, 'AddWholesaleCustomerTag');
     });
 
-    Notification::assertSentToTimes($user, ApprovalPasswordSetupNotification::class, 1);
+    expect(data_get($accessRequest->metadata, 'delivery.decision.status'))->toBe('pending');
+    Notification::assertNothingSent();
     expect($actor->email)->toBe('ops-review@example.com');
 });
 

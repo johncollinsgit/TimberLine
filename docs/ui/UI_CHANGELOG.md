@@ -1,3 +1,9 @@
+## 2026-09-15 — Wholesale applications
+
+- Buyer application uses a single page and a verified receipt, with retained inputs on failure.
+- Review actions appear first on mobile, remain beside the details on desktop, and display team/buyer delivery state.
+- Review notification links open Shopify Admin directly; Back to applications returns to the inbox.
+
 # UI Changelog
 
 ## 2026-09-06 — Safe first-time Website setup
