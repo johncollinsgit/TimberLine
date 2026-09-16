@@ -86,6 +86,15 @@ not the original account, merchant, or unsplit amount. Explicit merchant rules
 precede provider suggestions; undoing a review also disables the rule it created.
 Broad stores and uncertain money movements require review.
 
+Accounts is the connection surface. It labels each active Plaid feed separately
+from manual/imported account evidence; its Connect action opens Plaid directly. A disconnected Item has no usable provider token, so reconnect starts a new Link session rather than issuing a failing update request.
+The review queue may show bounded bulk suggestions only when at least two
+unreviewed expenses share a consistent reviewed decision or unambiguous title
+context. The user explicitly applies each group, transaction versions are checked
+atomically, and no bulk action creates a future merchant rule. Broad merchants,
+transfers, card payments, deposits, and mixed-purpose titles stay in individual
+review.
+
 The authenticated header exposes Personal, Business, and Both when the signed-in
 user has authorized access to both space types. Both is limited to a
 reconciliation-aware overview and the shared Review transactions queue. It never

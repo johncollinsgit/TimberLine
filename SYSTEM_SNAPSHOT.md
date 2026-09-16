@@ -1803,6 +1803,11 @@ Scope guard:
 - Real household/Modern Forestry statement reconciliation, production provider
   acceptance and Stripe subscription lifecycle activation remain release gates;
   local fictional data does not establish production readiness.
+- Accounts is the single account-management surface: it presents connected bank
+  feeds, connection state, manual/imported evidence, and direct Plaid linking.
+  Review transactions starts with bounded, user-confirmed bulk suggestions drawn
+  from consistent past reviews or unambiguous merchant-title context; ambiguous
+  merchants and money movements remain individual review work.
 
 ### Trajectory medical sharing (2026-09-14)
 

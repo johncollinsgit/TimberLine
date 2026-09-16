@@ -312,3 +312,50 @@ it('nets refunds before estimating spending reductions and savings opportunities
         ->and($data['comparison']['daily'][0]['cash_cents'])->toBe(99950)
         ->and($data['recommendations'][0]['monthly_savings_cents'])->toBe(3000);
 });
+
+it('offers title-context bulk suggestions and applies only the exact unreviewed rows', function (): void {
+    app(LedgerService::class)->ingest($this->account, [
+        ['id' => 'publix-one', 'date' => now()->subDays(2)->toDateString(), 'merchant' => 'Publix #100', 'amount_cents' => -1200],
+        ['id' => 'publix-two', 'date' => now()->subDay()->toDateString(), 'merchant' => 'Publix #100', 'amount_cents' => -3400],
+        ['id' => 'amazon', 'date' => now()->toDateString(), 'merchant' => 'Amazon Marketplace', 'amount_cents' => -999],
+    ]);
+    $dashboard = $this->actingAs($this->user)->getJson('/trajectory/spaces/'.$this->space->id.'/dashboard?range=month')->assertOk();
+    $suggestion = collect($dashboard->json('review_suggestions'))->firstWhere('merchant', 'Publix #100');
+    expect($suggestion)->not->toBeNull()->and(collect($dashboard->json('review_suggestions'))->contains('merchant', 'Amazon Marketplace'))->toBeFalse();
+
+    $this->postJson('/trajectory/spaces/'.$this->space->id.'/transactions/bulk-classify', [
+        'transactions' => $suggestion['transactions'], 'category' => $suggestion['category'], 'flow' => $suggestion['flow'],
+        'face_punched' => $suggestion['face_punched'], 'bullshit_spending' => $suggestion['bullshit_spending'],
+    ])->assertOk()->assertJsonCount(2, 'updated_ids');
+
+    expect(Transaction::whereIn('source_key', ['integration:cash:publix-one', 'integration:cash:publix-two'])->where('reviewed', true)->count())->toBe(2)
+        ->and(Transaction::where('source_key', 'integration:cash:amazon')->firstOrFail()->reviewed)->toBeFalse();
+});
+
+it('rejects stale bulk review suggestions without partially classifying the group', function (): void {
+    app(LedgerService::class)->ingest($this->account, [
+        ['id' => 'stale-one', 'date' => now()->subDays(2)->toDateString(), 'merchant' => 'Publix #200', 'amount_cents' => -1000],
+        ['id' => 'stale-two', 'date' => now()->subDay()->toDateString(), 'merchant' => 'Publix #200', 'amount_cents' => -2000],
+    ]);
+    $rows = Transaction::whereIn('source_key', ['integration:cash:stale-one', 'integration:cash:stale-two'])->get();
+    $payload = $rows->map(fn (Transaction $tx) => ['id' => $tx->id, 'version' => $tx->version])->all();
+    $payload[1]['version']++;
+
+    $this->actingAs($this->user)->postJson('/trajectory/spaces/'.$this->space->id.'/transactions/bulk-classify', [
+        'transactions' => $payload, 'category' => 'groceries', 'flow' => 'expense', 'face_punched' => false, 'bullshit_spending' => false,
+    ])->assertConflict();
+    expect($rows->every(fn (Transaction $tx) => ! $tx->fresh()->reviewed))->toBeTrue();
+});
+
+it('uses a consistent earlier review for a safe merchant bulk suggestion', function (): void {
+    app(LedgerService::class)->ingest($this->account, [['id' => 'garden-earlier', 'date' => now()->subDays(12)->toDateString(), 'merchant' => 'Garden Center 17', 'amount_cents' => -1500]]);
+    $earlier = Transaction::where('source_key', 'integration:cash:garden-earlier')->firstOrFail();
+    app(LedgerService::class)->classify($this->user, $this->space, $earlier, ['version' => $earlier->version, 'category' => 'materials', 'flow' => 'expense', 'face_punched' => false, 'bullshit_spending' => false]);
+    app(LedgerService::class)->ingest($this->account, [
+        ['id' => 'garden-one', 'date' => now()->subDays(2)->toDateString(), 'merchant' => 'Garden Center 17', 'amount_cents' => -1800],
+        ['id' => 'garden-two', 'date' => now()->subDay()->toDateString(), 'merchant' => 'Garden Center 17', 'amount_cents' => -2200],
+    ]);
+
+    $suggestion = collect(app(\App\Services\Trajectory\DashboardService::class)->build($this->space)['review_suggestions'])->firstWhere('merchant', 'Garden Center 17');
+    expect($suggestion['kind'])->toBe('past_decision')->and($suggestion['category'])->toBe('materials')->and($suggestion['count'])->toBe(2);
+});

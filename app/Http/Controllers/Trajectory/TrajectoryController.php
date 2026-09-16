@@ -83,6 +83,21 @@ class TrajectoryController extends Controller
         return response()->json($ledger->classify($request->user(), $space, $transaction, $data, $data['learn'] ?? false));
     }
 
+    public function bulkClassify(Request $request, Space $space, LedgerService $ledger)
+    {
+        $data = $request->validate([
+            'transactions' => 'required|array|min:2|max:100',
+            'transactions.*.id' => 'required|integer|distinct',
+            'transactions.*.version' => 'required|integer|min:1',
+            'category' => ['required', Rule::in(config('trajectory.categories'))],
+            'flow' => ['required', Rule::in(['expense', 'income', 'refund', 'transfer', 'card_payment', 'asset_transfer', 'owner_wages', 'owner_distribution', 'reimbursement', 'debt_payment', 'duplicate'])],
+            'face_punched' => 'required|boolean',
+            'bullshit_spending' => 'required|boolean',
+        ]);
+
+        return response()->json(['updated_ids' => $ledger->bulkClassify($request->user(), $space, $data['transactions'], $data)]);
+    }
+
     public function undo(Request $request, Space $space, Transaction $transaction, FinanceAccess $access)
     {
         $access->authorize($request->user(), $space);
@@ -240,6 +255,11 @@ class TrajectoryController extends Controller
         $access->authorize($request->user(), $space);
         $request->validate(['connection_id' => 'nullable|integer']);
         $connection = $request->input('connection_id') ? Connection::where('space_id', $space->id)->findOrFail($request->input('connection_id')) : null;
+        // A disconnected Item has had its provider token revoked. Start a fresh
+        // Link session instead of silently attempting an invalid update session.
+        if ($connection?->status === 'disconnected') {
+            $connection = null;
+        }
 
         return response()->json($plaid->link($space, $connection));
     }
@@ -247,8 +267,8 @@ class TrajectoryController extends Controller
     public function exchangeBank(Request $request, Space $space, FinanceAccess $access, PlaidService $plaid)
     {
         $access->authorize($request->user(), $space);
-        $data = $request->validate(['public_token' => 'required|string|max:500']);
-        $connection = $plaid->exchange($space, $data['public_token']);
+        $data = $request->validate(['public_token' => 'required|string|max:500', 'institution_name' => 'nullable|string|max:160']);
+        $connection = $plaid->exchange($space, $data['public_token'], $data['institution_name'] ?? null);
         SyncBank::dispatch($connection->id);
 
         return response()->json(['ok' => true]);
@@ -258,6 +278,10 @@ class TrajectoryController extends Controller
     {
         $access->authorize($request->user(), $space);
         abort_unless($connection->space_id === $space->id, 404);
+        $data = $request->validate(['institution_name' => 'nullable|string|max:160']);
+        if (filled($data['institution_name'] ?? null)) {
+            $connection->update(['institution_name' => $data['institution_name']]);
+        }
         SyncBank::dispatch($connection->id);
 
         return response()->json(['ok' => true]);

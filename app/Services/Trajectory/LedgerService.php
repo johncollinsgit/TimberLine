@@ -86,6 +86,33 @@ class LedgerService
         });
     }
 
+    public function bulkClassify(User $user, Space $space, array $transactions, array $data): array
+    {
+        app(FinanceAccess::class)->authorize($user, $space);
+
+        return DB::transaction(function () use ($user, $space, $transactions, $data): array {
+            $ids = array_column($transactions, 'id');
+            $versions = array_column($transactions, 'version', 'id');
+            $rows = Transaction::where('space_id', $space->id)->whereIn('id', $ids)->lockForUpdate()->get()->keyBy('id');
+            abort_unless($rows->count() === count($ids), 404);
+            $values = array_intersect_key($data, array_flip(['category', 'flow', 'face_punched', 'bullshit_spending']));
+            $updated = [];
+
+            foreach ($ids as $id) {
+                $tx = $rows[$id];
+                app(MedicalSharingService::class)->assertUnbound($tx);
+                abort_unless(! $tx->pending && ! $tx->removed && ! $tx->reviewed, 422, 'Only posted transactions still needing review can be bulk categorized.');
+                abort_unless($tx->version === (int) $versions[$id], 409, 'A transaction changed. Refresh before applying this suggestion.');
+                $before = $tx->only(['category', 'flow', 'face_punched', 'bullshit_spending', 'reviewed', 'explanation', 'version']);
+                $tx->update([...$values, 'reviewed' => true, 'explanation' => 'Reviewed in a bulk suggestion.', 'version' => $tx->version + 1]);
+                Event::create(['space_id' => $space->id, 'actor_id' => $user->id, 'action' => 'bulk_classify', 'record_id' => $tx->id, 'before' => $before, 'after' => $tx->only(array_keys($before))]);
+                $updated[] = $tx->id;
+            }
+
+            return $updated;
+        });
+    }
+
     public function split(User $user, Space $space, Transaction $tx, array $splits, int $version): void
     {
         app(FinanceAccess::class)->authorize($user, $space);

@@ -1241,6 +1241,10 @@ Do not skip upward on this ladder without documenting why the simpler level was 
 - Use integer cents and decimal arithmetic. Reviewed rules win; source refreshes
   retain corrections. Transfers/asset movements and operational sales summaries
   must not duplicate consumption or accounting revenue. Never write back to QB.
+- Trajectory Accounts is the sole connection surface. A connected feed must be
+  visibly distinguishable from manual/imported accounts; direct Connect opens
+  Plaid. Bulk review suggestions are proposals only: require explicit application,
+  exact transaction/version checks, and keep broad merchants/transfers out.
 - Forecasts and metal values expose missing/stale coverage and assumptions. Keep
   one-time shocks out of recurring baselines, linked debt bills out of duplicate
   payments, saved goals out of consumption, and linked business equity out of
