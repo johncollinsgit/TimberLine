@@ -13,6 +13,7 @@ function boot() {
   const title = (s) => s.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
   const spaces = JSON.parse(root.dataset.spaces || '[]');
   let loadVersion = 0;
+  let linkInProgress = false;
   let active = spaces[0]?.id, data, evidenceRows=null, tab = 'overview', charts = [], chartTables = {}, filter = {}, scenarioId = '', historyMonth = '', budgetSource = null, seasonal = false, formAction;
   $('#tr-space').innerHTML = spaces.map(s=>`<option value="${s.id}">${esc(s.name)} · ${s.kind==='household'?'Personal':'Business'}</option>`).join('');
   const api = async (path, method='GET', body=null) => {
@@ -252,9 +253,16 @@ function boot() {
     dialog(`Projected ${date(row.date)}`,`<div class="tr-block"><div class="tr-row">Cash <strong>${money(row.cash_cents)}</strong></div><div class="tr-row">Available after reserves <strong>${money(row.available_cents)}</strong></div><div class="tr-row">Reserved for goals <strong>${money(row.goal_reserve_cents)}</strong></div><div class="tr-row">Reserved for medical bills <strong>${money(row.medical_reserve_cents||0)}</strong></div>${data.bills.filter(b=>b.date===row.date).map(b=>`<div class="tr-row">${esc(b.name)}<strong>${money(b.amount_cents)}</strong></div>`).join('')}<p class="tr-subtle">This projection includes confirmed schedules, estimated variable spending, debt payments, and goal reserves. Edit those inputs in Bills & goals or Wealth & debt.</p></div>`,null);
   }
   async function connect(connectionId=null) {
-    const token=await api(endpoint('/banks/link'),'POST',{connection_id:connectionId});
-    if(!window.Plaid)await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='https://cdn.plaid.com/link/v2/stable/link-initialize.js';script.onload=resolve;script.onerror=()=>reject(new Error('Unable to load bank linking.'));document.head.appendChild(script);});
-    const handler=window.Plaid.create({token:token.link_token,onSuccess:async publicToken=>{try{if(connectionId)await api(endpoint(`/banks/${connectionId}/sync`),'POST',{});else await api(endpoint('/banks/exchange'),'POST',{public_token:publicToken});notice('Bank connected. History is being synchronized.');await load();}catch(e){notice(e.message);}finally{handler.destroy();}},onExit:()=>handler.destroy()});handler.open();
+    if(linkInProgress){notice('A bank connection window is already open. Finish or close it before starting another one.');return;}
+    linkInProgress=true;
+    let handler;
+    const finish=()=>{handler?.destroy();linkInProgress=false;};
+    try {
+      const token=await api(endpoint('/banks/link'),'POST',{connection_id:connectionId});
+      if(!window.Plaid)await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='https://cdn.plaid.com/link/v2/stable/link-initialize.js';script.onload=resolve;script.onerror=()=>reject(new Error('Unable to load bank linking.'));document.head.appendChild(script);});
+      handler=window.Plaid.create({token:token.link_token,onSuccess:async publicToken=>{try{if(connectionId)await api(endpoint(`/banks/${connectionId}/sync`),'POST',{});else await api(endpoint('/banks/exchange'),'POST',{public_token:publicToken});notice('Bank connected. History is being synchronized.');await load();}catch(e){notice(e.message);}finally{finish();}},onExit:finish});
+      handler.open();
+    } catch(e) {linkInProgress=false;throw e;}
   }
   root.addEventListener('click',async e=>{
     const target=e.target.closest('[data-action]');if(!target)return;
