@@ -160,3 +160,38 @@ The authenticated Fleet Tracking page is still governed by the global
 `FLEET_TRACKING_ENABLED` switch. Do not enable that switch merely to make a
 sales demo convenient; complete the normal controlled rollout and policy
 checks first.
+
+## Fleet map recovery and iPhone usability (2026-09-16)
+
+The mobile crew-map endpoint refreshes mapped company vehicles from the tenant's
+existing Bouncie connection on demand, no more often than once per 30 seconds.
+Concurrent viewers share a lock and cached health result; cached metadata contains
+no coordinates. Provider failures return a safe `tracking.vehicle_feed` status
+while retaining previously stored locations inside the approved retention window.
+It does not import new vehicles, change provider webhooks, or enable tracking.
+
+The official Bouncie contract (https://docs.bouncie.dev/openapi.json) puts moving
+GPS samples in `tripData.data[].gps` with a per-sample `timestamp`. A trip's
+`transactionId` is not a point ID. Deduplicate overlapping samples independently;
+never substitute receipt time for missing/invalid provider timestamps. The REST
+vehicle `stats.location` is a last-known position and `stats.lastUpdated` is the
+provider's document update timestamp, not proof of a new GPS fix. The mobile
+contract marks these points `source=provider_snapshot`.
+
+Check connection health, mapped-device count, location count, and last received
+time without printing tokens, IMEIs, raw provider payloads, or coordinates. A
+connected account with zero stored points can recover on the next map request.
+If the feed remains unavailable, verify/reconnect the tenant OAuth connection.
+Confirm the application webhook subscribes to `tripData` in Bouncie's developer
+portal; account OAuth access may not authorize webhook-management endpoints.
+Existing webhook authentication and tenant/policy gates remain mandatory.
+
+The iPhone map has searchable vehicle/crew layers, tappable pins and rows, a
+Fit all control, expanded view, directions, and explicit older-position labels.
+Background refreshes preserve the user's map position. Initial loading errors,
+provider failures, missing GPS, and street-tile failures have distinct recovery
+states. iPhone changes require a new bundled app release; backend recovery is
+compatible with the existing v2 client contract.
+
+Validation: `php artisan test tests/Feature/FieldService/ReusableFieldOperationsTest.php`.
+No migrations or production configuration changes are required.

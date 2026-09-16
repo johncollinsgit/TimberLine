@@ -19,7 +19,7 @@ class PruneFleetLocationPoints extends Command
             ->get();
         $deleted = 0;
         foreach ($settings as $setting) {
-            $days = max(1, min(90, (int) $setting->retention_days));
+            $days = max(1, min(30, (int) $setting->retention_days));
             $deleted += FleetLocationPoint::query()->forTenantId((int) $setting->tenant_id)
                 ->where('recorded_at', '<', now()->subDays($days))->delete();
         }
