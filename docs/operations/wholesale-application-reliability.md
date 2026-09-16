@@ -35,6 +35,24 @@ from July 1 onward. July 1 threads were follow-ups on older applications.
 This establishes the last observed successful capture; it does not establish
 that every attempted application since then failed.
 
+## Wholesale purchase authorization
+
+The storefront theme can hide catalog and checkout controls, but it cannot stop
+an anonymous request to Shopify's cart API. `everbranch-bundle-scent-validation`
+therefore treats the Shopify customer tag `wholesale` as the authoritative
+purchase permission whenever a cart has items. The same Cart and Checkout
+Validation Function runs for the regular checkout and accelerated payment paths.
+An unsigned-in customer or a customer without that tag sees a clear sign-in or
+application message and cannot place the order.
+
+The wholesale app needs Shopify's `read_validations` and `write_validations`
+scopes to audit and keep its blocking validation enabled. An app-permission
+update is required whenever those scopes are first released; verify the live
+validation is enabled and `blockOnFailure` is true before declaring checkout
+authorization complete. The function test suite covers anonymous rejection,
+approved-customer acceptance, and the combined authorization and bundle-scent
+error case.
+
 ## Delivery and operation
 
 - `wholesale:deliver-applications` runs each minute. `metadata.delivery` records
