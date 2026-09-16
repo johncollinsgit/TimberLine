@@ -216,7 +216,11 @@ class DashboardService
             'commitments' => app(CommitmentsService::class)->summary($records, $entries, $accounts, $today),
             'history' => app(HistoryService::class)->summarize($entries, $accounts, $today),
             'seasonality' => ['enabled' => $seasonal, 'sources' => $seasonalSources],
-            'transactions' => $selected->reverse()->values()->all(), 'categories' => $categories, 'daily_series' => $dailySeries,
+            // The review queue deliberately reaches beyond the reporting range so a
+            // user can finish categorizing older imports without changing dates.
+            'transactions' => $selected->reverse()->values()->all(),
+            'review_transactions' => $entries->where('reviewed', false)->reverse()->take(250)->values()->all(),
+            'categories' => $categories, 'daily_series' => $dailySeries,
             'debt_suggestions' => app(PlaidService::class)->debtSuggestions($space), 'forecast' => $baseline, 'comparison' => $comparison, 'bills' => $bills, 'goals' => $goals, 'debts' => $debtRows, 'assets' => $assets, 'metals' => $metals, 'quotes' => $quotes,
             'recommendations' => $recommendations, 'recurring_suggestions' => $this->recurringSuggestions($entries, $schedules),
             'records' => $records->whereNotIn('kind', ['payroll'])->values()->all(),

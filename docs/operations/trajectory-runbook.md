@@ -86,6 +86,15 @@ not the original account, merchant, or unsplit amount. Explicit merchant rules
 precede provider suggestions; undoing a review also disables the rule it created.
 Broad stores and uncertain money movements require review.
 
+The authenticated header exposes Personal, Business, and Both when the signed-in
+user has authorized access to both space types. Both is limited to a
+reconciliation-aware overview and the shared Review transactions queue. It never
+adds household and company flows together before the explicit space link allows
+matched owner transfers to be eliminated. The review queue returns up to 250
+unreviewed imported transactions from the available history, independently of
+the dashboard reporting period; categorization still uses the originating,
+authorized space.
+
 Face Punched affects actual spending but is excluded from repeating baselines.
 Bullshit Spending is a reviewable category profile with purchase exceptions.
 Transfers, card payments, reimbursements, asset movements, and confirmed
