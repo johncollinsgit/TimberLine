@@ -22,6 +22,8 @@ Trajectory has its own public `/trajectory/welcome` page and full-width authenti
 
 The dashboard includes subscription evidence, upcoming loan payments, account cash history, historical month comparison, dated budget versions, receipts, and interest by account. Imported cash history is not net-worth history. Unknown card terms leave purchases on the card liability and do not invent cash payments or APRs. Monthly and actual/365 biweekly debt calculations retain decimal rates; separate mortgage withdrawals expose the suspense/allocation assumption.
 
+Trajectory now opens with Personal, Business, and, when both authorized spaces exist, Both controls. Both is a reconciliation-aware overview and a cross-space transaction-review queue; it does not combine income or spending until the spaces are linked. The Review transactions destination surfaces up to 250 outstanding imported items across history so users can categorize them without changing the reporting period. Detailed planning remains scoped to Personal or Business.
+
 `trajectory:import-household` imports private Monarch history, optional Chase CSV and Monarch balance history, dated account observations, budgets, receipts, and reviewed financial records. It requires an existing verified household owner and entitlement. The default executes validation inside a rolled-back transaction; `--apply` commits atomically. Import identities, audited evidence corrections, and record replay markers preserve subsequent user corrections. Keep every real input, receipt, screenshot, database, and financial export outside git and public fixtures. See `docs/operations/trajectory-runbook.md`.
 
 

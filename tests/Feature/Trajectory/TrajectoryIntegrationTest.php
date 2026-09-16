@@ -25,7 +25,16 @@ beforeEach(function (): void {
 });
 
 it('renders the application shell with accessible finance controls', function (): void {
-    $this->actingAs($this->user)->get('/trajectory')->assertOk()->assertSee('Trajectory')->assertSee('Finance space')->assertSee('Bills &amp; goals', false);
+    $this->actingAs($this->user)->get('/trajectory')->assertOk()->assertSee('Trajectory')->assertSee('Finance view')->assertSee('Review transactions')->assertSee('Bills &amp; goals', false);
+});
+
+it('returns outstanding transactions for review beyond the selected reporting range', function (): void {
+    app(LedgerService::class)->ingest($this->account, [['id' => 'older-review', 'date' => now()->subDays(120)->toDateString(), 'merchant' => 'Older merchant', 'amount_cents' => -1000]]);
+    $transaction = Transaction::where('source_key', 'integration:cash:older-review')->firstOrFail();
+
+    $this->actingAs($this->user)->getJson('/trajectory/spaces/'.$this->space->id.'/dashboard?range=month')
+        ->assertOk()
+        ->assertJsonPath('review_transactions.0.id', $transaction->id);
 });
 
 it('requires preview confirmation and imports exact signed cents without duplicate rows', function (): void {
