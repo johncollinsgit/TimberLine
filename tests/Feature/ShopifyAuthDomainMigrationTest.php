@@ -26,6 +26,22 @@ test('shopify oauth auth route emits canonical callback host from canonical land
         ->and((string) ($query['client_id'] ?? ''))->toBe('retail-client-id');
 });
 
+test('wholesale oauth uses the embedded wholesale app registration when it is configured', function (): void {
+    config()->set('services.shopify.stores.wholesale.shop', 'wholesale-test.myshopify.com');
+    config()->set('services.shopify.stores.wholesale.client_id', 'retired-wholesale-client-id');
+    config()->set('services.shopify.stores.wholesale.client_secret', 'retired-wholesale-client-secret');
+    config()->set('services.shopify.stores.wholesale.embedded_client_id', 'wholesale-app-client-id');
+    config()->set('services.shopify.stores.wholesale.embedded_client_secret', 'wholesale-app-client-secret');
+
+    $response = $this->get('http://app.theeverbranch.com/shopify/reinstall/wholesale');
+    $response->assertRedirect();
+
+    parse_str((string) parse_url((string) $response->headers->get('Location'), PHP_URL_QUERY), $query);
+
+    expect((string) ($query['client_id'] ?? ''))->toBe('wholesale-app-client-id')
+        ->and((string) ($query['redirect_uri'] ?? ''))->toBe('https://app.theeverbranch.com/shopify/callback/wholesale');
+});
+
 test('shopify oauth auth route rejects legacy landlord hosts at runtime', function (): void {
     $this->get('http://app.grovebud.com/shopify/auth/retail')->assertNotFound();
     $this->get('http://app.forestrybackstage.com/shopify/auth/retail')->assertNotFound();

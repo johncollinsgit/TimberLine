@@ -54,6 +54,12 @@ approved-customer acceptance. It remains separate from `everbranch-bundle-scent-
 the existing bundle-scent Function can retain its complete 24-option input
 query within Shopify's Function complexity cap.
 
+Wholesale OAuth uses the `MF Wholesale Backstage` embedded app registration
+when its credentials are configured. This keeps the reauthorization callback,
+the stored Admin API token, and the checkout Function in the same Shopify app;
+the retired integration registration is only a fallback for environments that
+do not configure the embedded app credentials.
+
 ## Delivery and operation
 
 - `wholesale:deliver-applications` runs each minute. `metadata.delivery` records
