@@ -1,0 +1,33 @@
+{
+  "payload": {
+    "export": "cart-validations-generate-run",
+    "target": "cart.validations.generate.run",
+    "input": {
+      "cart": {
+        "buyerIdentity": {
+          "customer": { "hasWholesaleAccess": true }
+        },
+        "lines": [
+          {
+            "quantity": 1
+          },
+          {
+            "quantity": 1
+          },
+          {
+            "quantity": 1
+          }
+        ]
+      }
+    },
+    "output": {
+      "operations": [
+        {
+          "validationAdd": {
+            "errors": []
+          }
+        }
+      ]
+    }
+  }
+}
