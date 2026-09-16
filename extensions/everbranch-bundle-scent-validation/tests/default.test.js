@@ -93,39 +93,7 @@ describe("migrated Everbranch option sets", () => {
   });
 });
 
-describe("wholesale purchase access", () => {
-  test("blocks an anonymous cart before checkout", () => {
-    const result = cartValidationsGenerateRun(bundleInput("wholesale-garden-mint-soy-candle", "Wholesale Garden Mint", [], null));
-
-    expect(result.operations[0].validationAdd.errors).toEqual([{
-      message: "Wholesale ordering is available to approved partners. Sign in with your approved wholesale account or apply for wholesale access.",
-      target: "$.cart",
-    }]);
-  });
-
-  test("allows an approved wholesale customer to continue", () => {
-    const result = cartValidationsGenerateRun(bundleInput("wholesale-garden-mint-soy-candle", "Wholesale Garden Mint", [], true));
-
-    expect(result.operations[0].validationAdd.errors).toEqual([]);
-  });
-
-  test("reports wholesale access and bundle errors together", () => {
-    const result = cartValidationsGenerateRun(bundleInput("5-wax-melts-bundle", "5 Wax Melts Bundle", [], null));
-
-    expect(result.operations[0].validationAdd.errors).toEqual([
-      {
-        message: "Wholesale ordering is available to approved partners. Sign in with your approved wholesale account or apply for wholesale access.",
-        target: "$.cart",
-      },
-      {
-        message: "5 Wax Melts Bundle requires 5 scent selections. Return to the product and choose every scent before checkout.",
-        target: "$.cart",
-      },
-    ]);
-  });
-});
-
-function bundleInput(handle, title, values, hasWholesaleAccess = true) {
+function bundleInput(handle, title, values) {
   const line = {
     id: `gid://shopify/CartLine/${handle}`,
     merchandise: {
@@ -144,12 +112,5 @@ function bundleInput(handle, title, values, hasWholesaleAccess = true) {
       : null;
   }
 
-  return {
-    cart: {
-      buyerIdentity: hasWholesaleAccess === null
-        ? null
-        : { customer: { hasWholesaleAccess } },
-      lines: [line],
-    },
-  };
+  return { cart: { lines: [line] } };
 }

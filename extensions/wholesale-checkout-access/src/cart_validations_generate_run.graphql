@@ -1,0 +1,12 @@
+query CartValidationsGenerateRunInput {
+  cart {
+    buyerIdentity {
+      customer {
+        hasWholesaleAccess: hasAnyTag(tags: ["wholesale"])
+      }
+    }
+    lines {
+      quantity
+    }
+  }
+}

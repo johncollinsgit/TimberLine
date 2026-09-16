@@ -51,16 +51,6 @@ const MIGRATED_RULES: Record<string, Omit<BundleScentRule, "allowedValues">> = {
 export function cartValidationsGenerateRun(input: CartValidationsGenerateRunInput): CartValidationsGenerateRunResult {
   const errors: ValidationError[] = [];
 
-  // Theme access gates help with navigation, but cannot secure direct cart or
-  // checkout requests. Shopify runs this validation across checkout paths, so
-  // the wholesale customer tag is the purchase permission.
-  if (input.cart.lines.length > 0 && input.cart.buyerIdentity?.customer?.hasWholesaleAccess !== true) {
-    errors.push({
-      message: "Wholesale ordering is available to approved partners. Sign in with your approved wholesale account or apply for wholesale access.",
-      target: "$.cart",
-    });
-  }
-
   input.cart.lines.forEach((line) => {
     if (line.merchandise.__typename !== "ProductVariant") {
       return;
