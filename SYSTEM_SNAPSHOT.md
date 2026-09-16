@@ -1,5 +1,11 @@
 # SYSTEM SNAPSHOT
 
+## Fleet map Bouncie recovery (2026-09-16)
+
+- Mobile crew-map reads now refresh the connected tenant's mapped company-vehicle positions from Bouncie at most every 30 seconds, with a tenant lock and safe connection-health metadata. Existing positions survive provider outages, subject to the configured retention window. Snapshots retain the provider timestamp and are identified as last-known positions, never a new GPS fix.
+- Bouncie `tripData` webhooks ingest each `data[].gps` sample using its own timestamp; overlapping deliveries deduplicate by device, timestamp, and coordinates. Invalid, future, expired, unmapped, ambiguous, inactive, and unapproved points are ignored. No provider payload, speed, token, or coordinates enter diagnostic logs.
+- The iPhone map improvements are shipped from `everbranch-mobile` separately. See `docs/operations/field-operations-location-tracking-runbook.md`.
+
 ## Wholesale application reliability (2026-09-15)
 
 Wholesale applications now commit a tenant-owned request, form mirror, and durable

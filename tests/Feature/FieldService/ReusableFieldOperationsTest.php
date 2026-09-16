@@ -333,3 +333,60 @@ function fieldOperationsWorkspace(string $suffix, string $role = 'member'): arra
 
     return [$tenant, $user];
 }
+
+test('Bouncie trip samples deduplicate overlaps and ignore invalid or expired GPS without losing valid samples', function (): void {
+    [$tenant] = fieldOperationsWorkspace('bouncie-samples');
+    TenantAccessProfile::query()->create(['tenant_id' => $tenant->id, 'plan_key' => 'base', 'operating_mode' => 'direct', 'source' => 'test']);
+    foreach (['fleet', 'time_tracking', 'fleet_tracking'] as $module) {
+        TenantModuleState::query()->create(['tenant_id' => $tenant->id, 'module_key' => $module, 'enabled_override' => true, 'setup_status' => 'configured']);
+    }
+    $vehicle = FieldServiceVehicle::query()->create(['tenant_id' => $tenant->id, 'name' => 'Van', 'status' => 'active']);
+    FleetTrackingDevice::query()->create(['tenant_id' => $tenant->id, 'field_service_vehicle_id' => $vehicle->id, 'provider' => 'bouncie', 'external_device_id' => 'sample-imei', 'status' => 'active']);
+    $settings = TenantFleetTrackingSetting::query()->create(['tenant_id' => $tenant->id, 'bouncie_tracking_enabled' => true, 'policy_version' => 'v1', 'policy_sha256' => hash('sha256', 'policy'), 'approval_basis' => 'owner', 'approval_reference' => 'Owner approved', 'approved_at' => now(), 'retention_days' => 7]);
+    config(['services.fleet_tracking.enabled' => true, 'services.fleet_tracking.bouncie_webhook_key' => 'test-key']);
+    $sample = fn ($time, $lat = 35.2) => ['timestamp' => $time, 'gps' => ['lat' => $lat, 'lon' => -80.8, 'heading' => 135], 'speed' => 45];
+    $a = $sample(now()->subMinutes(2)->toISOString());
+    $b = $sample(now()->subMinute()->toISOString(), 35.3);
+    $deliver = function ($data, $key = 'test-key') {
+        $request = Request::create('/webhooks/bouncie', 'POST', [], [], [], ['CONTENT_TYPE' => 'application/json', 'HTTP_X_BOUNCIE_AUTHORIZATION' => $key], json_encode(['eventType' => 'tripData', 'imei' => 'sample-imei', 'transactionId' => 'same-trip', 'data' => $data]));
+
+        return app(FleetLocationIngestionService::class)->ingestBouncie($request);
+    };
+    expect($deliver([$a, $b, $sample('bad-date'), $sample(now()->subDays(8)->toISOString()), $sample(now()->addHour()->toISOString()), $sample(now()->toISOString(), 95)]))->toBe(['accepted' => 1, 'ignored' => 0]);
+    $deliver([$b, $a]);
+    expect(FleetLocationPoint::query()->forTenantId($tenant->id)->count())->toBe(2)
+        ->and(FleetLocationPoint::query()->forTenantId($tenant->id)->first()->safe_payload)->toBe([]);
+    expect(fn () => $deliver([$a], 'wrong-key'))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+    $settings->update(['bouncie_tracking_enabled' => false]);
+    expect($deliver([$sample(now()->toISOString())]))->toBe(['accepted' => 0, 'ignored' => 1]);
+});
+
+test('crew map recovers mapped Bouncie snapshots with bounded refreshes and preserves saved positions during outages', function (): void {
+    [$tenant, $admin] = fieldOperationsWorkspace('bouncie-recovery', 'admin');
+    TenantAccessProfile::query()->create(['tenant_id' => $tenant->id, 'plan_key' => 'base', 'operating_mode' => 'direct', 'source' => 'test']);
+    foreach (['fleet', 'time_tracking', 'fleet_tracking'] as $module) {
+        TenantModuleState::query()->create(['tenant_id' => $tenant->id, 'module_key' => $module, 'enabled_override' => true, 'setup_status' => 'configured']);
+    }
+    config(['services.fleet_tracking.enabled' => true, 'services.fleet_tracking.bouncie_api_base' => 'https://api.bouncie.dev/v1']);
+    TenantFleetTrackingSetting::query()->create(['tenant_id' => $tenant->id, 'bouncie_tracking_enabled' => true, 'policy_version' => 'v1', 'policy_sha256' => hash('sha256', 'policy'), 'approval_basis' => 'owner', 'approval_reference' => 'Owner approved', 'approved_at' => now(), 'retention_days' => 7]);
+    $vehicle = FieldServiceVehicle::query()->create(['tenant_id' => $tenant->id, 'name' => 'Mapped van', 'status' => 'active']);
+    FleetTrackingDevice::query()->create(['tenant_id' => $tenant->id, 'field_service_vehicle_id' => $vehicle->id, 'provider' => 'bouncie', 'external_device_id' => 'our-imei', 'status' => 'active']);
+    IntegrationConnection::query()->create(['tenant_id' => $tenant->id, 'provider' => 'bouncie', 'status' => IntegrationConnection::STATUS_CONNECTED, 'access_token' => 'test-token', 'expires_at' => now()->addHour()]);
+    $snapshot = ['imei' => 'our-imei', 'stats' => ['lastUpdated' => now()->subHours(2)->toISOString(), 'location' => ['lat' => 35.2, 'lon' => -80.8]]];
+    Http::fake(['api.bouncie.dev/*' => Http::sequence()->push([$snapshot, array_replace($snapshot, ['imei' => 'unmapped'])])->whenEmpty(Http::response([], 503))]);
+    Sanctum::actingAs($admin, ['mobile:read']);
+    $url = '/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/crew-map';
+    $this->getJson($url)->assertOk()->assertJsonPath('vehicles.0.location.latitude', 35.2)
+        ->assertJsonPath('vehicles.0.location.source', 'provider_snapshot')
+        ->assertJsonPath('vehicles.0.location.freshness', 'stale')
+        ->assertJsonPath('tracking.vehicle_feed.status', 'connected');
+    $this->getJson($url)->assertOk();
+    Http::assertSentCount(1);
+    expect(FleetLocationPoint::query()->forTenantId($tenant->id)->count())->toBe(1);
+    $this->travel(31)->seconds();
+    $this->getJson($url)->assertOk()->assertJsonPath('tracking.vehicle_feed.status', 'unavailable')
+        ->assertJsonPath('vehicles.0.location.latitude', 35.2);
+    // A stale provider snapshot never gets a new "now" timestamp, even if pruning has not run.
+    $this->travel(8)->days();
+    $this->getJson($url)->assertOk()->assertJsonPath('vehicles.0.location', null);
+});

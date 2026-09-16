@@ -71,7 +71,7 @@ class EverbranchMobileWorkforceController extends Controller
         return response()->json(['ok' => true, 'point_id' => (int) $point->id], 201);
     }
 
-    public function crewMap(Request $request, FleetTrackingAccessService $access): JsonResponse
+    public function crewMap(Request $request, FleetTrackingAccessService $access, \App\Services\FleetTracking\BouncieLocationRefreshService $bouncie): JsonResponse
     {
         $tenant = $this->tenant($request);
         $viewer = $this->user($request);
@@ -82,6 +82,8 @@ class EverbranchMobileWorkforceController extends Controller
         $policyApproved = $access->isPolicyApproved($settings);
         $phoneAvailable = $enabled && $policyApproved && $settings->phone_tracking_enabled;
         $vehicleAvailable = $enabled && $policyApproved && $settings->bouncie_tracking_enabled;
+        $vehicleFeed = $vehicleAvailable ? $bouncie->refresh($tenant) : ['status' => 'disabled'];
+        $retainedSince = now()->subDays(max(1, min(30, (int) $settings->retention_days)));
         $members = $tenant->users()->where('users.is_active', true)
             ->wherePivot('membership_active', true)->orderBy('users.name')->get(['users.id', 'users.name']);
         $memberIds = $members->pluck('id')->map(fn ($id): int => (int) $id);
@@ -95,6 +97,7 @@ class EverbranchMobileWorkforceController extends Controller
                 })
                 ->where('points.tenant_id', (int) $tenant->id)
                 ->where('points.source', 'mobile')
+                ->where('points.recorded_at', '>=', $retainedSince)
                 ->where('sessions.status', 'running')
                 ->whereIn('points.user_id', $memberIds)
                 ->selectRaw('points.id, points.user_id, points.field_service_time_session_id, points.latitude, points.longitude, points.accuracy_meters, points.recorded_at, row_number() over (partition by points.user_id order by points.recorded_at desc, points.id desc) as location_rank');
@@ -131,6 +134,7 @@ class EverbranchMobileWorkforceController extends Controller
         $vehicleDevices = $vehicleAvailable
             ? FleetTrackingDevice::query()->forTenantId((int) $tenant->id)
                 ->where('provider', 'bouncie')->where('status', 'active')
+                ->whereHas('vehicle', fn ($query) => $query->where('tenant_id', $tenant->id)->where('status', 'active'))
                 ->with('vehicle:id,tenant_id,name,identifier')->get()
             : collect();
         $latestVehiclePoints = collect();
@@ -138,7 +142,8 @@ class EverbranchMobileWorkforceController extends Controller
             $rankedVehicles = DB::table('fleet_location_points')
                 ->where('tenant_id', (int) $tenant->id)->where('source', 'bouncie')
                 ->whereIn('fleet_tracking_device_id', $vehicleDevices->modelKeys())
-                ->selectRaw('id, fleet_tracking_device_id, latitude, longitude, recorded_at, row_number() over (partition by fleet_tracking_device_id order by recorded_at desc, id desc) as location_rank');
+                ->where('recorded_at', '>=', $retainedSince)
+                ->selectRaw('id, event_type, fleet_tracking_device_id, latitude, longitude, recorded_at, row_number() over (partition by fleet_tracking_device_id order by recorded_at desc, id desc) as location_rank');
             $latestVehiclePoints = DB::query()->fromSub($rankedVehicles, 'ranked_vehicle_locations')
                 ->where('location_rank', 1)->get()->keyBy('fleet_tracking_device_id');
         }
@@ -151,7 +156,7 @@ class EverbranchMobileWorkforceController extends Controller
                 'device_id' => (int) $device->id,
                 'label' => (string) ($device->label ?: $device->vehicle?->name ?: 'Company vehicle'),
                 'vehicle' => $device->vehicle ? ['id' => (int) $device->vehicle->id, 'name' => (string) $device->vehicle->name, 'identifier' => $device->vehicle->identifier] : null,
-                'location' => $point ? ['latitude' => (float) $point->latitude, 'longitude' => (float) $point->longitude, 'recorded_at' => $recordedAt?->toIso8601String(), 'age_seconds' => $ageSeconds, 'freshness' => $ageSeconds <= 120 ? 'live' : ($ageSeconds <= 900 ? 'recent' : 'stale')] : null,
+                'location' => $point ? ['latitude' => (float) $point->latitude, 'longitude' => (float) $point->longitude, 'source' => $point->event_type === 'vehicleSnapshot' ? 'provider_snapshot' : 'gps', 'recorded_at' => $recordedAt?->toIso8601String(), 'age_seconds' => $ageSeconds, 'freshness' => $ageSeconds <= 120 ? 'live' : ($ageSeconds <= 900 ? 'recent' : 'stale')] : null,
             ];
         })->values();
 
@@ -162,6 +167,7 @@ class EverbranchMobileWorkforceController extends Controller
                 'module_enabled' => $enabled,
                 'phone_tracking_enabled' => (bool) $settings->phone_tracking_enabled,
                 'vehicle_tracking_enabled' => (bool) $settings->bouncie_tracking_enabled,
+                'vehicle_feed' => $vehicleFeed,
                 'policy_ready' => $policyApproved,
                 'retention_days' => (int) $settings->retention_days,
                 'setup_message' => ! $enabled
