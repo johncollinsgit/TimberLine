@@ -19,6 +19,7 @@ Route::middleware(['auth', 'verified', 'throttle:120,1'])->prefix('trajectory')-
         Route::post('/accounts', [Trajectory::class, 'account'])->name('trajectory.account');
         Route::patch('/accounts/{account}', [Trajectory::class, 'updateAccount'])->name('trajectory.updateAccount');
         Route::patch('/transactions/{transaction}', [Trajectory::class, 'classify'])->name('trajectory.classify');
+        Route::post('/transactions/bulk-classify', [Trajectory::class, 'bulkClassify'])->name('trajectory.bulkClassify');
         Route::post('/transactions/{transaction}/undo', [Trajectory::class, 'undo'])->name('trajectory.undo');
         Route::post('/transactions/{transaction}/split', [Trajectory::class, 'split'])->name('trajectory.split');
         Route::post('/records', [Trajectory::class, 'saveRecord'])->name('trajectory.saveRecord');

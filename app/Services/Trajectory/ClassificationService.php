@@ -15,7 +15,7 @@ class ClassificationService
                 return [...$rule->data['classification'], 'reviewed' => true, 'explanation' => 'Your exact merchant rule: '.$rule->name];
             }
         }
-        $ambiguous = preg_match('/\b(amazon|amzn|walmart|wal-mart|target|ebay|etsy|costco|paypal|venmo|transfer|payment|square|sq)\b/i', $merchant);
+        $ambiguous = self::isAmbiguousMerchant($merchant);
         $category = in_array($providerCategory, config('trajectory.categories'), true) ? $providerCategory : 'uncategorized';
         $defaults = $space->settings['discretionary_categories'] ?? config('trajectory.discretionary_defaults');
 
@@ -27,6 +27,11 @@ class ClassificationService
             'bullshit_spending' => ! $ambiguous && in_array($category, $defaults, true),
             'explanation' => $ambiguous ? 'Mixed-purpose merchant or possible transfer. Review the purpose.' : ($category === 'uncategorized' ? 'Insufficient evidence. Review required.' : 'Provider category; editable in review.'),
         ];
+    }
+
+    public static function isAmbiguousMerchant(string $merchant): bool
+    {
+        return (bool) preg_match('/\b(amazon|amzn|walmart|wal-mart|target|ebay|etsy|costco|paypal|venmo|zelle|cash app|transfer|payment|square|sq)\b/i', $merchant);
     }
 
     public static function merchant(string $value): string

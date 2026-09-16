@@ -209,7 +209,7 @@ class DashboardService
             'unresolved_deposits' => ['amount_cents' => (int) $unresolvedDeposits->sum('amount_cents'), 'ids' => $unresolvedDeposits->pluck('id')->all()],
             'summary' => ['income_cents' => (int) $income, 'spending_cents' => -(int) $spending->sum('amount_cents'), 'cash_cents' => $cash, 'net_worth_cents' => $assetTotal - $liabilities, 'net_worth_complete' => $netComplete, 'assets_cents' => $assetTotal, 'liabilities_cents' => $liabilities, 'review_count' => $entries->where('reviewed', false)->count(), 'selected_interest_cents' => $interestService->total($interest, $interestStatements, $start->toDateString(), $end->toDateString()), 'ytd_interest_cents' => $interestService->total($interest, $interestStatements, $today->startOfYear()->toDateString(), $today->toDateString()), 'recorded_interest_cents' => $interestService->total($interest, $interestStatements), 'projected_interest_cents' => count($forecastDebts) > count($debts) || collect($debtRows)->contains(fn ($d) => $d['projection']['interest_cents'] === null) ? null : (int) collect($debtRows)->sum(fn ($d) => $d['projection']['interest_cents'])],
             'coverage' => ['history_days' => $days, 'provisional' => $days < 90 || count($blockers) > 0, 'blockers' => $blockers, 'history_start' => $historyStart?->toDateString()],
-            'accounts' => $accounts->map(fn ($a) => $a->only(['id', 'name', 'kind', 'balance_cents', 'history_start', 'observed_at']))->all(),
+            'accounts' => $accounts->map(fn ($a) => $a->only(['id', 'name', 'kind', 'connection_id', 'balance_cents', 'history_start', 'observed_at']))->all(),
             'connections' => Connection::where('space_id', $space->id)->get()->map(fn ($c) => $c->only(['id', 'status', 'institution_name', 'synced_at']))->all(),
             'medical' => $space->kind === 'household' ? $medical : null,
             'interest_by_account' => $interestByAccount, 'interest_statements' => $interestStatements,
@@ -220,6 +220,7 @@ class DashboardService
             // user can finish categorizing older imports without changing dates.
             'transactions' => $selected->reverse()->values()->all(),
             'review_transactions' => $entries->where('reviewed', false)->reverse()->take(250)->values()->all(),
+            'review_suggestions' => app(ReviewSuggestionService::class)->forEntries($entries),
             'categories' => $categories, 'daily_series' => $dailySeries,
             'debt_suggestions' => app(PlaidService::class)->debtSuggestions($space), 'forecast' => $baseline, 'comparison' => $comparison, 'bills' => $bills, 'goals' => $goals, 'debts' => $debtRows, 'assets' => $assets, 'metals' => $metals, 'quotes' => $quotes,
             'recommendations' => $recommendations, 'recurring_suggestions' => $this->recurringSuggestions($entries, $schedules),

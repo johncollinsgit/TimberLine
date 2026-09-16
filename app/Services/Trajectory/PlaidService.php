@@ -68,13 +68,13 @@ class PlaidService
         return ['link_token' => $result['link_token'], 'expiration' => $result['expiration']];
     }
 
-    public function exchange(Space $space, string $publicToken): Connection
+    public function exchange(Space $space, string $publicToken, ?string $institutionName = null): Connection
     {
         $result = $this->call('/item/public_token/exchange', ['public_token' => $publicToken]);
         $existing = Connection::where('external_id', $result['item_id'])->first();
         abort_if($existing && $existing->space_id !== $space->id, 409, 'This bank item is already connected in another space.');
 
-        return Connection::updateOrCreate(['external_id' => $result['item_id']], ['space_id' => $space->id, 'access_token' => $result['access_token'], 'status' => 'connected']);
+        return Connection::updateOrCreate(['external_id' => $result['item_id']], array_filter(['space_id' => $space->id, 'access_token' => $result['access_token'], 'status' => 'connected', 'institution_name' => $institutionName], fn ($value) => $value !== null));
     }
 
     public function sync(Connection $connection): void

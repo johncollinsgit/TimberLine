@@ -6,7 +6,7 @@
             <a class="tr-wordmark" href="{{ route('trajectory.index') }}"><span class="tr-logo" aria-hidden="true">↗</span>trajectory<span class="tr-brand-dot">.</span></a>
             <p class="tr-nav-label">YOUR FINANCIAL FUTURE</p>
             <nav class="tr-tabs" aria-label="Trajectory sections">
-                @foreach(['overview'=>['↗','Trajectory'],'accounts'=>['▤','Accounts'],'transactions'=>['⇄','Review transactions'],'history'=>['◷','Cash flow & history'],'budget'=>['▦','Budget'],'bills'=>['▣','Bills & goals'],'medical'=>['♡','Medical sharing'],'assets'=>['◈','Wealth & debt'],'business'=>['▥','Business'],'connections'=>['⚙','Connections']] as $key=>$item)
+                @foreach(['overview'=>['↗','Trajectory'],'accounts'=>['▤','Accounts'],'transactions'=>['⇄','Review transactions'],'history'=>['◷','Cash flow & history'],'budget'=>['▦','Budget'],'bills'=>['▣','Bills & goals'],'medical'=>['♡','Medical sharing'],'assets'=>['◈','Wealth & debt'],'business'=>['▥','Business']] as $key=>$item)
                 <button data-tab="{{ $key }}" @if($key==='overview') aria-current="page" @endif><span aria-hidden="true">{{ $item[0] }}</span>{{ $item[1] }}</button>
                 @endforeach
             </nav>
