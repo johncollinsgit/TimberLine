@@ -4,6 +4,9 @@
     "target": "cart.validations.generate.run",
     "input": {
       "cart": {
+        "buyerIdentity": {
+          "customer": { "hasWholesaleAccess": true }
+        },
         "lines": [
           {
             "id": "gid://shopify/CartLine/duplicate",

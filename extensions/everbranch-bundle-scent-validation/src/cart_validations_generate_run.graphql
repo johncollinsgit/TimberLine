@@ -1,5 +1,10 @@
 query CartValidationsGenerateRunInput {
   cart {
+    buyerIdentity {
+      customer {
+        hasWholesaleAccess: hasAnyTag(tags: ["wholesale"])
+      }
+    }
     lines {
       id
       scent1: attribute(key: "Scent 1") { value }
