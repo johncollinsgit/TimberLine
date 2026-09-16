@@ -120,6 +120,27 @@ test('shopify embedded wholesale entry route fails closed without signed query p
         ->assertDontSeeText('Fast loyalty snapshot for recent program activity.');
 });
 
+test('shopify embedded wholesale entry uses its verified session after an oauth redirect supplies only host', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+        'plan' => 'pro',
+    ]);
+    configureEmbeddedWholesaleStore((int) $tenant->id);
+
+    $this->get(route('shopify.app.wholesale', wholesaleEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSeeText('Wholesale Operations');
+
+    $this->get(route('shopify.app.wholesale', [
+        'store_key' => 'wholesale',
+        'host' => 'admin-host-from-oauth-redirect',
+    ]))
+        ->assertOk()
+        ->assertSeeText('Wholesale Operations')
+        ->assertDontSeeText('We could not verify this Shopify request');
+});
+
 test('shopify embedded app route can load the full analytics dashboard from the stored session page context', function () {
     configureEmbeddedRetailStore();
 

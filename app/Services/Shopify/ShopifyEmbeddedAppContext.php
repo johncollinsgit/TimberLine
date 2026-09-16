@@ -44,12 +44,20 @@ class ShopifyEmbeddedAppContext
         $host = trim((string) $request->query('host', ''));
         $hmac = trim((string) $request->query('hmac', ''));
 
-        if ($shopDomain === '' && $host === '' && $hmac === '') {
+        // Shopify's OAuth callback can establish a verified page session before
+        // the embedded-surface redirect adds only `host` to the next request.
+        // That host value is not a signed launch query on its own, so continue
+        // with the verified session rather than treating the redirect as a new
+        // Shopify request. This is especially important in Safari, where the
+        // post-consent navigation must not depend on a fresh iframe cookie.
+        if ($shopDomain === '' && $hmac === '') {
             $sessionContext = $this->resolveSessionPageContext($request);
             if ($sessionContext !== null) {
                 return $sessionContext;
             }
+        }
 
+        if ($shopDomain === '' && $host === '' && $hmac === '') {
             return [
                 'ok' => false,
                 'status' => 'open_from_shopify',
