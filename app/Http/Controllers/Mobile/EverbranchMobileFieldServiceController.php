@@ -112,13 +112,19 @@ class EverbranchMobileFieldServiceController extends Controller
         $access->scopeVisibleJobs($query, $user, $tenant);
         if ($bucket === 'past') {
             $query->whereIn('operational_status', ['complete', 'canceled', 'history']);
+        } elseif ($bucket === 'generators') {
+            $query->where(function (Builder $generatorJobs): void {
+                $generatorJobs->where(function (Builder $active): void {
+                    $active->whereNull('archived_at')
+                        ->whereIn('operational_status', ['active', 'scheduled', 'needs_details', 'blocked']);
+                })->orWhere('operational_status', 'complete');
+            });
+            $this->scopeGeneratorJobs($query);
         } else {
             $query->whereNull('archived_at');
             $this->applyFilter($query, $filter, $user);
 
-            if ($bucket === 'generators') {
-                $this->scopeGeneratorJobs($query);
-            } elseif ($bucket === 'current') {
+            if ($bucket === 'current') {
                 $this->excludeGeneratorJobs($query);
             }
         }
@@ -1414,12 +1420,14 @@ class EverbranchMobileFieldServiceController extends Controller
         $viewerSeconds = ((int) ($job->viewer_manual_minutes ?? 0) * 60) + (int) ($job->viewer_timer_seconds ?? 0) + $viewerLiveSeconds;
         $materials = $job->relationLoaded('materials') ? $job->materials : collect();
         $equipment = $job->relationLoaded('equipment') ? $job->equipment : null;
-        $dueDate = $equipment?->next_service_due_at;
-        $maintenanceState = $dueDate?->isPast() ? 'due' : ($dueDate?->lte(today()->addDays(90)) ? 'upcoming' : 'scheduled');
         $anniversary = $equipment?->installed_at?->copy()->setYear(today()->year);
         if ($anniversary?->lt(today())) {
             $anniversary->addYear();
         }
+        $dueDate = $equipment?->next_service_due_at ?: $anniversary;
+        $maintenanceState = $job->operational_status === 'complete'
+            ? 'complete'
+            : ($dueDate?->isPast() ? 'due' : ($dueDate?->lte(today()->addDays(90)) ? 'upcoming' : 'scheduled'));
 
         return [
             'id' => (int) $job->id, 'title' => (string) $job->title, 'customer' => (string) $job->customer_name,
