@@ -254,9 +254,10 @@ class EverbranchPrepareCarolinaBarrelLaunchDemo extends Command
         if ((bool) $this->option('json')) {
             $this->line(json_encode($result, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
         } else {
+            $counts = $result['current_demo_records'] ?? $result['existing_demo_records'];
             $this->info((string) $result['message']);
             $this->line('Mode: '.$result['mode']);
-            $this->line('Profiles: '.$result['current_demo_records']['profiles'].' | Orders: '.$result['current_demo_records']['orders'].' | Sessions: '.$result['current_demo_records']['sessions']);
+            $this->line('Profiles: '.$counts['profiles'].' | Orders: '.$counts['orders'].' | Sessions: '.$counts['sessions']);
         }
 
         return self::SUCCESS;

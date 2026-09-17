@@ -77,3 +77,14 @@ it('refuses to write the fixture without the exact confirmation', function () {
 
     expect(Order::query()->where('order_number', 'like', 'CBC-DEMO-%')->count())->toBe(0);
 });
+
+it('reports the fixture plan without writing by default', function () {
+    Tenant::query()->create(['name' => 'Carolina Barrel Co.', 'slug' => 'carolina-barrel-co']);
+
+    $this->artisan('everbranch:prepare-carolina-barrel-launch-demo', [
+        'tenant' => 'carolina-barrel-co',
+        '--mode' => 'refresh',
+    ])->expectsOutputToContain('No records were changed.')->assertSuccessful();
+
+    expect(Order::query()->where('order_number', 'like', 'CBC-DEMO-%')->count())->toBe(0);
+});
