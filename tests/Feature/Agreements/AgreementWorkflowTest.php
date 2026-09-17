@@ -612,6 +612,9 @@ test('paid agreements show the receipt without another acceptance or payment pro
         'tenant_id' => $agreement->tenant_id,
         'provider' => 'stripe',
         'provider_receipt_id' => 'in_paid_proposal',
+        'paid_at' => now(),
+        'source_event_id' => 'evt_paid_proposal',
+        'subtotal_amount_cents' => 35800,
         'status' => 'paid',
         'currency' => 'USD',
         'total_amount_cents' => 35800,
@@ -625,6 +628,12 @@ test('paid agreements show the receipt without another acceptance or payment pro
         ->assertDontSee('name="electronic_signature_value"', false);
     $mail = new \App\Mail\AgreementProposalMail($agreement->fresh(), $sent['url']);
     expect($mail->render())->toContain('Your payment is confirmed.', 'View your agreement')->not->toContain('continue to secure payment');
+    $receipt = $order->receipts()->firstOrFail();
+    $confirmation = new \App\Mail\AgreementPaymentConfirmationMail($agreement->fresh(), $receipt, $sent['url']);
+    expect($confirmation->render())->toContain('Amount paid', '$358.00', 'View your payment receipt', 'View your signed agreement')
+        ->not->toContain('Continue to secure payment', 'Proposal password');
+    $receipt->status = 'processing';
+    expect(fn () => new \App\Mail\AgreementPaymentConfirmationMail($agreement, $receipt, $sent['url']))->toThrow(InvalidArgumentException::class);
     expect($agreement->acceptance->fresh()->snapshot_hash)->toBe($snapshotHash);
     $this->assertDatabaseCount('agreement_acceptances', 1);
     $this->assertDatabaseCount('tenant_billing_orders', 1);

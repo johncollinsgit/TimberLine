@@ -5,6 +5,7 @@
     $content = (array) ($version?->content_payload ?? []);
     $accepted = (bool) $agreement->acceptance;
     $paid = $billingOrder?->status === 'paid';
+    $receipt = $billingOrder?->receipts->where('status', 'paid')->sortByDesc('paid_at')->first();
     $lines = $billingOrder ? collect((array) $billingOrder->line_items) : collect((array) data_get($version?->pricing_payload, 'cards', []))->where('collectible_by_everbranch', true);
     $dueLines = $lines->whereIn('payment_timing', ['due_on_acceptance', 'recurring_current']);
     $futureLines = $lines->where('payment_timing', 'recurring_future');
@@ -31,6 +32,13 @@
     @if(session('status'))<div role="status" class="ep-notice ep-notice-success">{{ session('status') }}</div>@endif
     @if(session('status_error'))<div role="alert" class="ep-notice ep-notice-error">{{ session('status_error') }}</div>@endif
     @if($agreement->agreement_type === \App\Models\Agreement::TYPE_SANDBOX_VALIDATION)<div class="ep-notice">Test mode only. This agreement does not activate service or replace a client agreement.</div>@endif
+    @if($paid)
+    <section class="ep-card ep-confirmation" aria-label="Payment confirmation">
+        <span class="ep-confirmation-check" aria-hidden="true">✓</span>
+        <div><p class="ep-eyebrow">Payment confirmed</p><h2>Thank you for choosing Everbranch.</h2><p>Your payment is complete and your signed agreement is on file.@if($receipt) <strong>${{ number_format($receipt->total_amount_cents / 100, 2) }} {{ strtoupper($receipt->currency) }}</strong> received.@endif</p></div>
+        @if($receipt?->receipt_url ?: $receipt?->hosted_invoice_url)<a class="ep-button ep-button-secondary" href="{{ $receipt->receipt_url ?: $receipt->hosted_invoice_url }}" rel="noopener noreferrer">View your receipt ↗</a>@endif
+    </section>
+    @endif
     <div class="ep-intro">
         <p class="ep-eyebrow">Your {{ $product }} agreement</p>
         <h1>{{ $agreement->tenant->name }}</h1>
@@ -63,11 +71,11 @@
         <aside class="ep-summary" aria-label="Pricing and next step">
             <section class="ep-card ep-payment"><p class="ep-eyebrow">{{ $paid ? 'Payment received' : 'Your payment summary' }}</p><h2>{{ $paid ? 'You’re all set.' : ($accepted ? 'Finish your setup.' : 'A clear starting point.') }}</h2>
                 @if($dueLines->isNotEmpty())
-                <div class="ep-total">${{ number_format($due / 100, 2) }}<span>{{ $paid ? 'Initial agreement amount' : 'Initial payment · before applicable tax' }}</span></div>
+                <div class="ep-total">${{ number_format(($paid && $receipt ? $receipt->total_amount_cents : $due) / 100, 2) }}<span>{{ $paid ? 'Amount paid' : 'Initial payment · before applicable tax' }}</span></div>
                 <div class="ep-line-items">@foreach($dueLines as $line)<div class="ep-line"><div><strong>{{ $line['label'] }}</strong><small>{{ ($line['frequency'] ?? '') === 'month' ? 'Monthly service' : 'One-time' }}</small></div><span>${{ number_format(($line['amount_cents'] ?? 0) * ($line['quantity'] ?? 1) / 100, 2) }}</span></div>@endforeach</div>
                 @endif
                 @foreach($futureLines as $line)<p class="ep-recurring">{{ $line['label'] }}: <strong>${{ number_format(($line['amount_cents'] ?? 0) / 100, 2) }}/month</strong> from billing cycle {{ $line['starts_cycle'] ?? data_get($version->subscription_payload, 'promotional_cycles', 6) + 1 }}.</p>@endforeach
-                @if($paid)<div class="ep-notice ep-notice-success">Payment confirmed by Stripe.</div>@if($billingOrder->receipts->first()?->hosted_invoice_url)<a class="ep-button" href="{{ $billingOrder->receipts->first()->hosted_invoice_url }}" rel="noopener noreferrer">View payment receipt ↗</a>@endif
+                @if($paid)<div class="ep-notice ep-notice-success">Payment confirmed by Stripe.</div>@if($receipt?->receipt_url ?: $receipt?->hosted_invoice_url)<a class="ep-button" href="{{ $receipt->receipt_url ?: $receipt->hosted_invoice_url }}" rel="noopener noreferrer">View payment receipt ↗</a>@endif
                 @elseif(!$accepted)<a class="ep-button" href="#acceptance">Review &amp; accept <span aria-hidden="true">→</span></a><p class="ep-caption">Payment is a separate step after you accept.</p>
                 @elseif($billingOrder && $checkoutAvailable && !in_array($billingOrder->status, ['refunded','void']))<form method="post" action="{{ route('proposals.checkout', ['token' => $token]) }}">@csrf<button class="ep-button" type="submit">Continue to secure payment <span aria-hidden="true">→</span></button></form><p class="ep-caption">Card or US bank account · Powered by Stripe</p><p class="ep-caption">Bank payments remain processing until Stripe confirms settlement.</p>
                 @else<p class="ep-recurring">{{ $billingOrder && in_array($billingOrder->status, ['refunded','void']) ? 'This payment is no longer available. Contact us for the next step.' : 'Your agreement is accepted. We’ll help you with the next payment step.' }}</p><a class="ep-button ep-button-secondary" href="mailto:{{ $support }}">Contact your team ↗</a>@endif

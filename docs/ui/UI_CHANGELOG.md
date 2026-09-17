@@ -2703,3 +2703,5 @@
 ### 2026-09-15 — Wholesale decision routing
 
 - Approve and Deny now post to their form endpoints; Resend honors its explicit button override. This fixes the embedded Safari CSRF symptom caused by posting back to the detail page.
+
+- Paid proposals include a dedicated confirmation banner. The payment-confirmation email uses provider-confirmed amounts, a reconciled breakdown, and receipt/agreement links without a payment prompt.
