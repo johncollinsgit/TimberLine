@@ -5045,6 +5045,20 @@ body[data-premium-motion="public"].has-premium-motion .fb-splash__node--four {
   color: var(--fb-text);
 }
 
+.fb-auth-card [data-flux-label] {
+  color: var(--fb-text) !important;
+}
+
+.fb-auth-card [data-flux-checkbox-indicator] {
+  border-color: var(--fb-border) !important;
+  background: #ffffff;
+}
+
+.fb-auth-card [data-flux-checkbox][data-checked] [data-flux-checkbox-indicator] {
+  background: var(--fb-brand) !important;
+  color: #ffffff;
+}
+
 .fb-auth-card :is([data-flux-control], input, textarea, select) {
   background: #ffffff !important;
   border-color: var(--fb-border) !important;
