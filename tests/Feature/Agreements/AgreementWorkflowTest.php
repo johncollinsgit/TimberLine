@@ -623,6 +623,8 @@ test('paid agreements show the receipt without another acceptance or payment pro
         ->assertSeeText('Download permanent agreement copy')
         ->assertDontSeeText('Continue to secure payment')
         ->assertDontSee('name="electronic_signature_value"', false);
+    $mail = new \App\Mail\AgreementProposalMail($agreement->fresh(), $sent['url']);
+    expect($mail->render())->toContain('Your payment is confirmed.', 'View your agreement')->not->toContain('continue to secure payment');
     expect($agreement->acceptance->fresh()->snapshot_hash)->toBe($snapshotHash);
     $this->assertDatabaseCount('agreement_acceptances', 1);
     $this->assertDatabaseCount('tenant_billing_orders', 1);
