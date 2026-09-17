@@ -16,10 +16,10 @@ class FieldServiceJobTransitionService
     ) {}
 
     /** @return array{job:FieldServiceJob,note:FieldServiceJobNote,delivery:array<string,int>} */
-    public function transition(Tenant $tenant, FieldServiceJob $job, User $actor, string $action, ?string $reason = null): array
+    public function transition(Tenant $tenant, FieldServiceJob $job, User $actor, string $action, ?string $reason = null, ?string $completedAt = null): array
     {
-        return DB::transaction(function () use ($tenant, $job, $actor, $action, $reason): array {
-            $now = now();
+        return DB::transaction(function () use ($tenant, $job, $actor, $action, $reason, $completedAt): array {
+            $now = $action === 'complete' && $completedAt ? \Illuminate\Support\Carbon::parse($completedAt)->startOfDay() : now();
             $status = match ($action) {
                 'start', 'resume' => 'active',
                 'block' => 'blocked',

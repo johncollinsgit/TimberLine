@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\FieldServiceFinancialDocument;
+use App\Models\CustomerEquipment;
 use App\Models\FieldServiceJob;
 use App\Models\FieldServiceJobNote;
 use App\Models\FieldServiceJobNotification;
@@ -231,12 +232,18 @@ test('generator jobs have a dedicated mobile queue and do not inflate current wo
         'status' => 'open',
         'operational_status' => 'active',
     ]);
+    $equipment = CustomerEquipment::query()->create([
+        'tenant_id' => $tenant->id, 'equipment_type' => 'generator', 'name' => 'Generac 22kW',
+        'installed_at' => now()->subYear(), 'maintenance_interval_days' => 365,
+        'next_service_due_at' => now()->addDays(30), 'status' => 'active',
+    ]);
     $maintenance = FieldServiceJob::query()->create([
         'tenant_id' => $tenant->id,
         'title' => 'Generac generator maintenance',
         'status' => 'scheduled',
         'operational_status' => 'scheduled',
         'external_source' => 'equipment_maintenance',
+        'customer_equipment_id' => $equipment->id,
     ]);
     $installation = FieldServiceJob::query()->create([
         'tenant_id' => $tenant->id,
@@ -260,6 +267,8 @@ test('generator jobs have a dedicated mobile queue and do not inflate current wo
         ->assertOk()
         ->assertJsonPath('bucket', 'generators')
         ->assertJsonCount(2, 'jobs')
+        ->assertJsonPath('jobs.0.maintenance.equipment_name', 'Generac 22kW')
+        ->assertJsonPath('jobs.0.maintenance.state', 'upcoming')
         ->assertJsonFragment(['id' => $maintenance->id])
         ->assertJsonFragment(['id' => $installation->id]);
 });
@@ -404,12 +413,19 @@ test('completing a field job archives it while keeping it searchable in past job
         'operational_status' => 'active',
         'status_source' => 'manual',
     ]);
+    $equipment = CustomerEquipment::query()->create([
+        'tenant_id' => $tenant->id, 'equipment_type' => 'generator', 'name' => 'Test generator',
+        'maintenance_interval_days' => 365, 'next_service_due_at' => now(), 'status' => 'active',
+    ]);
+    $job->update(['customer_equipment_id' => $equipment->id]);
     Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
 
-    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/transitions', ['action' => 'complete'])
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/transitions', ['action' => 'complete', 'completed_at' => '2026-09-01'])
         ->assertOk()->assertJsonPath('status', 'complete');
 
     expect($job->fresh()->archived_at)->not->toBeNull();
+    expect($equipment->fresh()->last_serviced_at?->toDateString())->toBe('2026-09-01')
+        ->and($equipment->fresh()->next_service_due_at?->toDateString())->toBe('2027-09-01');
     $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service?view=list&bucket=past&q=Complete and retain')
         ->assertOk()->assertJsonPath('jobs.0.id', $job->id);
 });
