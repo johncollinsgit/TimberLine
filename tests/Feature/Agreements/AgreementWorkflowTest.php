@@ -599,3 +599,31 @@ test('stale proposal submissions refresh safely without replaying acceptance or 
     $this->postJson($sent['url'].'/'.$action, ['_token' => 'stale-token'])->assertStatus(419);
     $this->post('https://app.theeverbranch.com/login', ['_token' => 'stale-token'])->assertStatus(419);
 })->with(['unlock', 'accept', 'checkout']);
+
+test('paid agreements show the receipt without another acceptance or payment prompt', function (): void {
+    $sent = sentAgreement(agreementTenant('collins-electric'));
+    $this->get($sent['url'])->assertOk()->assertHeader('Referrer-Policy', 'no-referrer');
+    $this->post($sent['url'].'/accept', acceptancePayload())->assertRedirect();
+    $agreement = $sent['agreement']->fresh(['acceptance']);
+    $snapshotHash = $agreement->acceptance->snapshot_hash;
+    $order = $agreement->billingOrders()->firstOrFail();
+    $order->update(['status' => 'paid', 'paid_at' => now()]);
+    $order->receipts()->create([
+        'tenant_id' => $agreement->tenant_id,
+        'provider' => 'stripe',
+        'provider_receipt_id' => 'in_paid_proposal',
+        'status' => 'paid',
+        'currency' => 'USD',
+        'total_amount_cents' => 35800,
+        'hosted_invoice_url' => 'https://invoice.stripe.test/paid',
+    ]);
+    $this->get($sent['url'])->assertOk()
+        ->assertSeeText('Payment confirmed by Stripe.')
+        ->assertSee('https://invoice.stripe.test/paid', false)
+        ->assertSeeText('Download permanent agreement copy')
+        ->assertDontSeeText('Continue to secure payment')
+        ->assertDontSee('name="electronic_signature_value"', false);
+    expect($agreement->acceptance->fresh()->snapshot_hash)->toBe($snapshotHash);
+    $this->assertDatabaseCount('agreement_acceptances', 1);
+    $this->assertDatabaseCount('tenant_billing_orders', 1);
+});
