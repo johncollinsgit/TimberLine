@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\FieldServiceFinancialDocument;
 use App\Models\CustomerEquipment;
+use App\Models\FieldServiceFinancialDocument;
 use App\Models\FieldServiceJob;
 use App\Models\FieldServiceJobNote;
 use App\Models\FieldServiceJobNotification;
