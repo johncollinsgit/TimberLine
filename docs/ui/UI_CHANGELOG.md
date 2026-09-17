@@ -1,3 +1,9 @@
+## 2026-09-16 — Everbranch proposals and sign-in
+
+- Proposal invitations use the official Everbranch mark and a private link with no separate code. Email includes HTML and plain-text versions.
+- The proposal pairs the unchanged agreement with a clear initial-payment summary, acceptance record, and explicit Stripe payment action. Stale forms refresh safely with a retry notice.
+- Main and tenant sign-in pages use a calmer Everbranch layout, clearer spacing, and support access while retaining their authentication and tenant context.
+
 ## 2026-09-15 — Wholesale applications
 
 - Buyer application uses a single page and a verified receipt, with retained inputs on failure.
@@ -2697,3 +2703,5 @@
 ### 2026-09-15 — Wholesale decision routing
 
 - Approve and Deny now post to their form endpoints; Resend honors its explicit button override. This fixes the embedded Safari CSRF symptom caused by posting back to the detail page.
+
+- Paid proposals include a dedicated confirmation banner. The payment-confirmation email uses provider-confirmed amounts, a reconciled breakdown, and receipt/agreement links without a payment prompt.

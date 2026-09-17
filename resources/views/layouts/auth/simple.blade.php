@@ -7,9 +7,9 @@
         @php
             $authTenantPresentation = $authTenantPresentation ?? [];
             $tenantLabel = $authTenantPresentation['tenant_label'] ?? 'Your workspace';
-            $heroTitle = $authTenantPresentation['hero_title'] ?? 'Production, shipping, and wholesale in one place.';
-            $heroSubtitle = $authTenantPresentation['hero_subtitle'] ?? 'Track orders, inventory, fulfillment, and customer growth from one place built for real operations.';
-            $heroTagline = $authTenantPresentation['hero_tagline'] ?? 'Operations Console';
+            $heroTitle = $authTenantPresentation['hero_title'] ?? 'A clearer day starts here.';
+            $heroSubtitle = $authTenantPresentation['hero_subtitle'] ?? 'Your team, your work, and your next step. Everything you need to keep business moving, together in Everbranch.';
+            $heroTagline = $authTenantPresentation['hero_tagline'] ?? 'Everbranch by Evergrove Software';
             $productName = config('everbranch.product_name', 'Everbranch');
             $brandAssets = (array) config('everbranch.brand_assets', []);
             $brandAssetVersion = (string) ($brandAssets['cache_tag'] ?? 'eb1');
@@ -46,6 +46,7 @@
             <section class="fb-auth-card-wrap" aria-label="Authentication form">
                 <div class="fb-auth-card">
                     {{ $slot }}
+                    <p class="fb-auth-support">Need a hand? <a href="mailto:{{ config('everbranch.support_email') }}">Contact our team</a></p>
                 </div>
             </section>
         </div>

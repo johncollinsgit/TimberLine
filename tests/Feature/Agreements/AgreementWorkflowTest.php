@@ -209,7 +209,7 @@ test('disposable sandbox agreements never replace or version the client agreemen
         ->and(fn () => app(AgreementTerminationService::class)->request($firstSandbox, null))->toThrow(InvalidArgumentException::class);
 });
 
-test('proposal access is evergrove host locked password protected and secret safe', function (): void {
+test('proposal private link opens directly and remains host locked and secret safe', function (): void {
     $sent = sentAgreement(agreementTenant());
     $agreement = $sent['agreement'];
 
@@ -219,7 +219,7 @@ test('proposal access is evergrove host locked password protected and secret saf
         ->and($agreement->password_hash)->not->toContain($sent['password']);
 
     $this->get('http://not-evergrove.test/proposals/'.$sent['token'])->assertNotFound();
-    $this->get('http://evergrove.test/proposals/'.$sent['token'])->assertOk()->assertSeeText('Open secure proposal')->assertDontSeeText('Pricing and authorization');
+    $this->get('http://evergrove.test/proposals/'.$sent['token'])->assertOk()->assertSeeText('Pricing and authorization')->assertDontSee('name="password"', false);
     $this->post('http://evergrove.test/proposals/'.$sent['token'].'/unlock', ['password' => 'wrong-password'])->assertSessionHasErrors('password');
     $this->post('http://evergrove.test/proposals/'.$sent['token'].'/unlock', ['password' => $sent['password']])->assertRedirect();
     $this->get('http://evergrove.test/proposals/'.$sent['token'])
@@ -251,7 +251,7 @@ test('proposal overview uses the locked customer agreement without leaking anoth
         ->assertDontSeeText('Shopify store expenses');
 });
 
-test('short agreement link redirects to the current password-protected proposal', function (): void {
+test('short agreement link redirects to the current private proposal', function (): void {
     $sent = sentAgreement(agreementTenant());
     $management = app(AgreementManagementService::class);
     $shortUrl = $management->shortPublicUrl($sent['agreement']);
@@ -265,7 +265,7 @@ test('short agreement link redirects to the current password-protected proposal'
     $this->get($shortUrl)->assertNotFound();
 });
 
-test('evergrove agreement pages use a host-only session cookie for password unlocks', function (): void {
+test('evergrove agreement pages use a host-only session cookie for private links', function (): void {
     config()->set('session.domain', 'theeverbranch.com');
     $sent = sentAgreement(agreementTenant());
 
@@ -286,7 +286,7 @@ test('operator can text one agreement link to comma separated distinct recipient
             && str_contains($message, 'workspace is ready')
             && str_contains($message, 'evergrove.test/a/'.$agreement->id.'/')
             && ! str_contains($message, '/proposals/')
-            && str_contains($message, 'Code:')
+            && ! str_contains($message, 'Code:')
             && $options['tenant_id'] === $tenant->id)
         ->andReturn([
             'success' => true,
@@ -302,7 +302,7 @@ test('operator can text one agreement link to comma separated distinct recipient
             'expires_in_days' => 14,
         ])
         ->assertRedirect(route('landlord.agreements.show', $agreement))
-        ->assertSessionHas('status', 'Agreement link and access code were texted to 2 recipients.');
+        ->assertSessionHas('status', 'Agreement link was texted to 2 recipients.');
 
     $agreement->refresh();
     $event = $agreement->events()->where('event_type', 'agreement_text_sent')->firstOrFail();
@@ -558,4 +558,83 @@ test('landlord can email a secure agreement to its customer from the agreement s
         ->and($agreement->fresh()->recipient_email)->toBe('collinselectric91@gmail.com')
         ->and($agreement->fresh()->email_sent_at)->not->toBeNull();
     Mail::assertSent(\App\Mail\AgreementProposalMail::class, fn ($mail): bool => $mail->hasTo('collinselectric91@gmail.com'));
+});
+
+test('opening a private link only records a view and does not accept or bill', function (): void {
+    $sent = sentAgreement(agreementTenant());
+    $hash = $sent['agreement']->currentVersion->content_hash;
+    $html = $sent['agreement']->currentVersion->rendered_content;
+    $this->get($sent['url'])->assertOk()->assertSee($html, false)->assertSeeText('$358.00');
+    $this->get($sent['url'])->assertOk();
+    expect($sent['agreement']->fresh()->status)->toBe('viewed')
+        ->and($sent['agreement']->fresh()->view_count)->toBe(1)
+        ->and($sent['agreement']->fresh()->currentVersion->content_hash)->toBe($hash);
+    $this->assertDatabaseCount('agreement_acceptances', 0);
+    $this->assertDatabaseCount('tenant_billing_orders', 0);
+});
+
+test('proposal invitation is branded and never includes the legacy access code', function (): void {
+    $sent = sentAgreement(agreementTenant('collins-electric'));
+    $mail = new \App\Mail\AgreementProposalMail($sent['agreement'], $sent['url'], $sent['password']);
+    $html = $mail->render();
+    expect($html)->toContain('brand/everbranch-mark.png', 'Review your agreement', 'No password needed', $sent['url'])
+        ->not->toContain($sent['password'], 'Proposal password:', '🌿');
+});
+
+test('stale proposal submissions refresh safely without replaying acceptance or checkout', function (string $action): void {
+    app()->bind(\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class, fn ($app) => new class($app, $app['encrypter']) extends \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken
+    {
+        protected function runningUnitTests(): bool
+        {
+            return false;
+        }
+    });
+    $sent = sentAgreement(agreementTenant());
+    $this->get($sent['url'])->assertOk();
+    $response = $this->post($sent['url'].'/'.$action, array_merge(acceptancePayload(), ['_token' => 'stale-token', 'password' => 'do-not-reflect']));
+    $response->assertStatus(303)->assertRedirect('/proposals/'.$sent['token'].'?session_expired=1');
+    $this->get($sent['url'].'?session_expired=1')->assertOk()->assertSeeText('Your last submission was not processed.')->assertDontSeeText('do-not-reflect');
+    $this->assertDatabaseCount('agreement_acceptances', 0);
+    $this->assertDatabaseCount('tenant_billing_orders', 0);
+    $this->postJson($sent['url'].'/'.$action, ['_token' => 'stale-token'])->assertStatus(419);
+    $this->post('https://app.theeverbranch.com/login', ['_token' => 'stale-token'])->assertStatus(419);
+})->with(['unlock', 'accept', 'checkout']);
+
+test('paid agreements show the receipt without another acceptance or payment prompt', function (): void {
+    $sent = sentAgreement(agreementTenant('collins-electric'));
+    $this->get($sent['url'])->assertOk()->assertHeader('Referrer-Policy', 'no-referrer');
+    $this->post($sent['url'].'/accept', acceptancePayload())->assertRedirect();
+    $agreement = $sent['agreement']->fresh(['acceptance']);
+    $snapshotHash = $agreement->acceptance->snapshot_hash;
+    $order = $agreement->billingOrders()->firstOrFail();
+    $order->update(['status' => 'paid', 'paid_at' => now()]);
+    $order->receipts()->create([
+        'tenant_id' => $agreement->tenant_id,
+        'provider' => 'stripe',
+        'provider_receipt_id' => 'in_paid_proposal',
+        'paid_at' => now(),
+        'source_event_id' => 'evt_paid_proposal',
+        'subtotal_amount_cents' => 35800,
+        'status' => 'paid',
+        'currency' => 'USD',
+        'total_amount_cents' => 35800,
+        'hosted_invoice_url' => 'https://invoice.stripe.test/paid',
+    ]);
+    $this->get($sent['url'])->assertOk()
+        ->assertSeeText('Payment confirmed by Stripe.')
+        ->assertSee('https://invoice.stripe.test/paid', false)
+        ->assertSeeText('Download permanent agreement copy')
+        ->assertDontSeeText('Continue to secure payment')
+        ->assertDontSee('name="electronic_signature_value"', false);
+    $mail = new \App\Mail\AgreementProposalMail($agreement->fresh(), $sent['url']);
+    expect($mail->render())->toContain('Your payment is confirmed.', 'View your agreement')->not->toContain('continue to secure payment');
+    $receipt = $order->receipts()->firstOrFail();
+    $confirmation = new \App\Mail\AgreementPaymentConfirmationMail($agreement->fresh(), $receipt, $sent['url']);
+    expect($confirmation->render())->toContain('Amount paid', '$358.00', 'View your payment receipt', 'View your signed agreement')
+        ->not->toContain('Continue to secure payment', 'Proposal password');
+    $receipt->status = 'processing';
+    expect(fn () => new \App\Mail\AgreementPaymentConfirmationMail($agreement, $receipt, $sent['url']))->toThrow(InvalidArgumentException::class);
+    expect($agreement->acceptance->fresh()->snapshot_hash)->toBe($snapshotHash);
+    $this->assertDatabaseCount('agreement_acceptances', 1);
+    $this->assertDatabaseCount('tenant_billing_orders', 1);
 });

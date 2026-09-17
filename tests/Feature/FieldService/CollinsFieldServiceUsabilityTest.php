@@ -233,7 +233,9 @@ test('generator jobs have a dedicated mobile queue and do not inflate current wo
         'operational_status' => 'active',
     ]);
     $equipment = CustomerEquipment::query()->create([
-        'tenant_id' => $tenant->id, 'equipment_type' => 'generator', 'name' => 'Generac 22kW',
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => MarketingProfile::query()->create(['tenant_id' => $tenant->id, 'first_name' => 'Generator', 'last_name' => 'Customer'])->id,
+        'equipment_type' => 'generator', 'name' => 'Generac 22kW',
         'installed_at' => now()->subYear(), 'maintenance_interval_days' => 365,
         'next_service_due_at' => now()->addDays(30), 'status' => 'active',
     ]);
@@ -414,7 +416,9 @@ test('completing a field job archives it while keeping it searchable in past job
         'status_source' => 'manual',
     ]);
     $equipment = CustomerEquipment::query()->create([
-        'tenant_id' => $tenant->id, 'equipment_type' => 'generator', 'name' => 'Test generator',
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => MarketingProfile::query()->create(['tenant_id' => $tenant->id, 'first_name' => 'Generator', 'last_name' => 'Customer'])->id,
+        'equipment_type' => 'generator', 'name' => 'Test generator',
         'maintenance_interval_days' => 365, 'next_service_due_at' => now(), 'status' => 'active',
     ]);
     $job->update(['customer_equipment_id' => $equipment->id]);

@@ -32,10 +32,11 @@ class AgreementProposalController extends Controller
     public function show(Request $request, string $token, AgreementProposalAccessService $access): View
     {
         $agreement = $access->resolve($token);
+        $access->openFromLink($request, $agreement);
 
         $order = $agreement->billingOrders->sortByDesc('id')->first();
 
-        return view('agreements.proposal', ['agreement' => $agreement, 'token' => $token, 'unlocked' => $access->isUnlocked($request, $agreement), 'billingOrder' => $order, 'checkoutAvailable' => $order ? app(AgreementStripeCheckoutService::class)->availableFor($order) : false]);
+        return view('agreements.proposal', ['agreement' => $agreement, 'token' => $token, 'billingOrder' => $order, 'checkoutAvailable' => $order ? app(AgreementStripeCheckoutService::class)->availableFor($order) : false]);
     }
 
     public function unlock(Request $request, string $token, AgreementProposalAccessService $access): RedirectResponse

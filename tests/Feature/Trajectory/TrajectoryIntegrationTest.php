@@ -180,7 +180,7 @@ it('validates a real ES256 bank webhook and rejects body tampering', function ()
     $sLength = ord($der[$offset++]);
     $s = substr($der, $offset, $sLength);
     $raw = str_pad(ltrim($r, "\0"), 32, "\0", STR_PAD_LEFT).str_pad(ltrim($s, "\0"), 32, "\0", STR_PAD_LEFT);
-    Http::fake(['*/webhook_verification_key/get' => Http::response(['key' => ['alg' => 'ES256', 'crv' => 'P-256', 'x' => $base64($ec['x']), 'y' => $base64($ec['y']), 'expired_at' => null]])]);
+    Http::fake(['*/webhook_verification_key/get' => Http::response(['key' => ['alg' => 'ES256', 'crv' => 'P-256', 'x' => $base64(str_pad($ec['x'], 32, "\0", STR_PAD_LEFT)), 'y' => $base64(str_pad($ec['y'], 32, "\0", STR_PAD_LEFT)), 'expired_at' => null]])]);
     $jwt = implode('.', $parts).'.'.$base64($raw);
     expect(app(PlaidService::class)->verifyWebhook($jwt, $body))->toBeTrue()->and(app(PlaidService::class)->verifyWebhook($jwt, '{}'))->toBeFalse();
 });
@@ -314,6 +314,7 @@ it('nets refunds before estimating spending reductions and savings opportunities
 });
 
 it('offers title-context bulk suggestions and applies only the exact unreviewed rows', function (): void {
+    $this->travelTo(CarbonImmutable::parse('2026-07-15 12:00:00', $this->space->timezone));
     app(LedgerService::class)->ingest($this->account, [
         ['id' => 'publix-one', 'date' => now()->subDays(2)->toDateString(), 'merchant' => 'Publix #100', 'amount_cents' => -1200],
         ['id' => 'publix-two', 'date' => now()->subDay()->toDateString(), 'merchant' => 'Publix #100', 'amount_cents' => -3400],
