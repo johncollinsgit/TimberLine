@@ -91,6 +91,7 @@ class EverbranchMobileFieldServiceController extends Controller
             ->notGeneratedQuickBooksInvoice()
             ->with([
                 'assignedUser:id,name', 'participants:id,name', 'vehicles:id,tenant_id,name,identifier,status',
+                'equipment:id,tenant_id,equipment_type,name,manufacturer,model_number,installed_at,last_serviced_at,next_service_due_at,maintenance_interval_days,status',
                 'materials:id,tenant_id,field_service_job_id,quantity,pulled_quantity,loaded_quantity,used_quantity,status',
                 'timeSessions' => fn ($sessions) => $sessions->whereIn('status', ['running', 'paused'])->select(['id', 'tenant_id', 'field_service_job_id', 'user_id', 'status', 'clocked_in_at', 'break_seconds']),
             ])
@@ -171,7 +172,7 @@ class EverbranchMobileFieldServiceController extends Controller
         $owner = $financialAccess->allows($user, $tenantModel);
         $job->load([
             'assignedUser:id,name,email', 'participants:id,name,email', 'tasks.assignedUser:id,name', 'tasks.assignees:id,name,email', 'tasks.events.actor:id,name', 'tasks.createdBy:id,name', 'tasks.completedBy:id,name',
-            'vehicles:id,tenant_id,name,identifier,status', 'materials:id,tenant_id,field_service_job_id,requested_by_user_id,field_material_catalog_item_id,name,quantity,pulled_quantity,loaded_quantity,used_quantity,status,unit,external_source,notes,created_at',
+            'vehicles:id,tenant_id,name,identifier,status', 'equipment:id,tenant_id,equipment_type,name,manufacturer,model_number,installed_at,last_serviced_at,next_service_due_at,maintenance_interval_days,status', 'materials:id,tenant_id,field_service_job_id,requested_by_user_id,field_material_catalog_item_id,name,quantity,pulled_quantity,loaded_quantity,used_quantity,status,unit,external_source,notes,created_at',
             'materials.requestedBy:id,name',
             'timeSessions' => fn ($sessions) => $sessions->whereIn('status', ['running', 'paused'])->select(['id', 'tenant_id', 'field_service_job_id', 'user_id', 'status', 'clocked_in_at', 'break_seconds']),
             'assets' => fn ($assets) => $assets->when(! $owner, fn ($query) => $query->where('visibility', 'team'))->latest('captured_at')->latest('id'),
@@ -413,10 +414,10 @@ class EverbranchMobileFieldServiceController extends Controller
         $tenantModel = $this->tenant($request);
         $user = $this->user($request);
         abort_unless((int) $job->tenant_id === (int) $tenantModel->id, 404);
-        $validated = $request->validate(['action' => ['required', 'in:start,complete,cancel,archive,reopen'], 'reason' => ['nullable', 'string', 'max:500']]);
+        $validated = $request->validate(['action' => ['required', 'in:start,complete,cancel,archive,reopen'], 'reason' => ['nullable', 'string', 'max:500'], 'completed_at' => ['nullable', 'date_format:Y-m-d']]);
         $managerAction = in_array($validated['action'], ['cancel', 'archive', 'reopen'], true);
         abort_unless($managerAction ? $access->canManageJobs($user, $tenantModel) : $access->canUpdateProgress($user, $tenantModel, $job), 403);
-        $result = $transitions->transition($tenantModel, $job, $user, $validated['action'], $validated['reason'] ?? null);
+        $result = $transitions->transition($tenantModel, $job, $user, $validated['action'], $validated['reason'] ?? null, $validated['completed_at'] ?? null);
 
         return response()->json(['ok' => true, 'status' => $result['job']->operational_status, 'delivery' => $result['delivery']]);
     }
@@ -1412,6 +1413,13 @@ class EverbranchMobileFieldServiceController extends Controller
         $allSeconds = ((int) ($job->manual_minutes ?? 0) * 60) + (int) ($job->timer_seconds ?? 0) + $liveSeconds;
         $viewerSeconds = ((int) ($job->viewer_manual_minutes ?? 0) * 60) + (int) ($job->viewer_timer_seconds ?? 0) + $viewerLiveSeconds;
         $materials = $job->relationLoaded('materials') ? $job->materials : collect();
+        $equipment = $job->relationLoaded('equipment') ? $job->equipment : null;
+        $dueDate = $equipment?->next_service_due_at;
+        $maintenanceState = $dueDate?->isPast() ? 'due' : ($dueDate?->lte(today()->addDays(90)) ? 'upcoming' : 'scheduled');
+        $anniversary = $equipment?->installed_at?->copy()->setYear(today()->year);
+        if ($anniversary?->lt(today())) {
+            $anniversary->addYear();
+        }
 
         return [
             'id' => (int) $job->id, 'title' => (string) $job->title, 'customer' => (string) $job->customer_name,
@@ -1425,6 +1433,7 @@ class EverbranchMobileFieldServiceController extends Controller
             'hours' => ['total' => round(($owner ? $allSeconds : $viewerSeconds) / 3600, 2), 'running' => round(($owner ? $liveSeconds : $viewerLiveSeconds) / 3600, 2), 'running_timer_count' => $owner ? (int) ($job->running_timers_count ?? 0) : $activeSessions->where('user_id', $viewerId)->count()],
             'material_readiness' => ['total' => $materials->count(), 'needed' => $materials->where('status', 'needed')->count(), 'ready' => $materials->filter(fn ($material): bool => in_array($material->status, ['purchased', 'loaded', 'used'], true) || (float) $material->loaded_quantity >= (float) $material->quantity)->count()],
             'source' => $job->external_source ?: 'everbranch',
+            'maintenance' => $equipment ? ['equipment_name' => $equipment->name, 'installed_at' => $equipment->installed_at?->toDateString(), 'anniversary_at' => $anniversary?->toDateString(), 'last_serviced_at' => $equipment->last_serviced_at?->toDateString(), 'next_service_due_at' => $dueDate?->toDateString(), 'interval_days' => (int) $equipment->maintenance_interval_days, 'state' => $maintenanceState] : null,
             'financial' => $owner ? ['total' => (float) ($job->financial_total ?? 0), 'balance' => (float) ($job->financial_balance ?? 0)] : null,
             'readiness' => $readiness->forJob($job),
             'blocked_reason' => $job->blocked_reason,
