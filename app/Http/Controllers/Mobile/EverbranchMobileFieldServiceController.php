@@ -56,7 +56,7 @@ class EverbranchMobileFieldServiceController extends Controller
         $validated = $request->validate([
             'view' => ['nullable', 'in:calendar,list'],
             'filter' => ['nullable', 'in:mine,active,quotes,history'],
-            'bucket' => ['nullable', 'in:current,potential,past'],
+            'bucket' => ['nullable', 'in:current,generators,potential,past'],
             'month' => ['nullable', 'date_format:Y-m'],
             'q' => ['nullable', 'string', 'max:160'],
             'sort' => ['nullable', 'in:status,scheduled_for,priority,customer,title,hours,updated_at'],
@@ -114,6 +114,12 @@ class EverbranchMobileFieldServiceController extends Controller
         } else {
             $query->whereNull('archived_at');
             $this->applyFilter($query, $filter, $user);
+
+            if ($bucket === 'generators') {
+                $this->scopeGeneratorJobs($query);
+            } elseif ($bucket === 'current') {
+                $this->excludeGeneratorJobs($query);
+            }
         }
         $search = trim((string) ($validated['q'] ?? ''));
         if ($search !== '') {
@@ -1319,6 +1325,44 @@ class EverbranchMobileFieldServiceController extends Controller
         };
     }
 
+    /**
+     * Generator work belongs in its own operational queue. Maintenance jobs are
+     * explicitly identified by their source; installation and repair jobs are
+     * also included when their field-facing work title or description identifies
+     * the generator equipment. This keeps ordinary current work focused without
+     * hiding generator jobs from the team.
+     */
+    protected function scopeGeneratorJobs(Builder $query): void
+    {
+        $query->where(function (Builder $generator): void {
+            $generator->where('external_source', 'equipment_maintenance')
+                ->orWhereNotNull('customer_equipment_id')
+                ->orWhereRaw('lower(title) like ?', ['%generator%'])
+                ->orWhereRaw('lower(title) like ?', ['%generac%'])
+                ->orWhereRaw('lower(title) like ?', ['%duromax%'])
+                ->orWhereRaw('lower(description) like ?', ['%generator%'])
+                ->orWhereRaw('lower(description) like ?', ['%generac%'])
+                ->orWhereRaw('lower(description) like ?', ['%duromax%']);
+        });
+    }
+
+    protected function excludeGeneratorJobs(Builder $query): void
+    {
+        $query->where(function (Builder $general): void {
+            $general->where(function (Builder $source): void {
+                $source->whereNull('external_source')
+                    ->orWhere('external_source', '!=', 'equipment_maintenance');
+            })
+                ->whereNull('customer_equipment_id')
+                ->whereRaw("lower(coalesce(title, '')) not like ?", ['%generator%'])
+                ->whereRaw("lower(coalesce(title, '')) not like ?", ['%generac%'])
+                ->whereRaw("lower(coalesce(title, '')) not like ?", ['%duromax%'])
+                ->whereRaw("lower(coalesce(description, '')) not like ?", ['%generator%'])
+                ->whereRaw("lower(coalesce(description, '')) not like ?", ['%generac%'])
+                ->whereRaw("lower(coalesce(description, '')) not like ?", ['%duromax%']);
+        });
+    }
+
     protected function applySort(Builder $query, string $sort, string $direction): void
     {
         if ($sort === 'status') {
@@ -1341,11 +1385,18 @@ class EverbranchMobileFieldServiceController extends Controller
     protected function counts(Tenant $tenant, User $user, FieldServiceAccessService $access): array
     {
         $query = FieldServiceJob::query()->forTenantId((int) $tenant->id)
-            ->notGeneratedQuickBooksInvoice();
+            ->notGeneratedQuickBooksInvoice()
+            ->whereNull('archived_at');
         $access->scopeVisibleJobs($query, $user, $tenant);
 
+        $current = (clone $query)->whereIn('operational_status', ['active', 'scheduled', 'needs_details', 'blocked']);
+        $generators = clone $current;
+        $this->scopeGeneratorJobs($generators);
+        $this->excludeGeneratorJobs($current);
+
         return [
-            'active' => (clone $query)->whereIn('operational_status', ['active', 'scheduled', 'needs_details', 'blocked'])->count(),
+            'active' => $current->count(),
+            'generators' => $generators->count(),
             'quotes' => (clone $query)->where('operational_status', 'quote')->count(),
             'history' => (clone $query)->whereIn('operational_status', ['complete', 'canceled', 'history'])->count(),
             'unscheduled' => (clone $query)->whereIn('operational_status', ['active', 'needs_details'])->whereNull('scheduled_for')->count(),

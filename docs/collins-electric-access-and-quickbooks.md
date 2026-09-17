@@ -33,6 +33,10 @@ Members can see only jobs where they are the lead assignee, a participant/follow
 - `Complete`: paid invoices meet or exceed the accepted estimate, or a user manually completes the job.
 - `History`: closed/rejected work or financial activity older than one year.
 
+## Generator work queue
+
+The mobile Work screen separates generator installation, repair, and maintenance jobs from ordinary current work. The **Generators** tab includes jobs sourced from equipment maintenance, jobs attached to customer equipment, and field-facing job titles or descriptions that identify generator equipment (including Generac and Duromax). The **Current** tab excludes those same records. This is an operational grouping only: job access, schedules, tasks, notes, financial-document access, and lifecycle controls remain unchanged.
+
 Lifecycle values are derived alongside QuickBooks source records; they do not rewrite QuickBooks. Manual operational overrides win over future syncs. Current screens exclude History by default but retain it in owner History filters and authorized search. Calendar is the default Field Service view and includes an unscheduled tray so imported work cannot disappear.
 
 ## Collins workflow requirements
