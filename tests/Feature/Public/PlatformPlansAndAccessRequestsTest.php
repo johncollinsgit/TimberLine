@@ -57,7 +57,7 @@ test('public start as a client page renders plan interest inputs', function (): 
         ->assertSeeText('Launch partner pricing')
         ->assertSeeText('$149')
         ->assertSeeText('$299')
-        ->assertSeeText('$59')
+        ->assertSeeText('$89')
         ->assertSeeText('Limited to 10')
         ->assertSeeText('First 10 businesses')
         ->assertSeeText('Unlimited users')

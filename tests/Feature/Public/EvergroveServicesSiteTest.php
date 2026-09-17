@@ -36,7 +36,7 @@ test('evergrove public host renders the services site', function (): void {
         ->assertSeeText('Digital tools with a job to do.')
         ->assertSeeText('A real operating app, not a mockup.')
         ->assertSeeText('Launch partner pricing')
-        ->assertSeeText('$59')
+        ->assertSeeText('$89')
         ->assertSeeText('Where custom work helps')
         ->assertSeeText('Evergrove Studio')
         ->assertSeeText('Contact')
