@@ -314,6 +314,7 @@ it('nets refunds before estimating spending reductions and savings opportunities
 });
 
 it('offers title-context bulk suggestions and applies only the exact unreviewed rows', function (): void {
+    $this->travelTo(CarbonImmutable::parse('2026-07-15 12:00:00', $this->space->timezone));
     app(LedgerService::class)->ingest($this->account, [
         ['id' => 'publix-one', 'date' => now()->subDays(2)->toDateString(), 'merchant' => 'Publix #100', 'amount_cents' => -1200],
         ['id' => 'publix-two', 'date' => now()->subDay()->toDateString(), 'merchant' => 'Publix #100', 'amount_cents' => -3400],
