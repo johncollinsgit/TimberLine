@@ -223,6 +223,47 @@ test('legacy QuickBooks invoice jobs stay out of current mobile jobs', function 
         ->assertJsonMissing(['id' => $legacyInvoiceJob->id]);
 });
 
+test('generator jobs have a dedicated mobile queue and do not inflate current work', function (): void {
+    [$tenant, $owner] = usabilityWorkspace();
+    $general = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'title' => 'Kitchen trim-out',
+        'status' => 'open',
+        'operational_status' => 'active',
+    ]);
+    $maintenance = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'title' => 'Generac generator maintenance',
+        'status' => 'scheduled',
+        'operational_status' => 'scheduled',
+        'external_source' => 'equipment_maintenance',
+    ]);
+    $installation = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'title' => 'Standby generator installation',
+        'status' => 'open',
+        'operational_status' => 'needs_details',
+    ]);
+
+    Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
+
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service?view=list&bucket=current')
+        ->assertOk()
+        ->assertJsonPath('counts.active', 1)
+        ->assertJsonPath('counts.generators', 2)
+        ->assertJsonCount(1, 'jobs')
+        ->assertJsonPath('jobs.0.id', $general->id)
+        ->assertJsonMissing(['id' => $maintenance->id])
+        ->assertJsonMissing(['id' => $installation->id]);
+
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service?view=list&bucket=generators')
+        ->assertOk()
+        ->assertJsonPath('bucket', 'generators')
+        ->assertJsonCount(2, 'jobs')
+        ->assertJsonFragment(['id' => $maintenance->id])
+        ->assertJsonFragment(['id' => $installation->id]);
+});
+
 test('owners manage an independent invoice desk and may deliberately attach an invoice to a manual job', function (): void {
     [$tenant, $owner, $member] = usabilityWorkspace();
     $invoice = FieldServiceFinancialDocument::query()->create([
