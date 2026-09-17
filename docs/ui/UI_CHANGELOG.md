@@ -1,3 +1,9 @@
+## 2026-09-16 — Everbranch proposals and sign-in
+
+- Proposal invitations use the official Everbranch mark and a private link with no separate code. Email includes HTML and plain-text versions.
+- The proposal pairs the unchanged agreement with a clear initial-payment summary, acceptance record, and explicit Stripe payment action. Stale forms refresh safely with a retry notice.
+- Main and tenant sign-in pages use a calmer Everbranch layout, clearer spacing, and support access while retaining their authentication and tenant context.
+
 ## 2026-09-15 — Wholesale applications
 
 - Buyer application uses a single page and a verified receipt, with retained inputs on failure.

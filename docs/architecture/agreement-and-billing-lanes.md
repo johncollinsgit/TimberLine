@@ -30,7 +30,7 @@ Stripe customer reuse is tenant-scoped and signer/contact-aware. Proposal Checko
 ## State transition
 
 1. Operator prepares a tenant-scoped draft and immutable version.
-2. Operator sends a rotating, password-protected Evergrove proposal link.
+2. Operator sends a rotating, expiring private Evergrove proposal link that grants access without a separate password.
 3. Authorized signer accepts every required confirmation and types the matching legal name.
 4. Everbranch atomically stores the exact content hash, acceptance evidence, permanent HTML snapshot, event, audit record, and `authorized_pending_provider` subscription authorization.
 5. If separately approved later, a provider workflow creates/selects the approved price and obtains customer approval.

@@ -33,6 +33,17 @@ class AgreementProposalAccessService
             return false;
         }
 
+        $this->openFromLink($request, $agreement);
+
+        return true;
+    }
+
+    public function openFromLink(Request $request, Agreement $agreement): void
+    {
+        if ($this->isUnlocked($request, $agreement)) {
+            return;
+        }
+
         $request->session()->put($this->sessionKey($agreement), (string) $agreement->currentVersion?->content_hash);
         $now = now();
         $agreement->forceFill([
@@ -43,7 +54,6 @@ class AgreementProposalAccessService
         ])->save();
         $this->events->record($agreement, 'viewed', null, ['view_count' => $agreement->view_count]);
 
-        return true;
     }
 
     protected function sessionKey(Agreement $agreement): string

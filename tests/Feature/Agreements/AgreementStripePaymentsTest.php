@@ -65,7 +65,7 @@ function signStripeEvent(array $event): array
 
 function acceptStripeAgreement($test, array $sent): TenantBillingOrder
 {
-    $test->post($sent['url'].'/unlock', ['password' => $sent['password']])->assertRedirect();
+    $test->get($sent['url'])->assertOk();
     $test->post($sent['url'].'/accept', stripeAcceptancePayload())->assertRedirect();
 
     return TenantBillingOrder::query()->where('agreement_id', $sent['agreement']->id)->firstOrFail();

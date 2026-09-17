@@ -61,6 +61,23 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->respond(function (\Symfony\Component\HttpFoundation\Response $response, Throwable $exception, Request $request) {
+            if ($response->getStatusCode() !== 419
+                || ! $request->isMethod('POST')
+                || $request->expectsJson()
+                || ! $request->routeIs('proposals.unlock', 'proposals.accept', 'proposals.checkout')
+                || ! in_array(strtolower($request->getHost()), (array) config('evergrove.hosts', []), true)) {
+                return $response;
+            }
+
+            // Reject the stale POST. Never replay a signature or payment;
+            // a new GET supplies a fresh session and CSRF token.
+            return redirect()->to(route('proposals.show', [
+                'token' => $request->route('token'),
+                'session_expired' => 1,
+            ], false), 303)->header('Cache-Control', 'no-store, private');
+        });
+
         $exceptions->render(function (TokenMismatchException $e, Request $request) {
             if (! $request->isMethod('post') || ! $request->routeIs('field-service.fleet-tracking.settings.update')) {
                 return null;

@@ -17,6 +17,10 @@ class EnsureEvergroveProposalHost
 
         abort_unless(in_array(strtolower($request->getHost()), $hosts, true), 404);
 
-        return $next($request);
+        $response = $next($request);
+        $response->headers->set('Referrer-Policy', 'no-referrer');
+        $response->headers->set('X-Robots-Tag', 'noindex, nofollow');
+
+        return $response;
     }
 }

@@ -385,7 +385,8 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
 ## Agreement and Billing-Lane Guardrails (2026-07-16)
 
 - Treat `agreement_versions`, `agreement_acceptances`, and `agreement_events` as immutable/append-only legal evidence. Never update or delete accepted evidence; create a new version or child amendment.
-- Public proposals belong only on configured Evergrove hosts. Store only the SHA-256 token lookup and encrypted token, hash passwords, throttle attempts, never log plaintext secrets, and fail closed for expiry/revocation.
+- Proposal GET opens the current immutable version using the private bearer link; no separate code is requested or sent. Acceptance and Checkout remain CSRF-protected POSTs bound to that version. A stale form redirects with HTTP 303 to a fresh proposal and does not replay the submission. Keep private links out of referrers and shared caches.
+- Public proposals belong only on configured Evergrove hosts. Store only the SHA-256 token lookup and encrypted token, retain legacy password hashes for compatibility, throttle requests, never log plaintext secrets, and fail closed for expiry/revocation.
 - Tenant “User Agreements” must re-resolve current tenant membership and financial access. Never expose `internal_notes`, token/password fields, raw IP, user agent, or internal audit references.
 - Agreement acceptance is not billing activation. Shopify App Store merchants use `shopify_app_pricing`; direct/non-Shopify customers may use `stripe_direct`. Never charge one subscription through both providers and never route a Shopify App Store merchant around Shopify billing.
 - Pricing is agreement-specific and may be à la carte. Preserve exact authorized line items, content/version hashes, provider plan/subscription references, and provider-confirmed tax/receipt values. Do not derive tax locally.

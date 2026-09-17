@@ -106,8 +106,8 @@ class LandlordAgreementController extends Controller
         }
 
         return redirect()->route('landlord.agreements.show', $agreement)
-            ->with('proposal_access', ['url' => $access['short_url'], 'password' => $access['password']])
-            ->with('status', $recipient !== '' ? 'Agreement email sent to '.$recipient.'. Copy the access details now; the password is never shown again.' : 'Proposal access was rotated. Copy the password now; it is never shown again.');
+            ->with('proposal_access', ['url' => $access['short_url']])
+            ->with('status', $recipient !== '' ? 'Agreement email sent to '.$recipient.'. The private link opens the agreement directly.' : 'Proposal access was rotated. Copy the new private link.');
     }
 
     public function revoke(Request $request, Agreement $agreement, AgreementManagementService $management): RedirectResponse
@@ -148,7 +148,7 @@ class LandlordAgreementController extends Controller
         $intro = trim((string) ($data['message_intro'] ?? ''));
         $intro = $intro !== '' ? str_replace('{{tenant_name}}', $agreement->tenant->name, $intro) : 'Hi! '.$agreement->tenant->name.': your Everbranch workspace is ready.';
         $imageUrl = trim((string) ($data['image_url'] ?? ''));
-        $message = $intro.' Open, approve & pay: '.$access['short_url'].' Code: '.$access['password'];
+        $message = $intro.' Open, approve & pay: '.$access['short_url'];
         $sent = [];
         $failed = [];
 
@@ -181,7 +181,7 @@ class LandlordAgreementController extends Controller
             return back()->with('status_error', 'Agreement link was created, but no texts could be sent: '.collect($failed)->pluck('error')->unique()->implode('; '));
         }
 
-        $message = 'Agreement link and access code were texted to '.count($sent).' '.str('recipient')->plural(count($sent)).'.';
+        $message = 'Agreement link was texted to '.count($sent).' '.str('recipient')->plural(count($sent)).'.';
         if ($failed !== []) {
             $message .= ' '.count($failed).' '.str('recipient')->plural(count($failed)).' could not be reached.';
         }

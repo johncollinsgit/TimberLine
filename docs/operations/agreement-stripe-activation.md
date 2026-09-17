@@ -61,3 +61,11 @@ Direct invoice note: the July 17, 2026 smoke test satisfies the first internal c
 5. Add Front Yard Foods to the live allowlist. Use `*` only after multiple-client production evidence is approved.
 
 No processing-fee surcharge is added by this system. Supplemental and milestone charges always require their own immutable acceptance and customer-initiated payment.
+
+## Private proposal access — 2026-09-16
+
+Email and SMS invitations carry a private bearer link; there is no separate access-code step. Existing valid links open directly after deployment. Expiry, revocation, host restrictions, and immutable agreement evidence remain enforced. Treat the entire URL as a secret, and rotate/revoke it through agreement management if shared accidentally. The legacy unlock endpoint remains compatible, but new invitations never send a password.
+
+Acceptance and Checkout still require an explicit CSRF-protected POST and the version opened in the session. An expired form returns HTTP 303 to a freshly loaded proposal with a retry notice; it never replays a signature or payment request. JSON/API responses and main application login retain their normal 419 behavior. Opening or previewing an invitation only records a view; it does not sign, charge, or activate the workspace.
+
+Verify a current proposal opens without a code, an expired/revoked link is rejected, acceptance requires confirmation, and Checkout uses only the accepted order. The presentation wraps the stored agreement HTML without changing its content hash or permanent acceptance snapshot. The initial payment summary excludes later subscription phases.
