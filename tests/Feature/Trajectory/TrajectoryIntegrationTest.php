@@ -180,7 +180,7 @@ it('validates a real ES256 bank webhook and rejects body tampering', function ()
     $sLength = ord($der[$offset++]);
     $s = substr($der, $offset, $sLength);
     $raw = str_pad(ltrim($r, "\0"), 32, "\0", STR_PAD_LEFT).str_pad(ltrim($s, "\0"), 32, "\0", STR_PAD_LEFT);
-    Http::fake(['*/webhook_verification_key/get' => Http::response(['key' => ['alg' => 'ES256', 'crv' => 'P-256', 'x' => $base64($ec['x']), 'y' => $base64($ec['y']), 'expired_at' => null]])]);
+    Http::fake(['*/webhook_verification_key/get' => Http::response(['key' => ['alg' => 'ES256', 'crv' => 'P-256', 'x' => $base64(str_pad($ec['x'], 32, "\0", STR_PAD_LEFT)), 'y' => $base64(str_pad($ec['y'], 32, "\0", STR_PAD_LEFT)), 'expired_at' => null]])]);
     $jwt = implode('.', $parts).'.'.$base64($raw);
     expect(app(PlaidService::class)->verifyWebhook($jwt, $body))->toBeTrue()->and(app(PlaidService::class)->verifyWebhook($jwt, '{}'))->toBeFalse();
 });
