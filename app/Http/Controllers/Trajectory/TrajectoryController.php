@@ -39,7 +39,17 @@ class TrajectoryController extends Controller
         $access->authorize($request->user(), $space);
         $data = $request->validate(['range' => ['nullable', Rule::in(['day', 'week', 'month', 'year', 'all', 'custom'])], 'scenario_id' => ['nullable', 'integer'], 'from' => 'required_if:range,custom|nullable|date_format:Y-m-d|before_or_equal:today|after_or_equal:1900-01-01', 'through' => 'required_if:range,custom|nullable|date_format:Y-m-d|after_or_equal:from|before_or_equal:today', 'seasonal' => 'sometimes|boolean']);
 
-        return response()->json($dashboard->build($space, $data['range'] ?? 'month', $data['scenario_id'] ?? null, $data['from'] ?? null, $data['through'] ?? null, (bool) ($data['seasonal'] ?? false)))->header('Cache-Control', 'private, no-store');
+        return response()->json([...$dashboard->build($space, $data['range'] ?? 'month', $data['scenario_id'] ?? null, $data['from'] ?? null, $data['through'] ?? null, (bool) ($data['seasonal'] ?? false)),
+            'review_email' => app(\App\Services\Trajectory\ReviewEmailService::class)->preferences($request->user(), $space),
+        ])->header('Cache-Control', 'private, no-store');
+    }
+
+    public function reviewEmailPreferences(Request $request, Space $space, FinanceAccess $access, \App\Services\Trajectory\ReviewEmailService $emails)
+    {
+        $access->authorize($request->user(), $space);
+        $data = $request->validate(['frequency' => 'required|in:off,daily,weekly', 'timezone' => 'required|timezone']);
+
+        return response()->json($emails->save($request->user(), $space, $data['frequency'], $data['timezone']))->header('Cache-Control', 'private, no-store');
     }
 
     public function evidence(Request $request, Space $space, FinanceAccess $access, LedgerService $ledger)

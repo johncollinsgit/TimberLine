@@ -1825,3 +1825,7 @@ Scope guard:
 Wholesale application reviewers may use the tenant membership role `wholesale_reviewer`. It authorizes only wholesale application decisions for that tenant and requires active membership; it does not grant a global admin role or platform-access approval. See the wholesale application reliability runbook.
 
 Wholesale reviewer decisions resolve missing Shopify staff emails through verified online token exchange. Match the returned staff ID and verified email before looking up existing tenant reviewer membership; do not trust the store contact email as the acting staff identity.
+
+### Trajectory review reminders (2026-09-17)
+
+Opt-in daily/weekly private email digests now reuse Laravel transactional mail and queues. Accounts exposes recipient-specific controls; digest links select the authorized finance space and review queue. Encrypted audit events hold preferences and serialized delivery claims without a schema migration. See `docs/operations/trajectory-review-email.md` for pilot activation, diagnostics, and rollback.

@@ -14,6 +14,7 @@ Route::middleware(['auth', 'verified', 'throttle:120,1'])->prefix('trajectory')-
         Route::get('/combined', [Trajectory::class, 'combined'])->name('trajectory.combined');
         Route::post('/sms/verify', [Trajectory::class, 'verifySms'])->name('trajectory.verifySms')->middleware('throttle:3,10');
         Route::post('/sms/confirm', [Trajectory::class, 'confirmSms'])->name('trajectory.confirmSms')->middleware('throttle:5,10');
+        Route::patch('/review-email', [Trajectory::class, 'reviewEmailPreferences'])->name('trajectory.reviewEmailPreferences');
         Route::get('/dashboard', [Trajectory::class, 'dashboard'])->name('trajectory.dashboard');
         Route::post('/evidence', [Trajectory::class, 'evidence'])->name('trajectory.evidence');
         Route::post('/accounts', [Trajectory::class, 'account'])->name('trajectory.account');

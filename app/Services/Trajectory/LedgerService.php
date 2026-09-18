@@ -158,10 +158,10 @@ class LedgerService
             $query->whereIn('t.id', $ids);
         }
         if ($start) {
-            $query->where('t.posted_on', '>=', $start);
+            $query->whereDate('t.posted_on', '>=', $start);
         }
         if ($end) {
-            $query->where('t.posted_on', '<=', $end);
+            $query->whereDate('t.posted_on', '<=', $end);
         }
 
         return $query->select(['t.*', 'trajectory_allocations.amount_cents as allocated_cents'])->orderBy('t.posted_on')->get()->map(function ($row) use ($space): array {
