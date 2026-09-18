@@ -322,7 +322,10 @@ it('offers title-context bulk suggestions and applies only the exact unreviewed 
     ]);
     $dashboard = $this->actingAs($this->user)->getJson('/trajectory/spaces/'.$this->space->id.'/dashboard?range=month')->assertOk();
     $suggestion = collect($dashboard->json('review_suggestions'))->firstWhere('merchant', 'Publix #100');
-    expect($suggestion)->not->toBeNull()->and(collect($dashboard->json('review_suggestions'))->contains('merchant', 'Amazon Marketplace'))->toBeFalse();
+    expect($suggestion)->not->toBeNull()
+        ->and($suggestion['transactions'])->toHaveCount(2)
+        ->and($suggestion['transactions'][0])->toHaveKeys(['id', 'version', 'date', 'merchant', 'amount_cents'])
+        ->and(collect($dashboard->json('review_suggestions'))->contains('merchant', 'Amazon Marketplace'))->toBeFalse();
 
     $this->postJson('/trajectory/spaces/'.$this->space->id.'/transactions/bulk-classify', [
         'transactions' => $suggestion['transactions'], 'category' => $suggestion['category'], 'flow' => $suggestion['flow'],
