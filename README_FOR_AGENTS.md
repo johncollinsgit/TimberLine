@@ -16,6 +16,12 @@ Admin app. Approval requires a successful Shopify wholesale tag sync and never
 activates an internal user or grants tenant membership. Buyer emails use Shopify
 account activation/login, not Everbranch password setup. See
 `docs/operations/wholesale-application-reliability.md`.
+## Trajectory transaction review email (2026-09-17)
+
+Private review reminders use `ReviewEmailService`, `SendReviewEmail`, and Laravel's transactional mail transport. Each user opts in per finance space from Accounts → Email reminders; daily or Monday weekly delivery runs around 9 AM in their selected timezone. The scheduler checks every 15 minutes. Empty queues send nothing. Other recipients stay off by default; changed recipient addresses require fresh opt-in. Jobs carry IDs only and recheck verified identity, finance membership, entitlement, preference, and current queue at delivery time.
+
+Preferences and delivery claims/results are encrypted Trajectory audit events. A finance-space row lock serializes period claims; ambiguous provider errors and interrupted jobs retain their claim to prevent duplicate mail. `accepted` means provider handoff, not confirmed inbox delivery. `trajectory:status` exposes aggregate uncertain/unfinished email counts. Log, array, and failover transports are blocked for these messages.
+
 ## Trajectory standalone experience and evidence imports (2026-09-14)
 
 Trajectory has its own public `/trajectory/welcome` page and full-width authenticated `/trajectory` navigation. It reuses Everbranch login, finance spaces, financial permissions, and entitlements; the Back to Everbranch link does not change financial access. Personal-only use remains independent of company books. Checkout remains disabled until configured prices and lifecycle readiness pass.
