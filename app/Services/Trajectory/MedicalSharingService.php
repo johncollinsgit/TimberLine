@@ -74,7 +74,7 @@ class MedicalSharingService
                 $allocations = Allocation::where('transaction_id', $tx->id)->get();
                 abort_unless($allocations->count() === 1 && $allocations->first()->space_id === $space->id && $allocations->first()->amount_cents === $signed, 422, 'Medical payments must belong entirely to this household.');
                 abort_if($rows->contains(fn ($r) => ($r->data['transaction_id'] ?? null) === $tx->id), 422, 'This transaction already belongs to another record.');
-                abort_if(in_array($tx->flow, ['asset_transfer', 'duplicate', 'transfer', 'card_payment', 'owner_wages', 'owner_distribution'], true), 422, 'Review this transfer or asset match before linking it to a medical payment.');
+                abort_if(in_array($tx->flow, ['asset_transfer', 'asset_sale', 'loan_draw', 'duplicate', 'transfer', 'card_payment', 'owner_wages', 'owner_distribution'], true), 422, 'Review this transfer or asset match before linking it to a medical payment.');
                 $data['_original_classification'] = ($record?->data['transaction_id'] ?? null) === $tx->id ? $record->data['_original_classification'] : $tx->only(['category', 'flow', 'face_punched', 'bullshit_spending', 'reviewed', 'explanation']);
             }
         }

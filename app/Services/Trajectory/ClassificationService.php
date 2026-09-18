@@ -18,10 +18,17 @@ class ClassificationService
         $ambiguous = self::isAmbiguousMerchant($merchant);
         $category = in_array($providerCategory, config('trajectory.categories'), true) ? $providerCategory : 'uncategorized';
         $defaults = $space->settings['discretionary_categories'] ?? config('trajectory.discretionary_defaults');
+        $flow = match (true) {
+            $amount > 0 && self::isTransferMerchant($merchant) => 'transfer',
+            $amount > 0 && $category === 'uncategorized' => 'unclassified_deposit',
+            $amount > 0 && $category === 'income' => 'income',
+            $amount > 0 => 'refund',
+            default => 'expense',
+        };
 
         return [
             'category' => $category,
-            'flow' => $amount > 0 ? (in_array($category, ['income', 'uncategorized'], true) ? 'income' : 'refund') : 'expense',
+            'flow' => $flow,
             'reviewed' => ! $ambiguous && $category !== 'uncategorized',
             'face_punched' => false,
             'bullshit_spending' => ! $ambiguous && in_array($category, $defaults, true),
@@ -32,6 +39,11 @@ class ClassificationService
     public static function isAmbiguousMerchant(string $merchant): bool
     {
         return (bool) preg_match('/\b(amazon|amzn|walmart|wal-mart|target|ebay|etsy|costco|paypal|venmo|zelle|cash app|transfer|payment|square|sq)\b/i', $merchant);
+    }
+
+    public static function isTransferMerchant(string $merchant): bool
+    {
+        return (bool) preg_match('/\b(?:funds\s+transfer|webxfr|moneylink|cashout)\b/i', $merchant);
     }
 
     public static function merchant(string $value): string

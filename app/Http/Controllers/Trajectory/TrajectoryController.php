@@ -88,7 +88,7 @@ class TrajectoryController extends Controller
 
     public function classify(Request $request, Space $space, Transaction $transaction, LedgerService $ledger)
     {
-        $data = $request->validate(['version' => 'required|integer', 'category' => ['required', Rule::in(config('trajectory.categories'))], 'flow' => ['required', Rule::in(['expense', 'income', 'refund', 'transfer', 'card_payment', 'asset_transfer', 'owner_wages', 'owner_distribution', 'reimbursement', 'debt_payment', 'duplicate'])], 'face_punched' => 'required|boolean', 'bullshit_spending' => 'required|boolean', 'learn' => 'sometimes|boolean']);
+        $data = $request->validate(['version' => 'required|integer', 'category' => ['required', Rule::in(config('trajectory.categories'))], 'flow' => ['required', Rule::in(['expense', 'income', 'refund', 'transfer', 'card_payment', 'asset_transfer', 'asset_sale', 'loan_draw', 'unclassified_deposit', 'owner_wages', 'owner_distribution', 'reimbursement', 'debt_payment', 'duplicate'])], 'face_punched' => 'required|boolean', 'bullshit_spending' => 'required|boolean', 'learn' => 'sometimes|boolean']);
 
         return response()->json($ledger->classify($request->user(), $space, $transaction, $data, $data['learn'] ?? false));
     }
@@ -100,7 +100,7 @@ class TrajectoryController extends Controller
             'transactions.*.id' => 'required|integer|distinct',
             'transactions.*.version' => 'required|integer|min:1',
             'category' => ['required', Rule::in(config('trajectory.categories'))],
-            'flow' => ['required', Rule::in(['expense', 'income', 'refund', 'transfer', 'card_payment', 'asset_transfer', 'owner_wages', 'owner_distribution', 'reimbursement', 'debt_payment', 'duplicate'])],
+            'flow' => ['required', Rule::in(['expense', 'income', 'refund', 'transfer', 'card_payment', 'asset_transfer', 'asset_sale', 'loan_draw', 'unclassified_deposit', 'owner_wages', 'owner_distribution', 'reimbursement', 'debt_payment', 'duplicate'])],
             'face_punched' => 'required|boolean',
             'bullshit_spending' => 'required|boolean',
         ]);

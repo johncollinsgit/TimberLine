@@ -162,9 +162,14 @@ class DashboardService
         }
         usort($bills, fn ($a, $b) => strcmp($a['date'], $b['date']));
         $spending = $selected->whereIn('flow', ['expense', 'refund', 'medical_payment', 'medical_membership']);
-        $income = $selected->whereIn('flow', ['income', 'owner_wages', 'owner_distribution'])->where('amount_cents', '>', 0)->sum('amount_cents');
+        $incomeSources = app(IncomeSourceService::class)->summarize($selected);
+        $income = $incomeSources['earned_income_cents'];
         $categories = $spending->groupBy('category')->map(fn ($rows, $category) => ['category' => $category, 'amount_cents' => -(int) $rows->sum('amount_cents'), 'ids' => $rows->pluck('id')->all()])->values()->all();
-        $dailySeries = $selected->groupBy('date')->map(fn ($rows, $date) => ['date' => $date, 'income_cents' => (int) $rows->whereIn('flow', ['income', 'owner_wages', 'owner_distribution'])->where('amount_cents', '>', 0)->sum('amount_cents'), 'spending_cents' => -(int) $rows->whereIn('flow', ['expense', 'refund', 'medical_payment', 'medical_membership'])->sum('amount_cents')])->values()->all();
+        $dailySeries = $selected->groupBy('date')->map(function ($rows, $date): array {
+            $income = app(IncomeSourceService::class)->summarize($rows)['earned_income_cents'];
+
+            return ['date' => $date, 'income_cents' => $income, 'spending_cents' => -(int) $rows->whereIn('flow', ['expense', 'refund', 'medical_payment', 'medical_membership'])->sum('amount_cents')];
+        })->values()->all();
         $interestStatements = $plans('interest_statement');
         $interestService = app(InterestService::class);
         $interest = $entries->where('category', 'interest')->where('flow', 'expense');
@@ -221,6 +226,7 @@ class DashboardService
             'transactions' => $selected->reverse()->values()->all(),
             'review_transactions' => $entries->where('reviewed', false)->reverse()->take(250)->values()->all(),
             'review_suggestions' => app(ReviewSuggestionService::class)->forEntries($entries),
+            'income_sources' => $incomeSources,
             'categories' => $categories, 'daily_series' => $dailySeries,
             'debt_suggestions' => app(PlaidService::class)->debtSuggestions($space), 'forecast' => $baseline, 'comparison' => $comparison, 'bills' => $bills, 'goals' => $goals, 'debts' => $debtRows, 'assets' => $assets, 'metals' => $metals, 'quotes' => $quotes,
             'recommendations' => $recommendations, 'recurring_suggestions' => $this->recurringSuggestions($entries, $schedules),
