@@ -33,13 +33,20 @@ class LedgerService
                     $classification['bullshit_spending'] = $profileFlag && $classification['flow'] === 'expense';
                 }
                 $oldAmount = $tx?->amount_cents;
+                // A historical source may have been intentionally hidden because
+                // live Plaid coverage now owns this period. Preserve that reversible
+                // reconciliation when an identical export is imported again.
+                $coverageSource = ($tx?->source['source_superseded_by'] ?? null) ? [
+                    'source_superseded_by' => $tx->source['source_superseded_by'],
+                    'source_superseded_at' => $tx->source['source_superseded_at'] ?? null,
+                ] : [];
                 $tx ??= new Transaction;
                 $tx->fill([
                     'space_id' => $space->id, 'account_id' => $account->id, 'source_key' => $key,
                     'pending_source_key' => $pendingKey, 'posted_on' => $row['date'],
                     'amount_cents' => $row['amount_cents'], 'merchant' => $row['merchant'],
-                    'pending' => $row['pending'] ?? false, 'removed' => false,
-                    'source' => $row, ...$classification,
+                    'pending' => $row['pending'] ?? false, 'removed' => (bool) $coverageSource,
+                    'source' => [...$row, ...$coverageSource], ...$classification,
                 ]);
                 if ($tx->isDirty()) {
                     $tx->version = ($tx->exists ? $tx->version : 0) + 1;
