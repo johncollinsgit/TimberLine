@@ -1829,3 +1829,7 @@ Wholesale reviewer decisions resolve missing Shopify staff emails through verifi
 ### Trajectory review reminders (2026-09-17)
 
 Opt-in daily/weekly private email digests now reuse Laravel transactional mail and queues. Accounts exposes recipient-specific controls; digest links select the authorized finance space and review queue. Encrypted audit events hold preferences and serialized delivery claims without a schema migration. See `docs/operations/trajectory-review-email.md` for pilot activation, diagnostics, and rollback.
+
+### Trajectory source coverage (2026-09-18)
+
+Trajectory keeps imported Monarch history only before matching live Plaid coverage. Overlap is excluded from forecasts, totals, and review queues without deleting evidence; reversible encrypted audit events record each account-level operation. The service runs after future Monarch imports and is available through the owner-scoped preview/apply/restore console command.

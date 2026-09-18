@@ -144,7 +144,11 @@ class MonarchImportService
             }
             Event::create(['space_id' => $space->id, 'actor_id' => $user->id, 'action' => 'monarch_import', 'after' => ['rows' => count($rows), 'changed' => $count, 'accounts' => count($accounts)]]);
 
-            return ['changed' => $count, 'accounts' => $accounts, 'rows' => count($rows)];
+            // A historical export fills gaps, but live bank coverage is the source of
+            // truth for the same account from its first available Plaid transaction.
+            $superseded = app(SourceCoverageReconciliationService::class)->apply($user, $space);
+
+            return ['changed' => $count, 'accounts' => $accounts, 'rows' => count($rows), 'superseded' => array_sum(array_column($superseded, 'superseded_count'))];
         });
     }
 }

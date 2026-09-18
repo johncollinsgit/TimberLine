@@ -22,6 +22,10 @@ Private review reminders use `ReviewEmailService`, `SendReviewEmail`, and Larave
 
 Preferences and delivery claims/results are encrypted Trajectory audit events. A finance-space row lock serializes period claims; ambiguous provider errors and interrupted jobs retain their claim to prevent duplicate mail. `accepted` means provider handoff, not confirmed inbox delivery. `trajectory:status` exposes aggregate uncertain/unfinished email counts. Log, array, and failover transports are blocked for these messages.
 
+## Trajectory live-source coverage reconciliation (2026-09-18)
+
+Plaid is active from its first transaction for a uniquely matched household account; Monarch fills only the earlier gap. `SourceCoverageReconciliationService` excludes overlapping Monarch rows without deleting encrypted source evidence, retains a reversible audit marker, and leaves unmatched accounts, statements, and cross-account transfers alone. Use `trajectory:reconcile-import-sources` to preview, apply, or restore; future Monarch imports use the same idempotent policy. See `docs/operations/trajectory-source-coverage-reconciliation.md`.
+
 ## Trajectory standalone experience and evidence imports (2026-09-14)
 
 Trajectory has its own public `/trajectory/welcome` page and full-width authenticated `/trajectory` navigation. It reuses Everbranch login, finance spaces, financial permissions, and entitlements; the Back to Everbranch link does not change financial access. Personal-only use remains independent of company books. Checkout remains disabled until configured prices and lifecycle readiness pass.
