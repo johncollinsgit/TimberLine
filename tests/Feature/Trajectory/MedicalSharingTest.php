@@ -73,7 +73,7 @@ test('expected share converts to received and can be unlinked with correction hi
     $unlinked = $share->data;
     unset($unlinked['transaction_id']);
     ($this->saveMedical)('medical_share', $unlinked, $share);
-    expect($tx->fresh()->flow)->toBe('income')->and(\App\Models\Trajectory\Event::where('action', 'medical_unmatch')->count())->toBe(1);
+    expect($tx->fresh()->flow)->toBe('unclassified_deposit')->and(\App\Models\Trajectory\Event::where('action', 'medical_unmatch')->count())->toBe(1);
 });
 
 test('medical evidence cannot be split reclassified reused by assets or silently changed', function (): void {

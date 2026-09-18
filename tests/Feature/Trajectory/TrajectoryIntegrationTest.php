@@ -223,7 +223,7 @@ it('matches metal cash movements once and retains sold lot basis', function (): 
     app(\App\Services\Trajectory\MetalsService::class)->sell($this->user, Record::findOrFail($created['id']), '1', 12000, 1, $sell->id);
     expect(Record::find($created['id'])->data['cost_basis_cents'])->toBe(10000)
         ->and($buy->fresh()->flow)->toBe('asset_transfer')
-        ->and($sell->fresh()->flow)->toBe('asset_transfer');
+        ->and($sell->fresh()->flow)->toBe('asset_sale');
     $this->patchJson($url.'/'.$created['id'], ['kind' => 'metal', 'name' => 'Reset history', 'data' => $lot, 'version' => 2])->assertStatus(422);
 });
 

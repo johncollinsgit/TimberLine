@@ -61,8 +61,8 @@ class MetalsService
         DB::transaction(function () use ($user, $space, $record, $quantity, $proceeds, $version, $transactionId): void {
             if ($transactionId) {
                 $tx = \App\Models\Trajectory\Transaction::where('space_id', $space->id)->whereKey($transactionId)->lockForUpdate()->firstOrFail();
-                abort_unless(! $tx->pending && ! $tx->removed && $tx->amount_cents === $proceeds && $tx->flow !== 'asset_transfer', 422, 'Choose an unmatched deposit equal to sale proceeds.');
-                app(LedgerService::class)->classify($user, $space, $tx, ['version' => $tx->version, 'category' => $tx->category, 'flow' => 'asset_transfer', 'face_punched' => false, 'bullshit_spending' => false]);
+                abort_unless(! $tx->pending && ! $tx->removed && $tx->amount_cents === $proceeds && ! in_array($tx->flow, ['asset_transfer', 'asset_sale'], true), 422, 'Choose an unmatched deposit equal to sale proceeds.');
+                app(LedgerService::class)->classify($user, $space, $tx, ['version' => $tx->version, 'category' => $tx->category, 'flow' => 'asset_sale', 'face_punched' => false, 'bullshit_spending' => false]);
             }
             $record = Record::whereKey($record->id)->lockForUpdate()->firstOrFail();
             abort_unless($record->kind === 'metal' && $record->version === $version, 409);
