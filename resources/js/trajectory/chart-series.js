@@ -55,3 +55,15 @@ export function actualProjectedBalances(history, daily) {
   }
   return rows;
 }
+
+// Income and outflows are monthly flows, never a stacked or cumulative cash
+// balance. The selected projection can use the matching month last year, the
+// editable plan, or the current recent-history baseline.
+export function incomeRunwaySeries(rows, source = 'last-year') {
+  const key = source === 'plan' ? 'plan_income_cents' : source === 'recent' ? 'recent_income_cents' : 'last_year_income_cents';
+  const projected = rows.map(row => row[key] ?? null);
+  const lastYear = rows.map(row => row.last_year_income_cents ?? null);
+  const outflows = rows.map(row => row.outflow_cents ?? 0);
+  const gaps = projected.map((income, i) => income === null ? null : income - outflows[i]);
+  return {projected,lastYear,outflows,gaps,sameAsLastYear:projected.every((amount,i)=>amount===lastYear[i])};
+}

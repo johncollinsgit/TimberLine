@@ -93,6 +93,27 @@ test('recurrence preserves month ends and debt calculations have hand checked to
     expect($bad['status'])->toBe('not_amortizing')->and($bad['interest_cents'])->toBeNull();
 });
 
+test('income runway separates cash outflows from income and carries matching prior-year evidence', function (): void {
+    $this->travelTo(now()->setDate(2026, 9, 19)->startOfDay());
+    $projection = app(ProjectionService::class)->forecast(100000, [
+        $this->account->id => ['income' => 1000, 'expense' => -300, 'categories' => []],
+    ], [], [], [], [], now());
+    expect($projection['daily'][0]['income_cents'])->toBe(1000)
+        ->and($projection['daily'][0]['outflow_cents'])->toBe(300)
+        ->and($projection['daily'][0]['cash_cents'])->toBe(100700);
+
+    app(LedgerService::class)->ingest($this->account, [
+        ['id' => 'prior-earned', 'date' => '2025-09-20', 'merchant' => 'Demo income', 'amount_cents' => 90000, 'category' => 'income'],
+        ['id' => 'prior-transfer', 'date' => '2025-09-21', 'merchant' => 'Transfer', 'amount_cents' => 70000, 'category' => 'income'],
+    ]);
+    Transaction::where('source_key', 'test:cash:prior-earned')->update(['flow' => 'income', 'reviewed' => true]);
+    Transaction::where('source_key', 'test:cash:prior-transfer')->update(['flow' => 'transfer', 'reviewed' => true]);
+    $runway = app(DashboardService::class)->build($this->space)['income_runway'][0];
+    expect($runway['from'])->toBe('2026-09-20')->and($runway['through'])->toBe('2026-09-30')
+        ->and($runway['last_year_income_cents'])->toBe(90000)->and($runway['has_last_year_evidence'])->toBeTrue()
+        ->and($runway['last_year_income_ids'])->toHaveCount(1);
+});
+
 test('reliance counts owner compensation exactly once and refuses missing assumptions', function (): void {
     $service = app(ProjectionService::class);
     expect($service->reliance([])['status'])->toBe('setup_required');

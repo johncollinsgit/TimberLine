@@ -10,6 +10,10 @@ and compact currency axes. `chart-series.js` joins projection paths to the last
 observed cash point without adding observed records. Currency remains integer cents.
 Looking Ahead leads the dashboard. Separate Trend lines, Month by month, and
 Actual vs. projected tabs preserve distinct balance and income-rate semantics.
+The dashboard opens on Month by month Income runway: projected income from matching dates
+last year, an explicit prior-year line, and expected cash-outflow bars. Users can
+compare the current income plan or recent reviewed income without silently
+changing the daily cash forecast. Cash balance remains a separate monthly mode.
 Monthly cash bars use closing observations/estimates, never sums of balances;
 missing observations stay null. The monthly unexpected-expense card ranks scoped,
 posted Face Punched charges and links to their evidence.
