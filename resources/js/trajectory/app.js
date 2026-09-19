@@ -1,5 +1,7 @@
 import Chart from 'chart.js/auto';
 import { planningUI } from './planning.js';
+import { chartPresentation } from './chart-theme.js';
+import { outlookUI } from './outlook.js';
 import './app.css';
 import { minor, percentShare, rateMillis } from './money.js';
 
@@ -87,12 +89,13 @@ function boot() {
   const empty = (message) => `<div class="tr-empty">${esc(message)}</div>`;
   const plot = (id,label,size='') => `<div class="tr-chart ${size}"><canvas id="${id}" role="img" aria-label="${esc(label)}"></canvas></div><button class="tr-chart-data" data-action="chart-data" data-chart="${id}">View chart data</button>`;
   const btn = (label,action,attrs='') => `<button data-action="${action}" ${attrs}>${esc(label)}</button>`;
-  const chart = (id,type,labels,datasets,click) => {
+  const chart = (id,type,labels,datasets,click,extra={}) => {
     const canvas=document.getElementById(id);if(!canvas)return;
     chartTables[id]={labels,datasets,click,title:canvas.getAttribute('aria-label')};
-    const instance=new Chart(canvas,{type,data:{labels,datasets},options:{responsive:true,maintainAspectRatio:false,animation:!matchMedia('(prefers-reduced-motion: reduce)').matches,interaction:{intersect:false,mode:'index'},plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:7,font:{size:11},padding:20}},tooltip:{callbacks:{label:(ctx)=>`${ctx.dataset.label || ctx.label}: ${money(ctx.parsed.y ?? ctx.parsed)}`}}},scales:type==='doughnut'?{}:{x:{grid:{display:false},ticks:{maxTicksLimit:8,font:{size:10}}},y:{grid:{color:'#edf1ed'},border:{display:false},ticks:{callback:(v)=>money(v),font:{size:10}}}},onClick:(event,elements)=>{if(elements[0]&&click)click(elements[0].index);}}});charts.push(instance);
+    const presentation=chartPresentation(canvas,precise,type,extra);
+    const instance=new Chart(canvas,{type,data:{labels,datasets},plugins:presentation.plugins,options:{...presentation.options,onClick:(event,elements)=>{if(elements[0]&&click)click(elements[0].index);}}});charts.push(instance);
   };
-  const line = (label,values,color,fill=false) => ({label,data:values,borderColor:color,backgroundColor:color+'14',fill,tension:.2,borderWidth:2,pointRadius:0,pointHitRadius:12});
+  const line = (label,values,color,fill=false) => ({label,data:values,borderColor:color,backgroundColor:color+'0a',fill,tension:0,borderWidth:2.5,pointRadius:0,pointHoverRadius:4,pointHoverBackgroundColor:'#fff',pointHoverBorderWidth:2,pointHitRadius:16,spanGaps:false});
   const navigation=[];
   const remember=()=>{navigation.push({tab,filter:{...filter},evidenceRows,scroll:window.scrollY});$('#tr-back').hidden=false;};
   const navigate=(view)=>{remember();tab=view;filter={};evidenceRows=null;render();window.scrollTo(0,0);};
@@ -105,6 +108,7 @@ function boot() {
     } catch(e){notice(e.message);}
   };
   const planning=planningUI({getData:()=>data,spaces,esc,money,precise,panel,btn,plot,chart,line,dialog,field,api,endpoint,minor,load,navigate,evidence:showTransactions});
+  const outlook=outlookUI({getData:()=>data,esc,money,precise,date,plot,chart,line,btn,dialog,evidence:showTransactions,forecastDetail});
   function render() {
     if(!data)return;
     charts.forEach(c=>c.destroy());charts=[];chartTables={};
@@ -126,12 +130,11 @@ function boot() {
     if(tab==='budget') drawBudget();
   }
   function overview() {
-    const summary=data.summary, end=data.forecast.daily.at(-1);
-    const scenarios=data.records.filter(r=>r.kind==='scenario');
+    const summary=data.summary;
     return `${data.summary.review_count?panel('Review queue',`<p class="tr-subtle">${data.summary.review_count} transactions need your category or money-movement decision. Clear reviews make the forecast more useful.</p>`,btn('Review transactions','review')):''}
       ${data.unresolved_deposits.ids.length?panel('Resolve incoming deposits',`<p>${precise(data.unresolved_deposits.amount_cents)} of recent deposits need purpose review. The current forecast excludes these from recurring income.</p>${btn('Review deposits','deposit-evidence')}`):''}
       <div class="tr-metrics">${metric('Money coming in',summary.income_cents,'Earned income only')}${metric('Money going out',summary.spending_cents,'Transfers excluded')}${metric('Cash on hand',summary.cash_cents,'Observed account balances')}${metric('Net worth',summary.net_worth_cents,summary.net_worth_complete?'Assets minus liabilities':'Personal obligations less recorded assets · values missing')}</div>
-      ${panel('Where you’re headed',`<p class="tr-subtle">Cash after planned bills and spending. Goal reserves show what remains available.</p>${plot('tr-forecast','Projected daily cash and cash available after goals','large')}<div class="tr-chart-foot"><div class="tr-subtle">Available in 12 months<strong>${money(end?.available_cents)}</strong></div><div class="tr-subtle">First projected shortfall<strong>${data.forecast.first_shortfall_on?date(data.forecast.first_shortfall_on):'None in this scenario'}</strong></div><div class="tr-subtle">Plan confidence<strong>${data.coverage.provisional?'Needs more evidence':'90-day baseline'}</strong></div></div><p class="tr-subtle">${data.forecast.assumptions.map(esc).join(' ')}</p>`,`<div class="tr-actions"><label class="sr-only" for="tr-scenario">Compare a scenario</label><select id="tr-scenario"><option value="">Current path</option>${scenarios.map(s=>`<option value="${s.id}" ${Number(scenarioId)===s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select>${btn(seasonal?'Seasonal history ✓':'Use seasonal history','toggle-seasonal')}${btn('What if…','add','data-kind="scenario"')}</div>`)}
+      ${outlook.html(scenarioId,seasonal)}
       ${planning.summary()}
       ${commitmentCards()}
       ${incomeSources()}
@@ -154,12 +157,7 @@ function boot() {
     return html+'</div><p class="tr-subtle">Last 35 days; amounts reflect the selected reporting period.</p>';
   }
   function drawOverview() {
-    const rows=data.forecast.daily;
-    const history=data.net_worth_history.filter(h=>h.date<=data.range.end && h.cash_cents!==undefined).slice(-90);
-    const prefix=history.map(()=>null);
-    const sets=[line('Observed cash',history.map(h=>h.cash_cents).concat(rows.map(()=>null)),'#345547'),line('Current path · cash',prefix.concat(rows.map(r=>r.cash_cents)),'#8fada1'),line('Available after reserves',prefix.concat(rows.map(r=>r.available_cents)),'#176b52',true)];
-    if(data.comparison)sets.push({...line('Scenario · available',prefix.concat(data.comparison.daily.map(r=>r.available_cents)),'#b48836'),borderDash:[5,4]});
-    chart('tr-forecast','line',history.map(r=>date(r.date)).concat(rows.map(r=>date(r.date))),sets,i=>i<history.length?showTransactions({date:history[i].date}):forecastDetail(rows[i-history.length]));
+    outlook.draw();
     chart('tr-cashflow','bar',data.daily_series.map(r=>date(r.date)),[{label:'Income',data:data.daily_series.map(r=>r.income_cents),backgroundColor:'#4c8d72',borderRadius:3},{label:'Spending',data:data.daily_series.map(r=>r.spending_cents),backgroundColor:'#d9b896',borderRadius:3}],i=>showTransactions({date:data.daily_series[i].date}));
     const cats=data.categories.filter(c=>c.amount_cents>0);
     chart('tr-categories','doughnut',cats.map(c=>title(c.category)),[{data:cats.map(c=>c.amount_cents),backgroundColor:['#205c48','#4f8970','#8fbaa1','#becb9d','#b39760','#dfbf8e','#a6b8bc','#759498'],borderWidth:3,borderColor:'#fff'}],i=>showTransactions({category:cats[i].category}));
@@ -343,6 +341,7 @@ function boot() {
     const target=e.target.closest('[data-action]');if(!target)return;
     const a=target.dataset.action,id=Number(target.dataset.id),spaceId=Number(target.dataset.spaceId)||active,r=data?.records.find(r=>r.id===id),tx=[...(evidenceRows||[]),...(data?.review_transactions||[]),...(data?.transactions||[])].find(t=>t.id===id&&(!target.dataset.spaceId||(t.space_id||active)===spaceId));
     try {
+      if(a==='forecast-horizon'){outlook.setHorizon(Number(target.dataset.days));render();root.querySelector('.tr-horizon [aria-pressed="true"]')?.focus({preventScroll:true});return;}
       if(await planning.handle(a,target))return;
       if(['overview','accounts','history','budget','bills','assets','business','medical'].includes(a)){navigate(a);}
       else if(a==='review-email'){const p=data.review_email;dialog('Review email reminders',`<p class="tr-subtle tr-block">Send to ${esc(p.email)} for ${esc(data.space.name)}. Includes the total waiting for review and the four most recent transactions. Daily emails arrive around 9 AM; weekly emails arrive Monday around 9 AM. Empty queues do not generate email. These settings apply only to you.</p>${field('frequency','Frequency','text',p.frequency,[{value:'off',label:'Off'},{value:'daily',label:'Daily'},{value:'weekly',label:'Weekly · Mondays'}])}${field('timezone','Timezone','text',p.timezone,null,true)}`,async v=>{await api(endpoint('/review-email'),'PATCH',{frequency:v.get('frequency'),timezone:v.get('timezone')});notice('Your review email preference is saved.');});}
