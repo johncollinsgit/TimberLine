@@ -40,3 +40,31 @@ test('income chart uses monthly plan rates, never cash balances or invented grow
   assert.deepEqual(incomeSeries({...plan,history_days:0}).historical,[null,null]);
   assert.equal(incomeSeries({...plan,historical_monthly_cents:500000}).sameHistorical,true);
 });
+
+test('monthly bars use closing balances, preserving leap days and partial months',async()=>{
+  const { monthlyBalances }=await import('../../resources/js/trajectory/chart-series.js');
+  const rows=[{date:'2028-02-28',cash_cents:100},{date:'2028-02-29',cash_cents:150},{date:'2028-03-01',cash_cents:-20},{date:'2028-03-12',cash_cents:0}];
+  assert.deepEqual(monthlyBalances(rows),[rows[1],rows[3]]);
+  assert.deepEqual(monthlyBalances([...rows].reverse()),[rows[1],rows[3]]);
+  assert.deepEqual(monthlyBalances([]),[]);
+  assert.equal(rows.length,4);
+});
+
+test('actual vs projected keeps current-month observations distinct and missing history blank',async()=>{
+  const { actualProjectedBalances }=await import('../../resources/js/trajectory/chart-series.js');
+  const rows=actualProjectedBalances([
+    {date:'2028-01-31',cash_cents:100},
+    {date:'2028-02-15',cash_cents:0},
+    {date:'2028-03-01',cash_cents:999},
+    {date:'2028-01-20',cash_cents:null},
+  ],[{date:'2028-02-15',cash_cents:-10},{date:'2028-02-29',cash_cents:-50},{date:'2028-03-12',cash_cents:-80}]);
+  assert.equal(rows.find(r=>r.month==='2028-01').actual.cash_cents,100);
+  assert.equal(rows.find(r=>r.month==='2028-01').projected,null);
+  const current=rows.find(r=>r.month==='2028-02');
+  assert.equal(current.actual.cash_cents,0);
+  assert.equal(current.projected.cash_cents,-50);
+  assert.equal(current.projected.date,'2028-02-29');
+  assert.equal(rows.find(r=>r.month==='2028-03').actual,null);
+  assert.equal(rows.find(r=>r.month==='2027-12').actual,null);
+  assert.deepEqual(actualProjectedBalances([],[]),[]);
+});

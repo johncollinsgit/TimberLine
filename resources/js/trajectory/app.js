@@ -131,16 +131,22 @@ function boot() {
   }
   function overview() {
     const summary=data.summary;
-    return `${data.summary.review_count?panel('Review queue',`<p class="tr-subtle">${data.summary.review_count} transactions need your category or money-movement decision. Clear reviews make the forecast more useful.</p>`,btn('Review transactions','review')):''}
+    return `${outlook.html(scenarioId,seasonal)}
+      ${data.summary.review_count?panel('Review queue',`<p class="tr-subtle">${data.summary.review_count} transactions need your category or money-movement decision. Clear reviews make the forecast more useful.</p>`,btn('Review transactions','review')):''}
       ${data.unresolved_deposits.ids.length?panel('Resolve incoming deposits',`<p>${precise(data.unresolved_deposits.amount_cents)} of recent deposits need purpose review. The current forecast excludes these from recurring income.</p>${btn('Review deposits','deposit-evidence')}`):''}
       <div class="tr-metrics">${metric('Money coming in',summary.income_cents,'Earned income only')}${metric('Money going out',summary.spending_cents,'Transfers excluded')}${metric('Cash on hand',summary.cash_cents,'Observed account balances')}${metric('Net worth',summary.net_worth_cents,summary.net_worth_complete?'Assets minus liabilities':'Personal obligations less recorded assets · values missing')}</div>
-      ${outlook.html(scenarioId,seasonal)}
+      ${unexpectedExpenses()}
       ${planning.summary()}
       ${commitmentCards()}
       ${incomeSources()}
       <div class="tr-grid">${panel('Income and spending',plot('tr-cashflow','Daily income versus spending')+`<p class="tr-subtle">Select a date to inspect its transactions.</p>`)}${panel('Where your money went',data.categories.length?plot('tr-categories','Spending by category'):empty('Import transactions to see your spending breakdown.'))}</div>
       <div class="tr-grid equal">${panel('Coming up next',data.bills.length?data.bills.slice(0,6).map(b=>`<div class="tr-row"><div><strong>${esc(b.name)}</strong><div class="tr-subtle">${date(b.date)}${b.estimated?' · Estimated':''}</div></div><div class="tr-money">${money(b.amount_cents)} ${btn('View','edit',`data-id="${b.record_id}"`)}</div></div>`).join(''):empty('Confirm recurring bills to build your calendar.'),btn('See bills','bills'))}${panel('Change your trajectory',data.recommendations.length?data.recommendations.slice(0,5).map((r,i)=>`<div class="tr-row"><div><strong>${esc(r.title)}</strong><div class="tr-subtle">Up to ${money(r.monthly_savings_cents)}/month · ${money(r.yearly_cash_impact_cents)} over a year</div></div>${btn('Explore','recommendation',`data-index="${i}"`)}</div>`).join(''):empty('Review your spending profile to surface supported saving opportunities.'))}</div>
       <div class="tr-grid equal">${panel('Five years from here',plot('tr-fiveyear','Monthly five-year cash projection'))}${panel('Your spending calendar',heatmap())}</div>`;
+  }
+  function unexpectedExpenses() {
+    const unexpected=data.unexpected_expenses;
+    if(!unexpected)return '';
+    return panel('Biggest unexpected expenses',`<div class="tr-labels"><div><div class="tr-number">${money(unexpected.total_cents)}</div><p class="tr-subtle">${esc(date(unexpected.from))} – ${esc(date(unexpected.through))}, ${unexpected.through.slice(0,4)} · ${unexpected.count} unexpected purchase${unexpected.count===1?'':'s'}</p></div><span class="tr-pill">Face Punched</span></div>${unexpected.items.length?unexpected.items.map((t,i)=>`<div class="tr-row tr-unexpected-row"><span class="tr-unexpected-rank">${i+1}</span><div><strong>${esc(t.merchant)}</strong><div class="tr-subtle">${date(t.date)} · ${esc(title(t.category))}</div></div><div class="tr-money"><strong>${precise(-t.amount_cents)}</strong> ${btn('View transaction','plan-evidence',`data-ids="${esc(JSON.stringify([t.id]))}"`)}</div></div>`).join(''):empty('No purchases marked unexpected this month. Mark a one-time surprise as Face Punched when reviewing a transaction.')}<p class="tr-subtle">Largest posted purchases marked Face Punched in the month ending ${date(unexpected.through)}. Gross charges before refunds; transfers and pending charges are excluded.</p>`,unexpected.count?btn('View all unexpected','plan-evidence',`data-ids="${esc(JSON.stringify(unexpected.ids))}"`):btn('Review transactions','review'));
   }
   function bothOverview(){
     const s=data.summary, combined=data.combined_result;
@@ -341,6 +347,7 @@ function boot() {
     const target=e.target.closest('[data-action]');if(!target)return;
     const a=target.dataset.action,id=Number(target.dataset.id),spaceId=Number(target.dataset.spaceId)||active,r=data?.records.find(r=>r.id===id),tx=[...(evidenceRows||[]),...(data?.review_transactions||[]),...(data?.transactions||[])].find(t=>t.id===id&&(!target.dataset.spaceId||(t.space_id||active)===spaceId));
     try {
+      if(a==='outlook-view'){outlook.setView(target.dataset.view);render();root.querySelector('.tr-outlook-tabs [aria-selected="true"]')?.focus({preventScroll:true});return;}
       if(a==='forecast-horizon'){outlook.setHorizon(Number(target.dataset.days));render();root.querySelector('.tr-horizon [aria-pressed="true"]')?.focus({preventScroll:true});return;}
       if(await planning.handle(a,target))return;
       if(['overview','accounts','history','budget','bills','assets','business','medical'].includes(a)){navigate(a);}
@@ -418,6 +425,14 @@ function boot() {
   function smsForm(){dialog('Text reminders',field('phone','Your mobile number','tel','+1',null,true)+field('consent','I want bill reminders, cash alerts, and weekly summaries','checkbox',false),async v=>{await api(endpoint('/sms/verify'),'POST',{phone:v.get('phone'),consent:v.get('consent')==='on'});dialog('Verify your phone',field('code','Code from your text','text','',null,true),async v2=>{await api(endpoint('/sms/confirm'),'POST',{code:v2.get('code')});},'Verify');return false;},'Send verification code');}
   $('#tr-form').addEventListener('submit',async e=>{e.preventDefault();if(!formAction)return;$('#tr-save').disabled=true;$('#tr-form-error').hidden=true;try{const done=await formAction(new FormData($('#tr-form')));if(done!==false){$('#tr-dialog').close();await load();}}catch(e){$('#tr-form-error').textContent=e.message;$('#tr-form-error').hidden=false;}finally{$('#tr-save').disabled=false;}});
   $('#tr-close').onclick=$('#tr-cancel').onclick=()=>$('#tr-dialog').close();
+  root.addEventListener('keydown',e=>{
+    const button=e.target.closest('[data-action="outlook-view"]');
+    if(!button||!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;
+    e.preventDefault();
+    const views=['lines','bars','comparison'],index=views.indexOf(button.dataset.view);
+    const next=e.key==='Home'?views[0]:e.key==='End'?views.at(-1):views[(index+(e.key==='ArrowRight'?1:-1)+views.length)%views.length];
+    root.querySelector(`[data-action="outlook-view"][data-view="${next}"]`)?.click();
+  });
   $('#tr-add').onclick=chooseAdd;$('#tr-refresh').onclick=load;
   $('#tr-space-tabs').addEventListener('click',e=>{const button=e.target.closest('[data-scope]');if(!button||button.dataset.scope===scope)return;navigation.length=0;$('#tr-back').hidden=true;scope=button.dataset.scope;active=(scope==='personal'?personalSpace:businessSpace)?.id||personalSpace?.id||businessSpace?.id;scenarioId='';filter={};budgetSource=null;historyMonth='';evidenceRows=null;data=null;$('#tr-dialog').close();$('#tr-content').innerHTML='';renderSpaceTabs();load();});
   $('#tr-range').onchange=()=>{filter={};$('#tr-date-fields').hidden=$('#tr-range').value!=='custom';if($('#tr-range').value!=='custom'||($('#tr-start').value&&$('#tr-end').value))load();};

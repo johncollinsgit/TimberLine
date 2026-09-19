@@ -8,6 +8,11 @@ forecast and planning payloads; the monthly income plan remains distinct from da
 bill timing. `chart-theme.js` provides shared accessible HTML legends, light tooltips,
 and compact currency axes. `chart-series.js` joins projection paths to the last
 observed cash point without adding observed records. Currency remains integer cents.
+Looking Ahead leads the dashboard. Separate Trend lines, Month by month, and
+Actual vs. projected tabs preserve distinct balance and income-rate semantics.
+Monthly cash bars use closing observations/estimates, never sums of balances;
+missing observations stay null. The monthly unexpected-expense card ranks scoped,
+posted Face Punched charges and links to their evidence.
 See `docs/operations/trajectory-runbook.md` for chart validation.
 
 ## Fleet map Bouncie recovery (2026-09-16)

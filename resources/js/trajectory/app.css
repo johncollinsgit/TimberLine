@@ -70,3 +70,12 @@
 @media(min-width:2000px){.trajectory-site .tr-chart.outlook-cash,.trajectory-site .tr-chart.outlook-income{height:340px}}
 @media(max-width:1250px){.tr-outlook-grid{grid-template-columns:1fr}.tr-outlook-income{padding:26px 0 0;border-left:0;border-top:1px solid #e7ecef}.tr-outlook-header{flex-wrap:wrap}.tr-outlook-controls{align-items:flex-start;flex-direction:column}.tr-outlook-controls p{max-width:none}}
 @media(max-width:700px){.tr-outlook-header,.tr-outlook-grid{padding:20px}.trajectory-site .tr-outlook h2{font-size:21px}.tr-outlook-metrics{margin:0 20px;grid-template-columns:1fr}.tr-app .tr-outlook-metrics button{padding:16px 0;border:0;border-bottom:1px solid #e7ecef}.tr-app .tr-outlook-metrics button:last-child{border-bottom:0}.tr-outlook-metrics strong{font-size:27px}.tr-outlook-controls,.tr-assumptions{padding:16px 20px}.tr-chart-heading{flex-wrap:wrap;min-height:60px}.tr-chart-legend{gap:4px 16px}.tr-app .tr-chart-legend button{font-size:11px}.tr-tooltip-row{gap:12px}.tr-outlook-controls .tr-actions{flex-wrap:wrap}.trajectory-site .tr-chart.outlook-cash,.trajectory-site .tr-chart.outlook-income{height:250px}}
+
+.tr-outlook-tabs{display:flex;gap:20px;margin:18px 28px 0;border-bottom:1px solid #e7ecef}
+.tr-app .tr-outlook-tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;padding:12px 2px;background:transparent;color:#657984;font-size:13px}
+.tr-app .tr-outlook-tabs button[aria-selected=true]{border-bottom-color:#187a70;color:#195b54;font-weight:650}
+.tr-unexpected-row>div:nth-child(2){flex:1;min-width:0;overflow-wrap:anywhere}.tr-unexpected-rank{flex:0 0 26px;color:#8c735a;font-size:12px;font-weight:600}
+@media(max-width:700px){.tr-outlook-tabs{margin-inline:20px}.tr-unexpected-row{flex-wrap:wrap}.tr-unexpected-row .tr-money{width:100%;display:flex;align-items:center;justify-content:space-between;padding-left:40px}}
+
+.tr-outlook-grid.tr-outlook-comparison{grid-template-columns:1fr}
+.tr-outlook-tabs{overflow-x:auto}.tr-outlook-tabs button{white-space:nowrap;flex-shrink:0}

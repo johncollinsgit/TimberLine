@@ -30,6 +30,12 @@ class DashboardService
         }
         $end = $range === 'custom' && $through ? CarbonImmutable::parse($through, $space->timezone) : $today;
         $selected = $entries->where('date', '>=', $start->toDateString())->where('date', '<=', $end->toDateString())->values();
+        $unexpectedThrough = $end->min($today);
+        $unexpectedFrom = $unexpectedThrough->startOfMonth();
+        $unexpected = $entries->where('date', '>=', $unexpectedFrom->toDateString())
+            ->where('date', '<=', $unexpectedThrough->toDateString())
+            ->where('face_punched', true)->whereIn('flow', ['expense', 'medical_payment', 'medical_membership'])
+            ->where('amount_cents', '<', 0)->sortBy('amount_cents')->values();
         $accounts = Account::where('space_id', $space->id)->get();
         $records = Record::where('space_id', $space->id)->where('active', true)->whereNotIn('kind', ['sms'])->get();
         $plans = fn ($kind) => $records->where('kind', $kind)->map(fn ($r) => [...$r->data, 'id' => $r->id, 'name' => $r->name])->values()->all();
@@ -223,6 +229,7 @@ class DashboardService
             'seasonality' => ['enabled' => $seasonal, 'sources' => $seasonalSources],
             // The review queue deliberately reaches beyond the reporting range so a
             // user can finish categorizing older imports without changing dates.
+            'unexpected_expenses' => ['from' => $unexpectedFrom->toDateString(), 'through' => $unexpectedThrough->toDateString(), 'total_cents' => -(int) $unexpected->sum('amount_cents'), 'count' => $unexpected->count(), 'ids' => $unexpected->pluck('id')->all(), 'items' => $unexpected->take(5)->values()->all()],
             'transactions' => $selected->reverse()->values()->all(),
             'review_transactions' => $entries->where('reviewed', false)->reverse()->take(250)->values()->all(),
             'review_suggestions' => app(ReviewSuggestionService::class)->forEntries($entries),
