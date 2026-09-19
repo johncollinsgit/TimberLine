@@ -76,7 +76,7 @@ class LedgerService
         abort_unless($tx->space_id === $space->id, 404);
 
         return DB::transaction(function () use ($user, $space, $tx, $data, $learn) {
-            $tx = Transaction::whereKey($tx->id)->lockForUpdate()->firstOrFail();
+            $tx = Transaction::where('space_id', $space->id)->whereKey($tx->id)->lockForUpdate()->firstOrFail();
             app(MedicalSharingService::class)->assertUnbound($tx);
             abort_unless($tx->version === $data['version'], 409, 'This transaction changed. Refresh before editing.');
             $before = $tx->only(['category', 'flow', 'face_punched', 'bullshit_spending', 'reviewed', 'explanation', 'version']);
@@ -136,7 +136,7 @@ class LedgerService
             }
         }
         DB::transaction(function () use ($user, $space, $tx, $splits, $version): void {
-            $tx = Transaction::whereKey($tx->id)->lockForUpdate()->firstOrFail();
+            $tx = Transaction::where('space_id', $space->id)->whereKey($tx->id)->lockForUpdate()->firstOrFail();
             app(MedicalSharingService::class)->assertUnbound($tx);
             abort_unless($tx->version === $version, 409);
             if (array_sum(array_column($splits, 'amount_cents')) !== $tx->amount_cents || count(array_unique(array_column($splits, 'space_id'))) !== count($splits)) {

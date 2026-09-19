@@ -43,6 +43,18 @@ foreach ($fixtures as [$kind,$name,$data]) {
     Record::updateOrCreate(['space_id' => $space->id, 'kind' => $kind, 'name' => $name], ['data' => $data]);
 }
 for ($i = 30; $i >= 0; $i--) {
-    Snapshot::updateOrCreate(['space_id' => $space->id, 'observed_on' => now()->subDays($i)->toDateString()], ['data' => ['net_worth_cents' => 43500000 + (30 - $i) * 5000, 'cash_cents' => 1600000 + (30 - $i) * 7000, 'complete' => false]]);
+    Snapshot::updateOrCreate(['space_id' => $space->id, 'observed_on' => now()->subDays($i)->startOfDay()->toDateTimeString()], ['data' => ['net_worth_cents' => 43500000 + (30 - $i) * 5000, 'cash_cents' => 1600000 + (30 - $i) * 7000, 'complete' => false]]);
 }
 echo "Local fictional preview ready.\n";
+
+// Isolated examples for the income, multi-company, and anomaly controls.
+app(\App\Services\Trajectory\WorkspaceService::class)->save($user, $space, ['income_categories' => ['mowing_lawns' => 'Mowing lawns', 'odd_jobs' => 'Odd jobs'], 'income_expectations' => ['income' => 640000, 'mowing_lawns' => 30000]]);
+app(LedgerService::class)->ingest($account, [['id' => 'software-miscategorized', 'date' => now()->subDay()->toDateString(), 'merchant' => 'Adobe Creative Cloud', 'amount_cents' => -5999]]);
+\App\Models\Trajectory\Transaction::where('source_key', 'demo:checking:software-miscategorized')->update(['category' => 'transport', 'flow' => 'expense', 'reviewed' => true]);
+foreach (['demo-software' => 'Fictional Software LLC', 'demo-forestry' => 'Fictional Forestry Inc'] as $slug => $name) {
+    $tenant = \App\Models\Tenant::firstOrCreate(['slug' => $slug], ['name' => $name]);
+    \App\Models\TenantAccessProfile::firstOrCreate(['tenant_id' => $tenant->id], ['plan_key' => 'base', 'operating_mode' => 'direct']);
+    $user->tenants()->syncWithoutDetaching([$tenant->id => ['role' => 'owner', 'membership_active' => true]]);
+    [, $business] = app(PilotService::class)->prepare($user, $tenant, true);
+    app(\App\Services\Trajectory\WorkspaceService::class)->save($user, $business, ['tax_profile' => ['state' => 'SC', 'tax_year' => 2026, 'federal_treatment' => $slug === 'demo-software' ? 'single_member_llc' : 's_corporation', 'industry' => 'Fictional example']]);
+}

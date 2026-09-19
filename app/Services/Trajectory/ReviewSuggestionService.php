@@ -47,6 +47,7 @@ class ReviewSuggestionService
 
     private function suggestion(Collection $rows, array $classification, string $kind, string $evidence): array
     {
+        $rows = $rows->take(100)->values();
         $first = $rows->first();
 
         return [

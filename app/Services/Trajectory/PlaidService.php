@@ -68,13 +68,18 @@ class PlaidService
         return ['link_token' => $result['link_token'], 'expiration' => $result['expiration']];
     }
 
-    public function exchange(Space $space, string $publicToken, ?string $institutionName = null): Connection
+    public function exchange(Space $space, string $publicToken, ?string $institutionName = null, ?int $ownerId = null): Connection
     {
         $result = $this->call('/item/public_token/exchange', ['public_token' => $publicToken]);
         $existing = Connection::where('external_id', $result['item_id'])->first();
         abort_if($existing && $existing->space_id !== $space->id, 409, 'This bank item is already connected in another space.');
 
-        return Connection::updateOrCreate(['external_id' => $result['item_id']], array_filter(['space_id' => $space->id, 'access_token' => $result['access_token'], 'status' => 'connected', 'institution_name' => $institutionName], fn ($value) => $value !== null));
+        $connection = Connection::updateOrCreate(['external_id' => $result['item_id']], array_filter(['space_id' => $space->id, 'access_token' => $result['access_token'], 'status' => 'connected', 'institution_name' => $institutionName], fn ($value) => $value !== null));
+        if (! $existing && $ownerId) {
+            $connection->update(['status' => 'mapping_required', 'coverage' => ['require_account_mapping' => true, 'owner_user_id' => $ownerId, 'account_spaces' => []]]);
+        }
+
+        return $connection;
     }
 
     public function sync(Connection $connection): void
@@ -106,16 +111,24 @@ class PlaidService
                 if ($connection->status === 'disconnected') {
                     return;
                 }
+                $unassigned = false;
                 foreach ($accounts as $remoteId => $data) {
                     if (($data['balances']['iso_currency_code'] ?? null) !== 'USD') {
                         continue;
                     }
-                    $account = Account::updateOrCreate(['source_key' => 'plaid:'.$connection->id.':'.$remoteId], [
-                        'space_id' => $connection->space_id, 'connection_id' => $connection->id, 'name' => $data['name'],
+                    $account = Account::firstOrNew(['source_key' => 'plaid:'.$connection->id.':'.$remoteId]);
+                    $targetId = $account->exists ? $account->space_id : ($connection->coverage['account_spaces'][$remoteId] ?? null);
+                    if (! $targetId && ($connection->coverage['require_account_mapping'] ?? false)) {
+                        $unassigned = true;
+
+                        continue;
+                    }
+                    $account->fill([
+                        'space_id' => $targetId ?? $connection->space_id, 'connection_id' => $connection->id, 'name' => $data['name'].(empty($data['mask']) ? '' : ' (…'.$data['mask'].')'),
                         'kind' => in_array($data['type'], ['credit', 'loan'], true) ? $data['type'] : 'cash',
                         'balance_cents' => isset($data['balances']['current']) ? Money::cents($data['balances']['current']) : null,
                         'observed_at' => now(),
-                    ]);
+                    ])->save();
                     foreach ($changes as $page) {
                         $rows = [];
                         foreach ([...$page['added'], ...$page['modified']] as $tx) {
@@ -135,7 +148,7 @@ class PlaidService
                     }
                     $account->update(['history_start' => Transaction::where('account_id', $account->id)->where('removed', false)->min('posted_on')]);
                 }
-                $connection->update(['cursor' => $cursor, 'synced_at' => now(), 'status' => 'connected']);
+                $connection->update(['cursor' => $cursor, 'synced_at' => now(), 'status' => $unassigned ? 'mapping_required' : 'connected']);
             });
             $this->liabilities($connection);
             $this->investments($connection);
@@ -147,7 +160,7 @@ class PlaidService
         try {
             $data = $this->call('/liabilities/get', ['access_token' => $connection->access_token]);
             // Provider evidence is a setup suggestion, never an overwrite of reviewed debt terms.
-            $connection->update(['coverage' => ['liabilities' => $data['liabilities'] ?? [], 'observed_at' => now()->toIso8601String()]]);
+            $connection->update(['coverage' => [...($connection->coverage ?? []), 'liabilities' => $data['liabilities'] ?? [], 'observed_at' => now()->toIso8601String()]]);
         } catch (\Throwable) {
             // Transactions can be complete while debt metadata is unsupported.
         }
@@ -167,14 +180,21 @@ class PlaidService
                     if (($account['balances']['iso_currency_code'] ?? null) !== 'USD' || empty($account['account_id'])) {
                         continue;
                     }
-                    Account::updateOrCreate(['source_key' => 'plaid:'.$connection->id.':'.$account['account_id']], [
-                        'space_id' => $connection->space_id,
+                    $local = Account::firstOrNew(['source_key' => 'plaid:'.$connection->id.':'.$account['account_id']]);
+                    $targetId = $local->exists ? $local->space_id : ($connection->coverage['account_spaces'][$account['account_id']] ?? null);
+                    if (! $targetId && ($connection->coverage['require_account_mapping'] ?? false)) {
+                        $connection->update(['status' => 'mapping_required']);
+
+                        continue;
+                    }
+                    $local->fill([
+                        'space_id' => $targetId ?? $connection->space_id,
                         'connection_id' => $connection->id,
                         'name' => $account['name'] ?? 'Investment account',
                         'kind' => 'investment',
                         'balance_cents' => isset($account['balances']['current']) ? Money::cents($account['balances']['current']) : null,
                         'observed_at' => now(),
-                    ]);
+                    ])->save();
                     $supported++;
                 }
                 $coverage = $connection->coverage ?? [];
@@ -189,7 +209,7 @@ class PlaidService
     public function debtSuggestions(Space $space): array
     {
         $suggestions = [];
-        foreach (Connection::where('space_id', $space->id)->where('status', '!=', 'disconnected')->get() as $connection) {
+        foreach (Connection::whereIn('id', Account::where('space_id', $space->id)->whereNotNull('connection_id')->pluck('connection_id'))->where('status', '!=', 'disconnected')->get() as $connection) {
             foreach (($connection->coverage['liabilities'] ?? []) as $kind => $rows) {
                 foreach ($rows ?? [] as $row) {
                     $account = Account::where('space_id', $space->id)->where('source_key', 'plaid:'.$connection->id.':'.($row['account_id'] ?? ''))->first();

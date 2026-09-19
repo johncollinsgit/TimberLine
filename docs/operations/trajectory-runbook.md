@@ -271,3 +271,61 @@ Monarch CSV preserves its original row and source categories; Chase preserves po
 Subscriptions show confirmed schedules and unconfirmed receipt/history evidence separately. Expired/canceled evidence never establishes a future renewal. Payment notices add only the verified next payment when no linked schedule/debt already covers it. Missing APRs and future minimums remain coverage gaps, with unknown card purchases affecting debt rather than immediate cash. Recorded interest by account replaces overlapping lender period totals; a YTD total cannot fabricate individual monthly charges. Fine-weight metal lots avoid applying purity twice; gross-weight lots apply purity before troy-ounce valuation.
 
 Validation: run `tests/Feature/Trajectory`, the complete existing suite including Shopify gates, `npm run build`, and `tests/e2e/trajectory-smoke.cjs` against the isolated fictional local fixture. The smoke script checks standalone accounts/history/budget navigation, subscription/payment cards, chart evidence, existing medical sharing, and mobile width. No schema change is required for these encrypted record additions. Run the migration linter anyway; production release remains GitHub test/build plus migration safety gate, then Forge atomic activation. Rollback disables the Branch without deleting records.
+
+### Finance controls and category review (2026-09-19)
+
+Trajectory now offers an explicit business selector. `Both` combines the household
+with the selected business, not all companies; its reporting dates follow the UI.
+Owner wages/distributions are eliminated only against explicitly matched pairs in
+that business. Unmatched owner income remains visible. Each business must already
+have an entitled Everbranch tenant and the user's financial membership.
+
+`WorkspaceService` keeps custom income categories, per-source monthly overrides,
+tax profiles, flexible spending, and debt target settings in the space's encrypted
+settings, with audit events. Pilot income categories are provisioned only into the
+requested household. No global customer categories, prices, or tax elections are
+inferred. An LLC's owner count does not establish a corporate tax election.
+
+A bank login may feed multiple spaces. Account reassignment authorizes both spaces
+and the original connection owner, locks the connection/account/history, preserves
+source identities, and changes allocations with their source records. Split
+allocations, linked plans, medical/asset matches, and reconciled transfers block a
+move until resolved. Plaid refreshes preserve assigned ownership. Assigned spaces
+see only their accounts plus minimal feed status; credential management stays in
+the original connection space. New bank connections require per-account ownership selection before first import.
+Unassigned new accounts are withheld from every space; mapping resets the cursor
+under the sync lock so earlier withheld history imports idempotently. Existing
+connections retain their current ownership for backward compatibility.
+Account reassignment is an intentional disclosure to the destination's financial
+members, and the confirmation names that effect.
+
+Income planning starts from reviewed history, with per-source overrides replacing
+rather than adding to the estimate. Loans, transfers, and asset-sale proceeds are
+excluded. The planning line spreads monthly amounts evenly; the original daily
+forecast remains the timing view. Missing debt terms and history make forecasts
+provisional. Avalanche/snowball comparisons allocate one shared monthly budget,
+roll freed payments forward, and distinguish escrow/fees from debt principal and
+interest. No debt payments are initiated.
+
+Anomaly review separates (1) specific purchase-title fit, (2) this space's reviewed
+merchant pattern with three other examples and 80% agreement, and (3) labeled
+business-practice guidance. It does **not** have empirical peer categorization
+data. No peer percentage or industry consensus is fabricated. Mixed retailers
+are excluded. Conflicting signals require a category choice. Marking normal
+stores an exception tied to transaction version; a later changed transaction can
+return to review. Corrections use the existing audited/undoable classifier.
+
+Tax review measures classification/receipt evidence, not deduction eligibility.
+IRS and South Carolina source links, tax year, entity treatment, and state are
+visible. Other-state guidance stays explicitly unverified. QuickBooks exact-period
+reports remain authoritative for P&L; otherwise the UI labels transaction activity
+provisional and excludes borrowing, draws, and transfers. Owner wages are expenses.
+Bud Core answers from authorized calculated context and opens supporting screens;
+this release does not enable metered generative Bud AI or send finance questions
+to support tickets. Provider activation and metering remain separate dependencies.
+
+Verification: `FinanceControlsTest` covers semantic/pattern conflicts, normal
+exceptions, private categories, expected income, shared debt budgets, persistent
+Plaid account ownership, scope denial, P&L precedence, and combined period bounds.
+No database migration is added. The existing release and migration-safety gates
+remain mandatory. Rollback disables the Branch and preserves all records.

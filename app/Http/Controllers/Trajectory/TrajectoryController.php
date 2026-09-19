@@ -88,7 +88,7 @@ class TrajectoryController extends Controller
 
     public function classify(Request $request, Space $space, Transaction $transaction, LedgerService $ledger)
     {
-        $data = $request->validate(['version' => 'required|integer', 'category' => ['required', Rule::in(config('trajectory.categories'))], 'flow' => ['required', Rule::in(['expense', 'income', 'refund', 'transfer', 'card_payment', 'asset_transfer', 'asset_sale', 'loan_draw', 'unclassified_deposit', 'owner_wages', 'owner_distribution', 'reimbursement', 'debt_payment', 'duplicate'])], 'face_punched' => 'required|boolean', 'bullshit_spending' => 'required|boolean', 'learn' => 'sometimes|boolean']);
+        $data = $request->validate(['version' => 'required|integer', 'category' => ['required', Rule::in(app(\App\Services\Trajectory\WorkspaceService::class)->categories($space))], 'flow' => ['required', Rule::in(['expense', 'income', 'refund', 'transfer', 'card_payment', 'asset_transfer', 'asset_sale', 'loan_draw', 'unclassified_deposit', 'owner_wages', 'owner_distribution', 'reimbursement', 'debt_payment', 'duplicate'])], 'face_punched' => 'required|boolean', 'bullshit_spending' => 'required|boolean', 'learn' => 'sometimes|boolean']);
 
         return response()->json($ledger->classify($request->user(), $space, $transaction, $data, $data['learn'] ?? false));
     }
@@ -99,7 +99,7 @@ class TrajectoryController extends Controller
             'transactions' => 'required|array|min:2|max:100',
             'transactions.*.id' => 'required|integer|distinct',
             'transactions.*.version' => 'required|integer|min:1',
-            'category' => ['required', Rule::in(config('trajectory.categories'))],
+            'category' => ['required', Rule::in(app(\App\Services\Trajectory\WorkspaceService::class)->categories($space))],
             'flow' => ['required', Rule::in(['expense', 'income', 'refund', 'transfer', 'card_payment', 'asset_transfer', 'asset_sale', 'loan_draw', 'unclassified_deposit', 'owner_wages', 'owner_distribution', 'reimbursement', 'debt_payment', 'duplicate'])],
             'face_punched' => 'required|boolean',
             'bullshit_spending' => 'required|boolean',
@@ -218,7 +218,7 @@ class TrajectoryController extends Controller
                 if (isset($row['id'])) {
                     $row['id'] = (string) $row['id'];
                 }
-                $row = Validator::make($row, ['id' => 'required|string|max:100', 'date' => 'required|date_format:Y-m-d|before_or_equal:today', 'merchant' => 'required|string|max:160', 'amount' => 'required|regex:/^-?\d{1,10}(\.\d{1,2})?$/', 'category' => ['nullable', Rule::in(config('trajectory.categories'))]])->validate();
+                $row = Validator::make($row, ['id' => 'required|string|max:100', 'date' => 'required|date_format:Y-m-d|before_or_equal:today', 'merchant' => 'required|string|max:160', 'amount' => 'required|regex:/^-?\d{1,10}(\.\d{1,2})?$/', 'category' => ['nullable', Rule::in(app(\App\Services\Trajectory\WorkspaceService::class)->categories($space))]])->validate();
                 $rows[] = ['id' => $row['id'], 'date' => $row['date'], 'merchant' => $row['merchant'], 'amount_cents' => Money::cents($row['amount']), 'category' => $row['category'] ?? null];
             } else {
                 $row = app(RecordService::class)->validate($space, 'payroll', $row);
@@ -278,10 +278,12 @@ class TrajectoryController extends Controller
     {
         $access->authorize($request->user(), $space);
         $data = $request->validate(['public_token' => 'required|string|max:500', 'institution_name' => 'nullable|string|max:160']);
-        $connection = $plaid->exchange($space, $data['public_token'], $data['institution_name'] ?? null);
-        SyncBank::dispatch($connection->id);
+        $connection = $plaid->exchange($space, $data['public_token'], $data['institution_name'] ?? null, $request->user()->id);
+        if ($connection->status !== 'mapping_required') {
+            SyncBank::dispatch($connection->id);
+        }
 
-        return response()->json(['ok' => true]);
+        return response()->json(['ok' => true, 'connection_id' => $connection->id, 'needs_mapping' => $connection->status === 'mapping_required']);
     }
 
     public function syncBank(Request $request, Space $space, Connection $connection, FinanceAccess $access)
@@ -358,7 +360,7 @@ class TrajectoryController extends Controller
     public function settings(Request $request, Space $space, FinanceAccess $access)
     {
         $access->authorize($request->user(), $space);
-        $data = $request->validate(['discretionary_categories' => 'required|array', 'discretionary_categories.*' => [Rule::in(config('trajectory.categories'))]]);
+        $data = $request->validate(['discretionary_categories' => 'required|array', 'discretionary_categories.*' => [Rule::in(app(\App\Services\Trajectory\WorkspaceService::class)->categories($space))]]);
         $space->update(['settings' => [...($space->settings ?? []), ...$data]]);
 
         return response()->json(['ok' => true]);
@@ -382,9 +384,9 @@ class TrajectoryController extends Controller
 
     public function combined(Request $request, Space $space)
     {
-        $data = $request->validate(['business_id' => 'required|integer']);
+        $data = $request->validate(['business_id' => 'required|integer', 'from' => 'sometimes|required|date_format:Y-m-d', 'through' => 'required_with:from|date_format:Y-m-d|after_or_equal:from']);
 
-        return response()->json(app(\App\Services\Trajectory\ReconciliationService::class)->combined($request->user(), $space->id, (int) $data['business_id']));
+        return response()->json(app(\App\Services\Trajectory\ReconciliationService::class)->combined($request->user(), $space->id, (int) $data['business_id'], $data['from'] ?? null, $data['through'] ?? null));
     }
 
     public function verifySms(Request $request, Space $space)

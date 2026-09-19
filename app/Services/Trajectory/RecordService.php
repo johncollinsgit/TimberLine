@@ -33,7 +33,7 @@ class RecordService
                 'decimal' => ['regex:/^\d{1,8}(\.\d{1,8})?$/', 'numeric', 'gt:0'],
                 'date' => ['date_format:Y-m-d', 'after_or_equal:1900-01-01', 'before:2200-01-01'],
                 'boolean' => ['boolean'],
-                'category' => [Rule::in(config('trajectory.categories'))],
+                'category' => [Rule::in(app(WorkspaceService::class)->categories($space))],
                 'select' => [Rule::in($field['choices'])],
                 default => ['string', 'max:160'],
             }];

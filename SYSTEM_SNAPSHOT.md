@@ -1833,3 +1833,17 @@ Opt-in daily/weekly private email digests now reuse Laravel transactional mail a
 ### Trajectory source coverage (2026-09-18)
 
 Trajectory keeps imported Monarch history only before matching live Plaid coverage. Overlap is excluded from forecasts, totals, and review queues without deleting evidence; reversible encrypted audit events record each account-level operation. The service runs after future Monarch imports and is available through the owner-scoped preview/apply/restore console command.
+
+## Trajectory finance controls — 2026-09-19
+
+- Space-scoped income plans, company selection/account ownership, debt strategy
+  comparison, anomaly review, tax evidence readiness, and P&L are implemented by
+  `WorkspaceService`, `PlanningService`, `DebtStrategyService`, `AnomalyService`,
+  and `TaxReviewService`; UI lives in `resources/js/trajectory/planning.js`.
+- Purchase context, reviewed merchant patterns, and business practice are separate
+  anomaly signals. Peer statistics are unavailable and never invented.
+- Shared Plaid account ownership survives sync; moves require source/destination
+  access and connection ownership, and block linked or split records.
+- Bud's finance endpoint is scoped deterministic Bud Core. Generative Bud AI and
+  empirical category benchmarking are not activated by this release.
+- See `docs/operations/trajectory-runbook.md` for setup, limits, and rollback.

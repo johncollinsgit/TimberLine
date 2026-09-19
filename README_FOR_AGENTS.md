@@ -1280,3 +1280,17 @@ Do not skip upward on this ladder without documenting why the simpler level was 
 Wholesale application reviewers may use the tenant membership role `wholesale_reviewer`. It authorizes only wholesale application decisions for that tenant and requires active membership; it does not grant a global admin role or platform-access approval. See the wholesale application reliability runbook.
 
 Wholesale reviewer decisions resolve missing Shopify staff emails through verified online token exchange. Match the returned staff ID and verified email before looking up existing tenant reviewer membership; do not trust the store contact email as the acting staff identity.
+
+### Trajectory finance controls (2026-09-19)
+
+Income categories/overrides belong to a finance space, never global pilot defaults.
+`PlanningController` mutations resolve finance access; company assignment also
+requires the connection owner and revalidates linked records under locks. Never
+reset `Account.space_id` from `Connection.space_id` during bank refreshes.
+Anomalies separate semantic fit, within-space history, and general practice; do not
+invent peer statistics. Normal exceptions are version-specific. P&L remains
+QuickBooks-authoritative, with explicitly provisional bank evidence otherwise.
+Bud Core is deterministic and private to the selected space; no automatic support
+escalation, generative provider activation, or price invention. Follow the finance
+controls section of `docs/operations/trajectory-runbook.md` and run focused tests,
+full regression/build, and normal release gates.

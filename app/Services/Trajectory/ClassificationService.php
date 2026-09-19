@@ -16,12 +16,12 @@ class ClassificationService
             }
         }
         $ambiguous = self::isAmbiguousMerchant($merchant);
-        $category = in_array($providerCategory, config('trajectory.categories'), true) ? $providerCategory : 'uncategorized';
+        $category = in_array($providerCategory, app(WorkspaceService::class)->categories($space), true) ? $providerCategory : 'uncategorized';
         $defaults = $space->settings['discretionary_categories'] ?? config('trajectory.discretionary_defaults');
         $flow = match (true) {
             $amount > 0 && self::isTransferMerchant($merchant) => 'transfer',
             $amount > 0 && $category === 'uncategorized' => 'unclassified_deposit',
-            $amount > 0 && $category === 'income' => 'income',
+            $amount > 0 && ($category === 'income' || isset($space->settings['income_categories'][$category])) => 'income',
             $amount > 0 => 'refund',
             default => 'expense',
         };
