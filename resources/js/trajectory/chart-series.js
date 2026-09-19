@@ -30,3 +30,28 @@ export function incomeSeries(plan) {
     sameHistorical: plan.history_days > 0 && plan.monthly.every(r => r.expected_income_cents === plan.historical_monthly_cents),
   };
 }
+
+// A cash balance is a stock, so monthly bars use the last available day,
+// never the sum of daily balances. Partial months retain their actual date.
+export function monthlyBalances(daily) {
+  const months=new Map();
+  for(const row of [...daily].sort((a,b)=>a.date.localeCompare(b.date))) months.set(row.date.slice(0,7),row);
+  return [...months.values()];
+}
+
+// Observations and predictions remain distinct, including in the current month.
+// Null means missing evidence, not a zero balance or an inferred past forecast.
+export function actualProjectedBalances(history, daily) {
+  if (!daily.length) return [];
+  const cutoff=daily[0].date;
+  const start=new Date(`${cutoff.slice(0,7)}-01T12:00:00Z`);
+  start.setUTCMonth(start.getUTCMonth()-6);
+  const actual=new Map(monthlyBalances(history.filter(r=>Number.isFinite(r.cash_cents)&&r.date<=cutoff)).map(r=>[r.date.slice(0,7),r]));
+  const projected=new Map(monthlyBalances(daily).map(r=>[r.date.slice(0,7),r]));
+  const end=daily.at(-1).date.slice(0,7),rows=[];
+  for(let cursor=start;cursor.toISOString().slice(0,7)<=end;cursor.setUTCMonth(cursor.getUTCMonth()+1)) {
+    const month=cursor.toISOString().slice(0,7);
+    rows.push({month,actual:actual.get(month)??null,projected:projected.get(month)??null});
+  }
+  return rows;
+}

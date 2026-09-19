@@ -354,3 +354,25 @@ Design reference: Shopify's Polaris Viz article documents consistent themes and
 accessible contrast (https://shopify.engineering/react-library-consistent-data-visualization).
 The implementation retains Everbranch's Chart.js infrastructure and has no new
 chart-provider dependency or external financial-data transmission.
+
+### Monthly views and unexpected expenses (2026-09-19)
+
+Looking Ahead is the first dashboard panel. Its keyboard-navigable tabs separate
+Trend lines, Month by month (projected closing balances and monthly income rates),
+and Actual vs. projected (recorded cash snapshots beside future closing estimates).
+The comparison includes six prior calendar months and the selected forward horizon.
+Current-month actuals are last observed balances; predictions are not added to them.
+These are current forward estimates, not archived forecasts. Missing observations
+stay null, including whole missing months. First/last forecast months can be partial;
+bar drilldowns expose exact observation/projection dates. No balance is summed over days.
+
+Biggest unexpected expenses uses the month containing the report's end date, capped
+at today, and ranks the five largest posted, allocated Face Punched expense/medical
+charges. Its total covers all matching charges, before refunds. Transfers, pending,
+removed records and ordinary unflagged expenses are excluded. View-all and per-row
+links use the existing authorized transaction evidence and back navigation.
+
+Validation adds month-end/leap-day/partial-month and actual-versus-projected JS
+fixtures, plus backend month selection, ranking, import replay, excluded flows,
+and shared-allocation privacy tests. Check all three tabs at desktop/mobile widths,
+chart tables/bar details, the card's empty state and transaction return path.
