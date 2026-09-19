@@ -162,7 +162,7 @@ class DashboardService
         }
         usort($bills, fn ($a, $b) => strcmp($a['date'], $b['date']));
         $spending = $selected->whereIn('flow', ['expense', 'refund', 'medical_payment', 'medical_membership']);
-        $incomeSources = app(IncomeSourceService::class)->summarize($selected);
+        $incomeSources = app(IncomeSourceService::class)->summarize($selected, $space->settings['income_categories'] ?? []);
         $income = $incomeSources['earned_income_cents'];
         $categories = $spending->groupBy('category')->map(fn ($rows, $category) => ['category' => $category, 'amount_cents' => -(int) $rows->sum('amount_cents'), 'ids' => $rows->pluck('id')->all()])->values()->all();
         $dailySeries = $selected->groupBy('date')->map(function ($rows, $date): array {
@@ -215,7 +215,7 @@ class DashboardService
             'summary' => ['income_cents' => (int) $income, 'spending_cents' => -(int) $spending->sum('amount_cents'), 'cash_cents' => $cash, 'net_worth_cents' => $assetTotal - $liabilities, 'net_worth_complete' => $netComplete, 'assets_cents' => $assetTotal, 'liabilities_cents' => $liabilities, 'review_count' => $entries->where('reviewed', false)->count(), 'selected_interest_cents' => $interestService->total($interest, $interestStatements, $start->toDateString(), $end->toDateString()), 'ytd_interest_cents' => $interestService->total($interest, $interestStatements, $today->startOfYear()->toDateString(), $today->toDateString()), 'recorded_interest_cents' => $interestService->total($interest, $interestStatements), 'projected_interest_cents' => count($forecastDebts) > count($debts) || collect($debtRows)->contains(fn ($d) => $d['projection']['interest_cents'] === null) ? null : (int) collect($debtRows)->sum(fn ($d) => $d['projection']['interest_cents'])],
             'coverage' => ['history_days' => $days, 'provisional' => $days < 90 || count($blockers) > 0, 'blockers' => $blockers, 'history_start' => $historyStart?->toDateString()],
             'accounts' => $accounts->map(fn ($a) => $a->only(['id', 'name', 'kind', 'connection_id', 'balance_cents', 'history_start', 'observed_at']))->all(),
-            'connections' => Connection::where('space_id', $space->id)->get()->map(fn ($c) => $c->only(['id', 'status', 'institution_name', 'synced_at']))->all(),
+            'connections' => Connection::where(fn ($q) => $q->where('space_id', $space->id)->orWhereIn('id', $accounts->pluck('connection_id')->filter()))->get()->map(fn ($c) => [...$c->only(['id', 'status', 'institution_name', 'synced_at']), 'managed_here' => $c->space_id === $space->id])->all(),
             'medical' => $space->kind === 'household' ? $medical : null,
             'interest_by_account' => $interestByAccount, 'interest_statements' => $interestStatements,
             'commitments' => app(CommitmentsService::class)->summary($records, $entries, $accounts, $today),
@@ -226,6 +226,9 @@ class DashboardService
             'transactions' => $selected->reverse()->values()->all(),
             'review_transactions' => $entries->where('reviewed', false)->reverse()->take(250)->values()->all(),
             'review_suggestions' => app(ReviewSuggestionService::class)->forEntries($entries),
+            'anomalies' => app(AnomalyService::class)->detect($space, $entries),
+            'planning' => app(PlanningService::class)->build($space, $entries, $records, $accounts, $start, $end, $baseline),
+            'tax_review' => app(TaxReviewService::class)->review($space, $selected, $records),
             'income_sources' => $incomeSources,
             'categories' => $categories, 'daily_series' => $dailySeries,
             'debt_suggestions' => app(PlaidService::class)->debtSuggestions($space), 'forecast' => $baseline, 'comparison' => $comparison, 'bills' => $bills, 'goals' => $goals, 'debts' => $debtRows, 'assets' => $assets, 'metals' => $metals, 'quotes' => $quotes,
@@ -239,7 +242,8 @@ class DashboardService
                 'discretionary_categories' => $space->settings['discretionary_categories'] ?? config('trajectory.discretionary_defaults'),
                 'pending_bank_connections' => $space->settings['pending_bank_connections'] ?? [],
             ],
-            'definitions' => config('trajectory_records'), 'category_options' => config('trajectory.categories'),
+            'definitions' => config('trajectory_records'), 'category_options' => app(WorkspaceService::class)->categories($space),
+            'workspace_settings' => array_intersect_key($space->settings ?? [], array_flip(['income_categories', 'income_expectations', 'tax_profile', 'flexible_monthly_cents', 'debt_extra_cents', 'debt_target_months'])),
         ];
     }
 
@@ -305,6 +309,6 @@ class DashboardService
             }
         }
 
-        return ['ledger' => $ledger, 'channels' => $channels, 'payroll' => $payroll->all(), 'materials' => $materials, 'insights' => $insights, 'reliance' => app(ProjectionService::class)->reliance($records->where('kind', 'reliance')->last()?->data ?? [])];
+        return ['profit_loss' => app(TaxReviewService::class)->profitLoss(collect(app(LedgerService::class)->entries($space, $start->toDateString(), $end->toDateString())), $ledger), 'ledger' => $ledger, 'channels' => $channels, 'payroll' => $payroll->all(), 'materials' => $materials, 'insights' => $insights, 'reliance' => app(ProjectionService::class)->reliance($records->where('kind', 'reliance')->last()?->data ?? [])];
     }
 }

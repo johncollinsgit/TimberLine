@@ -24,7 +24,7 @@ test('income source summary separates company support, metals, loan proceeds, an
 
     expect($summary['earned_income_cents'])->toBe(120000)
         ->and($sources['Company support']['amount_cents'])->toBe(120000)
-        ->and($sources['Gold & silver sales']['amount_cents'])->toBe(832000)
+        ->and($sources['Asset sales']['amount_cents'])->toBe(832000)
         ->and($sources['Loan draws']['amount_cents'])->toBe(1500000)
         ->and($sources['Transfers']['amount_cents'])->toBe(40000)
         ->and($sources['Deposits needing purpose']['amount_cents'])->toBe(500000);

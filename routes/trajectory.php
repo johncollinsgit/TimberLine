@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Trajectory\PlanningController as Planning;
 use App\Http\Controllers\Trajectory\TrajectoryController as Trajectory;
 use Illuminate\Support\Facades\Route;
 
@@ -7,8 +8,16 @@ Route::get('/trajectory/welcome', fn () => view('trajectory.welcome'))->name('tr
 
 Route::middleware(['auth', 'verified', 'throttle:120,1'])->prefix('trajectory')->group(function (): void {
     Route::get('/', [Trajectory::class, 'index'])->name('trajectory.index');
+    Route::get('/businesses', [Planning::class, 'businesses']);
+    Route::post('/businesses', [Planning::class, 'addBusiness']);
     Route::post('/invites/accept', [Trajectory::class, 'acceptInvite'])->name('trajectory.acceptInvite');
     Route::prefix('/spaces/{space}')->whereNumber('space')->group(function (): void {
+        Route::patch('/workspace', [Planning::class, 'settings']);
+        Route::post('/accounts/{account}/assign', [Planning::class, 'assign']);
+        Route::post('/transactions/{transaction}/anomaly', [Planning::class, 'anomaly']);
+        Route::get('/banks/{connection}/accounts', [Planning::class, 'bankAccounts'])->middleware('throttle:10,1');
+        Route::post('/banks/{connection}/accounts', [Planning::class, 'mapBankAccounts'])->middleware('throttle:10,1');
+        Route::post('/bud', [Planning::class, 'bud'])->middleware('throttle:15,1');
         Route::get('/reconciliation', [Trajectory::class, 'reconciliation'])->name('trajectory.reconciliation');
         Route::post('/reconciliation', [Trajectory::class, 'reconcile'])->name('trajectory.reconcile');
         Route::get('/combined', [Trajectory::class, 'combined'])->name('trajectory.combined');
