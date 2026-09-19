@@ -42,10 +42,12 @@ export function outlookUI({getData,esc,money,precise,date,plot,chart,line,btn,di
     if(data.comparison)sets.push({...line('What-if · available',series.comparison,'#b86a2d'),borderDash:[3,4]});
     if(view==='comparison') {
       const months=actualProjectedBalances(data.net_worth_history,rows);
+      const scenarioMonths=new Map(monthlyBalances((data.comparison?.daily||[]).slice(0,horizon)).map(r=>[r.date.slice(0,7),r]));
       const bars=[bar('Actual · last recorded',months.map(r=>r.actual?.cash_cents??null),'#273b49'),bar('Projected · month end',months.map(r=>r.projected?.cash_cents??null),'#69a99f')];
+      if(data.comparison)bars.push(bar('What-if · month end',months.map(r=>scenarioMonths.get(r.month)?.cash_cents??null),'#b86a2d'));
       chart('tr-forecast','bar',months.map(r=>month(`${r.month}-01`)),bars,i=>{
-        const row=months[i];
-        dialog(`Actual vs. projected · ${month(`${row.month}-01`)}`,`<div class="tr-block"><div class="tr-row">Actual cash${row.actual?` · ${date(row.actual.date)}`:''}<strong>${row.actual?precise(row.actual.cash_cents):'No recorded balance'}</strong></div><div class="tr-row">Projected cash${row.projected?` · ${date(row.projected.date)}`:''}<strong>${row.projected?precise(row.projected.cash_cents):'No forward estimate'}</strong></div><p class="tr-subtle">Balances are snapshots, not income or spending totals. A midmonth observation is not a completed month. Forward estimates use the current forecast; no past prediction is inferred.</p><div class="tr-actions">${jump('Review accounts','accounts')}</div></div>`,null);
+        const row=months[i],scenario=scenarioMonths.get(row.month);
+        dialog(`Actual vs. projected · ${month(`${row.month}-01`)}`,`<div class="tr-block"><div class="tr-row">Actual cash${row.actual?` · ${date(row.actual.date)}`:''}<strong>${row.actual?precise(row.actual.cash_cents):'No recorded balance'}</strong></div><div class="tr-row">Projected cash${row.projected?` · ${date(row.projected.date)}`:''}<strong>${row.projected?precise(row.projected.cash_cents):'No forward estimate'}</strong></div>${scenario?`<div class="tr-row">What-if cash · ${date(scenario.date)}<strong>${precise(scenario.cash_cents)}</strong></div>`:''}<p class="tr-subtle">Balances are snapshots, not income or spending totals. A midmonth observation is not a completed month. Forward estimates use the current forecast; no past prediction is inferred.</p><div class="tr-actions">${jump('Review accounts','accounts')}</div></div>`,null);
       },{beginAtZero:true});
       return;
     }
