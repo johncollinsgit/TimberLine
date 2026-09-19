@@ -187,3 +187,13 @@ test('shared bank logins stage new accounts until ownership is explicitly assign
     $stranger = User::factory()->create(['is_active' => true, 'email_verified_at' => now()]);
     $this->actingAs($stranger)->getJson("/trajectory/spaces/{$this->space->id}/banks/{$connection->id}/accounts")->assertForbidden();
 });
+
+test('financial colleagues cannot reconnect or revoke another persons shared bank login', function () {
+    $business = ($this->business)('bank-owner-controls');
+    $connection = Connection::create(['space_id' => $business->id, 'external_id' => 'private-owner-item', 'access_token' => 'test', 'status' => 'connected', 'coverage' => ['owner_user_id' => $this->owner->id]]);
+    $admin = User::factory()->create(['is_active' => true, 'email_verified_at' => now()]);
+    $admin->tenants()->attach($business->tenant_id, ['role' => 'admin', 'membership_active' => true]);
+    $this->actingAs($admin)->postJson("/trajectory/spaces/{$business->id}/banks/link", ['connection_id' => $connection->id])->assertForbidden();
+    $this->deleteJson("/trajectory/spaces/{$business->id}/banks/{$connection->id}")->assertForbidden();
+    $this->getJson("/trajectory/spaces/{$business->id}/banks/{$connection->id}/accounts")->assertForbidden();
+});

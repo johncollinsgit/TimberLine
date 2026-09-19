@@ -265,6 +265,9 @@ class TrajectoryController extends Controller
         $access->authorize($request->user(), $space);
         $request->validate(['connection_id' => 'nullable|integer']);
         $connection = $request->input('connection_id') ? Connection::where('space_id', $space->id)->findOrFail($request->input('connection_id')) : null;
+        if ($connection) {
+            abort_unless(($connection->coverage['owner_user_id'] ?? $space->owner_user_id) === $request->user()->id, 403, 'Only the bank connection owner can reconnect a shared login.');
+        }
         // A disconnected Item has had its provider token revoked. Start a fresh
         // Link session instead of silently attempting an invalid update session.
         if ($connection?->status === 'disconnected') {
@@ -303,6 +306,7 @@ class TrajectoryController extends Controller
     {
         $access->authorize($request->user(), $space);
         abort_unless($connection->space_id === $space->id, 404);
+        abort_unless(($connection->coverage['owner_user_id'] ?? $space->owner_user_id) === $request->user()->id, 403, 'Only the bank connection owner can disconnect a shared login.');
         $plaid->call('/item/remove', ['access_token' => $connection->access_token]);
         $connection->update(['status' => 'disconnected', 'access_token' => '']);
 
