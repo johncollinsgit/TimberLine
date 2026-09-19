@@ -1,5 +1,15 @@
 # START HERE
 
+## Trajectory financial outlook charts (2026-09-19)
+
+The main dashboard now pairs the daily cash outlook with monthly expected-income,
+income-needed, and reviewed-history lines. `outlook.js` consumes existing scoped
+forecast and planning payloads; the monthly income plan remains distinct from daily
+bill timing. `chart-theme.js` provides shared accessible HTML legends, light tooltips,
+and compact currency axes. `chart-series.js` joins projection paths to the last
+observed cash point without adding observed records. Currency remains integer cents.
+See `docs/operations/trajectory-runbook.md` for chart validation.
+
 ## Fleet map Bouncie recovery (2026-09-16)
 
 - Mobile crew-map reads now refresh the connected tenant's mapped company-vehicle positions from Bouncie at most every 30 seconds, with a tenant lock and safe connection-health metadata. Existing positions survive provider outages, subject to the configured retention window. Snapshots retain the provider timestamp and are identified as last-known positions, never a new GPS fix.

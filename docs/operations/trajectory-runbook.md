@@ -329,3 +329,28 @@ exceptions, private categories, expected income, shared debt budgets, persistent
 Plaid account ownership, scope denial, P&L precedence, and combined period bounds.
 No database migration is added. The existing release and migration-safety gates
 remain mandatory. Rollback disables the Branch and preserves all records.
+
+## Dashboard chart presentation (2026-09-19)
+
+The financial outlook shows cash balances and monthly income rates on separate,
+explicitly labeled charts. The income chart uses PlanningService monthly amounts,
+not gross deposits, borrowed cash, or asset-sale proceeds. Historical and expected
+income may coincide; the caption explains the overlap. Missing history stays
+unavailable. Changing an income override changes the monthly plan; it does not
+silently mutate the existing daily cash forecast. Cash scenarios are labeled apart.
+
+The cash chart offers 30/90/365-day horizons, shares its first projection segment
+with the last observed cash balance, and marks the projection boundary. Coincident
+cash/available series collapse into one labeled line. Assumptions remain available
+in an expandable section. HTML legend buttons support keyboard toggles and retain
+focus; data tables and point drilldowns remain accessible with the return path.
+
+Validation: `npm run test:trajectory` includes anchor continuity, missing/zero
+observations, scenario gaps, and monthly-rate fixtures. Run `npm run build` and
+Trajectory feature tests. Visually check desktop/mobile, legend toggles, horizons,
+income editing, evidence navigation, chart tables and tooltips before release.
+
+Design reference: Shopify's Polaris Viz article documents consistent themes and
+accessible contrast (https://shopify.engineering/react-library-consistent-data-visualization).
+The implementation retains Everbranch's Chart.js infrastructure and has no new
+chart-provider dependency or external financial-data transmission.
