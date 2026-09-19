@@ -1,7 +1,10 @@
-import { cashTimeline, incomeSeries, monthlyBalances, actualProjectedBalances } from './chart-series.js';
+import { cashTimeline, incomeSeries, monthlyBalances, actualProjectedBalances, incomeRunwaySeries } from './chart-series.js';
 
 export function outlookUI({getData,esc,money,precise,date,plot,chart,line,btn,dialog,evidence,forecastDetail}) {
-  let horizon=365,view='lines';
+  // The initial question is whether expected income will cover upcoming cash
+  // needs. The cash-balance trend remains available, but does not lead with a
+  // "runway" that assumes a large opening balance.
+  let horizon=365,view='bars',monthlyView='runway',incomeSource='last-year';
   const month=d=>new Date(`${d}T12:00:00`).toLocaleDateString('en-US',{month:'short',year:'numeric'});
   const jump=(label,view)=>btn(label,'plan-nav',`data-view="${view}"`);
   function html(scenarioId,seasonal) {
@@ -9,6 +12,11 @@ export function outlookUI({getData,esc,money,precise,date,plot,chart,line,btn,di
     const end=data.forecast.daily.slice(0,horizon).at(-1);
     const availableSame=data.forecast.daily.every(r=>r.cash_cents===r.available_cents);
     const gap=(p?.required_monthly_cents||0)-(p?.expected_monthly_cents||0);
+    const runway=incomeRunwaySeries(data.income_runway||[],incomeSource);
+    const expectedIncome=runway.projected.reduce((sum,value)=>sum+(value??0),0);
+    const expectedOutflows=runway.outflows.reduce((sum,value)=>sum+value,0);
+    const firstIncomeGap=(data.income_runway||[]).find((row,index)=>runway.gaps[index]!==null&&runway.gaps[index]<0);
+    const incomeSourceLabel={"last-year":"the same future dates last year",plan:'your current income plan',recent:'recent reviewed income'}[incomeSource];
     return `<section class="tr-panel tr-outlook" aria-labelledby="tr-outlook-title">
       <header class="tr-outlook-header"><div><p class="tr-overline">LOOKING AHEAD</p><h2 id="tr-outlook-title">Your financial outlook</h2><p class="tr-subtle">Your cash outlook and the income it takes to stay on track.</p></div><span class="tr-status">${data.coverage.provisional||p?.provisional?'Provisional · inputs need review':'Based on reviewed inputs'}</span></header>
       ${p?`<div class="tr-outlook-metrics">
@@ -17,13 +25,14 @@ export function outlookUI({getData,esc,money,precise,date,plot,chart,line,btn,di
         <button data-action="plan-costs"><span>${gap>0?'Income gap':'Room in your plan'} <small>/ month</small></span><strong class="${gap>0?'tr-gap':''}">${money(Math.abs(gap))}</strong><em>${gap>0?'More income or lower costs needed':'Income above planned needs'} ↗</em></button>
       </div>`:''}
       <div class="tr-outlook-tabs" role="tablist" aria-label="Outlook chart view">${[['lines','Trend lines'],['bars','Month by month'],['comparison','Actual vs. projected']].map(([key,label])=>`<button id="tr-outlook-${key}" role="tab" aria-selected="${view===key}" aria-controls="tr-outlook-charts" tabindex="${view===key?0:-1}" data-action="outlook-view" data-view="${key}">${label}</button>`).join('')}</div>
-      <div id="tr-outlook-charts" class="tr-outlook-grid ${view==='comparison'?'tr-outlook-comparison':''}" role="tabpanel" aria-labelledby="tr-outlook-${view}">
-        <section class="tr-outlook-cash" aria-labelledby="tr-cash-title"><div class="tr-chart-heading"><div><h3 id="tr-cash-title">${view==='comparison'?'Actual vs. projected cash':view==='bars'?'Cash by month':'Cash outlook'}</h3><p>${view==='comparison'?'Recorded balances and future month-end estimates':view==='bars'?'Projected closing balances':'Balance after bills & spending'} · USD</p></div><div class="tr-horizon" role="group" aria-label="Cash forecast horizon">${[[30,'30D'],[90,'90D'],[365,'1Y']].map(([n,label])=>`<button data-action="forecast-horizon" data-days="${n}" aria-pressed="${horizon===n}">${label}</button>`).join('')}</div></div>
-        ${plot('tr-forecast',view==='comparison'?'Actual and projected monthly cash balances in USD':view==='bars'?'Projected closing cash balances by month in USD':'Observed and projected cash balances in USD','outlook-cash')}
-        <div class="tr-cash-result"><div><span>Available in ${horizon===365?'12 months':horizon+' days'}</span><strong>${money(end?.available_cents)}</strong></div><div><span>First projected shortfall · full year</span><strong>${data.forecast.first_shortfall_on?date(data.forecast.first_shortfall_on):'None projected'}</strong></div></div>
-        <p class="tr-chart-caption">${view==='comparison'?'Actual bars use the last recorded balance in each month, with its date available on selection. The current month compares cash observed so far with its projected closing balance—not two amounts to add together. Missing observations stay blank. These are today’s forward estimates, not archived forecasts.':`${view==='bars'?'Bars use the final projected day in each month; first and last months may be partial. ':''}${availableSame?`Cash and available cash are equal; shown as one ${view==='bars'?'series':'line'}.`:'Available cash subtracts money reserved for goals and medical bills.'}`} Select a ${view==='lines'?'point':'bar'} to see its details.</p>
+      <div id="tr-outlook-charts" class="tr-outlook-grid ${(view==='comparison'||(view==='bars'&&monthlyView==='runway'))?'tr-outlook-comparison':''}" role="tabpanel" aria-labelledby="tr-outlook-${view}">
+        <section class="tr-outlook-cash" aria-labelledby="tr-cash-title"><div class="tr-chart-heading"><div><h3 id="tr-cash-title">${view==='comparison'?'Actual vs. projected cash':view==='bars'?(monthlyView==='runway'?'Income runway':'Cash by month'):'Cash outlook'}</h3><p>${view==='comparison'?'Recorded balances and future month-end estimates':view==='bars'?(monthlyView==='runway'?'Expected income and cash outflows · next 12 months':'Projected closing balances'):'Balance after bills & spending'} · USD</p></div>${view==='bars'&&monthlyView==='runway'?'':`<div class="tr-horizon" role="group" aria-label="Cash forecast horizon">${[[30,'30D'],[90,'90D'],[365,'1Y']].map(([n,label])=>`<button data-action="forecast-horizon" data-days="${n}" aria-pressed="${horizon===n}">${label}</button>`).join('')}</div>`}</div>
+        ${view==='bars'?`<div class="tr-monthly-controls"><div class="tr-segmented" role="group" aria-label="Monthly chart content">${[['runway','Income runway'],['cash','Cash balance']].map(([key,label])=>`<button data-action="monthly-view" data-view="${key}" aria-pressed="${monthlyView===key}">${label}</button>`).join('')}</div>${monthlyView==='runway'?`<div class="tr-segmented" role="group" aria-label="Projected income source">${[['last-year','Same time last year'],['plan','Current income plan'],['recent','Recent reviewed income']].map(([key,label])=>`<button data-action="income-source" data-source="${key}" aria-pressed="${incomeSource===key}">${label}</button>`).join('')}</div>`:''}</div>`:''}
+        ${plot('tr-forecast',view==='comparison'?'Actual and projected monthly cash balances in USD':view==='bars'?(monthlyView==='runway'?'Projected income, same-period-last-year income, and expected cash outflows in USD':'Projected closing cash balances by month in USD'):'Observed and projected cash balances in USD','outlook-cash')}
+        <div class="tr-cash-result">${view==='bars'&&monthlyView==='runway'?`<div><span>Projected income · next 12 months</span><strong>${money(expectedIncome)}</strong></div><div><span>Expected cash outflows · next 12 months</span><strong>${money(expectedOutflows)}</strong></div><div><span>First income gap</span><strong>${firstIncomeGap?date(firstIncomeGap.date):'None projected'}</strong></div>`:`<div><span>Available in ${horizon===365?'12 months':horizon+' days'}</span><strong>${money(end?.available_cents)}</strong></div><div><span>First projected shortfall · full year</span><strong>${data.forecast.first_shortfall_on?date(data.forecast.first_shortfall_on):'None projected'}</strong></div>`}</div>
+        <p class="tr-chart-caption">${view==='bars'&&monthlyView==='runway'?`Projected income currently uses ${incomeSourceLabel}. Change its source to compare the other evidence. Outflows include scheduled bills, debt payments, and estimated cash spending; transfers, asset sales, loan draws, and goal reserves are kept separate. This comparison does not silently add a new income assumption to the cash-balance forecast.`:view==='comparison'?'Actual bars use the last recorded balance in each month, with its date available on selection. The current month compares cash observed so far with its projected closing balance—not two amounts to add together. Missing observations stay blank. These are today’s forward estimates, not archived forecasts.':`${view==='bars'?'Bars use the final projected day in each month; first and last months may be partial. ':''}${availableSame?`Cash and available cash are equal; shown as one ${view==='bars'?'series':'line'}.`:'Available cash subtracts money reserved for goals and medical bills.'}`} Select a ${view==='lines'?'point':'bar'} to see its details.</p>
         </section>
-        ${p&&view!=='comparison'?`<section class="tr-outlook-income" aria-labelledby="tr-income-title"><div class="tr-chart-heading"><div><h3 id="tr-income-title">Income vs. what you need</h3><p>Monthly rate · next 12 months · USD</p></div></div>
+        ${p&&view!=='comparison'&&!(view==='bars'&&monthlyView==='runway')?`<section class="tr-outlook-income" aria-labelledby="tr-income-title"><div class="tr-chart-heading"><div><h3 id="tr-income-title">Income vs. what you need</h3><p>Monthly rate · next 12 months · USD</p></div></div>
         ${plot('tr-income-needs','Expected monthly income, income needed and reviewed historical income in USD','outlook-income')}
         <p class="tr-chart-caption">${incomeSeries(p).sameHistorical?(view==='bars'?'Expected income currently equals your historical average; their bars have the same height.':'Expected income currently equals your historical average. The dashed baseline shares the same path.'):'Expected income includes your source adjustments; the historical baseline uses reviewed income.'} Monthly rates stay flat until you change the plan.</p>
         <div class="tr-income-actions">${btn('Edit expected income','plan-income')}${jump('See cost breakdown','planning')}</div>
@@ -52,6 +61,19 @@ export function outlookUI({getData,esc,money,precise,date,plot,chart,line,btn,di
       return;
     }
     if(view==='bars') {
+      if(monthlyView==='runway') {
+        const rows=data.income_runway||[],runway=incomeRunwaySeries(rows,incomeSource);
+        const sourceLabel={"last-year":"Same-time-last-year income",plan:'Current income plan',recent:'Recent reviewed income'}[incomeSource];
+        chart('tr-forecast','bar',rows.map(row=>month(row.date)),[
+          {...bar('Expected cash outflows',runway.outflows,'#b45b31'),order:3},
+          {...line('Projected income',runway.projected,'#187a70'),type:'line',order:1,pointRadius:3},
+          {...line('Income · same time last year',runway.lastYear,'#566c93'),type:'line',borderDash:[4,4],order:2,pointRadius:2},
+        ],i=>{
+          const row=rows[i],income=runway.projected[i],gap=runway.gaps[i];
+          dialog(`Income runway · ${month(row.date)}`,`<div class="tr-block"><div class="tr-row">Projected income · ${sourceLabel}<strong>${income===null?'No estimate':precise(income)}</strong></div><div class="tr-row">Income · same time last year<strong>${row.last_year_income_cents===null?'No recorded history':precise(row.last_year_income_cents)}</strong></div><div class="tr-row">Expected cash outflows<strong>${precise(row.outflow_cents)}</strong></div><div class="tr-row">Income after expected outflows<strong class="${gap!==null&&gap<0?'tr-gap':''}">${gap===null?'Needs income history':precise(gap)}</strong></div><p class="tr-subtle">${date(row.from)} – ${date(row.through)} compared with the same dates last year. Outflows are bills, debt payments, and estimated cash spending. They do not include transfers, loan draws, asset sales, or savings reserves.</p><div class="tr-actions">${row.last_year_income_ids?.length?btn('View last-year income','plan-evidence',`data-ids="${esc(JSON.stringify(row.last_year_income_ids))}"`):''}${jump('Edit expected income','planning')}</div></div>`,null);
+        },{beginAtZero:true});
+        return;
+      }
       const months=monthlyBalances(rows),comparison=new Map((data.comparison?.daily||[]).map(r=>[r.date,r]));
       const bars=[bar(series.sameAvailable?'Projected cash · available':'Projected cash',months.map(r=>r.cash_cents),'#187a70')];
       if(!series.sameAvailable)bars.push(bar('Available after reserves',months.map(r=>r.available_cents),'#5365b8'));
@@ -72,5 +94,5 @@ export function outlookUI({getData,esc,money,precise,date,plot,chart,line,btn,di
     },{beginAtZero:true});
   }
   const bar=(label,values,color)=>({label,data:values,backgroundColor:color,borderColor:color,borderRadius:3,maxBarThickness:24});
-  return {html,draw,setView(value){if(['lines','bars','comparison'].includes(value))view=value;},setHorizon(value){if([30,90,365].includes(value))horizon=value;}};
+  return {html,draw,setView(value){if(['lines','bars','comparison'].includes(value))view=value;},setMonthlyView(value){if(['runway','cash'].includes(value))monthlyView=value;},setIncomeSource(value){if(['last-year','plan','recent'].includes(value))incomeSource=value;},setHorizon(value){if([30,90,365].includes(value))horizon=value;}};
 }

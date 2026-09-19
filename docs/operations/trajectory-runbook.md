@@ -358,8 +358,16 @@ chart-provider dependency or external financial-data transmission.
 ### Monthly views and unexpected expenses (2026-09-19)
 
 Looking Ahead is the first dashboard panel. Its keyboard-navigable tabs separate
-Trend lines, Month by month (projected closing balances and monthly income rates),
-and Actual vs. projected (recorded cash snapshots beside future closing estimates).
+Trend lines, Month by month, and Actual vs. projected (recorded cash snapshots
+beside future closing estimates). Month by month defaults to Income runway:
+projected income from matching future dates last year, an explicit matching-period
+income reference line, and expected cash-outflow bars. The income-source control
+can instead use the editable income plan or recent reviewed-income baseline.
+Outflows include scheduled bills, debt payments, and estimated cash spending;
+they exclude transfers, asset sales, loan draws, and savings/medical reserves.
+Choosing an income source is a comparison only: it does not silently insert the
+assumption into the daily cash forecast. Cash balance remains an explicit monthly
+mode using projected closing balances and monthly income rates.
 The comparison includes six prior calendar months and the selected forward horizon.
 Current-month actuals are last observed balances; predictions are not added to them.
 These are current forward estimates, not archived forecasts. Missing observations
@@ -372,7 +380,9 @@ charges. Its total covers all matching charges, before refunds. Transfers, pendi
 removed records and ordinary unflagged expenses are excluded. View-all and per-row
 links use the existing authorized transaction evidence and back navigation.
 
-Validation adds month-end/leap-day/partial-month and actual-versus-projected JS
-fixtures, plus backend month selection, ranking, import replay, excluded flows,
-and shared-allocation privacy tests. Check all three tabs at desktop/mobile widths,
-chart tables/bar details, the card's empty state and transaction return path.
+Validation adds month-end/leap-day/partial-month, actual-versus-projected, and
+income-runway source/gap JS fixtures, plus backend cash-flow breakdown, matching
+prior-year income evidence, month selection, ranking, import replay, excluded
+flows, and shared-allocation privacy tests. Check all three tabs at desktop/mobile
+widths, source controls, chart tables/bar details, the card's empty state and
+transaction return path.

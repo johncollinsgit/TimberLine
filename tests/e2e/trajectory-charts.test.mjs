@@ -68,3 +68,21 @@ test('actual vs projected keeps current-month observations distinct and missing 
   assert.equal(rows.find(r=>r.month==='2027-12').actual,null);
   assert.deepEqual(actualProjectedBalances([],[]),[]);
 });
+
+test('income runway keeps outflows distinct and defaults the projection to matching prior-year income', async()=>{
+  const { incomeRunwaySeries }=await import('../../resources/js/trajectory/chart-series.js');
+  const rows=[
+    {date:'2026-09-30',last_year_income_cents:800000,plan_income_cents:600000,recent_income_cents:500000,outflow_cents:700000},
+    {date:'2026-10-31',last_year_income_cents:null,plan_income_cents:650000,recent_income_cents:500000,outflow_cents:550000},
+  ];
+  const previous=incomeRunwaySeries(rows);
+  assert.deepEqual(previous.projected,[800000,null]);
+  assert.deepEqual(previous.lastYear,[800000,null]);
+  assert.deepEqual(previous.outflows,[700000,550000]);
+  assert.deepEqual(previous.gaps,[100000,null]);
+  assert.equal(previous.sameAsLastYear,true);
+  const plan=incomeRunwaySeries(rows,'plan');
+  assert.deepEqual(plan.projected,[600000,650000]);
+  assert.deepEqual(plan.gaps,[-100000,100000]);
+  assert.equal(plan.sameAsLastYear,false);
+});

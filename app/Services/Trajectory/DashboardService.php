@@ -176,6 +176,30 @@ class DashboardService
 
             return ['date' => $date, 'income_cents' => $income, 'spending_cents' => -(int) $rows->whereIn('flow', ['expense', 'refund', 'medical_payment', 'medical_membership'])->sum('amount_cents')];
         })->values()->all();
+        $planning = app(PlanningService::class)->build($space, $entries, $records, $accounts, $start, $end, $baseline);
+        $incomeService = app(IncomeSourceService::class);
+        $incomeRunway = collect($baseline['daily'])->groupBy(fn (array $row) => substr($row['date'], 0, 7))->map(function ($rows) use ($entries, $incomeService, $space, $planning): array {
+            $first = CarbonImmutable::parse($rows->min('date'), $space->timezone);
+            $last = CarbonImmutable::parse($rows->max('date'), $space->timezone);
+            $prior = $entries->where('date', '>=', $first->subYearNoOverflow()->toDateString())
+                ->where('date', '<=', $last->subYearNoOverflow()->toDateString())->values();
+            $priorIncome = $incomeService->summarize($prior, $space->settings['income_categories'] ?? []);
+            $priorIncomeIds = collect($priorIncome['sources'])->where('counts_as_income', true)->pluck('ids')->flatten()->values()->all();
+
+            return [
+                'date' => $last->toDateString(),
+                'from' => $first->toDateString(),
+                'through' => $last->toDateString(),
+                'outflow_cents' => (int) $rows->sum('outflow_cents'),
+                'recent_income_cents' => (int) $rows->sum('income_cents'),
+                'plan_income_cents' => Money::ratio($planning['expected_monthly_cents'], $first->diffInDays($last) + 1, $last->daysInMonth),
+                // No row means unavailable history; zero means a reviewed period
+                // with no earned income. Never turn missing history into income.
+                'last_year_income_cents' => $prior->isEmpty() ? null : $priorIncome['earned_income_cents'],
+                'last_year_income_ids' => $priorIncomeIds,
+                'has_last_year_evidence' => $prior->isNotEmpty(),
+            ];
+        })->values()->all();
         $interestStatements = $plans('interest_statement');
         $interestService = app(InterestService::class);
         $interest = $entries->where('category', 'interest')->where('flow', 'expense');
@@ -234,7 +258,8 @@ class DashboardService
             'review_transactions' => $entries->where('reviewed', false)->reverse()->take(250)->values()->all(),
             'review_suggestions' => app(ReviewSuggestionService::class)->forEntries($entries),
             'anomalies' => app(AnomalyService::class)->detect($space, $entries),
-            'planning' => app(PlanningService::class)->build($space, $entries, $records, $accounts, $start, $end, $baseline),
+            'planning' => $planning,
+            'income_runway' => $incomeRunway,
             'tax_review' => app(TaxReviewService::class)->review($space, $selected, $records),
             'income_sources' => $incomeSources,
             'categories' => $categories, 'daily_series' => $dailySeries,

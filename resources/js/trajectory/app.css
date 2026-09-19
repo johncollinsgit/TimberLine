@@ -58,6 +58,10 @@
 .tr-horizon{display:flex;border:1px solid #e0e6eb;border-radius:6px;padding:3px;gap:2px}
 .tr-app .tr-horizon button{border:0;border-radius:4px;padding:5px 8px;font-size:11px;color:#667985;background:transparent;min-height:28px}
 .tr-app .tr-horizon button[aria-pressed=true]{background:#eaf0f3;color:#253d49;font-weight:650}
+.tr-monthly-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:-2px 0 16px;flex-wrap:wrap}
+.tr-segmented{display:inline-flex;max-width:100%;overflow-x:auto;padding:3px;border:1px solid #e0e6eb;border-radius:7px;background:#fbfcfd}
+.tr-app .tr-segmented button{white-space:nowrap;flex-shrink:0;border:0;border-radius:4px;padding:6px 9px;min-height:29px;background:transparent;color:#667985;font-size:11px;font-weight:550}
+.tr-app .tr-segmented button[aria-pressed=true]{background:#e6f0ed;color:#195b54;font-weight:650}
 .trajectory-site .tr-chart.outlook-cash,.trajectory-site .tr-chart.outlook-income{height:290px}
 .tr-cash-result{display:flex;flex-wrap:wrap;gap:24px;border-top:1px solid #e7ecef;margin-top:18px;padding-top:16px}
 .tr-cash-result span{display:block;font-size:11px;color:#6b7b85}.tr-cash-result strong{font-size:20px;letter-spacing:-.4px;display:block;margin-top:4px;color:#253d49;font-weight:600}
@@ -69,7 +73,7 @@
 .tr-assumptions summary{cursor:pointer;font-weight:550;color:#48616d;min-height:24px}.tr-assumptions ul{padding-left:20px;max-width:1000px}.tr-assumptions li{margin:8px 0}
 @media(min-width:2000px){.trajectory-site .tr-chart.outlook-cash,.trajectory-site .tr-chart.outlook-income{height:340px}}
 @media(max-width:1250px){.tr-outlook-grid{grid-template-columns:1fr}.tr-outlook-income{padding:26px 0 0;border-left:0;border-top:1px solid #e7ecef}.tr-outlook-header{flex-wrap:wrap}.tr-outlook-controls{align-items:flex-start;flex-direction:column}.tr-outlook-controls p{max-width:none}}
-@media(max-width:700px){.tr-outlook-header,.tr-outlook-grid{padding:20px}.trajectory-site .tr-outlook h2{font-size:21px}.tr-outlook-metrics{margin:0 20px;grid-template-columns:1fr}.tr-app .tr-outlook-metrics button{padding:16px 0;border:0;border-bottom:1px solid #e7ecef}.tr-app .tr-outlook-metrics button:last-child{border-bottom:0}.tr-outlook-metrics strong{font-size:27px}.tr-outlook-controls,.tr-assumptions{padding:16px 20px}.tr-chart-heading{flex-wrap:wrap;min-height:60px}.tr-chart-legend{gap:4px 16px}.tr-app .tr-chart-legend button{font-size:11px}.tr-tooltip-row{gap:12px}.tr-outlook-controls .tr-actions{flex-wrap:wrap}.trajectory-site .tr-chart.outlook-cash,.trajectory-site .tr-chart.outlook-income{height:250px}}
+@media(max-width:700px){.tr-outlook-header,.tr-outlook-grid{padding:20px}.trajectory-site .tr-outlook h2{font-size:21px}.tr-outlook-metrics{margin:0 20px;grid-template-columns:1fr}.tr-app .tr-outlook-metrics button{padding:16px 0;border:0;border-bottom:1px solid #e7ecef}.tr-app .tr-outlook-metrics button:last-child{border-bottom:0}.tr-outlook-metrics strong{font-size:27px}.tr-outlook-controls,.tr-assumptions{padding:16px 20px}.tr-chart-heading{flex-wrap:wrap;min-height:60px}.tr-chart-legend{gap:4px 16px}.tr-app .tr-chart-legend button{font-size:11px}.tr-tooltip-row{gap:12px}.tr-outlook-controls .tr-actions{flex-wrap:wrap}.tr-monthly-controls{align-items:stretch;gap:8px}.tr-segmented{width:100%}.trajectory-site .tr-chart.outlook-cash,.trajectory-site .tr-chart.outlook-income{height:250px}}
 
 .tr-outlook-tabs{display:flex;gap:20px;margin:18px 28px 0;border-bottom:1px solid #e7ecef}
 .tr-app .tr-outlook-tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;padding:12px 2px;background:transparent;color:#657984;font-size:13px}

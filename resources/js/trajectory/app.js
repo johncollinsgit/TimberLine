@@ -348,6 +348,8 @@ function boot() {
     const a=target.dataset.action,id=Number(target.dataset.id),spaceId=Number(target.dataset.spaceId)||active,r=data?.records.find(r=>r.id===id),tx=[...(evidenceRows||[]),...(data?.review_transactions||[]),...(data?.transactions||[])].find(t=>t.id===id&&(!target.dataset.spaceId||(t.space_id||active)===spaceId));
     try {
       if(a==='outlook-view'){outlook.setView(target.dataset.view);render();root.querySelector('.tr-outlook-tabs [aria-selected="true"]')?.focus({preventScroll:true});return;}
+      if(a==='monthly-view'){outlook.setMonthlyView(target.dataset.view);render();root.querySelector('.tr-monthly-controls [aria-pressed="true"]')?.focus({preventScroll:true});return;}
+      if(a==='income-source'){outlook.setIncomeSource(target.dataset.source);render();root.querySelector('.tr-monthly-controls [aria-pressed="true"]')?.focus({preventScroll:true});return;}
       if(a==='forecast-horizon'){outlook.setHorizon(Number(target.dataset.days));render();root.querySelector('.tr-horizon [aria-pressed="true"]')?.focus({preventScroll:true});return;}
       if(await planning.handle(a,target))return;
       if(['overview','accounts','history','budget','bills','assets','business','medical'].includes(a)){navigate(a);}
