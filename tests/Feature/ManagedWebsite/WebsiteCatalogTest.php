@@ -127,3 +127,12 @@ test('catalog gates freeze active edits and customer editing does not require ch
     $this->get(route('managed-website.products.edit', $product))->assertStatus(423);
     $this->putJson(route('managed-website.customers.update', $customer), ['first_name' => 'Blocked'])->assertStatus(423);
 });
+
+test('orders remain browsable with commerce disabled and unavailable actions are hidden', function () {
+    $product = $this->catalog->saveProduct($this->site, null, $this->data, $this->actor);
+    $order = app(\App\Services\ManagedWebsite\WebsiteCommerceService::class)->createDraftOrder($this->site, ['customer_name' => 'Local test', 'website_product_variant_id' => $product->variants->first()->id, 'quantity' => 1, 'fulfillment_method' => 'pickup'], $this->actor);
+    config()->set('managed_website.commerce_enabled', false);
+    $this->get(route('managed-website.orders.index'))->assertOk()->assertSeeText($order->number)->assertDontSeeText('Create draft order');
+    $this->get(route('managed-website.orders.show', $order))->assertOk()->assertSeeText('Oak chair')->assertDontSeeText('Staff actions');
+    $this->postJson(route('managed-website.orders.drafts.store'), [])->assertStatus(423);
+});

@@ -229,10 +229,9 @@ class WebsiteCommerceController extends Controller
     {
         $tenant = $this->tenant($request);
         abort_unless((int) $order->tenant_id === (int) $tenant->id, 404);
-        $this->requireCommerce($tenant, $commerce);
         $order->load(['lines', 'payments', 'fulfillments.lines', 'shipments.events', 'events']);
 
-        return view('managed-website.commerce.order', compact('tenant', 'order'));
+        return view('managed-website.commerce.order', compact('tenant', 'order') + ['canManageOrders' => $commerce->enabledFor($tenant)]);
     }
 
     public function fulfill(Request $request, WebsiteOrder $order, WebsiteCommerceService $commerce): RedirectResponse
