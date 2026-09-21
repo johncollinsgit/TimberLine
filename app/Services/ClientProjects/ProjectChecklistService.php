@@ -17,7 +17,7 @@ class ProjectChecklistService
         return ClientProject::query()->forTenantId((int) $tenant->id)
             ->where('metadata->checklist_enabled', true)
             ->with(['tickets' => fn ($q) => $q->where('tenant_id', $tenant->id)->where('customer_visible', true)
-                ->orderBy('id')->with(['tasks' => fn ($tasks) => $tasks->where('tenant_id', $tenant->id)])])
+                ->reorder()->orderBy('id')->with(['tasks' => fn ($tasks) => $tasks->where('tenant_id', $tenant->id)])])
             ->orderBy('sort_order')->orderBy('id')->get();
     }
 

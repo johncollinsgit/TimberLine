@@ -3,7 +3,7 @@
         <style>
             .launch-shell{max-width:1280px;margin:0 auto;color:var(--fb-text,#24332d)}
             .launch-hero{padding:clamp(24px,4vw,48px);border-radius:24px;background:#183d32;color:#fff;margin-bottom:24px}
-            .launch-hero h1{font-size:clamp(30px,4vw,46px);line-height:1.1;font-weight:650;letter-spacing:-.035em;margin:10px 0 14px}
+            .launch-shell .launch-hero h1{color:#fff!important;font-size:clamp(30px,4vw,46px);line-height:1.1;font-weight:650;letter-spacing:-.035em;margin:10px 0 14px}
             .launch-hero p{max-width:660px;color:#d4e2dc;line-height:1.65}
             .launch-kicker{font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#b9d4c7}
             .launch-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;align-items:start}

@@ -25,8 +25,16 @@ test('checklist exposes only visible tasks and saves completion and reopening wi
     $hiddenTask->client_project_ticket_id = $hidden->id;
     $hiddenTask->title = 'Hidden task';
     $hiddenTask->save();
+    $last = $this->ticket->replicate();
+    $last->title = 'Final review';
+    $last->save();
+    $lastTask = $this->task->replicate();
+    $lastTask->client_project_ticket_id = $last->id;
+    $lastTask->title = 'Final approval';
+    $lastTask->save();
     $this->actingAs($this->user)->get(route('client.projects.checklist'))
         ->assertOk()->assertSeeText('Choose a featured product')->assertSeeText('Launch checklist')
+        ->assertSeeInOrder(['Start here', 'Final review'])
         ->assertDontSeeText('Hidden task')->assertDontSeeText('PRIVATE OPERATOR NOTES');
     $url = route('client.projects.checklist.update', ['task' => $this->task->id]);
     $this->patchJson($url, ['completed' => true])->assertOk()->assertJson(['completed' => true]);
