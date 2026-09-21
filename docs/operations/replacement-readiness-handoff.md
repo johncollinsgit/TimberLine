@@ -160,23 +160,31 @@ repository's deployment rules before release.
 
 ## Refund and vendor correspondence state
 
-Issued Shopify credit notes total **$32.06**:
+Issued Shopify credit notes total **$108.03**:
 
 - Minmaxify: three credits of $5.34, totaling $16.02.
 - Omnium: $5.34.
 - Happy Birthday ticket `#3928`: $10.70 including tax.
+- Rewind: $75.97 including tax, split into Shopify credit notes of $63.13
+  and $12.84 against bill `#592616207`. Rewind confirmed permanent
+  cancellation, no other company subscription, and no automatic reactivation.
+  It declined the requested historical refund because daily backups were
+  delivered from July 2022 onward.
 
-Pending, unapproved requests total **$115.96 before tax** (approximately
-$124.08 if the same 7% tax applies), plus an unknown Replaceit amount:
+Wholesale Helper approved **$31.98 before tax** for the latest Wholesale Order
+Form and Wholesale Lock charges. Confirmation to process the refund, including
+the tax adjustment, was sent on 2026-09-21. Await the Shopify credit references;
+the expected tax-inclusive credit is approximately $34.22 if the same 7% tax
+applies. Historical periods were declined.
+
+Still awaiting vendor decisions total **$14.97 before tax** (approximately
+$16.02 if the same 7% tax applies):
 
 - Storeify: $4.99. `contact@storeify.app` bounced; the request reached
   `storeifyapps@gmail.com` and the vendor said only the latest charge is
-  eligible.
-- Wholesale Helper: $31.98 before tax, under internal review.
+  eligible. Processing was requested, but no confirmation has arrived.
 - InstaBuy: $7.99 before tax; maximum/latest and historical goodwill requested.
-- Rewind: $71 before tax; uninstalled/cancelled and escalation follow-up sent to
-  `help@rewind.com` for the latest charge and historical goodwill.
-- Replaceit: refund amount still unidentified.
+- Replaceit: $1.99 before tax; maximum/latest and historical goodwill requested.
 
 Matrixify denied any additional refund. PluginHive has no current refund because
 the app remains an active production dependency. Recharge has no refund request
@@ -192,9 +200,11 @@ preserved exactly unless the next task explicitly owns them:
 - `routes/api.php`
 - unrelated contents under `output/`
 
-The readiness implementation is currently uncommitted. Review `git status` and
-stage explicit files rather than using `git add -A`. Never stage the customer
-exports under `output/shopify-app-audit-2026-09-21`.
+The readiness implementation is committed and pushed on
+`feature/replacement-readiness-2026-09-21`; its main implementation commit is
+`d40f8141`. Review `git status` and stage explicit files rather than using
+`git add -A`. Never stage the customer exports under
+`output/shopify-app-audit-2026-09-21`.
 
 ## Definition of ready for activation
 
