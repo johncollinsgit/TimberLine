@@ -117,6 +117,29 @@ test('subscription and loan cards show unknown coverage and compute only confirm
     expect($summary['subscription_monthly_cents'])->toBe(1000)->and($summary['subscriptions'])->toHaveCount(2)->and($summary['subscriptions'][1]['monthly_cents'])->toBeNull()->and($summary['payments'][0]['due_on'])->toBeNull();
 });
 
+test('missed recurring bills are labeled overdue and charged once in the immediate forecast', function () {
+    $account = Account::create(['space_id' => $this->space->id, 'source_key' => 'overdue:cash', 'name' => 'Checking', 'kind' => 'cash', 'balance_cents' => 100000, 'observed_at' => now(), 'history_start' => '2026-01-01']);
+    app(\App\Services\Trajectory\RecordService::class)->save($this->owner, $this->space, 'recurring', 'Monthly sharing', [
+        'account_id' => $account->id, 'merchant' => 'Sharing ministry', 'amount_cents' => -73500,
+        'next_due_on' => '2026-09-10', 'cadence' => 'monthly', 'category' => 'health',
+        'expense_type' => 'fixed', 'confirmed' => true,
+    ]);
+
+    $data = app(DashboardService::class)->build($this->space);
+
+    expect(collect($data['bills'])->firstWhere('name', 'Monthly sharing')['status'])->toBe('overdue')
+        ->and($data['forecast']['daily'][0]['cash_cents'])->toBe(26500);
+
+    app(LedgerService::class)->ingest($account, [[
+        'id' => 'paid-share', 'date' => '2026-09-10', 'merchant' => 'Sharing ministry', 'amount_cents' => -73500,
+        'category' => 'health',
+    ]]);
+    $paid = app(DashboardService::class)->build($this->space);
+
+    expect(collect($paid['bills'])->where('status', 'overdue'))->toBeEmpty()
+        ->and($paid['forecast']['daily'][0]['cash_cents'])->toBeGreaterThan(26500);
+});
+
 test('fine ounce coins and gross kilogram silver retain distinct purity and weight calculations', function () {
     $metals = app(\App\Services\Trajectory\MetalsService::class);
     $gold = $metals->value(['quantity' => '1', 'weight' => '1', 'unit' => 'troy_ounce', 'weight_basis' => 'fine', 'purity_bps' => 9999, 'cost_basis_cents' => 200000], 300000);
