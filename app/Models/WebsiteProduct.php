@@ -23,6 +23,11 @@ class WebsiteProduct extends Model
         return $this->belongsTo(TenantSite::class, 'tenant_site_id');
     }
 
+    public function collections(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(WebsiteCollection::class, 'website_collection_products')->withPivot('tenant_id', 'position');
+    }
+
     public function variants(): HasMany
     {
         return $this->hasMany(WebsiteProductVariant::class);
