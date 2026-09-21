@@ -136,20 +136,37 @@ class DashboardService
             }
         }
         $projection = app(ProjectionService::class);
-        $baseline = $projection->forecast($cash, $dailyByAccount, $schedules, $forecastDebts, $plans('goal'), [], $today, 60, $medical['reserves']);
+        $overdueBills = [];
+        $forecastSchedules = $schedules;
+        foreach ($schedules as $schedule) {
+            if (($schedule['amount_cents'] ?? 0) >= 0 || ($schedule['next_due_on'] ?? '') >= $today->toDateString()) {
+                continue;
+            }
+            $due = CarbonImmutable::parse($schedule['next_due_on']);
+            $wasPaid = $entries->contains(fn ($entry) => $entry['account_id'] === $schedule['account_id']
+                && $entry['amount_cents'] === $schedule['amount_cents']
+                && $entry['date'] >= $due->subDays(3)->toDateString()
+                && $entry['date'] <= $today->toDateString());
+            if ($wasPaid) {
+                continue;
+            }
+            $overdueBills[] = ['date' => $schedule['next_due_on'], 'name' => $schedule['name'], 'amount_cents' => $schedule['amount_cents'], 'record_id' => $schedule['id'], 'estimated' => $schedule['expense_type'] === 'essential_variable', 'status' => 'overdue'];
+            $forecastSchedules[] = [...$schedule, 'id' => 'overdue-'.$schedule['id'], 'next_due_on' => $today->addDay()->toDateString(), 'cadence' => 'once'];
+        }
+        $baseline = $projection->forecast($cash, $dailyByAccount, $forecastSchedules, $forecastDebts, $plans('goal'), [], $today, 60, $medical['reserves']);
         $scenario = $scenarioId ? $records->where('kind', 'scenario')->firstWhere('id', $scenarioId) : null;
         if ($scenarioId) {
             abort_unless($scenario, 404);
         }
-        $comparison = $scenario ? $projection->forecast($cash, $dailyByAccount, $schedules, $forecastDebts, $plans('goal'), $scenario->data, $today, 60, $medical['reserves']) : null;
-        $bills = [];
+        $comparison = $scenario ? $projection->forecast($cash, $dailyByAccount, $forecastSchedules, $forecastDebts, $plans('goal'), $scenario->data, $today, 60, $medical['reserves']) : null;
+        $bills = $overdueBills;
         $replaced = array_filter(array_column($debts, 'recurring_record_id'));
         foreach ($schedules as $schedule) {
             if (in_array($schedule['id'], $replaced, true)) {
                 continue;
             }
             foreach ($projection->occurrences($schedule, $today, $today->addDays(45)) as $date) {
-                $bills[] = ['date' => $date, 'name' => $schedule['name'], 'amount_cents' => $schedule['seasonal_amounts_cents'][(int) substr($date, 5, 2)] ?? $schedule['amount_cents'], 'record_id' => $schedule['id'], 'estimated' => $schedule['expense_type'] === 'essential_variable'];
+                $bills[] = ['date' => $date, 'name' => $schedule['name'], 'amount_cents' => $schedule['seasonal_amounts_cents'][(int) substr($date, 5, 2)] ?? $schedule['amount_cents'], 'record_id' => $schedule['id'], 'estimated' => $schedule['expense_type'] === 'essential_variable', 'status' => 'upcoming'];
             }
         }
         foreach ($debts as $debt) {

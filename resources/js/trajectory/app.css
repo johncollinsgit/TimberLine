@@ -43,6 +43,7 @@
 .tr-outlook .tr-overline{font-size:10px;letter-spacing:1.2px;font-weight:650;color:#647a86;margin:0 0 8px}
 .trajectory-site .tr-outlook h2{font-size:23px;letter-spacing:-.6px;font-weight:650;color:#223946;margin:0}
 .tr-status{white-space:nowrap;font-size:11px;color:#826338;background:#faf5eb;padding:7px 10px;border-radius:5px}
+.tr-row-overdue{background:#fff7f5;border-left:3px solid #b54736;margin-left:-10px;padding-left:7px}.tr-overdue{color:#a33d2d;font-weight:700}
 .tr-outlook-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-block:1px solid #e7ecef;margin:0 28px}
 .tr-app .tr-outlook-metrics button{border:0;border-radius:0;border-right:1px solid #e7ecef;padding:22px 24px;text-align:left;display:flex;flex-direction:column;gap:8px;background:transparent}
 .tr-app .tr-outlook-metrics button:first-child{padding-left:0}.tr-app .tr-outlook-metrics button:last-child{border-right:0}
