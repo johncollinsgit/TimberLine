@@ -305,7 +305,7 @@ class ManagedWebsiteService
             return null;
         }
         $site = TenantSite::query()->forTenant($tenant)->where('status', 'published')->where('public_enabled', true)->with('publishedSiteVersion')->first();
-        if (! $site) {
+        if (! $site || app(ConnectedWebsiteService::class)->connected($site)) {
             return null;
         }
         $slug = trim('/'.trim($path, '/'), '/');

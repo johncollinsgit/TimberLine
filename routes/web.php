@@ -744,11 +744,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->get('/sales-channels', [SalesChannelController::class, 'index'])
         ->name('sales-channels.index');
 
-    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access', 'module:managed_website'])
+    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access', 'module:managed_website', \App\Http\Middleware\UseConnectedWebsiteEditor::class])
         ->prefix('website')
         ->name('managed-website.')
         ->group(function (): void {
             Route::get('/', [ManagedWebsiteController::class, 'index'])->name('index');
+            Route::get('/connected', [\App\Http\Controllers\ConnectedWebsiteController::class, 'index'])->name('connected.index');
+            Route::post('/connected/draft', [\App\Http\Controllers\ConnectedWebsiteController::class, 'save'])->name('connected.save');
+            Route::post('/connected/publish', [\App\Http\Controllers\ConnectedWebsiteController::class, 'publish'])->name('connected.publish');
+            Route::post('/connected/restore', [\App\Http\Controllers\ConnectedWebsiteController::class, 'restore'])->name('connected.restore');
             Route::post('/', [ManagedWebsiteController::class, 'create'])->name('create');
             Route::post('/setup', [ManagedWebsiteController::class, 'saveSetup'])->name('setup.save');
             Route::post('/mobile-previewed', [ManagedWebsiteController::class, 'markMobilePreviewed'])->name('mobile-previewed');

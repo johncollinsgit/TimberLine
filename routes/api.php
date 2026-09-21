@@ -199,3 +199,7 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
 
 Route::post('/trajectory/webhooks/plaid', [\App\Http\Controllers\Trajectory\WebhookController::class, 'plaid'])->middleware('throttle:120,1');
 Route::post('/trajectory/webhooks/sms', [\App\Http\Controllers\Trajectory\WebhookController::class, 'sms'])->middleware('throttle:60,1');
+
+// Pinned public content and inquiry endpoints; no client-selected tenant or site.
+Route::get('/connected-website/carolina-barrel/content', [\App\Http\Controllers\ConnectedWebsiteController::class, 'content']);
+Route::post('/connected-website/carolina-barrel/inquiries', [\App\Http\Controllers\ConnectedWebsiteController::class, 'inquire'])->middleware('throttle:20,1');
