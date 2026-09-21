@@ -96,6 +96,7 @@ class UnifiedAppNavigationService
         $branchChildren = [];
         $websiteCommerceRoute = request()->routeIs(
             'managed-website.products.*',
+            'managed-website.collections.*',
             'managed-website.customers.*',
             'managed-website.orders.*',
             'managed-website.commerce.*',
@@ -110,13 +111,9 @@ class UnifiedAppNavigationService
                 'current' => request()->routeIs('managed-website.*') && ! $websiteCommerceRoute,
             ];
             if (Route::has('managed-website.products.index')) {
-                $branchChildren[] = [
-                    'key' => 'branch-website-commerce',
-                    'icon' => 'shopping-bag',
-                    'href' => route('managed-website.products.index'),
-                    'label' => 'Website Commerce',
-                    'current' => $websiteCommerceRoute,
-                ];
+                foreach (['products' => ['Products', 'shopping-bag'], 'collections' => ['Collections', 'squares-2x2'], 'customers' => ['Customers', 'users'], 'orders' => ['Orders', 'clipboard-document-list']] as $entity => [$label, $icon]) {
+                    $branchChildren[] = ['key' => 'branch-website-'.$entity, 'icon' => $icon, 'href' => route('managed-website.'.$entity.'.index'), 'label' => $label, 'current' => request()->routeIs('managed-website.'.$entity.'.*')];
+                }
             }
         }
 
@@ -335,6 +332,7 @@ class UnifiedAppNavigationService
             if ($this->moduleAccessResolver->canAccess((int) $tenant->id, 'managed_website')) {
                 $add('website', 'Website', 'managed-website.index', 'globe-alt');
                 $add('website-products', 'Products', 'managed-website.products.index', 'shopping-bag');
+                $add('website-collections', 'Collections', 'managed-website.collections.index', 'squares-2x2');
                 $add('website-customers', 'Customers', 'managed-website.customers.index', 'users');
                 $add('website-orders', 'Orders', 'managed-website.orders.index', 'clipboard-document-list');
                 $add('website-leads', 'Inquiries', 'managed-website.leads.index', 'inbox');

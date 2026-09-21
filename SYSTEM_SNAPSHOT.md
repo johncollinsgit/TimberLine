@@ -1,9 +1,22 @@
 # SYSTEM SNAPSHOT
 
+## Shared website catalog administration (2026-09-21)
+
+Products, Collections, Customers, and Orders have separate workspace destinations
+for every tenant with Managed Website access. Products use dedicated editors with
+photo uploads/previews, variants, cents-based pricing, inventory and organization.
+Collections use tenant-owned `website_collections` and membership records. Active
+catalog edits are independent of static-page drafts and publishing. Carolina's
+connected renderer consumes these records; publishing pages never reimports or
+resurrects catalog products. Customer detail editing requires editor access but
+not checkout activation. Payment/fulfillment gates remain in force. See
+`docs/operations/website-catalog-admin.md` for release and rollback.
+
+
 ## Carolina Barrel connected website (2026-09-21)
 
 Carolina Barrel's existing Cloudflare site now has an opt-in Everbranch content
-editor, versioned draft/preview/publish/restore controls, five quote-product mirrors,
+editor, versioned draft/preview/publish/restore controls, an independently editable quote-product catalog,
 and workspace inquiry capture. Its existing renderer and public domain remain in
 place. Other sites retain the generic editor. No accounts, emails, payments or
 entitlements are activated by this integration. See

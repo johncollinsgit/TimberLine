@@ -1,6 +1,7 @@
 <x-layouts::app.sidebar :title="str($screen)->headline()">
     <flux:main>
         <div class="mx-auto max-w-[1440px] space-y-5 pb-10">
+            @include('managed-website.catalog.nav')
             @if(session('status'))<div class="border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-950" role="status">{{ session('status') }}</div>@endif
             @if($errors->any())<div class="border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-950" role="alert">{{ $errors->first() }}</div>@endif
 

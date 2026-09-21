@@ -81,12 +81,12 @@ class ConnectedWebsiteController extends Controller
             $token = $request->validate(['preview' => ['required', 'string', 'max:4096']])['preview'];
             $content = $service->previewContent($site, $token);
 
-            return response()->json(['renderer' => ConnectedWebsiteService::RENDERER, 'content' => $content, 'preview' => true])
+            return response()->json(['renderer' => ConnectedWebsiteService::RENDERER, 'content' => $content, 'preview' => true, 'catalog' => app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->publicCatalog($site), 'collections' => app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->publicCollections($site)])
                 ->header('Cache-Control', 'private, no-store')->header('X-Robots-Tag', 'noindex, nofollow')->header('Referrer-Policy', 'no-referrer');
         }
         $service->assertAvailable($site);
 
-        return response()->json(['renderer' => ConnectedWebsiteService::RENDERER, 'content' => $service->content($site, $site->published_site_version_id), 'version' => $site->published_site_version_id])
+        return response()->json(['renderer' => ConnectedWebsiteService::RENDERER, 'content' => $service->content($site, $site->published_site_version_id), 'version' => $site->published_site_version_id, 'catalog' => app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->publicCatalog($site), 'collections' => app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->publicCollections($site)])
             ->header('Cache-Control', 'no-store');
     }
 
@@ -101,7 +101,8 @@ class ConnectedWebsiteController extends Controller
             'company' => ['required_unless:type,quote', 'nullable', 'string', 'max:160'],
             'phone' => ['nullable', 'string', 'max:60'], 'website' => ['nullable', 'url:http,https', 'max:500'],
             'businessType' => ['nullable', 'string', 'max:120'], 'notes' => ['required', 'string', 'max:3000'],
-            'productSlug' => ['required_if:type,quote', 'nullable', Rule::in(array_column($service->manifest()['products'], 'slug'))],
+            'productSlug' => ['required_if:type,quote', 'nullable', 'string', 'max:160', Rule::exists('website_products', 'handle')->where('tenant_id', $site->tenant_id)->where('tenant_site_id', $site->id)->where('status', 'active')],
+            'variantId' => ['nullable', 'integer'],
             'quantity' => ['required_if:type,quote', 'nullable', 'integer', 'between:1,100'],
             'finish' => ['required_if:type,quote', 'nullable', 'string', 'max:120'],
             'affiliateCode' => ['nullable', 'string', 'max:80'],
@@ -109,9 +110,16 @@ class ConnectedWebsiteController extends Controller
         DB::transaction(function () use ($site, $data, $service) {
             $site = TenantSite::query()->lockForUpdate()->findOrFail($site->id);
             $service->assertAvailable($site);
+            $hash = hash('sha256', json_encode($data, JSON_THROW_ON_ERROR));
+            if ($data['type'] === 'quote') {
+                $product = \App\Models\WebsiteProduct::query()->forTenantId($site->tenant_id)->where('tenant_site_id', $site->id)->where('status', 'active')->where('handle', $data['productSlug'])->firstOrFail();
+                $variant = $product->variants()->where('tenant_id', $site->tenant_id)->where('is_available', true)->when(! empty($data['variantId']), fn ($q) => $q->whereKey($data['variantId']))->first();
+                abort_unless($variant && (! $product->track_inventory || $variant->inventory_quantity >= $data['quantity']), 422, 'That product option is unavailable.');
+                $data['variant_title'] = $variant->title;
+                $data['product_title'] = $product->title;
+            }
             $source = $data['type'] === 'quote' ? 'managed_website_quote' : 'managed_website';
             $key = 'connected:'.$data['requestId'];
-            $hash = hash('sha256', json_encode($data, JSON_THROW_ON_ERROR));
             $existing = FormSubmission::query()->forTenantId($site->tenant_id)->where('source_key', $key)->first();
             if ($existing) {
                 abort_unless(hash_equals((string) data_get($existing->metadata, 'request_hash'), $hash), 409, 'Use a new request ID for different details.');

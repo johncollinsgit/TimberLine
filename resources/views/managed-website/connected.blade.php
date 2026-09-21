@@ -20,15 +20,17 @@
             </section>
             <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
                 <form id="connected-draft" action="{{ route('managed-website.connected.save') }}" method="POST" class="space-y-4">
+                    @foreach($manifest['fields'] as $key=>$field) @if($field['group']==='products' || preg_match('/^home_0(1[6-9]|2[0-9]|3[01])$/', $key))<input type="hidden" name="content[{{ $key }}]" value="{{ $content[$key] }}">@endif @endforeach
                     @csrf<input type="hidden" name="version" value="{{ $site->draft_site_version_id }}">
-                    <h2 class="text-xl font-bold">Website content</h2>
-                    <p class="text-sm text-zinc-600">Changes below stay private until you save and publish. Image fields accept an image URL or an existing /images/ path. Product amounts are retail quote starting prices.</p>
+                    <h2 class="text-xl font-bold">Website content</h2><a class="text-sm font-semibold text-emerald-800 underline" href="{{ route('managed-website.products.index') }}">Manage products & collections →</a>
+                    <p class="text-sm text-zinc-600">Changes below stay private until you save and publish. Image fields accept an image URL or an existing /images/ path. Manage product photos, prices, and collections in Products.</p>
                     @foreach($manifest['groups'] as $group => $label)
-                    <details class="rounded-xl border bg-white p-5" @if($group === (request()->routeIs('managed-website.products.index', 'managed-website.services.index') ? 'products' : 'home')) open @endif>
+                    @continue($group === 'products')
+                    <details class="rounded-xl border bg-white p-5" @if($group === 'home') open @endif>
                         <summary class="cursor-pointer text-lg font-bold">{{ $label }}</summary>
                         <div class="mt-5 grid gap-5 sm:grid-cols-2">
                             @foreach($manifest['fields'] as $key => $field)
-                            @continue($field['group'] !== $group)
+                            @continue($field['group'] !== $group || preg_match('/^home_0(1[6-9]|2[0-9]|3[01])$/', $key))
                             <label class="block text-sm {{ strlen($content[$key]) > 120 || $field['type'] === 'lines' ? 'sm:col-span-2' : '' }}">
                                 <span class="mb-2 block font-semibold">{{ $field['label'] }}</span>
                                 @if($field['type'] === 'money')

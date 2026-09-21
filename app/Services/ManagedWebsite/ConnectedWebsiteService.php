@@ -136,7 +136,6 @@ class ConnectedWebsiteService
             $version = $this->version($site, $content, $actor, 'published');
             $before = $site->published_site_version_id;
             $site->update(['published_site_version_id' => $version->id, 'status' => 'published', 'public_enabled' => true, 'published_at' => now(), 'updated_by_user_id' => $actor->id]);
-            $this->syncProducts($site, $content);
             app(ManagedWebsiteService::class)->recordEvent($site, null, $actor, 'connected.published', ['previous_version_id' => $before, 'version_id' => $version->id, 'draft_version_id' => $expected]);
 
             return $version;
@@ -181,8 +180,40 @@ class ConnectedWebsiteService
             $this->assertEditor($site, $actor, true);
             $version = $this->version($site, $this->validateContent($this->manifest()['defaults']), $actor, 'draft');
             $site->update(['draft_site_version_id' => $version->id]);
+            $this->syncProducts($site, $this->manifest()['defaults']);
             $this->publish($site->fresh(), $actor, $version->id);
             app(ManagedWebsiteService::class)->recordEvent($site, null, $actor, 'connected.imported', ['before' => $before, 'version_id' => $version->id]);
+        });
+    }
+
+    /** Backfill existing catalog organization once, without overwriting product edits. */
+    public function initializeCatalog(TenantSite $site, User $actor): void
+    {
+        $this->assertEditor($site, $actor);
+        DB::transaction(function () use ($site, $actor) {
+            $site = TenantSite::query()->lockForUpdate()->findOrFail($site->id);
+            if (data_get($site->settings, 'catalog_initialized')) {
+                return;
+            }
+            $content = $this->content($site, $site->published_site_version_id);
+            foreach ($this->manifest()['products'] as $definition) {
+                $product = WebsiteProduct::query()->forTenantId($site->tenant_id)->where('tenant_site_id', $site->id)->where('handle', $definition['slug'])->first();
+                if (! $product) {
+                    continue;
+                }
+                $prefix = $definition['prefix'];
+                $details = $product->service_details ?? [];
+                $details += ['details' => $content[$prefix.'details'], 'image_alt' => $content[$prefix.'alt']];
+                $product->update(['service_details' => $details]);
+                $title = $content[$prefix.'collection'];
+                $collection = \App\Models\WebsiteCollection::query()->firstOrCreate(
+                    ['tenant_id' => $site->tenant_id, 'tenant_site_id' => $site->id, 'handle' => \Illuminate\Support\Str::slug($title)],
+                    ['title' => $title, 'status' => 'active', 'image_url' => $product->media[0] ?? null]
+                );
+                $product->collections()->syncWithoutDetaching([$collection->id => ['tenant_id' => $site->tenant_id]]);
+            }
+            $site->update(['settings' => array_merge($site->settings, ['catalog_initialized' => true])]);
+            app(ManagedWebsiteService::class)->recordEvent($site, null, $actor, 'catalog.connected_initialized', ['source_version_id' => $site->published_site_version_id]);
         });
     }
 

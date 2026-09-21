@@ -30,6 +30,6 @@ class WebsiteProduct extends Model
 
     public function variants(): HasMany
     {
-        return $this->hasMany(WebsiteProductVariant::class);
+        return $this->hasMany(WebsiteProductVariant::class)->orderBy('id');
     }
 }

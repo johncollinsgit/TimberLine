@@ -1,6 +1,7 @@
 <x-layouts::app.sidebar :title="$order->number">
     <flux:main>
         <div class="mx-auto max-w-6xl space-y-5 pb-10">
+            @include('managed-website.catalog.nav')
             @if(session('status'))<div class="border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-950" role="status">{{ session('status') }}</div>@endif
             <x-ui.operational-header :title="$order->number" :description="'Native Website order · '.$order->created_at->format('M j, Y g:i A')" :back="['href' => route('managed-website.orders.index'), 'label' => 'Orders']">
                 <x-ui.status-badge :tone="$order->order_status === 'draft' ? 'warning' : 'neutral'">{{ str($order->order_status)->headline() }}</x-ui.status-badge>

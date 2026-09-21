@@ -115,14 +115,32 @@ test('inquiries are tenant owned retry safe and send no messages', function () {
 
 test('workspace overview and products show live editor and block legacy mutations', function () {
     $this->actingAs($this->actor);
-    foreach (['managed-website.index', 'managed-website.products.index'] as $route) {
-        $this->get(route($route, ['tenant' => $this->tenant->slug]))->assertOk()
-            ->assertSeeText('Edit your live design.')->assertSeeText('Five-Stave')
-            ->assertSee('https://carolina-barrel-co.theeverbranch.com', false)->assertDontSeeText('Continue setup');
-    }
+    $this->get(route('managed-website.index', ['tenant' => $this->tenant->slug]))->assertOk()->assertSeeText('Edit your live design.');
+    $this->get(route('managed-website.products.index', ['tenant' => $this->tenant->slug]))->assertOk()->assertSeeText('Products')->assertSeeText('Five-Stave')->assertDontSeeText('Edit your live design.');
     $this->post(route('managed-website.themes.apply'), ['theme_key' => 'anything'])->assertStatus(409);
     $this->post(route('managed-website.publish'))->assertStatus(409);
-    $this->post(route('managed-website.products.store'), [])->assertStatus(409);
+    $this->postJson(route('managed-website.products.store'), [])->assertUnprocessable();
     $this->actor->tenants()->updateExistingPivot($this->tenant->id, ['membership_active' => false]);
     $this->get(route('managed-website.connected.index'))->assertForbidden();
+});
+
+test('catalog edits and new products survive page publishing and become browsable request options', function () {
+    $this->service->initializeCatalog($this->site, $this->actor);
+    $count = \App\Models\WebsiteCollection::query()->count();
+    $this->service->initializeCatalog($this->site, $this->actor);
+    expect(\App\Models\WebsiteCollection::query()->count())->toBe($count)->toBeGreaterThan(0);
+    $catalog = app(\App\Services\ManagedWebsite\WebsiteCatalogService::class);
+    $product = $catalog->saveProduct($this->site, null, ['title' => 'New custom bench', 'handle' => 'new-custom-bench', 'description' => 'A bench', 'status' => 'active', 'product_type' => 'quote', 'track_inventory' => false, 'media' => [], 'collection_ids' => [], 'variants' => [['title' => 'Large', 'price' => '425.25', 'is_available' => true]]], $this->actor);
+    $existing = WebsiteProduct::query()->where('handle', 'five-stave-lounge-chair')->firstOrFail();
+    $existing->update(['title' => 'Edited in Products', 'status' => 'archived']);
+    $draft = $this->service->save($this->site, $this->service->manifest()['defaults'], $this->actor, $this->site->draft_site_version_id);
+    $this->service->publish($this->site, $this->actor, $draft->id);
+    expect($existing->fresh()->title)->toBe('Edited in Products')->and($existing->fresh()->status)->toBe('archived');
+    $this->getJson('/api/connected-website/carolina-barrel/content')->assertOk()->assertJsonFragment(['slug' => 'new-custom-bench'])->assertJsonMissing(['slug' => 'five-stave-lounge-chair']);
+    $data = ['requestId' => (string) Str::uuid(), 'type' => 'quote', 'name' => 'Visitor', 'email' => 'visitor@example.test', 'notes' => 'Bench request', 'productSlug' => $product->handle, 'variantId' => $product->variants->first()->id, 'quantity' => 1, 'finish' => 'Natural'];
+    $this->postJson('/api/connected-website/carolina-barrel/inquiries', $data)->assertCreated();
+    expect(data_get(FormSubmission::query()->first()->payload, 'variant_title'))->toBe('Large');
+    $data['requestId'] = (string) Str::uuid();
+    $data['variantId'] = $existing->variants->first()->id;
+    $this->postJson('/api/connected-website/carolina-barrel/inquiries', $data)->assertUnprocessable();
 });
