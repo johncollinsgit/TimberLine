@@ -38,7 +38,16 @@ test('verified wholesale stores redirect every retail html surface to wholesale 
     'edit app' => ['shopify.app.edit'],
     'settings' => ['shopify.app.settings'],
     'module store' => ['shopify.app.store'],
+    'replacement readiness' => ['shopify.app.replacements'],
 ]);
+
+test('wholesale session tokens cannot call retail replacement mutations', function (): void {
+    $this->withHeaders([
+        'Authorization' => 'Bearer '.wholesaleShopifySessionToken(),
+        'Accept' => 'application/json',
+    ])->postJson(route('shopify.app.api.replacements.refresh', ['module' => 1]))
+        ->assertForbidden();
+});
 
 test('wholesale session tokens cannot call retail search or subscription mutations', function (string $routeName, string $method): void {
     $headers = [

@@ -7,7 +7,6 @@ use App\Services\Subscriptions\SubscriptionModuleService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use App\Services\Tenancy\TenantResolver;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
@@ -114,15 +113,11 @@ class ShopifyEmbeddedSubscriptionsController extends Controller
             return response()->json(['ok' => false, 'status' => 'subscriptions_module_locked'], 403);
         }
 
-        $validated = $request->validate([
-            'rows' => ['nullable', 'array'],
-            'rows.*' => ['array'],
-        ]);
-
         return response()->json([
-            'ok' => true,
-            'data' => $subscriptions->createMigrationDryRun($tenantId, $request->user()?->id, (array) ($validated['rows'] ?? [])),
-        ]);
+            'ok' => false,
+            'status' => 'authenticated_recharge_ingestion_required',
+            'message' => 'Synthetic migration rows are disabled. Connect authenticated Recharge ingestion in Replacement Readiness.',
+        ], 423);
     }
 
     public function approveCutover(
@@ -137,19 +132,11 @@ class ShopifyEmbeddedSubscriptionsController extends Controller
             return response()->json(['ok' => false, 'status' => 'subscriptions_module_locked'], 403);
         }
 
-        $validated = $request->validate([
-            'batch_id' => ['required', 'integer'],
-            'recharge_billing_paused' => ['required', 'boolean'],
-        ]);
-
-        $payload = $subscriptions->approveCutover(
-            $tenantId,
-            (int) $validated['batch_id'],
-            $request->user()?->id,
-            (bool) $validated['recharge_billing_paused']
-        );
-
-        return response()->json($payload, (bool) ($payload['ok'] ?? false) ? 200 : 422);
+        return response()->json([
+            'ok' => false,
+            'status' => 'recharge_cutover_protected',
+            'message' => 'Recharge cutover is disabled until authenticated ingestion, billing parity, and a full controlled renewal pilot pass.',
+        ], 423);
     }
 
     public function action(
@@ -165,20 +152,11 @@ class ShopifyEmbeddedSubscriptionsController extends Controller
             return response()->json(['ok' => false, 'status' => 'subscriptions_module_locked'], 403);
         }
 
-        $validated = $request->validate([
-            'action' => ['required', 'string', 'max:80'],
-            'payload' => ['nullable', 'array'],
-        ]);
-
-        $payload = $subscriptions->recordAdminAction(
-            $tenantId,
-            $contract,
-            (string) $validated['action'],
-            $request->user()?->id,
-            (array) ($validated['payload'] ?? [])
-        );
-
-        return response()->json($payload, (bool) ($payload['ok'] ?? false) ? 200 : 422);
+        return response()->json([
+            'ok' => false,
+            'status' => 'recharge_action_bridge_required',
+            'message' => 'Use Recharge for live subscription changes until the provider-backed Everbranch action bridge is verified.',
+        ], 423);
     }
 
     public function exportFeedback(

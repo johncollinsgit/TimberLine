@@ -63,4 +63,36 @@ return [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['first reporting destination column retained before trailing delivery-address columns'],
     ],
+    '2026_09_21_120000_create_replacement_modules_table.php' => [
+        'test' => 'tests/Integration/ReplacementReadinessMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['replacement module table retained before migration bookkeeping'],
+    ],
+    '2026_09_21_120100_create_replacement_source_snapshots_table.php' => [
+        'test' => 'tests/Integration/ReplacementReadinessMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['source snapshot table retained before migration bookkeeping'],
+    ],
+    '2026_09_21_120200_create_replacement_import_batches_table.php' => [
+        'test' => 'tests/Integration/ReplacementReadinessMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['import batch table retained before migration bookkeeping'],
+    ],
+    '2026_09_21_120300_create_replacement_import_rows_table.php' => [
+        'test' => 'tests/Integration/ReplacementReadinessMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['import row table retained before migration bookkeeping'],
+    ],
+    '2026_09_21_120400_create_replacement_evidence_table.php' => [
+        'test' => 'tests/Integration/ReplacementReadinessMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['replacement evidence table retained before migration bookkeeping'],
+    ],
+    '2026_09_21_120500_create_replacement_activation_runs_table.php' => [
+        'test' => 'tests/Integration/ReplacementReadinessMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['activation run table retained before migration bookkeeping'],
+    ],
+    '2026_09_21_120600_create_stockist_locator_settings_table.php' => [
+        'test' => 'tests/Integration/ReplacementReadinessMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['locator settings table retained before migration bookkeeping'],
+    ],
+    '2026_09_21_120700_create_stockist_locations_table.php' => [
+        'test' => 'tests/Integration/ReplacementReadinessMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['stockist locations table retained before migration bookkeeping'],
+    ],
 ];

@@ -2,6 +2,29 @@
 
 Read `SYSTEM_SNAPSHOT.md` before making changes.
 
+## Shopify replacement readiness (2026-09-21)
+
+- **Restart here:** `docs/operations/replacement-readiness-handoff.md` records
+  the exact working-tree state, source checksums, refund correspondence,
+  unresolved gates, next commands, and files that belong to other work.
+
+- The embedded Replacement Readiness Center at `/shopify/app/replacements` is
+  the control plane for Storeify, Omnium, Calendar, TnC, Shopify shipping,
+  Recharge, and certification of existing Everbranch replacements. Its records,
+  imports, evidence, and activation history are tenant and Shopify-store scoped.
+- Keep `REPLACEMENT_ACTIVATION_ENABLED=false` unless one named non-Recharge
+  module has complete current evidence and a concrete adapter that performs the
+  real provider switch, smoke checks, and rollback. A database-provider flag is
+  not sufficient activation evidence. Never create an activate-all path.
+- Recharge remains live and protected. Synthetic migration input and
+  intent-only admin controls are not production operations; the embedded
+  endpoints fail closed until authenticated Recharge ingestion and a controlled
+  renewal pilot exist. See
+  `docs/operations/replacement-readiness-runbook.md`.
+- Storeify and Omnium source exports are imported only as inactive candidates.
+  Do not commit customer-data exports. Forms send no notifications, and locator
+  rows remain unpublished until their module cutover passes every gate.
+
 ## Shopify state sales tax reporting (2026-08-20)
 
 - Embedded **Sales Tax Reports** is a tenant-scoped, read-only reporting

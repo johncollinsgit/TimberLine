@@ -95,6 +95,7 @@ use App\Http\Controllers\ShopifyEmbeddedSettingsController;
 use App\Http\Controllers\ShopifyEmbeddedSubscriptionsController;
 use App\Http\Controllers\ShopifyPrivacyWebhookController;
 use App\Http\Controllers\ShopifyProductOptionsController;
+use App\Http\Controllers\ShopifyReplacementReadinessController;
 use App\Http\Controllers\ShopifyWebhookController;
 use App\Http\Controllers\SubscriptionPublicController;
 use App\Http\Controllers\SubscriptionStorefrontController;
@@ -2027,6 +2028,10 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
     Route::post('/app/store/modules/{moduleKey}/activate', [ShopifyEmbeddedAppController::class, 'activateModule'])->name('shopify.app.store.activate');
     Route::post('/app/store/modules/{moduleKey}/request', [ShopifyEmbeddedAppController::class, 'requestModuleAccess'])->name('shopify.app.store.request');
     Route::get('/app/integrations', [ShopifyEmbeddedAppController::class, 'integrations'])->name('shopify.app.integrations');
+    Route::get('/app/replacements', [ShopifyReplacementReadinessController::class, 'index'])->name('shopify.app.replacements');
+    Route::get('/app/replacements/{module}', [ShopifyReplacementReadinessController::class, 'show'])
+        ->whereNumber('module')
+        ->name('shopify.app.replacements.show');
     Route::get('/app/product-options', [ShopifyProductOptionsController::class, 'show'])->name('shopify.app.product-options');
     Route::get('/app/subscriptions', [ShopifyEmbeddedSubscriptionsController::class, 'show'])->name('shopify.app.subscriptions');
     Route::get('/app/rewards', [ShopifyEmbeddedRewardsController::class, 'index'])->name('shopify.app.rewards');
@@ -2065,6 +2070,21 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
     Route::get('/app/edit', [ShopifyEmbeddedSettingsController::class, 'editApp'])->name('shopify.app.edit');
     Route::get('/app/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.app.settings');
     Route::prefix('app/api')->name('shopify.app.api.')->group(function () {
+        Route::post('/replacements/{module}/refresh', [ShopifyReplacementReadinessController::class, 'refresh'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->whereNumber('module')
+            ->name('replacements.refresh');
+        Route::post('/replacements/{module}/activate', [ShopifyReplacementReadinessController::class, 'activate'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->whereNumber('module')
+            ->name('replacements.activate');
+        Route::patch('/replacements/submissions/{submission}', [ShopifyReplacementReadinessController::class, 'updateSubmission'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->whereNumber('submission')
+            ->name('replacements.submissions.update');
+        Route::get('/replacements/{module}/submissions.csv', [ShopifyReplacementReadinessController::class, 'exportSubmissions'])
+            ->whereNumber('module')
+            ->name('replacements.submissions.export');
         Route::get('/dashboard', [ShopifyEmbeddedAppController::class, 'data'])->name('dashboard');
         Route::get('/dashboard-lite', [ShopifyEmbeddedAppController::class, 'liteData'])->name('dashboard-lite');
         Route::get('/search', [ShopifyEmbeddedAppController::class, 'search'])->name('search');

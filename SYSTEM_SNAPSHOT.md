@@ -1,5 +1,39 @@
 # SYSTEM SNAPSHOT
 
+## Shopify replacement readiness center (2026-09-21)
+
+- Continue this program from
+  `docs/operations/replacement-readiness-handoff.md`. It is the canonical
+  restart checklist for remaining implementation, production import, vendor
+  correspondence, verification, activation gates, and working-tree boundaries.
+
+- Everbranch now has a tenant- and Shopify-store-scoped Replacement Readiness
+  Center under the embedded Dashboard. It tracks immutable source snapshots,
+  idempotent import batches and rows, versioned evidence, module lifecycle,
+  activation attempts, operator identity, and rollback payloads for Storeify,
+  Omnium, Calendar, TnC, shipping, Recharge, and existing-replacement
+  certification.
+- Storeify ingestion is implemented for the four audited XLSX exports (338
+  submissions). It provisions inactive Contact and Job Opportunity candidates,
+  history-only Forestry Weekend and retail Wholesale Application forms, and an
+  admin preview with search, status, assignment history, and CSV export. Omnium
+  ingestion is implemented for its JSON export (44 locations plus settings) and
+  keeps every location unpublished.
+- Production activation remains default-off and store isolated. No module has
+  been activated by this readiness work. Missing source exports, settings,
+  customer/admin parity, theme/config fingerprints, performance,
+  accessibility, rollback, and crawl evidence remain explicit blockers.
+- Recharge remains authoritative for live subscriptions. The embedded
+  synthetic dry-run, cutover-approval, and intent-only contract actions now
+  fail closed; visible placeholder controls are disabled and direct staff to
+  Recharge. Recharge can never use the common activation endpoint.
+- PluginHive confirmed the retail FedEx app is actively serving checkout rates
+  (39,595 calls over 2,140 days), so shipping remains live and cannot be cut
+  over or refunded until the shipping parity and atomic-rate gates pass. The
+  vendor cannot export configuration, so a dated settings-screen recording and
+  field-by-field transcription are mandatory source evidence. See
+  `docs/operations/replacement-readiness-runbook.md`.
+
 ## Shopify State Sales Tax Reporting (2026-08-20)
 
 - Modern Forestry Backstage now exposes a tenant-scoped, read-only **Sales Tax

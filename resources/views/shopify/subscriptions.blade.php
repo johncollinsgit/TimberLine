@@ -245,11 +245,11 @@
                                 <td>{{ $latest['event_type'] ?? 'None yet' }}</td>
                                 <td>
                                     <div class="eg-subscriptions-actions">
-                                        <button type="button">Pause</button>
-                                        <button type="button">Swap</button>
-                                        <button type="button">Address</button>
-                                        <button type="button">Payment email</button>
-                                        <button type="button">Cancel</button>
+                                        <button type="button" disabled title="Use Recharge until the provider-backed action bridge passes pilot validation.">Pause in Everbranch (not ready)</button>
+                                        <button type="button" disabled title="Use Recharge until the provider-backed action bridge passes pilot validation.">Swap in Everbranch (not ready)</button>
+                                        <button type="button" disabled title="Use Recharge until the provider-backed action bridge passes pilot validation.">Address in Everbranch (not ready)</button>
+                                        <button type="button" disabled title="Use Recharge until the provider-backed action bridge passes pilot validation.">Payment email (not ready)</button>
+                                        <button type="button" disabled title="Use Recharge until the provider-backed action bridge passes pilot validation.">Cancel in Everbranch (not ready)</button>
                                     </div>
                                 </td>
                             </tr>
@@ -282,9 +282,9 @@
                             </p>
                             <p><span class="eg-subscriptions-pill">{{ $scent['product_status'] ?? 'draft' }}</span></p>
                             <div class="eg-subscriptions-actions">
-                                <button type="button">View scent</button>
-                                <button type="button">Export reviews</button>
-                                <button type="button">Publish product</button>
+                                <button type="button" disabled title="Scent detail workflow is not connected yet.">View scent (not ready)</button>
+                                <button type="button" disabled title="Review export is not connected yet.">Export reviews (not ready)</button>
+                                <button type="button" disabled title="Publishing is disabled until the product workflow is connected.">Publish product (not ready)</button>
                             </div>
                         </section>
                     @empty
