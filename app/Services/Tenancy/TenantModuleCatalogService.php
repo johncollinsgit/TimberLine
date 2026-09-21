@@ -30,6 +30,10 @@ class TenantModuleCatalogService
             default => 'app_store',
         };
         $moduleDefinitions = $this->storeVisibleModuleDefinitions($visibilityKey);
+        $websiteSales = app(TenantExperienceProfileService::class)->workspaceFocusForTenant($tenantId) === 'website_sales';
+        if ($websiteSales) {
+            $moduleDefinitions = array_intersect_key($moduleDefinitions, ['managed_website' => true]);
+        }
         $moduleKeys = array_keys($moduleDefinitions);
         $resolved = $this->accessResolver->resolveForTenant($tenantId, $moduleKeys);
         $moduleStates = $this->applyDisplayLabels(
@@ -95,6 +99,12 @@ class TenantModuleCatalogService
         }
 
         $blueprintRecommendations = $this->blueprintRecommendations->forTenant($tenantId, $modules);
+        if ($websiteSales) {
+            $blueprintRecommendations['rows'] = array_values(array_filter($blueprintRecommendations['rows'] ?? [], fn (array $row): bool => ($row['catalog_module_key'] ?? null) === 'managed_website'));
+            foreach ($blueprintRecommendations['sections'] ?? [] as $key => $rows) {
+                $blueprintRecommendations['sections'][$key] = array_values(array_filter($rows, fn (array $row): bool => ($row['catalog_module_key'] ?? null) === 'managed_website'));
+            }
+        }
         $modules = $this->blueprintRecommendations->decorateCatalogModules($modules, $blueprintRecommendations);
         $businessTemplate = strtolower(trim((string) data_get($blueprintRecommendations, 'context.business_template', 'generic')));
         $modules = array_map(function (array $module) use ($businessTemplate): array {
@@ -190,7 +200,6 @@ class TenantModuleCatalogService
     /**
      * Purposeful, local photography keeps the Branch directory easy to scan
      * without coupling customer-facing presentation to a tenant's data.
-     *
      */
     protected function branchCoverImage(string $moduleKey, string $businessTemplate = 'generic'): string
     {

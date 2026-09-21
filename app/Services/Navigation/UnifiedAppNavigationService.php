@@ -48,6 +48,10 @@ class UnifiedAppNavigationService
         $tenantId = $tenant ? (int) $tenant->id : null;
         $profile = $this->experienceProfileService->forTenant($tenantId, $user, $tenant);
 
+        if (($profile['workspace_focus'] ?? null) === 'website_sales' && $tenant && $user) {
+            return $this->buildWebsiteSalesShell($request, $tenant, $user, $profile);
+        }
+
         $isAdmin = $user?->isAdmin() ?? true;
         $isManager = $user?->isManager() ?? false;
         $isPouring = $user?->isPouring() ?? false;
@@ -310,6 +314,46 @@ class UnifiedAppNavigationService
             'current_console' => $this->currentConsolePayload($tenant, $profile),
             'console_switches' => $this->consoleSwitches($user, $tenant, false),
             'shell_context' => 'tenant',
+        ];
+    }
+
+    protected function buildWebsiteSalesShell(Request $request, Tenant $tenant, User $user, array $profile): array
+    {
+        $items = [];
+        $add = function (string $key, string $label, string $route, string $icon) use (&$items, $tenant, $request): void {
+            $items[] = ['key' => $key, 'label' => $label, 'icon' => $icon,
+                'href' => route($route, ['tenant' => $tenant->slug]), 'current' => $request->routeIs($route)];
+        };
+        $membership = $user->tenants()->whereKey($tenant->id)->wherePivot('membership_active', true)->first();
+        $canWork = $user->is_active && $membership && in_array($membership->pivot->role, ['admin', 'owner', 'tenant_owner', 'manager', 'marketing_manager'], true)
+            && ($user->isAdmin() || $user->isManager() || $user->canAccessMarketing());
+        if ($canWork) {
+            $add('home', 'Home', 'dashboard', 'home');
+            if ($tenant->clientProjects()->where('metadata->checklist_enabled', true)->exists()) {
+                $add('project-checklist', 'Launch checklist', 'client.projects.checklist', 'clipboard-document-check');
+            }
+            if ($this->moduleAccessResolver->canAccess((int) $tenant->id, 'managed_website')) {
+                $add('website', 'Website', 'managed-website.index', 'globe-alt');
+                $add('website-products', 'Products', 'managed-website.products.index', 'shopping-bag');
+                $add('website-customers', 'Customers', 'managed-website.customers.index', 'users');
+                $add('website-orders', 'Orders', 'managed-website.orders.index', 'clipboard-document-list');
+                $add('website-leads', 'Inquiries', 'managed-website.leads.index', 'inbox');
+                $add('sales-channels', 'Sales channels', 'sales-channels.index', 'chart-bar');
+            }
+            $add('user-agreements', 'User Agreements', 'agreements.index', 'document-check');
+        }
+        $add('account-help', 'Account Help', 'account-help.index', 'lifebuoy');
+        $quickActions = array_map(fn (array $item): array => [
+            'label' => $item['label'], 'description' => 'Open '.$item['label'].'.', 'href' => $item['href'],
+        ], array_values(array_filter($items, fn (array $item): bool => in_array($item['key'], ['project-checklist', 'website', 'website-products'], true))));
+
+        return [
+            'tenant' => $tenant, 'tenant_id' => $tenant->id, 'experience_profile' => $profile,
+            'items' => $this->normalizeNavigationItems($items), 'admin_sub_items' => [],
+            'marketing_sub_groups' => [], 'birthday_sub_groups' => [], 'wiki_sections' => [],
+            'quick_actions' => $quickActions, 'ops_attention' => ['unresolved_exceptions' => 0, 'latest_run' => null],
+            'current_console' => $this->currentConsolePayload($tenant, $profile),
+            'console_switches' => $this->consoleSwitches($user, $tenant, false), 'shell_context' => 'tenant',
         ];
     }
 

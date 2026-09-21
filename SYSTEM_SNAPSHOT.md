@@ -1,5 +1,17 @@
 # SYSTEM SNAPSHOT
 
+
+## Website client workspace focus (2026-09-21)
+
+- Access-profile metadata `workspace_focus: website_sales` opts a tenant into
+  the same website/sales menu for its client and operator. Navigation, dashboard,
+  branch discovery, and search follow this focus; personal finance, legacy
+  shipping, production, marketing administration, and unrelated branch prompts
+  are omitted. Existing module and role authorization still applies.
+- This is a presentation setting, not impersonation or a billing/entitlement
+  change. Other workspaces and standalone Trajectory access stay unchanged.
+  See `docs/operations/website-client-workspace.md`.
+
 ## Client project launch checklists (2026-09-21)
 
 - Tenant logins now expose a two-owner launch checklist at

@@ -56,6 +56,9 @@ class UnifiedDashboardService
             : ($user ? $this->tenantContextResolver->resolveForRequest($request, $user) : null);
         $tenantId = $tenant ? (int) $tenant->id : null;
         $profile = $this->experienceProfileService->forTenant($tenantId, $user, $tenant);
+        if (($profile['workspace_focus'] ?? null) === 'website_sales' && $tenant && $user) {
+            return $this->websiteSalesDashboard($request, $tenant, $user, $profile, $rangeKey);
+        }
         $canAccessMarketing = $user?->canAccessMarketing() ?? false;
         $canAccessOps = ($user?->isAdmin() ?? false) || ($user?->isManager() ?? false);
         $catalog = ($tenantId !== null && $canAccessMarketing)
@@ -100,6 +103,47 @@ class UnifiedDashboardService
             'owner_reporting' => $ownerReport,
             'next_actions' => $this->nextActions($tenantId, $profile, $catalog, $canAccessMarketing, $canAccessOps, $clientFacingFieldService),
             'pinned_modules' => $canAccessMarketing ? $this->pinnedModules($catalog) : [],
+        ];
+    }
+
+    protected function websiteSalesDashboard(Request $request, Tenant $tenant, User $user, array $profile, ?string $rangeKey): array
+    {
+        $checklists = app(\App\Services\ClientProjects\ProjectChecklistService::class);
+        $checklists->assertMembership($user, $tenant);
+        $range = $this->dateRanges->resolve($rangeKey ?? $request->query('range'));
+        $tasks = $checklists->projects($tenant)->flatMap->tickets->flatMap->tasks;
+        $websiteEnabled = $this->moduleAccess->canAccess((int) $tenant->id, 'managed_website');
+        $site = $websiteEnabled ? \App\Models\TenantSite::query()->forTenantId($tenant->id)->first() : null;
+        $url = fn (string $route): string => route($route, ['tenant' => $tenant->slug]);
+        $cards = [];
+        $actions = [];
+        if ($tasks->isNotEmpty()) {
+            $cards[] = ['label' => 'Launch checklist', 'value' => $tasks->where('status', 'done')->count().' / '.$tasks->count(),
+                'detail' => 'Completed launch tasks', 'href' => $url('client.projects.checklist')];
+            $actions[] = ['label' => 'Continue the launch checklist', 'description' => 'Review what you and Evergrove need to do next.', 'href' => $url('client.projects.checklist')];
+        }
+        if ($websiteEnabled) {
+            foreach ([
+                ['Products', \App\Models\WebsiteProduct::class, 'managed-website.products.index'],
+                ['Customers', \App\Models\WebsiteCustomer::class, 'managed-website.customers.index'],
+                ['Orders', \App\Models\WebsiteOrder::class, 'managed-website.orders.index'],
+            ] as [$label, $model, $route]) {
+                $cards[] = ['label' => $label, 'value' => (string) $model::query()->forTenantId($tenant->id)->count(),
+                    'detail' => 'Website '.strtolower($label), 'href' => $url($route)];
+            }
+            $actions[] = ['label' => 'Review the website', 'description' => 'Review your pages, photos, and launch setup.', 'href' => $url('managed-website.index')];
+        }
+
+        return [
+            'tenant_id' => $tenant->id, 'tenant_slug' => $tenant->slug, 'experience_profile' => $profile,
+            'date_range' => ['key' => $range['key'], 'label' => $range['label'], 'short_label' => $range['short_label'],
+                'starts_at' => $range['starts_at']->toIso8601String(), 'ends_at' => $range['ends_at']->toIso8601String(), 'options' => $range['options']],
+            'hero' => ['label' => 'Website status', 'value' => ! $websiteEnabled ? 'Unavailable' : ($site?->public_enabled && $site?->published_site_version_id ? 'Published' : 'Draft'),
+                'supporting' => $site?->public_enabled && $site?->published_site_version_id ? 'Review your website and sales activity.' : 'Prepare the website and complete the shared launch checklist.',
+                'href' => $url($websiteEnabled ? 'managed-website.index' : 'account-help.index'), 'tone' => 'emerald'],
+            'summary_cards' => $cards, 'next_actions' => $actions, 'channel_pulse' => null,
+            'upcoming_jobs' => [], 'class_calendar' => null, 'front_yard_launch' => null,
+            'workflow_automation_health' => null, 'owner_reporting' => null, 'pinned_modules' => [],
         ];
     }
 
