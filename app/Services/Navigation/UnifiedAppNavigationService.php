@@ -79,6 +79,14 @@ class UnifiedAppNavigationService
         $items = [];
         $items[] = ['key' => 'home', 'icon' => 'home', 'href' => $homeHref, 'label' => 'Home', 'current' => request()->routeIs('dashboard')];
 
+        if ($tenant && $user && ($canAccessOps || $roleCanAccessMarketing)
+            && $user->tenants()->whereKey($tenant->id)->wherePivot('membership_active', true)->exists()
+            && $tenant->clientProjects()->where('metadata->checklist_enabled', true)->exists()) {
+            $items[] = ['key' => 'project-checklist', 'icon' => 'clipboard-document-check',
+                'href' => route('client.projects.checklist', ['tenant' => $tenant->slug]),
+                'label' => 'Launch checklist', 'current' => request()->routeIs('client.projects.checklist*')];
+        }
+
         // Enabled branches are collected and rendered together near Settings.
         // Core work remains the first scanning destination in the sidebar.
         $branchChildren = [];

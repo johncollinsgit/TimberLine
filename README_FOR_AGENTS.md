@@ -1,5 +1,16 @@
 # START HERE
 
+## Client project launch checklists (2026-09-21)
+
+- Tenant logins now expose a two-owner launch checklist at
+  `/client/projects/checklist` when a client project opts in through metadata.
+  It reuses client-project tickets/tasks, enforces active membership and
+  ownership, and audits completion/reopen without activating business services.
+- Import reviewed tenant content with `client-projects:import-checklist`;
+  preview is default and replay preserves existing progress. See
+  `docs/operations/client-project-checklists.md`. Imports send no notifications.
+
+
 ## Trajectory financial outlook charts (2026-09-19)
 
 The main dashboard now pairs the daily cash outlook with monthly expected-income,
