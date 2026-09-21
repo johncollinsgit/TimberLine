@@ -136,7 +136,7 @@ class WebsiteCommerceController extends Controller
     public function createCustomer(Request $request, WebsiteCommerceService $commerce): View
     {
         $tenant = $this->tenant($request);
-        $this->requireCommerce($tenant, $commerce);
+        app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->assertEditor($this->site($tenant), $request->user());
 
         return view('managed-website.commerce.customer', ['site' => $this->site($tenant), 'customer' => null, 'orders' => collect()]);
     }
@@ -145,7 +145,7 @@ class WebsiteCommerceController extends Controller
     {
         $tenant = $this->tenant($request);
         abort_unless((int) $customer->tenant_id === (int) $tenant->id, 404);
-        $this->requireCommerce($tenant, $commerce);
+        app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->assertEditor($this->site($tenant), $request->user());
         $orders = WebsiteOrder::query()->forTenant($tenant)->where('website_customer_id', $customer->id)->latest()->paginate(20);
 
         return view('managed-website.commerce.customer', compact('customer', 'orders') + ['site' => $this->site($tenant)]);
@@ -154,7 +154,7 @@ class WebsiteCommerceController extends Controller
     public function storeCustomer(Request $request, WebsiteCommerceService $commerce): RedirectResponse
     {
         $tenant = $this->tenant($request);
-        $this->requireCommerce($tenant, $commerce);
+        app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->assertEditor($this->site($tenant), $request->user());
         $customer = WebsiteCustomer::query()->create($this->customerData($request) + ['tenant_id' => $tenant->id, 'status' => 'active']);
 
         return redirect()->route('managed-website.customers.show', $customer)->with('status', 'Website customer saved.');
@@ -164,7 +164,7 @@ class WebsiteCommerceController extends Controller
     {
         $tenant = $this->tenant($request);
         abort_unless((int) $customer->tenant_id === (int) $tenant->id, 404);
-        $this->requireCommerce($tenant, $commerce);
+        app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->assertEditor($this->site($tenant), $request->user());
         $customer->update($this->customerData($request));
 
         return back()->with('status', 'Website customer updated.');
@@ -229,10 +229,9 @@ class WebsiteCommerceController extends Controller
     {
         $tenant = $this->tenant($request);
         abort_unless((int) $order->tenant_id === (int) $tenant->id, 404);
-        $this->requireCommerce($tenant, $commerce);
         $order->load(['lines', 'payments', 'fulfillments.lines', 'shipments.events', 'events']);
 
-        return view('managed-website.commerce.order', compact('tenant', 'order'));
+        return view('managed-website.commerce.order', compact('tenant', 'order') + ['canManageOrders' => $commerce->enabledFor($tenant)]);
     }
 
     public function fulfill(Request $request, WebsiteOrder $order, WebsiteCommerceService $commerce): RedirectResponse
@@ -510,7 +509,7 @@ class WebsiteCommerceController extends Controller
         return $request->validate([
             'first_name' => ['nullable', 'string', 'max:120'],
             'last_name' => ['nullable', 'string', 'max:120'],
-            'email' => ['nullable', 'email:rfc,dns', 'max:190'],
+            'email' => ['nullable', 'email:rfc', 'max:190', \Illuminate\Validation\Rule::unique('website_customers', 'email')->where('tenant_id', $this->tenant($request)->id)->ignore($request->route('customer')?->id)],
             'phone' => ['nullable', 'string', 'max:80'],
         ]);
     }

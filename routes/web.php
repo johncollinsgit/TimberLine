@@ -707,6 +707,8 @@ Route::post('/website/forms/{page}', [ManagedWebsiteController::class, 'submitFo
     ->middleware('throttle:6,1')
     ->name('managed-website.forms.submit');
 
+Route::get('/website-catalog-media/{media}', [\App\Http\Controllers\WebsiteCatalogController::class, 'media'])->name('managed-website.catalog.media');
+
 Route::get('/website-media/{media}', [ManagedWebsiteController::class, 'showMedia'])
     ->name('managed-website.media.show');
 Route::get('/website-thumbnail-source/{siteVersion}/{pageVersion}', [ManagedWebsiteController::class, 'thumbnailSource'])
@@ -775,7 +777,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/media', [ManagedWebsiteController::class, 'media'])->name('media.index');
             Route::post('/media', [ManagedWebsiteController::class, 'storeMedia'])->name('media.store');
             Route::get('/thumbnails/{siteVersion}', [ManagedWebsiteController::class, 'showThumbnail'])->name('thumbnails.show');
-            Route::get('/products', [WebsiteCommerceController::class, 'products'])->name('products.index');
+            Route::get('/products', [\App\Http\Controllers\WebsiteCatalogController::class, 'index'])->name('products.index');
+            Route::get('/products/create', [\App\Http\Controllers\WebsiteCatalogController::class, 'create'])->name('products.create');
+            Route::get('/products/{product}/edit', [\App\Http\Controllers\WebsiteCatalogController::class, 'edit'])->name('products.edit');
+            Route::get('/collections', [\App\Http\Controllers\WebsiteCatalogController::class, 'collections'])->name('collections.index');
+            Route::get('/collections/create', [\App\Http\Controllers\WebsiteCatalogController::class, 'createCollection'])->name('collections.create');
+            Route::post('/collections', [\App\Http\Controllers\WebsiteCatalogController::class, 'storeCollection'])->name('collections.store');
+            Route::get('/collections/{collection}/edit', [\App\Http\Controllers\WebsiteCatalogController::class, 'editCollection'])->name('collections.edit');
+            Route::put('/collections/{collection}', [\App\Http\Controllers\WebsiteCatalogController::class, 'updateCollection'])->name('collections.update');
             Route::get('/commerce/imports', [WebsiteCommerceController::class, 'imports'])->name('commerce.imports');
             Route::post('/commerce/imports/dry-run', [WebsiteCommerceController::class, 'createImportDryRun'])->name('commerce.imports.dry-run');
             Route::get('/commerce/shipping', [WebsiteCommerceController::class, 'shippingSettings'])->name('commerce.shipping');
@@ -783,9 +792,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/commerce/shipping/packages', [WebsiteCommerceController::class, 'saveShippingPackage'])->name('commerce.shipping.packages.store');
             Route::get('/products/export', [WebsiteCommerceController::class, 'exportProducts'])->name('products.export');
             Route::post('/products/import', [WebsiteCommerceController::class, 'importProducts'])->name('products.import');
-            Route::post('/products', [WebsiteCommerceController::class, 'storeProduct'])->name('products.store');
-            Route::put('/products/{product}', [WebsiteCommerceController::class, 'updateProduct'])->name('products.update');
-            Route::delete('/products/{product}', [WebsiteCommerceController::class, 'archiveProduct'])->name('products.destroy');
+            Route::post('/products', [\App\Http\Controllers\WebsiteCatalogController::class, 'store'])->name('products.store');
+            Route::put('/products/{product}', [\App\Http\Controllers\WebsiteCatalogController::class, 'update'])->name('products.update');
+            Route::delete('/products/{product}', [\App\Http\Controllers\WebsiteCatalogController::class, 'archive'])->name('products.destroy');
             Route::get('/customers', [WebsiteCommerceController::class, 'customers'])->name('customers.index');
             Route::get('/customers/create', [WebsiteCommerceController::class, 'createCustomer'])->name('customers.create');
             Route::post('/customers', [WebsiteCommerceController::class, 'storeCustomer'])->name('customers.store');

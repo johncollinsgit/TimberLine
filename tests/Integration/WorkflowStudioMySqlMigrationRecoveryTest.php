@@ -967,3 +967,23 @@ it('resumes trajectory after MySQL retains finance accounts before trailing fina
         ->and(Schema::hasIndex('trajectory_allocations', 'traj_allocation_unique'))->toBeTrue();
     DB::table('trajectory_spaces')->where('id', $id)->delete();
 });
+
+it('resumes website collections after MySQL retains the collection table', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+    Schema::dropIfExists('website_collection_products');
+    Schema::dropIfExists('website_collections');
+    foreach (['tenants', 'tenant_sites', 'website_products'] as $name) {
+        if (! Schema::hasTable($name)) {
+            Schema::create($name, fn (Blueprint $table) => $table->id());
+        }
+    }
+    $migration = require database_path('migrations/2026_09_21_210000_create_website_collections.php');
+    $migration->up();
+    Schema::drop('website_collection_products');
+    $migration->up();
+    $migration->up();
+    expect(Schema::hasIndex('website_collections', 'wc_site_handle_uq'))->toBeTrue()
+        ->and(Schema::hasIndex('website_collection_products', 'wcp_collection_product_uq'))->toBeTrue();
+});

@@ -19,7 +19,7 @@ class UseConnectedWebsiteEditor
         if (! $service->connected($site)) {
             return $next($request);
         }
-        if ($request->routeIs('managed-website.index', 'managed-website.editor', 'managed-website.products.index', 'managed-website.services.index')) {
+        if ($request->routeIs('managed-website.index', 'managed-website.editor')) {
             if ($request->route('page')) {
                 $page = $request->route('page');
                 abort_unless((int) $page->tenant_id === $tenant->id, 404);
@@ -35,7 +35,7 @@ class UseConnectedWebsiteEditor
         if (! $request->isMethod('GET') && ! $request->isMethod('HEAD') && $request->routeIs(
             'managed-website.create', 'managed-website.setup.*', 'managed-website.themes.*', 'managed-website.domains.*',
             'managed-website.editor.*', 'managed-website.pages.*', 'managed-website.publish',
-            'managed-website.products.*', 'managed-website.services.*', 'managed-website.commerce.imports.*'
+            'managed-website.products.import', 'managed-website.services.*', 'managed-website.commerce.imports.*'
         )) {
             abort(409, 'Use Website to edit and publish this connected site.');
         }

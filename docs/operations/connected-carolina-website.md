@@ -2,7 +2,7 @@
 
 The existing Carolina Barrel Cloudflare/vinext renderer stays at
 `https://carolina-barrel-co.theeverbranch.com`. Everbranch owns its editable
-content, immutable published snapshots, quote-product mirror, and new inquiries.
+content, immutable published snapshots, product catalog, and new inquiries.
 The renderer source remains in the separate `carolina-barrel-preview` project.
 
 ## Release and activation
@@ -15,15 +15,18 @@ The renderer source remains in the separate `carolina-barrel-preview` project.
 3. Deploy the matching renderer to its existing public Worker and private Sites
    preview. The two copies of `content-manifest.json` / `carolina-barrel.json`
    must match. No credentials are embedded in either manifest.
-4. Verify Website and Products show the connected editor for both authorized
-   accounts. Save/preview a draft and confirm public content stays published.
+4. Run `website:initialize-connected-catalog --actor=1` (dry run), then `--apply`.
+   Verify Website opens page editing and Products opens the separate catalog for
+   both authorized accounts. Save/preview a draft and confirm public content stays published.
    Do not create production test inquiries or send welcome messages.
 
-No schema or entitlement changes are required. Previous generic site/page
+The shared catalog release adds collection and membership tables; no entitlement
+changes are required. Previous generic site/page
 snapshots remain intact. Activation versions the reviewed live baseline from the
 manifest; it does not migrate the unrelated native template into the live design.
-Products are quote-only: publishing mirrors the five renderer products into
-`website_products`/variants, never legacy or Shopify records. New quote, wholesale,
+Initial connection imports the five quote products into `website_products` and
+variants. Subsequent catalog editing is independent; page publishing never changes
+product records. See `website-catalog-admin.md`. New quote, wholesale,
 and partner requests become `form_submissions` and send no notifications, create
 no customers/accounts/orders, and collect no payment. Initial live D1 inspection
 found zero applications and zero order requests; retain the D1 tables and existing
@@ -32,16 +35,17 @@ separately rather than removing unrecognized records during activation.
 
 ## Editing and preview
 
-`/website` and `/website/products` use the connected editor after opt-in through
+`/website` uses the connected page editor after opt-in through
 `tenant_sites.settings.connected_renderer=carolina_barrel_v1`. Content is stored in
 `tenant_site_versions.settings.connected_content`; Save always creates a new
 private snapshot, Publish clones it into an immutable published snapshot, and
 Restore creates a draft. Optimistic draft IDs reject stale writes/publishes.
-Generic theme/page/catalog mutations are blocked for this renderer. Other tenant
+Generic theme/page mutations and legacy catalog imports are blocked for this renderer.
+Products, collections, customers and orders use the shared native administration. Other tenant
 sites keep the existing editor. Publish audit events retain previous pointer IDs.
 
 The anonymous content endpoint is pinned to this renderer and tenant. It only
-returns published content unless given an encrypted preview token bound to the
+returns published page content and the current active catalog unless given an encrypted preview token bound to the
 site, tenant, version, active editor and a 15-minute expiry. Preview and editor
 responses are private/no-store. The renderer removes incoming preview headers,
 sets its internal header from the URL token, preserves it on internal links,

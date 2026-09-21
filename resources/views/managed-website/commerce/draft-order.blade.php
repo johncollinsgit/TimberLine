@@ -1,6 +1,7 @@
 <x-layouts::app.sidebar title="Create draft order">
     <flux:main>
         <div class="mx-auto max-w-4xl space-y-5 pb-10">
+            @include('managed-website.catalog.nav')
             <x-ui.operational-header title="Create draft order" description="Save an internal native Website order for review. This does not charge, reserve inventory, buy shipping, or contact anyone." :back="['href' => route('managed-website.orders.index'), 'label' => 'Orders']" />
             @if($errors->any())<div class="border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-950" role="alert">{{ $errors->first() }}</div>@endif
             <form method="POST" action="{{ route('managed-website.orders.drafts.store') }}" class="border border-zinc-200 bg-white">@csrf

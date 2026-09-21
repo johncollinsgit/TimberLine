@@ -95,4 +95,8 @@ return [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['first owner-approval column retained before the remaining approval fields and foreign key'],
     ],
+    '2026_09_21_210000_create_website_collections.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['collection table retained before membership table creation'],
+    ],
 ];
