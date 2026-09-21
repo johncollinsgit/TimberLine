@@ -1,5 +1,15 @@
 # START HERE
 
+## Carolina Barrel connected website (2026-09-21)
+
+Carolina Barrel's existing Cloudflare site now has an opt-in Everbranch content
+editor, versioned draft/preview/publish/restore controls, five quote-product mirrors,
+and workspace inquiry capture. Its existing renderer and public domain remain in
+place. Other sites retain the generic editor. No accounts, emails, payments or
+entitlements are activated by this integration. See
+`docs/operations/connected-carolina-website.md` for release, gates and rollback.
+
+
 
 ## Website client workspace focus (2026-09-21)
 

@@ -1,0 +1,1655 @@
+{
+  "renderer": "carolina_barrel_v1",
+  "origin": "https://carolina-barrel-co.theeverbranch.com",
+  "groups": {
+    "shared": "Header, footer & forms",
+    "home": "Home",
+    "stays": "Stay Awhile",
+    "field": "Field & Hearth",
+    "work": "Our work",
+    "partners": "Partners",
+    "wholesale": "Wholesale",
+    "product": "Product page",
+    "products": "Products"
+  },
+  "fields": {
+    "shared_001": {
+      "group": "shared",
+      "label": "/",
+      "type": "link"
+    },
+    "shared_002": {
+      "group": "shared",
+      "label": "Carolina Barrel Co.",
+      "type": "text"
+    },
+    "shared_003": {
+      "group": "shared",
+      "label": "Handcrafted in Carolina",
+      "type": "text"
+    },
+    "shared_004": {
+      "group": "shared",
+      "label": "/stays",
+      "type": "link"
+    },
+    "shared_005": {
+      "group": "shared",
+      "label": "Stay Awhile",
+      "type": "text"
+    },
+    "shared_006": {
+      "group": "shared",
+      "label": "/field",
+      "type": "link"
+    },
+    "shared_007": {
+      "group": "shared",
+      "label": "Field & Hearth",
+      "type": "text"
+    },
+    "shared_008": {
+      "group": "shared",
+      "label": "/work",
+      "type": "link"
+    },
+    "shared_009": {
+      "group": "shared",
+      "label": "Our work",
+      "type": "text"
+    },
+    "shared_010": {
+      "group": "shared",
+      "label": "/partners",
+      "type": "link"
+    },
+    "shared_011": {
+      "group": "shared",
+      "label": "Partners",
+      "type": "text"
+    },
+    "shared_012": {
+      "group": "shared",
+      "label": "/wholesale",
+      "type": "link"
+    },
+    "shared_013": {
+      "group": "shared",
+      "label": "Wholesale",
+      "type": "text"
+    },
+    "shared_014": {
+      "group": "shared",
+      "label": "Carolina Barrel Co.",
+      "type": "text"
+    },
+    "shared_015": {
+      "group": "shared",
+      "label": "Handcrafted chairs and home accessories made from reclaimed wine barrels.",
+      "type": "text"
+    },
+    "shared_016": {
+      "group": "shared",
+      "label": "tel:+17049294133",
+      "type": "link"
+    },
+    "shared_017": {
+      "group": "shared",
+      "label": "704-929-4133",
+      "type": "text"
+    },
+    "shared_018": {
+      "group": "shared",
+      "label": "mailto:carolinabarrelco@gmail.com",
+      "type": "link"
+    },
+    "shared_019": {
+      "group": "shared",
+      "label": "carolinabarrelco@gmail.com",
+      "type": "text"
+    },
+    "shared_020": {
+      "group": "shared",
+      "label": "Collections",
+      "type": "text"
+    },
+    "shared_021": {
+      "group": "shared",
+      "label": "/stays",
+      "type": "link"
+    },
+    "shared_022": {
+      "group": "shared",
+      "label": "Stay Awhile",
+      "type": "text"
+    },
+    "shared_023": {
+      "group": "shared",
+      "label": "/field",
+      "type": "link"
+    },
+    "shared_024": {
+      "group": "shared",
+      "label": "Field & Hearth",
+      "type": "text"
+    },
+    "shared_025": {
+      "group": "shared",
+      "label": "Trade",
+      "type": "text"
+    },
+    "shared_026": {
+      "group": "shared",
+      "label": "/wholesale",
+      "type": "link"
+    },
+    "shared_027": {
+      "group": "shared",
+      "label": "Wholesale portal",
+      "type": "text"
+    },
+    "shared_028": {
+      "group": "shared",
+      "label": "/partners",
+      "type": "link"
+    },
+    "shared_029": {
+      "group": "shared",
+      "label": "Affiliate partners",
+      "type": "text"
+    },
+    "shared_030": {
+      "group": "shared",
+      "label": "Follow",
+      "type": "text"
+    },
+    "shared_031": {
+      "group": "shared",
+      "label": "https://www.instagram.com/carolinabarrelco",
+      "type": "link"
+    },
+    "shared_032": {
+      "group": "shared",
+      "label": "Instagram ↗",
+      "type": "text"
+    },
+    "shared_033": {
+      "group": "shared",
+      "label": "https://www.facebook.com/profile.php?id=100066775430414",
+      "type": "link"
+    },
+    "shared_034": {
+      "group": "shared",
+      "label": "Facebook ↗",
+      "type": "text"
+    },
+    "shared_035": {
+      "group": "shared",
+      "label": "© ",
+      "type": "text"
+    },
+    "shared_036": {
+      "group": "shared",
+      "label": " Carolina Barrel Co.",
+      "type": "text"
+    },
+    "shared_037": {
+      "group": "shared",
+      "label": "One catalog · Powered by Everbranch",
+      "type": "text"
+    },
+    "home_001": {
+      "group": "home",
+      "label": "/images/five-stave-rocking-chair-lodge.webp",
+      "type": "image"
+    },
+    "home_002": {
+      "group": "home",
+      "label": "The five-stave original · Carolina made",
+      "type": "text"
+    },
+    "shared_038": {
+      "group": "shared",
+      "label": "A rocker made",
+      "type": "text"
+    },
+    "shared_039": {
+      "group": "shared",
+      "label": "to be remembered.",
+      "type": "text"
+    },
+    "home_003": {
+      "group": "home",
+      "label": "The real Carolina Barrel Co. rocking chair—five reclaimed barrel staves, sculpted arms, an",
+      "type": "text"
+    },
+    "home_004": {
+      "group": "home",
+      "label": "/products/five-stave-rocking-chair",
+      "type": "link"
+    },
+    "home_005": {
+      "group": "home",
+      "label": "View this five-stave rocker",
+      "type": "text"
+    },
+    "home_006": {
+      "group": "home",
+      "label": "/images/barrel-bar-suite.webp",
+      "type": "image"
+    },
+    "home_007": {
+      "group": "home",
+      "label": "Hospitality statement piece · Built to order",
+      "type": "text"
+    },
+    "shared_040": {
+      "group": "shared",
+      "label": "Give the room",
+      "type": "text"
+    },
+    "shared_041": {
+      "group": "shared",
+      "label": "its own story.",
+      "type": "text"
+    },
+    "home_008": {
+      "group": "home",
+      "label": "A full barrel bar installation designed for memorable vacation homes, tasting rooms, and g",
+      "type": "text"
+    },
+    "home_009": {
+      "group": "home",
+      "label": "/products/full-bar-installation",
+      "type": "link"
+    },
+    "home_010": {
+      "group": "home",
+      "label": "Explore the full barrel bar",
+      "type": "text"
+    },
+    "home_011": {
+      "group": "home",
+      "label": "/images/fire-table-product.webp",
+      "type": "image"
+    },
+    "home_012": {
+      "group": "home",
+      "label": "Outdoor gathering · Reclaimed wine barrel",
+      "type": "text"
+    },
+    "shared_042": {
+      "group": "shared",
+      "label": "The night starts",
+      "type": "text"
+    },
+    "shared_043": {
+      "group": "shared",
+      "label": "around the fire.",
+      "type": "text"
+    },
+    "home_013": {
+      "group": "home",
+      "label": "A substantial barrel fire table with generous room to gather—made for patios, lodges, and ",
+      "type": "text"
+    },
+    "home_014": {
+      "group": "home",
+      "label": "/products/barrel-fire-table",
+      "type": "link"
+    },
+    "home_015": {
+      "group": "home",
+      "label": "View the barrel fire table",
+      "type": "text"
+    },
+    "shared_044": {
+      "group": "shared",
+      "label": "/work",
+      "type": "link"
+    },
+    "shared_045": {
+      "group": "shared",
+      "label": "View the complete collection ",
+      "type": "text"
+    },
+    "shared_046": {
+      "group": "shared",
+      "label": "↗",
+      "type": "text"
+    },
+    "shared_047": {
+      "group": "shared",
+      "label": " / ",
+      "type": "text"
+    },
+    "shared_048": {
+      "group": "shared",
+      "label": "Carolina Barrel Co. handcrafted barrel furniture",
+      "type": "text"
+    },
+    "shared_049": {
+      "group": "shared",
+      "label": "Enter collection →",
+      "type": "text"
+    },
+    "home_016": {
+      "group": "home",
+      "label": "Five-stave seating",
+      "type": "text"
+    },
+    "home_017": {
+      "group": "home",
+      "label": "Rocking and lounge chairs with the maker's recognizable five-stave back.",
+      "type": "text"
+    },
+    "home_018": {
+      "group": "home",
+      "label": "/images/dock-five-stave-chairs.webp",
+      "type": "image"
+    },
+    "home_019": {
+      "group": "home",
+      "label": "/products/five-stave-lounge-chair",
+      "type": "link"
+    },
+    "home_020": {
+      "group": "home",
+      "label": "Fire tables",
+      "type": "text"
+    },
+    "home_021": {
+      "group": "home",
+      "label": "Wine-barrel fire tables that turn an outdoor space into a gathering place.",
+      "type": "text"
+    },
+    "home_022": {
+      "group": "home",
+      "label": "/images/fire-table-product.webp",
+      "type": "image"
+    },
+    "home_023": {
+      "group": "home",
+      "label": "/products/barrel-fire-table",
+      "type": "link"
+    },
+    "home_024": {
+      "group": "home",
+      "label": "Home bars",
+      "type": "text"
+    },
+    "home_025": {
+      "group": "home",
+      "label": "Full barrel bars, shelving, and property-defining entertaining installations.",
+      "type": "text"
+    },
+    "home_026": {
+      "group": "home",
+      "label": "/images/barrel-bar-suite.webp",
+      "type": "image"
+    },
+    "home_027": {
+      "group": "home",
+      "label": "/products/full-bar-installation",
+      "type": "link"
+    },
+    "home_028": {
+      "group": "home",
+      "label": "Wine storage",
+      "type": "text"
+    },
+    "home_029": {
+      "group": "home",
+      "label": "Barrel-form bottle and stemware storage for homes, rentals, and tasting rooms.",
+      "type": "text"
+    },
+    "home_030": {
+      "group": "home",
+      "label": "/images/barrel-wine-storage.webp",
+      "type": "image"
+    },
+    "home_031": {
+      "group": "home",
+      "label": "/products/barrel-wine-storage",
+      "type": "link"
+    },
+    "shared_050": {
+      "group": "shared",
+      "label": "Real pieces. Made by hand.",
+      "type": "text"
+    },
+    "shared_051": {
+      "group": "shared",
+      "label": "The barrel types",
+      "type": "text"
+    },
+    "shared_052": {
+      "group": "shared",
+      "label": "/work",
+      "type": "link"
+    },
+    "shared_053": {
+      "group": "shared",
+      "label": "View full catalog →",
+      "type": "text"
+    },
+    "shared_054": {
+      "group": "shared",
+      "label": "View product →",
+      "type": "text"
+    },
+    "shared_055": {
+      "group": "shared",
+      "label": "Name",
+      "type": "text"
+    },
+    "shared_056": {
+      "group": "shared",
+      "label": "Email",
+      "type": "text"
+    },
+    "shared_057": {
+      "group": "shared",
+      "label": "Quantity",
+      "type": "text"
+    },
+    "shared_058": {
+      "group": "shared",
+      "label": "Finish direction",
+      "type": "text"
+    },
+    "shared_059": {
+      "group": "shared",
+      "label": "Natural two-tone",
+      "type": "text"
+    },
+    "shared_060": {
+      "group": "shared",
+      "label": "Dark heritage",
+      "type": "text"
+    },
+    "shared_061": {
+      "group": "shared",
+      "label": "Wine-stave red",
+      "type": "text"
+    },
+    "shared_062": {
+      "group": "shared",
+      "label": "Discuss a custom finish",
+      "type": "text"
+    },
+    "shared_063": {
+      "group": "shared",
+      "label": "Referral code (optional)",
+      "type": "text"
+    },
+    "shared_064": {
+      "group": "shared",
+      "label": "Enter a code you received",
+      "type": "text"
+    },
+    "shared_065": {
+      "group": "shared",
+      "label": "Delivery location & notes",
+      "type": "text"
+    },
+    "shared_066": {
+      "group": "shared",
+      "label": "City, state, timing, and anything Carolina Barrel Co. should know",
+      "type": "text"
+    },
+    "shared_067": {
+      "group": "shared",
+      "label": "Name",
+      "type": "text"
+    },
+    "shared_068": {
+      "group": "shared",
+      "label": "Company",
+      "type": "text"
+    },
+    "shared_069": {
+      "group": "shared",
+      "label": "Email",
+      "type": "text"
+    },
+    "shared_070": {
+      "group": "shared",
+      "label": "Phone",
+      "type": "text"
+    },
+    "shared_071": {
+      "group": "shared",
+      "label": "Website or social profile",
+      "type": "text"
+    },
+    "shared_072": {
+      "group": "shared",
+      "label": "https://",
+      "type": "text"
+    },
+    "shared_073": {
+      "group": "shared",
+      "label": "Business type",
+      "type": "text"
+    },
+    "shared_074": {
+      "group": "shared",
+      "label": "Interior designer",
+      "type": "text"
+    },
+    "shared_075": {
+      "group": "shared",
+      "label": "Vacation-rental operator",
+      "type": "text"
+    },
+    "shared_076": {
+      "group": "shared",
+      "label": "Retail store",
+      "type": "text"
+    },
+    "shared_077": {
+      "group": "shared",
+      "label": "Hospitality group",
+      "type": "text"
+    },
+    "shared_078": {
+      "group": "shared",
+      "label": "Other",
+      "type": "text"
+    },
+    "shared_079": {
+      "group": "shared",
+      "label": "Primary audience",
+      "type": "text"
+    },
+    "shared_080": {
+      "group": "shared",
+      "label": "Airbnb and vacation rentals",
+      "type": "text"
+    },
+    "shared_081": {
+      "group": "shared",
+      "label": "Outdoor and sporting",
+      "type": "text"
+    },
+    "shared_082": {
+      "group": "shared",
+      "label": "Home and design",
+      "type": "text"
+    },
+    "shared_083": {
+      "group": "shared",
+      "label": "Local lifestyle",
+      "type": "text"
+    },
+    "shared_084": {
+      "group": "shared",
+      "label": "Other",
+      "type": "text"
+    },
+    "shared_085": {
+      "group": "shared",
+      "label": "Tell us what you have in mind",
+      "type": "text"
+    },
+    "shared_086": {
+      "group": "shared",
+      "label": "Affiliate link preview",
+      "type": "text"
+    },
+    "shared_087": {
+      "group": "shared",
+      "label": "Your partner code",
+      "type": "text"
+    },
+    "shared_088": {
+      "group": "shared",
+      "label": "Copy preview link",
+      "type": "text"
+    },
+    "home_032": {
+      "group": "home",
+      "label": "The Carolina Barrel Co. collection",
+      "type": "text"
+    },
+    "home_033": {
+      "group": "home",
+      "label": "Built once. Remembered for years.",
+      "type": "text"
+    },
+    "home_034": {
+      "group": "home",
+      "label": "Both collections lead back to one catalog, one inquiry desk, and one source of truth insid",
+      "type": "text"
+    },
+    "home_035": {
+      "group": "home",
+      "label": "/stays",
+      "type": "link"
+    },
+    "home_036": {
+      "group": "home",
+      "label": "/images/barrel-bar-suite.webp",
+      "type": "image"
+    },
+    "home_037": {
+      "group": "home",
+      "label": "Hospitality collection",
+      "type": "text"
+    },
+    "home_038": {
+      "group": "home",
+      "label": "Stay Awhile",
+      "type": "text"
+    },
+    "home_039": {
+      "group": "home",
+      "label": "Statement furniture, fire tables, bars, and guest-ready details for high-end rentals and g",
+      "type": "text"
+    },
+    "home_040": {
+      "group": "home",
+      "label": "/field",
+      "type": "link"
+    },
+    "home_041": {
+      "group": "home",
+      "label": "/images/dock-five-stave-chairs.webp",
+      "type": "image"
+    },
+    "home_042": {
+      "group": "home",
+      "label": "Heritage collection",
+      "type": "text"
+    },
+    "home_043": {
+      "group": "home",
+      "label": "Field & Hearth",
+      "type": "text"
+    },
+    "home_044": {
+      "group": "home",
+      "label": "Five-stave seating and purposeful pieces for lake houses, sporting rooms, patios, and ever",
+      "type": "text"
+    },
+    "home_045": {
+      "group": "home",
+      "label": "For designers, hosts & retailers",
+      "type": "text"
+    },
+    "home_046": {
+      "group": "home",
+      "label": "Made for one room—or a portfolio of properties.",
+      "type": "text"
+    },
+    "home_047": {
+      "group": "home",
+      "label": "/wholesale",
+      "type": "link"
+    },
+    "home_048": {
+      "group": "home",
+      "label": "Wholesale portal",
+      "type": "text"
+    },
+    "home_049": {
+      "group": "home",
+      "label": "/partners",
+      "type": "link"
+    },
+    "home_050": {
+      "group": "home",
+      "label": "Partner program",
+      "type": "text"
+    },
+    "stays_001": {
+      "group": "stays",
+      "label": "/images/barrel-bar-suite.webp",
+      "type": "image"
+    },
+    "stays_002": {
+      "group": "stays",
+      "label": "Hospitality collection",
+      "type": "text"
+    },
+    "stays_003": {
+      "group": "stays",
+      "label": "Stay",
+      "type": "text"
+    },
+    "stays_004": {
+      "group": "stays",
+      "label": "Awhile.",
+      "type": "text"
+    },
+    "stays_005": {
+      "group": "stays",
+      "label": "Statement pieces for the rooms guests photograph, remember, and return to—from full entert",
+      "type": "text"
+    },
+    "stays_006": {
+      "group": "stays",
+      "label": "/products/full-bar-installation",
+      "type": "link"
+    },
+    "stays_007": {
+      "group": "stays",
+      "label": "View this full bar",
+      "type": "text"
+    },
+    "stays_008": {
+      "group": "stays",
+      "label": "/images/five-stave-rocking-chair-lodge.webp",
+      "type": "image"
+    },
+    "stays_009": {
+      "group": "stays",
+      "label": "Carolina Barrel Co. five-stave rocking chair in a lodge setting",
+      "type": "text"
+    },
+    "stays_010": {
+      "group": "stays",
+      "label": "Designed for destination spaces",
+      "type": "text"
+    },
+    "stays_011": {
+      "group": "stays",
+      "label": "The detail guests remember.",
+      "type": "text"
+    },
+    "stays_012": {
+      "group": "stays",
+      "label": "Carolina Barrel Co. turns reclaimed wine barrels into functional centerpieces with real gr",
+      "type": "text"
+    },
+    "stays_013": {
+      "group": "stays",
+      "label": "Five-stave rocking and lounge chairs",
+      "type": "text"
+    },
+    "stays_014": {
+      "group": "stays",
+      "label": "Barrel fire tables for outdoor gathering",
+      "type": "text"
+    },
+    "stays_015": {
+      "group": "stays",
+      "label": "Full bar and wine-storage installations",
+      "type": "text"
+    },
+    "stays_016": {
+      "group": "stays",
+      "label": "Custom pieces for cabins and rental portfolios",
+      "type": "text"
+    },
+    "stays_017": {
+      "group": "stays",
+      "label": "/#collection",
+      "type": "link"
+    },
+    "stays_018": {
+      "group": "stays",
+      "label": "View all barrel types →",
+      "type": "text"
+    },
+    "stays_019": {
+      "group": "stays",
+      "label": "“Built to become the part of the property everyone talks about.”",
+      "type": "text"
+    },
+    "stays_020": {
+      "group": "stays",
+      "label": "Carolina-made · Property-ready · Hand-finished",
+      "type": "text"
+    },
+    "stays_021": {
+      "group": "stays",
+      "label": "Multiple properties?",
+      "type": "text"
+    },
+    "stays_022": {
+      "group": "stays",
+      "label": "Build a consistent signature across every stay.",
+      "type": "text"
+    },
+    "stays_023": {
+      "group": "stays",
+      "label": "/wholesale",
+      "type": "link"
+    },
+    "stays_024": {
+      "group": "stays",
+      "label": "Wholesale portal",
+      "type": "text"
+    },
+    "stays_025": {
+      "group": "stays",
+      "label": "/field",
+      "type": "link"
+    },
+    "stays_026": {
+      "group": "stays",
+      "label": "Visit Field & Hearth",
+      "type": "text"
+    },
+    "field_001": {
+      "group": "field",
+      "label": "/images/dock-five-stave-chairs.webp",
+      "type": "image"
+    },
+    "field_002": {
+      "group": "field",
+      "label": "Heritage collection",
+      "type": "text"
+    },
+    "field_003": {
+      "group": "field",
+      "label": "Field &",
+      "type": "text"
+    },
+    "field_004": {
+      "group": "field",
+      "label": "Hearth.",
+      "type": "text"
+    },
+    "field_005": {
+      "group": "field",
+      "label": "Purposeful barrel furniture for the porch, dock, fire, and sporting room—made for people w",
+      "type": "text"
+    },
+    "field_006": {
+      "group": "field",
+      "label": "/products/five-stave-lounge-chair",
+      "type": "link"
+    },
+    "field_007": {
+      "group": "field",
+      "label": "View these five-stave chairs",
+      "type": "text"
+    },
+    "field_008": {
+      "group": "field",
+      "label": "/images/dock-five-stave-chairs.webp",
+      "type": "image"
+    },
+    "field_009": {
+      "group": "field",
+      "label": "Two Carolina Barrel Co. five-stave chairs on a lakeside dock",
+      "type": "text"
+    },
+    "field_010": {
+      "group": "field",
+      "label": "The five-stave signature",
+      "type": "text"
+    },
+    "field_011": {
+      "group": "field",
+      "label": "Recognizable from across the water.",
+      "type": "text"
+    },
+    "field_012": {
+      "group": "field",
+      "label": "Every featured chair keeps the real Carolina Barrel Co. construction: exactly five back st",
+      "type": "text"
+    },
+    "field_013": {
+      "group": "field",
+      "label": "Five-stave outdoor lounge chairs",
+      "type": "text"
+    },
+    "field_014": {
+      "group": "field",
+      "label": "Five-stave rocking chairs with cup-holder arms",
+      "type": "text"
+    },
+    "field_015": {
+      "group": "field",
+      "label": "Fire tables and conversation pieces",
+      "type": "text"
+    },
+    "field_016": {
+      "group": "field",
+      "label": "Owner-approved secure-storage configurations",
+      "type": "text"
+    },
+    "field_017": {
+      "group": "field",
+      "label": "Gun-rack photography and exact configurations remain pending owner approval.",
+      "type": "text"
+    },
+    "field_018": {
+      "group": "field",
+      "label": " The site will never invent a product or claim a configuration he has not confirmed.",
+      "type": "text"
+    },
+    "field_019": {
+      "group": "field",
+      "label": "“Honest materials. Strong silhouettes. Nothing mass-produced.”",
+      "type": "text"
+    },
+    "field_020": {
+      "group": "field",
+      "label": "Lake house · Lodge · Patio · Sporting room",
+      "type": "text"
+    },
+    "field_021": {
+      "group": "field",
+      "label": "Retail and outfitter inquiries",
+      "type": "text"
+    },
+    "field_022": {
+      "group": "field",
+      "label": "A heritage collection with real shelf presence.",
+      "type": "text"
+    },
+    "field_023": {
+      "group": "field",
+      "label": "/wholesale",
+      "type": "link"
+    },
+    "field_024": {
+      "group": "field",
+      "label": "Request trade access",
+      "type": "text"
+    },
+    "field_025": {
+      "group": "field",
+      "label": "/stays",
+      "type": "link"
+    },
+    "field_026": {
+      "group": "field",
+      "label": "Visit Stay Awhile",
+      "type": "text"
+    },
+    "work_001": {
+      "group": "work",
+      "label": "The product catalog",
+      "type": "text"
+    },
+    "work_002": {
+      "group": "work",
+      "label": "Our",
+      "type": "text"
+    },
+    "work_003": {
+      "group": "work",
+      "label": "Work.",
+      "type": "text"
+    },
+    "work_004": {
+      "group": "work",
+      "label": "Real barrel types, photographed and organized into one orderable catalog.",
+      "type": "text"
+    },
+    "work_005": {
+      "group": "work",
+      "label": "Shop by barrel type",
+      "type": "text"
+    },
+    "work_006": {
+      "group": "work",
+      "label": "Made one piece at a time.",
+      "type": "text"
+    },
+    "work_007": {
+      "group": "work",
+      "label": "Choose a piece to see details, select an affiliate, and submit an order request. Final fin",
+      "type": "text"
+    },
+    "work_008": {
+      "group": "work",
+      "label": "Retail",
+      "type": "text"
+    },
+    "work_009": {
+      "group": "work",
+      "label": "View product & order →",
+      "type": "text"
+    },
+    "partners_001": {
+      "group": "partners",
+      "label": "Affiliate & referral program",
+      "type": "text"
+    },
+    "partners_002": {
+      "group": "partners",
+      "label": "Share the",
+      "type": "text"
+    },
+    "partners_003": {
+      "group": "partners",
+      "label": "craft.",
+      "type": "text"
+    },
+    "partners_004": {
+      "group": "partners",
+      "label": "A trackable partner system for hosts, designers, builders, outdoor creators, and retailers",
+      "type": "text"
+    },
+    "partners_005": {
+      "group": "partners",
+      "label": "How it works",
+      "type": "text"
+    },
+    "partners_006": {
+      "group": "partners",
+      "label": "One link. Clear attribution.",
+      "type": "text"
+    },
+    "partners_007": {
+      "group": "partners",
+      "label": "Each approved partner receives a unique link. Visits and inquiries stay associated with th",
+      "type": "text"
+    },
+    "partners_008": {
+      "group": "partners",
+      "label": "Apply with your audience and channel.",
+      "type": "text"
+    },
+    "partners_009": {
+      "group": "partners",
+      "label": "Receive an approved partner code.",
+      "type": "text"
+    },
+    "partners_010": {
+      "group": "partners",
+      "label": "Share either collection with the same code.",
+      "type": "text"
+    },
+    "partners_011": {
+      "group": "partners",
+      "label": "Review attributed inquiries from one portal.",
+      "type": "text"
+    },
+    "wholesale_001": {
+      "group": "wholesale",
+      "label": "Trade access",
+      "type": "text"
+    },
+    "wholesale_002": {
+      "group": "wholesale",
+      "label": "Wholesale",
+      "type": "text"
+    },
+    "wholesale_003": {
+      "group": "wholesale",
+      "label": "Portal.",
+      "type": "text"
+    },
+    "wholesale_004": {
+      "group": "wholesale",
+      "label": "For vacation-rental portfolios, interior designers, hospitality groups, retailers, and out",
+      "type": "text"
+    },
+    "wholesale_005": {
+      "group": "wholesale",
+      "label": "Trade store",
+      "type": "text"
+    },
+    "wholesale_006": {
+      "group": "wholesale",
+      "label": "Made for your business.",
+      "type": "text"
+    },
+    "wholesale_007": {
+      "group": "wholesale",
+      "label": "Request wholesale pricing, lead times, and terms directly from Carolina Barrel Co.",
+      "type": "text"
+    },
+    "wholesale_008": {
+      "group": "wholesale",
+      "label": "Retail",
+      "type": "text"
+    },
+    "wholesale_009": {
+      "group": "wholesale",
+      "label": "View & order",
+      "type": "text"
+    },
+    "wholesale_010": {
+      "group": "wholesale",
+      "label": "One catalog. Clear terms.",
+      "type": "text"
+    },
+    "wholesale_011": {
+      "group": "wholesale",
+      "label": "Tell us how you buy.",
+      "type": "text"
+    },
+    "wholesale_012": {
+      "group": "wholesale",
+      "label": "Approved accounts receive private pricing, lead-time guidance, available finishes, and a d",
+      "type": "text"
+    },
+    "product_001": {
+      "group": "product",
+      "label": "Retail",
+      "type": "text"
+    },
+    "product_002": {
+      "group": "product",
+      "label": "Configure & request order",
+      "type": "text"
+    },
+    "product_003": {
+      "group": "product",
+      "label": "Order request",
+      "type": "text"
+    },
+    "product_004": {
+      "group": "product",
+      "label": "Make it yours.",
+      "type": "text"
+    },
+    "product_005": {
+      "group": "product",
+      "label": "Select the quantity, finish direction, and affiliate who introduced you. Carolina Barrel C",
+      "type": "text"
+    },
+    "product_006": {
+      "group": "product",
+      "label": "/work",
+      "type": "link"
+    },
+    "product_007": {
+      "group": "product",
+      "label": "← Back to all products",
+      "type": "text"
+    },
+    "products_five_stave_lounge_chair_name": {
+      "group": "products",
+      "label": "Five-Stave Lounge Chair · name",
+      "type": "text"
+    },
+    "products_five_stave_lounge_chair_shortName": {
+      "group": "products",
+      "label": "Five-Stave Lounge Chair · shortName",
+      "type": "text"
+    },
+    "products_five_stave_lounge_chair_collection": {
+      "group": "products",
+      "label": "Five-Stave Lounge Chair · collection",
+      "type": "text"
+    },
+    "products_five_stave_lounge_chair_image": {
+      "group": "products",
+      "label": "Five-Stave Lounge Chair · image",
+      "type": "image"
+    },
+    "products_five_stave_lounge_chair_alt": {
+      "group": "products",
+      "label": "Five-Stave Lounge Chair · alt",
+      "type": "text"
+    },
+    "products_five_stave_lounge_chair_retail": {
+      "group": "products",
+      "label": "Five-Stave Lounge Chair · retail",
+      "type": "money"
+    },
+    "products_five_stave_lounge_chair_summary": {
+      "group": "products",
+      "label": "Five-Stave Lounge Chair · summary",
+      "type": "text"
+    },
+    "products_five_stave_lounge_chair_details": {
+      "group": "products",
+      "label": "Five-Stave Lounge Chair · details",
+      "type": "lines"
+    },
+    "products_five_stave_rocking_chair_name": {
+      "group": "products",
+      "label": "Five-Stave Rocking Chair · name",
+      "type": "text"
+    },
+    "products_five_stave_rocking_chair_shortName": {
+      "group": "products",
+      "label": "Five-Stave Rocking Chair · shortName",
+      "type": "text"
+    },
+    "products_five_stave_rocking_chair_collection": {
+      "group": "products",
+      "label": "Five-Stave Rocking Chair · collection",
+      "type": "text"
+    },
+    "products_five_stave_rocking_chair_image": {
+      "group": "products",
+      "label": "Five-Stave Rocking Chair · image",
+      "type": "image"
+    },
+    "products_five_stave_rocking_chair_alt": {
+      "group": "products",
+      "label": "Five-Stave Rocking Chair · alt",
+      "type": "text"
+    },
+    "products_five_stave_rocking_chair_retail": {
+      "group": "products",
+      "label": "Five-Stave Rocking Chair · retail",
+      "type": "money"
+    },
+    "products_five_stave_rocking_chair_summary": {
+      "group": "products",
+      "label": "Five-Stave Rocking Chair · summary",
+      "type": "text"
+    },
+    "products_five_stave_rocking_chair_details": {
+      "group": "products",
+      "label": "Five-Stave Rocking Chair · details",
+      "type": "lines"
+    },
+    "products_barrel_fire_table_name": {
+      "group": "products",
+      "label": "Barrel Fire Table · name",
+      "type": "text"
+    },
+    "products_barrel_fire_table_shortName": {
+      "group": "products",
+      "label": "Barrel Fire Table · shortName",
+      "type": "text"
+    },
+    "products_barrel_fire_table_collection": {
+      "group": "products",
+      "label": "Barrel Fire Table · collection",
+      "type": "text"
+    },
+    "products_barrel_fire_table_image": {
+      "group": "products",
+      "label": "Barrel Fire Table · image",
+      "type": "image"
+    },
+    "products_barrel_fire_table_alt": {
+      "group": "products",
+      "label": "Barrel Fire Table · alt",
+      "type": "text"
+    },
+    "products_barrel_fire_table_retail": {
+      "group": "products",
+      "label": "Barrel Fire Table · retail",
+      "type": "money"
+    },
+    "products_barrel_fire_table_summary": {
+      "group": "products",
+      "label": "Barrel Fire Table · summary",
+      "type": "text"
+    },
+    "products_barrel_fire_table_details": {
+      "group": "products",
+      "label": "Barrel Fire Table · details",
+      "type": "lines"
+    },
+    "products_barrel_wine_storage_name": {
+      "group": "products",
+      "label": "Barrel Wine Storage · name",
+      "type": "text"
+    },
+    "products_barrel_wine_storage_shortName": {
+      "group": "products",
+      "label": "Barrel Wine Storage · shortName",
+      "type": "text"
+    },
+    "products_barrel_wine_storage_collection": {
+      "group": "products",
+      "label": "Barrel Wine Storage · collection",
+      "type": "text"
+    },
+    "products_barrel_wine_storage_image": {
+      "group": "products",
+      "label": "Barrel Wine Storage · image",
+      "type": "image"
+    },
+    "products_barrel_wine_storage_alt": {
+      "group": "products",
+      "label": "Barrel Wine Storage · alt",
+      "type": "text"
+    },
+    "products_barrel_wine_storage_retail": {
+      "group": "products",
+      "label": "Barrel Wine Storage · retail",
+      "type": "money"
+    },
+    "products_barrel_wine_storage_summary": {
+      "group": "products",
+      "label": "Barrel Wine Storage · summary",
+      "type": "text"
+    },
+    "products_barrel_wine_storage_details": {
+      "group": "products",
+      "label": "Barrel Wine Storage · details",
+      "type": "lines"
+    },
+    "products_full_bar_installation_name": {
+      "group": "products",
+      "label": "Full Barrel Bar Installation · name",
+      "type": "text"
+    },
+    "products_full_bar_installation_shortName": {
+      "group": "products",
+      "label": "Full Barrel Bar Installation · shortName",
+      "type": "text"
+    },
+    "products_full_bar_installation_collection": {
+      "group": "products",
+      "label": "Full Barrel Bar Installation · collection",
+      "type": "text"
+    },
+    "products_full_bar_installation_image": {
+      "group": "products",
+      "label": "Full Barrel Bar Installation · image",
+      "type": "image"
+    },
+    "products_full_bar_installation_alt": {
+      "group": "products",
+      "label": "Full Barrel Bar Installation · alt",
+      "type": "text"
+    },
+    "products_full_bar_installation_retail": {
+      "group": "products",
+      "label": "Full Barrel Bar Installation · retail",
+      "type": "money"
+    },
+    "products_full_bar_installation_summary": {
+      "group": "products",
+      "label": "Full Barrel Bar Installation · summary",
+      "type": "text"
+    },
+    "products_full_bar_installation_details": {
+      "group": "products",
+      "label": "Full Barrel Bar Installation · details",
+      "type": "lines"
+    }
+  },
+  "defaults": {
+    "shared_001": "/",
+    "shared_002": "Carolina Barrel Co.",
+    "shared_003": "Handcrafted in Carolina",
+    "shared_004": "/stays",
+    "shared_005": "Stay Awhile",
+    "shared_006": "/field",
+    "shared_007": "Field & Hearth",
+    "shared_008": "/work",
+    "shared_009": "Our work",
+    "shared_010": "/partners",
+    "shared_011": "Partners",
+    "shared_012": "/wholesale",
+    "shared_013": "Wholesale",
+    "shared_014": "Carolina Barrel Co.",
+    "shared_015": "Handcrafted chairs and home accessories made from reclaimed wine barrels.",
+    "shared_016": "tel:+17049294133",
+    "shared_017": "704-929-4133",
+    "shared_018": "mailto:carolinabarrelco@gmail.com",
+    "shared_019": "carolinabarrelco@gmail.com",
+    "shared_020": "Collections",
+    "shared_021": "/stays",
+    "shared_022": "Stay Awhile",
+    "shared_023": "/field",
+    "shared_024": "Field & Hearth",
+    "shared_025": "Trade",
+    "shared_026": "/wholesale",
+    "shared_027": "Wholesale portal",
+    "shared_028": "/partners",
+    "shared_029": "Affiliate partners",
+    "shared_030": "Follow",
+    "shared_031": "https://www.instagram.com/carolinabarrelco",
+    "shared_032": "Instagram ↗",
+    "shared_033": "https://www.facebook.com/profile.php?id=100066775430414",
+    "shared_034": "Facebook ↗",
+    "shared_035": "© ",
+    "shared_036": " Carolina Barrel Co.",
+    "shared_037": "One catalog · Powered by Everbranch",
+    "home_001": "/images/five-stave-rocking-chair-lodge.webp",
+    "home_002": "The five-stave original · Carolina made",
+    "shared_038": "A rocker made",
+    "shared_039": "to be remembered.",
+    "home_003": "The real Carolina Barrel Co. rocking chair—five reclaimed barrel staves, sculpted arms, and the unmistakable hand-built silhouette.",
+    "home_004": "/products/five-stave-rocking-chair",
+    "home_005": "View this five-stave rocker",
+    "home_006": "/images/barrel-bar-suite.webp",
+    "home_007": "Hospitality statement piece · Built to order",
+    "shared_040": "Give the room",
+    "shared_041": "its own story.",
+    "home_008": "A full barrel bar installation designed for memorable vacation homes, tasting rooms, and gathering spaces.",
+    "home_009": "/products/full-bar-installation",
+    "home_010": "Explore the full barrel bar",
+    "home_011": "/images/fire-table-product.webp",
+    "home_012": "Outdoor gathering · Reclaimed wine barrel",
+    "shared_042": "The night starts",
+    "shared_043": "around the fire.",
+    "home_013": "A substantial barrel fire table with generous room to gather—made for patios, lodges, and guest experiences people talk about.",
+    "home_014": "/products/barrel-fire-table",
+    "home_015": "View the barrel fire table",
+    "shared_044": "/work",
+    "shared_045": "View the complete collection ",
+    "shared_046": "↗",
+    "shared_047": " / ",
+    "shared_048": "Carolina Barrel Co. handcrafted barrel furniture",
+    "shared_049": "Enter collection →",
+    "home_016": "Five-stave seating",
+    "home_017": "Rocking and lounge chairs with the maker's recognizable five-stave back.",
+    "home_018": "/images/dock-five-stave-chairs.webp",
+    "home_019": "/products/five-stave-lounge-chair",
+    "home_020": "Fire tables",
+    "home_021": "Wine-barrel fire tables that turn an outdoor space into a gathering place.",
+    "home_022": "/images/fire-table-product.webp",
+    "home_023": "/products/barrel-fire-table",
+    "home_024": "Home bars",
+    "home_025": "Full barrel bars, shelving, and property-defining entertaining installations.",
+    "home_026": "/images/barrel-bar-suite.webp",
+    "home_027": "/products/full-bar-installation",
+    "home_028": "Wine storage",
+    "home_029": "Barrel-form bottle and stemware storage for homes, rentals, and tasting rooms.",
+    "home_030": "/images/barrel-wine-storage.webp",
+    "home_031": "/products/barrel-wine-storage",
+    "shared_050": "Real pieces. Made by hand.",
+    "shared_051": "The barrel types",
+    "shared_052": "/work",
+    "shared_053": "View full catalog →",
+    "shared_054": "View product →",
+    "shared_055": "Name",
+    "shared_056": "Email",
+    "shared_057": "Quantity",
+    "shared_058": "Finish direction",
+    "shared_059": "Natural two-tone",
+    "shared_060": "Dark heritage",
+    "shared_061": "Wine-stave red",
+    "shared_062": "Discuss a custom finish",
+    "shared_063": "Referral code (optional)",
+    "shared_064": "Enter a code you received",
+    "shared_065": "Delivery location & notes",
+    "shared_066": "City, state, timing, and anything Carolina Barrel Co. should know",
+    "shared_067": "Name",
+    "shared_068": "Company",
+    "shared_069": "Email",
+    "shared_070": "Phone",
+    "shared_071": "Website or social profile",
+    "shared_072": "https://",
+    "shared_073": "Business type",
+    "shared_074": "Interior designer",
+    "shared_075": "Vacation-rental operator",
+    "shared_076": "Retail store",
+    "shared_077": "Hospitality group",
+    "shared_078": "Other",
+    "shared_079": "Primary audience",
+    "shared_080": "Airbnb and vacation rentals",
+    "shared_081": "Outdoor and sporting",
+    "shared_082": "Home and design",
+    "shared_083": "Local lifestyle",
+    "shared_084": "Other",
+    "shared_085": "Tell us what you have in mind",
+    "shared_086": "Affiliate link preview",
+    "shared_087": "Your partner code",
+    "shared_088": "Copy preview link",
+    "home_032": "The Carolina Barrel Co. collection",
+    "home_033": "Built once. Remembered for years.",
+    "home_034": "Both collections lead back to one catalog, one inquiry desk, and one source of truth inside Everbranch.",
+    "home_035": "/stays",
+    "home_036": "/images/barrel-bar-suite.webp",
+    "home_037": "Hospitality collection",
+    "home_038": "Stay Awhile",
+    "home_039": "Statement furniture, fire tables, bars, and guest-ready details for high-end rentals and gathering spaces.",
+    "home_040": "/field",
+    "home_041": "/images/dock-five-stave-chairs.webp",
+    "home_042": "Heritage collection",
+    "home_043": "Field & Hearth",
+    "home_044": "Five-stave seating and purposeful pieces for lake houses, sporting rooms, patios, and everyday retreat.",
+    "home_045": "For designers, hosts & retailers",
+    "home_046": "Made for one room—or a portfolio of properties.",
+    "home_047": "/wholesale",
+    "home_048": "Wholesale portal",
+    "home_049": "/partners",
+    "home_050": "Partner program",
+    "stays_001": "/images/barrel-bar-suite.webp",
+    "stays_002": "Hospitality collection",
+    "stays_003": "Stay",
+    "stays_004": "Awhile.",
+    "stays_005": "Statement pieces for the rooms guests photograph, remember, and return to—from full entertaining bars to fire tables and five-stave seating.",
+    "stays_006": "/products/full-bar-installation",
+    "stays_007": "View this full bar",
+    "stays_008": "/images/five-stave-rocking-chair-lodge.webp",
+    "stays_009": "Carolina Barrel Co. five-stave rocking chair in a lodge setting",
+    "stays_010": "Designed for destination spaces",
+    "stays_011": "The detail guests remember.",
+    "stays_012": "Carolina Barrel Co. turns reclaimed wine barrels into functional centerpieces with real grain, visible joinery, and a story that belongs in a memorable stay.",
+    "stays_013": "Five-stave rocking and lounge chairs",
+    "stays_014": "Barrel fire tables for outdoor gathering",
+    "stays_015": "Full bar and wine-storage installations",
+    "stays_016": "Custom pieces for cabins and rental portfolios",
+    "stays_017": "/#collection",
+    "stays_018": "View all barrel types →",
+    "stays_019": "“Built to become the part of the property everyone talks about.”",
+    "stays_020": "Carolina-made · Property-ready · Hand-finished",
+    "stays_021": "Multiple properties?",
+    "stays_022": "Build a consistent signature across every stay.",
+    "stays_023": "/wholesale",
+    "stays_024": "Wholesale portal",
+    "stays_025": "/field",
+    "stays_026": "Visit Field & Hearth",
+    "field_001": "/images/dock-five-stave-chairs.webp",
+    "field_002": "Heritage collection",
+    "field_003": "Field &",
+    "field_004": "Hearth.",
+    "field_005": "Purposeful barrel furniture for the porch, dock, fire, and sporting room—made for people who value real materials and things built to last.",
+    "field_006": "/products/five-stave-lounge-chair",
+    "field_007": "View these five-stave chairs",
+    "field_008": "/images/dock-five-stave-chairs.webp",
+    "field_009": "Two Carolina Barrel Co. five-stave chairs on a lakeside dock",
+    "field_010": "The five-stave signature",
+    "field_011": "Recognizable from across the water.",
+    "field_012": "Every featured chair keeps the real Carolina Barrel Co. construction: exactly five back staves, visible hardware, curved barrel character, and contrasting reclaimed-oak tones.",
+    "field_013": "Five-stave outdoor lounge chairs",
+    "field_014": "Five-stave rocking chairs with cup-holder arms",
+    "field_015": "Fire tables and conversation pieces",
+    "field_016": "Owner-approved secure-storage configurations",
+    "field_017": "Gun-rack photography and exact configurations remain pending owner approval.",
+    "field_018": " The site will never invent a product or claim a configuration he has not confirmed.",
+    "field_019": "“Honest materials. Strong silhouettes. Nothing mass-produced.”",
+    "field_020": "Lake house · Lodge · Patio · Sporting room",
+    "field_021": "Retail and outfitter inquiries",
+    "field_022": "A heritage collection with real shelf presence.",
+    "field_023": "/wholesale",
+    "field_024": "Request trade access",
+    "field_025": "/stays",
+    "field_026": "Visit Stay Awhile",
+    "work_001": "The product catalog",
+    "work_002": "Our",
+    "work_003": "Work.",
+    "work_004": "Real barrel types, photographed and organized into one orderable catalog.",
+    "work_005": "Shop by barrel type",
+    "work_006": "Made one piece at a time.",
+    "work_007": "Choose a piece to see details, select an affiliate, and submit an order request. Final finishes, timing, freight, and installation are confirmed directly with Carolina Barrel Co.",
+    "work_008": "Retail",
+    "work_009": "View product & order →",
+    "partners_001": "Affiliate & referral program",
+    "partners_002": "Share the",
+    "partners_003": "craft.",
+    "partners_004": "A trackable partner system for hosts, designers, builders, outdoor creators, and retailers who introduce the right customer to Carolina Barrel Co.",
+    "partners_005": "How it works",
+    "partners_006": "One link. Clear attribution.",
+    "partners_007": "Each approved partner receives a unique link. Visits and inquiries stay associated with that partner while Carolina Barrel Co. keeps one catalog and lead queue inside Everbranch.",
+    "partners_008": "Apply with your audience and channel.",
+    "partners_009": "Receive an approved partner code.",
+    "partners_010": "Share either collection with the same code.",
+    "partners_011": "Review attributed inquiries from one portal.",
+    "wholesale_001": "Trade access",
+    "wholesale_002": "Wholesale",
+    "wholesale_003": "Portal.",
+    "wholesale_004": "For vacation-rental portfolios, interior designers, hospitality groups, retailers, and outfitters sourcing handcrafted barrel pieces.",
+    "wholesale_005": "Trade store",
+    "wholesale_006": "Made for your business.",
+    "wholesale_007": "Request wholesale pricing, lead times, and terms directly from Carolina Barrel Co.",
+    "wholesale_008": "Retail",
+    "wholesale_009": "View & order",
+    "wholesale_010": "One catalog. Clear terms.",
+    "wholesale_011": "Tell us how you buy.",
+    "wholesale_012": "Approved accounts receive private pricing, lead-time guidance, available finishes, and a direct path for custom or multi-unit requests. Final shipping, minimums, and territory terms remain owner-approved.",
+    "product_001": "Retail",
+    "product_002": "Configure & request order",
+    "product_003": "Order request",
+    "product_004": "Make it yours.",
+    "product_005": "Select the quantity, finish direction, and affiliate who introduced you. Carolina Barrel Co. will confirm the exact build, delivery, and final total before taking payment.",
+    "product_006": "/work",
+    "product_007": "← Back to all products",
+    "products_five_stave_lounge_chair_name": "Five-Stave Lounge Chair",
+    "products_five_stave_lounge_chair_shortName": "Lounge Chair",
+    "products_five_stave_lounge_chair_collection": "Field & Hearth",
+    "products_five_stave_lounge_chair_image": "/images/dock-five-stave-chairs.webp",
+    "products_five_stave_lounge_chair_alt": "Two Carolina Barrel Co. five-stave lounge chairs on a lakeside dock",
+    "products_five_stave_lounge_chair_retail": "500",
+    "products_five_stave_lounge_chair_summary": "The signature outdoor chair: exactly five barrel staves, curved reclaimed-oak character, and visible hand-built joinery.",
+    "products_five_stave_lounge_chair_details": "Exactly five back staves\nTwo-tone reclaimed oak\nOutdoor and lake-property favorite\nFinal finish confirmed with maker",
+    "products_five_stave_rocking_chair_name": "Five-Stave Rocking Chair",
+    "products_five_stave_rocking_chair_shortName": "Rocking Chair",
+    "products_five_stave_rocking_chair_collection": "Stay Awhile",
+    "products_five_stave_rocking_chair_image": "/images/five-stave-rocking-chair-lodge.webp",
+    "products_five_stave_rocking_chair_alt": "Carolina Barrel Co. five-stave rocking chair in a mountain lodge",
+    "products_five_stave_rocking_chair_retail": "500",
+    "products_five_stave_rocking_chair_summary": "A conversation-starting barrel rocking chair with the real five-stave back and cup-holder arms.",
+    "products_five_stave_rocking_chair_details": "Exactly five back staves\nCurved rocking runners\nCup-holder arms\nHand-selected reclaimed wood",
+    "products_barrel_fire_table_name": "Barrel Fire Table",
+    "products_barrel_fire_table_shortName": "Fire Table",
+    "products_barrel_fire_table_collection": "Stay Awhile",
+    "products_barrel_fire_table_image": "/images/fire-table-product.webp",
+    "products_barrel_fire_table_alt": "Carolina Barrel Co. wine-barrel fire table",
+    "products_barrel_fire_table_retail": "1500",
+    "products_barrel_fire_table_summary": "A full wine-barrel base with a wide circular gathering surface, inset fire glass, and integrated controls.",
+    "products_barrel_fire_table_details": "Full reclaimed barrel base\nRound gathering tabletop\nInset fire-glass bowl\nFinal fuel and safety specification confirmed before order",
+    "products_barrel_wine_storage_name": "Barrel Wine Storage",
+    "products_barrel_wine_storage_shortName": "Wine Storage",
+    "products_barrel_wine_storage_collection": "Stay Awhile",
+    "products_barrel_wine_storage_image": "/images/barrel-wine-storage.webp",
+    "products_barrel_wine_storage_alt": "Carolina Barrel Co. circular barrel wine-storage console",
+    "products_barrel_wine_storage_retail": "1000",
+    "products_barrel_wine_storage_summary": "Statement wine and spirits storage using curved barrel forms, visible hoops, and hand-finished shelving.",
+    "products_barrel_wine_storage_details": "Reclaimed barrel construction\nBottle and stemware options\nWall or furniture configurations\nExact configuration priced after review",
+    "products_full_bar_installation_name": "Full Barrel Bar Installation",
+    "products_full_bar_installation_shortName": "Full Bar",
+    "products_full_bar_installation_collection": "Stay Awhile",
+    "products_full_bar_installation_image": "/images/barrel-bar-suite.webp",
+    "products_full_bar_installation_alt": "Carolina Barrel Co. full barrel bar installation",
+    "products_full_bar_installation_retail": "4000",
+    "products_full_bar_installation_summary": "A property-defining home bar built from full barrels, reclaimed wood, barrel shelving, and coordinated lighting details.",
+    "products_full_bar_installation_details": "Two-barrel foundation\nReclaimed-wood bar top\nCoordinated shelving\nSite dimensions and installation scope confirmed before order"
+  },
+  "products": [
+    {
+      "slug": "five-stave-lounge-chair",
+      "prefix": "products_five_stave_lounge_chair_"
+    },
+    {
+      "slug": "five-stave-rocking-chair",
+      "prefix": "products_five_stave_rocking_chair_"
+    },
+    {
+      "slug": "barrel-fire-table",
+      "prefix": "products_barrel_fire_table_"
+    },
+    {
+      "slug": "barrel-wine-storage",
+      "prefix": "products_barrel_wine_storage_"
+    },
+    {
+      "slug": "full-bar-installation",
+      "prefix": "products_full_bar_installation_"
+    }
+  ]
+}
