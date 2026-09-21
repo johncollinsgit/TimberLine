@@ -967,6 +967,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('client.projects.')
         ->group(function (): void {
             Route::get('/', [ClientProjectController::class, 'index'])->name('index');
+            Route::get('/checklist', [\App\Http\Controllers\ClientProjectChecklistController::class, 'index'])->name('checklist');
+            Route::patch('/checklist/tasks/{task}', [\App\Http\Controllers\ClientProjectChecklistController::class, 'update'])->whereNumber('task')->name('checklist.update');
             Route::get('/requests', [ClientProjectTicketController::class, 'index'])->name('requests.index');
             Route::get('/requests/{ticket}', [ClientProjectTicketController::class, 'show'])->name('requests.show');
             Route::get('/{project}/requests/create', [ClientProjectTicketController::class, 'create'])->name('requests.create');
