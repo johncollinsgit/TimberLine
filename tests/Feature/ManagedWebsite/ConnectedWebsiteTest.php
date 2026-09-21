@@ -34,6 +34,7 @@ test('connected baseline import is repeatable and public data is immutable until
     $count = $this->site->siteVersions()->count();
     $this->service->connect($this->site, $this->actor);
     expect($this->site->siteVersions()->count())->toBe($count)->and(WebsiteProduct::query()->forTenant($this->tenant)->count())->toBe(5);
+    expect(WebsiteProduct::query()->forTenant($this->tenant)->first()->media)->not->toBeEmpty();
     $content = $this->service->content($this->site, $this->site->draft_site_version_id);
     $key = array_key_first(array_filter($this->service->manifest()['fields'], fn ($field) => $field['type'] === 'text'));
     $content[$key] = 'PRIVATE DRAFT ONLY';

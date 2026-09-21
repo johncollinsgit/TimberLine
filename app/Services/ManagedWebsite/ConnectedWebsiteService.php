@@ -194,7 +194,7 @@ class ConnectedWebsiteService
             app(WebsiteCommerceService::class)->saveProduct($site, array_filter(['id' => $product?->id], fn ($value) => $value !== null) + [
                 'handle' => $definition['slug'], 'title' => $content[$prefix.'name'], 'description' => $content[$prefix.'summary'],
                 'product_type' => 'quote', 'status' => 'active', 'price' => $content[$prefix.'retail'], 'track_inventory' => false, 'is_available' => true,
-                'media' => [['url' => str_starts_with($content[$prefix.'image'], '/') ? self::ORIGIN.$content[$prefix.'image'] : $content[$prefix.'image'], 'alt' => $content[$prefix.'alt']]],
+                'media' => [str_starts_with($content[$prefix.'image'], '/') ? self::ORIGIN.$content[$prefix.'image'] : $content[$prefix.'image']],
             ]);
         }
     }
