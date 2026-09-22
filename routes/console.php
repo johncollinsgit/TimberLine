@@ -161,6 +161,16 @@ Schedule::command('marketing:send-modern-forestry-scent-quiz-report')
     ->withoutOverlapping(120)
     ->runInBackground();
 
+Schedule::command('marketing:send-weekly-rewards-wishlist-summary', [
+    '--tenant' => 'modern-forestry',
+    '--email' => 'info@theforestrystudio.com',
+    '--days' => 7,
+])
+    ->weeklyOn(1, '08:30')
+    ->timezone('America/New_York')
+    ->withoutOverlapping(120)
+    ->runInBackground();
+
 Schedule::command('operator:send-weekly-snapshot')
     ->weeklyOn(1, '08:00')
     ->timezone('America/New_York')

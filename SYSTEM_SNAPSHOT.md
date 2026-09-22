@@ -1032,6 +1032,15 @@ Historically, third-party systems like Growave used API/OAuth-style access, but 
 - CSV importer command: `marketing:import-wishlist-csv`
 - Wishlist data is now first-party and canonical
 
+### Rewards + wishlist operational summary
+- Tenant-scoped builder: `TenantRewardsWishlistWeeklySummaryService`
+- Command: `marketing:send-weekly-rewards-wishlist-summary`
+- Modern Forestry schedule: Monday at 08:30 `America/New_York`, delivered to `info@theforestrystudio.com`
+- The report reads canonical Candle Cash transactions/redemptions, wishlist items, and storefront telemetry. It contains aggregate operational metrics only and does not mutate customer or Shopify state.
+- `Working`, `Needs attention`, and neutral `No activity observed` labels prevent a quiet week from being misreported as an outage.
+- Storefront `reward_status_fallback_rendered` telemetry is accepted by the existing rewards-event endpoint so widget fallback usage appears in the report.
+- Operator runbook: `docs/operations/rewards-wishlist-weekly-summary.md`
+
 ### Analytics / segmentation
 - Analytics: `MarketingProfileAnalyticsService`
 - Segments: `MarketingSegmentEvaluator`
