@@ -8,32 +8,32 @@ use App\Models\CandleCashRedemption;
 use App\Models\CandleCashReward;
 use App\Models\CandleCashTask;
 use App\Models\CandleCashTransaction;
-use App\Models\CustomerExternalProfile;
 use App\Models\CustomerBirthdayProfile;
+use App\Models\CustomerExternalProfile;
 use App\Models\MarketingConsentRequest;
 use App\Models\MarketingProfile;
-use App\Services\Marketing\CandleCashService;
-use App\Services\Marketing\CandleCashReferralService;
-use App\Services\Marketing\CandleCashTaskService;
 use App\Services\Marketing\BirthdayProfileService;
 use App\Services\Marketing\BirthdayRewardActivationService;
 use App\Services\Marketing\BirthdayRewardEngineService;
 use App\Services\Marketing\CandleCashAccessGate;
-use App\Services\Marketing\CandleClubMembershipService;
+use App\Services\Marketing\CandleCashReferralService;
+use App\Services\Marketing\CandleCashService;
 use App\Services\Marketing\CandleCashShopifyDiscountService;
+use App\Services\Marketing\CandleCashTaskService;
+use App\Services\Marketing\CandleClubMembershipService;
 use App\Services\Marketing\GoogleBusinessProfileConnectionService;
 use App\Services\Marketing\GoogleBusinessProfileException;
 use App\Services\Marketing\MarketingConsentCaptureService;
 use App\Services\Marketing\MarketingConsentIncentiveService;
 use App\Services\Marketing\MarketingConsentService;
 use App\Services\Marketing\MarketingProfileSyncService;
-use App\Services\Marketing\MarketingWishlistService;
-use App\Services\Marketing\ProductReviewService;
-use App\Services\Marketing\ShopifyBirthdayMetafieldService;
 use App\Services\Marketing\MarketingStorefrontEventLogger;
 use App\Services\Marketing\MarketingStorefrontFunnelService;
 use App\Services\Marketing\MarketingStorefrontIdentityService;
 use App\Services\Marketing\MarketingStorefrontWidgetService;
+use App\Services\Marketing\MarketingWishlistService;
+use App\Services\Marketing\ProductReviewService;
+use App\Services\Marketing\ShopifyBirthdayMetafieldService;
 use App\Services\Marketing\TenantRewardsPolicyService;
 use App\Services\Shopify\ShopifyStores;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
@@ -41,8 +41,8 @@ use App\Services\Tenancy\TenantResolver;
 use App\Support\Marketing\MarketingStorefrontContract;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class MarketingShopifyIntegrationController extends Controller
@@ -56,8 +56,7 @@ class MarketingShopifyIntegrationController extends Controller
         protected TenantRewardsPolicyService $tenantRewardsPolicyService,
         protected TenantResolver $tenantResolver,
         protected TenantDisplayLabelResolver $displayLabelResolver
-    ) {
-    }
+    ) {}
 
     public function rewardBalance(Request $request, CandleCashService $candleCashService): JsonResponse
     {
@@ -70,7 +69,7 @@ class MarketingShopifyIntegrationController extends Controller
         if (! $resolved['profile']) {
             $this->logStorefrontEvent($request, 'widget_balance_lookup', [
                 'status' => 'error',
-                'issue_type' => 'identity_' . $resolved['status'],
+                'issue_type' => 'identity_'.$resolved['status'],
                 'source_type' => 'shopify_widget_reward_balance',
             ]);
 
@@ -91,7 +90,7 @@ class MarketingShopifyIntegrationController extends Controller
             'status' => 'ok',
             'profile' => $profile,
             'source_type' => 'shopify_widget_reward_balance',
-            'source_id' => 'profile:' . $profile->id,
+            'source_id' => 'profile:'.$profile->id,
             'meta' => [
                 'balance' => $balance,
             ],
@@ -123,12 +122,14 @@ class MarketingShopifyIntegrationController extends Controller
         $storeContext = $this->resolveStoreContext($request);
         if ($this->requiresVerifiedStoreContext($request) && ! $this->hasStoreContext($storeContext)) {
             $this->warnIfSlowStorefrontRequest($request, 'available_rewards', $startedAt, $storeContext);
+
             return $this->missingStoreContextResponse('available_rewards');
         }
         if (! $this->requiresVerifiedStoreContext($request)
             && $this->hasStoreContext($storeContext)
             && ! $this->hasTenantScopedStoreContext($storeContext)) {
             $this->warnIfSlowStorefrontRequest($request, 'available_rewards', $startedAt, $storeContext);
+
             return $this->missingTenantContextResponse('available_rewards');
         }
 
@@ -196,7 +197,7 @@ class MarketingShopifyIntegrationController extends Controller
         if (! $resolved['profile']) {
             $this->logStorefrontEvent($request, 'widget_reward_history_lookup', [
                 'status' => 'error',
-                'issue_type' => 'identity_' . $resolved['status'],
+                'issue_type' => 'identity_'.$resolved['status'],
                 'source_type' => 'shopify_widget_reward_history',
             ]);
 
@@ -223,7 +224,7 @@ class MarketingShopifyIntegrationController extends Controller
             'status' => 'ok',
             'profile' => $profile,
             'source_type' => 'shopify_widget_reward_history',
-            'source_id' => 'profile:' . $profile->id,
+            'source_id' => 'profile:'.$profile->id,
             'meta' => [
                 'transactions' => $transactions->count(),
                 'redemptions' => $redemptions->count(),
@@ -266,7 +267,7 @@ class MarketingShopifyIntegrationController extends Controller
                 'reward' => [
                     'id' => (int) $row->reward_id,
                     'name' => $row->reward && $candleCashService->isStorefrontReward($row->reward, $tenantId)
-                        ? 'Redeem ' . $candleCashService->fixedRedemptionFormatted($tenantId) . ' ' . Str::title($rewardCreditLabel)
+                        ? 'Redeem '.$candleCashService->fixedRedemptionFormatted($tenantId).' '.Str::title($rewardCreditLabel)
                         : (string) ($row->reward?->name ?: $rewardsLabel),
                     'reward_type' => (string) ($row->reward?->reward_type ?: ''),
                     'reward_value' => $row->reward?->reward_value ? (string) $row->reward->reward_value : null,
@@ -279,8 +280,7 @@ class MarketingShopifyIntegrationController extends Controller
         Request $request,
         CandleCashService $candleCashService,
         CandleCashShopifyDiscountService $discountSyncService
-    ): JsonResponse
-    {
+    ): JsonResponse {
         $data = $request->validate([
             'reward_id' => ['required', 'integer', 'exists:candle_cash_rewards,id'],
             'marketing_profile_id' => ['nullable', 'integer'],
@@ -298,7 +298,7 @@ class MarketingShopifyIntegrationController extends Controller
         if (! $resolved['profile']) {
             $this->logStorefrontEvent($request, 'widget_redeem_request', [
                 'status' => 'error',
-                'issue_type' => 'identity_' . $resolved['status'],
+                'issue_type' => 'identity_'.$resolved['status'],
                 'source_type' => 'shopify_widget_redeem_request',
             ]);
 
@@ -510,7 +510,7 @@ class MarketingShopifyIntegrationController extends Controller
     public function logRewardEvent(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'event_type' => ['required', 'string', 'in:reward_view,reward_activate_click,reward_activation_success,reward_activation_failure,reward_apply_click,reward_apply_success,reward_apply_failure,reward_confetti_shown,reward_task_open_click'],
+            'event_type' => ['required', 'string', 'in:reward_view,reward_activate_click,reward_activation_success,reward_activation_failure,reward_apply_click,reward_apply_success,reward_apply_failure,reward_confetti_shown,reward_task_open_click,reward_status_fallback_rendered'],
             'request_key' => ['nullable', 'string', 'max:120'],
             'marketing_profile_id' => ['nullable', 'integer'],
             'email' => ['nullable', 'email', 'max:255'],
@@ -521,6 +521,8 @@ class MarketingShopifyIntegrationController extends Controller
             'surface' => ['nullable', 'string', 'max:80'],
             'state' => ['nullable', 'string', 'max:120'],
             'message' => ['nullable', 'string', 'max:255'],
+            'status_error_code' => ['nullable', 'string', 'max:120'],
+            'fallback_access_mode' => ['nullable', 'string', 'max:120'],
             'meta' => ['nullable', 'array'],
         ]);
 
@@ -528,29 +530,34 @@ class MarketingShopifyIntegrationController extends Controller
         $resolved = $this->resolveProfile($request, scope: 'reward_event', allowCreate: false, allowBody: true);
         $profile = $resolved['profile'] ?? null;
 
+        $isFailure = str_contains((string) $data['event_type'], 'failure')
+            || (string) $data['event_type'] === 'reward_status_fallback_rendered';
+
         $event = $this->eventLogger->log((string) $data['event_type'], [
-            'status' => str_contains((string) $data['event_type'], 'failure') ? 'error' : 'ok',
-            'issue_type' => str_contains((string) $data['event_type'], 'failure')
-                ? ((string) ($data['state'] ?? 'reward_interaction_failed') ?: 'reward_interaction_failed')
+            'status' => $isFailure ? 'error' : 'ok',
+            'issue_type' => $isFailure
+                ? ((string) ($data['status_error_code'] ?? $data['state'] ?? 'reward_interaction_failed') ?: 'reward_interaction_failed')
                 : null,
             'source_surface' => trim((string) ($data['surface'] ?? 'shopify_rewards_surface')) ?: 'shopify_rewards_surface',
-            'endpoint' => '/' . ltrim((string) $request->path(), '/'),
+            'endpoint' => '/'.ltrim((string) $request->path(), '/'),
             'request_key' => trim((string) ($data['request_key'] ?? '')) ?: null,
             'dedupe_key' => trim((string) ($data['request_key'] ?? '')) ?: null,
             'profile' => $profile,
             'tenant_id' => $storeContext['tenant_id'] ?? null,
             'source_type' => 'shopify_widget_reward_surface',
-            'source_id' => trim((string) ($data['reward_code'] ?? '')) ?: ($profile ? 'profile:' . $profile->id : null),
+            'source_id' => trim((string) ($data['reward_code'] ?? '')) ?: ($profile ? 'profile:'.$profile->id : null),
             'meta' => array_filter([
                 'reward_code' => trim((string) ($data['reward_code'] ?? '')) ?: null,
                 'reward_kind' => trim((string) ($data['reward_kind'] ?? '')) ?: null,
                 'state' => trim((string) ($data['state'] ?? '')) ?: null,
                 'message' => trim((string) ($data['message'] ?? '')) ?: null,
+                'status_error_code' => trim((string) ($data['status_error_code'] ?? '')) ?: null,
+                'fallback_access_mode' => trim((string) ($data['fallback_access_mode'] ?? '')) ?: null,
                 'identity_status' => (string) ($resolved['status'] ?? 'missing_identity'),
                 'shopify_store_key' => $this->normalizeStoreKey($storeContext['store_key'] ?? null),
                 'extra' => (array) ($data['meta'] ?? []),
             ], static fn ($value): bool => $value !== null && $value !== []),
-            'resolution_status' => str_contains((string) $data['event_type'], 'failure') ? 'open' : 'resolved',
+            'resolution_status' => $isFailure ? 'open' : 'resolved',
         ]);
 
         return MarketingStorefrontContract::success([
@@ -697,7 +704,7 @@ class MarketingShopifyIntegrationController extends Controller
 
             $taskService->awardSystemTask($profile, 'email-signup', [
                 'source_type' => 'shopify_widget_optin',
-                'source_id' => $sourceId . ':email',
+                'source_id' => $sourceId.':email',
                 'metadata' => [
                     'surface' => 'shopify_widget',
                     'flow' => $flow,
@@ -927,7 +934,7 @@ class MarketingShopifyIntegrationController extends Controller
             'status' => 'ok',
             'profile' => $profile,
             'source_type' => 'shopify_widget_consent_status',
-            'source_id' => 'profile:' . $profile->id,
+            'source_id' => 'profile:'.$profile->id,
             'meta' => [
                 'state' => $state,
                 'request_id' => $requestRow?->id,
@@ -1105,8 +1112,8 @@ class MarketingShopifyIntegrationController extends Controller
         $syncResult = $shopifyBirthdayMetafieldService->writeBirthdayForProfile($profile, $birthdayProfile);
         $birthdaySignupFrequency = (string) data_get($taskService->programConfig($tenantId), 'birthday_reward_frequency', 'once_per_year');
         $birthdayTaskSourceId = $birthdaySignupFrequency === 'once_per_lifetime'
-            ? 'birthday-signup:profile:' . $profile->id
-            : 'birthday-signup:profile:' . $profile->id . ':year:' . now()->year;
+            ? 'birthday-signup:profile:'.$profile->id
+            : 'birthday-signup:profile:'.$profile->id.':year:'.now()->year;
         $taskService->awardSystemTask($profile, 'birthday-signup', [
             'source_type' => 'birthday_capture',
             'source_id' => $birthdayTaskSourceId,
@@ -1162,8 +1169,7 @@ class MarketingShopifyIntegrationController extends Controller
         Request $request,
         BirthdayRewardEngineService $rewardEngine,
         BirthdayRewardActivationService $activationService
-    ): JsonResponse
-    {
+    ): JsonResponse {
         $storeContext = $this->resolveStoreContext($request, allowBody: true);
         if (! $this->hasStoreContext($storeContext)) {
             return $this->missingStoreContextResponse('birthday_claim');
@@ -1268,6 +1274,7 @@ class MarketingShopifyIntegrationController extends Controller
         $storeContext = $this->resolveStoreContext($request);
         if (! $this->hasStoreContext($storeContext)) {
             $this->warnIfSlowStorefrontRequest($request, 'candle_cash_status', $startedAt, $storeContext);
+
             return $this->missingStoreContextResponse('candle_cash_status');
         }
 
@@ -1366,6 +1373,7 @@ class MarketingShopifyIntegrationController extends Controller
                         'Canceled automatically because Shopify could not prepare the reward discount yet.'
                     );
                     $restoredFailedSyncRedemption = true;
+
                     continue;
                 }
             }
@@ -1387,7 +1395,7 @@ class MarketingShopifyIntegrationController extends Controller
                 'reward' => [
                     'id' => (int) $row->reward_id,
                     'name' => $row->reward && $candleCashService->isStorefrontReward($row->reward, $tenantId)
-                        ? 'Redeem ' . $candleCashService->fixedRedemptionFormatted($tenantId) . ' ' . $rewardCreditLabelTitle
+                        ? 'Redeem '.$candleCashService->fixedRedemptionFormatted($tenantId).' '.$rewardCreditLabelTitle
                         : (string) ($row->reward?->name ?: $rewardsLabel),
                     'reward_type' => (string) ($row->reward?->reward_type ?: ''),
                     'reward_value' => $row->reward?->reward_value !== null ? (string) $row->reward->reward_value : null,
@@ -1431,7 +1439,7 @@ class MarketingShopifyIntegrationController extends Controller
             'issue_type' => $profile ? null : (string) ($resolved['status'] ?? 'missing_identity'),
             'profile' => $profile,
             'source_type' => 'shopify_widget_candle_cash_status',
-            'source_id' => $profile ? ('profile:' . $profile->id) : null,
+            'source_id' => $profile ? ('profile:'.$profile->id) : null,
             'meta' => [
                 'task_count' => $taskRows->count(),
                 'pending_rewards' => (int) ($summary['pending_rewards'] ?? 0),
@@ -1444,10 +1452,10 @@ class MarketingShopifyIntegrationController extends Controller
             'profile_id' => $profile ? (int) $profile->id : null,
             'state' => $states[0] ?? 'unknown_customer',
             'copy' => [
-                'title' => (string) data_get($frontendConfig, 'central_title', $rewardsLabel . ' Central'),
-                'subtitle' => (string) data_get($frontendConfig, 'central_subtitle', 'Earn ' . $rewardsLabelLc . ' through verified actions like signups, reviews, referrals, and member-only perks.'),
+                'title' => (string) data_get($frontendConfig, 'central_title', $rewardsLabel.' Central'),
+                'subtitle' => (string) data_get($frontendConfig, 'central_subtitle', 'Earn '.$rewardsLabelLc.' through verified actions like signups, reviews, referrals, and member-only perks.'),
                 'rewards_label' => $rewardsLabel,
-                'wallet_label' => (string) data_get($frontendConfig, 'wallet_label', $rewardsLabel . ' Wallet'),
+                'wallet_label' => (string) data_get($frontendConfig, 'wallet_label', $rewardsLabel.' Wallet'),
                 'reward_credit_label' => $rewardCreditLabel,
                 'expiration_copy' => (string) data_get($programPayload, 'expiration.message', ''),
                 'redemption_copy' => (string) data_get($programPayload, 'redemption.message', ''),
@@ -1473,8 +1481,8 @@ class MarketingShopifyIntegrationController extends Controller
                 'enabled' => $referralService->isEnabled($tenantId),
                 'code' => $profile ? $referralService->referralCodeForProfile($profile) : null,
                 'link' => $profile ? $referralService->referralLinkForProfile($profile) : null,
-                'headline' => (string) data_get($referralConfig, 'program_headline', 'Share ' . $rewardsLabel . ' with a friend'),
-                'copy' => (string) data_get($referralConfig, 'program_copy', 'Share your link and earn ' . $rewardCreditLabel . ' when a friend places a qualifying first order.'),
+                'headline' => (string) data_get($referralConfig, 'program_headline', 'Share '.$rewardsLabel.' with a friend'),
+                'copy' => (string) data_get($referralConfig, 'program_copy', 'Share your link and earn '.$rewardCreditLabel.' when a friend places a qualifying first order.'),
                 'referrer_reward_amount' => (float) data_get($referralConfig, 'referrer_reward_amount', 10),
                 'referred_reward_amount' => (float) data_get($referralConfig, 'referred_reward_amount', 5),
                 'count' => $profile ? (int) $profile->candleCashReferralsMade()->count() : 0,
@@ -1493,7 +1501,7 @@ class MarketingShopifyIntegrationController extends Controller
                         'referred_customer' => $referred
                             ? [
                                 'id' => (int) $referred->id,
-                                'name' => trim(($referred->first_name ?? '') . ' ' . ($referred->last_name ?? '')) ?: ($referred->email ?: 'Friend'),
+                                'name' => trim(($referred->first_name ?? '').' '.($referred->last_name ?? '')) ?: ($referred->email ?: 'Friend'),
                             ]
                             : null,
                     ];
@@ -1669,7 +1677,7 @@ class MarketingShopifyIntegrationController extends Controller
         }
 
         if ((bool) data_get($manualSubmissionConfig, 'extra_field_required', false) && $extraFieldValue === '') {
-            $errorCode = $extraFieldKey !== '' ? Str::snake($extraFieldKey) . '_required' : 'submission_extra_required';
+            $errorCode = $extraFieldKey !== '' ? Str::snake($extraFieldKey).'_required' : 'submission_extra_required';
 
             return MarketingStorefrontContract::error(
                 code: $errorCode,
@@ -1691,16 +1699,16 @@ class MarketingShopifyIntegrationController extends Controller
         $googleReviewManualFallback = $taskHandle === 'google-review' && $googleReviewMode === 'manual_review_fallback';
         $instagramCommentManualTask = $taskHandle === 'instagram-comment';
         $sourceId = trim((string) ($data['campaign_key'] ?? '')) !== ''
-            ? ($taskHandle . ':campaign:' . trim((string) $data['campaign_key']))
+            ? ($taskHandle.':campaign:'.trim((string) $data['campaign_key']))
             : $taskHandle;
         $sourceEventKey = trim((string) ($data['campaign_key'] ?? '')) !== ''
-            ? ($taskHandle . ':profile:' . $profile->id . ':campaign:' . trim((string) $data['campaign_key']))
+            ? ($taskHandle.':profile:'.$profile->id.':campaign:'.trim((string) $data['campaign_key']))
             : '';
 
         if ($googleReviewManualFallback || $instagramCommentManualTask) {
             $submissionKey = $requestKey !== '' ? $requestKey : (string) Str::uuid();
-            $sourceId = $taskHandle . ':manual-submit:' . $submissionKey;
-            $sourceEventKey = $taskHandle . ':profile:' . $profile->id . ':manual-submit:' . $submissionKey;
+            $sourceId = $taskHandle.':manual-submit:'.$submissionKey;
+            $sourceEventKey = $taskHandle.':profile:'.$profile->id.':manual-submit:'.$submissionKey;
         }
 
         $submissionPayload = [
@@ -1923,7 +1931,7 @@ class MarketingShopifyIntegrationController extends Controller
 
         $this->logStorefrontEvent($request, 'widget_product_review_status_lookup', [
             'status' => 'ok',
-            'issue_type' => $profile ? null : 'identity_' . $identityStatus,
+            'issue_type' => $profile ? null : 'identity_'.$identityStatus,
             'profile' => $profile,
             'source_type' => 'shopify_widget_product_review_status',
             'source_id' => (string) $data['product_id'],
@@ -1970,7 +1978,7 @@ class MarketingShopifyIntegrationController extends Controller
 
         $this->logStorefrontEvent($request, 'widget_sitewide_product_review_status_lookup', [
             'status' => 'ok',
-            'issue_type' => $profile ? null : 'identity_' . $identityStatus,
+            'issue_type' => $profile ? null : 'identity_'.$identityStatus,
             'profile' => $profile,
             'source_type' => 'shopify_widget_sitewide_product_review_status',
             'source_id' => 'sitewide_reviews',
@@ -2024,7 +2032,7 @@ class MarketingShopifyIntegrationController extends Controller
 
         $this->logStorefrontEvent($request, 'widget_wishlist_status_lookup', [
             'status' => 'ok',
-            'issue_type' => $profile ? null : 'identity_' . $identityStatus,
+            'issue_type' => $profile ? null : 'identity_'.$identityStatus,
             'profile' => $profile,
             'source_type' => 'shopify_widget_wishlist_status',
             'source_id' => (string) ($data['product_id'] ?? 'wishlist'),
@@ -2079,7 +2087,7 @@ class MarketingShopifyIntegrationController extends Controller
         if (! $profile && $guestToken === '') {
             $this->logStorefrontEvent($request, 'widget_wishlist_add', [
                 'status' => 'error',
-                'issue_type' => 'identity_' . $identityStatus,
+                'issue_type' => 'identity_'.$identityStatus,
                 'source_type' => 'shopify_widget_wishlist_add',
                 'source_id' => (string) $data['product_id'],
                 'request_key' => $requestKey !== '' ? $requestKey : null,
@@ -2119,7 +2127,7 @@ class MarketingShopifyIntegrationController extends Controller
                 [
                     'request_key' => $data['request_key'] ?? null,
                     'source' => 'native_storefront',
-                'source_surface' => 'shopify_product_page',
+                    'source_surface' => 'shopify_product_page',
                     'guest_token' => $data['guest_token'] ?? null,
                     'wishlist_list_id' => $data['wishlist_list_id'] ?? null,
                     'list_name' => $data['list_name'] ?? null,
@@ -2229,7 +2237,7 @@ class MarketingShopifyIntegrationController extends Controller
         if (! $profile && $guestToken === '') {
             $this->logStorefrontEvent($request, 'widget_wishlist_remove', [
                 'status' => 'error',
-                'issue_type' => 'identity_' . $identityStatus,
+                'issue_type' => 'identity_'.$identityStatus,
                 'source_type' => 'shopify_widget_wishlist_remove',
                 'source_id' => (string) $data['product_id'],
                 'request_key' => $requestKey !== '' ? $requestKey : null,
@@ -2462,7 +2470,7 @@ class MarketingShopifyIntegrationController extends Controller
 
         $this->logStorefrontEvent($request, 'widget_product_review_submit', [
             'status' => 'pending',
-            'issue_type' => $profile ? null : 'identity_' . $identityStatus,
+            'issue_type' => $profile ? null : 'identity_'.$identityStatus,
             'profile' => $profile,
             'source_type' => 'shopify_widget_product_review_submit',
             'source_id' => (string) $data['product_id'],
@@ -2615,8 +2623,7 @@ class MarketingShopifyIntegrationController extends Controller
         Request $request,
         CandleCashService $candleCashService,
         BirthdayRewardEngineService $birthdayRewardEngine
-    ): JsonResponse
-    {
+    ): JsonResponse {
         $storeContext = $this->resolveStoreContext($request);
         if (! $this->hasStoreContext($storeContext)) {
             return $this->missingStoreContextResponse('customer_status');
@@ -2634,18 +2641,18 @@ class MarketingShopifyIntegrationController extends Controller
                 'resolution_status' => 'open',
             ]);
 
-        return MarketingStorefrontContract::success([
-            'profile_id' => null,
-            'state' => $states[0] ?? 'unknown_customer',
-            'consent' => ['sms' => false, 'email' => false],
-            'source_channels' => [],
-            'candle_cash_balance' => 0,
-            'candle_cash_balance_amount' => 0,
-            'candle_cash_balance_formatted' => $candleCashService->formatCurrency(0),
-            'redemption_rules' => $candleCashService->redemptionRulesPayload((int) $storeContext['tenant_id']),
-            'groups' => [],
-            'eligibility' => [
-                'winback' => false,
+            return MarketingStorefrontContract::success([
+                'profile_id' => null,
+                'state' => $states[0] ?? 'unknown_customer',
+                'consent' => ['sms' => false, 'email' => false],
+                'source_channels' => [],
+                'candle_cash_balance' => 0,
+                'candle_cash_balance_amount' => 0,
+                'candle_cash_balance_formatted' => $candleCashService->formatCurrency(0),
+                'redemption_rules' => $candleCashService->redemptionRulesPayload((int) $storeContext['tenant_id']),
+                'groups' => [],
+                'eligibility' => [
+                    'winback' => false,
                     'reward_nudge' => false,
                 ],
                 'birthday' => [
@@ -2674,7 +2681,7 @@ class MarketingShopifyIntegrationController extends Controller
             'status' => 'ok',
             'profile' => $profile,
             'source_type' => 'shopify_widget_customer_status',
-            'source_id' => 'profile:' . $profile->id,
+            'source_id' => 'profile:'.$profile->id,
             'meta' => [
                 'states' => $states,
                 'group_count' => $profile->groups->where('is_internal', false)->count(),
@@ -2889,7 +2896,7 @@ class MarketingShopifyIntegrationController extends Controller
             }
         }
 
-        $sourceType = 'shopify_widget_' . Str::slug($scope, '_');
+        $sourceType = 'shopify_widget_'.Str::slug($scope, '_');
         $sourceId = $this->identityService->deterministicSourceId(
             prefix: $sourceType,
             email: $emailInput,
@@ -2909,7 +2916,7 @@ class MarketingShopifyIntegrationController extends Controller
         ], [
             'source_type' => $sourceType,
             'source_id' => $sourceId,
-            'source_label' => 'shopify_widget_' . $scope,
+            'source_label' => 'shopify_widget_'.$scope,
             'source_channels' => ['shopify', 'online', 'shopify_widget'],
             'tenant_id' => $storeContext['tenant_id'],
             'source_meta' => [
@@ -2923,8 +2930,8 @@ class MarketingShopifyIntegrationController extends Controller
     }
 
     /**
-     * @param array<string,mixed> $data
-     * @param array{store_key:?string,tenant_id:?int} $storeContext
+     * @param  array<string,mixed>  $data
+     * @param  array{store_key:?string,tenant_id:?int}  $storeContext
      * @return array{product_id:string,product_handle:?string,product_title:?string,product_url:?string,variant_id:?string,store_key:string,tenant_id:?int}
      */
     protected function productReviewContext(array $data, array $storeContext): array
@@ -2943,8 +2950,8 @@ class MarketingShopifyIntegrationController extends Controller
     }
 
     /**
-     * @param array<string,mixed> $data
-     * @param array{store_key:?string,tenant_id:?int} $storeContext
+     * @param  array<string,mixed>  $data
+     * @param  array{store_key:?string,tenant_id:?int}  $storeContext
      * @return array{product_id:string,product_variant_id:?string,product_handle:?string,product_title:?string,product_url:?string,store_key:string,tenant_id:?int,guest_token:?string,wishlist_list_id:?int,list_name:?string}
      */
     protected function wishlistContext(array $data, array $storeContext): array
@@ -3005,7 +3012,7 @@ class MarketingShopifyIntegrationController extends Controller
     }
 
     /**
-     * @param array{store_key:?string,tenant_id:?int} $storeContext
+     * @param  array{store_key:?string,tenant_id:?int}  $storeContext
      */
     protected function hasStoreContext(array $storeContext): bool
     {
@@ -3013,7 +3020,7 @@ class MarketingShopifyIntegrationController extends Controller
     }
 
     /**
-     * @param array{store_key:?string,tenant_id:?int} $storeContext
+     * @param  array{store_key:?string,tenant_id:?int}  $storeContext
      */
     protected function hasTenantScopedStoreContext(array $storeContext): bool
     {
@@ -3341,20 +3348,20 @@ class MarketingShopifyIntegrationController extends Controller
 
     protected function birthdayApplyPath(string $rewardCode): string
     {
-        $redirect = '/cart?forestry_reward_code=' . rawurlencode($rewardCode) . '&forestry_reward_kind=birthday';
+        $redirect = '/cart?forestry_reward_code='.rawurlencode($rewardCode).'&forestry_reward_kind=birthday';
 
-        return '/discount/' . rawurlencode($rewardCode) . '?redirect=' . rawurlencode($redirect);
+        return '/discount/'.rawurlencode($rewardCode).'?redirect='.rawurlencode($redirect);
     }
 
     protected function candleCashApplyPath(string $rewardCode): string
     {
-        $redirect = '/cart?forestry_reward_code=' . rawurlencode($rewardCode) . '&forestry_reward_kind=candle_cash';
+        $redirect = '/cart?forestry_reward_code='.rawurlencode($rewardCode).'&forestry_reward_kind=candle_cash';
 
-        return '/discount/' . rawurlencode($rewardCode) . '?redirect=' . rawurlencode($redirect);
+        return '/discount/'.rawurlencode($rewardCode).'?redirect='.rawurlencode($redirect);
     }
 
     /**
-     * @param array{store_key:?string,tenant_id:?int} $storeContext
+     * @param  array{store_key:?string,tenant_id:?int}  $storeContext
      */
     protected function syncRedemptionStoreContext(CandleCashRedemption $redemption, array $storeContext): CandleCashRedemption
     {
@@ -3454,7 +3461,7 @@ class MarketingShopifyIntegrationController extends Controller
         $rewardsLabel = $this->displayLabelForStoreContext($storeContext, 'rewards_label', 'Rewards');
         $rewardCreditLabel = $this->displayLabelForStoreContext($storeContext, 'reward_credit_label', 'reward credit');
         $programName = (string) data_get($policy, 'program_identity.program_name', $rewardsLabel);
-        $walletLabel = (string) data_get($customer, 'wallet_label', $rewardsLabel . ' Wallet');
+        $walletLabel = (string) data_get($customer, 'wallet_label', $rewardsLabel.' Wallet');
         $expirationMode = (string) ($expiration['expiration_mode'] ?? 'days_from_issue');
         $expirationDays = max(1, (int) ($expiration['expiration_days'] ?? 90));
         $redeemIncrement = $candleCashService->fixedRedemptionAmount($tenantId);
@@ -3583,7 +3590,7 @@ class MarketingShopifyIntegrationController extends Controller
     }
 
     /**
-     * @param array{store_key:?string,tenant_id:?int} $storeContext
+     * @param  array{store_key:?string,tenant_id:?int}  $storeContext
      */
     protected function runtimeTenantId(array $storeContext, ?MarketingProfile $profile = null): ?int
     {
@@ -3634,7 +3641,7 @@ class MarketingShopifyIntegrationController extends Controller
         $verb = Str::endsWith(Str::lower($programName), 's') ? 'expire' : 'expires';
 
         return match ($expirationMode) {
-            'none' => $programName . ' does not currently expire.',
+            'none' => $programName.' does not currently expire.',
             'end_of_season' => sprintf('%s %s at the end of the active season.', $programName, $verb),
             default => sprintf('%s %s %d days after it is earned.', $programName, $verb, $expirationDays),
         };
@@ -3680,7 +3687,7 @@ class MarketingShopifyIntegrationController extends Controller
 
     protected function formatStorefrontRewardAmount(float $amount): string
     {
-        return '$' . number_format($amount, fmod(abs($amount), 1.0) === 0.0 ? 0 : 2);
+        return '$'.number_format($amount, fmod(abs($amount), 1.0) === 0.0 ? 0 : 2);
     }
 
     protected function isoDateTimeOrNull(mixed $value): ?string
@@ -3755,11 +3762,11 @@ class MarketingShopifyIntegrationController extends Controller
     }
 
     /**
-     * @param array<string,mixed> $context
+     * @param  array<string,mixed>  $context
      */
     protected function logStorefrontEvent(Request $request, string $eventType, array $context = []): void
     {
-        $endpoint = '/' . ltrim((string) $request->path(), '/');
+        $endpoint = '/'.ltrim((string) $request->path(), '/');
         $authMode = (string) $request->attributes->get('marketing_storefront_auth_mode', 'unknown');
 
         $this->eventLogger->log($eventType, [
@@ -3767,7 +3774,7 @@ class MarketingShopifyIntegrationController extends Controller
             'issue_type' => $context['issue_type'] ?? null,
             'source_surface' => (string) ($context['source_surface'] ?? 'shopify_widget'),
             'endpoint' => $endpoint,
-            'request_key' => (string) ($context['request_key'] ?? substr(hash('sha1', $request->fullUrl() . '|' . $request->ip() . '|' . $eventType), 0, 48)),
+            'request_key' => (string) ($context['request_key'] ?? substr(hash('sha1', $request->fullUrl().'|'.$request->ip().'|'.$eventType), 0, 48)),
             'signature_mode' => $authMode,
             'profile' => $context['profile'] ?? null,
             'marketing_profile_id' => $context['marketing_profile_id'] ?? null,

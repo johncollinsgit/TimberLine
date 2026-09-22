@@ -480,6 +480,7 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
 
 - Production is ONE DigitalOcean droplet: IP `129.212.138.111`, hostname `Backstage`, managed by Laravel Forge (`modern-forestry` / `backstage-pfw`). One nginx serves every domain: `theeverbranch.com` (canonical, incl. `app.` and tenant wildcards), `backstage.theforestrystudio.com` (legacy), `evergrovesoftware.com`, `forestrybackstage.com`. All are Cloudflare-proxied.
 - MySQL lives on the same droplet (`DB_CONNECTION=mysql`). The scheduler cron (`schedule:run` every minute) is installed directly in the forge crontab and IS active, even though Forge's UI scheduler toggle looks off.
+- The tenant-scoped Candle Cash + wishlist checker is `marketing:send-weekly-rewards-wishlist-summary`. Modern Forestry runs Monday at 08:30 America/New_York and emails aggregate usage/health to `info@theforestrystudio.com`; use `--dry-run` before an ad hoc send. A `No activity observed` result is neutral, while recorded apply/fallback/wishlist errors produce `Needs attention`. See `docs/operations/rewards-wishlist-weekly-summary.md`.
 - The Forge production site tracks `main` and is configured for zero-downtime
   releases. Direct Forge push-to-deploy is intentionally off so a change cannot
   bypass the GitHub Actions test/build gate. GitHub deploys only by posting to
