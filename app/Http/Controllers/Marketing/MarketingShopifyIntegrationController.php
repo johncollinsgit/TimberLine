@@ -43,6 +43,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class MarketingShopifyIntegrationController extends Controller
@@ -2791,6 +2792,23 @@ class MarketingShopifyIntegrationController extends Controller
         bool $allowBody = false
     ): array {
         $storeContext = $this->resolveStoreContext($request, $allowBody);
+        // Shopify app-proxy supplies this verified ID even when New Customer
+        // Accounts fails to hydrate Liquid's storefront customer object.
+        // Prefer it over stale browser-supplied identity fields.
+        $signedShopifyCustomerId = $this->normalizeShopifyCustomerId(
+            $request->query('logged_in_customer_id', '')
+        );
+        if ($signedShopifyCustomerId !== '') {
+            $signedProfile = $this->profileFromShopifyCustomerId(
+                $signedShopifyCustomerId,
+                $storeContext['store_key'] ?? null,
+                is_numeric($storeContext['tenant_id'] ?? null) ? (int) $storeContext['tenant_id'] : null
+            );
+            if ($signedProfile) {
+                return ['status' => 'resolved', 'profile' => $signedProfile, 'sync' => []];
+            }
+        }
+
         $profileId = (int) ($request->query('marketing_profile_id', 0) ?: ($allowBody ? $request->input('marketing_profile_id', 0) : 0));
         if ($profileId > 0) {
             $profileQuery = MarketingProfile::query();
@@ -3089,6 +3107,8 @@ class MarketingShopifyIntegrationController extends Controller
 
     protected function profileFromShopifyCustomerId(string $shopifyCustomerId, ?string $storeKey = null, ?int $tenantId = null): ?MarketingProfile
     {
+        // Resolve only aliases tied to Shopify's signed customer ID. Historical
+        // imports can leave an empty duplicate beside the ledger-bearing profile.
         $externalQuery = CustomerExternalProfile::query()
             ->forTenantId($tenantId)
             ->where('provider', 'shopify')
@@ -3103,18 +3123,69 @@ class MarketingShopifyIntegrationController extends Controller
             });
         }
 
-        $external = $externalQuery
+        $externalProfileIds = $externalQuery
             ->orderByDesc('synced_at')
             ->orderByDesc('id')
-            ->first(['marketing_profile_id']);
+            ->pluck('marketing_profile_id')
+            ->map(static fn ($id): int => (int) $id)
+            ->filter(static fn (int $id): bool => $id > 0)
+            ->values();
 
-        if (! $external || (int) $external->marketing_profile_id <= 0) {
+        $normalizedStoreKey = $this->normalizeStoreKey($storeKey);
+        $linkIds = $normalizedStoreKey !== null
+            ? [$normalizedStoreKey.':'.$shopifyCustomerId, 'shopify:'.$shopifyCustomerId]
+            : [$shopifyCustomerId, 'shopify:'.$shopifyCustomerId];
+        $linkedProfileIds = DB::table('marketing_profile_links')
+            ->where('source_type', 'shopify_customer')
+            ->whereIn('source_id', array_values(array_unique($linkIds)))
+            ->pluck('marketing_profile_id')
+            ->map(static fn ($id): int => (int) $id)
+            ->filter(static fn (int $id): bool => $id > 0)
+            ->values();
+
+        $profileIds = $externalProfileIds->merge($linkedProfileIds)->unique()->values();
+        if ($profileIds->isEmpty()) {
             return null;
         }
 
-        $profileQuery = MarketingProfile::query()->forTenantId($tenantId);
+        $profileQuery = MarketingProfile::query()->whereIn('id', $profileIds);
+        if ($tenantId !== null && $tenantId > 0) {
+            $profileQuery->forTenantId($tenantId);
+        }
+        $profiles = $profileQuery->whereNull('merged_at')->get();
+        if ($profiles->isEmpty()) {
+            return null;
+        }
 
-        return $profileQuery->find((int) $external->marketing_profile_id);
+        $walletStats = DB::table('candle_cash_transactions')
+            ->whereIn('marketing_profile_id', $profiles->pluck('id'))
+            ->selectRaw('marketing_profile_id, COUNT(*) AS transaction_count, SUM(candle_cash_delta) AS balance')
+            ->groupBy('marketing_profile_id')
+            ->get()
+            ->keyBy('marketing_profile_id');
+        $externalIdLookup = $externalProfileIds->flip();
+
+        return $profiles->sort(function (MarketingProfile $left, MarketingProfile $right) use ($walletStats, $externalIdLookup): int {
+            $leftStats = $walletStats->get($left->id);
+            $rightStats = $walletStats->get($right->id);
+            $leftBalance = abs((float) ($leftStats->balance ?? 0));
+            $rightBalance = abs((float) ($rightStats->balance ?? 0));
+            if ($leftBalance !== $rightBalance) {
+                return $rightBalance <=> $leftBalance;
+            }
+            $leftTransactions = (int) ($leftStats->transaction_count ?? 0);
+            $rightTransactions = (int) ($rightStats->transaction_count ?? 0);
+            if ($leftTransactions !== $rightTransactions) {
+                return $rightTransactions <=> $leftTransactions;
+            }
+            $leftExternal = $externalIdLookup->has($left->id) ? 1 : 0;
+            $rightExternal = $externalIdLookup->has($right->id) ? 1 : 0;
+            if ($leftExternal !== $rightExternal) {
+                return $rightExternal <=> $leftExternal;
+            }
+            return $right->id <=> $left->id;
+        })->values()->first();
+
     }
 
     protected function identityErrorResponse(string $status, ?Request $request = null): JsonResponse
