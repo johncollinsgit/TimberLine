@@ -47,12 +47,12 @@ export function chartPresentation(canvas, money, type, extra = {}) {
       tooltip.hidden=!model.opacity;if(!model.opacity)return;
       tooltip.replaceChildren();
       const heading=document.createElement('strong');heading.className='tr-tooltip-heading';heading.textContent=model.title?.join(' ')||'';tooltip.append(heading);
-      model.dataPoints.forEach(point=>{const row=document.createElement('div');row.className='tr-tooltip-row';const label=document.createElement('span');label.textContent=point.dataset.label||point.label;const value=document.createElement('strong');value.textContent=money(point.parsed.y??point.parsed);row.append(label,value);tooltip.append(row);});
+      model.dataPoints.forEach(point=>{const row=document.createElement('div');row.className='tr-tooltip-row';const label=document.createElement('span');label.textContent=point.dataset.label||point.label;const value=document.createElement('strong');const parsed=point.parsed.y??point.parsed;value.textContent=Number.isFinite(parsed)?money(parsed):'No data';row.append(label,value);tooltip.append(row);});
       tooltip.style.left=`${Math.max(0,Math.min(model.caretX+16,wrapper.clientWidth-tooltip.offsetWidth))}px`;
       tooltip.style.top=`${Math.max(0,Math.min(model.caretY-tooltip.offsetHeight-12,wrapper.clientHeight-tooltip.offsetHeight))}px`;
     }}},
     scales:type==='doughnut'?{}:{
-      x:{grid:{display:false},border:{display:false},ticks:{...(extra.tickLabels?{callback:v=>extra.tickLabels[v]}:{}),maxTicksLimit:6,maxRotation:0,autoSkip:true,color:'#667580',padding:12,font:{family:font,size:11}}},
+      x:{grid:{display:false},border:{display:false},ticks:{...(extra.tickLabels?{callback:v=>extra.tickLabels[v]}:{}),maxTicksLimit:extra.showAllTicks?12:6,maxRotation:0,autoSkip:!extra.showAllTicks,color:'#667580',padding:12,font:{family:font,size:11}}},
       y:{beginAtZero:extra.beginAtZero??false,border:{display:false},grid:{color:ctx=>ctx.tick.value===0?'#b8c4cc':'#edf0f3',drawTicks:false},ticks:{maxTicksLimit:6,padding:12,color:'#667580',callback:v=>compact.format(v/100),font:{family:font,size:11}}},
     },
   }};

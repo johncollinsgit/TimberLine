@@ -86,3 +86,30 @@ test('income runway keeps outflows distinct and defaults the projection to match
   assert.deepEqual(plan.gaps,[-100000,100000]);
   assert.equal(plan.sameAsLastYear,false);
 });
+
+test('previous-year comparison aligns calendar months and preserves missing evidence', async()=>{
+  const { previousYearSeries }=await import('../../resources/js/trajectory/chart-series.js');
+  const months=[
+    {month:'2025-01',income_cents:100000,spending_cents:70000,ids:[1],closed_month:true},
+    {month:'2025-02',income_cents:90000,spending_cents:80000,ids:[2],closed_month:true},
+    {month:'2026-01',income_cents:120000,spending_cents:60000,ids:[3],closed_month:true},
+    {month:'2026-02',income_cents:110000,spending_cents:75000,ids:[4],closed_month:false},
+  ];
+  const spending=previousYearSeries(months,2026);
+  assert.deepEqual(spending.current.slice(0,3),[60000,75000,null]);
+  assert.deepEqual(spending.previous.slice(0,3),[70000,80000,null]);
+  assert.equal(spending.currentTotal,135000);
+  assert.equal(spending.previousTotal,150000);
+  assert.equal(spending.currentCount,2);
+  assert.equal(spending.previousCount,2);
+  assert.equal(spending.comparableCount,1);
+  assert.equal(spending.comparableCurrentTotal,60000);
+  assert.equal(spending.comparablePreviousTotal,70000);
+  assert.deepEqual(spending.rows[0].current.ids,[3]);
+  const income=previousYearSeries(months,2026,'income');
+  assert.deepEqual(income.current.slice(0,2),[120000,110000]);
+  assert.deepEqual(income.previous.slice(0,2),[100000,90000]);
+  const net=previousYearSeries(months,2026,'net');
+  assert.equal(net.current[0],60000);
+  assert.equal(net.previous[0],30000);
+});

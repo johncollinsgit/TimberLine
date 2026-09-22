@@ -67,3 +67,34 @@ export function incomeRunwaySeries(rows, source = 'last-year') {
   const gaps = projected.map((income, i) => income === null ? null : income - outflows[i]);
   return {projected,lastYear,outflows,gaps,sameAsLastYear:projected.every((amount,i)=>amount===lastYear[i])};
 }
+
+// Calendar-year comparisons preserve missing months as null. A missing month
+// is unavailable evidence, never a zero-dollar month. The row keeps both
+// years' transaction IDs so a selected bar can open the records behind it.
+export function previousYearSeries(months, year, metric = 'spending') {
+  const indexed=new Map(months.map(row=>[row.month,row]));
+  const amount=row=>{
+    if(!row)return null;
+    if(metric==='income')return row.income_cents;
+    if(metric==='net')return row.income_cents-row.spending_cents;
+    return row.spending_cents;
+  };
+  const rows=Array.from({length:12},(_,index)=>{
+    const number=String(index+1).padStart(2,'0');
+    const current=indexed.get(`${year}-${number}`)??null;
+    const previous=indexed.get(`${year-1}-${number}`)??null;
+    return {month:number,current,previous,current_cents:amount(current),previous_cents:amount(previous)};
+  });
+  return {
+    rows,
+    current:rows.map(row=>row.current_cents),
+    previous:rows.map(row=>row.previous_cents),
+    currentTotal:rows.reduce((sum,row)=>sum+(row.current_cents??0),0),
+    previousTotal:rows.reduce((sum,row)=>sum+(row.previous_cents??0),0),
+    currentCount:rows.filter(row=>row.current_cents!==null).length,
+    previousCount:rows.filter(row=>row.previous_cents!==null).length,
+    comparableCurrentTotal:rows.filter(row=>row.current_cents!==null&&row.previous_cents!==null&&row.current?.closed_month!==false).reduce((sum,row)=>sum+row.current_cents,0),
+    comparablePreviousTotal:rows.filter(row=>row.current_cents!==null&&row.previous_cents!==null&&row.current?.closed_month!==false).reduce((sum,row)=>sum+row.previous_cents,0),
+    comparableCount:rows.filter(row=>row.current_cents!==null&&row.previous_cents!==null&&row.current?.closed_month!==false).length,
+  };
+}
