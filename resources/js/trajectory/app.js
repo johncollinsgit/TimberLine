@@ -351,6 +351,7 @@ function boot() {
       if(a==='outlook-view'){outlook.setView(target.dataset.view);render();root.querySelector('.tr-outlook-tabs [aria-selected="true"]')?.focus({preventScroll:true});return;}
       if(a==='monthly-view'){outlook.setMonthlyView(target.dataset.view);render();root.querySelector('.tr-monthly-controls [aria-pressed="true"]')?.focus({preventScroll:true});return;}
       if(a==='income-source'){outlook.setIncomeSource(target.dataset.source);render();root.querySelector('.tr-monthly-controls [aria-pressed="true"]')?.focus({preventScroll:true});return;}
+      if(a==='previous-metric'){outlook.setPreviousMetric(target.dataset.metric);render();root.querySelector('[aria-label="Previous year comparison metric"] [aria-pressed="true"]')?.focus({preventScroll:true});return;}
       if(a==='forecast-horizon'){outlook.setHorizon(Number(target.dataset.days));render();root.querySelector('.tr-horizon [aria-pressed="true"]')?.focus({preventScroll:true});return;}
       if(await planning.handle(a,target))return;
       if(['overview','accounts','history','budget','bills','assets','business','medical'].includes(a)){navigate(a);}
