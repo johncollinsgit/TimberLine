@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AgreementProposalController extends Controller
 {
@@ -95,7 +95,7 @@ class AgreementProposalController extends Controller
         return redirect()->route('proposals.show', ['token' => $token])->with('status', 'Agreement accepted. Your permanent copy is ready.');
     }
 
-    public function download(Request $request, string $token, AgreementProposalAccessService $access): BinaryFileResponse
+    public function download(Request $request, string $token, AgreementProposalAccessService $access): StreamedResponse
     {
         $agreement = $access->resolve($token);
         abort_unless($access->isUnlocked($request, $agreement), 403);

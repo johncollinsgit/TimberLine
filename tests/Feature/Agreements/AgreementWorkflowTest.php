@@ -369,6 +369,35 @@ test('acceptance binds every confirmation and authorizes a billing order without
     expect(AgreementAcceptance::query()->where('agreement_id', $agreement->id)->count())->toBe(1);
 });
 
+test('every agreement download surface streams the signed immutable snapshot', function (): void {
+    $tenant = agreementTenant('download-client');
+    $sent = sentAgreement($tenant);
+    $this->post($sent['url'].'/unlock', ['password' => $sent['password']])->assertRedirect();
+    $this->post($sent['url'].'/accept', acceptancePayload())->assertRedirect();
+    $agreement = $sent['agreement']->fresh(['acceptance']);
+    $snapshot = (string) Storage::disk('local')->get((string) $agreement->acceptance->snapshot_path);
+
+    $this->get($sent['url'].'/download')
+        ->assertOk()
+        ->assertDownload('everbranch-agreement-'.$agreement->id.'.html')
+        ->assertStreamedContent($snapshot);
+
+    $tenantUser = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+    $tenantUser->tenants()->attach($tenant->id, ['role' => 'admin', 'membership_active' => true]);
+    $this->actingAs($tenantUser)
+        ->get('https://app.theeverbranch.com/agreements/'.$agreement->id.'/download?tenant='.$tenant->slug)
+        ->assertOk()
+        ->assertDownload('user-agreement-'.$agreement->id.'.html')
+        ->assertStreamedContent($snapshot);
+
+    $operator = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+    $this->actingAs($operator)
+        ->get('https://app.theeverbranch.com/landlord/agreements/'.$agreement->id.'/download')
+        ->assertOk()
+        ->assertDownload('agreement-'.$agreement->id.'-accepted.html')
+        ->assertStreamedContent($snapshot);
+});
+
 test('invalid public acceptance returns to the agreement form instead of the post-only endpoint', function (): void {
     $sent = sentAgreement(agreementTenant());
     $url = 'http://evergrove.test/proposals/'.$sent['token'];

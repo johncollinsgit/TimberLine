@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class LandlordAgreementController extends Controller
 {
@@ -248,7 +248,7 @@ class LandlordAgreementController extends Controller
         return back()->with('status', 'Export tracking updated.');
     }
 
-    public function download(Agreement $agreement): BinaryFileResponse
+    public function download(Agreement $agreement): StreamedResponse
     {
         $acceptance = $agreement->acceptance()->firstOrFail();
 
