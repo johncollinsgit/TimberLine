@@ -30,6 +30,14 @@ found zero applications and zero order requests; retain the D1 tables and existi
 referral-click history. Review/archive any superseded native scaffold product
 separately rather than removing unrecognized records during activation.
 
+The current public navigation is product-first: **Products**, **Find a retailer**,
+**Wholesale**, and **Affiliates**. The retailer page is a retail-facing map whose
+pins are added only after a location is approved. Legacy editorial routes may stay
+available for existing links, but must not reappear in primary navigation. A
+wholesaler login must lead only to the dedicated approved wholesale storefront;
+it must never be represented by an Everbranch operator/workspace sign-in or expose
+trade pricing in the retail renderer.
+
 ## Editing and preview
 
 `/website` and `/website/products` use the connected editor after opt-in through

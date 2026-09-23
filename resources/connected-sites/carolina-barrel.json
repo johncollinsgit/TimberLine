@@ -30,32 +30,32 @@
     },
     "shared_004": {
       "group": "shared",
-      "label": "/stays",
+      "label": "/products",
       "type": "link"
     },
     "shared_005": {
       "group": "shared",
-      "label": "Stay Awhile",
+      "label": "Products",
       "type": "text"
     },
     "shared_006": {
       "group": "shared",
-      "label": "/field",
+      "label": "/retailers",
       "type": "link"
     },
     "shared_007": {
       "group": "shared",
-      "label": "Field & Hearth",
+      "label": "Find a retailer",
       "type": "text"
     },
     "shared_008": {
       "group": "shared",
-      "label": "/work",
+      "label": "/wholesale",
       "type": "link"
     },
     "shared_009": {
       "group": "shared",
-      "label": "Our work",
+      "label": "Wholesale",
       "type": "text"
     },
     "shared_010": {
@@ -65,7 +65,7 @@
     },
     "shared_011": {
       "group": "shared",
-      "label": "Partners",
+      "label": "Affiliate program",
       "type": "text"
     },
     "shared_012": {
@@ -75,7 +75,7 @@
     },
     "shared_013": {
       "group": "shared",
-      "label": "Wholesale",
+      "label": "Wholesaler login",
       "type": "text"
     },
     "shared_014": {
@@ -110,32 +110,32 @@
     },
     "shared_020": {
       "group": "shared",
-      "label": "Collections",
+      "label": "Shop",
       "type": "text"
     },
     "shared_021": {
       "group": "shared",
-      "label": "/stays",
+      "label": "/products",
       "type": "link"
     },
     "shared_022": {
       "group": "shared",
-      "label": "Stay Awhile",
+      "label": "Products",
       "type": "text"
     },
     "shared_023": {
       "group": "shared",
-      "label": "/field",
+      "label": "/retailers",
       "type": "link"
     },
     "shared_024": {
       "group": "shared",
-      "label": "Field & Hearth",
+      "label": "Find a retailer",
       "type": "text"
     },
     "shared_025": {
       "group": "shared",
-      "label": "Trade",
+      "label": "For your business",
       "type": "text"
     },
     "shared_026": {
@@ -145,7 +145,7 @@
     },
     "shared_027": {
       "group": "shared",
-      "label": "Wholesale portal",
+      "label": "Wholesale",
       "type": "text"
     },
     "shared_028": {
@@ -155,7 +155,7 @@
     },
     "shared_029": {
       "group": "shared",
-      "label": "Affiliate partners",
+      "label": "Affiliate program",
       "type": "text"
     },
     "shared_030": {
@@ -1363,32 +1363,32 @@
     "shared_001": "/",
     "shared_002": "Carolina Barrel Co.",
     "shared_003": "Handcrafted in Carolina",
-    "shared_004": "/stays",
-    "shared_005": "Stay Awhile",
-    "shared_006": "/field",
-    "shared_007": "Field & Hearth",
-    "shared_008": "/work",
-    "shared_009": "Our work",
+    "shared_004": "/products",
+    "shared_005": "Products",
+    "shared_006": "/retailers",
+    "shared_007": "Find a retailer",
+    "shared_008": "/wholesale",
+    "shared_009": "Wholesale",
     "shared_010": "/partners",
-    "shared_011": "Partners",
+    "shared_011": "Affiliate program",
     "shared_012": "/wholesale",
-    "shared_013": "Wholesale",
+    "shared_013": "Wholesaler login",
     "shared_014": "Carolina Barrel Co.",
     "shared_015": "Handcrafted chairs and home accessories made from reclaimed wine barrels.",
     "shared_016": "tel:+17049294133",
     "shared_017": "704-929-4133",
     "shared_018": "mailto:carolinabarrelco@gmail.com",
     "shared_019": "carolinabarrelco@gmail.com",
-    "shared_020": "Collections",
-    "shared_021": "/stays",
-    "shared_022": "Stay Awhile",
-    "shared_023": "/field",
-    "shared_024": "Field & Hearth",
-    "shared_025": "Trade",
+    "shared_020": "Shop",
+    "shared_021": "/products",
+    "shared_022": "Products",
+    "shared_023": "/retailers",
+    "shared_024": "Find a retailer",
+    "shared_025": "For your business",
     "shared_026": "/wholesale",
-    "shared_027": "Wholesale portal",
+    "shared_027": "Wholesale",
     "shared_028": "/partners",
-    "shared_029": "Affiliate partners",
+    "shared_029": "Affiliate program",
     "shared_030": "Follow",
     "shared_031": "https://www.instagram.com/carolinabarrelco",
     "shared_032": "Instagram ↗",
@@ -1418,7 +1418,7 @@
     "home_013": "A substantial barrel fire table with generous room to gather—made for patios, lodges, and guest experiences people talk about.",
     "home_014": "/products/barrel-fire-table",
     "home_015": "View the barrel fire table",
-    "shared_044": "/work",
+    "shared_044": "/products",
     "shared_045": "View the complete collection ",
     "shared_046": "↗",
     "shared_047": " / ",
@@ -1442,7 +1442,7 @@
     "home_031": "/products/barrel-wine-storage",
     "shared_050": "Real pieces. Made by hand.",
     "shared_051": "The barrel types",
-    "shared_052": "/work",
+    "shared_052": "/products",
     "shared_053": "View full catalog →",
     "shared_054": "View product →",
     "shared_055": "Name",
@@ -1482,22 +1482,22 @@
     "home_032": "The Carolina Barrel Co. collection",
     "home_033": "Built once. Remembered for years.",
     "home_034": "Both collections lead back to one catalog, one inquiry desk, and one source of truth inside Everbranch.",
-    "home_035": "/stays",
+    "home_035": "/products",
     "home_036": "/images/barrel-bar-suite.webp",
-    "home_037": "Hospitality collection",
-    "home_038": "Stay Awhile",
-    "home_039": "Statement furniture, fire tables, bars, and guest-ready details for high-end rentals and gathering spaces.",
-    "home_040": "/field",
+    "home_037": "The collection",
+    "home_038": "Shop the products",
+    "home_039": "Explore chairs, fire tables, bars, wine storage, and handcrafted pieces built from reclaimed wine barrels.",
+    "home_040": "/retailers",
     "home_041": "/images/dock-five-stave-chairs.webp",
-    "home_042": "Heritage collection",
-    "home_043": "Field & Hearth",
-    "home_044": "Five-stave seating and purposeful pieces for lake houses, sporting rooms, patios, and everyday retreat.",
+    "home_042": "See it in person",
+    "home_043": "Find a retailer",
+    "home_044": "Find approved retailers carrying Carolina Barrel Co. pieces, or introduce a store that should join the collection.",
     "home_045": "For designers, hosts & retailers",
     "home_046": "Made for one room—or a portfolio of properties.",
     "home_047": "/wholesale",
-    "home_048": "Wholesale portal",
+    "home_048": "Wholesale",
     "home_049": "/partners",
-    "home_050": "Partner program",
+    "home_050": "Affiliate program",
     "stays_001": "/images/barrel-bar-suite.webp",
     "stays_002": "Hospitality collection",
     "stays_003": "Stay",
@@ -1559,24 +1559,24 @@
     "work_007": "Choose a piece to see details and submit a quote request. If someone referred you, you can include their referral code. Final finishes, timing, freight, and installation are confirmed directly with Carolina Barrel Co.",
     "work_008": "Retail",
     "work_009": "View product & order →",
-    "partners_001": "Affiliate & referral program",
+    "partners_001": "Affiliate program",
     "partners_002": "Share the",
     "partners_003": "craft.",
     "partners_004": "A trackable partner system for hosts, designers, builders, outdoor creators, and retailers who introduce the right customer to Carolina Barrel Co.",
     "partners_005": "How it works",
     "partners_006": "One link. Clear attribution.",
-    "partners_007": "Each approved partner receives a unique link. Visits and inquiries stay associated with that partner while Carolina Barrel Co. keeps one catalog and lead queue inside Everbranch.",
+    "partners_007": "Each approved affiliate receives a unique link. Visits and inquiries stay associated with that affiliate while Carolina Barrel Co. keeps one catalog and lead queue inside Everbranch.",
     "partners_008": "Apply with your audience and channel.",
     "partners_009": "Receive an approved partner code.",
-    "partners_010": "Share either collection with the same code.",
-    "partners_011": "Review attributed inquiries from one portal.",
+    "partners_010": "Share the product collection with the same code.",
+    "partners_011": "Review approved attribution and commission terms.",
     "wholesale_001": "Trade access",
     "wholesale_002": "Wholesale",
     "wholesale_003": "Portal.",
     "wholesale_004": "For vacation-rental portfolios, interior designers, hospitality groups, retailers, and outfitters sourcing handcrafted barrel pieces.",
-    "wholesale_005": "Trade store",
+    "wholesale_005": "Trade account",
     "wholesale_006": "Made for your business.",
-    "wholesale_007": "Request wholesale pricing, lead times, and terms directly from Carolina Barrel Co.",
+    "wholesale_007": "Apply for private pricing, lead times, and terms directly from Carolina Barrel Co.",
     "wholesale_008": "Retail",
     "wholesale_009": "View & order",
     "wholesale_010": "One catalog. Clear terms.",
