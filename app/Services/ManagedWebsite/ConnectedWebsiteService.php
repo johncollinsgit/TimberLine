@@ -65,6 +65,73 @@ class ConnectedWebsiteService
         return $this->validateContent((array) data_get($version->settings, 'connected_content'));
     }
 
+    /** @return array<int,array<string,mixed>> */
+    public function catalog(TenantSite $site, bool $includeDrafts = false): array
+    {
+        $query = WebsiteProduct::query()->forTenantId($site->tenant_id)
+            ->where('tenant_site_id', $site->id)
+            ->with('variants');
+        $includeDrafts ? $query->whereIn('status', ['active', 'draft']) : $query->where('status', 'active');
+
+        return $query->orderBy('id')->get()->map(function (WebsiteProduct $product): array {
+            $catalog = (array) data_get($product->service_details, 'catalog', []);
+            $images = collect((array) $product->media)->filter(fn ($url) => is_string($url) && filter_var($url, FILTER_VALIDATE_URL))->take(12)->values()->all();
+            $collection = (string) ($catalog['collection'] ?? 'Carolina Barrel Co.');
+            $collectionHandle = \Illuminate\Support\Str::slug($collection);
+            $alt = (array) ($catalog['media_alt'] ?? []);
+
+            return [
+                'slug' => $product->handle,
+                'name' => $product->title,
+                'shortName' => $product->title,
+                'collection' => $collection,
+                'collections' => $collectionHandle !== '' ? [$collectionHandle] : [],
+                'image' => $images[0] ?? '',
+                'images' => $images,
+                'alt' => $alt[0] ?? $product->title,
+                'mediaAlt' => $alt,
+                'summary' => $product->description,
+                'details' => (array) ($catalog['details'] ?? []),
+                'sourceEvidence' => (array) ($catalog['source_evidence'] ?? []),
+                'reviewStatus' => (string) ($catalog['review_status'] ?? 'approved'),
+                'quoteOnly' => true,
+                'retail' => null,
+                'seo' => (array) $product->seo,
+                'variants' => [],
+            ];
+        })->values()->all();
+    }
+
+    /** @return array<int,array{title:string,handle:string,description:null,image_url:null}> */
+    public function collections(TenantSite $site, bool $includeDrafts = false): array
+    {
+        return collect($this->catalog($site, $includeDrafts))->map(fn (array $product) => [
+            'title' => $product['collection'],
+            'handle' => $product['collections'][0] ?? '',
+            'description' => null,
+            'image_url' => $product['image'] ?: null,
+        ])->filter(fn (array $collection) => $collection['handle'] !== '')->unique('handle')->values()->all();
+    }
+
+    public function activeProduct(TenantSite $site, string $handle): bool
+    {
+        return WebsiteProduct::query()->forTenantId($site->tenant_id)
+            ->where('tenant_site_id', $site->id)
+            ->where('status', 'active')
+            ->where('handle', $handle)
+            ->exists();
+    }
+
+    public function presentation(TenantSite $site, int $versionId, bool $preview = false): string
+    {
+        if ($preview) {
+            return 'catalog_v2';
+        }
+        $version = $site->siteVersions()->where('tenant_id', $site->tenant_id)->findOrFail($versionId);
+
+        return data_get($version->settings, 'connected_presentation') === 'catalog_v2' ? 'catalog_v2' : 'v1';
+    }
+
     public function validateContent(array $content): array
     {
         $content = array_map(fn ($value) => $value ?? '', $content);
@@ -95,13 +162,13 @@ class ConnectedWebsiteService
         return $content;
     }
 
-    private function version(TenantSite $site, array $content, User $actor, string $status): TenantSiteVersion
+    private function version(TenantSite $site, array $content, User $actor, string $status, string $presentation = 'v1'): TenantSiteVersion
     {
         return $site->siteVersions()->create([
             'tenant_id' => $site->tenant_id,
             'version_number' => ((int) $site->siteVersions()->max('version_number')) + 1,
             'status' => $status,
-            'settings' => ['connected_renderer' => self::RENDERER, 'connected_content' => $content],
+            'settings' => ['connected_renderer' => self::RENDERER, 'connected_content' => $content, 'connected_presentation' => $presentation],
             'navigation' => [], 'seo' => [],
             'source_manifest' => ['renderer' => self::RENDERER, 'origin' => self::ORIGIN],
             'created_by_user_id' => $actor->id,
@@ -133,10 +200,11 @@ class ConnectedWebsiteService
             $site = TenantSite::query()->lockForUpdate()->findOrFail($site->id);
             abort_unless($site->draft_site_version_id === $expected, 409, 'The draft changed. Reload and review it before publishing.');
             $content = $this->content($site, $expected);
-            $version = $this->version($site, $content, $actor, 'published');
+            $presentation = $this->presentation($site, $expected);
+            $version = $this->version($site, $content, $actor, 'published', $presentation);
             $before = $site->published_site_version_id;
             $site->update(['published_site_version_id' => $version->id, 'status' => 'published', 'public_enabled' => true, 'published_at' => now(), 'updated_by_user_id' => $actor->id]);
-            $this->syncProducts($site, $content);
+            $this->publishCatalog($site, $content, $presentation);
             app(ManagedWebsiteService::class)->recordEvent($site, null, $actor, 'connected.published', ['previous_version_id' => $before, 'version_id' => $version->id, 'draft_version_id' => $expected]);
 
             return $version;
@@ -149,6 +217,22 @@ class ConnectedWebsiteService
         $token = Crypt::encryptString(json_encode(['site' => $site->id, 'tenant' => $site->tenant_id, 'version' => $site->draft_site_version_id, 'actor' => $actor->id, 'expires' => now()->addMinutes(15)->timestamp], JSON_THROW_ON_ERROR));
 
         return self::ORIGIN.'/?__preview='.rawurlencode($token);
+    }
+
+    /** Stages the renderer-only catalog presentation without exposing it publicly. */
+    public function stageCatalogPreview(TenantSite $site, User $actor): TenantSiteVersion
+    {
+        $this->assertEditor($site, $actor);
+
+        return DB::transaction(function () use ($site, $actor): TenantSiteVersion {
+            $site = TenantSite::query()->lockForUpdate()->findOrFail($site->id);
+            $content = $this->content($site, (int) $site->draft_site_version_id);
+            $version = $this->version($site, $content, $actor, 'draft', 'catalog_v2');
+            $site->update(['draft_site_version_id' => $version->id, 'updated_by_user_id' => $actor->id]);
+            app(ManagedWebsiteService::class)->recordEvent($site, null, $actor, 'connected.catalog_preview_staged', ['version_id' => $version->id]);
+
+            return $version;
+        });
     }
 
     public function previewContent(TenantSite $site, string $token): array
@@ -186,8 +270,20 @@ class ConnectedWebsiteService
         });
     }
 
-    private function syncProducts(TenantSite $site, array $content): void
+    private function publishCatalog(TenantSite $site, array $content, string $presentation): void
     {
+        if ($presentation === 'catalog_v2') {
+            WebsiteProduct::query()->forTenantId($site->tenant_id)->where('tenant_site_id', $site->id)->where('status', 'draft')
+                ->get()->filter(fn (WebsiteProduct $product) => data_get($product->service_details, 'catalog.review_status') === 'approved')
+                ->each(function (WebsiteProduct $product): void {
+                    $product->update(['status' => 'active']);
+                });
+
+            return;
+        }
+        if (WebsiteProduct::query()->forTenantId($site->tenant_id)->where('tenant_site_id', $site->id)->exists()) {
+            return;
+        }
         foreach ($this->manifest()['products'] as $definition) {
             $prefix = $definition['prefix'];
             $product = WebsiteProduct::query()->forTenantId($site->tenant_id)->where('tenant_site_id', $site->id)->where('handle', $definition['slug'])->first();

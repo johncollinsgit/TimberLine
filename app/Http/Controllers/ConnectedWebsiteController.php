@@ -81,12 +81,12 @@ class ConnectedWebsiteController extends Controller
             $token = $request->validate(['preview' => ['required', 'string', 'max:4096']])['preview'];
             $content = $service->previewContent($site, $token);
 
-            return response()->json(['renderer' => ConnectedWebsiteService::RENDERER, 'content' => $content, 'preview' => true])
+            return response()->json(['renderer' => ConnectedWebsiteService::RENDERER, 'content' => $content, 'catalog' => $service->catalog($site, true), 'collections' => $service->collections($site, true), 'presentation' => $service->presentation($site, $site->draft_site_version_id, true), 'preview' => true])
                 ->header('Cache-Control', 'private, no-store')->header('X-Robots-Tag', 'noindex, nofollow')->header('Referrer-Policy', 'no-referrer');
         }
         $service->assertAvailable($site);
 
-        return response()->json(['renderer' => ConnectedWebsiteService::RENDERER, 'content' => $service->content($site, $site->published_site_version_id), 'version' => $site->published_site_version_id])
+        return response()->json(['renderer' => ConnectedWebsiteService::RENDERER, 'content' => $service->content($site, $site->published_site_version_id), 'catalog' => $service->catalog($site), 'collections' => $service->collections($site), 'presentation' => $service->presentation($site, $site->published_site_version_id), 'version' => $site->published_site_version_id])
             ->header('Cache-Control', 'no-store');
     }
 
@@ -101,7 +101,11 @@ class ConnectedWebsiteController extends Controller
             'company' => ['required_unless:type,quote', 'nullable', 'string', 'max:160'],
             'phone' => ['nullable', 'string', 'max:60'], 'website' => ['nullable', 'url:http,https', 'max:500'],
             'businessType' => ['nullable', 'string', 'max:120'], 'notes' => ['required', 'string', 'max:3000'],
-            'productSlug' => ['required_if:type,quote', 'nullable', Rule::in(array_column($service->manifest()['products'], 'slug'))],
+            'productSlug' => ['required_if:type,quote', 'nullable', function (string $attribute, mixed $value, \Closure $fail) use ($service, $site): void {
+                if ($value === null || ! $service->activeProduct($site, (string) $value)) {
+                    $fail('The selected product is unavailable.');
+                }
+            }],
             'quantity' => ['required_if:type,quote', 'nullable', 'integer', 'between:1,100'],
             'finish' => ['required_if:type,quote', 'nullable', 'string', 'max:120'],
             'affiliateCode' => ['nullable', 'string', 'max:80'],

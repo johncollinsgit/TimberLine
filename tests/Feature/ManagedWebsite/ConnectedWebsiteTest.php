@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\WebsiteProduct;
 use App\Services\ManagedWebsite\ConnectedWebsiteService;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
+use App\Services\ManagedWebsite\WebsiteCommerceService;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
@@ -111,6 +112,29 @@ test('inquiries are tenant owned retry safe and send no messages', function () {
     $this->postJson('/api/connected-website/carolina-barrel/inquiries', $data)->assertUnprocessable();
     Mail::assertNothingSent();
     Notification::assertNothingSent();
+});
+
+test('catalog_v2 previews include ordered draft galleries but public content and inquiries reject them', function () {
+    app(WebsiteCommerceService::class)->saveProduct($this->site, [
+        'handle' => 'barrel-cooler', 'title' => 'Barrel Cooler', 'description' => 'A reclaimed barrel cooler.',
+        'product_type' => 'quote', 'status' => 'draft', 'price' => '0', 'is_available' => true, 'track_inventory' => false,
+        'media' => ['https://media.example.test/cooler-studio.jpg', 'https://media.example.test/cooler-original.jpg'],
+        'service_details' => ['catalog' => ['collection' => 'Gather & Serve', 'details' => ['Reclaimed wine barrel form'],
+            'media_alt' => ['Barrel cooler in a neutral studio', 'Barrel cooler detail'], 'source_evidence' => ['imessage:cooler:7'], 'review_status' => 'ready_for_review']],
+        'seo_title' => 'Barrel Cooler', 'seo_description' => 'A reclaimed barrel cooler.',
+    ]);
+    $public = $this->getJson('/api/connected-website/carolina-barrel/content')->assertOk()
+        ->assertJsonPath('presentation', 'v1')->assertJsonMissing(['slug' => 'barrel-cooler']);
+    expect($public->json('catalog'))->toHaveCount(5);
+    $this->postJson('/api/connected-website/carolina-barrel/inquiries', ['requestId' => (string) Str::uuid(), 'type' => 'quote', 'name' => 'Test visitor', 'email' => 'visitor@example.test', 'notes' => 'Test request', 'productSlug' => 'barrel-cooler', 'quantity' => 1, 'finish' => 'Discuss finish'])->assertUnprocessable();
+
+    $this->service->stageCatalogPreview($this->site, $this->actor);
+    $this->site->refresh();
+    parse_str(parse_url($this->service->previewUrl($this->site, $this->actor), PHP_URL_QUERY), $query);
+    $this->getJson('/api/connected-website/carolina-barrel/content?preview='.urlencode($query['__preview']))->assertOk()
+        ->assertJsonPath('presentation', 'catalog_v2')->assertJsonPath('catalog.5.slug', 'barrel-cooler')
+        ->assertJsonPath('catalog.5.images.1', 'https://media.example.test/cooler-original.jpg')
+        ->assertJsonPath('catalog.5.reviewStatus', 'ready_for_review');
 });
 
 test('workspace overview and products show live editor and block legacy mutations', function () {

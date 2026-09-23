@@ -503,7 +503,43 @@ class WebsiteCommerceService
     /** @param array<string,mixed> $details */
     private function safeServiceDetails(array $details): array
     {
-        return collect($details)->only(['duration_minutes', 'intake_label'])->map(fn ($v) => is_scalar($v) ? strip_tags(mb_substr((string) $v, 0, 190)) : null)->filter()->all();
+        $safe = collect($details)->only(['duration_minutes', 'intake_label'])->map(fn ($v) => is_scalar($v) ? strip_tags(mb_substr((string) $v, 0, 190)) : null)->filter()->all();
+
+        // Connected catalog records use this namespaced payload rather than a
+        // schema migration.  It deliberately carries only display metadata and
+        // opaque evidence IDs; message text and media bytes stay out of product
+        // and audit records.
+        if (is_array($details['catalog'] ?? null)) {
+            $catalog = $details['catalog'];
+            $review = (string) ($catalog['review_status'] ?? 'ready_for_review');
+            $safe['catalog'] = [
+                'collection' => $this->catalogText($catalog['collection'] ?? '', 120),
+                'details' => $this->catalogList($catalog['details'] ?? [], 12, 320),
+                'media_alt' => $this->catalogList($catalog['media_alt'] ?? [], 12, 320),
+                'source_evidence' => $this->catalogList($catalog['source_evidence'] ?? [], 24, 180),
+                'review_status' => in_array($review, ['ready_for_review', 'needs_sean_confirmation', 'approved'], true) ? $review : 'ready_for_review',
+                'quote_only' => true,
+            ];
+        }
+
+        return $safe;
+    }
+
+    private function catalogText(mixed $value, int $max): string
+    {
+        return is_scalar($value) ? strip_tags(mb_substr(trim((string) $value), 0, $max)) : '';
+    }
+
+    /** @return array<int,string> */
+    private function catalogList(mixed $values, int $limit, int $max): array
+    {
+        return collect(is_array($values) ? $values : [])
+            ->filter(fn ($value) => is_scalar($value))
+            ->map(fn ($value) => $this->catalogText($value, $max))
+            ->filter()
+            ->take($limit)
+            ->values()
+            ->all();
     }
 
     /** @param array<string,mixed> $payload @return array<string,mixed> */
