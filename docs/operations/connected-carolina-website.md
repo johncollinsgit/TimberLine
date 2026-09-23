@@ -27,8 +27,9 @@ manifest; it does not migrate the unrelated native template into the live design
 Initial connection imports the five quote products into `website_products` and
 variants. Subsequent catalog editing is independent; page publishing never changes
 product records. See `website-catalog-admin.md`. New quote, wholesale,
-and partner requests become `form_submissions` and collect no payment. Carolina
-Barrel quote requests require name, email, phone, product, quantity, finish, and
+and partner requests become `form_submissions` and collect no payment. The anonymous
+catalog response omits retail and variant price values, so every product is quote-only.
+Carolina Barrel quote requests require name, email, phone, product, quantity, finish, and
 notes. They appear in **Orders → Quotes**, where an authorized staff member may
 send and record a direct email response. A quote is attributed only when both its
 normalized email and phone exactly match a tenant-owned Website customer; when a

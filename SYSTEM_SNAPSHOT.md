@@ -24,8 +24,9 @@ are activated by this integration; quote emails are explicit staff responses. Se
 
 ## Carolina Barrel quote workflow (2026-09-23)
 
-All public Carolina Barrel catalog products are quote-only. The request form
-requires name, email, phone, and quantity. **Orders → Quotes** is the tenant-owned
+All public Carolina Barrel catalog products are quote-only; the anonymous catalog
+response omits retail and variant price values. The request form requires name,
+email, phone, and quantity. **Orders → Quotes** is the tenant-owned
 queue for those requests; an authorized staff member may send and record a reply.
 Quote attribution requires an exact normalized email-and-phone match to a Website
 customer and may link a later native Website order. This remains wholly inside the

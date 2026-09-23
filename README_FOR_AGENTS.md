@@ -22,8 +22,9 @@ place. Other sites retain the generic editor. No accounts, payments, or entitlem
 are activated by this integration; quote emails are explicit staff responses. See
 `docs/operations/connected-carolina-website.md` for release, gates and rollback.
 
-Public Carolina Barrel catalog products are quote-only. Quote requests require name,
-email, phone, and quantity; authorized staff handle them in **Orders → Quotes**.
+Public Carolina Barrel catalog products are quote-only and their anonymous catalog
+response omits retail and variant price values. Quote requests require name, email,
+phone, and quantity; authorized staff handle them in **Orders → Quotes**.
 Replies are explicit staff sends, and attribution requires both the normalized email
 and phone to match a tenant-owned Website customer before a later Website order can
 be linked. Keep this flow in Website Commerce and form submissions—never legacy,

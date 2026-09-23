@@ -118,11 +118,11 @@ class WebsiteCatalogService
 
                 return ['id' => $product->id, 'slug' => $product->handle, 'name' => $product->title, 'shortName' => $product->title,
                     'summary' => $product->description ?? '', 'image' => $product->media[0] ?? '', 'images' => $product->media ?? [],
-                    'alt' => data_get($product->service_details, 'image_alt') ?: $product->title, 'retail' => ($variant?->price_cents ?? 0) / 100,
+                    'alt' => data_get($product->service_details, 'image_alt') ?: $product->title, 'quoteOnly' => true,
                     'details' => preg_split('/\R/', (string) data_get($product->service_details, 'details', ''), -1, PREG_SPLIT_NO_EMPTY),
                     'collection' => $product->collections->first()?->title ?? '', 'collections' => $product->collections->pluck('handle')->all(),
                     'seo' => $product->seo ?? [],
-                    'variants' => $product->variants->where('is_available', true)->map(fn ($v) => ['id' => $v->id, 'title' => $v->title, 'price' => $v->price_cents / 100, 'available' => ! $product->track_inventory || $v->inventory_quantity > 0])->values()->all(),
+                    'variants' => $product->variants->where('is_available', true)->map(fn ($v) => ['id' => $v->id, 'title' => $v->title, 'available' => ! $product->track_inventory || $v->inventory_quantity > 0])->values()->all(),
                 ];
             })->all();
     }

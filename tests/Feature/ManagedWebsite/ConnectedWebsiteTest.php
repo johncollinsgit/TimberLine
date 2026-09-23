@@ -154,7 +154,7 @@ test('catalog edits and new products survive page publishing and become browsabl
     $draft = $this->service->save($this->site, $this->service->manifest()['defaults'], $this->actor, $this->site->draft_site_version_id);
     $this->service->publish($this->site, $this->actor, $draft->id);
     expect($existing->fresh()->title)->toBe('Edited in Products')->and($existing->fresh()->status)->toBe('archived');
-    $this->getJson('/api/connected-website/carolina-barrel/content')->assertOk()->assertJsonFragment(['slug' => 'new-custom-bench'])->assertJsonMissing(['slug' => 'five-stave-lounge-chair']);
+    $this->getJson('/api/connected-website/carolina-barrel/content')->assertOk()->assertJsonFragment(['slug' => 'new-custom-bench', 'quoteOnly' => true])->assertJsonMissing(['slug' => 'five-stave-lounge-chair'])->assertJsonMissing(['retail' => 425.25])->assertJsonMissing(['price' => 425.25]);
     $data = ['requestId' => (string) Str::uuid(), 'type' => 'quote', 'name' => 'Visitor', 'email' => 'visitor@example.test', 'phone' => '555-555-0123', 'notes' => 'Bench request', 'productSlug' => $product->handle, 'variantId' => $product->variants->first()->id, 'quantity' => 1, 'finish' => 'Natural'];
     $this->postJson('/api/connected-website/carolina-barrel/inquiries', $data)->assertCreated();
     expect(data_get(FormSubmission::query()->first()->payload, 'variant_title'))->toBe('Large');
