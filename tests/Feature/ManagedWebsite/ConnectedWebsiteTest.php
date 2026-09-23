@@ -6,9 +6,11 @@ use App\Models\TenantModuleEntitlement;
 use App\Models\TenantSite;
 use App\Models\User;
 use App\Models\WebsiteProduct;
+use App\Models\WebsiteCustomer;
 use App\Services\ManagedWebsite\ConnectedWebsiteService;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
 use App\Services\ManagedWebsite\WebsiteCommerceService;
+use App\Services\ManagedWebsite\WebsiteQuoteAttributionService;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
@@ -101,7 +103,7 @@ test('unsafe URLs missing fields and invalid prices are rejected', function () {
 test('inquiries are tenant owned retry safe and send no messages', function () {
     Mail::fake();
     Notification::fake();
-    $data = ['requestId' => (string) Str::uuid(), 'type' => 'quote', 'name' => 'Test visitor', 'email' => 'visitor@example.test', 'notes' => 'Test request', 'productSlug' => 'five-stave-lounge-chair', 'quantity' => 2, 'finish' => 'Discuss finish'];
+    $data = ['requestId' => (string) Str::uuid(), 'type' => 'quote', 'name' => 'Test visitor', 'email' => 'visitor@example.test', 'phone' => '(555) 555-0123', 'notes' => 'Test request', 'productSlug' => 'five-stave-lounge-chair', 'quantity' => 2, 'finish' => 'Discuss finish'];
     $this->postJson('/api/connected-website/carolina-barrel/inquiries', $data)->assertCreated();
     $this->postJson('/api/connected-website/carolina-barrel/inquiries', $data)->assertCreated();
     expect(FormSubmission::query()->count())->toBe(1)->and(FormSubmission::query()->first()->tenant_id)->toBe($this->tenant->id);
@@ -112,6 +114,22 @@ test('inquiries are tenant owned retry safe and send no messages', function () {
     $this->postJson('/api/connected-website/carolina-barrel/inquiries', $data)->assertUnprocessable();
     Mail::assertNothingSent();
     Notification::assertNothingSent();
+});
+
+test('quote workspace replies and links only an exact email and phone match', function () {
+    $data = ['requestId' => (string) Str::uuid(), 'type' => 'quote', 'name' => 'Quote visitor', 'email' => 'quote@example.test', 'phone' => '(555) 555-0123', 'notes' => 'Please quote two tables.', 'productSlug' => 'five-stave-lounge-chair', 'quantity' => 2, 'finish' => 'Natural'];
+    $this->postJson('/api/connected-website/carolina-barrel/inquiries', $data)->assertCreated();
+    $submission = FormSubmission::query()->firstOrFail();
+    $customer = WebsiteCustomer::query()->create(['tenant_id' => $this->tenant->id, 'first_name' => 'Quote', 'last_name' => 'Visitor', 'email' => 'quote@example.test', 'phone' => '555.555.0123', 'status' => 'active']);
+
+    app(WebsiteQuoteAttributionService::class)->link($customer);
+    expect(data_get($submission->fresh()->metadata, 'quote_attribution.website_customer_id'))->toBe($customer->id);
+
+    Mail::fake();
+    $this->actingAs($this->actor)->get(route('managed-website.quotes.index', ['tenant' => $this->tenant->slug]))->assertOk()->assertSeeText('Quote visitor')->assertSeeText('Quantity');
+    $this->actingAs($this->actor)->post(route('managed-website.quotes.reply', ['tenant' => $this->tenant->slug, 'submission' => $submission]), ['subject' => 'Your quote', 'reply' => 'Your requested quote is ready.'])->assertRedirect();
+    Mail::assertSent(\App\Mail\WebsiteQuoteReplyMail::class);
+    expect($submission->fresh()->status)->toBe('responded');
 });
 
 test('catalog_v2 previews include ordered draft galleries but public content and inquiries reject them', function () {

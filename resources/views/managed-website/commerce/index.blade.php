@@ -5,7 +5,7 @@
             @if($errors->any())<div class="border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-950" role="alert">{{ $errors->first() }}</div>@endif
 
             <x-ui.operational-header :title="str($screen)->headline()" :back="['href' => route('managed-website.index'), 'label' => 'Website']" :description="$screen === 'orders' ? 'Native Website Commerce only. Shopify and legacy orders remain separate.' : ($screen === 'customers' ? 'Website customers are separate from your marketing and provider records.' : 'Products and services used by your native Website storefront.')">
-                @if($screen === 'orders')<a class="fb-btn fb-btn-primary" href="{{ route('managed-website.orders.create') }}">Create draft order</a>
+                @if($screen === 'orders')<a class="fb-btn fb-btn-secondary" href="{{ route('managed-website.quotes.index') }}">Quotes</a><a class="fb-btn fb-btn-primary" href="{{ route('managed-website.orders.create') }}">Create draft order</a>
                 @elseif($screen === 'customers')<a class="fb-btn fb-btn-primary" href="{{ route('managed-website.customers.create') }}">Add customer</a>
                 @else
                     <a class="fb-btn fb-btn-secondary" href="{{ route('managed-website.products.export') }}">Export</a>

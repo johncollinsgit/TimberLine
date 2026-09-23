@@ -792,6 +792,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/customers/{customer}', [WebsiteCommerceController::class, 'showCustomer'])->name('customers.show');
             Route::put('/customers/{customer}', [WebsiteCommerceController::class, 'updateCustomer'])->name('customers.update');
             Route::get('/orders', [WebsiteCommerceController::class, 'orders'])->name('orders.index');
+            Route::get('/orders/quotes', [\App\Http\Controllers\WebsiteQuoteController::class, 'index'])->name('quotes.index');
+            Route::post('/orders/quotes/{submission}/reply', [\App\Http\Controllers\WebsiteQuoteController::class, 'reply'])->name('quotes.reply');
             Route::get('/orders/create', [WebsiteCommerceController::class, 'createOrder'])->name('orders.create');
             Route::post('/orders/drafts', [WebsiteCommerceController::class, 'storeDraftOrder'])->name('orders.drafts.store');
             Route::get('/orders/{order}', [WebsiteCommerceController::class, 'showOrder'])->name('orders.show');

@@ -3,11 +3,21 @@
 ## Carolina Barrel connected website (2026-09-21)
 
 Carolina Barrel's existing Cloudflare site now has an opt-in Everbranch content
-editor, versioned draft/preview/publish/restore controls, five quote-product mirrors,
+editor, versioned draft/preview/publish/restore controls, quote-product mirrors,
 and workspace inquiry capture. Its existing renderer and public domain remain in
-place. Other sites retain the generic editor. No accounts, emails, payments or
-entitlements are activated by this integration. See
+place. Other sites retain the generic editor. No accounts, payments, or entitlements
+are activated by this integration; quote emails are explicit staff responses. See
 `docs/operations/connected-carolina-website.md` for release, gates and rollback.
+
+## Carolina Barrel quote workflow (2026-09-23)
+
+All public Carolina Barrel catalog products are quote-only. The request form
+requires name, email, phone, and quantity. **Orders → Quotes** is the tenant-owned
+queue for those requests; an authorized staff member may send and record a reply.
+Quote attribution requires an exact normalized email-and-phone match to a Website
+customer and may link a later native Website order. This remains wholly inside the
+`website_*` / tenant form-submission lane and never touches legacy, Shopify, or
+marketing customer/order data.
 
 
 

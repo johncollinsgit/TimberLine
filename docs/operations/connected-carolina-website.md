@@ -22,10 +22,15 @@ The renderer source remains in the separate `carolina-barrel-preview` project.
 No schema or entitlement changes are required. Previous generic site/page
 snapshots remain intact. Activation versions the reviewed live baseline from the
 manifest; it does not migrate the unrelated native template into the live design.
-Products are quote-only: publishing mirrors the five renderer products into
+Products are quote-only: publishing mirrors the renderer products into
 `website_products`/variants, never legacy or Shopify records. New quote, wholesale,
-and partner requests become `form_submissions` and send no notifications, create
-no customers/accounts/orders, and collect no payment. Initial live D1 inspection
+and partner requests become `form_submissions` and collect no payment. Carolina
+Barrel quote requests require name, email, phone, product, quantity, finish, and
+notes. They appear in **Orders → Quotes**, where an authorized staff member may
+send and record a direct email response. A quote is attributed only when both its
+normalized email and phone exactly match a tenant-owned Website customer; when a
+later Website order for that customer exists, the quote links to that order. This
+never reads or writes legacy orders, Shopify, or marketing profiles. Initial live D1 inspection
 found zero applications and zero order requests; retain the D1 tables and existing
 referral-click history. Review/archive any superseded native scaffold product
 separately rather than removing unrecognized records during activation.
