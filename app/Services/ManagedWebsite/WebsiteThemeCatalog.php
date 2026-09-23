@@ -11,6 +11,7 @@ class WebsiteThemeCatalog
             $this->hvac(),
             $this->collinsElectric(),
             $this->outdoorElements(),
+            $this->productShowcase(),
         ];
     }
 
@@ -89,6 +90,55 @@ class WebsiteThemeCatalog
                 $this->page('about', 'About', 'about', [$this->hero('A more considered way to live outside.', 'Use this page to tell the story behind the work.'), $this->text('Materials, craft, and gathering', 'Add approved team, material, and process details.'), $this->contact('Meet the team')]),
                 $this->page('faq', 'FAQ', 'faq', [$this->hero('Useful answers for a better project.', 'Help customers understand timing, materials, and next steps.'), $this->faq('Common questions', [['How do we begin?', 'Start with a conversation about your space and priorities.'], ['What can be customized?', 'Use this answer to describe available materials, sizes, and finishes.']])]),
                 $this->page('contact', 'Contact', 'contact', [$this->hero('Let’s make space for more outside.', 'Tell us a little about your project.'), $this->contact('Start your project')]),
+            ],
+        ];
+    }
+
+    /**
+     * A product-led starter that deliberately contains no tenant media.
+     *
+     * Interactive model blocks require tenant-owned model and poster media IDs,
+     * so they are added from the editor after the customer assets are uploaded.
+     * This keeps the theme safe to apply to any tenant and avoids embedding a
+     * customer's product assets or URLs in application code.
+     *
+     * @return array<string,mixed>
+     */
+    protected function productShowcase(): array
+    {
+        return [
+            'key' => 'product-showcase', 'name' => 'Product Showcase', 'eyebrow' => 'Crafted product',
+            'description' => 'A dark, premium product landing site for a signature piece, custom orders, and an optional interactive model.',
+            'thumbnail' => null,
+            'settings' => $this->settings('product-showcase', 'Your Product Studio', ['ink' => '#1b1714', 'brand' => '#70462e', 'surface' => '#f7f3ed', 'soft' => '#ebe1d4', 'accent' => '#d7a35c'], 'serif', 'rounded', 'Made to become the center of the room.'),
+            'pages' => [
+                $this->page('/', 'Home', 'home', [
+                    $this->hero('A statement piece with another side.', 'Designed to live beautifully in the room, then reveal exactly what the moment calls for.', 'Explore the collection', '/collection'),
+                    $this->trust('Made for the reveal.', [['Designed to belong', 'A finished piece of furniture first—considered from every angle.'], ['Built around your use', 'Configure the interior around the way you gather, serve, or display.'], ['A simple next step', 'Start with the signature piece, then make it your own.']]),
+                    $this->feature('Closed when you want it. Ready when you do.', 'Use this section for the visual story: a quiet exterior, a purposeful interior, and the motion that changes the room.'),
+                    $this->cards('Choose the experience inside.', 'Use these cards to introduce the approved configurations your product can support.', [['Entertain', 'A focused setup for a better pour and an easier gathering.'], ['Collect', 'Display the pieces you care about without leaving them on view all day.'], ['Make it yours', 'Shape the final layout, finish, and details around your space.']]),
+                    $this->contact('Start your custom build'),
+                ]),
+                $this->page('collection', 'Collection', 'services', [
+                    $this->hero('One signature form. Built around your life.', 'Introduce the product, its core proportions, and the configurations available for custom orders.', 'Ask about a custom build', '/contact'),
+                    $this->cards('Inside the collection', 'Use each card for an approved product or configuration.', [['Signature lift piece', 'A furniture-first exterior with a hidden display that rises into view.'], ['Custom interiors', 'Tailor shelves, lighting, and storage to the intended use.'], ['Made for your room', 'Select the finish and details that belong in the space.']]),
+                    $this->contact('Request details'),
+                ]),
+                $this->page('the-piece', 'The Piece', 'landing', [
+                    $this->hero('See the transformation from every angle.', 'Add the interactive 3D viewer here after the approved model and poster are uploaded to this tenant.'),
+                    $this->text('The detail is in the motion', 'Use the viewer to let customers rotate, zoom, and raise the product before they begin a custom conversation.'),
+                    $this->faq('Questions about the piece', [['Can I see it in motion?', 'Add the approved interactive viewer and fallback video on this page.'], ['Can the interior be customized?', 'Use this answer to describe the configurations you offer.'], ['How do I begin?', 'Start with a short conversation about the room, use case, and finish.']]),
+                    $this->contact('Talk through your project'),
+                ]),
+                $this->page('process', 'Process', 'about', [
+                    $this->hero('A custom piece, made more straightforward.', 'Tell customers what happens from their first idea to final delivery.'),
+                    $this->cards('How it comes together', 'Keep the process simple and clear.', [['Share the space', 'Start with the room, the intended use, and the details that matter.'], ['Shape the piece', 'Review the approved configuration, finish, and any custom features.'], ['Bring it home', 'Confirm the final build and coordinate the next step.']]),
+                    $this->contact('Begin the conversation'),
+                ]),
+                $this->page('contact', 'Contact', 'contact', [
+                    $this->hero('Let’s make the room more interesting.', 'Tell us what you are imagining and we will help identify the right next step.'),
+                    $this->contact('Start a custom conversation'),
+                ]),
             ],
         ];
     }

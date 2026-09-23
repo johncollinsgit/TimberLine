@@ -29,6 +29,17 @@ and phone to match a tenant-owned Website customer before a later Website order 
 be linked. Keep this flow in Website Commerce and form submissions—never legacy,
 Shopify, or marketing records.
 
+## Interactive Product Viewer pilot (2026-09-23)
+
+- Managed Website product viewers accept only tenant-owned, inspected,
+  self-contained GLB models plus owned posters and fallback video. Published
+  snapshots keep media IDs and validated clip/node names only; they never carry
+  mutable asset URLs or third-party model resources.
+- Carolina Barrel is the controlled first pilot for the reusable viewer. Keep
+  client source assets, model masters, and rights records private; use the
+  standard media, accessibility, preview, publish, and rollback controls for
+  every future model.
+
 
 
 ## Website client workspace focus (2026-09-21)

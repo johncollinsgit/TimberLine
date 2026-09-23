@@ -22,6 +22,16 @@ place. Other sites retain the generic editor. No accounts, payments, or entitlem
 are activated by this integration; quote emails are explicit staff responses. See
 `docs/operations/connected-carolina-website.md` for release, gates and rollback.
 
+## Interactive Product Viewer pilot (2026-09-23)
+
+- Managed Website media can carry tenant-owned, inspected self-contained GLB
+  product models and MP4 fallback video alongside existing images. Published
+  snapshots retain only owned media IDs and validated animation/node
+  configuration, never mutable URLs.
+- Carolina Barrel is the controlled first pilot. Its Whiskey Bar and Gun Rack
+  Lift Barrel variants use the shared model, poster, fallback, accessibility,
+  and rollback contract. Client source assets and Blender masters remain private.
+
 ## Carolina Barrel quote workflow (2026-09-23)
 
 All public Carolina Barrel catalog products are quote-only. The request form

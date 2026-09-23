@@ -44,8 +44,16 @@ return [
     // fail closed until the global gate, tenant entitlement, Connect readiness,
     // tax decision, and dedicated endpoint secret are all present.
     'stripe_webhook_secret' => env('MANAGED_WEBSITE_STRIPE_WEBHOOK_SECRET'),
-    'allowed_blocks' => ['announcement', 'header', 'hero', 'text', 'image', 'services', 'testimonial', 'faq', 'contact_form', 'cta', 'product_grid', 'footer', 'image_with_text', 'service_cards', 'trust_bar', 'gallery', 'faq_list'],
+    'allowed_blocks' => ['announcement', 'header', 'hero', 'text', 'image', 'services', 'testimonial', 'faq', 'contact_form', 'cta', 'product_grid', 'footer', 'image_with_text', 'service_cards', 'trust_bar', 'gallery', 'faq_list', 'interactive_product_viewer', 'product_video'],
     'media_max_bytes' => max(1024 * 1024, (int) env('MANAGED_WEBSITE_MEDIA_MAX_BYTES', 10 * 1024 * 1024)),
+    // 3D assets use a separate ceiling from images. The browser viewer targets
+    // substantially smaller optimized models, but the hard limit leaves room
+    // for a controlled flagship asset without widening image uploads.
+    'model_max_bytes' => max(1024 * 1024, (int) env('MANAGED_WEBSITE_MODEL_MAX_BYTES', 20 * 1024 * 1024)),
+    // A constrained MP4 lane for product-motion footage. It remains separate
+    // from images and models so a tenant cannot smuggle arbitrary files into a
+    // public page through the general media uploader.
+    'video_max_bytes' => max(1024 * 1024, (int) env('MANAGED_WEBSITE_VIDEO_MAX_BYTES', 80 * 1024 * 1024)),
     'screenshot_enabled' => $bool('MANAGED_WEBSITE_SCREENSHOT_ENABLED'),
     'screenshot_node_binary' => env('MANAGED_WEBSITE_SCREENSHOT_NODE_BINARY', 'node'),
     'screenshot_timeout_seconds' => max(15, (int) env('MANAGED_WEBSITE_SCREENSHOT_TIMEOUT_SECONDS', 60)),

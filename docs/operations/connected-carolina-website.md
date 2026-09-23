@@ -78,3 +78,17 @@ and submissions. Never replace published content with the old generic template.
 Validation: `ConnectedWebsiteTest`, existing Managed Website safety/commerce tests,
 full backend suite/build, and the renderer's typecheck, lint, build, content-isolation
 and inquiry-proxy tests. Confirm the deployed readiness release before activation.
+
+## Lift Barrel interactive viewer
+
+Carolina is the first controlled consumer of the shared Interactive Product
+Viewer. The page may reference only Carolina-owned, inspected model, poster,
+and fallback-video media records. Whiskey Bar and Gun Rack are variants of the
+same product section, with their own owned model/poster IDs and validated
+`raise` / `lower` clips. Source captures, Blender masters, and rights records
+remain private; no public snapshot includes a mutable asset URL.
+
+Publish only after verifying the poster/fallback behavior, keyboard controls,
+motion returning to the closed pose, mobile interaction, and the connected
+renderer's content endpoint. A bad presentation is corrected by restoring the
+previous immutable connected content version; do not overwrite live media.

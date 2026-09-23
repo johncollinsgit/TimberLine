@@ -4,11 +4,15 @@ use App\Http\Controllers\ManagedWebsiteController;
 use App\Models\Order;
 use App\Models\Tenant;
 use App\Models\TenantModuleEntitlement;
+use App\Models\TenantSiteMedia;
 use App\Models\TenantSitePage;
 use App\Models\User;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Validation\ValidationException;
 
 beforeEach(function (): void {
     $this->withoutVite();
@@ -39,6 +43,157 @@ function managedWebsiteActor(Tenant $tenant): User
 
     return $actor;
 }
+
+/** @param array<string,mixed> $document */
+function managedWebsiteGlb(array $document = []): string
+{
+    $document = array_replace_recursive([
+        'asset' => ['version' => '2.0', 'generator' => 'Everbranch test'],
+        'extensionsUsed' => ['KHR_texture_transform'],
+        'animations' => [['name' => 'raise'], ['name' => 'lower']],
+        'nodes' => [['name' => 'cbc_root'], ['name' => 'hotspot_lift']],
+    ], $document);
+    $json = json_encode($document, JSON_THROW_ON_ERROR);
+    $json .= str_repeat(' ', (4 - strlen($json) % 4) % 4);
+
+    return pack('V3', 0x46546c67, 2, 20 + strlen($json))
+        .pack('V2', strlen($json), 0x4e4f534a)
+        .$json;
+}
+
+test('interactive product viewer stores only owned media IDs and model metadata in immutable snapshots', function (): void {
+    $tenant = managedWebsiteTenant('viewer-pilot');
+    $actor = managedWebsiteActor($tenant);
+    $service = app(ManagedWebsiteService::class);
+    $site = $service->createSite($tenant, $actor);
+    $page = $site->pages()->where('slug', '/')->firstOrFail();
+    $model = TenantSiteMedia::query()->create([
+        'tenant_id' => $tenant->id, 'tenant_site_id' => $site->id, 'storage_disk' => 'local', 'storage_path' => 'test/barrel.glb',
+        'file_name' => 'barrel.glb', 'mime_type' => 'model/gltf-binary', 'file_size' => 100, 'checksum' => str_repeat('a', 64), 'kind' => 'model', 'source' => 'upload',
+        'metadata' => ['format' => 'glb', 'animation_clips' => ['raise', 'lower'], 'nodes' => ['cbc_root', 'hotspot_lift']],
+    ]);
+    $poster = TenantSiteMedia::query()->create([
+        'tenant_id' => $tenant->id, 'tenant_site_id' => $site->id, 'storage_disk' => 'local', 'storage_path' => 'test/barrel.webp',
+        'file_name' => 'barrel.webp', 'mime_type' => 'image/webp', 'file_size' => 100, 'checksum' => str_repeat('b', 64), 'kind' => 'image', 'source' => 'upload',
+    ]);
+
+    $version = $service->saveDraft($site, $page, ['title' => 'Barrel lift', 'blocks' => [[
+        'type' => 'interactive_product_viewer', 'model_media_id' => $model->id, 'poster_media_id' => $poster->id,
+        'id' => 'lift-viewer', 'label' => 'Explore the barrel', 'heading' => 'Wine cabinet', 'poster_alt' => 'Closed wine barrel', 'raise_label' => 'Raise cabinet', 'lower_label' => 'Lower cabinet',
+        'variants' => [
+            ['id' => 'whiskey', 'label' => 'Whiskey Bar', 'model_media_id' => $model->id, 'poster_media_id' => $poster->id],
+            ['id' => 'display', 'label' => 'Display', 'model_media_id' => $model->id, 'poster_media_id' => $poster->id],
+        ],
+        'hotspots' => [['id' => 'lift', 'label' => 'Lift', 'body' => 'Visible lift hardware.', 'node_name' => 'hotspot_lift']],
+    ]]], $actor);
+    $block = $version->blocks[0];
+    expect($block['model_media_id'])->toBe($model->id)
+        ->and($block['poster_media_id'])->toBe($poster->id)
+        ->and($block['raise_clip'])->toBe('raise')
+        ->and($block['lower_clip'])->toBe('lower')
+        ->and($block['id'])->toBe('lift-viewer')
+        ->and($block['label'])->toBe('Explore the barrel')
+        ->and($block['poster_alt'])->toBe('Closed wine barrel')
+        ->and($block['variants'][1]['id'])->toBe('display')
+        ->and($block)->not->toHaveKey('model_url');
+
+    $service->publish($site, $actor);
+    expect($page->fresh()->publishedVersion->blocks[0]['model_media_id'])->toBe($model->id)
+        ->and($service->interactiveProductViewerMedia($site, $block))->toMatchArray(['model_url' => route('managed-website.media.show', $model), 'poster_url' => route('managed-website.media.show', $poster)]);
+});
+
+test('interactive product viewer rejects media from another tenant and unknown animation or hotspot nodes', function (): void {
+    $tenant = managedWebsiteTenant('viewer-owner');
+    $other = managedWebsiteTenant('viewer-other');
+    $actor = managedWebsiteActor($tenant);
+    managedWebsiteActor($other);
+    $service = app(ManagedWebsiteService::class);
+    $site = $service->createSite($tenant, $actor);
+    $otherSite = $service->createSite($other, $actor);
+    $page = $site->pages()->where('slug', '/')->firstOrFail();
+    $foreignModel = TenantSiteMedia::query()->create([
+        'tenant_id' => $other->id, 'tenant_site_id' => $otherSite->id, 'storage_disk' => 'local', 'storage_path' => 'test/foreign.glb',
+        'file_name' => 'foreign.glb', 'mime_type' => 'model/gltf-binary', 'file_size' => 100, 'checksum' => str_repeat('c', 64), 'kind' => 'model', 'source' => 'upload',
+        'metadata' => ['animation_clips' => ['raise', 'lower'], 'nodes' => ['hotspot']],
+    ]);
+    $poster = TenantSiteMedia::query()->create([
+        'tenant_id' => $tenant->id, 'tenant_site_id' => $site->id, 'storage_disk' => 'local', 'storage_path' => 'test/owner.webp',
+        'file_name' => 'owner.webp', 'mime_type' => 'image/webp', 'file_size' => 100, 'checksum' => str_repeat('d', 64), 'kind' => 'image', 'source' => 'upload',
+    ]);
+
+    expect(fn () => $service->saveDraft($site, $page, ['title' => 'Nope', 'blocks' => [[
+        'type' => 'interactive_product_viewer', 'model_media_id' => $foreignModel->id, 'poster_media_id' => $poster->id,
+    ]]], $actor))->toThrow(ValidationException::class)
+        ->and($service->interactiveProductViewerMedia($site, ['model_media_id' => $foreignModel->id, 'poster_media_id' => $poster->id]))->toBeNull();
+
+    $model = TenantSiteMedia::query()->create([
+        'tenant_id' => $tenant->id, 'tenant_site_id' => $site->id, 'storage_disk' => 'local', 'storage_path' => 'test/owner.glb',
+        'file_name' => 'owner.glb', 'mime_type' => 'model/gltf-binary', 'file_size' => 100, 'checksum' => str_repeat('e', 64), 'kind' => 'model', 'source' => 'upload',
+        'metadata' => ['animation_clips' => ['raise', 'lower'], 'nodes' => ['cbc_root']],
+    ]);
+    expect(fn () => $service->saveDraft($site, $page, ['title' => 'Nope', 'blocks' => [[
+        'type' => 'interactive_product_viewer', 'model_media_id' => $model->id, 'poster_media_id' => $poster->id, 'lower_clip' => 'missing',
+    ]]], $actor))->toThrow(ValidationException::class);
+    expect(fn () => $service->saveDraft($site, $page, ['title' => 'Nope', 'blocks' => [[
+        'type' => 'interactive_product_viewer', 'model_media_id' => $model->id, 'poster_media_id' => $poster->id,
+        'hotspots' => [['id' => 'missing', 'node_name' => 'not_a_model_node']],
+    ]]], $actor))->toThrow(ValidationException::class);
+});
+
+test('model uploads accept a self-contained GLB and expose inspected editor metadata', function (): void {
+    $tenant = managedWebsiteTenant('viewer-upload');
+    $actor = managedWebsiteActor($tenant);
+    config()->set('managed_website.editor_tenant_ids', [$tenant->id]);
+    Storage::fake('local');
+    $file = UploadedFile::fake()->createWithContent('barrel.glb', managedWebsiteGlb());
+    $request = Request::create('/website/media', 'POST', ['alt_text' => 'Closed wine barrel'], [], ['model' => $file]);
+    $request->attributes->set('current_tenant', $tenant);
+    $request->setUserResolver(fn () => $actor);
+    app(ManagedWebsiteService::class)->createSite($tenant, $actor);
+
+    $response = app(ManagedWebsiteController::class)->storeMedia($request, app(ManagedWebsiteService::class));
+    $payload = $response->getData(true)['media'];
+    expect($response->status())->toBe(201)
+        ->and($payload['kind'])->toBe('model')
+        ->and($payload['mime_type'])->toBe('model/gltf-binary')
+        ->and($payload['metadata']['animation_clips'])->toBe(['raise', 'lower'])
+        ->and($payload['metadata']['nodes'])->toContain('hotspot_lift');
+});
+
+test('model inspection rejects GLBs with remote or URI resources', function (): void {
+    $path = tempnam(sys_get_temp_dir(), 'everbranch-glb-');
+    file_put_contents($path, managedWebsiteGlb(['buffers' => [['byteLength' => 10, 'uri' => 'https://example.test/model.bin']]]));
+
+    try {
+        expect(fn () => app(ManagedWebsiteService::class)->inspectGlb($path))->toThrow(ValidationException::class);
+    } finally {
+        @unlink($path);
+    }
+});
+
+test('product video blocks retain owned media IDs and resolve the video only at render time', function (): void {
+    $tenant = managedWebsiteTenant('product-video');
+    $actor = managedWebsiteActor($tenant);
+    $service = app(ManagedWebsiteService::class);
+    $site = $service->createSite($tenant, $actor);
+    $page = $site->pages()->where('slug', '/')->firstOrFail();
+    $video = TenantSiteMedia::query()->create([
+        'tenant_id' => $tenant->id, 'tenant_site_id' => $site->id, 'storage_disk' => 'local', 'storage_path' => 'test/lift.mp4',
+        'file_name' => 'lift.mp4', 'mime_type' => 'video/mp4', 'file_size' => 100, 'checksum' => str_repeat('f', 64), 'kind' => 'video', 'source' => 'upload',
+    ]);
+    $poster = TenantSiteMedia::query()->create([
+        'tenant_id' => $tenant->id, 'tenant_site_id' => $site->id, 'storage_disk' => 'local', 'storage_path' => 'test/lift.webp',
+        'file_name' => 'lift.webp', 'mime_type' => 'image/webp', 'file_size' => 100, 'checksum' => str_repeat('1', 64), 'kind' => 'image', 'source' => 'upload',
+    ]);
+
+    $version = $service->saveDraft($site, $page, ['title' => 'Lift motion', 'blocks' => [[
+        'type' => 'product_video', 'video_media_id' => $video->id, 'poster_media_id' => $poster->id, 'heading' => 'Watch it rise',
+    ]]], $actor);
+
+    expect($version->blocks[0]['video_media_id'])->toBe($video->id)
+        ->and($version->blocks[0])->not->toHaveKey('video_url')
+        ->and($service->productVideoMedia($site, $version->blocks[0])['video_url'])->toBe(route('managed-website.media.show', $video));
+});
 
 test('managed website publishing is additive and creates immutable snapshots', function (): void {
     $tenant = managedWebsiteTenant();
@@ -224,10 +379,14 @@ test('starter themes produce distinct safe drafts and hidden sections stay out o
     $hvac = $home->fresh()->draftVersion->blocks;
     $service->applyTheme($site, 'outdoor-elements', $actor);
     $outdoor = $home->fresh()->draftVersion->blocks;
+    $service->applyTheme($site, 'product-showcase', $actor);
+    $showcase = $home->fresh()->draftVersion->blocks;
 
     expect(collect($hvac)->pluck('heading')->implode(' '))->toContain('help')
         ->and(collect($outdoor)->pluck('heading')->implode(' '))->toContain('outdoor')
+        ->and(collect($showcase)->pluck('heading')->implode(' '))->toContain('statement piece')
         ->and($hvac)->not->toEqual($outdoor)
+        ->and(collect($showcase)->pluck('type'))->not->toContain('interactive_product_viewer')
         ->and($service->sanitizeBlocks([['type' => 'text', 'heading' => 'Private draft', 'hidden' => 'true']]))
         ->toBe([['type' => 'text', 'heading' => 'Private draft', 'hidden' => 'true']]);
 });
