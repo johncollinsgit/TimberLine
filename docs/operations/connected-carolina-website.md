@@ -27,8 +27,13 @@ manifest; it does not migrate the unrelated native template into the live design
 Initial connection imports the five quote products into `website_products` and
 variants. Subsequent catalog editing is independent; page publishing never changes
 product records. See `website-catalog-admin.md`. New quote, wholesale,
-and partner requests become `form_submissions` and send no notifications, create
-no customers/accounts/orders, and collect no payment. Initial live D1 inspection
+and partner requests become `form_submissions` and collect no payment. Carolina
+Barrel quote requests require name, email, phone, product, quantity, finish, and
+notes. They appear in **Orders → Quotes**, where an authorized staff member may
+send and record a direct email response. A quote is attributed only when both its
+normalized email and phone exactly match a tenant-owned Website customer; when a
+later Website order for that customer exists, the quote links to that order. This
+never reads or writes legacy orders, Shopify, or marketing profiles. Initial live D1 inspection
 found zero applications and zero order requests; retain the D1 tables and existing
 referral-click history. Review/archive any superseded native scaffold product
 separately rather than removing unrecognized records during activation.

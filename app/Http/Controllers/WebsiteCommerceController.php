@@ -22,6 +22,7 @@ use App\Services\ManagedWebsite\ManagedWebsiteService;
 use App\Services\ManagedWebsite\WebsiteCommerceService;
 use App\Services\ManagedWebsite\WebsiteCommerceShippingService;
 use App\Services\ManagedWebsite\WebsiteProductCsvService;
+use App\Services\ManagedWebsite\WebsiteQuoteAttributionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -151,21 +152,23 @@ class WebsiteCommerceController extends Controller
         return view('managed-website.commerce.customer', compact('customer', 'orders') + ['site' => $this->site($tenant)]);
     }
 
-    public function storeCustomer(Request $request, WebsiteCommerceService $commerce): RedirectResponse
+    public function storeCustomer(Request $request, WebsiteCommerceService $commerce, WebsiteQuoteAttributionService $quotes): RedirectResponse
     {
         $tenant = $this->tenant($request);
         app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->assertEditor($this->site($tenant), $request->user());
         $customer = WebsiteCustomer::query()->create($this->customerData($request) + ['tenant_id' => $tenant->id, 'status' => 'active']);
+        $quotes->link($customer);
 
         return redirect()->route('managed-website.customers.show', $customer)->with('status', 'Website customer saved.');
     }
 
-    public function updateCustomer(Request $request, WebsiteCustomer $customer, WebsiteCommerceService $commerce): RedirectResponse
+    public function updateCustomer(Request $request, WebsiteCustomer $customer, WebsiteCommerceService $commerce, WebsiteQuoteAttributionService $quotes): RedirectResponse
     {
         $tenant = $this->tenant($request);
         abort_unless((int) $customer->tenant_id === (int) $tenant->id, 404);
         app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->assertEditor($this->site($tenant), $request->user());
         $customer->update($this->customerData($request));
+        $quotes->link($customer->fresh());
 
         return back()->with('status', 'Website customer updated.');
     }
