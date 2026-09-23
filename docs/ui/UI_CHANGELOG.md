@@ -1,3 +1,9 @@
+## 2026-09-23 — Carolina Barrel quote queue
+
+- The Carolina Barrel catalog is presented as made-to-order, with quote requests collecting name, email, phone, and quantity.
+- **Orders → Quotes** gives staff a focused request queue with product, finish, quantity, contact details, reply history, and an explicit email-response action.
+- Exact email-and-phone matches surface the linked Website customer and later Website order without exposing or altering legacy, Shopify, or marketing records.
+
 ## 2026-09-16 — Everbranch proposals and sign-in
 
 - Proposal invitations use the official Everbranch mark and a private link with no separate code. Email includes HTML and plain-text versions.

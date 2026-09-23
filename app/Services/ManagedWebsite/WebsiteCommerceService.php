@@ -35,6 +35,7 @@ class WebsiteCommerceService
     public function __construct(
         private readonly ManagedWebsiteService $websites,
         private readonly TenantPaymentsReadinessService $payments,
+        private readonly WebsiteQuoteAttributionService $quotes,
     ) {}
 
     public function enabledFor(Tenant $tenant): bool
@@ -192,6 +193,9 @@ class WebsiteCommerceService
                 'snapshot' => ['variant_title' => $variant->title, 'sku' => $variant->sku, 'product_handle' => $variant->product->handle],
             ]);
             $this->event($order, 'draft_order_created', 'Draft order created by staff. No payment, inventory, shipping, or customer communication was started.', $actor);
+            if ($customer instanceof WebsiteCustomer) {
+                $this->quotes->link($customer, $order);
+            }
 
             return $order->fresh(['lines', 'events']);
         });
@@ -320,6 +324,7 @@ class WebsiteCommerceService
             }
 
             $this->event($order, 'order_created', 'Order created from native Website checkout.', null, ['cart_id' => $cart->id]);
+            $this->quotes->link($customer, $order);
 
             return $order->load('lines');
         });

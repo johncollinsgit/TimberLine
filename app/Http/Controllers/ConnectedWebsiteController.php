@@ -99,7 +99,7 @@ class ConnectedWebsiteController extends Controller
             'requestId' => ['required', 'uuid'], 'type' => ['required', Rule::in(['quote', 'wholesale', 'affiliate'])],
             'name' => ['required', 'string', 'max:120'], 'email' => ['required', 'email:rfc', 'max:190'],
             'company' => ['required_unless:type,quote', 'nullable', 'string', 'max:160'],
-            'phone' => ['nullable', 'string', 'max:60'], 'website' => ['nullable', 'url:http,https', 'max:500'],
+            'phone' => ['required_if:type,quote', 'nullable', 'string', 'max:60'], 'website' => ['nullable', 'url:http,https', 'max:500'],
             'businessType' => ['nullable', 'string', 'max:120'], 'notes' => ['required', 'string', 'max:3000'],
             'productSlug' => ['required_if:type,quote', 'nullable', 'string', 'max:160', Rule::exists('website_products', 'handle')->where('tenant_id', $site->tenant_id)->where('tenant_site_id', $site->id)->where('status', 'active')],
             'variantId' => ['nullable', 'integer'],
