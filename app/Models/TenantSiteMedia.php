@@ -12,12 +12,12 @@ class TenantSiteMedia extends Model
 
     protected $fillable = [
         'tenant_id', 'tenant_site_id', 'uploaded_by_user_id', 'storage_disk', 'storage_path', 'file_name',
-        'mime_type', 'file_size', 'checksum', 'kind', 'source', 'source_url', 'alt_text', 'is_starter',
+        'mime_type', 'file_size', 'checksum', 'kind', 'source', 'source_url', 'alt_text', 'is_starter', 'metadata',
     ];
 
     protected function casts(): array
     {
-        return ['tenant_id' => 'integer', 'tenant_site_id' => 'integer', 'uploaded_by_user_id' => 'integer', 'file_size' => 'integer', 'is_starter' => 'boolean'];
+        return ['tenant_id' => 'integer', 'tenant_site_id' => 'integer', 'uploaded_by_user_id' => 'integer', 'file_size' => 'integer', 'is_starter' => 'boolean', 'metadata' => 'array'];
     }
 
     public function site(): BelongsTo

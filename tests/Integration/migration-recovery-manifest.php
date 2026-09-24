@@ -99,4 +99,8 @@ return [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['collection table retained before membership table creation'],
     ],
+    '2026_09_23_120000_add_metadata_to_tenant_site_media.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['existing media table retained before additive metadata column'],
+    ],
 ];
