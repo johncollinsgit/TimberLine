@@ -41,7 +41,7 @@ class FleetTrackingController extends Controller
             }
         }
 
-        return view('field-service.fleet-tracking', ['tenant' => $tenant, 'settings' => $settings, 'devices' => $devices, 'points' => $points, 'fleetMap' => $this->fleetMapPayload($devices, $points), 'vehicles' => FieldServiceVehicle::query()->forTenantId((int) $tenant->id)->where('status', 'active')->orderBy('name')->get(), 'globalEnabled' => (bool) config('services.fleet_tracking.enabled', false), 'mapApiKey' => (string) config('services.google_maps.fleet_api_key', ''), 'bouncieConnection' => $connection, 'bouncieVehicles' => $bouncieVehicles, 'bouncieConnectionError' => $connectionError, 'canManageBouncie' => $canManageBouncie]);
+        return view('field-service.fleet-tracking', ['tenant' => $tenant, 'settings' => $settings, 'devices' => $devices, 'points' => $points, 'fleetMap' => $this->fleetMapPayload($devices, $points), 'vehicles' => FieldServiceVehicle::query()->forTenantId((int) $tenant->id)->where('status', 'active')->orderBy('name')->get(), 'globalEnabled' => (bool) config('services.fleet_tracking.enabled', false), 'mapApiKey' => (string) config('services.google_maps.fleet_api_key', ''), 'bouncieConnection' => $connection, 'bouncieVehicles' => $bouncieVehicles, 'bouncieConnectionError' => $connectionError, 'canManageBouncie' => $canManageBouncie, 'isDemoBouncieFeed' => (bool) data_get($connection?->metadata, 'demo_route_feed', false)]);
     }
 
     /** @return array{vehicles:array<int,array<string,mixed>>,bounds:array<string,float>|null} */

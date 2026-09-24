@@ -3,6 +3,7 @@
     $mappedCount = $devices->count();
     $policyReady = app(\App\Services\FleetTracking\FleetTrackingAccessService::class)->isPolicyApproved($settings);
     $fleetVehicles = (array) data_get($fleetMap ?? [], 'vehicles', []);
+    $hasDemoBouncieFeed = $isDemoBouncieFeed ?? false;
 @endphp
 
 <x-layouts::app.sidebar title="Location tracker">
@@ -19,7 +20,7 @@
                     <a href="{{ route('field-service.index') }}" class="rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/15">Back to field service</a>
                 </div>
                 <div class="relative mt-7 grid gap-2 sm:grid-cols-3">
-                    <div class="rounded-2xl bg-white/10 px-4 py-3 backdrop-blur"><div class="flex items-center gap-2 text-sm font-semibold"><span class="grid h-6 w-6 place-items-center rounded-full {{ $isConnected ? 'bg-emerald-400 text-zinc-950' : 'bg-white/10 text-white' }}">1</span>Connect Bouncie</div><p class="mt-1 pl-8 text-xs text-zinc-300">{{ $isConnected ? 'Connected and secure' : 'Waiting for authorization' }}</p></div>
+                    <div class="rounded-2xl bg-white/10 px-4 py-3 backdrop-blur"><div class="flex items-center gap-2 text-sm font-semibold"><span class="grid h-6 w-6 place-items-center rounded-full {{ $isConnected || $hasDemoBouncieFeed ? 'bg-emerald-400 text-zinc-950' : 'bg-white/10 text-white' }}">1</span>{{ $hasDemoBouncieFeed ? 'Load demo telemetry' : 'Connect Bouncie' }}</div><p class="mt-1 pl-8 text-xs text-zinc-300">{{ $hasDemoBouncieFeed ? 'Two fictional company-van feeds are ready' : ($isConnected ? 'Connected and secure' : 'Waiting for authorization') }}</p></div>
                     <div class="rounded-2xl bg-white/10 px-4 py-3 backdrop-blur"><div class="flex items-center gap-2 text-sm font-semibold"><span class="grid h-6 w-6 place-items-center rounded-full {{ $mappedCount ? 'bg-emerald-400 text-zinc-950' : 'bg-white/10 text-white' }}">2</span>Import vehicles</div><p class="mt-1 pl-8 text-xs text-zinc-300">{{ $mappedCount }} linked · {{ count($bouncieVehicles) }} available</p></div>
                     <div class="rounded-2xl bg-white/10 px-4 py-3 backdrop-blur"><div class="flex items-center gap-2 text-sm font-semibold"><span class="grid h-6 w-6 place-items-center rounded-full {{ $policyReady && $settings->bouncie_tracking_enabled ? 'bg-emerald-400 text-zinc-950' : 'bg-white/10 text-white' }}">3</span>Turn on live view</div><p class="mt-1 pl-8 text-xs text-zinc-300">{{ $policyReady ? ($settings->bouncie_tracking_enabled ? 'Company vans are enabled' : 'Ready when you are') : 'Policy approval required' }}</p></div>
                 </div>
@@ -66,7 +67,10 @@
                     <div class="flex flex-wrap items-start justify-between gap-4">
                         <div>
                             <p class="text-xs font-semibold uppercase tracking-[.16em] text-emerald-700">Bouncie account</p>
-                            @if($isConnected)
+                            @if($hasDemoBouncieFeed)
+                                <div class="mt-2 flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_0_5px_rgba(16,185,129,.12)]"></span><h2 class="text-2xl font-semibold text-zinc-950">Demo route feed ready</h2></div>
+                                <p class="mt-2 text-sm text-zinc-600">Two fictional company vans have retained Bouncie route samples ready for this demonstration. Connect a real account only when you are ready to replace the samples.</p>
+                            @elseif($isConnected)
                                 <div class="mt-2 flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_0_5px_rgba(16,185,129,.12)]"></span><h2 class="text-2xl font-semibold text-zinc-950">Connected</h2></div>
                                 <p class="mt-2 text-sm text-zinc-600">{{ $bouncieConnection->external_account_label }} · {{ count($bouncieVehicles) }} vehicle{{ count($bouncieVehicles) === 1 ? '' : 's' }} found</p>
                             @else
@@ -82,7 +86,7 @@
                         <div class="mt-6 rounded-2xl bg-emerald-50 p-5"><div class="flex flex-wrap items-center justify-between gap-4"><div><h3 class="font-semibold text-emerald-950">Bring in every company vehicle</h3><p class="mt-1 text-sm text-emerald-800">Everbranch securely matches each Bouncie tracker and keeps future imports idempotent.</p></div>@if($canManageBouncie)<form method="POST" action="{{ route('field-service.fleet-tracking.bouncie.sync-vehicles') }}">@csrf<button class="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800">{{ $mappedCount ? 'Refresh vehicles' : 'Import all vehicles' }}</button></form>@endif</div></div>
                     @endif
                     <div class="mt-5 grid grid-cols-3 gap-3">
-                        <div class="rounded-2xl bg-zinc-50 p-4"><div class="text-2xl font-semibold text-zinc-950">{{ count($bouncieVehicles) }}</div><div class="mt-1 text-xs font-medium text-zinc-500">Bouncie vehicles</div></div>
+                        <div class="rounded-2xl bg-zinc-50 p-4"><div class="text-2xl font-semibold text-zinc-950">{{ $hasDemoBouncieFeed ? $mappedCount : count($bouncieVehicles) }}</div><div class="mt-1 text-xs font-medium text-zinc-500">{{ $hasDemoBouncieFeed ? 'Demo Bouncie vans' : 'Bouncie vehicles' }}</div></div>
                         <div class="rounded-2xl bg-zinc-50 p-4"><div class="text-2xl font-semibold text-zinc-950">{{ $mappedCount }}</div><div class="mt-1 text-xs font-medium text-zinc-500">Linked vehicles</div></div>
                         <div class="rounded-2xl bg-zinc-50 p-4"><div class="text-2xl font-semibold text-zinc-950">{{ $points->count() }}</div><div class="mt-1 text-xs font-medium text-zinc-500">Recent updates</div></div>
                     </div>

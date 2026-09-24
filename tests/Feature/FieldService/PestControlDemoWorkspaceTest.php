@@ -12,6 +12,7 @@ use App\Models\FleetTrackingDevice;
 use App\Models\Tenant;
 use App\Models\TenantFleetTrackingSetting;
 use App\Models\TenantForm;
+use App\Models\TenantSetupStatus;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 
@@ -35,6 +36,7 @@ test('the fictional pest-control command creates an isolated tracking demonstrat
         ->and(FleetTrackingDevice::query()->forTenantId((int) $tenant->id)->where('provider', 'bouncie')->count())->toBe(2)
         ->and(FleetLocationPoint::query()->forTenantId((int) $tenant->id)->count())->toBe(9)
         ->and(data_get($tenant->moduleEntitlements()->where('module_key', 'field_service')->value('metadata'), 'experience_version'))->toBe(3)
+        ->and(TenantSetupStatus::query()->where('tenant_id', (int) $tenant->id)->sole()->business_profile_status)->toBe('ready')
         ->and(TenantForm::query()->forTenantId((int) $tenant->id)->where('slug', 'pest-prevention-reminders')->count())->toBe(1)
         ->and(TenantFleetTrackingSetting::query()->forTenantId((int) $tenant->id)->sole()->retention_days)->toBe(30);
 });

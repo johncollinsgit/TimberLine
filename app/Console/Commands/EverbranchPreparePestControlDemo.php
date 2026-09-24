@@ -17,12 +17,15 @@ use App\Models\IntegrationConnection;
 use App\Models\MarketingProfile;
 use App\Models\QuickBooksReportingSnapshot;
 use App\Models\Tenant;
+use App\Models\TenantAccessProfile;
 use App\Models\TenantDiscoveryProfile;
 use App\Models\TenantFleetTrackingSetting;
 use App\Models\TenantForm;
+use App\Models\TenantSetupStatus;
 use App\Models\TenantWorkforceSetting;
 use App\Models\User;
 use App\Services\Tenancy\LandlordCommercialConfigService;
+use App\Services\Tenancy\TenantBlueprintProfileService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -41,7 +44,7 @@ class EverbranchPreparePestControlDemo extends Command
 
     protected $description = 'Create or refresh the fictional Green Shield Pest Control vehicle-tracking demonstration workspace.';
 
-    public function handle(LandlordCommercialConfigService $commercial): int
+    public function handle(LandlordCommercialConfigService $commercial, TenantBlueprintProfileService $blueprints): int
     {
         if (app()->environment('production') && ! $this->option('force-production')) {
             $this->error('Refusing to create the fictional demonstration workspace in production without --force-production.');
@@ -63,7 +66,7 @@ class EverbranchPreparePestControlDemo extends Command
             return self::FAILURE;
         }
 
-        $result = DB::transaction(function () use ($commercial, $password, $grantEmail): array {
+        $result = DB::transaction(function () use ($commercial, $blueprints, $password, $grantEmail): array {
             $tenant = Tenant::query()->updateOrCreate(['slug' => 'green-shield-pest-control'], ['name' => 'Green Shield Pest Control']);
             $owner = User::query()->firstOrNew(['email' => self::OWNER_EMAIL]);
             $owner->forceFill([
@@ -145,6 +148,63 @@ class EverbranchPreparePestControlDemo extends Command
                     ], static fn (mixed $value): bool => $value !== null),
                 ], (int) $owner->id);
             }
+
+            // Treat this as a ready-to-browse field-operations demo, rather than
+            // an unfinished tenant waiting on a real onboarding workflow.
+            $accessProfile = TenantAccessProfile::query()->firstOrCreate([
+                'tenant_id' => (int) $tenant->id,
+            ], [
+                'plan_key' => 'base',
+                'operating_mode' => 'demo',
+                'source' => 'fictional_pest_control_demo',
+            ]);
+            $setupStatus = TenantSetupStatus::query()->firstOrCreate([
+                'tenant_id' => (int) $tenant->id,
+            ]);
+            $blueprints->applyBlueprint(
+                tenant: $tenant,
+                profile: $accessProfile,
+                status: $setupStatus,
+                blueprint: $blueprints->blueprintFromInput([
+                    'business_template' => 'landscaping',
+                    'operating_mode' => 'demo',
+                    'data_source_preference' => 'manual',
+                    'customer_label' => 'Customer',
+                    'work_label' => 'Service visit',
+                    'money_label' => 'Service revenue',
+                    'material_label' => 'Products / equipment',
+                    'stage_label' => 'Service stage',
+                    'project_label' => 'Route',
+                    'task_label' => 'Service task',
+                    'assignee_label' => 'Technician',
+                    'communication_label' => 'Service updates',
+                    'upload_label' => 'Treatment photos',
+                    'wants_project_workspace' => true,
+                    'wants_task_management' => true,
+                    'wants_user_assignments' => true,
+                    'wants_team_communication' => true,
+                    'wants_client_communication' => true,
+                    'wants_photo_uploads' => true,
+                    'wants_file_uploads' => true,
+                    'wants_mobile_field_capture' => true,
+                    'setup_notes' => 'Fictional pest-control demo with customers, routes, service visits, billing, and Bouncie vehicle samples.',
+                    'onboarding_next_action' => 'Demo workspace is ready to explore.',
+                ]),
+                accountMode: 'demo',
+                refreshSetupProjection: true,
+            );
+            $setupStatus->forceFill([
+                'business_profile_status' => 'ready',
+                'import_path' => 'manual',
+                'csv_manual_status' => 'ready',
+                'module_interests' => ['field_service', 'time_tracking', 'fleet', 'fleet_tracking'],
+                'mobile_interest' => 'ios',
+                'landlord_review_status' => 'reviewed',
+                'next_recommended_action' => 'Demo workspace is ready to explore.',
+                'internal_notes' => 'Fictional Green Shield demonstration; no customer, vehicle, or financial data is real.',
+                'reviewed_by' => (int) $owner->id,
+                'reviewed_at' => now(),
+            ])->save();
 
             TenantDiscoveryProfile::query()->updateOrCreate(['tenant_id' => (int) $tenant->id], [
                 'primary_brand_name' => 'Green Shield Pest Control',
@@ -527,6 +587,15 @@ class EverbranchPreparePestControlDemo extends Command
                 'external_account_label' => 'Fictional demo only — not a QuickBooks connection',
                 'status' => IntegrationConnection::STATUS_DISCONNECTED,
                 'metadata' => ['fictional_demo' => true],
+            ]);
+            IntegrationConnection::query()->updateOrCreate([
+                'tenant_id' => (int) $tenant->id,
+                'provider' => 'bouncie',
+                'external_account_id' => 'fictional-green-shield-bouncie-feed',
+            ], [
+                'external_account_label' => 'Fictional Bouncie route feed',
+                'status' => IntegrationConnection::STATUS_DISCONNECTED,
+                'metadata' => ['fictional_demo' => true, 'demo_route_feed' => true],
             ]);
             foreach ([
                 'today' => [now()->startOfDay(), now(), 860.00, 172.00],
