@@ -15,6 +15,8 @@ use App\Models\FleetTrackingDevice;
 use App\Models\FleetTrackingPolicyAcknowledgement;
 use App\Models\IntegrationConnection;
 use App\Models\MarketingProfile;
+use App\Models\MarketingStorefrontEvent;
+use App\Models\Order;
 use App\Models\QuickBooksReportingSnapshot;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
@@ -36,6 +38,10 @@ class EverbranchPreparePestControlDemo extends Command
     public const OWNER_EMAIL = 'demo@greenshieldpest.example';
 
     public const DEFAULT_PASSWORD = 'DemoPest!2026';
+
+    private const DEMO_ORDER_PREFIX = 'GSP-WEB-DEMO-';
+
+    private const DEMO_SESSION_PREFIX = 'session_started:green-shield-demo-';
 
     protected $signature = 'everbranch:prepare-pest-control-demo
         {--password='.self::DEFAULT_PASSWORD.' : Fictional demo login password}
@@ -585,6 +591,56 @@ class EverbranchPreparePestControlDemo extends Command
                     'amount' => $moneySpent,
                     'metadata' => ['fictional_demo' => true],
                 ]);
+            }
+
+            foreach ([
+                ['101', 7, 'Lena Brooks', 189.00, 'Quarterly pest protection plan'],
+                ['102', 5, 'Marisol Nguyen', 245.00, 'Mosquito service renewal'],
+                ['103', 2, 'David Kim', 395.00, 'Rodent exclusion consultation'],
+                ['104', 28, 'Priya Shah', 169.00, 'Seasonal exterior service'],
+                ['105', 52, 'Riley Morgan', 285.00, 'Termite monitoring plan'],
+            ] as [$number, $hoursAgo, $customerName, $total, $plan]) {
+                $orderedAt = now()->subHours($hoursAgo);
+                Order::query()->updateOrCreate([
+                    'tenant_id' => (int) $tenant->id,
+                    'order_number' => self::DEMO_ORDER_PREFIX.$number,
+                ], [
+                    'source' => 'website',
+                    'container_name' => 'Fictional website service-plan sale',
+                    'customer_name' => $customerName,
+                    'ordered_at' => $orderedAt,
+                    'due_date' => $orderedAt->addDays(14)->toDateString(),
+                    'status' => 'paid',
+                    'currency_code' => 'USD',
+                    'subtotal_price' => $total,
+                    'total_price' => $total,
+                    'internal_notes' => 'Fictional Green Shield '.$plan.'. No payment, customer action, or fulfillment is associated with this record.',
+                ]);
+            }
+            $demoProfiles = collect($customers)->values();
+            $sessionNumber = 1;
+            foreach (range(0, 13) as $daysAgo) {
+                $sessionsForDay = $daysAgo === 0 ? 18 : 3;
+                foreach (range(1, $sessionsForDay) as $session) {
+                    $occurredAt = $daysAgo === 0 && $session > 16
+                        ? now()->subMinutes(2 + (18 - $session))
+                        : now()->subDays($daysAgo)->setTime(8 + ($session % 8), 10);
+                    MarketingStorefrontEvent::query()->updateOrCreate([
+                        'tenant_id' => (int) $tenant->id,
+                        'source_id' => self::DEMO_SESSION_PREFIX.$occurredAt->format('Ymd').'-'.str_pad((string) $sessionNumber, 3, '0', STR_PAD_LEFT),
+                    ], [
+                        'event_type' => 'session_started',
+                        'status' => 'ok',
+                        'source_surface' => 'fictional_demo_website',
+                        'source_type' => 'fictional_pest_control_demo',
+                        'marketing_profile_id' => (int) $demoProfiles[($sessionNumber - 1) % $demoProfiles->count()]->id,
+                        'meta' => ['fictional_demo' => true, 'notice' => 'Fictional Green Shield website activity. No visitor data was collected.'],
+                        'occurred_at' => $occurredAt,
+                        'resolution_status' => 'resolved',
+                        'resolution_notes' => 'Fictional website analytics sample for the Green Shield demo.',
+                    ]);
+                    $sessionNumber++;
+                }
             }
 
             $demoConnection = IntegrationConnection::query()->updateOrCreate([

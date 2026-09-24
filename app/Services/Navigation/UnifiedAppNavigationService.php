@@ -6,6 +6,7 @@ use App\Models\MappingException;
 use App\Models\ShopifyImportRun;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\FieldService\FieldServiceAccessService;
 use App\Services\Tenancy\AuthenticatedTenantContextResolver;
 use App\Services\Tenancy\TenantBrandProfileService;
 use App\Services\Tenancy\TenantExperienceProfileService;
@@ -28,6 +29,7 @@ class UnifiedAppNavigationService
         protected TenantHostBuilder $tenantHostBuilder,
         protected ?TenantFinancialAccess $financialAccess = null,
         protected ?TenantBrandProfileService $brandProfileService = null,
+        protected ?FieldServiceAccessService $fieldServiceAccess = null,
     ) {}
 
     /**
@@ -55,13 +57,15 @@ class UnifiedAppNavigationService
         $isAdmin = $user?->isAdmin() ?? true;
         $isManager = $user?->isManager() ?? false;
         $isPouring = $user?->isPouring() ?? false;
-        $canAccessOps = $isAdmin || $isManager;
+        $canAccessOps = $isAdmin || $isManager
+            || ($user instanceof User && $tenant instanceof Tenant && ($this->fieldServiceAccess?->canManageJobs($user, $tenant) ?? false));
         $roleCanAccessMarketing = $user?->canAccessMarketing() ?? false;
 
         $moduleStates = $tenantId !== null
-            ? (array) ($this->moduleAccessResolver->resolveForTenant($tenantId, ['birthdays', 'customers', 'campaigns', 'wishlist', 'reporting', 'rewards', 'reviews', 'field_service', 'class_scheduling', 'plant_inventory', 'messaging', 'workflow_automations', 'managed_website', 'accounting_command_center'])['modules'] ?? [])
+            ? (array) ($this->moduleAccessResolver->resolveForTenant($tenantId, ['birthdays', 'customers', 'campaigns', 'wishlist', 'reporting', 'rewards', 'reviews', 'field_service', 'fleet_tracking', 'class_scheduling', 'plant_inventory', 'messaging', 'workflow_automations', 'managed_website', 'accounting_command_center'])['modules'] ?? [])
             : [];
         $fieldServiceEnabled = $this->moduleStateEnabled($moduleStates['field_service'] ?? null);
+        $fleetTrackingEnabled = $this->moduleStateEnabled($moduleStates['fleet_tracking'] ?? null);
         $classSchedulingEnabled = $this->moduleStateEnabled($moduleStates['class_scheduling'] ?? null);
         $plantInventoryEnabled = $this->moduleStateEnabled($moduleStates['plant_inventory'] ?? null);
         $customersEnabled = $this->moduleStateEnabled($moduleStates['customers'] ?? null);
@@ -180,6 +184,9 @@ class UnifiedAppNavigationService
                     ['key' => 'field-service-materials', 'icon' => 'archive-box', 'href' => route('field-service.resources').'#inventory', 'label' => 'Inventory', 'current' => false],
                     ['key' => 'field-service-vehicles', 'icon' => 'truck', 'href' => route('field-service.resources').'#vans', 'label' => 'Work vans', 'current' => false],
                 ];
+                if ($fleetTrackingEnabled && Route::has('field-service.fleet-tracking.index')) {
+                    $fieldServiceChildren[] = ['key' => 'field-service-fleet-tracker', 'icon' => 'map-pin', 'href' => route('field-service.fleet-tracking.index'), 'label' => 'Fleet Tracker', 'current' => request()->routeIs('field-service.fleet-tracking.*')];
+                }
 
                 $workItems[] = [
                     'key' => 'field-service',
