@@ -137,7 +137,12 @@ class EverbranchPreparePestControlDemo extends Command
                     'billing_status' => 'demo',
                     'entitlement_source' => 'fictional_pest_control_demo',
                     'notes' => 'Fictional sales demonstration only. Never treat this workspace or its location points as production evidence.',
-                    'metadata' => ['demo' => true, 'fictional_data_only' => true],
+                    'metadata' => array_filter([
+                        'demo' => true,
+                        'fictional_data_only' => true,
+                        // Use the operations-first mobile home for this field-service demo.
+                        'experience_version' => $moduleKey === 'field_service' ? 3 : null,
+                    ], static fn (mixed $value): bool => $value !== null),
                 ], (int) $owner->id);
             }
 
@@ -561,6 +566,16 @@ class EverbranchPreparePestControlDemo extends Command
                 'status' => 'active',
                 'installed_at' => now()->subMonth(),
             ]);
+            $secondDevice = FleetTrackingDevice::query()->updateOrCreate([
+                'tenant_id' => (int) $tenant->id,
+                'field_service_vehicle_id' => (int) $secondVan->id,
+            ], [
+                'provider' => 'bouncie',
+                'external_device_id' => 'DEMO-GSP-24',
+                'label' => 'Van 24 · fictional Bouncie feed',
+                'status' => 'active',
+                'installed_at' => now()->subMonth(),
+            ]);
             $session = FieldServiceTimeSession::query()->updateOrCreate([
                 'tenant_id' => (int) $tenant->id,
                 'user_id' => (int) $technician->id,
@@ -583,6 +598,10 @@ class EverbranchPreparePestControlDemo extends Command
                 ['bouncie', 'bouncie-van-2', 35.2307, -80.8390, now()->subMinutes(18), (int) $device->id, (int) $van->id, null],
                 ['mobile', 'mobile-tech-2', 35.2314, -80.8379, now()->subMinutes(14), null, null, (int) $technician->id],
                 ['bouncie', 'bouncie-van-3', 35.2330, -80.8352, now()->subMinutes(8), (int) $device->id, (int) $van->id, null],
+                ['bouncie', 'bouncie-van-24-1', 35.2219, -80.8612, now()->subMinutes(35), (int) $secondDevice->id, (int) $secondVan->id, null],
+                ['bouncie', 'bouncie-van-24-2', 35.2248, -80.8561, now()->subMinutes(25), (int) $secondDevice->id, (int) $secondVan->id, null],
+                ['bouncie', 'bouncie-van-24-3', 35.2265, -80.8517, now()->subMinutes(15), (int) $secondDevice->id, (int) $secondVan->id, null],
+                ['bouncie', 'bouncie-van-24-4', 35.2294, -80.8488, now()->subMinutes(5), (int) $secondDevice->id, (int) $secondVan->id, null],
             ] as [$source, $key, $latitude, $longitude, $recordedAt, $deviceId, $vehicleId, $userId]) {
                 FleetLocationPoint::query()->updateOrCreate([
                     'tenant_id' => (int) $tenant->id,

@@ -32,8 +32,9 @@ test('the fictional pest-control command creates an isolated tracking demonstrat
         ->and(FieldServiceFinancialDocument::query()->forTenantId((int) $tenant->id)->where('source', 'fictional_demo')->count())->toBe(40)
         ->and(FieldServiceVehicle::query()->forTenantId((int) $tenant->id)->count())->toBe(2)
         ->and(FieldServiceWorkShift::query()->forTenantId((int) $tenant->id)->count())->toBe(11)
-        ->and(FleetTrackingDevice::query()->forTenantId((int) $tenant->id)->where('provider', 'bouncie')->count())->toBe(1)
-        ->and(FleetLocationPoint::query()->forTenantId((int) $tenant->id)->count())->toBe(5)
+        ->and(FleetTrackingDevice::query()->forTenantId((int) $tenant->id)->where('provider', 'bouncie')->count())->toBe(2)
+        ->and(FleetLocationPoint::query()->forTenantId((int) $tenant->id)->count())->toBe(9)
+        ->and(data_get($tenant->moduleEntitlements()->where('module_key', 'field_service')->value('metadata'), 'experience_version'))->toBe(3)
         ->and(TenantForm::query()->forTenantId((int) $tenant->id)->where('slug', 'pest-prevention-reminders')->count())->toBe(1)
         ->and(TenantFleetTrackingSetting::query()->forTenantId((int) $tenant->id)->sole()->retention_days)->toBe(30);
 });
@@ -49,7 +50,7 @@ test('the fictional pest-control command safely refreshes the same demonstration
     expect(FieldServiceJob::query()->forTenantId((int) $tenant->id)->count())->toBe(20)
         ->and(FieldServiceTask::query()->forTenantId((int) $tenant->id)->count())->toBe(41)
         ->and(FieldServiceWorkShift::query()->forTenantId((int) $tenant->id)->count())->toBe(11)
-        ->and(FleetLocationPoint::query()->forTenantId((int) $tenant->id)->count())->toBe(5);
+        ->and(FleetLocationPoint::query()->forTenantId((int) $tenant->id)->count())->toBe(9);
 });
 
 test('the fictional pest-control command grants an existing account tenant-scoped demo access', function (): void {
