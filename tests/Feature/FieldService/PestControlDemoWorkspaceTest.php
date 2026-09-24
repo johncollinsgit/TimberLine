@@ -11,6 +11,7 @@ use App\Models\FleetLocationPoint;
 use App\Models\FleetTrackingDevice;
 use App\Models\Tenant;
 use App\Models\TenantFleetTrackingSetting;
+use App\Models\TenantForm;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 
@@ -33,6 +34,7 @@ test('the fictional pest-control command creates an isolated tracking demonstrat
         ->and(FieldServiceWorkShift::query()->forTenantId((int) $tenant->id)->count())->toBe(11)
         ->and(FleetTrackingDevice::query()->forTenantId((int) $tenant->id)->where('provider', 'bouncie')->count())->toBe(1)
         ->and(FleetLocationPoint::query()->forTenantId((int) $tenant->id)->count())->toBe(5)
+        ->and(TenantForm::query()->forTenantId((int) $tenant->id)->where('slug', 'pest-prevention-reminders')->count())->toBe(1)
         ->and(TenantFleetTrackingSetting::query()->forTenantId((int) $tenant->id)->sole()->retention_days)->toBe(30);
 });
 
@@ -48,4 +50,22 @@ test('the fictional pest-control command safely refreshes the same demonstration
         ->and(FieldServiceTask::query()->forTenantId((int) $tenant->id)->count())->toBe(41)
         ->and(FieldServiceWorkShift::query()->forTenantId((int) $tenant->id)->count())->toBe(11)
         ->and(FleetLocationPoint::query()->forTenantId((int) $tenant->id)->count())->toBe(5);
+});
+
+test('the fictional pest-control command grants an existing account tenant-scoped demo access', function (): void {
+    $presenter = User::factory()->create(['email' => 'johncollinsemail@gmail.com']);
+    $otherTenant = Tenant::query()->create(['name' => 'Other workspace', 'slug' => 'other-workspace']);
+    $presenter->tenants()->attach((int) $otherTenant->id, ['role' => 'member', 'membership_active' => true]);
+
+    $this->artisan('everbranch:prepare-pest-control-demo', [
+        '--grant-email' => $presenter->email,
+    ])->assertSuccessful();
+
+    $demoTenant = Tenant::query()->where('slug', 'green-shield-pest-control')->firstOrFail();
+    $membership = $presenter->tenants()->whereKey((int) $demoTenant->id)->firstOrFail();
+
+    expect($presenter->tenants()->pluck('tenants.id')->sort()->values()->all())
+        ->toBe([(int) $otherTenant->id, (int) $demoTenant->id])
+        ->and($membership->pivot->role)->toBe('admin')
+        ->and($membership->pivot->membership_active)->toBeTruthy();
 });

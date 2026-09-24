@@ -19,6 +19,7 @@ use App\Models\QuickBooksReportingSnapshot;
 use App\Models\Tenant;
 use App\Models\TenantDiscoveryProfile;
 use App\Models\TenantFleetTrackingSetting;
+use App\Models\TenantForm;
 use App\Models\TenantWorkforceSetting;
 use App\Models\User;
 use App\Services\Tenancy\LandlordCommercialConfigService;
@@ -35,6 +36,7 @@ class EverbranchPreparePestControlDemo extends Command
 
     protected $signature = 'everbranch:prepare-pest-control-demo
         {--password='.self::DEFAULT_PASSWORD.' : Fictional demo login password}
+        {--grant-email= : Grant an existing Everbranch account admin access to this demo workspace}
         {--force-production : Allow the explicitly requested production demo fixture}';
 
     protected $description = 'Create or refresh the fictional Green Shield Pest Control vehicle-tracking demonstration workspace.';
@@ -54,7 +56,14 @@ class EverbranchPreparePestControlDemo extends Command
             return self::FAILURE;
         }
 
-        $result = DB::transaction(function () use ($commercial, $password): array {
+        $grantEmail = strtolower(trim((string) $this->option('grant-email')));
+        if ($grantEmail !== '' && filter_var($grantEmail, FILTER_VALIDATE_EMAIL) === false) {
+            $this->error('Provide a valid existing Everbranch account email to grant demo access.');
+
+            return self::FAILURE;
+        }
+
+        $result = DB::transaction(function () use ($commercial, $password, $grantEmail): array {
             $tenant = Tenant::query()->updateOrCreate(['slug' => 'green-shield-pest-control'], ['name' => 'Green Shield Pest Control']);
             $owner = User::query()->firstOrNew(['email' => self::OWNER_EMAIL]);
             $owner->forceFill([
@@ -101,6 +110,24 @@ class EverbranchPreparePestControlDemo extends Command
                 $additionalTechnicians[$email] = $member;
             }
 
+            $grantedUser = null;
+            if ($grantEmail !== '') {
+                $grantedUser = User::query()->where('email', $grantEmail)->first();
+                if (! $grantedUser) {
+                    throw new \RuntimeException('No existing Everbranch account was found for '.$grantEmail.'. Ask that person to sign in or create their account before granting workspace access.');
+                }
+
+                // Preserve every other workspace membership while making this
+                // demo tenant available to the designated presenter.
+                $grantedUser->tenants()->syncWithoutDetaching([
+                    (int) $tenant->id => [
+                        'role' => 'admin',
+                        'membership_active' => true,
+                        'updated_at' => now(),
+                    ],
+                ]);
+            }
+
             $commercial->assignTenantPlan((int) $tenant->id, 'base', 'direct', 'fictional_pest_control_demo', (int) $owner->id);
             foreach (['field_service', 'time_tracking', 'fleet', 'fleet_tracking'] as $moduleKey) {
                 $commercial->setTenantModuleState((int) $tenant->id, $moduleKey, true, 'configured', (int) $owner->id);
@@ -129,6 +156,19 @@ class EverbranchPreparePestControlDemo extends Command
                 'clock_early_minutes' => 15,
                 'clock_late_minutes' => 15,
                 'updated_by_user_id' => (int) $owner->id,
+            ]);
+            TenantForm::query()->updateOrCreate([
+                'tenant_id' => (int) $tenant->id,
+                'slug' => 'pest-prevention-reminders',
+            ], [
+                'name' => 'Pest prevention reminders',
+                'description' => 'Customer-facing fictional demo request capture. It never sends messages.',
+                'status' => 'active',
+                'channel' => 'website',
+                'schema' => ['name', 'email', 'phone', 'property_type', 'reminders', 'message'],
+                'settings' => ['fictional_demo' => true, 'delivery_enabled' => false],
+                'created_by' => (int) $owner->id,
+                'updated_by' => (int) $owner->id,
             ]);
             TenantFleetTrackingSetting::query()->updateOrCreate(['tenant_id' => (int) $tenant->id], [
                 'phone_tracking_enabled' => true,
@@ -563,7 +603,7 @@ class EverbranchPreparePestControlDemo extends Command
                 ]);
             }
 
-            return compact('tenant', 'owner', 'technician', 'job', 'shift', 'van');
+            return compact('tenant', 'owner', 'technician', 'job', 'shift', 'van', 'grantedUser');
         });
 
         $this->info('Fictional Green Shield Pest Control demonstration workspace is ready.');
@@ -572,6 +612,9 @@ class EverbranchPreparePestControlDemo extends Command
         $this->line('demo_password='.$password);
         $this->line('vehicle='.$result['van']->name);
         $this->line('job_id='.$result['job']->id);
+        if ($result['grantedUser']) {
+            $this->line('granted_access='.$result['grantedUser']->email);
+        }
         $this->warn('All data is fictional. The fleet page remains unavailable until the global FLEET_TRACKING_ENABLED rollout switch is intentionally enabled.');
 
         return self::SUCCESS;
