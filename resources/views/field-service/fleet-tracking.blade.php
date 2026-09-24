@@ -2,6 +2,8 @@
     $isConnected = $bouncieConnection?->isConnected() ?? false;
     $mappedCount = $devices->count();
     $policyReady = app(\App\Services\FleetTracking\FleetTrackingAccessService::class)->isPolicyApproved($settings);
+    $fleetVehicles = (array) data_get($fleetMap ?? [], 'vehicles', []);
+    $hasDemoBouncieFeed = $isDemoBouncieFeed ?? false;
 @endphp
 
 <x-layouts::app.sidebar title="Location tracker">
@@ -18,7 +20,7 @@
                     <a href="{{ route('field-service.index') }}" class="rounded-xl bg-white/10 px-4 py-2.5 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/15">Back to field service</a>
                 </div>
                 <div class="relative mt-7 grid gap-2 sm:grid-cols-3">
-                    <div class="rounded-2xl bg-white/10 px-4 py-3 backdrop-blur"><div class="flex items-center gap-2 text-sm font-semibold"><span class="grid h-6 w-6 place-items-center rounded-full {{ $isConnected ? 'bg-emerald-400 text-zinc-950' : 'bg-white/10 text-white' }}">1</span>Connect Bouncie</div><p class="mt-1 pl-8 text-xs text-zinc-300">{{ $isConnected ? 'Connected and secure' : 'Waiting for authorization' }}</p></div>
+                    <div class="rounded-2xl bg-white/10 px-4 py-3 backdrop-blur"><div class="flex items-center gap-2 text-sm font-semibold"><span class="grid h-6 w-6 place-items-center rounded-full {{ $isConnected || $hasDemoBouncieFeed ? 'bg-emerald-400 text-zinc-950' : 'bg-white/10 text-white' }}">1</span>{{ $hasDemoBouncieFeed ? 'Load demo telemetry' : 'Connect Bouncie' }}</div><p class="mt-1 pl-8 text-xs text-zinc-300">{{ $hasDemoBouncieFeed ? 'Two fictional company-van feeds are ready' : ($isConnected ? 'Connected and secure' : 'Waiting for authorization') }}</p></div>
                     <div class="rounded-2xl bg-white/10 px-4 py-3 backdrop-blur"><div class="flex items-center gap-2 text-sm font-semibold"><span class="grid h-6 w-6 place-items-center rounded-full {{ $mappedCount ? 'bg-emerald-400 text-zinc-950' : 'bg-white/10 text-white' }}">2</span>Import vehicles</div><p class="mt-1 pl-8 text-xs text-zinc-300">{{ $mappedCount }} linked · {{ count($bouncieVehicles) }} available</p></div>
                     <div class="rounded-2xl bg-white/10 px-4 py-3 backdrop-blur"><div class="flex items-center gap-2 text-sm font-semibold"><span class="grid h-6 w-6 place-items-center rounded-full {{ $policyReady && $settings->bouncie_tracking_enabled ? 'bg-emerald-400 text-zinc-950' : 'bg-white/10 text-white' }}">3</span>Turn on live view</div><p class="mt-1 pl-8 text-xs text-zinc-300">{{ $policyReady ? ($settings->bouncie_tracking_enabled ? 'Company vans are enabled' : 'Ready when you are') : 'Policy approval required' }}</p></div>
                 </div>
@@ -28,12 +30,47 @@
             @if($errors->any())<div class="rounded-2xl bg-red-50 px-5 py-4 text-sm font-medium text-red-800 shadow-sm">{{ $errors->first() }}</div>@endif
             @if(! $globalEnabled)<div class="rounded-2xl bg-amber-50 px-5 py-4 text-sm text-amber-900 shadow-sm">Location Tracker is staged but the Everbranch-wide rollout switch is still off. No location is being collected.</div>@endif
 
+            <section class="overflow-hidden rounded-3xl bg-white shadow-lg shadow-zinc-950/5 ring-1 ring-black/5" aria-labelledby="fleet-map-title">
+                <div class="flex flex-wrap items-end justify-between gap-4 px-6 py-5"><div><p class="text-xs font-semibold uppercase tracking-[.16em] text-emerald-700">Fleet comparison</p><h2 id="fleet-map-title" class="mt-1 text-2xl font-semibold text-zinc-950">Route-aware vehicle view</h2><p class="mt-1 text-sm text-zinc-600">Compare each company van’s latest Bouncie route without mixing it with employee phone sharing.</p></div><span class="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800">{{ count($fleetVehicles) }} van{{ count($fleetVehicles) === 1 ? '' : 's' }} with route data</span></div>
+                @if(count($fleetVehicles))
+                    <div class="grid min-h-[420px] lg:grid-cols-[270px_minmax(0,1fr)]">
+                        <aside class="border-b border-zinc-100 bg-zinc-50/80 p-4 lg:border-b-0 lg:border-r" aria-label="Vehicle map controls">
+                            <p class="px-2 pb-3 text-xs font-semibold uppercase tracking-[.14em] text-zinc-500">Map controls</p>
+                            <div class="space-y-2" data-fleet-controls>
+                                <button type="button" class="fleet-map-control is-active w-full rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-left transition" data-fleet-select="all"><span class="flex items-center justify-between gap-3"><span><span class="block text-sm font-semibold text-emerald-950">All company vans</span><span class="mt-0.5 block text-xs text-emerald-800">Compare routes at a glance</span></span><span class="rounded-full bg-white px-2 py-1 text-xs font-bold text-emerald-700">{{ count($fleetVehicles) }}</span></span></button>
+                                @foreach($fleetVehicles as $vehicle)
+                                    <button type="button" class="fleet-map-control w-full rounded-2xl border border-transparent bg-white px-3 py-3 text-left shadow-sm ring-1 ring-zinc-100 transition hover:ring-emerald-200" data-fleet-select="{{ $vehicle['id'] }}"><span class="flex items-start gap-3"><span class="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" style="background:{{ $vehicle['color'] }}"></span><span class="min-w-0 flex-1"><span class="flex items-center justify-between gap-2"><span class="truncate text-sm font-semibold text-zinc-950">{{ $vehicle['label'] }}</span><span class="text-xs font-semibold text-zinc-500">{{ $vehicle['distance_miles'] }} mi</span></span><span class="mt-0.5 block truncate text-xs text-zinc-500">{{ $vehicle['last_seen'] ?: 'No recent update' }} · {{ $vehicle['updates'] }} points</span></span></span></button>
+                                @endforeach
+                            </div>
+                            <div class="mt-4 rounded-2xl border border-zinc-200 bg-white p-3 text-xs leading-5 text-zinc-600"><span class="font-semibold text-zinc-900">Comparison is company-vehicle only.</span> Route distance is calculated from retained Bouncie points; it is not payroll, performance scoring, or a driver-safety judgment.</div>
+                        </aside>
+                        <div class="relative min-h-[420px] overflow-hidden bg-[#e9f1e8] p-5">
+                            <div class="pointer-events-none absolute inset-0 opacity-60" style="background-image:linear-gradient(rgba(23,76,62,.09) 1px,transparent 1px),linear-gradient(90deg,rgba(23,76,62,.09) 1px,transparent 1px);background-size:34px 34px"></div>
+                            <div class="pointer-events-none absolute -right-20 top-10 h-64 w-64 rounded-full bg-emerald-200/60 blur-3xl"></div><div class="pointer-events-none absolute bottom-0 left-16 h-48 w-72 rounded-full bg-lime-100/70 blur-3xl"></div>
+                            <div class="relative flex items-center justify-between gap-3"><div class="rounded-xl bg-white/90 px-3 py-2 text-xs font-semibold text-zinc-700 shadow-sm">Bouncie route traces · retained {{ $settings->retention_days }} days</div><div class="rounded-xl bg-zinc-950 px-3 py-2 text-xs font-semibold text-white" data-fleet-map-label>All company vans</div></div>
+                            <svg class="relative mt-3 h-[322px] w-full" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Vehicle route comparison map" data-fleet-map>
+                                @foreach($fleetVehicles as $vehicle)
+                                    @php($route = collect($vehicle['route']))
+                                    <g data-fleet-route="{{ $vehicle['id'] }}"><polyline points="{{ $route->map(fn ($point) => $point['x'].','.$point['y'])->implode(' ') }}" fill="none" stroke="{{ $vehicle['color'] }}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" opacity=".88" />@foreach($route as $pointIndex => $point)<circle cx="{{ $point['x'] }}" cy="{{ $point['y'] }}" r="{{ $pointIndex === $route->count() - 1 ? '2.6' : '1.2' }}" fill="{{ $vehicle['color'] }}" stroke="#fff" stroke-width=".8" vector-effect="non-scaling-stroke" />@endforeach</g>
+                                @endforeach
+                            </svg>
+                            <div class="relative grid gap-2 sm:grid-cols-2 xl:grid-cols-3" data-fleet-comparisons>@foreach($fleetVehicles as $vehicle)<article class="fleet-map-stat rounded-2xl bg-white/90 p-3 shadow-sm ring-1 ring-zinc-200/70" data-fleet-stat="{{ $vehicle['id'] }}"><div class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full" style="background:{{ $vehicle['color'] }}"></span><strong class="truncate text-sm text-zinc-950">{{ $vehicle['label'] }}</strong></div><div class="mt-2 grid grid-cols-2 gap-2 text-xs"><span class="rounded-lg bg-zinc-50 p-2 text-zinc-500">Route <b class="mt-0.5 block text-sm text-zinc-900">{{ $vehicle['distance_miles'] }} mi</b></span><span class="rounded-lg bg-zinc-50 p-2 text-zinc-500">Last seen <b class="mt-0.5 block text-sm text-zinc-900">{{ $vehicle['last_seen'] ?: '—' }}</b></span></div></article>@endforeach</div>
+                        </div>
+                    </div>
+                @else
+                    <div class="mx-6 mb-6 rounded-2xl bg-zinc-50 px-5 py-10 text-center"><p class="font-semibold text-zinc-900">No company-van route data yet</p><p class="mx-auto mt-1 max-w-md text-sm text-zinc-500">Import a Bouncie vehicle and receive location points to compare routes here. Phone locations remain separate from vehicle telemetry.</p></div>
+                @endif
+            </section>
+
             <div class="grid gap-5 lg:grid-cols-5">
                 <section class="rounded-3xl bg-white p-6 shadow-lg shadow-zinc-950/5 ring-1 ring-black/5 lg:col-span-3">
                     <div class="flex flex-wrap items-start justify-between gap-4">
                         <div>
                             <p class="text-xs font-semibold uppercase tracking-[.16em] text-emerald-700">Bouncie account</p>
-                            @if($isConnected)
+                            @if($hasDemoBouncieFeed)
+                                <div class="mt-2 flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_0_5px_rgba(16,185,129,.12)]"></span><h2 class="text-2xl font-semibold text-zinc-950">Demo route feed ready</h2></div>
+                                <p class="mt-2 text-sm text-zinc-600">Two fictional company vans have retained Bouncie route samples ready for this demonstration. Connect a real account only when you are ready to replace the samples.</p>
+                            @elseif($isConnected)
                                 <div class="mt-2 flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_0_5px_rgba(16,185,129,.12)]"></span><h2 class="text-2xl font-semibold text-zinc-950">Connected</h2></div>
                                 <p class="mt-2 text-sm text-zinc-600">{{ $bouncieConnection->external_account_label }} · {{ count($bouncieVehicles) }} vehicle{{ count($bouncieVehicles) === 1 ? '' : 's' }} found</p>
                             @else
@@ -49,7 +86,7 @@
                         <div class="mt-6 rounded-2xl bg-emerald-50 p-5"><div class="flex flex-wrap items-center justify-between gap-4"><div><h3 class="font-semibold text-emerald-950">Bring in every company vehicle</h3><p class="mt-1 text-sm text-emerald-800">Everbranch securely matches each Bouncie tracker and keeps future imports idempotent.</p></div>@if($canManageBouncie)<form method="POST" action="{{ route('field-service.fleet-tracking.bouncie.sync-vehicles') }}">@csrf<button class="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800">{{ $mappedCount ? 'Refresh vehicles' : 'Import all vehicles' }}</button></form>@endif</div></div>
                     @endif
                     <div class="mt-5 grid grid-cols-3 gap-3">
-                        <div class="rounded-2xl bg-zinc-50 p-4"><div class="text-2xl font-semibold text-zinc-950">{{ count($bouncieVehicles) }}</div><div class="mt-1 text-xs font-medium text-zinc-500">Bouncie vehicles</div></div>
+                        <div class="rounded-2xl bg-zinc-50 p-4"><div class="text-2xl font-semibold text-zinc-950">{{ $hasDemoBouncieFeed ? $mappedCount : count($bouncieVehicles) }}</div><div class="mt-1 text-xs font-medium text-zinc-500">{{ $hasDemoBouncieFeed ? 'Demo Bouncie vans' : 'Bouncie vehicles' }}</div></div>
                         <div class="rounded-2xl bg-zinc-50 p-4"><div class="text-2xl font-semibold text-zinc-950">{{ $mappedCount }}</div><div class="mt-1 text-xs font-medium text-zinc-500">Linked vehicles</div></div>
                         <div class="rounded-2xl bg-zinc-50 p-4"><div class="text-2xl font-semibold text-zinc-950">{{ $points->count() }}</div><div class="mt-1 text-xs font-medium text-zinc-500">Recent updates</div></div>
                     </div>
@@ -142,6 +179,31 @@
         form.addEventListener('input', saveDraft);
         form.addEventListener('change', saveDraft);
         form.addEventListener('submit', saveDraft);
+    })();
+
+    (() => {
+        const controls = Array.from(document.querySelectorAll('[data-fleet-select]'));
+        const routes = Array.from(document.querySelectorAll('[data-fleet-route]'));
+        const cards = Array.from(document.querySelectorAll('[data-fleet-stat]'));
+        const label = document.querySelector('[data-fleet-map-label]');
+        if (!controls.length) return;
+
+        const apply = (selected) => {
+            const all = selected === 'all';
+            controls.forEach((control) => {
+                const active = control.dataset.fleetSelect === selected;
+                control.classList.toggle('is-active', active);
+                control.classList.toggle('border-emerald-200', active);
+                control.classList.toggle('bg-emerald-50', active);
+                control.classList.toggle('ring-emerald-100', active);
+                control.setAttribute('aria-pressed', String(active));
+            });
+            routes.forEach((route) => { route.style.opacity = all || route.dataset.fleetRoute === selected ? '1' : '.14'; });
+            cards.forEach((card) => { card.style.opacity = all || card.dataset.fleetStat === selected ? '1' : '.45'; });
+            if (label) label.textContent = all ? 'All company vans' : (controls.find((control) => control.dataset.fleetSelect === selected)?.innerText.split('\n')[0] || 'Selected van');
+        };
+        controls.forEach((control) => control.addEventListener('click', () => apply(control.dataset.fleetSelect || 'all')));
+        apply('all');
     })();
 </script>
 </x-layouts::app.sidebar>
