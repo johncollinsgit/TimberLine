@@ -320,7 +320,11 @@ class EverbranchPreparePestControlDemo extends Command
                 'description' => 'Fictional inspection and treatment visit for demonstration only.',
                 'scheduled_for' => now()->startOfHour()->addHour(),
                 'scheduled_end_at' => now()->startOfHour()->addHours(3),
-                'metadata' => ['fictional_demo' => true, 'fictional_route' => $this->fictionalRoute(0, 'Green Shield Van 17')],
+                'metadata' => [
+                    'fictional_demo' => true,
+                    'fictional_route' => $this->fictionalRoute(0, 'Green Shield Van 17'),
+                    'gross_revenue' => 245,
+                ],
             ]);
             $job->participants()->syncWithoutDetaching([(int) $owner->id => ['tenant_id' => $tenant->id, 'role' => 'dispatcher', 'following' => true]]);
             $shift = FieldServiceWorkShift::query()->updateOrCreate([
@@ -452,7 +456,11 @@ class EverbranchPreparePestControlDemo extends Command
                     'scheduled_end_at' => $sample['end'],
                     'completed_at' => $sample['operational_status'] === 'complete' ? $sample['end'] : null,
                     'last_financial_activity_at' => $sample['start'] ?? now(),
-                    'metadata' => ['fictional_demo' => true, 'fictional_route' => $this->fictionalRoute($sampleIndex + 1, $sample['vehicle']->name)],
+                    'metadata' => [
+                        'fictional_demo' => true,
+                        'fictional_route' => $this->fictionalRoute($sampleIndex + 1, $sample['vehicle']->name),
+                        'gross_revenue' => 245 + (($sampleIndex + 1) * 35),
+                    ],
                 ]);
                 $demoJobs[] = $sampleJob;
                 $sampleJob->participants()->syncWithoutDetaching([

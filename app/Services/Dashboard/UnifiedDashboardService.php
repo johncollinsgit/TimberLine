@@ -18,6 +18,7 @@ use App\Models\Tenant;
 use App\Models\TenantBillingOrder;
 use App\Models\User;
 use App\Models\WebsiteOrder;
+use App\Services\FieldService\FieldServiceAccessService;
 use App\Services\FieldService\QuickBooksOwnerReportingService;
 use App\Services\Reporting\SalesChannelSummaryService;
 use App\Services\Tenancy\AuthenticatedTenantContextResolver;
@@ -42,6 +43,7 @@ class UnifiedDashboardService
         protected TenantModuleAccessResolver $moduleAccess,
         protected QuickBooksOwnerReportingService $ownerReports,
         protected SalesChannelSummaryService $salesChannels,
+        protected FieldServiceAccessService $fieldServiceAccess,
     ) {}
 
     /**
@@ -60,7 +62,9 @@ class UnifiedDashboardService
             return $this->websiteSalesDashboard($request, $tenant, $user, $profile, $rangeKey);
         }
         $canAccessMarketing = $user?->canAccessMarketing() ?? false;
-        $canAccessOps = ($user?->isAdmin() ?? false) || ($user?->isManager() ?? false);
+        $canAccessOps = ($user?->isAdmin() ?? false)
+            || ($user?->isManager() ?? false)
+            || ($user instanceof User && $tenant instanceof Tenant && $this->fieldServiceAccess->canManageJobs($user, $tenant));
         $catalog = ($tenantId !== null && $canAccessMarketing)
             ? $this->moduleCatalogService->tenantStorePayload($tenantId, 'marketing')
             : ['sections' => []];

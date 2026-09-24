@@ -14,6 +14,7 @@ use App\Models\TenantFleetTrackingSetting;
 use App\Models\TenantForm;
 use App\Models\TenantSetupStatus;
 use App\Models\User;
+use App\Services\Dashboard\UnifiedDashboardService;
 use Illuminate\Support\Facades\Hash;
 
 test('the fictional pest-control command creates an isolated tracking demonstration workspace', function (): void {
@@ -56,7 +57,7 @@ test('the fictional pest-control command safely refreshes the same demonstration
 });
 
 test('the fictional pest-control command grants an existing account tenant-scoped demo access', function (): void {
-    $presenter = User::factory()->create(['email' => 'johncollinsemail@gmail.com']);
+    $presenter = User::factory()->create(['email' => 'johncollinsemail@gmail.com', 'role' => 'marketing_manager']);
     $otherTenant = Tenant::query()->create(['name' => 'Other workspace', 'slug' => 'other-workspace']);
     $presenter->tenants()->attach((int) $otherTenant->id, ['role' => 'member', 'membership_active' => true]);
 
@@ -71,4 +72,12 @@ test('the fictional pest-control command grants an existing account tenant-scope
         ->toBe([(int) $otherTenant->id, (int) $demoTenant->id])
         ->and($membership->pivot->role)->toBe('admin')
         ->and($membership->pivot->membership_active)->toBeTruthy();
+
+    request()->attributes->set('current_tenant', $demoTenant);
+    $dashboard = app(UnifiedDashboardService::class)->forRequest(request(), $presenter);
+
+    expect(data_get($dashboard, 'hero.label'))->toBe('Active jobs')
+        ->and(data_get($dashboard, 'hero.value'))->toBe('4')
+        ->and(data_get($dashboard, 'summary_cards.0.label'))->toBe('Total gross revenue')
+        ->and(data_get($dashboard, 'summary_cards.0.value'))->toBe('$2,135.00');
 });
