@@ -550,6 +550,11 @@ Route::post('/platform/demos/green-shield-pest-control/login', [PlatformProductP
     ->name('platform.pest-control-fleet-demo.login');
 Route::get('/platform/demos/green-shield-pest-control/login', fn () => redirect()->route('platform.pest-control-fleet-demo'))
     ->name('platform.pest-control-fleet-demo.login.redirect');
+Route::get('/platform/demos/green-shield-pest-control/website', [PlatformProductPagesController::class, 'pestControlWebsite'])
+    ->name('platform.pest-control-website');
+Route::post('/platform/demos/green-shield-pest-control/website/reminders', [PlatformProductPagesController::class, 'submitPestControlReminder'])
+    ->middleware('throttle:6,1')
+    ->name('platform.pest-control-website.reminders');
 Route::get('/platform/plans', [PlatformProductPagesController::class, 'plans'])->name('platform.plans');
 Route::get('/platform/demo', [PlatformProductPagesController::class, 'demo'])->name('platform.demo');
 Route::get('/platform/start', [PlatformProductPagesController::class, 'start'])->name('platform.start');
