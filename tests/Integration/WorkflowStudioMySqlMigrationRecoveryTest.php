@@ -6,6 +6,26 @@ use Illuminate\Support\Facades\Schema;
 
 uses(Tests\TestCase::class);
 
+it('resumes tenant site media metadata after the base media table was retained', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    Schema::dropIfExists('tenant_site_media');
+    Schema::create('tenant_site_media', function (Blueprint $table): void {
+        $table->id();
+        $table->unsignedBigInteger('tenant_id');
+        $table->unsignedBigInteger('tenant_site_id');
+        $table->string('storage_path', 500);
+    });
+
+    $migration = require database_path('migrations/2026_09_23_120000_add_metadata_to_tenant_site_media.php');
+    $migration->up();
+    $migration->up();
+
+    expect(Schema::hasColumn('tenant_site_media', 'metadata'))->toBeTrue();
+});
+
 it('resumes crew status creation after MySQL retains the table', function (): void {
     if (DB::connection()->getDriverName() !== 'mysql') {
         $this->markTestSkipped('This recovery contract requires MySQL.');

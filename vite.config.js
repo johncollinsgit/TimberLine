@@ -17,6 +17,7 @@ export default defineConfig(() => ({
         'resources/js/shopify/dashboard.tsx',
         'resources/js/shopify/wholesale-messaging.tsx',
         'resources/js/shopify/birthday-email-composer.tsx',
+        'resources/js/managed-website/product-viewer.ts',
       ],
       refresh: true,
     }),

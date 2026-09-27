@@ -130,3 +130,19 @@ To prepare the Collins draft without publishing it, run:
 
 Confirm the output says `published=no`. Entitlement, editor access, and Publish
 remain separate audited controls.
+
+## Interactive Product Viewer media
+
+Product-viewer models are a controlled Website-media type. Accept only
+tenant-owned, self-contained binary `.glb` uploads that pass server-side
+inspection; remote resources, scripts, unknown animation clips, foreign media,
+and mutable URLs are rejected. A published viewer snapshot references only
+owned model/poster/video IDs and validated clip/node names.
+
+Before publishing a viewer, verify its poster and fallback video remain useful
+with JavaScript or WebGL unavailable, controls work by keyboard, and both the
+raise and lower clips return deterministically to the closed pose. Keep client
+source images/video and Blender masters outside the repository. For a model
+defect, publish the prior immutable page snapshot or disable the pilot tenant's
+viewer through the existing Managed Website gates; do not replace a live model
+file in place.

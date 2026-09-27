@@ -219,6 +219,49 @@ class ManagedWebsiteController extends Controller
         $tenant = $this->tenant($request);
         $this->requireEditor($tenant, $websites);
         $site = TenantSite::query()->forTenant($tenant)->firstOrFail();
+        if ($request->hasFile('model')) {
+            $maxKilobytes = max(1024, (int) ceil(((int) config('managed_website.model_max_bytes', 20 * 1024 * 1024)) / 1024));
+            $data = $request->validate([
+                'model' => ['required', 'file', 'max:'.$maxKilobytes],
+                'alt_text' => ['nullable', 'string', 'max:500'],
+            ]);
+            $file = $data['model'];
+            abort_unless(strtolower((string) $file->getClientOriginalExtension()) === 'glb', 422, 'Only binary GLB models are accepted.');
+            $metadata = $websites->inspectGlb($file->getRealPath());
+            $path = 'tenant-site-media/'.$tenant->id.'/'.Str::uuid().'.glb';
+            $disk = 'local';
+            Storage::disk($disk)->put($path, file_get_contents($file->getRealPath()));
+            $media = TenantSiteMedia::query()->create([
+                'tenant_id' => $tenant->id, 'tenant_site_id' => $site->id, 'uploaded_by_user_id' => $request->user()?->id,
+                'storage_disk' => $disk, 'storage_path' => $path, 'file_name' => basename($file->getClientOriginalName()),
+                'mime_type' => 'model/gltf-binary', 'file_size' => $file->getSize(), 'checksum' => hash_file('sha256', $file->getRealPath()),
+                'kind' => 'model', 'source' => 'upload', 'alt_text' => strip_tags((string) ($data['alt_text'] ?? '')), 'metadata' => $metadata,
+            ]);
+            $websites->recordEvent($site, null, $request->user(), 'site.model_uploaded', ['media_id' => $media->id, 'checksum' => $media->checksum]);
+
+            return response()->json(['media' => $this->mediaPayload($media)], 201);
+        }
+        if ($request->hasFile('video')) {
+            $maxKilobytes = max(1024, (int) ceil(((int) config('managed_website.video_max_bytes', 80 * 1024 * 1024)) / 1024));
+            $data = $request->validate([
+                'video' => ['required', 'file', 'mimetypes:video/mp4', 'max:'.$maxKilobytes],
+                'alt_text' => ['nullable', 'string', 'max:500'],
+            ]);
+            $file = $data['video'];
+            abort_unless(strtolower((string) $file->getClientOriginalExtension()) === 'mp4', 422, 'Only MP4 product videos are accepted.');
+            $path = 'tenant-site-media/'.$tenant->id.'/'.Str::uuid().'.mp4';
+            $disk = 'local';
+            Storage::disk($disk)->put($path, file_get_contents($file->getRealPath()));
+            $media = TenantSiteMedia::query()->create([
+                'tenant_id' => $tenant->id, 'tenant_site_id' => $site->id, 'uploaded_by_user_id' => $request->user()?->id,
+                'storage_disk' => $disk, 'storage_path' => $path, 'file_name' => basename($file->getClientOriginalName()),
+                'mime_type' => 'video/mp4', 'file_size' => $file->getSize(), 'checksum' => hash_file('sha256', $file->getRealPath()),
+                'kind' => 'video', 'source' => 'upload', 'alt_text' => strip_tags((string) ($data['alt_text'] ?? '')),
+            ]);
+            $websites->recordEvent($site, null, $request->user(), 'site.video_uploaded', ['media_id' => $media->id, 'checksum' => $media->checksum]);
+
+            return response()->json(['media' => $this->mediaPayload($media)], 201);
+        }
         $maxKilobytes = max(1024, (int) ceil(((int) config('managed_website.media_max_bytes', 10485760)) / 1024));
         $data = $request->validate([
             'image' => ['required', 'file', 'mimetypes:image/jpeg,image/png,image/webp,image/avif', 'max:'.$maxKilobytes],
@@ -434,7 +477,16 @@ class ManagedWebsiteController extends Controller
     /** @return array<string,mixed> */
     protected function mediaPayload(TenantSiteMedia $media): array
     {
-        return ['id' => $media->id, 'name' => $media->file_name, 'url' => route('managed-website.media.show', ['media' => $media]), 'alt_text' => $media->alt_text, 'mime_type' => $media->mime_type, 'size' => $media->file_size];
+        return [
+            'id' => $media->id,
+            'name' => $media->file_name,
+            'url' => route('managed-website.media.show', ['media' => $media]),
+            'alt_text' => $media->alt_text,
+            'mime_type' => $media->mime_type,
+            'kind' => $media->kind,
+            'size' => $media->file_size,
+            'metadata' => $media->kind === 'model' ? (array) $media->metadata : null,
+        ];
     }
 
     public function submitForm(Request $request, TenantSitePage $page): RedirectResponse
