@@ -38,6 +38,7 @@ use App\Services\Marketing\TenantRewardsPolicyService;
 use App\Services\Shopify\ShopifyStores;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantResolver;
+use App\Support\Marketing\MarketingIdentityNormalizer;
 use App\Support\Marketing\MarketingStorefrontContract;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -55,7 +56,8 @@ class MarketingShopifyIntegrationController extends Controller
         protected CandleClubMembershipService $candleClubMembershipService,
         protected TenantRewardsPolicyService $tenantRewardsPolicyService,
         protected TenantResolver $tenantResolver,
-        protected TenantDisplayLabelResolver $displayLabelResolver
+        protected TenantDisplayLabelResolver $displayLabelResolver,
+        protected MarketingIdentityNormalizer $identityNormalizer
     ) {}
 
     public function rewardBalance(Request $request, CandleCashService $candleCashService): JsonResponse
@@ -2859,6 +2861,11 @@ class MarketingShopifyIntegrationController extends Controller
 
             $profile = $profileQuery->find($profileId);
 
+            if ($profile && $this->requiresStoreLinkedIdentity($storeContext)
+                && ! $this->profileIsAccessibleFromShopifyStore($profile, $storeContext['store_key'], (int) $storeContext['tenant_id'])) {
+                $profile = null;
+            }
+
             return [
                 'status' => $profile ? 'resolved' : 'not_found',
                 'profile' => $profile,
@@ -2896,6 +2903,23 @@ class MarketingShopifyIntegrationController extends Controller
             }
         }
 
+        if ($this->requiresStoreLinkedIdentity($storeContext)) {
+            $externalProfile = $this->profileFromShopifyStorefrontIdentity(
+                $emailInput,
+                $phoneInput,
+                (string) $storeContext['store_key'],
+                (int) $storeContext['tenant_id']
+            );
+
+            if ($externalProfile) {
+                return [
+                    'status' => 'resolved',
+                    'profile' => $externalProfile,
+                    'sync' => [],
+                ];
+            }
+        }
+
         $sourceType = 'shopify_widget_'.Str::slug($scope, '_');
         $sourceId = $this->identityService->deterministicSourceId(
             prefix: $sourceType,
@@ -2908,7 +2932,7 @@ class MarketingShopifyIntegrationController extends Controller
             ]
         );
 
-        return $this->identityService->resolve([
+        $resolved = $this->identityService->resolve([
             'email' => $emailInput,
             'phone' => $phoneInput,
             'first_name' => (string) $firstName,
@@ -2927,6 +2951,22 @@ class MarketingShopifyIntegrationController extends Controller
             ],
             'allow_create' => $allowCreate,
         ]);
+
+        if (($resolved['profile'] ?? null) instanceof MarketingProfile
+            && $this->requiresStoreLinkedIdentity($storeContext)
+            && ! $this->profileIsAccessibleFromShopifyStore(
+                $resolved['profile'],
+                $storeContext['store_key'],
+                (int) $storeContext['tenant_id']
+            )) {
+            return [
+                'status' => 'not_found',
+                'profile' => null,
+                'sync' => $resolved['sync'] ?? [],
+            ];
+        }
+
+        return $resolved;
     }
 
     /**
@@ -3155,11 +3195,8 @@ class MarketingShopifyIntegrationController extends Controller
             ->whereNotNull('marketing_profile_id');
 
         $normalizedStoreKey = $this->normalizeStoreKey($storeKey);
-        if ($normalizedStoreKey !== null) {
-            $externalQuery->where(function ($query) use ($normalizedStoreKey): void {
-                $query->where('store_key', $normalizedStoreKey)
-                    ->orWhereNull('store_key');
-            });
+        if ($normalizedStoreKey !== null && $tenantId !== null && $tenantId > 0) {
+            $externalQuery->where('store_key', $normalizedStoreKey);
         }
 
         $external = $externalQuery
@@ -3174,6 +3211,89 @@ class MarketingShopifyIntegrationController extends Controller
         $profileQuery = MarketingProfile::query()->forTenantId($tenantId);
 
         return $profileQuery->find((int) $external->marketing_profile_id);
+    }
+
+    protected function profileFromShopifyStorefrontIdentity(
+        string $email,
+        string $phone,
+        string $storeKey,
+        int $tenantId
+    ): ?MarketingProfile {
+        $normalizedStoreKey = $this->normalizeStoreKey($storeKey);
+        if ($normalizedStoreKey === null || $tenantId <= 0) {
+            return null;
+        }
+
+        $normalizedEmail = $this->identityNormalizer->normalizeEmail($email);
+        $phoneCandidates = $this->identityNormalizer->phoneMatchCandidates($phone);
+        if ($normalizedEmail === null && $phoneCandidates === []) {
+            return null;
+        }
+
+        $profileIds = CustomerExternalProfile::query()
+            ->forTenantId($tenantId)
+            ->where('provider', 'shopify')
+            ->where('store_key', $normalizedStoreKey)
+            ->whereNotNull('marketing_profile_id')
+            ->where(function ($query) use ($normalizedEmail, $phoneCandidates): void {
+                if ($normalizedEmail !== null) {
+                    $query->where('normalized_email', $normalizedEmail);
+                }
+
+                if ($phoneCandidates !== []) {
+                    $method = $normalizedEmail !== null ? 'orWhereIn' : 'whereIn';
+                    $query->{$method}('normalized_phone', $phoneCandidates);
+                }
+            })
+            ->distinct()
+            ->pluck('marketing_profile_id')
+            ->map(static fn ($id): int => (int) $id)
+            ->filter(static fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values();
+
+        if ($profileIds->count() !== 1) {
+            return null;
+        }
+
+        return MarketingProfile::query()
+            ->forTenantId($tenantId)
+            ->find($profileIds->first());
+    }
+
+    /**
+     * @param  array{store_key:?string,tenant_id:?int}  $storeContext
+     */
+    protected function requiresStoreLinkedIdentity(array $storeContext): bool
+    {
+        return $this->normalizeStoreKey($storeContext['store_key'] ?? null) !== null
+            && is_numeric($storeContext['tenant_id'] ?? null)
+            && (int) $storeContext['tenant_id'] > 0;
+    }
+
+    protected function profileIsAccessibleFromShopifyStore(MarketingProfile $profile, ?string $storeKey, int $tenantId): bool
+    {
+        $normalizedStoreKey = $this->normalizeStoreKey($storeKey);
+        if ($normalizedStoreKey === null || $tenantId <= 0) {
+            return false;
+        }
+
+        $links = CustomerExternalProfile::query()
+            ->where('provider', 'shopify')
+            ->where('marketing_profile_id', $profile->id)
+            ->where(function ($query) use ($tenantId): void {
+                $query->where('tenant_id', $tenantId)
+                    ->orWhereNull('tenant_id');
+            })
+            ->get(['store_key']);
+
+        if ($links->isEmpty()) {
+            return true;
+        }
+
+        return $links->contains(
+            static fn (CustomerExternalProfile $link): bool => (string) $link->store_key === $normalizedStoreKey
+        );
     }
 
     protected function identityErrorResponse(string $status, ?Request $request = null): JsonResponse
