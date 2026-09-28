@@ -24,6 +24,11 @@ query BirthdayDiscountByCode($code: String!) {
         title
         startsAt
         endsAt
+        combinesWith {
+          orderDiscounts
+          productDiscounts
+          shippingDiscounts
+        }
       }
       ... on DiscountCodeFreeShipping {
         id
@@ -31,6 +36,35 @@ query BirthdayDiscountByCode($code: String!) {
         startsAt
         endsAt
       }
+    }
+  }
+}
+GRAPHQL;
+
+    protected const UPDATE_BASIC_DISCOUNT_MUTATION = <<<'GRAPHQL'
+mutation BirthdayDiscountCodeBasicUpdate($id: ID!, $basicCodeDiscount: DiscountCodeBasicInput!) {
+  discountCodeBasicUpdate(id: $id, basicCodeDiscount: $basicCodeDiscount) {
+    codeDiscountNode {
+      id
+      codeDiscount {
+        __typename
+        ... on DiscountCodeBasic {
+          id
+          title
+          startsAt
+          endsAt
+          combinesWith {
+            orderDiscounts
+            productDiscounts
+            shippingDiscounts
+          }
+        }
+      }
+    }
+    userErrors {
+      field
+      message
+      code
     }
   }
 }
@@ -87,12 +121,12 @@ GRAPHQL;
     public function __construct(
         protected BirthdayRewardEngineService $rewardEngine,
         protected BirthdayProfileService $birthdayProfileService,
-        protected MarketingStorefrontEventLogger $eventLogger
-    ) {
-    }
+        protected MarketingStorefrontEventLogger $eventLogger,
+        protected CandleCashShopifyDiscountService $candleCashDiscountService
+    ) {}
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array<string,mixed>
      */
     public function activate(BirthdayRewardIssuance $issuance, array $options = []): array
@@ -271,7 +305,7 @@ GRAPHQL;
                 'marketing_profile_id' => (int) $failed->marketing_profile_id,
                 'source_type' => 'birthday_reward',
                 'source_id' => (string) $failed->id,
-                'dedupe_key' => sha1('birthday_reward_discount_sync_failed|' . $failed->id . '|' . $failed->shopify_store_key . '|' . $failed->reward_code),
+                'dedupe_key' => sha1('birthday_reward_discount_sync_failed|'.$failed->id.'|'.$failed->shopify_store_key.'|'.$failed->reward_code),
                 'meta' => [
                     'reward_code' => $failed->reward_code,
                     'shopify_store_key' => $failed->shopify_store_key,
@@ -332,7 +366,7 @@ GRAPHQL;
             'marketing_profile_id' => (int) $activated->marketing_profile_id,
             'source_type' => 'birthday_reward',
             'source_id' => (string) $activated->id,
-            'dedupe_key' => sha1('birthday_reward_discount_synced|' . $activated->id . '|' . $activated->shopify_store_key . '|' . $activated->reward_code),
+            'dedupe_key' => sha1('birthday_reward_discount_synced|'.$activated->id.'|'.$activated->shopify_store_key.'|'.$activated->reward_code),
             'meta' => [
                 'reward_code' => $activated->reward_code,
                 'shopify_store_key' => $activated->shopify_store_key,
@@ -351,7 +385,7 @@ GRAPHQL;
     }
 
     /**
-     * @param array<string,mixed> $store
+     * @param  array<string,mixed>  $store
      * @return array{discount_id:?string,discount_node_id:?string,store_key:string,starts_at:?string,ends_at:?\Carbon\CarbonInterface}
      */
     protected function ensureShopifyDiscount(BirthdayRewardIssuance $issuance, array $store): array
@@ -368,6 +402,14 @@ GRAPHQL;
 
         $existing = $this->discountIdentifiersFromPayload($lookup['codeDiscountNodeByCode'] ?? null);
         if ($existing !== null) {
+            if (($existing['type'] ?? null) === 'DiscountCodeBasic'
+                && ! $this->combinesWithMatches(
+                    $existing['combines_with'] ?? null,
+                    $this->combinesWithInput($issuance)
+                )) {
+                $existing = $this->updateBasicDiscountCombinesWith($client, $existing, $issuance);
+            }
+
             return [
                 'discount_id' => $existing['discount_id'],
                 'discount_node_id' => $existing['discount_node_id'],
@@ -397,7 +439,7 @@ GRAPHQL;
 
         $errors = $this->extractUserErrors((array) ($payload['userErrors'] ?? []));
         if ($errors !== []) {
-            throw new RuntimeException('Shopify discount create failed: ' . implode(' | ', $errors));
+            throw new RuntimeException('Shopify discount create failed: '.implode(' | ', $errors));
         }
 
         $created = $this->discountIdentifiersFromPayload($payload['codeDiscountNode'] ?? null);
@@ -415,7 +457,7 @@ GRAPHQL;
     }
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array<string,mixed>|null
      */
     protected function resolveStoreConfig(BirthdayRewardIssuance $issuance, array $options = []): ?array
@@ -499,7 +541,21 @@ GRAPHQL;
                     ],
                 ],
             ],
+            // Shopify requires both discounts to opt in before they can be
+            // combined. Keep birthday cash aligned with the tenant's Candle
+            // Cash combination policy rather than making it broadly stackable.
+            'combinesWith' => $this->combinesWithInput($issuance),
         ];
+    }
+
+    /**
+     * @return array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}
+     */
+    protected function combinesWithInput(BirthdayRewardIssuance $issuance): array
+    {
+        return $this->candleCashDiscountService->combinesWithForTenant(
+            $this->tenantIdForIssuance($issuance)
+        );
     }
 
     /**
@@ -536,8 +592,7 @@ GRAPHQL;
     }
 
     /**
-     * @param mixed $payload
-     * @return array{discount_id:?string,discount_node_id:?string,starts_at:?string,ends_at:?\Carbon\CarbonInterface}|null
+     * @return array{discount_id:?string,discount_node_id:?string,starts_at:?string,ends_at:?\Carbon\CarbonInterface,type:?string,combines_with:?array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}}|null
      */
     protected function discountIdentifiersFromPayload(mixed $payload): ?array
     {
@@ -553,6 +608,8 @@ GRAPHQL;
                 'discount_node_id' => $discountNodeId,
                 'starts_at' => null,
                 'ends_at' => null,
+                'type' => null,
+                'combines_with' => null,
             ] : null;
         }
 
@@ -563,11 +620,71 @@ GRAPHQL;
             'discount_node_id' => $discountNodeId !== '' ? $discountNodeId : null,
             'starts_at' => trim((string) ($discount['startsAt'] ?? '')) ?: null,
             'ends_at' => ! empty($discount['endsAt']) ? Carbon::parse((string) $discount['endsAt']) : null,
+            'type' => trim((string) ($discount['__typename'] ?? '')) ?: null,
+            'combines_with' => is_array($discount['combinesWith'] ?? null)
+                ? $this->normalizedCombinesWith((array) $discount['combinesWith'])
+                : null,
         ];
     }
 
     /**
-     * @param array<int,mixed> $errors
+     * @param  array{discount_id:?string,discount_node_id:?string,starts_at:?string,ends_at:?\Carbon\CarbonInterface,type:?string,combines_with:?array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}}  $existing
+     * @return array{discount_id:?string,discount_node_id:?string,starts_at:?string,ends_at:?\Carbon\CarbonInterface,type:?string,combines_with:?array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}}
+     */
+    protected function updateBasicDiscountCombinesWith(
+        ShopifyGraphqlClient $client,
+        array $existing,
+        BirthdayRewardIssuance $issuance
+    ): array {
+        $discountNodeId = trim((string) ($existing['discount_node_id'] ?? ''));
+        if ($discountNodeId === '') {
+            throw new RuntimeException('Shopify birthday discount update failed: missing discount node identifier.');
+        }
+
+        $data = $client->query(self::UPDATE_BASIC_DISCOUNT_MUTATION, [
+            'id' => $discountNodeId,
+            'basicCodeDiscount' => ['combinesWith' => $this->combinesWithInput($issuance)],
+        ]);
+        $payload = $data['discountCodeBasicUpdate'] ?? null;
+        if (! is_array($payload)) {
+            throw new RuntimeException('Shopify birthday discount update response was invalid.');
+        }
+
+        $errors = $this->extractUserErrors((array) ($payload['userErrors'] ?? []));
+        if ($errors !== []) {
+            throw new RuntimeException('Shopify birthday discount update failed: '.implode(' | ', $errors));
+        }
+
+        $updated = $this->discountIdentifiersFromPayload($payload['codeDiscountNode'] ?? null);
+        if ($updated === null) {
+            throw new RuntimeException('Shopify birthday discount update did not return a discount identifier.');
+        }
+
+        return $updated;
+    }
+
+    /**
+     * @param  array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}  $expected
+     */
+    protected function combinesWithMatches(mixed $current, array $expected): bool
+    {
+        return $this->normalizedCombinesWith($current) === $this->normalizedCombinesWith($expected);
+    }
+
+    /**
+     * @return array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}
+     */
+    protected function normalizedCombinesWith(mixed $value): array
+    {
+        return [
+            'orderDiscounts' => (bool) data_get($value, 'orderDiscounts', false),
+            'productDiscounts' => (bool) data_get($value, 'productDiscounts', false),
+            'shippingDiscounts' => (bool) data_get($value, 'shippingDiscounts', false),
+        ];
+    }
+
+    /**
+     * @param  array<int,mixed>  $errors
      * @return array<int,string>
      */
     protected function extractUserErrors(array $errors): array
@@ -586,7 +703,7 @@ GRAPHQL;
     }
 
     /**
-     * @param array<string,mixed> $payload
+     * @param  array<string,mixed>  $payload
      */
     protected function writeAudit(BirthdayRewardIssuance $issuance, string $action, array $payload = []): void
     {
@@ -615,7 +732,7 @@ GRAPHQL;
     }
 
     /**
-     * @param array<string,mixed> $store
+     * @param  array<string,mixed>  $store
      */
     protected function storeOwnedByTenant(array $store, int $tenantId): bool
     {

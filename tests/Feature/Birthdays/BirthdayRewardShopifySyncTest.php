@@ -19,7 +19,7 @@ use App\Services\Marketing\MarketingConversionAttributionService;
 use App\Services\Marketing\MarketingProfileSyncService;
 use Illuminate\Support\Facades\Http;
 
-require_once __DIR__ . '/../ShopifyEmbeddedTestHelpers.php';
+require_once __DIR__.'/../ShopifyEmbeddedTestHelpers.php';
 
 beforeEach(function () {
     MarketingSetting::query()->updateOrCreate(
@@ -125,6 +125,12 @@ test('birthday reward activation creates exactly one shopify discount and stays 
         ->and($fresh->resolvedActivationAt())->not->toBeNull()
         ->and($lookupCalls)->toBe(1)
         ->and($createCalls)->toBe(1);
+
+    expect(data_get($createInput, 'combinesWith'))->toBe([
+        'orderDiscounts' => false,
+        'productDiscounts' => false,
+        'shippingDiscounts' => false,
+    ]);
 });
 
 test('storefront birthday payload reflects activated reward state correctly', function () {
@@ -168,7 +174,7 @@ test('storefront birthday payload reflects activated reward state correctly', fu
         ->assertJsonPath('ok', true)
         ->assertJsonPath('data.reward.issuance.reward_code', (string) $issuance->reward_code)
         ->assertJsonPath('data.reward.issuance.discount_title', 'Birthday Candle Cash 2026 #1')
-        ->assertJsonPath('data.reward.issuance.apply_path', '/discount/' . rawurlencode((string) $issuance->reward_code) . '?redirect=' . rawurlencode('/cart?forestry_reward_code=' . rawurlencode((string) $issuance->reward_code) . '&forestry_reward_kind=birthday'))
+        ->assertJsonPath('data.reward.issuance.apply_path', '/discount/'.rawurlencode((string) $issuance->reward_code).'?redirect='.rawurlencode('/cart?forestry_reward_code='.rawurlencode((string) $issuance->reward_code).'&forestry_reward_kind=birthday'))
         ->assertJsonPath('data.reward.issuance.discount_sync_status', 'synced')
         ->assertJsonPath('data.reward.issuance.is_activated', true)
         ->assertJsonPath('data.reward.issuance.is_usable', true)
@@ -198,7 +204,7 @@ test('storefront reward event endpoint logs idempotent interaction telemetry', f
 
     $payload = [
         'event_type' => 'reward_apply_click',
-        'request_key' => 'birthday-apply-' . $issuance->id,
+        'request_key' => 'birthday-apply-'.$issuance->id,
         'marketing_profile_id' => $profile->id,
         'reward_code' => (string) $issuance->reward_code,
         'reward_kind' => 'birthday',
@@ -218,7 +224,7 @@ test('storefront reward event endpoint logs idempotent interaction telemetry', f
 
     expect(MarketingStorefrontEvent::query()
         ->where('event_type', 'reward_apply_click')
-        ->where('request_key', 'birthday-apply-' . $issuance->id)
+        ->where('request_key', 'birthday-apply-'.$issuance->id)
         ->count())->toBe(1);
 });
 
@@ -236,7 +242,7 @@ test('storefront reward event endpoint accepts reward task open telemetry idempo
 
     $payload = [
         'event_type' => 'reward_task_open_click',
-        'request_key' => 'product-review-task-open-' . $profile->id,
+        'request_key' => 'product-review-task-open-'.$profile->id,
         'marketing_profile_id' => $profile->id,
         'reward_kind' => 'product_review',
         'surface' => 'rewards_page',
@@ -258,7 +264,7 @@ test('storefront reward event endpoint accepts reward task open telemetry idempo
 
     expect(MarketingStorefrontEvent::query()
         ->where('event_type', 'reward_task_open_click')
-        ->where('request_key', 'product-review-task-open-' . $profile->id)
+        ->where('request_key', 'product-review-task-open-'.$profile->id)
         ->count())->toBe(1);
 });
 
@@ -550,7 +556,7 @@ function birthdayRewardFixture(array $issuanceOverrides = [], int $suffix = 1, ?
 {
     $profile = MarketingProfile::query()->create(array_filter([
         'tenant_id' => $tenantId,
-        'first_name' => 'Birthday' . $suffix,
+        'first_name' => 'Birthday'.$suffix,
         'last_name' => 'Tester',
         'email' => "birthday-{$suffix}@example.com",
         'normalized_email' => "birthday-{$suffix}@example.com",
@@ -584,14 +590,14 @@ function birthdayRewardFixture(array $issuanceOverrides = [], int $suffix = 1, ?
 }
 
 /**
- * @param array<string,mixed> $params
+ * @param  array<string,mixed>  $params
  * @return array<string,mixed>
  */
 function birthdayAppProxySignedQuery(array $params, string $secret): array
 {
     ksort($params);
     $canonical = collect($params)
-        ->map(fn ($value, $key) => (string) $key . '=' . (is_scalar($value) || $value === null ? (string) ($value ?? '') : json_encode($value)))
+        ->map(fn ($value, $key) => (string) $key.'='.(is_scalar($value) || $value === null ? (string) ($value ?? '') : json_encode($value)))
         ->implode('');
 
     return [...$params, 'signature' => hash_hmac('sha256', $canonical, $secret)];

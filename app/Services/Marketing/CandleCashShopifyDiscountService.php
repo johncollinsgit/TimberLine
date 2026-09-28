@@ -95,8 +95,7 @@ GRAPHQL;
     public function __construct(
         protected CandleCashService $candleCashService,
         protected TenantMarketingSettingsResolver $settingsResolver
-    ) {
-    }
+    ) {}
 
     /**
      * @return array{discount_id:?string,discount_node_id:?string,store_key:string,starts_at:?string,ends_at:?\Carbon\CarbonInterface}
@@ -154,7 +153,7 @@ GRAPHQL;
 
         $errors = $this->extractUserErrors((array) ($payload['userErrors'] ?? []));
         if ($errors !== []) {
-            throw new RuntimeException('Shopify reward discount create failed: ' . implode(' | ', $errors));
+            throw new RuntimeException('Shopify reward discount create failed: '.implode(' | ', $errors));
         }
 
         $created = $this->discountIdentifiersFromPayload($payload['codeDiscountNode'] ?? null);
@@ -360,7 +359,6 @@ GRAPHQL;
     }
 
     /**
-     * @param mixed $payload
      * @return array{discount_id:?string,discount_node_id:?string,starts_at:?string,ends_at:?\Carbon\CarbonInterface,combines_with:?array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}}|null
      */
     protected function discountIdentifiersFromPayload(mixed $payload): ?array
@@ -393,7 +391,7 @@ GRAPHQL;
     }
 
     /**
-     * @param array<int,mixed> $errors
+     * @param  array<int,mixed>  $errors
      * @return array<int,string>
      */
     protected function extractUserErrors(array $errors): array
@@ -417,6 +415,18 @@ GRAPHQL;
     protected function combinesWithInput(CandleCashRedemption $redemption): array
     {
         return $this->desiredCombinationStateForTenant($this->tenantIdForRedemption($redemption));
+    }
+
+    /**
+     * Return the Shopify combination policy for another reward issued by the
+     * same tenant. Birthday cash discounts use this so both sides of a
+     * combination carry compatible Shopify settings.
+     *
+     * @return array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}
+     */
+    public function combinesWithForTenant(?int $tenantId): array
+    {
+        return $this->desiredCombinationStateForTenant($tenantId);
     }
 
     /**
@@ -455,7 +465,7 @@ GRAPHQL;
     }
 
     /**
-     * @param array<int,mixed> $selectedPromoTypes
+     * @param  array<int,mixed>  $selectedPromoTypes
      * @return array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}
      */
     protected function combinesWithFromSelectedPromoTypes(array $selectedPromoTypes): array
@@ -488,11 +498,13 @@ GRAPHQL;
 
             if (in_array($promoType, ['order', 'order_discount', 'order_discounts', 'cart', 'cart_discount', 'cart_discounts'], true)) {
                 $orderDiscounts = true;
+
                 continue;
             }
 
             if (in_array($promoType, ['product', 'product_discount', 'product_discounts', 'line_item', 'line_items', 'item', 'item_discounts'], true)) {
                 $productDiscounts = true;
+
                 continue;
             }
 
@@ -509,8 +521,8 @@ GRAPHQL;
     }
 
     /**
-     * @param array{discount_id:?string,discount_node_id:?string,starts_at:?string,ends_at:?\Carbon\CarbonInterface,combines_with:?array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}} $existingDiscount
-     * @param array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool} $desiredCombinesWith
+     * @param  array{discount_id:?string,discount_node_id:?string,starts_at:?string,ends_at:?\Carbon\CarbonInterface,combines_with:?array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}}  $existingDiscount
+     * @param  array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}  $desiredCombinesWith
      * @return array{discount_id:?string,discount_node_id:?string,starts_at:?string,ends_at:?\Carbon\CarbonInterface,combines_with:?array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}}
      */
     protected function updateDiscountCombinesWith(
@@ -537,7 +549,7 @@ GRAPHQL;
 
         $errors = $this->extractUserErrors((array) ($payload['userErrors'] ?? []));
         if ($errors !== []) {
-            throw new RuntimeException('Shopify reward discount update failed: ' . implode(' | ', $errors));
+            throw new RuntimeException('Shopify reward discount update failed: '.implode(' | ', $errors));
         }
 
         $updated = $this->discountIdentifiersFromPayload($payload['codeDiscountNode'] ?? null);
@@ -549,8 +561,7 @@ GRAPHQL;
     }
 
     /**
-     * @param mixed $currentCombinesWith
-     * @param array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool} $desiredCombinesWith
+     * @param  array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}  $desiredCombinesWith
      */
     protected function combinesWithMatches(mixed $currentCombinesWith, array $desiredCombinesWith): bool
     {
@@ -558,7 +569,6 @@ GRAPHQL;
     }
 
     /**
-     * @param mixed $combinesWith
      * @return array{orderDiscounts:bool,productDiscounts:bool,shippingDiscounts:bool}
      */
     protected function normalizedCombinesWith(mixed $combinesWith): array
@@ -598,7 +608,7 @@ GRAPHQL;
     }
 
     /**
-     * @param array<string,mixed> $store
+     * @param  array<string,mixed>  $store
      */
     protected function storeOwnedByTenant(array $store, int $tenantId): bool
     {
