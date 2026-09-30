@@ -10,6 +10,12 @@
 
 ## Launch status
 
+### Employee development installation
+
+Pair the native build with the backend release that provides assignment-scoped My Day/clock-in and group conversations. Check `/ready` after the GitHub/Forge gate before installing on employee phones. An active Collins membership and verified account are required. Team can create an email-addressed single-use invitation link and copy it for direct sharing; that action does not send an email. Email/password users need an existing provisioned account. SMS invitations remain blocked until provider readiness is verified.
+
+On one assigned employee phone and one manager/owner phone, check Google and email sign-in, password-reset email and return, workspace selection, assigned upcoming jobs, all-operational job browsing without financial fields, photo and PDF upload/reopen, company/direct/job/group messages, clock in/break/resume/out, My Hours, manager hours, and owner/admin employee controls. Repeat file and job reads after switching tenants to check isolation.
+
 - The Collins Electric core launch was approved on 2026-07-20. The business profile, guided import, final production blueprint, owner/admin roles, Work 2.0 entitlement, field-service calendar, reporting, private documents, estimator drafts, and iOS photo-upload path are ready.
 - Historical QuickBooks data remains available read-only. Scheduled synchronization is paused until verified production Intuit client credentials are configured and the connection is reauthorized. Existing imported records must not be deleted or rewritten while it is paused.
 - The Collins launch-partner agreement is prepared as an unsigned draft with editable defaults of $299 once, $59/month for six cycles, and $149/month beginning in cycle seven. Acceptance and collection remain blocked until the operator sends the immutable proposal and live Stripe readiness passes.

@@ -29,6 +29,7 @@ class EverbranchMobileEmployeeController extends Controller
         $tenant = $this->tenant($request);
         $this->manage($access, $request, $tenant);
         $validated = $request->validate(['phone' => ['nullable', 'string', 'max:40', 'required_without:email'], 'email' => ['nullable', 'email', 'max:255', 'required_without:phone'], 'role' => ['nullable', 'in:member,manager']]);
+        abort_if(($validated['role'] ?? 'member') === 'manager' && ! $this->canAdminTeam($access, $request, $tenant), 403);
         $result = $invitations->create($tenant, $this->user($request), $validated['phone'] ?? null, $validated['email'] ?? null, $validated['role'] ?? 'member');
 
         return response()->json(['ok' => true, 'invitation' => $this->invitePayload($result['invitation']), 'invite_url' => $result['invite_url']], 201);
@@ -57,6 +58,7 @@ class EverbranchMobileEmployeeController extends Controller
         $tenantModel = $this->tenant($request);
         $actor = $this->user($request);
         $this->manage($access, $request, $tenantModel);
+        abort_unless($this->canAdminTeam($access, $request, $tenantModel), 403);
         abort_unless($tenantModel->users()->whereKey((int) $employee->id)->exists(), 404);
         $validated = $request->validate(['role' => ['sometimes', 'in:member,manager,admin'], 'active' => ['sometimes', 'boolean']]);
         abort_if((int) $actor->id === (int) $employee->id && (($validated['active'] ?? true) === false), 422, 'You cannot deactivate your own workspace membership.');
@@ -89,6 +91,12 @@ class EverbranchMobileEmployeeController extends Controller
     protected function manage(FieldServiceAccessService $access, Request $request, Tenant $tenant): void
     {
         abort_unless($access->canManageJobs($this->user($request), $tenant), 403);
+    }
+
+    protected function canAdminTeam(FieldServiceAccessService $access, Request $request, Tenant $tenant): bool
+    {
+        return in_array($access->role($this->user($request), $tenant), ['owner', 'tenant_owner', 'admin'], true)
+            || $this->user($request)->role === 'platform_admin';
     }
 
     protected function tenant(Request $request): Tenant

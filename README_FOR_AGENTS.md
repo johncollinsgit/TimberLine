@@ -1,5 +1,10 @@
 # START HERE
 
+## Collins employee install release (2026-09-30)
+
+- Keep Collins' operational job browsing broad, but scope employee My Day and clock-in to assigned jobs. Financials, manager hours, and employee role changes stay server gated.
+- The native group composer needs `/field-service/channels/group` and the active teammate list. Release backend changes through GitHub/Forge before pairing a development phone build. Follow the Collins phone smoke in `docs/collins-electric-access-and-quickbooks.md`.
+
 ## Shared website catalog administration (2026-09-21)
 
 Products, Collections, Customers, and Orders have separate workspace destinations

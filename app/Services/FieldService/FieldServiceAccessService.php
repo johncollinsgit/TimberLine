@@ -56,6 +56,23 @@ class FieldServiceAccessService
             || $job->participants()->whereKey((int) $user->id)->exists();
     }
 
+    public function scopeAssignedJobs(Builder $query, User $user): Builder
+    {
+        return $query->where(fn (Builder $assigned) => $assigned
+            ->where('assigned_user_id', (int) $user->id)
+            ->orWhereHas('participants', fn (Builder $participants) => $participants->whereKey((int) $user->id))
+            ->orWhereHas('tasks', fn (Builder $tasks) => $tasks
+                ->where('assigned_user_id', (int) $user->id)
+                ->orWhereHas('assignees', fn (Builder $assignees) => $assignees->whereKey((int) $user->id))));
+    }
+
+    public function canClockJob(User $user, Tenant $tenant, FieldServiceJob $job): bool
+    {
+        return (int) $job->tenant_id === (int) $tenant->id
+            && ($this->canManageJobs($user, $tenant)
+                || $this->scopeAssignedJobs(FieldServiceJob::query()->whereKey($job->id), $user)->exists());
+    }
+
     public function canCreateTask(User $user, Tenant $tenant, FieldServiceJob $job): bool
     {
         return $this->canManageJobs($user, $tenant) || $this->canUpdateProgress($user, $tenant, $job);

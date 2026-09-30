@@ -19,7 +19,14 @@ class EverbranchMobileTeamController extends Controller
         $tenant = $this->tenant($request);
         $user = $this->user($request);
 
-        return response()->json(['contract_version' => 5, 'channels' => $team->channels($tenant, $user)->map(fn (TeamChannel $channel): array => $this->channelPayload($channel, $user))->values()]);
+        $teammates = $tenant->users()->wherePivot('membership_active', true)->where('users.id', '!=', (int) $user->id)
+            ->orderBy('users.name')->get(['users.id', 'users.name']);
+
+        return response()->json([
+            'contract_version' => 6,
+            'channels' => $team->channels($tenant, $user)->map(fn (TeamChannel $channel): array => $this->channelPayload($channel, $user))->values(),
+            'teammates' => $teammates->map(fn (User $teammate): array => ['id' => (int) $teammate->id, 'name' => $teammate->name])->values(),
+        ]);
     }
 
     public function show(Request $request, string $tenant, TeamChannel $channel, TeamCommunicationService $team): JsonResponse
@@ -63,6 +70,20 @@ class EverbranchMobileTeamController extends Controller
         $channel = $team->directChannel($tenant, $this->user($request), $other)->load(['members:id,name']);
 
         return response()->json(['channel' => $this->channelPayload($channel, $this->user($request))], 201);
+    }
+
+    public function createGroupChannel(Request $request, TeamCommunicationService $team): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'min:2', 'max:80'],
+            'member_ids' => ['required', 'array', 'min:1', 'max:49'],
+            'member_ids.*' => ['required', 'integer', 'distinct'],
+        ]);
+        $tenant = $this->tenant($request);
+        $user = $this->user($request);
+        $channel = $team->groupChannel($tenant, $user, $validated['name'], $validated['member_ids']);
+
+        return response()->json(['channel' => $this->channelPayload($channel, $user)], 201);
     }
 
     /** @return array<string,mixed> */
