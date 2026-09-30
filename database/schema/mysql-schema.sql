@@ -5931,6 +5931,11 @@ CREATE TABLE `modern_forestry_fundraiser_invoice_packages` (
   `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'review_required',
   `delivery_status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'not_sent',
   `tracking_status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'not_available',
+  `quickbooks_invoice_id` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `quickbooks_doc_number` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `quickbooks_created_at` timestamp NULL DEFAULT NULL,
+  `quickbooks_sent_at` timestamp NULL DEFAULT NULL,
+  `quickbooks_last_error` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `payer_name` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `payer_email` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `notification_email` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -5952,6 +5957,7 @@ CREATE TABLE `modern_forestry_fundraiser_invoice_packages` (
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `mffip_package_reference_uq` (`package_reference`),
+  UNIQUE KEY `mffip_tenant_qb_invoice_uq` (`tenant_id`,`quickbooks_invoice_id`),
   KEY `mffip_tenant_status_prepared_idx` (`tenant_id`,`status`,`prepared_at`),
   CONSTRAINT `mffip_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -10746,3 +10752,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (264,'2026_09_05_18
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (265,'2026_09_05_210000_add_owner_approval_to_fleet_tracking_settings',11);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (266,'2026_09_14_120000_create_trajectory_tables',12);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (267,'2026_09_21_210000_create_website_collections',13);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (268,'2026_09_30_180000_add_quickbooks_delivery_to_fundraiser_invoice_packages',14);
