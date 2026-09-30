@@ -28,6 +28,7 @@ class FieldServiceTimeClockService
     public function start(Tenant $tenant, User $user, FieldServiceJob $job, string $clientUuid, array $context = []): FieldServiceTimeSession
     {
         abort_unless((int) $job->tenant_id === (int) $tenant->id, 404);
+        abort_unless(in_array((string) $job->operational_status, ['active', 'scheduled', 'needs_details', 'blocked'], true), 422, 'Choose a current job to clock in.');
         $this->workforce->assertClockingAllowed($tenant, $user, (int) $job->id);
 
         return DB::transaction(function () use ($tenant, $user, $job, $clientUuid, $context): FieldServiceTimeSession {

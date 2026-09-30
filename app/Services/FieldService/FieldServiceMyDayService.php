@@ -36,9 +36,14 @@ class FieldServiceMyDayService
             ->notGeneratedQuickBooksInvoice()
             ->with(['assignedUser:id,name', 'participants:id,name'])
             ->withCount(['tasks', 'notes']);
-        $this->access->scopeVisibleJobs($base, $user, $tenant);
+        if ($this->access->canManageJobs($user, $tenant)) {
+            $this->access->scopeVisibleJobs($base, $user, $tenant);
+        } else {
+            $this->access->scopeAssignedJobs($base, $user);
+        }
 
-        $today = (clone $base)->whereBetween('scheduled_for', [$start, $end])->orderBy('scheduled_for')->limit(50)->get();
+        $today = (clone $base)->whereBetween('scheduled_for', [$start, $end])
+            ->whereNotIn('operational_status', ['complete', 'canceled', 'history'])->orderBy('scheduled_for')->limit(50)->get();
         $upcoming = (clone $base)->whereBetween('scheduled_for', [$end->copy()->addSecond(), $upcomingEnd])
             ->whereNotIn('operational_status', ['complete', 'canceled', 'history'])->orderBy('scheduled_for')->limit(20)->get();
         $tasks = FieldServiceTask::query()->forTenantId((int) $tenant->id)
@@ -57,7 +62,7 @@ class FieldServiceMyDayService
         $tasksHaveMore = $tasks->count() > 30;
         $tasks = $tasks->take(30)->values();
         $attention = collect();
-        if ($this->access->canViewAllJobs($user, $tenant)) {
+        if ($this->access->canManageJobs($user, $tenant)) {
             $attention = (clone $base)->whereIn('operational_status', ['needs_details', 'blocked'])
                 ->orderByRaw("case when operational_status = 'blocked' then 0 else 1 end")
                 ->orderByDesc('updated_at')->limit(20)->get();

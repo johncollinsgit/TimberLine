@@ -1,5 +1,9 @@
 # SYSTEM SNAPSHOT
 
+## Collins employee mobile release (2026-09-30)
+
+The production field API already supports private resumable PDF uploads, photo payload retries, guarded galleries, and manager time review. The employee release adds assignment-scoped My Day and clock-in while preserving Collins' all-operational job browsing, active-teammate direct and group conversations, and owner/admin-only employee role changes. The companion native build exposes assigned upcoming jobs, group composition, password reset, and a guarded full-image gallery fallback. Deploy the backend through the GitHub test/build gate before installing the paired native build; verify `/ready` and the phone smoke in `docs/collins-electric-access-and-quickbooks.md`.
+
 ## Shared website catalog administration (2026-09-21)
 
 Products, Collections, Customers, and Orders have separate workspace destinations

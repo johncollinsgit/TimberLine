@@ -230,6 +230,7 @@ class EverbranchMobileFieldServiceController extends Controller
             'financials' => $owner ? $job->financialDocuments->map(fn ($document): array => ['id' => (int) $document->id, 'type' => $document->document_type, 'number' => $document->document_number, 'status' => $document->status, 'transaction_date' => $document->transaction_date?->toDateString(), 'total' => (float) $document->total_amount, 'balance' => (float) $document->balance])->values() : [],
             'can_manage' => $access->canManageJobs($user, $tenantModel),
             'can_update_progress' => $access->canUpdateProgress($user, $tenantModel, $job),
+            'can_clock' => $access->canClockJob($user, $tenantModel, $job) && in_array((string) $job->operational_status, ['active', 'scheduled', 'needs_details', 'blocked'], true),
             'viewer' => ['role' => $access->role($user, $tenantModel), 'capabilities' => $access->capabilities($user, $tenantModel)],
             'profile' => $profiles->forTenant($tenantModel),
         ]]);
@@ -1325,7 +1326,7 @@ class EverbranchMobileFieldServiceController extends Controller
     protected function applyFilter(Builder $query, string $filter, User $user): void
     {
         match ($filter) {
-            'mine' => $query->where(fn (Builder $mine) => $mine->where('assigned_user_id', $user->id)->orWhereHas('participants', fn (Builder $participants) => $participants->whereKey($user->id))),
+            'mine' => app(FieldServiceAccessService::class)->scopeAssignedJobs($query, $user),
             'quotes' => $query->where('operational_status', 'quote'),
             'history' => $query->whereIn('operational_status', ['complete', 'canceled', 'history']),
             default => $query->whereIn('operational_status', ['active', 'scheduled', 'needs_details', 'blocked']),
