@@ -41,7 +41,7 @@ store, host, secret, or QuickBooks identifier in the Zapier payload.
 ## Operating boundary
 
 - Do not use legacy `orders`, Shopify customers/orders/checkout, Website
-  Commerce, QuickBooks write-back, or platform `tenant_direct_invoices` for
+  Commerce or platform `tenant_direct_invoices` for
   fundraiser orders.
 - Imported order data is tenant-scoped to Modern Forestry and idempotent. The
   endpoint does not accept a Zapier-supplied tenant, store, host, QuickBooks
@@ -60,8 +60,21 @@ store, host, secret, or QuickBooks identifier in the Zapier payload.
    income account, and tax code before creating and sending the actual
    QuickBooks invoice in QuickBooks.
 
-The package shows `review_required`, `not_sent`, and `not_available` for
-tracking. Those are honest status values, not provider telemetry.
+When the cadence is **Monthly review package on the last day of the month**,
+Everbranch runs at 5:00 PM America/New_York on the final calendar day. It groups
+only approved Zapier orders whose source date is in that calendar month, keeps
+currencies separate, and creates the same immutable review package. It does not
+approve orders. Default-off QuickBooks write and send gates control the later
+provider actions independently.
+
+The package begins at `review_required`, `not_sent`, and `not_available`. With
+the write gate and exact customer/candle/shipping item IDs configured, the
+command creates a deterministic `BSF-MMM-YYYY` invoice through the tenant-owned
+OAuth connection. With the separate send gate enabled, it invokes Intuit's
+invoice-send endpoint and stores the provider invoice ID, document number, and
+created/sent timestamps. Delivery is currently forced to the controlled
+`info@theforestrystudio.com` address through the dedicated send-to setting;
+replays reuse that provider invoice.
 
 ## Prerequisites before enabling delivery or QuickBooks write-back
 
@@ -70,15 +83,11 @@ tracking. Those are honest status values, not provider telemetry.
    replay test.
 3. Confirm an approved tax decision and how supplied tax/shipping values are
    reconciled.
-4. Formally expand the QuickBooks integration from its current read-only
-   contract with explicit customer, product/service, income-account, tax-code,
-   permissions, audit, error/replay, send, webhook, and rollback approvals.
-5. Use a controlled test invoice before production delivery.
+4. Configure the exact QuickBooks customer, candle item, and shipping item IDs.
+5. Enable the write gate for a controlled draft test, verify it in QuickBooks,
+   and only then enable the separate send gate.
 
 ## Delivery/open status
 
-QuickBooks send/payment/webhook telemetry is not connected to this lane. Do not
-claim an invoice was sent, opened, or paid from Everbranch until a separately
-approved QuickBooks write-back and telemetry contract exists. If open visibility
-is later required, document the provider telemetry and customer disclosure
-before enabling it.
+Everbranch records a send only after Intuit's send endpoint succeeds. Payment
+and recipient-open telemetry are not connected; do not infer either state.

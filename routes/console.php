@@ -171,6 +171,16 @@ Schedule::command('marketing:send-weekly-rewards-wishlist-summary', [
     ->withoutOverlapping(120)
     ->runInBackground();
 
+// Modern Forestry fundraiser orders arrive through the signed Zapier intake.
+// Only already-approved source amounts are packaged. QuickBooks creation and
+// controlled delivery stay inert unless both production gates and exact
+// Modern Forestry customer/item mappings are configured.
+Schedule::command('modern-forestry:prepare-fundraiser-monthly-packages', ['--send' => true])
+    ->lastDayOfMonth('17:00')
+    ->timezone('America/New_York')
+    ->withoutOverlapping(30)
+    ->runInBackground();
+
 Schedule::command('operator:send-weekly-snapshot')
     ->weeklyOn(1, '08:00')
     ->timezone('America/New_York')

@@ -115,6 +115,24 @@ class QuickBooksOnlineClient
             ->json();
     }
 
+    /** @param array<string,mixed> $invoice */
+    public function createInvoice(array $invoice, string $requestId): array
+    {
+        return $this->request()->post('/v3/company/'.$this->realmId().'/invoice?'.http_build_query([
+            'minorversion' => $this->minorVersion,
+            'requestid' => $requestId,
+        ]), $invoice)->throw()->json();
+    }
+
+    public function sendInvoice(string $invoiceId, string $recipient): array
+    {
+        return $this->request()->withBody('', 'application/octet-stream')
+            ->post('/v3/company/'.$this->realmId().'/invoice/'.rawurlencode($invoiceId).'/send?'.http_build_query([
+                'sendTo' => $recipient,
+                'minorversion' => $this->minorVersion,
+            ]))->throw()->json();
+    }
+
     public function realmId(): string
     {
         $realmId = trim((string) ($this->connection->external_account_secret

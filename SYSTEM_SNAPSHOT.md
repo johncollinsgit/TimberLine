@@ -181,9 +181,11 @@ Trajectory now opens with Personal, Business, and, when both authorized spaces e
   external order ID. It is never a Shopify, Website Commerce, or legacy-order
   record.
 - Operators manually approve each source amount before they can prepare an
-  immutable CSV accounting-review package. The package is expressly not a
-  QuickBooks invoice: it does not create/send a QuickBooks record, collect a
-  payment, email anyone, decide taxability, or report an invoice open. See
+  immutable CSV accounting-review package. A final-day monthly cadence creates
+  deterministic `BSF-MMM-YYYY` packages. Separate default-off environment
+  gates can create and send the reviewed invoice through the tenant-owned
+  QuickBooks OAuth connection. Exact customer/item mappings are mandatory,
+  taxed packages fail closed, and persisted provider IDs make retries safe. See
   `docs/operations/modern-forestry-fundraiser-order-invoicing-runbook.md`.
 
 ## Modern Forestry embedded app-base compatibility (2026-08-19)

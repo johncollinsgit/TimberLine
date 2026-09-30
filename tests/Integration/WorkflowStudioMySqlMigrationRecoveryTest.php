@@ -129,6 +129,23 @@ it('resumes Modern Forestry fundraiser preparation after the order table is reta
         ->and(Schema::hasIndex('modern_forestry_fundraiser_invoice_packages', 'mffip_tenant_status_prepared_idx'))->toBeTrue();
 });
 
+it('resumes fundraiser QuickBooks delivery columns after a partial MySQL migration', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+    $base = require database_path('migrations/2026_08_19_140000_create_modern_forestry_fundraiser_invoice_preparation_tables.php');
+    $base->up();
+    if (! Schema::hasColumn('modern_forestry_fundraiser_invoice_packages', 'quickbooks_invoice_id')) {
+        Schema::table('modern_forestry_fundraiser_invoice_packages', fn (Blueprint $table) => $table->string('quickbooks_invoice_id', 190)->nullable());
+    }
+    $migration = require database_path('migrations/2026_09_30_180000_add_quickbooks_delivery_to_fundraiser_invoice_packages.php');
+    $migration->up();
+    $migration->up();
+    expect(Schema::hasColumn('modern_forestry_fundraiser_invoice_packages', 'quickbooks_sent_at'))->toBeTrue()
+        ->and(Schema::hasColumn('modern_forestry_fundraiser_invoice_packages', 'quickbooks_last_error'))->toBeTrue()
+        ->and(Schema::hasIndex('modern_forestry_fundraiser_invoice_packages', 'mffip_tenant_qb_invoice_uq'))->toBeTrue();
+});
+
 it('runs cleanly and recovers the partial workflow studio migration on mysql', function (): void {
     if (DB::connection()->getDriverName() !== 'mysql') {
         $this->markTestSkipped('This recovery contract requires MySQL.');

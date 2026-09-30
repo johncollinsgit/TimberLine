@@ -13,7 +13,7 @@ class ModernForestryFundraiserInvoicePackage extends Model
 {
     use HasTenantScope;
 
-    public const STATUSES = ['review_required'];
+    public const STATUSES = ['review_required', 'quickbooks_created', 'sent'];
 
     protected $guarded = [];
 
@@ -33,6 +33,8 @@ class ModernForestryFundraiserInvoicePackage extends Model
             'invoice_lines' => 'encrypted:array',
             'review_notes' => 'array',
             'prepared_at' => 'datetime',
+            'quickbooks_created_at' => 'datetime',
+            'quickbooks_sent_at' => 'datetime',
         ];
     }
 }

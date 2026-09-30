@@ -99,4 +99,8 @@ return [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['collection table retained before membership table creation'],
     ],
+    '2026_09_30_180000_add_quickbooks_delivery_to_fundraiser_invoice_packages.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['partial QuickBooks delivery columns retained before the remaining columns and unique index'],
+    ],
 ];

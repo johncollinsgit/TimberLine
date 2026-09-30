@@ -60,8 +60,42 @@ class ModernForestryFundraiserInvoicePreparationService
         });
     }
 
+    /** @return list<ModernForestryFundraiserInvoicePackage> */
+    public function prepareApprovedMonth(Tenant $tenant, \Carbon\CarbonImmutable $month, string $actor): array
+    {
+        $settings = (array) data_get($this->settings->forTenant((int) $tenant->id), 'settings', []);
+        if (($settings['invoice_cadence'] ?? null) !== 'monthly_last_day') {
+            return [];
+        }
+
+        $baseReference = 'BSF-'.strtoupper($month->format('M')).'-'.$month->format('Y');
+        $existing = ModernForestryFundraiserInvoicePackage::query()->forTenant($tenant)
+            ->where(fn ($query) => $query->where('package_reference', $baseReference)->orWhere('package_reference', 'like', $baseReference.'-%'))
+            ->orderBy('id')->get();
+        if ($existing->isNotEmpty()) {
+            return $existing->all();
+        }
+
+        $groups = ModernForestryFundraiserOrder::query()
+            ->forTenant($tenant)
+            ->where('status', 'approved')
+            ->whereBetween('source_created_at', [$month->startOfMonth(), $month->endOfMonth()])
+            ->orderBy('id')
+            ->get()->groupBy('currency');
+
+        return $groups
+            ->map(fn ($orders, $currency) => $this->prepare(
+                $tenant,
+                $orders->pluck('id')->all(),
+                $actor,
+                $baseReference.($groups->count() > 1 ? '-'.strtoupper((string) $currency) : '')
+            ))
+            ->values()
+            ->all();
+    }
+
     /** @param list<int> $orderIds */
-    public function prepare(Tenant $tenant, array $orderIds, string $actor): ModernForestryFundraiserInvoicePackage
+    public function prepare(Tenant $tenant, array $orderIds, string $actor, ?string $packageReference = null): ModernForestryFundraiserInvoicePackage
     {
         $settings = (array) data_get($this->settings->forTenant((int) $tenant->id), 'settings', []);
         if (! filled($settings['fundraiser_name'] ?? null) || ! filled($settings['invoice_payer_name'] ?? null) || ! filled($settings['invoice_payer_email'] ?? null)) {
@@ -76,7 +110,13 @@ class ModernForestryFundraiserInvoicePreparationService
             throw ValidationException::withMessages(['order_ids' => ['The current cadence is one package per order. Select one order or change the cadence.']]);
         }
 
-        return DB::transaction(function () use ($tenant, $settings, $orderIds, $actor): ModernForestryFundraiserInvoicePackage {
+        return DB::transaction(function () use ($tenant, $settings, $orderIds, $actor, $packageReference): ModernForestryFundraiserInvoicePackage {
+            if (filled($packageReference)) {
+                $existing = ModernForestryFundraiserInvoicePackage::query()->forTenant($tenant)->where('package_reference', $packageReference)->first();
+                if ($existing) {
+                    return $existing;
+                }
+            }
             $orders = ModernForestryFundraiserOrder::query()
                 ->forTenant($tenant)
                 ->whereIn('id', $orderIds)
@@ -121,7 +161,7 @@ class ModernForestryFundraiserInvoicePreparationService
             $invoiceDate = today();
             $package = ModernForestryFundraiserInvoicePackage::query()->create([
                 'tenant_id' => $tenant->id,
-                'package_reference' => 'MF-FUND-'.now()->format('Ymd').'-'.strtoupper(Str::random(8)),
+                'package_reference' => $packageReference ?: 'MF-FUND-'.now()->format('Ymd').'-'.strtoupper(Str::random(8)),
                 'status' => 'review_required',
                 'delivery_status' => 'not_sent',
                 'tracking_status' => 'not_available',
@@ -183,6 +223,10 @@ class ModernForestryFundraiserInvoicePreparationService
             'status' => $package->status,
             'delivery_status' => $package->delivery_status,
             'tracking_status' => $package->tracking_status,
+            'quickbooks_invoice_id' => $package->quickbooks_invoice_id,
+            'quickbooks_doc_number' => $package->quickbooks_doc_number,
+            'quickbooks_created_at' => $package->quickbooks_created_at?->toIso8601String(),
+            'quickbooks_sent_at' => $package->quickbooks_sent_at?->toIso8601String(),
             'prepared_at' => $package->prepared_at?->toIso8601String(),
         ];
     }
