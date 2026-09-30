@@ -74,7 +74,7 @@ class ModernForestryFundraiserInvoiceSettingsService
                     'updated_by' => $updatedBy,
                     'updated_at' => now()->toIso8601String(),
                 ],
-                'description' => 'Modern Forestry third-party fundraiser Zapier intake and accounting-review package settings. It does not enable QuickBooks write-back, payment collection, tax calculation, invoice delivery, or recipient-open tracking.',
+                'description' => 'Modern Forestry third-party fundraiser Zapier intake and accounting-review package settings. QuickBooks creation and controlled invoice delivery require separate production gates and exact mappings; payment collection, tax calculation, and recipient-open tracking remain outside this lane.',
             ]
         );
     }
@@ -98,7 +98,7 @@ class ModernForestryFundraiserInvoiceSettingsService
             ['tenant_id' => $tenantId, 'key' => self::SETTING_KEY],
             [
                 'value' => $value,
-                'description' => 'Modern Forestry third-party fundraiser Zapier intake and accounting-review package settings. It does not enable QuickBooks write-back, payment collection, tax calculation, invoice delivery, or recipient-open tracking.',
+                'description' => 'Modern Forestry third-party fundraiser Zapier intake and accounting-review package settings. QuickBooks creation and controlled invoice delivery require separate production gates and exact mappings; payment collection, tax calculation, and recipient-open tracking remain outside this lane.',
             ]
         );
 
@@ -137,7 +137,7 @@ class ModernForestryFundraiserInvoiceSettingsService
             'invoice_payer_name' => $this->text($payload['invoice_payer_name'] ?? null),
             'invoice_payer_email' => $this->email($payload['invoice_payer_email'] ?? null),
             'notification_email' => $this->email($payload['notification_email'] ?? null) ?? $defaults['notification_email'],
-            'invoice_cadence' => in_array($payload['invoice_cadence'] ?? null, ['per_order', 'weekly_summary', 'campaign_close'], true)
+            'invoice_cadence' => in_array($payload['invoice_cadence'] ?? null, ['per_order', 'weekly_summary', 'campaign_close', 'monthly_last_day'], true)
                 ? $payload['invoice_cadence']
                 : $defaults['invoice_cadence'],
             'payment_terms_days' => max(1, min(90, (int) ($payload['payment_terms_days'] ?? $defaults['payment_terms_days']))),

@@ -385,7 +385,7 @@ class ShopifyEmbeddedSettingsController extends Controller
 
         return response()->json([
             'ok' => true,
-            'message' => 'Fundraiser invoice settings saved. Zapier stays token-protected; QuickBooks creation, payment requests, delivery, and opening tracking are not enabled.',
+            'message' => 'Fundraiser invoice settings saved. Zapier stays token-protected; QuickBooks creation and sending remain controlled by separate production gates.',
             'data' => [
                 'tenant_id' => $tenantId,
                 'settings' => $settingsService->forTenant($tenantId),
@@ -946,7 +946,7 @@ class ShopifyEmbeddedSettingsController extends Controller
             'invoice_payer_name' => ['nullable', 'string', 'max:160'],
             'invoice_payer_email' => ['nullable', 'email', 'max:255'],
             'notification_email' => ['required', 'email', 'max:255'],
-            'invoice_cadence' => ['required', 'in:per_order,weekly_summary,campaign_close'],
+            'invoice_cadence' => ['required', 'in:per_order,weekly_summary,campaign_close,monthly_last_day'],
             'payment_terms_days' => ['required', 'integer', 'min:1', 'max:90'],
             'shipping_treatment' => ['required', 'in:source_amount,manual_review'],
             'tax_handling' => ['required', 'in:manual_review_required,source_amount_pending_review'],

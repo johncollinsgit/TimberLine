@@ -57,7 +57,7 @@ test('modern forestry retail settings configure fundraiser invoice contacts with
         ->assertOk()
         ->assertSeeText('Fundraiser Order Invoicing')
         ->assertSeeText('info@theforestrystudio.com')
-        ->assertSeeText('Delivery disabled');
+        ->assertSeeText('QuickBooks gated');
 
     $payload = [
         'fundraiser_name' => 'Cozy Sheets Fundraiser',
@@ -80,7 +80,7 @@ test('modern forestry retail settings configure fundraiser invoice contacts with
         ->assertJsonPath('data.settings.settings.invoice_payer_email', 'payables@cozysheets.example')
         ->assertJsonPath('data.settings.settings.notification_email', 'info@theforestrystudio.com')
         ->assertJsonPath('data.settings.configured', true)
-        ->assertJsonPath('message', 'Fundraiser invoice settings saved. Zapier stays token-protected; QuickBooks creation, payment requests, delivery, and opening tracking are not enabled.');
+        ->assertJsonPath('message', 'Fundraiser invoice settings saved. Zapier stays token-protected; QuickBooks creation and sending remain controlled by separate production gates.');
 
     $stored = TenantMarketingSetting::query()
         ->where('tenant_id', $tenant->id)

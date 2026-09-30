@@ -188,6 +188,12 @@ return [
         'scopes' => env('QUICKBOOKS_SCOPES', 'com.intuit.quickbooks.accounting'),
         'minor_version' => (int) env('QUICKBOOKS_MINOR_VERSION', 75),
         'oauth_state_cache_store' => env('QUICKBOOKS_OAUTH_STATE_CACHE_STORE', env('CACHE_STORE', 'file')),
+        'fundraiser_writes_enabled' => (bool) env('MODERN_FORESTRY_FUNDRAISER_QBO_WRITES_ENABLED', false),
+        'fundraiser_send_enabled' => (bool) env('MODERN_FORESTRY_FUNDRAISER_QBO_SEND_ENABLED', false),
+        'fundraiser_customer_id' => env('MODERN_FORESTRY_FUNDRAISER_QBO_CUSTOMER_ID'),
+        'fundraiser_item_id' => env('MODERN_FORESTRY_FUNDRAISER_QBO_ITEM_ID'),
+        'fundraiser_shipping_item_id' => env('MODERN_FORESTRY_FUNDRAISER_QBO_SHIPPING_ITEM_ID'),
+        'fundraiser_send_to' => env('MODERN_FORESTRY_FUNDRAISER_QBO_SEND_TO', 'info@theforestrystudio.com'),
     ],
 
     // Instagram API with Instagram Login. Credentials are application-wide while

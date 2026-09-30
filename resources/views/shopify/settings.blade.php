@@ -534,7 +534,7 @@
                     <div>
                         <h2>Fundraiser Order Invoicing</h2>
                         <p>
-                            Record who the fundraiser company is, who receives the payable invoice, and how its orders should be grouped. Zapier orders enter a manual-review queue; payment collection, QuickBooks invoice creation, email delivery, and recipient-open tracking remain off.
+                            Record who the fundraiser company is, who receives the payable invoice, and how its orders should be grouped. Zapier orders enter a manual-review queue before the separately gated QuickBooks create-and-send step.
                         </p>
                     </div>
                     <div class="settings-badges" id="fundraiser-invoice-settings-status"></div>
@@ -579,6 +579,7 @@
                             <option value="per_order" @selected(($fundraiserSettings['invoice_cadence'] ?? 'per_order') === 'per_order')>One invoice per imported order</option>
                             <option value="weekly_summary" @selected(($fundraiserSettings['invoice_cadence'] ?? '') === 'weekly_summary')>Weekly summary invoice</option>
                             <option value="campaign_close" @selected(($fundraiserSettings['invoice_cadence'] ?? '') === 'campaign_close')>One invoice when the campaign closes</option>
+                            <option value="monthly_last_day" @selected(($fundraiserSettings['invoice_cadence'] ?? '') === 'monthly_last_day')>Monthly review package on the last day of the month</option>
                         </select>
                         <small>Choose the intended grouping now; no invoice is created from this setting alone.</small>
                         <div class="settings-field-error" data-error-for="invoice_cadence"></div>
@@ -610,7 +611,7 @@
                 </form>
 
                 <div class="settings-provider-help">
-                    <strong>Current safety status:</strong> Zapier orders are encrypted and duplicate-protected, then reviewed before an accountant-review package can be downloaded. Everbranch does not create, send, charge, or track a QuickBooks invoice.
+                    <strong>Current safety status:</strong> Zapier orders are encrypted and duplicate-protected, then reviewed before a monthly package is eligible for the separately gated QuickBooks create-and-send step. Payment and recipient-open tracking are not inferred.
                 </div>
 
                 <div class="settings-actions">
@@ -1268,7 +1269,7 @@
                     invoice_payer_name: String(source.invoice_payer_name || ""),
                     invoice_payer_email: String(source.invoice_payer_email || ""),
                     notification_email: String(source.notification_email || "info@theforestrystudio.com"),
-                    invoice_cadence: ["per_order", "weekly_summary", "campaign_close"].includes(source.invoice_cadence) ? source.invoice_cadence : "per_order",
+                    invoice_cadence: ["per_order", "weekly_summary", "campaign_close", "monthly_last_day"].includes(source.invoice_cadence) ? source.invoice_cadence : "per_order",
                     payment_terms_days: Number.parseInt(source.payment_terms_days, 10) || 14,
                     shipping_treatment: ["source_amount", "manual_review"].includes(source.shipping_treatment) ? source.shipping_treatment : "source_amount",
                     tax_handling: ["manual_review_required", "source_amount_pending_review"].includes(source.tax_handling) ? source.tax_handling : "manual_review_required",
@@ -2418,7 +2419,7 @@
                 const configured = Boolean(settings.fundraiser_name && settings.invoice_payer_name && settings.invoice_payer_email);
                 fundraiserInvoiceStatus.innerHTML = `
                     <span class="settings-badge ${configured ? "settings-badge--configured" : "settings-badge--warn"}">${configured ? "Contacts configured" : "Contacts needed"}</span>
-                    <span class="settings-badge settings-badge--warn">Delivery disabled</span>
+                    <span class="settings-badge settings-badge--warn">QuickBooks gated</span>
                 `;
             }
 
