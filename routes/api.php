@@ -24,6 +24,9 @@ Route::post('/integrations/level-foundations/transcriptions', [LevelFoundationsT
     ->name('integrations.level-foundations.transcriptions.store');
 
 Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
+    Route::post('/auth/password', [EverbranchMobileAuthController::class, 'password'])
+        ->middleware('throttle:5,1')
+        ->name('auth.password');
     Route::post('/auth/exchange', [EverbranchMobileAuthController::class, 'exchange'])
         ->middleware('throttle:20,1')
         ->name('auth.exchange');

@@ -98,6 +98,79 @@ test('browser authorization creates a short lived pkce code and returns to the a
         ->and(MobileAuthorizationCode::query()->first()?->expires_at?->isFuture())->toBeTrue();
 });
 
+test('native email password sign in issues a mobile token without a browser session', function (): void {
+    $user = User::factory()->create(['is_active' => true, 'email_verified_at' => now()]);
+
+    $response = $this->postJson('/api/mobile/v1/auth/password', [
+        'email' => $user->email,
+        'password' => 'password',
+        'device_name' => 'Review iPhone',
+    ]);
+
+    $response->assertOk()->assertJsonPath('user.id', $user->id);
+    expect($response->json('access_token'))->toBeString()
+        ->and($user->tokens()->where('name', 'Everbranch mobile:Review iPhone')->count())->toBe(1);
+});
+
+test('native email password sign in rejects invalid and unverified accounts', function (): void {
+    $user = User::factory()->create(['is_active' => true, 'email_verified_at' => now()]);
+    $this->postJson('/api/mobile/v1/auth/password', ['email' => $user->email, 'password' => 'wrong'])
+        ->assertUnprocessable()->assertJsonValidationErrors('email');
+
+    $user->forceFill(['email_verified_at' => null])->save();
+    $this->postJson('/api/mobile/v1/auth/password', ['email' => $user->email, 'password' => 'password'])
+        ->assertUnprocessable()->assertJsonValidationErrors('email');
+    expect($user->tokens()->count())->toBe(0);
+});
+
+test('native email password sign in rejects a disabled account', function (): void {
+    $user = User::factory()->create(['is_active' => false, 'email_verified_at' => now()]);
+    $this->postJson('/api/mobile/v1/auth/password', ['email' => $user->email, 'password' => 'password'])
+        ->assertUnprocessable()->assertJsonValidationErrors('email');
+    expect($user->tokens()->count())->toBe(0);
+});
+
+test('native email password sign in requires the existing two factor code or a single use recovery code', function (): void {
+    $secret = app(\Laravel\Fortify\Contracts\TwoFactorAuthenticationProvider::class)->generateSecretKey();
+    $user = User::factory()->create([
+        'is_active' => true,
+        'email_verified_at' => now(),
+        'two_factor_secret' => encrypt($secret),
+        'two_factor_recovery_codes' => encrypt(json_encode(['mobile-recovery-code'], JSON_THROW_ON_ERROR)),
+        'two_factor_confirmed_at' => now(),
+    ]);
+    $credentials = ['email' => $user->email, 'password' => 'password'];
+
+    $this->postJson('/api/mobile/v1/auth/password', $credentials)
+        ->assertStatus(202)->assertJsonPath('requires_two_factor', true);
+    expect($user->tokens()->count())->toBe(0);
+
+    $this->postJson('/api/mobile/v1/auth/password', $credentials + ['two_factor_code' => 'wrong'])
+        ->assertUnprocessable()->assertJsonValidationErrors('two_factor_code');
+    $this->postJson('/api/mobile/v1/auth/password', $credentials + ['two_factor_code' => 'mobile-recovery-code'])
+        ->assertOk()->assertJsonPath('user.id', $user->id);
+    $this->postJson('/api/mobile/v1/auth/password', $credentials + ['two_factor_code' => 'mobile-recovery-code'])
+        ->assertUnprocessable()->assertJsonValidationErrors('two_factor_code');
+    expect($user->tokens()->count())->toBe(1);
+});
+
+test('native email password sign in accepts a valid authenticator code', function (): void {
+    $secret = app(\Laravel\Fortify\Contracts\TwoFactorAuthenticationProvider::class)->generateSecretKey();
+    $user = User::factory()->create([
+        'is_active' => true,
+        'email_verified_at' => now(),
+        'two_factor_secret' => encrypt($secret),
+        'two_factor_confirmed_at' => now(),
+    ]);
+    $code = app(\PragmaRX\Google2FA\Google2FA::class)->getCurrentOtp($secret);
+
+    $this->postJson('/api/mobile/v1/auth/password', [
+        'email' => $user->email,
+        'password' => 'password',
+        'two_factor_code' => $code,
+    ])->assertOk()->assertJsonPath('user.id', $user->id);
+});
+
 test('guest mobile email sign in preserves pkce intent through fortify login', function (): void {
     config()->set('app.url', 'https://app.theeverbranch.com');
     config()->set('tenancy.landlord.primary_host', 'app.theeverbranch.com');

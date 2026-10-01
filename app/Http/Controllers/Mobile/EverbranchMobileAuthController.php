@@ -8,11 +8,69 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Laravel\Fortify\Contracts\TwoFactorAuthenticationProvider;
+use Laravel\Fortify\Fortify;
 
 class EverbranchMobileAuthController extends Controller
 {
+    public function password(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'email' => ['required', 'email', 'max:255'],
+            'password' => ['required', 'string'],
+            'two_factor_code' => ['nullable', 'string', 'max:100'],
+            'device_name' => ['nullable', 'string', 'max:160'],
+        ]);
+
+        $user = User::query()->where('email', Str::lower($validated['email']))->first();
+        if (! $user instanceof User || ! Hash::check($validated['password'], (string) $user->password)) {
+            throw ValidationException::withMessages(['email' => 'The email or password is incorrect.']);
+        }
+        if ($user->is_active === false) {
+            throw ValidationException::withMessages(['email' => 'This account is disabled. Contact an administrator.']);
+        }
+        if (! $user->hasVerifiedEmail()) {
+            throw ValidationException::withMessages(['email' => 'Verify your email address before signing in.']);
+        }
+
+        if ($user->hasEnabledTwoFactorAuthentication()) {
+            $code = trim((string) ($validated['two_factor_code'] ?? ''));
+            if ($code === '') {
+                return response()->json(['requires_two_factor' => true], 202);
+            }
+
+            $validAuthenticatorCode = app(TwoFactorAuthenticationProvider::class)->verify(
+                Fortify::currentEncrypter()->decrypt($user->two_factor_secret),
+                $code
+            );
+            if (! $validAuthenticatorCode) {
+                $validRecoveryCode = DB::transaction(function () use ($user, $code): bool {
+                    $locked = User::query()->whereKey($user->id)->lockForUpdate()->first();
+                    if (! $locked instanceof User || ! $locked->two_factor_recovery_codes) {
+                        return false;
+                    }
+                    foreach ($locked->recoveryCodes() as $recoveryCode) {
+                        if (hash_equals($recoveryCode, $code)) {
+                            $locked->replaceRecoveryCode($recoveryCode);
+
+                            return true;
+                        }
+                    }
+
+                    return false;
+                });
+                if (! $validRecoveryCode) {
+                    throw ValidationException::withMessages(['two_factor_code' => 'The authenticator or recovery code is incorrect.']);
+                }
+            }
+        }
+
+        return $this->tokenResponse($user, $validated['device_name'] ?? 'Everbranch mobile');
+    }
+
     public function exchange(Request $request): JsonResponse
     {
         $validated = $request->validate([
