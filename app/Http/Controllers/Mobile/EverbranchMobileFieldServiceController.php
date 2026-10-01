@@ -102,9 +102,7 @@ class EverbranchMobileFieldServiceController extends Controller
                 'assets as documents_count' => fn ($assets) => $assets->where('mime_type', 'not like', 'image/%'),
             ])
             ->withSum(['timeEntries as manual_minutes' => fn ($entries) => $entries->whereIn('status', ['submitted', 'approved'])], 'duration_minutes')
-            ->withSum(['timeEntries as viewer_manual_minutes' => fn ($entries) => $entries->where('user_id', (int) $user->id)->whereIn('status', ['submitted', 'approved'])], 'duration_minutes')
-            ->withSum(['timeSessions as timer_seconds' => fn ($sessions) => $sessions->whereIn('status', ['submitted', 'approved'])], 'duration_seconds')
-            ->withSum(['timeSessions as viewer_timer_seconds' => fn ($sessions) => $sessions->where('user_id', (int) $user->id)->whereIn('status', ['submitted', 'approved'])], 'duration_seconds');
+            ->withSum(['timeSessions as timer_seconds' => fn ($sessions) => $sessions->whereIn('status', ['submitted', 'approved'])], 'duration_seconds');
         if ($owner) {
             $query->withSum('financialDocuments as financial_total', 'total_amount')
                 ->withSum('financialDocuments as financial_balance', 'balance');
@@ -148,8 +146,8 @@ class EverbranchMobileFieldServiceController extends Controller
                 'viewer' => ['role' => $access->role($user, $tenant), 'capabilities' => [...$access->capabilities($user, $tenant), 'manage_job_drafts' => $owner]],
                 'view' => 'calendar', 'filter' => $filter, 'month' => $month->format('Y-m'),
                 'days' => $scheduled->groupBy(fn (FieldServiceJob $job): string => $job->scheduled_for?->toDateString() ?? '')
-                    ->map(fn ($jobs) => $jobs->map(fn (FieldServiceJob $job): array => $this->summary($job, $readiness, $owner, (int) $user->id))->values())->all(),
-                'unscheduled' => $unscheduled->map(fn (FieldServiceJob $job): array => $this->summary($job, $readiness, $owner, (int) $user->id))->values(),
+                    ->map(fn ($jobs) => $jobs->map(fn (FieldServiceJob $job): array => $this->summary($job, $readiness, $owner, $access->canManageJobs($user, $tenant)))->values())->all(),
+                'unscheduled' => $unscheduled->map(fn (FieldServiceJob $job): array => $this->summary($job, $readiness, $owner, $access->canManageJobs($user, $tenant)))->values(),
                 'counts' => $this->counts($tenant, $user, $access),
             ]);
         }
@@ -164,7 +162,7 @@ class EverbranchMobileFieldServiceController extends Controller
             'contract_version' => 7, 'profile' => $profiles->forTenant($tenant), 'bucket' => $bucket,
             'viewer' => ['role' => $access->role($user, $tenant), 'capabilities' => [...$access->capabilities($user, $tenant), 'manage_job_drafts' => $owner]],
             'view' => 'list', 'filter' => $filter,
-            'jobs' => $jobs->map(fn (FieldServiceJob $job): array => $this->summary($job, $readiness, $owner, (int) $user->id))->values(),
+            'jobs' => $jobs->map(fn (FieldServiceJob $job): array => $this->summary($job, $readiness, $owner, $access->canManageJobs($user, $tenant)))->values(),
             'next_cursor' => $page->nextCursor()?->encode(),
             'counts' => $this->counts($tenant, $user, $access),
         ]);
@@ -188,16 +186,14 @@ class EverbranchMobileFieldServiceController extends Controller
         ]);
         $job->loadCount(['tasks', 'notes', 'timeSessions as running_timers_count' => fn ($sessions) => $sessions->whereIn('status', ['running', 'paused'])]);
         $job->loadSum(['timeEntries as manual_minutes' => fn ($entries) => $entries->whereIn('status', ['submitted', 'approved'])], 'duration_minutes');
-        $job->loadSum(['timeEntries as viewer_manual_minutes' => fn ($entries) => $entries->where('user_id', (int) $user->id)->whereIn('status', ['submitted', 'approved'])], 'duration_minutes');
         $job->loadSum(['timeSessions as timer_seconds' => fn ($sessions) => $sessions->whereIn('status', ['submitted', 'approved'])], 'duration_seconds');
-        $job->loadSum(['timeSessions as viewer_timer_seconds' => fn ($sessions) => $sessions->where('user_id', (int) $user->id)->whereIn('status', ['submitted', 'approved'])], 'duration_seconds');
         if ($owner) {
             $job->loadSum('financialDocuments as financial_total', 'total_amount');
             $job->loadSum('financialDocuments as financial_balance', 'balance');
         }
 
         return response()->json(['job' => [
-            ...$this->summary($job, $readiness, $owner, (int) $user->id),
+            ...$this->summary($job, $readiness, $owner, $access->canManageJobs($user, $tenantModel)),
             'description' => $job->description,
             'customer_email' => $job->customer_email,
             'customer_phone' => $job->customer_phone,
@@ -1412,13 +1408,11 @@ class EverbranchMobileFieldServiceController extends Controller
     }
 
     /** @return array<string,mixed> */
-    protected function summary(FieldServiceJob $job, FieldServiceJobReadinessService $readiness, bool $owner = false, ?int $viewerId = null): array
+    protected function summary(FieldServiceJob $job, FieldServiceJobReadinessService $readiness, bool $owner = false, bool $canSeeCrewHours = false): array
     {
         $activeSessions = $job->relationLoaded('timeSessions') ? $job->timeSessions : collect();
         $liveSeconds = $activeSessions->sum(fn ($session): int => max(0, (int) $session->clocked_in_at?->diffInSeconds(now()) - (int) $session->break_seconds));
-        $viewerLiveSeconds = $viewerId === null ? 0 : $activeSessions->where('user_id', $viewerId)->sum(fn ($session): int => max(0, (int) $session->clocked_in_at?->diffInSeconds(now()) - (int) $session->break_seconds));
         $allSeconds = ((int) ($job->manual_minutes ?? 0) * 60) + (int) ($job->timer_seconds ?? 0) + $liveSeconds;
-        $viewerSeconds = ((int) ($job->viewer_manual_minutes ?? 0) * 60) + (int) ($job->viewer_timer_seconds ?? 0) + $viewerLiveSeconds;
         $materials = $job->relationLoaded('materials') ? $job->materials : collect();
         $equipment = $job->relationLoaded('equipment') ? $job->equipment : null;
         $anniversary = $equipment?->installed_at?->copy()->setYear(today()->year);
@@ -1439,7 +1433,7 @@ class EverbranchMobileFieldServiceController extends Controller
             'project_manager' => $this->projectManagerPayload($job),
             'lead' => $job->assignedUser?->name, 'participants' => $job->participants->pluck('name')->values(),
             'vehicles' => $job->relationLoaded('vehicles') ? $job->vehicles->map(fn ($vehicle): array => ['id' => (int) $vehicle->id, 'name' => $vehicle->name, 'identifier' => $vehicle->identifier])->values() : [],
-            'hours' => ['total' => round(($owner ? $allSeconds : $viewerSeconds) / 3600, 2), 'running' => round(($owner ? $liveSeconds : $viewerLiveSeconds) / 3600, 2), 'running_timer_count' => $owner ? (int) ($job->running_timers_count ?? 0) : $activeSessions->where('user_id', $viewerId)->count()],
+            ...($canSeeCrewHours ? ['hours' => ['total' => round($allSeconds / 3600, 2), 'running' => round($liveSeconds / 3600, 2), 'running_timer_count' => (int) ($job->running_timers_count ?? 0)]] : []),
             'material_readiness' => ['total' => $materials->count(), 'needed' => $materials->where('status', 'needed')->count(), 'ready' => $materials->filter(fn ($material): bool => in_array($material->status, ['purchased', 'loaded', 'used'], true) || (float) $material->loaded_quantity >= (float) $material->quantity)->count()],
             'source' => $job->external_source ?: 'everbranch',
             'maintenance' => $equipment ? ['equipment_name' => $equipment->name, 'installed_at' => $equipment->installed_at?->toDateString(), 'anniversary_at' => $anniversary?->toDateString(), 'last_serviced_at' => $equipment->last_serviced_at?->toDateString(), 'next_service_due_at' => $dueDate?->toDateString(), 'interval_days' => (int) $equipment->maintenance_interval_days, 'state' => $maintenanceState] : null,

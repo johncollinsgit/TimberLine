@@ -39,7 +39,9 @@ class EverbranchMobileTeamController extends Controller
         $user = $this->user($request);
         $team->assertAccess($tenantModel, $user, $channel);
         $messages = $channel->messages()->whereNull('deleted_at')->with('author:id,name')->latest('id')->limit(100)->get()->reverse()->values();
-        $team->markRead($tenantModel, $user, $channel);
+        if ($messages->isNotEmpty()) {
+            $team->markRead($tenantModel, $user, $channel, $messages->last()->created_at);
+        }
 
         return response()->json(['channel' => $this->channelPayload($channel->loadMissing(['job:id,tenant_id,title', 'members:id,name']), $user), 'messages' => $messages->map(fn (TeamMessage $message): array => $this->messagePayload($message))->values(), 'poll_after_ms' => 5000]);
     }
@@ -54,6 +56,13 @@ class EverbranchMobileTeamController extends Controller
         $message = $team->post($this->tenant($request), $this->user($request), $channel, $validated['body'], $validated['client_uuid'], (array) ($validated['mention_user_ids'] ?? []), $validated['parent_message_id'] ?? null);
 
         return response()->json(['ok' => true, 'message' => $this->messagePayload($message)], 201);
+    }
+
+    public function markUnread(Request $request, string $tenant, TeamChannel $channel, TeamCommunicationService $team): JsonResponse
+    {
+        $team->markUnread($this->tenant($request), $this->user($request), $channel);
+
+        return response()->json(['ok' => true]);
     }
 
     public function createJobChannel(Request $request, TeamCommunicationService $team): JsonResponse

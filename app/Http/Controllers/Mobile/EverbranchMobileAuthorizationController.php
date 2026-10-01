@@ -53,7 +53,7 @@ class EverbranchMobileAuthorizationController extends Controller
 
             return $validated['auth_method'] === 'google'
                 ? redirect()->route('auth.google.redirect')
-                : redirect()->route('login');
+                : redirect()->route('login', ['mobile_email' => 1]);
         }
 
         abort_unless($user->is_active !== false, 403);

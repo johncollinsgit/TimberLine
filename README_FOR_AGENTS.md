@@ -527,6 +527,8 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
 
 ## Collins Electric Guided Launch Rule (2026-07-11)
 
+- The October 2026 Everbranch Field App Store repair is a paired Laravel/native release. Employee time analytics are tenant/user scoped; job crew hours and job hours analytics are manager-only. Team unread status is per member. Native review login uses email/password and its login page suppresses the Google button. Production reviewer credentials passed PKCE on 2026-10-01, but real-device smoke and a release-gated backend deployment remain required before a new iOS submission. Apple's unlisted approval is case 20000141339318; a direct link is not an access control.
+- Do not add QuickBooks TimeActivity writes to this App Store release. Any later Collins-only hours export needs verified Intuit production credentials, employee mapping, explicit tenant enablement, durable idempotent export/reconciliation, sandbox validation, and a separate approved release. QuickBooks stays authoritative for payroll and money.
 - Collins Electric (`collins-electric`) is the first guided electrician launch-partner workspace. It is not a 3-day trial, public self-service tenant, or billing/subscription activation.
 - Use `php artisan everbranch:prepare-collins-electric --seed-demo-job` to create or refresh the tenant, apply the `electrician` blueprint, attach `johncollinsemail@gmail.com` as active verified admin, and keep SMS provider status `not_verified`.
 - `collinselectric91@gmail.com` is provisioned as Collins owner until Nathan supplies another verified identity. Do not remove John's other memberships or use either email as a tenant-scoping shortcut.

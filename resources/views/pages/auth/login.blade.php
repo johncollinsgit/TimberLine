@@ -41,7 +41,7 @@
                 && filled(config('services.google.redirect'));
         @endphp
 
-        @if ($googleLoginEnabled)
+        @if ($googleLoginEnabled && ! request()->boolean('mobile_email'))
             <div class="space-y-3">
                 <a href="{{ route('auth.google.redirect', absolute: false) }}" class="fb-auth-google-btn">
                     <span aria-hidden="true" class="fb-auth-google-mark">G</span>

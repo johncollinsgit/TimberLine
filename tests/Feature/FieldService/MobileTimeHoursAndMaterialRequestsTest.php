@@ -199,12 +199,16 @@ test('job hourly analytics automatically include new members and never expose an
     $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$otherJob->id.'/hours?range=week')->assertNotFound();
 
     Sanctum::actingAs($employee, ['mobile:read']);
-    $employeeResponse = $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/hours?range=week')
-        ->assertOk()
-        ->assertJsonPath('scope', 'my_hours')
-        ->assertJsonPath('summary.total_seconds', 3600)
-        ->assertJsonCount(1, 'by_employee');
-    expect($employeeResponse->json('by_employee.0.user.id'))->toBe($employee->id);
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/hours?range=week')->assertForbidden();
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id)->assertOk()->assertJsonMissingPath('job.hours');
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/time-clock-hours?range=day&offset=0&employee_id='.$newEmployee->id)
+        ->assertOk()->assertJsonPath('scope', 'my_hours')->assertJsonPath('summary.total_seconds', 3600);
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/time-clock-hours?range=week&offset=0')
+        ->assertOk()->assertJsonPath('summary.total_seconds', 3600);
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/time-clock-hours?range=month&offset=0')
+        ->assertOk()->assertJsonPath('summary.total_seconds', 3600);
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/time-clock-hours?range=day&offset=1')
+        ->assertOk()->assertJsonPath('summary.total_seconds', 0);
 
     Sanctum::actingAs($otherManager, ['mobile:read']);
     $this->getJson('/api/mobile/v1/workspaces/'.$otherTenant->slug.'/field-service/jobs/'.$job->id.'/hours?range=week')->assertNotFound();

@@ -20,6 +20,7 @@ class EverbranchMobileTimeHoursController extends Controller
         $user = $this->user($request);
         $jobModel = FieldServiceJob::query()->forTenantId((int) $tenant->id)->findOrFail($job);
         abort_unless($access->canAccessJob($user, $tenant, $jobModel), 404, 'That job is not available to your account.');
+        abort_unless($access->canManageJobs($user, $tenant), 403);
         $validated = $request->validate([
             'range' => ['nullable', 'in:week,pay_period,month'],
         ]);
@@ -28,7 +29,7 @@ class EverbranchMobileTimeHoursController extends Controller
             $tenant,
             $jobModel,
             $user,
-            $access->canManageJobs($user, $tenant),
+            true,
             $validated,
         ));
     }
@@ -39,7 +40,8 @@ class EverbranchMobileTimeHoursController extends Controller
         $user = $this->user($request);
         $this->assertTimeTracking($tenant, $modules);
         $validated = $request->validate([
-            'range' => ['nullable', 'in:week,pay_period,month,custom'],
+            'range' => ['nullable', 'in:day,week,pay_period,month,custom'],
+            'offset' => ['nullable', 'integer', 'min:0', 'max:365'],
             'start_date' => ['nullable', 'required_if:range,custom', 'date_format:Y-m-d'],
             'end_date' => ['nullable', 'required_if:range,custom', 'date_format:Y-m-d', 'after_or_equal:start_date'],
             'employee_id' => ['nullable', 'integer', 'min:1'],
