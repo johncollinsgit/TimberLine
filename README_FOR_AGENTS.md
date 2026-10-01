@@ -6,6 +6,38 @@
 - The native group composer needs `/field-service/channels/group` and the active teammate list. Release backend changes through GitHub/Forge before pairing a development phone build. Follow the Collins phone smoke in `docs/collins-electric-access-and-quickbooks.md`.
 - The Messages People directory uses the active teammate list and membership role from `/field-service/channels`; keep direct and group creation restricted to active tenant members.
 
+## Modern Forestry operator sales summary (2026-09-30)
+
+- `/api/mobile/v1/landlord/bootstrap` may expose the read-only
+  `modern_forestry_sales` object only after landlord authorization. It resolves
+  the exact `modern-forestry` tenant and reads that tenant's imported Shopify
+  retail/wholesale orders; it never accepts a caller-supplied tenant or store.
+- Treat the figures as gross operational orders and recorded refunds, never as
+  Shopify payouts, cash received, profit, or accounting net income. Preserve the
+  source/basis fields, fail closed for mixed currencies or missing evidence, and
+  do not copy these figures into another ledger.
+
+## Jarvis customer-acquisition read rail (2026-09-30)
+
+- Landlord bootstrap may return `customer_acquisition` from the existing
+  `landlord_prospects` pipeline. Keep it read-only, landlord-authorized, bounded,
+  and free of prospect email, phone, communication-body, or provider snapshot
+  data. The summary is context for prioritization, not authority to act.
+- Never turn a Jarvis conversation into automatic Places discovery, outreach,
+  booking, conversion, or onboarding. Preserve the existing paid-discovery
+  confirmation, explicit send/review controls, provider readiness checks,
+  tenant creation gates, and audit trail.
+
+## Evergrove landlord revenue rail (2026-10-01)
+
+- `landlord_revenue` is Evergrove Software's landlord receipt evidence only.
+  It uses Stripe-confirmed Everbranch billing receipts and excludes every
+  client's tenant commerce. Never blend it with Modern Forestry sales or other
+  tenant earnings.
+- Keep verified cash, refunds, recurring line items, one-time line items, taxes,
+  and catalog-derived recurring run rate distinct. Unknown or mixed-currency
+  evidence fails closed; do not invent an allocation or relabel run rate as cash.
+
 ## Shared website catalog administration (2026-09-21)
 
 Products, Collections, Customers, and Orders have separate workspace destinations
@@ -1292,7 +1324,7 @@ Do not skip upward on this ladder without documenting why the simpler level was 
 - Trade Home metrics come from the tenant blueprint and tenant-scoped job records. Preserve the definitions for in-progress jobs, gross/contract value, distinct crew assignment, and potential/estimate/quoted pipeline work; never accept a client-selected work type or aggregate.
 - Landlord access is not tenant membership. Authorized operators may reuse the current device session to switch context, but landlord APIs must still pass `MobileLandlordAccessService`. Landlord navigation is Home, Tenants, Tickets, Reports, and Account; never render tenant Work or Branches there.
 - Tenant support tickets are a base mobile service. Tenant reads, creates, and replies must resolve through the current tenant; landlord assignment, replies, waiting, and resolution use the separate landlord routes and audit layer.
-- Landlord reporting may expose catalog-derived MRR, tenant/user/activity totals, tenant mix/growth, and per-tenant users/Branch readiness only through landlord-authorized payloads. Do not add portfolio information to normal tenant bootstrap.
+- Landlord reporting may expose catalog-derived MRR, tenant/user/activity totals, tenant mix/growth, per-tenant users/Branch readiness, and the explicitly sourced Modern Forestry operational-order summary only through landlord-authorized payloads. Do not add portfolio information to normal tenant bootstrap, and never relabel operational orders as payouts, profit, or accounting income.
 - Every mobile-store Branch needs a purpose icon and useful owned-state product/setup copy. Do not restore generic Share actions, inert summaries, or client-only availability decisions.
 - Mobile billing is a US-only, system-browser Stripe handoff behind existing checkout and lifecycle flags. Keep non-US purchase CTAs closed, maintain idempotent webhook/audit behavior, and recheck Apple/Google rules immediately before submission.
 - Landlord direct Stripe invoices live at `/landlord/invoices` and are only for approved Everbranch service or Evergrove implementation/supplemental/milestone work. Keep email, text-only, and combined delivery behind `EVERBRANCH_STRIPE_INVOICING_ENABLED` plus tenant allowlisting, reject Shopify/third-party pass-through lines, mirror Stripe-confirmed totals/tax/receipt links, and never let invoice payment or reminders mutate module entitlements. Text-only delivery may finalize a non-auto-advancing Stripe invoice solely to obtain its hosted link; it must not call Stripe's email-send endpoint. Store billing phones encrypted; all invoice texts must use Stripe's freshly verified hosted invoice URL and current amount due, consent confirmation, opt-out checks, idempotency, and landlord audit evidence.

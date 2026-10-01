@@ -6,6 +6,42 @@ The production field API already supports private resumable PDF uploads, photo p
 
 The People directory in Messages lists active tenant teammates with their membership role. Employees can search by name, open a teammate profile, start a private conversation, or select the person for a named group. Inactive accounts and memberships cannot be selected for new direct or group conversations. Conversation search and unread counts are native client controls.
 
+## Modern Forestry operator sales summary (2026-09-30)
+
+- The landlord-authorized mobile bootstrap includes a read-only
+  `modern_forestry_sales` report for the `modern-forestry` workspace. It combines
+  imported Shopify retail and wholesale orders for today, the current week, and
+  the current month, with per-store order counts, gross amounts, recorded refunds,
+  and amounts after recorded refunds.
+- This is operational order evidence from Everbranch, not Shopify payout or
+  accounting income. The response names its source and basis; mixed currencies,
+  a missing workspace, or missing reporting columns fail closed without invented
+  zeroes. Processing fees, taxes, payouts, and accounting net income remain
+  unreconciled and outside this report.
+
+## Jarvis customer-acquisition read rail (2026-09-30)
+
+- The landlord-authorized mobile bootstrap exposes a read-only
+  `customer_acquisition` summary backed by the existing landlord prospect
+  pipeline: stage counts, follow-ups due, and a bounded list of prospects that
+  need attention. It does not expose message bodies, email addresses, or phone
+  numbers in this summary.
+- This rail does not authorize discovery or external action. Google Places
+  discovery requires the existing explicit cost confirmation; outreach sends,
+  meeting bookings, conversion, and tenant onboarding retain their existing
+  Everbranch review, authorization, provider, and audit gates.
+
+## Evergrove landlord revenue rail (2026-10-01)
+
+- The landlord-authorized mobile bootstrap reports Evergrove Software revenue
+  from Stripe-confirmed Everbranch billing receipts. Verified cash subtracts
+  succeeded refunds; recurring and one-time totals come from the recorded
+  pre-tax invoice line classifications.
+- Tenant commerce remains a separate ledger. Catalog MRR is a run rate rather
+  than cash received, and taxes or refunds are not silently allocated across
+  recurring and one-time categories. Mixed currencies and unverifiable Stripe
+  mode fail closed without invented zeroes.
+
 ## Shared website catalog administration (2026-09-21)
 
 Products, Collections, Customers, and Orders have separate workspace destinations
