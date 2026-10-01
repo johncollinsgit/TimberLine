@@ -112,7 +112,21 @@ test('guest mobile email sign in preserves pkce intent through fortify login', f
         ->assertRedirect(route('login', ['mobile_email' => 1]))
         ->assertSessionHas('url.intended', route('mobile.everbranch.authorize', $parameters, absolute: false));
 
+    $loginForm = $this->get('https://app.theeverbranch.com/login?mobile_email=1');
+    $loginForm->assertOk()->assertSee('name="mobile_email" value="1"', false);
+    $mobileCookie = collect($loginForm->headers->getCookies())
+        ->first(fn ($cookie) => $cookie->getName() === 'everbranch-mobile-auth-session');
+    expect($mobileCookie)->not->toBeNull()
+        ->and($mobileCookie->getDomain())->toBeNull()
+        ->and($mobileCookie->getSameSite())->toBe('lax')
+        ->and($mobileCookie->isPartitioned())->toBeFalse();
+
+    $regularLogin = $this->get('https://app.theeverbranch.com/login');
+    expect(collect($regularLogin->headers->getCookies())
+        ->contains(fn ($cookie) => $cookie->getName() === 'everbranch-mobile-auth-session'))->toBeFalse();
+
     $login = $this->post('https://app.theeverbranch.com/login', [
+        'mobile_email' => '1',
         'email' => $user->email,
         'password' => 'password',
     ]);

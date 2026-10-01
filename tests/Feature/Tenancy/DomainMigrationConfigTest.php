@@ -39,6 +39,7 @@ test('session domain is not configured as a broad wildcard', function (): void {
 
 test('canonical session cookies are valid across trusted Everbranch subdomains', function (): void {
     config()->set('session.domain', 'theeverbranch.com');
+    config()->set('session.platform_cookie_defaults.domain', 'theeverbranch.com');
     Tenant::query()->create(['name' => 'Modern Forestry', 'slug' => 'modern-forestry']);
 
     foreach (['app.theeverbranch.com', 'modern-forestry.theeverbranch.com'] as $host) {

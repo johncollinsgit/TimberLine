@@ -9,8 +9,6 @@ use Symfony\Component\HttpFoundation\Response;
 
 class EnforceCanonicalRuntimeHost
 {
-    protected ?string $applicationSessionDomain = null;
-
     public function handle(Request $request, Closure $next): Response
     {
         $host = $this->normalizeHost((string) $request->getHost());
@@ -27,8 +25,33 @@ class EnforceCanonicalRuntimeHost
         // *.theeverbranch.com, which browsers will reject on this unrelated
         // host. This runs before StartSession and resets the setting on every
         // request, which matters for long-lived PHP workers.
-        $this->applicationSessionDomain ??= config('session.domain');
-        config(['session.domain' => $this->isEvergroveHost($host) ? null : $this->applicationSessionDomain]);
+        $defaults = config('session.platform_cookie_defaults');
+        config([
+            'session.cookie' => $defaults['cookie'],
+            'session.domain' => $this->isEvergroveHost($host) ? null : $defaults['domain'],
+            'session.same_site' => $defaults['same_site'],
+            'session.partitioned' => $defaults['partitioned'],
+        ]);
+
+        // The field app signs in through Safari's in-app browser. Its
+        // first-party login form needs a regular cookie: WebKit may discard
+        // the partitioned cookie used by embedded Shopify surfaces, leaving
+        // the POST without the session that issued its CSRF token.
+        $mobileAuthCookiePresent = $request->cookies->has('everbranch-mobile-auth-session');
+        $mobileAuthRoute = $request->is('mobile/authorize')
+            || ($request->is('login') && $request->boolean('mobile_email'))
+            || ($mobileAuthCookiePresent && $request->is('login', 'two-factor-challenge', 'email/verify*'));
+        if ($host === 'app.theeverbranch.com' && $mobileAuthRoute) {
+            config([
+                'session.cookie' => 'everbranch-mobile-auth-session',
+                'session.domain' => null,
+                'session.same_site' => 'lax',
+                'session.partitioned' => false,
+            ]);
+        }
+        // SessionManager may already have resolved its Store in a worker or
+        // an integration test; StartSession reads the cookie name from Store.
+        app('session')->driver()->setName(config('session.cookie'));
 
         $context = $request->attributes->get('host_tenant_context');
         if ($context instanceof HostTenantContext && $context->strategy === 'managed_website_custom_domain') {

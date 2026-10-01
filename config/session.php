@@ -12,6 +12,9 @@ $sessionDomain = SessionCookieDomain::resolve(
     env('TENANCY_CANONICAL_BASE_DOMAIN'),
     $shareCanonicalSubdomains
 );
+$sessionCookie = env('SESSION_COOKIE', Str::slug((string) env('APP_NAME', 'laravel')).'-session');
+$sameSite = env('SESSION_SAME_SITE', 'lax');
+$partitioned = env('SESSION_PARTITIONED_COOKIE', false);
 
 return [
 
@@ -138,10 +141,7 @@ return [
     |
     */
 
-    'cookie' => env(
-        'SESSION_COOKIE',
-        Str::slug((string) env('APP_NAME', 'laravel')).'-session'
-    ),
+    'cookie' => $sessionCookie,
 
     /*
     |--------------------------------------------------------------------------
@@ -210,7 +210,7 @@ return [
     |
     */
 
-    'same_site' => env('SESSION_SAME_SITE', 'lax'),
+    'same_site' => $sameSite,
 
     /*
     |--------------------------------------------------------------------------
@@ -223,6 +223,15 @@ return [
     |
     */
 
-    'partitioned' => env('SESSION_PARTITIONED_COOKIE', false),
+    'partitioned' => $partitioned,
+
+    // Immutable request baseline for cookie overrides used by the field app.
+    // Long-lived workers and tests must restore these before each request.
+    'platform_cookie_defaults' => [
+        'cookie' => $sessionCookie,
+        'domain' => $sessionDomain,
+        'same_site' => $sameSite,
+        'partitioned' => $partitioned,
+    ],
 
 ];
