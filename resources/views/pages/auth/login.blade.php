@@ -57,6 +57,9 @@
 
         <form method="POST" action="{{ route('login.store') }}" class="flex flex-col gap-6">
             @csrf
+            @if (request()->boolean('mobile_email'))
+                <input type="hidden" name="mobile_email" value="1">
+            @endif
 
             <flux:input
                 name="email"

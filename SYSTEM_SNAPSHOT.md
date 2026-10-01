@@ -2,6 +2,8 @@
 
 ## Everbranch Field App Store repair (development, 2026-10-01)
 
+The Safari in-app reviewer login exposed a production 419 on form POST even though a plain HTTP PKCE probe passed. The field authorization and email login now use an isolated, host-only, unpartitioned SameSite=Lax session cookie so WebKit can retain the CSRF session; Shopify embedded sessions keep their existing partitioned cookie. Confirm this fix through the native simulator and on a physical iPhone before submission.
+
 App Store Connect rejects iOS 2.3.3 build 16 under guideline 4.8 for native Google sign-in without an equivalent privacy-preserving service and guideline 2.1 for reviewer login failure. Earlier guideline 3.2 distribution concern is resolved by Apple's unlisted approval, case 20000141339318. The unlisted link is `https://apps.apple.com/us/app/everbranch-field/id6798258874`; a tenant account and active membership still gate access.
 
 The paired backend/native release based on current `main` offers email/password native sign-in, removes the requested job status and completion/archive controls, keeps job crew hours manager-only, adds daily-first personal hours with weekly/monthly navigation, and exposes visible read/unread controls. The production reviewer credentials passed an HTTP/PKCE login probe on October 1. Real-device smoke, backend release-gated deployment, updated screenshots, and review submission are still required. QuickBooks hours write-back is a separate default-off Collins-only design; the existing connector remains read-only and payroll stays in QuickBooks.
