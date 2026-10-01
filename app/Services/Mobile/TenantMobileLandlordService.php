@@ -100,12 +100,20 @@ class TenantMobileLandlordService
         }
 
         $now = now();
+        $priorNow = $now->copy()->subYear();
         $starts = [
             'day' => $now->copy()->startOfDay(),
             'week' => $now->copy()->startOfWeek(),
             'month' => $now->copy()->startOfMonth(),
+            'year' => $now->copy()->startOfYear(),
         ];
-        $queryStart = collect($starts)->sortBy(fn ($start) => $start->getTimestamp())->first();
+        $priorStarts = [
+            'day' => $priorNow->copy()->startOfDay(),
+            'week' => $priorNow->copy()->startOfWeek(),
+            'month' => $priorNow->copy()->startOfMonth(),
+            'year' => $priorNow->copy()->startOfYear(),
+        ];
+        $queryStart = $priorStarts['year'];
         $hasRefunds = Schema::hasColumn('orders', 'refund_total');
         $hasCurrency = Schema::hasColumn('orders', 'currency_code');
         $rows = Order::withoutGlobalScopes()
@@ -127,8 +135,7 @@ class TenantMobileLandlordService
             return $unavailable('Imported orders contain multiple currencies and cannot be combined safely.');
         }
         $currency = (string) ($currencies->first() ?: 'USD');
-        $periods = collect($starts)->mapWithKeys(function ($start, string $period) use ($rows, $hasRefunds): array {
-            $periodRows = $rows->filter(fn (Order $order): bool => $order->ordered_at !== null && $order->ordered_at->greaterThanOrEqualTo($start));
+        $summarize = static function ($periodRows) use ($hasRefunds): array {
             $stores = collect(['retail', 'wholesale'])->mapWithKeys(function (string $store) use ($periodRows, $hasRefunds): array {
                 $storeRows = $periodRows->where('shopify_store_key', $store);
                 $grossCents = (int) round($storeRows->sum(fn (Order $order): float => (float) ($order->total_price ?? 0)) * 100);
@@ -142,16 +149,72 @@ class TenantMobileLandlordService
                 ]];
             });
 
-            return [$period => [
-                'starts_at' => $start->toIso8601String(),
-                'ends_at' => now()->toIso8601String(),
+            return [
                 'order_count' => (int) $stores->sum('order_count'),
                 'gross_cents' => (int) $stores->sum('gross_cents'),
                 'refund_cents' => $hasRefunds ? (int) $stores->sum('refund_cents') : null,
                 'net_after_recorded_refunds_cents' => $hasRefunds ? (int) $stores->sum('net_after_recorded_refunds_cents') : null,
                 'stores' => $stores->all(),
+            ];
+        };
+        $compare = static function (array $current, array $previous): array {
+            $currentCents = $current['net_after_recorded_refunds_cents'];
+            $previousCents = $previous['net_after_recorded_refunds_cents'];
+            if (! is_int($currentCents) || ! is_int($previousCents)) {
+                return ['difference_cents' => null, 'percent_change' => null, 'pace' => 'unknown', 'is_on_track' => null];
+            }
+
+            $difference = $currentCents - $previousCents;
+            $pace = match (true) {
+                $previousCents === 0 && $currentCents > 0 => 'no_baseline',
+                $difference > 0 => 'ahead',
+                $difference < 0 => 'behind',
+                default => 'even',
+            };
+
+            return [
+                'difference_cents' => $difference,
+                'percent_change' => $previousCents === 0 ? null : round(($difference / $previousCents) * 100, 1),
+                'pace' => $pace,
+                'is_on_track' => $previousCents === 0 ? null : $difference >= 0,
+            ];
+        };
+        $inRange = static fn (Order $order, $start, $end): bool => $order->ordered_at !== null
+            && $order->ordered_at->greaterThanOrEqualTo($start)
+            && $order->ordered_at->lessThanOrEqualTo($end);
+        $periods = collect($starts)->mapWithKeys(function ($start, string $period) use ($rows, $now, $priorNow, $priorStarts, $summarize, $compare, $inRange): array {
+            $current = $summarize($rows->filter(fn (Order $order): bool => $inRange($order, $start, $now)));
+            $previous = $summarize($rows->filter(fn (Order $order): bool => $inRange($order, $priorStarts[$period], $priorNow)));
+
+            return [$period => [
+                ...$current,
+                'starts_at' => $start->toIso8601String(),
+                'ends_at' => $now->toIso8601String(),
+                'previous_year' => [
+                    ...$previous,
+                    'starts_at' => $priorStarts[$period]->toIso8601String(),
+                    'ends_at' => $priorNow->toIso8601String(),
+                ],
+                'comparison' => $compare($current, $previous),
             ]];
         })->all();
+        $currentMonth = (int) $now->month;
+        $monthly = collect(range(1, $currentMonth))->map(function (int $month) use ($rows, $now, $priorNow, $summarize, $compare, $inRange): array {
+            $currentStart = $now->copy()->setDate((int) $now->year, $month, 1)->startOfDay();
+            $currentEnd = $month === (int) $now->month ? $now : $currentStart->copy()->endOfMonth();
+            $previousStart = $priorNow->copy()->setDate((int) $priorNow->year, $month, 1)->startOfDay();
+            $previousEnd = $month === (int) $priorNow->month ? $priorNow : $previousStart->copy()->endOfMonth();
+            $current = $summarize($rows->filter(fn (Order $order): bool => $inRange($order, $currentStart, $currentEnd)));
+            $previous = $summarize($rows->filter(fn (Order $order): bool => $inRange($order, $previousStart, $previousEnd)));
+
+            return [
+                'month_number' => $month,
+                'label' => $currentStart->format('M'),
+                'current' => $current,
+                'previous_year' => $previous,
+                'comparison' => $compare($current, $previous),
+            ];
+        })->values()->all();
 
         return [
             'available' => true,
@@ -160,6 +223,13 @@ class TenantMobileLandlordService
             'basis' => 'Gross imported order amounts less recorded refunds. Shopify payouts, processing fees, taxes, and accounting net income are not exposed by this report.',
             'currency' => $currency,
             'periods' => $periods,
+            'year_comparison' => [
+                'current_year' => (int) $now->year,
+                'previous_year' => (int) $priorNow->year,
+                'through_month' => $currentMonth,
+                'monthly' => $monthly,
+                'basis' => 'Current periods are compared with the equivalent elapsed period one year earlier. Percent change is omitted when the prior amount is zero.',
+            ],
             'observed_through' => optional($rows->max('ordered_at'))->toIso8601String(),
         ];
     }

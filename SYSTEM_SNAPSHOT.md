@@ -18,9 +18,15 @@ The People directory in Messages lists active tenant teammates with their member
 
 - The landlord-authorized mobile bootstrap includes a read-only
   `modern_forestry_sales` report for the `modern-forestry` workspace. It combines
-  imported Shopify retail and wholesale orders for today, the current week, and
-  the current month, with per-store order counts, gross amounts, recorded refunds,
-  and amounts after recorded refunds.
+  imported Shopify retail and wholesale orders for today, the current week,
+  month, and year, with per-store order counts, gross amounts, recorded refunds,
+  and amounts after recorded refunds. Each period includes the equivalent
+  elapsed period one year earlier, its verified difference and percentage when
+  a non-zero baseline exists, and an explicit ahead/behind/even/no-baseline pace.
+- A bounded monthly year-over-year series supplies the current year and the
+  equivalent months from the prior year through the same elapsed date. Retail
+  and wholesale remain separate in every point so Jarvis can graph and tabulate
+  the comparison without deriving or inventing financial figures.
 - This is operational order evidence from Everbranch, not Shopify payout or
   accounting income. The response names its source and basis; mixed currencies,
   a missing workspace, or missing reporting columns fail closed without invented

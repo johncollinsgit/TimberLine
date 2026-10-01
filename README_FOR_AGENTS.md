@@ -16,6 +16,11 @@
   Shopify payouts, cash received, profit, or accounting net income. Preserve the
   source/basis fields, fail closed for mixed currencies or missing evidence, and
   do not copy these figures into another ledger.
+- Periods include current day/week/month/year plus the equivalent elapsed period
+  one year earlier. `year_comparison.monthly` is the bounded graph/table rail;
+  keep current/prior retail and wholesale values separate. A zero prior-period
+  amount has no percentage baseline and must remain `null`, with pace reported
+  as `no_baseline` instead of an invented infinite growth percentage.
 
 ## Jarvis customer-acquisition read rail (2026-09-30)
 

@@ -651,6 +651,26 @@ test('authorized landlord home reports revenue tenant mix growth and tenant oper
         'total_price' => 300.00,
         'refund_total' => 0,
     ]);
+    Order::withoutGlobalScopes()->create([
+        'tenant_id' => $modernForestry->id,
+        'source' => 'shopify',
+        'shopify_store_key' => 'retail',
+        'shopify_order_id' => 800001,
+        'ordered_at' => now()->subYear()->startOfDay()->addHour(),
+        'currency_code' => 'USD',
+        'total_price' => 100.00,
+        'refund_total' => 0,
+    ]);
+    Order::withoutGlobalScopes()->create([
+        'tenant_id' => $modernForestry->id,
+        'source' => 'shopify',
+        'shopify_store_key' => 'wholesale',
+        'shopify_order_id' => 800002,
+        'ordered_at' => now()->subYear()->startOfDay()->addHours(2),
+        'currency_code' => 'USD',
+        'total_price' => 200.00,
+        'refund_total' => 0,
+    ]);
     TenantBillingSubscription::query()->create([
         'tenant_id' => $retail->id,
         'provider' => 'stripe',
@@ -712,12 +732,22 @@ test('authorized landlord home reports revenue tenant mix growth and tenant oper
         ->assertJsonPath('modern_forestry_sales.periods.day.net_after_recorded_refunds_cents', 42000)
         ->assertJsonPath('modern_forestry_sales.periods.day.stores.retail.gross_cents', 12550)
         ->assertJsonPath('modern_forestry_sales.periods.day.stores.wholesale.gross_cents', 30000)
+        ->assertJsonPath('modern_forestry_sales.periods.day.previous_year.net_after_recorded_refunds_cents', 30000)
+        ->assertJsonPath('modern_forestry_sales.periods.day.comparison.difference_cents', 12000)
+        ->assertJsonPath('modern_forestry_sales.periods.day.comparison.percent_change', 40)
+        ->assertJsonPath('modern_forestry_sales.periods.day.comparison.pace', 'ahead')
+        ->assertJsonPath('modern_forestry_sales.periods.year.net_after_recorded_refunds_cents', 42000)
+        ->assertJsonPath('modern_forestry_sales.periods.year.previous_year.net_after_recorded_refunds_cents', 30000)
+        ->assertJsonPath('modern_forestry_sales.year_comparison.current_year', (int) now()->year)
+        ->assertJsonPath('modern_forestry_sales.year_comparison.previous_year', (int) now()->subYear()->year)
+        ->assertJsonPath('modern_forestry_sales.year_comparison.monthly.'.((int) now()->month - 1).'.current.stores.retail.net_after_recorded_refunds_cents', 12000)
+        ->assertJsonPath('modern_forestry_sales.year_comparison.monthly.'.((int) now()->month - 1).'.previous_year.stores.wholesale.net_after_recorded_refunds_cents', 20000)
         ->assertJsonPath('landlord_revenue.available', true)
         ->assertJsonPath('landlord_revenue.owner', 'Evergrove Software')
         ->assertJsonPath('landlord_revenue.periods.month.verified_cash_received_cents', 44800)
         ->assertJsonPath('landlord_revenue.periods.month.recurring_line_item_cents', 14900)
         ->assertJsonPath('landlord_revenue.periods.month.one_time_line_item_cents', 29900)
-        ->assertJsonStructure(['metrics', 'tenant_types', 'tenant_growth', 'activity', 'recent_tenants', 'recent_activity', 'modern_forestry_sales' => ['source', 'basis', 'periods'], 'landlord_revenue' => ['source', 'owner', 'scope', 'basis', 'periods', 'history'], 'customer_acquisition' => ['available', 'source', 'manage_url', 'stage_counts', 'follow_up_due', 'needs_attention']]);
+        ->assertJsonStructure(['metrics', 'tenant_types', 'tenant_growth', 'activity', 'recent_tenants', 'recent_activity', 'modern_forestry_sales' => ['source', 'basis', 'periods' => ['year' => ['previous_year', 'comparison']], 'year_comparison' => ['current_year', 'previous_year', 'monthly']], 'landlord_revenue' => ['source', 'owner', 'scope', 'basis', 'periods', 'history'], 'customer_acquisition' => ['available', 'source', 'manage_url', 'stage_counts', 'follow_up_due', 'needs_attention']]);
     $this->getJson('/api/mobile/v1/landlord/tenants?q=Retail')
         ->assertOk()->assertJsonPath('tenants.0.name', 'Retail Tenant')
         ->assertJsonStructure(['tenants' => [['users_count', 'active', 'activity_30d']]]);
