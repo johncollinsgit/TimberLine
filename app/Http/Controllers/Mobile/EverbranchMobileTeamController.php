@@ -19,13 +19,17 @@ class EverbranchMobileTeamController extends Controller
         $tenant = $this->tenant($request);
         $user = $this->user($request);
 
-        $teammates = $tenant->users()->wherePivot('membership_active', true)->where('users.id', '!=', (int) $user->id)
+        $teammates = $tenant->users()->wherePivot('membership_active', true)->where('users.is_active', true)->where('users.id', '!=', (int) $user->id)
             ->orderBy('users.name')->get(['users.id', 'users.name']);
 
         return response()->json([
             'contract_version' => 6,
             'channels' => $team->channels($tenant, $user)->map(fn (TeamChannel $channel): array => $this->channelPayload($channel, $user))->values(),
-            'teammates' => $teammates->map(fn (User $teammate): array => ['id' => (int) $teammate->id, 'name' => $teammate->name])->values(),
+            'teammates' => $teammates->map(fn (User $teammate): array => [
+                'id' => (int) $teammate->id,
+                'name' => $teammate->name,
+                'role' => (string) $teammate->pivot->role,
+            ])->values(),
         ]);
     }
 

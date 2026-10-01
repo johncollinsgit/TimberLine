@@ -15,18 +15,22 @@ test('employees can create a private group only with active teammates in their w
     $creator = User::factory()->create(['is_active' => true, 'email_verified_at' => now()]);
     $teammate = User::factory()->create(['is_active' => true]);
     $inactive = User::factory()->create(['is_active' => true]);
+    $deactivated = User::factory()->create(['is_active' => false]);
     $outsider = User::factory()->create(['is_active' => true]);
     foreach ([$creator, $teammate] as $user) {
         $user->tenants()->attach($tenant->id, ['role' => 'member', 'membership_active' => true]);
     }
     $inactive->tenants()->attach($tenant->id, ['role' => 'member', 'membership_active' => false]);
+    $deactivated->tenants()->attach($tenant->id, ['role' => 'member', 'membership_active' => true]);
     $outsider->tenants()->attach($other->id, ['role' => 'member', 'membership_active' => true]);
     $base = '/api/mobile/v1/workspaces/field-messages/field-service/channels';
     Sanctum::actingAs($creator, ['mobile:read', 'mobile:write']);
-    $this->getJson($base)->assertOk()->assertJsonFragment(['id' => $teammate->id, 'name' => $teammate->name])
-        ->assertDontSee($inactive->name)->assertDontSee($outsider->name);
+    $this->getJson($base)->assertOk()->assertJsonFragment(['id' => $teammate->id, 'name' => $teammate->name, 'role' => 'member'])
+        ->assertDontSee($inactive->name)->assertDontSee($deactivated->name)->assertDontSee($outsider->name);
     $this->postJson($base.'/group', ['name' => 'Service crew', 'member_ids' => [$inactive->id]])->assertUnprocessable();
+    $this->postJson($base.'/group', ['name' => 'Service crew', 'member_ids' => [$deactivated->id]])->assertUnprocessable();
     $this->postJson($base.'/group', ['name' => 'Service crew', 'member_ids' => [$outsider->id]])->assertUnprocessable();
+    $this->postJson($base.'/direct', ['user_id' => $deactivated->id])->assertNotFound();
     $channelId = $this->postJson($base.'/group', ['name' => 'Service crew', 'member_ids' => [$teammate->id]])
         ->assertCreated()->assertJsonPath('channel.kind', 'group')->json('channel.id');
     $this->postJson($base.'/'.$channelId.'/messages', ['body' => 'Bring the drawings.', 'client_uuid' => '22222222-2222-4222-8222-222222222222'])->assertCreated();
