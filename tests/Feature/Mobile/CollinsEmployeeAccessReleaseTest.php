@@ -35,9 +35,15 @@ test('employees can create a private group only with active teammates in their w
         ->assertCreated()->assertJsonPath('channel.kind', 'group')->json('channel.id');
     $this->postJson($base.'/'.$channelId.'/messages', ['body' => 'Bring the drawings.', 'client_uuid' => '22222222-2222-4222-8222-222222222222'])->assertCreated();
     Sanctum::actingAs($teammate, ['mobile:read', 'mobile:write']);
-    $this->getJson($base.'/'.$channelId)->assertOk()->assertJsonPath('messages.0.body', 'Bring the drawings.');
+    $this->getJson($base)->assertOk()->assertJsonFragment(['id' => $channelId, 'unread_count' => 1]);
+    $this->getJson($base.'/'.$channelId)->assertOk()->assertJsonPath('messages.0.body', 'Bring the drawings.')
+        ->assertJsonPath('channel.unread_count', 0);
+    $this->getJson($base)->assertOk()->assertJsonFragment(['id' => $channelId, 'unread_count' => 0]);
+    $this->postJson($base.'/'.$channelId.'/unread')->assertOk();
+    $this->getJson($base)->assertOk()->assertJsonFragment(['id' => $channelId, 'unread_count' => 1]);
     Sanctum::actingAs($outsider, ['mobile:read', 'mobile:write']);
     $this->getJson($base.'/'.$channelId)->assertNotFound();
+    $this->postJson($base.'/'.$channelId.'/unread')->assertNotFound();
 });
 
 test('an employee sees assigned upcoming jobs and can clock only assigned current work', function (): void {

@@ -1,5 +1,11 @@
 # SYSTEM SNAPSHOT
 
+## Everbranch Field App Store repair (development, 2026-10-01)
+
+App Store Connect rejects iOS 2.3.3 build 16 under guideline 4.8 for native Google sign-in without an equivalent privacy-preserving service and guideline 2.1 for reviewer login failure. Earlier guideline 3.2 distribution concern is resolved by Apple's unlisted approval, case 20000141339318. The unlisted link is `https://apps.apple.com/us/app/everbranch-field/id6798258874`; a tenant account and active membership still gate access.
+
+The paired backend/native release based on current `main` offers email/password native sign-in, removes the requested job status and completion/archive controls, keeps job crew hours manager-only, adds daily-first personal hours with weekly/monthly navigation, and exposes visible read/unread controls. The production reviewer credentials passed an HTTP/PKCE login probe on October 1. Real-device smoke, backend release-gated deployment, updated screenshots, and review submission are still required. QuickBooks hours write-back is a separate default-off Collins-only design; the existing connector remains read-only and payroll stays in QuickBooks.
+
 ## Collins employee mobile release (2026-09-30)
 
 The production field API already supports private resumable PDF uploads, photo payload retries, guarded galleries, and manager time review. The employee release adds assignment-scoped My Day and clock-in while preserving Collins' all-operational job browsing, active-teammate direct and group conversations, and owner/admin-only employee role changes. The companion native build exposes assigned upcoming jobs, group composition, password reset, and a guarded full-image gallery fallback. Deploy the backend through the GitHub test/build gate before installing the paired native build; verify `/ready` and the phone smoke in `docs/collins-electric-access-and-quickbooks.md`.

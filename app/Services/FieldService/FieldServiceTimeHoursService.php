@@ -4,6 +4,7 @@ namespace App\Services\FieldService;
 
 use App\Models\FieldServiceJob;
 use App\Models\FieldServiceReminderSetting;
+use App\Models\FieldServiceTimeChangeRequest;
 use App\Models\FieldServiceTimeEntry;
 use App\Models\FieldServiceTimeSession;
 use App\Models\Tenant;
@@ -39,6 +40,7 @@ class FieldServiceTimeHoursService
             $filters['start_date'] ?? null,
             $filters['end_date'] ?? null,
             $timezone,
+            (int) ($filters['offset'] ?? 0),
         );
         $employeeId = isset($filters['employee_id']) ? (int) $filters['employee_id'] : null;
         $metrics = $this->aggregate($tenant, $range, $timezone, null, $employeeId);
@@ -311,8 +313,11 @@ class FieldServiceTimeHoursService
             ->whereIn('id', $references->where('source', 'timer')->pluck('id'))
             ->get()
             ->keyBy('id');
+        $correctionStatuses = FieldServiceTimeChangeRequest::query()->forTenantId((int) $tenant->id)
+            ->whereIn('field_service_time_session_id', $timerModels->keys())->orderByDesc('id')->get()
+            ->unique('field_service_time_session_id')->pluck('status', 'field_service_time_session_id');
 
-        $entries = $references->map(function (object $reference) use ($manualModels, $timerModels, $timezone): ?array {
+        $entries = $references->map(function (object $reference) use ($manualModels, $timerModels, $correctionStatuses, $timezone): ?array {
             if ($reference->source === 'manual') {
                 $entry = $manualModels->get((int) $reference->id);
 
@@ -320,7 +325,7 @@ class FieldServiceTimeHoursService
             }
             $session = $timerModels->get((int) $reference->id);
 
-            return $session instanceof FieldServiceTimeSession ? $this->timerPayload($session, $timezone) : null;
+            return $session instanceof FieldServiceTimeSession ? $this->timerPayload($session, $timezone, $correctionStatuses->get((int) $session->id)) : null;
         })->filter()->values();
 
         return [
@@ -542,7 +547,7 @@ class FieldServiceTimeHoursService
     }
 
     /** @return array<string,mixed> */
-    private function timerPayload(FieldServiceTimeSession $session, string $timezone): array
+    private function timerPayload(FieldServiceTimeSession $session, string $timezone, ?string $correctionStatus = null): array
     {
         return [
             'source' => 'timer',
@@ -555,6 +560,7 @@ class FieldServiceTimeHoursService
             'break_seconds' => (int) $session->break_seconds,
             'duration_seconds' => $session->duration_seconds === null ? null : (int) $session->duration_seconds,
             'status' => (string) $session->status,
+            'correction_status' => $correctionStatus,
             'notes' => $session->clock_out_notes,
             'reviewed_at' => $session->reviewed_at?->toIso8601String(),
             'editable' => ! in_array((string) $session->status, self::ACTIVE_STATUSES, true),
@@ -641,7 +647,7 @@ class FieldServiceTimeHoursService
     }
 
     /** @return array{key:string,start:CarbonImmutable,end:CarbonImmutable,start_utc:CarbonImmutable,end_utc:CarbonImmutable} */
-    private function resolveRange(string $key, mixed $customStart, mixed $customEnd, string $timezone): array
+    private function resolveRange(string $key, mixed $customStart, mixed $customEnd, string $timezone, int $offset = 0): array
     {
         $today = CarbonImmutable::now($timezone)->startOfDay();
         if ($key === 'custom') {
@@ -656,9 +662,12 @@ class FieldServiceTimeHoursService
             if ($start->diffInDays($end) + 1 > self::MAX_CUSTOM_RANGE_DAYS) {
                 throw ValidationException::withMessages(['end_date' => 'Custom reports may cover at most 366 days.']);
             }
+        } elseif ($key === 'day') {
+            $start = $today->subDays($offset);
+            $end = $start;
         } elseif ($key === 'month') {
-            $start = $today->startOfMonth();
-            $end = $today->endOfMonth()->startOfDay();
+            $start = $today->startOfMonth()->subMonths($offset);
+            $end = $start->endOfMonth()->startOfDay();
         } elseif ($key === 'pay_period') {
             $anchor = CarbonImmutable::create(2020, 1, 6, 0, 0, 0, $timezone);
             $period = intdiv((int) $anchor->diffInDays($today->startOfWeek(CarbonInterface::MONDAY)), 14);
@@ -666,8 +675,8 @@ class FieldServiceTimeHoursService
             $end = $start->addDays(13);
         } else {
             $key = 'week';
-            $start = $today->startOfWeek(CarbonInterface::MONDAY);
-            $end = $today->endOfWeek(CarbonInterface::SUNDAY)->startOfDay();
+            $start = $today->startOfWeek(CarbonInterface::MONDAY)->subWeeks($offset);
+            $end = $start->endOfWeek(CarbonInterface::SUNDAY)->startOfDay();
         }
 
         return [

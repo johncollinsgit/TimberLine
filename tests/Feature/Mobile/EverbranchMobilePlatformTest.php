@@ -109,7 +109,7 @@ test('guest mobile email sign in preserves pkce intent through fortify login', f
     $authorizationUrl = '/mobile/authorize?'.http_build_query($parameters);
 
     $this->get('https://app.theeverbranch.com'.$authorizationUrl)
-        ->assertRedirect(route('login'))
+        ->assertRedirect(route('login', ['mobile_email' => 1]))
         ->assertSessionHas('url.intended', route('mobile.everbranch.authorize', $parameters, absolute: false));
 
     $login = $this->post('https://app.theeverbranch.com/login', [
@@ -140,7 +140,7 @@ test('two factor recovery login resumes the pending mobile authorization', funct
     $parameters = mobileAuthorizationParameters(Str::random(64), Str::random(32), 'email');
 
     $this->get('https://app.theeverbranch.com/mobile/authorize?'.http_build_query($parameters))
-        ->assertRedirect(route('login'));
+        ->assertRedirect(route('login', ['mobile_email' => 1]));
     $this->post('https://app.theeverbranch.com/login', [
         'email' => $user->email,
         'password' => 'password',
@@ -238,7 +238,7 @@ test('mobile authorization requires active verified users and expires pending at
 
     auth()->logout();
     $active = User::factory()->create(['is_active' => true, 'email_verified_at' => now()]);
-    $this->get($url)->assertRedirect(route('login'));
+    $this->get($url)->assertRedirect(route('login', ['mobile_email' => 1]));
     $this->travel(11)->minutes();
     $this->actingAs($active)->get($url)
         ->assertSessionHasErrors('state');

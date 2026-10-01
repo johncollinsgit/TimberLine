@@ -316,12 +316,56 @@ test('the text invitation link authenticates before joining the employee to the 
     parse_str((string) parse_url($result['invite_url'], PHP_URL_QUERY), $query);
     $path = '/join-team?token='.$query['token'];
 
-    $this->get($path)->assertRedirect(route('login'));
+    $this->get($path)->assertOk()->assertSee('Sign in to your account');
     $this->actingAs($employee)->get($path)->assertOk()->assertSee('Join '.$tenant->name);
     $this->post(route('employee-invitations.accept'), ['token' => $query['token']])->assertRedirect();
 
     $membership = $employee->tenants()->whereKey($tenant->id)->firstOrFail()->pivot;
     expect($membership->role)->toBe('member')->and((bool) $membership->membership_active)->toBeTrue();
+});
+
+test('an email-bound invitation lets a new employee create a limited login once', function (): void {
+    [$tenant, $manager] = fieldOperationsWorkspace('invite-new-login', 'manager');
+    $result = app(TenantEmployeeInvitationService::class)->create($tenant, $manager, null, 'new-crew@example.com', 'member');
+    parse_str((string) parse_url($result['invite_url'], PHP_URL_QUERY), $query);
+    $token = $query['token'];
+
+    $this->get('/join-team?token='.$token)->assertOk()->assertSee('Create account and join')->assertSee('new-crew@example.com');
+    $this->post(route('employee-invitations.register'), [
+        'token' => $token, 'name' => 'New Crew', 'password' => 'ExampleSecurePass123!', 'password_confirmation' => 'ExampleSecurePass123!',
+    ])->assertRedirect();
+
+    $user = User::query()->where('email', 'new-crew@example.com')->firstOrFail();
+    expect($user->role)->toBe('pouring')
+        ->and($user->is_active)->toBeTrue()
+        ->and($user->email_verified_at)->not->toBeNull()
+        ->and($user->tenants()->whereKey($tenant->id)->firstOrFail()->pivot->role)->toBe('member')
+        ->and($result['invitation']->fresh()->status)->toBe('accepted');
+    $this->assertAuthenticatedAs($user);
+    $this->post(route('logout'));
+    $this->post(route('employee-invitations.register'), [
+        'token' => $token, 'name' => 'Other', 'password' => 'ExampleSecurePass123!', 'password_confirmation' => 'ExampleSecurePass123!',
+    ])->assertSessionHasErrors('token');
+});
+
+test('a phone-only invitation cannot create an account and an existing email must sign in', function (): void {
+    [$tenant, $manager] = fieldOperationsWorkspace('invite-guard', 'manager');
+    $service = app(TenantEmployeeInvitationService::class);
+    $phoneOnly = $service->create($tenant, $manager, '+18285550101', null, 'member');
+    parse_str((string) parse_url($phoneOnly['invite_url'], PHP_URL_QUERY), $phoneQuery);
+    $this->get('/join-team?token='.$phoneQuery['token'])->assertOk()->assertDontSee('Create account and join');
+    $this->post(route('employee-invitations.register'), [
+        'token' => $phoneQuery['token'], 'name' => 'Unverified', 'password' => 'ExampleSecurePass123!', 'password_confirmation' => 'ExampleSecurePass123!',
+    ])->assertSessionHasErrors('token');
+
+    $existing = User::factory()->create(['email' => 'already@example.com']);
+    $emailInvite = $service->create($tenant, $manager, null, $existing->email, 'member');
+    parse_str((string) parse_url($emailInvite['invite_url'], PHP_URL_QUERY), $emailQuery);
+    $this->get('/join-team?token='.$emailQuery['token'])->assertOk()->assertSee('Sign in with already@example.com')->assertDontSee('Create account and join');
+    $this->post(route('employee-invitations.register'), [
+        'token' => $emailQuery['token'], 'name' => 'Impostor', 'password' => 'ExampleSecurePass123!', 'password_confirmation' => 'ExampleSecurePass123!',
+    ])->assertSessionHasErrors('token');
+    expect($emailInvite['invitation']->fresh()->status)->toBe('pending');
 });
 
 /** @return array{0:Tenant,1:User} */

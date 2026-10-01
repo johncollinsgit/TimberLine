@@ -270,6 +270,9 @@ Route::get('/join-team', [TenantEmployeeInvitationController::class, 'show'])
 Route::post('/join-team', [TenantEmployeeInvitationController::class, 'accept'])
     ->middleware(['auth', 'verified', 'throttle:20,1'])
     ->name('employee-invitations.accept');
+Route::post('/join-team/register', [TenantEmployeeInvitationController::class, 'register'])
+    ->middleware(['guest', 'throttle:10,1'])
+    ->name('employee-invitations.register');
 
 $landlordHosts = collect((array) config('tenancy.landlord.hosts', []))
     ->map(static fn (mixed $host): ?string => $normalizeHost($host))

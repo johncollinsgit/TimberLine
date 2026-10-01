@@ -7,6 +7,7 @@ use App\Models\TeamChannel;
 use App\Models\TeamMessage;
 use App\Models\Tenant;
 use App\Models\User;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -126,10 +127,22 @@ class TeamCommunicationService
         });
     }
 
-    public function markRead(Tenant $tenant, User $user, TeamChannel $channel): void
+    public function markRead(Tenant $tenant, User $user, TeamChannel $channel, ?CarbonInterface $readThrough = null): void
     {
         $this->assertAccess($tenant, $user, $channel);
-        $channel->members()->syncWithoutDetaching([(int) $user->id => ['tenant_id' => (int) $tenant->id, 'last_read_at' => now()]]);
-        $channel->members()->updateExistingPivot((int) $user->id, ['last_read_at' => now()]);
+        $at = $readThrough ?: now();
+        $channel->members()->syncWithoutDetaching([(int) $user->id => ['tenant_id' => (int) $tenant->id, 'last_read_at' => $at]]);
+        $channel->members()->updateExistingPivot((int) $user->id, ['last_read_at' => $at]);
+    }
+
+    public function markUnread(Tenant $tenant, User $user, TeamChannel $channel): void
+    {
+        $this->assertAccess($tenant, $user, $channel);
+        $latest = $channel->messages()->whereNull('deleted_at')->where('created_by_user_id', '!=', (int) $user->id)->latest('id')->first();
+        if (! $latest) {
+            return;
+        }
+        $channel->members()->syncWithoutDetaching([(int) $user->id => ['tenant_id' => (int) $tenant->id]]);
+        $channel->members()->updateExistingPivot((int) $user->id, ['last_read_at' => $latest->created_at->copy()->subSecond()]);
     }
 }
