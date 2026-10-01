@@ -55,7 +55,7 @@ class TeamCommunicationService
 
     public function directChannel(Tenant $tenant, User $actor, User $other): TeamChannel
     {
-        abort_unless($tenant->users()->whereKey((int) $other->id)->wherePivot('membership_active', true)->exists(), 404);
+        abort_unless($tenant->users()->whereKey((int) $other->id)->wherePivot('membership_active', true)->where('users.is_active', true)->exists(), 404);
         $ids = collect([(int) $actor->id, (int) $other->id])->sort()->values();
         $key = $ids->implode(':');
         $channel = TeamChannel::query()->firstOrCreate(
@@ -74,7 +74,7 @@ class TeamCommunicationService
         $ids = collect($memberIds)->map(fn ($id): int => (int) $id)->unique()
             ->reject(fn (int $id): bool => $id === (int) $actor->id)->values();
         abort_unless($ids->isNotEmpty() && $ids->count() <= 49, 422, 'Choose at least one teammate.');
-        $activeIds = $tenant->users()->wherePivot('membership_active', true)->whereIn('users.id', $ids->all())
+        $activeIds = $tenant->users()->wherePivot('membership_active', true)->where('users.is_active', true)->whereIn('users.id', $ids->all())
             ->pluck('users.id')->map(fn ($id): int => (int) $id);
         abort_unless($activeIds->count() === $ids->count(), 422, 'A teammate is no longer active in this workspace.');
 

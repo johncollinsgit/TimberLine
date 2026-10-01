@@ -4,6 +4,7 @@
 
 - Keep Collins' operational job browsing broad, but scope employee My Day and clock-in to assigned jobs. Financials, manager hours, and employee role changes stay server gated.
 - The native group composer needs `/field-service/channels/group` and the active teammate list. Release backend changes through GitHub/Forge before pairing a development phone build. Follow the Collins phone smoke in `docs/collins-electric-access-and-quickbooks.md`.
+- The Messages People directory uses the active teammate list and membership role from `/field-service/channels`; keep direct and group creation restricted to active tenant members.
 
 ## Shared website catalog administration (2026-09-21)
 
