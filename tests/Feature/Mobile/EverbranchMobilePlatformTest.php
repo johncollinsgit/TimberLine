@@ -9,9 +9,13 @@ use App\Models\MarketingProfile;
 use App\Models\MessagingConversation;
 use App\Models\MessagingConversationMessage;
 use App\Models\MobileAuthorizationCode;
+use App\Models\Order;
+use App\Models\StripeWebhookEvent;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
+use App\Models\TenantBillingReceipt;
 use App\Models\TenantBillingSubscription;
+use App\Models\TenantDirectInvoice;
 use App\Models\TenantDiscoveryProfile;
 use App\Models\TenantModuleEntitlement;
 use App\Models\TenantSupportTicket;
@@ -545,12 +549,35 @@ test('mobile branding is displayed for the tenant and only workspace admins can 
 });
 
 test('authorized landlord home reports revenue tenant mix growth and tenant operations', function (): void {
+    config()->set('services.stripe.secret', 'sk_test_mobile_landlord');
     config()->set('tenancy.landlord.operator_roles', ['platform_admin']);
     config()->set('tenancy.landlord.operator_emails', []);
     $retail = Tenant::query()->create(['name' => 'Retail Tenant', 'slug' => 'retail-tenant']);
     $trade = Tenant::query()->create(['name' => 'Trade Tenant', 'slug' => 'trade-tenant']);
+    $modernForestry = Tenant::query()->create(['name' => 'Modern Forestry', 'slug' => 'modern-forestry']);
     TenantAccessProfile::query()->create(['tenant_id' => $retail->id, 'plan_key' => 'base', 'operating_mode' => 'shopify', 'source' => 'test']);
     TenantAccessProfile::query()->create(['tenant_id' => $trade->id, 'plan_key' => 'base', 'operating_mode' => 'direct', 'source' => 'test']);
+    TenantAccessProfile::query()->create(['tenant_id' => $modernForestry->id, 'plan_key' => 'base', 'operating_mode' => 'shopify', 'source' => 'test']);
+    Order::withoutGlobalScopes()->create([
+        'tenant_id' => $modernForestry->id,
+        'source' => 'shopify',
+        'shopify_store_key' => 'retail',
+        'shopify_order_id' => 900001,
+        'ordered_at' => now()->startOfDay()->addHour(),
+        'currency_code' => 'USD',
+        'total_price' => 125.50,
+        'refund_total' => 5.50,
+    ]);
+    Order::withoutGlobalScopes()->create([
+        'tenant_id' => $modernForestry->id,
+        'source' => 'shopify',
+        'shopify_store_key' => 'wholesale',
+        'shopify_order_id' => 900002,
+        'ordered_at' => now()->startOfDay()->addHours(2),
+        'currency_code' => 'USD',
+        'total_price' => 300.00,
+        'refund_total' => 0,
+    ]);
     TenantBillingSubscription::query()->create([
         'tenant_id' => $retail->id,
         'provider' => 'stripe',
@@ -558,14 +585,66 @@ test('authorized landlord home reports revenue tenant mix growth and tenant oper
         'purchase_key' => (string) data_get(config('module_catalog.plans.base'), 'purchase_key', 'plan.base'),
         'status' => 'active',
     ]);
+    $directInvoice = TenantDirectInvoice::query()->create([
+        'tenant_id' => $retail->id,
+        'status' => 'paid',
+        'currency' => 'USD',
+        'customer_name' => 'Retail Tenant',
+        'customer_email' => 'billing@example.test',
+        'billing_address' => ['country' => 'US'],
+        'authorization_reference' => 'mobile-landlord-test',
+        'line_items' => [
+            ['label' => 'Monthly service', 'amount_cents' => 14900, 'frequency' => 'month', 'payment_timing' => 'recurring_current', 'cost_category' => 'everbranch_service'],
+            ['label' => 'Implementation', 'amount_cents' => 29900, 'frequency' => 'one_time', 'payment_timing' => 'due_on_acceptance', 'cost_category' => 'evergrove_implementation'],
+            ['label' => 'Future monthly service', 'amount_cents' => 9900, 'frequency' => 'month', 'payment_timing' => 'recurring_future', 'cost_category' => 'everbranch_service'],
+        ],
+        'authorized_subtotal_cents' => 44800,
+        'provider_total_cents' => 44800,
+        'provider_amount_due_cents' => 0,
+        'paid_at' => now(),
+    ]);
+    StripeWebhookEvent::query()->create([
+        'event_id' => 'evt_mobile_landlord_paid',
+        'event_type' => 'invoice.paid',
+        'status' => 'processed',
+        'livemode' => false,
+        'tenant_id' => $retail->id,
+        'processed_at' => now(),
+    ]);
+    TenantBillingReceipt::query()->create([
+        'tenant_id' => $retail->id,
+        'tenant_direct_invoice_id' => $directInvoice->id,
+        'provider' => 'stripe',
+        'provider_receipt_id' => 'in_mobile_landlord_paid',
+        'invoice_number' => 'MOBILE-LANDLORD-001',
+        'status' => 'paid',
+        'currency' => 'USD',
+        'subtotal_amount_cents' => 44800,
+        'tax_amount_cents' => 0,
+        'total_amount_cents' => 44800,
+        'paid_at' => now(),
+        'source_event_id' => 'evt_mobile_landlord_paid',
+    ]);
     $operator = User::factory()->create(['role' => 'platform_admin', 'is_active' => true, 'email_verified_at' => now()]);
     Sanctum::actingAs($operator, ['mobile:read', 'mobile:write']);
 
     $this->getJson('/api/mobile/v1/landlord/bootstrap')
         ->assertOk()
         ->assertJsonPath('metrics.1.label', 'Tenants')
-        ->assertJsonPath('metrics.1.value', 2)
-        ->assertJsonStructure(['metrics', 'tenant_types', 'tenant_growth', 'activity', 'recent_tenants', 'recent_activity']);
+        ->assertJsonPath('metrics.1.value', 3)
+        ->assertJsonPath('modern_forestry_sales.available', true)
+        ->assertJsonPath('modern_forestry_sales.currency', 'USD')
+        ->assertJsonPath('modern_forestry_sales.periods.day.gross_cents', 42550)
+        ->assertJsonPath('modern_forestry_sales.periods.day.refund_cents', 550)
+        ->assertJsonPath('modern_forestry_sales.periods.day.net_after_recorded_refunds_cents', 42000)
+        ->assertJsonPath('modern_forestry_sales.periods.day.stores.retail.gross_cents', 12550)
+        ->assertJsonPath('modern_forestry_sales.periods.day.stores.wholesale.gross_cents', 30000)
+        ->assertJsonPath('landlord_revenue.available', true)
+        ->assertJsonPath('landlord_revenue.owner', 'Evergrove Software')
+        ->assertJsonPath('landlord_revenue.periods.month.verified_cash_received_cents', 44800)
+        ->assertJsonPath('landlord_revenue.periods.month.recurring_line_item_cents', 14900)
+        ->assertJsonPath('landlord_revenue.periods.month.one_time_line_item_cents', 29900)
+        ->assertJsonStructure(['metrics', 'tenant_types', 'tenant_growth', 'activity', 'recent_tenants', 'recent_activity', 'modern_forestry_sales' => ['source', 'basis', 'periods'], 'landlord_revenue' => ['source', 'owner', 'scope', 'basis', 'periods', 'history'], 'customer_acquisition' => ['available', 'source', 'manage_url', 'stage_counts', 'follow_up_due', 'needs_attention']]);
     $this->getJson('/api/mobile/v1/landlord/tenants?q=Retail')
         ->assertOk()->assertJsonPath('tenants.0.name', 'Retail Tenant')
         ->assertJsonStructure(['tenants' => [['users_count', 'active', 'activity_30d']]]);

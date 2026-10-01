@@ -6,9 +6,11 @@ use App\Models\ClientProject;
 use App\Models\CustomerAccessRequest;
 use App\Models\FieldServiceJob;
 use App\Models\LandlordOperatorAction;
+use App\Models\LandlordProspect;
 use App\Models\Order;
 use App\Models\ServiceInquiry;
 use App\Models\Tenant;
+use App\Models\TenantBillingReceipt;
 use App\Models\TenantBillingSubscription;
 use App\Models\TenantOnboardingBlueprint;
 use App\Models\TenantSupportTicket;
@@ -59,8 +61,303 @@ class TenantMobileLandlordService
                 'status' => (string) $action->status,
                 'created_at' => optional($action->created_at)->toIso8601String(),
             ])->values(),
+            'modern_forestry_sales' => $this->modernForestrySales(),
+            'landlord_revenue' => $this->landlordRevenue(),
+            'customer_acquisition' => $this->customerAcquisitionSummary(),
             'access_requests' => $this->accessRequests(12),
             'support_inquiries' => $this->inquiries(12),
+        ];
+    }
+
+    /**
+     * Read-only Modern Forestry Shopify order evidence for an operator display.
+     *
+     * These are imported order amounts, not Shopify payouts or accounting net
+     * income. Keeping that distinction in the contract prevents a dashboard
+     * consumer from silently treating operational sales as reconciled cash.
+     *
+     * @return array<string,mixed>
+     */
+    protected function modernForestrySales(): array
+    {
+        $unavailable = fn (string $reason): array => [
+            'available' => false,
+            'reason' => $reason,
+            'source' => 'Everbranch tenant-scoped imported Shopify orders',
+            'basis' => 'Gross imported order amounts less recorded refunds. Shopify payouts, processing fees, taxes, and accounting net income are not exposed by this report.',
+            'currency' => null,
+            'periods' => [],
+            'observed_through' => null,
+        ];
+
+        if (! Schema::hasTable('orders') || ! Schema::hasColumn('orders', 'tenant_id') || ! Schema::hasColumn('orders', 'ordered_at') || ! Schema::hasColumn('orders', 'shopify_store_key') || ! Schema::hasColumn('orders', 'total_price')) {
+            return $unavailable('The verified orders reporting columns are not available.');
+        }
+
+        $tenant = Tenant::query()->where('slug', 'modern-forestry')->first();
+        if (! $tenant) {
+            return $unavailable('The Modern Forestry workspace was not found.');
+        }
+
+        $now = now();
+        $starts = [
+            'day' => $now->copy()->startOfDay(),
+            'week' => $now->copy()->startOfWeek(),
+            'month' => $now->copy()->startOfMonth(),
+        ];
+        $queryStart = collect($starts)->sortBy(fn ($start) => $start->getTimestamp())->first();
+        $hasRefunds = Schema::hasColumn('orders', 'refund_total');
+        $hasCurrency = Schema::hasColumn('orders', 'currency_code');
+        $rows = Order::withoutGlobalScopes()
+            ->where('tenant_id', $tenant->id)
+            ->whereIn('shopify_store_key', ['retail', 'wholesale'])
+            ->whereBetween('ordered_at', [$queryStart, $now])
+            ->get(array_values(array_filter([
+                'ordered_at',
+                'shopify_store_key',
+                'total_price',
+                $hasRefunds ? 'refund_total' : null,
+                $hasCurrency ? 'currency_code' : null,
+            ])));
+
+        $currencies = $hasCurrency
+            ? $rows->pluck('currency_code')->filter()->map(fn ($currency): string => strtoupper(trim((string) $currency)))->unique()->values()
+            : collect(['USD']);
+        if ($currencies->count() > 1) {
+            return $unavailable('Imported orders contain multiple currencies and cannot be combined safely.');
+        }
+        $currency = (string) ($currencies->first() ?: 'USD');
+        $periods = collect($starts)->mapWithKeys(function ($start, string $period) use ($rows, $hasRefunds): array {
+            $periodRows = $rows->filter(fn (Order $order): bool => $order->ordered_at !== null && $order->ordered_at->greaterThanOrEqualTo($start));
+            $stores = collect(['retail', 'wholesale'])->mapWithKeys(function (string $store) use ($periodRows, $hasRefunds): array {
+                $storeRows = $periodRows->where('shopify_store_key', $store);
+                $grossCents = (int) round($storeRows->sum(fn (Order $order): float => (float) ($order->total_price ?? 0)) * 100);
+                $refundCents = $hasRefunds ? (int) round($storeRows->sum(fn (Order $order): float => (float) ($order->refund_total ?? 0)) * 100) : null;
+
+                return [$store => [
+                    'order_count' => $storeRows->count(),
+                    'gross_cents' => $grossCents,
+                    'refund_cents' => $refundCents,
+                    'net_after_recorded_refunds_cents' => $refundCents === null ? null : $grossCents - $refundCents,
+                ]];
+            });
+
+            return [$period => [
+                'starts_at' => $start->toIso8601String(),
+                'ends_at' => now()->toIso8601String(),
+                'order_count' => (int) $stores->sum('order_count'),
+                'gross_cents' => (int) $stores->sum('gross_cents'),
+                'refund_cents' => $hasRefunds ? (int) $stores->sum('refund_cents') : null,
+                'net_after_recorded_refunds_cents' => $hasRefunds ? (int) $stores->sum('net_after_recorded_refunds_cents') : null,
+                'stores' => $stores->all(),
+            ]];
+        })->all();
+
+        return [
+            'available' => true,
+            'reason' => null,
+            'source' => 'Everbranch tenant-scoped imported Shopify orders',
+            'basis' => 'Gross imported order amounts less recorded refunds. Shopify payouts, processing fees, taxes, and accounting net income are not exposed by this report.',
+            'currency' => $currency,
+            'periods' => $periods,
+            'observed_through' => optional($rows->max('ordered_at'))->toIso8601String(),
+        ];
+    }
+
+    /**
+     * Verified Evergrove Software landlord receipts, kept separate from the
+     * commerce income earned inside client workspaces.
+     *
+     * The recurring/one-time split is based on the billing line items that
+     * produced each confirmed receipt. Taxes and refunds are reported
+     * separately because assigning either to a line-item category without
+     * provider evidence would invent a financial allocation.
+     *
+     * @return array<string,mixed>
+     */
+    protected function landlordRevenue(): array
+    {
+        $unavailable = fn (string $reason): array => [
+            'available' => false,
+            'reason' => $reason,
+            'source' => 'Everbranch Stripe-confirmed landlord billing receipts',
+            'owner' => 'Evergrove Software',
+            'scope' => 'Landlord receipts from client tenants. Tenant commerce income is excluded.',
+            'basis' => 'No amount is inferred from catalog pricing or tenant sales.',
+            'currency' => null,
+            'mrr_run_rate_cents' => $this->monthlyRecurringRevenueCents(),
+            'periods' => [],
+            'history' => [],
+            'observed_through' => null,
+        ];
+
+        if (! Schema::hasTable('tenant_billing_receipts') || ! Schema::hasTable('stripe_webhook_events')) {
+            return $unavailable('The verified landlord receipt ledger is not available.');
+        }
+
+        $secret = trim((string) config('services.stripe.secret'));
+        $livemode = match (true) {
+            str_starts_with($secret, 'sk_live_') => true,
+            str_starts_with($secret, 'sk_test_') => false,
+            default => null,
+        };
+        if ($livemode === null) {
+            return $unavailable('Stripe mode cannot be verified from the configured Everbranch account.');
+        }
+
+        $receipts = TenantBillingReceipt::withoutGlobalScopes()
+            ->stripePaymentConfirmed($livemode)
+            ->with([
+                'tenant:id,name',
+                'refunds:id,tenant_billing_receipt_id,status,amount_cents',
+                'billingOrder:id,tenant_id,line_items,metadata',
+                'directInvoice:id,tenant_id,line_items,metadata',
+            ])
+            ->orderByDesc('paid_at')
+            ->limit(2000)
+            ->get();
+
+        $currencies = $receipts->pluck('currency')->filter()->map(fn ($currency): string => strtoupper(trim((string) $currency)))->unique()->values();
+        if ($currencies->count() > 1) {
+            return $unavailable('Verified landlord receipts contain multiple currencies and cannot be combined safely.');
+        }
+        $currency = (string) ($currencies->first() ?: 'USD');
+
+        $rows = $receipts->map(function (TenantBillingReceipt $receipt): array {
+            $rawItems = (array) ($receipt->billingOrder?->line_items ?: $receipt->directInvoice?->line_items);
+            $normalized = collect($rawItems)->filter(fn ($line): bool => is_array($line))->map(function (array $line): array {
+                $quantity = max(1, (int) ($line['quantity'] ?? 1));
+                $amount = array_key_exists('unit_amount_cents', $line)
+                    ? (int) ($line['amount_cents'] ?? ((int) $line['unit_amount_cents'] * $quantity))
+                    : (int) ($line['amount_cents'] ?? $line['amount'] ?? 0) * $quantity;
+
+                return [
+                    'amount_cents' => $amount,
+                    'frequency' => strtolower(trim((string) ($line['frequency'] ?? ''))),
+                    'payment_timing' => strtolower(trim((string) ($line['payment_timing'] ?? ''))),
+                    'cost_category' => strtolower(trim((string) ($line['cost_category'] ?? ''))),
+                ];
+            })->filter(fn (array $line): bool => $line['amount_cents'] !== 0)->values();
+            $candidateGroups = [
+                $normalized->filter(fn (array $line): bool => in_array($line['payment_timing'], ['due_on_acceptance', 'recurring_current'], true))->values(),
+                $normalized->filter(fn (array $line): bool => $line['payment_timing'] === 'recurring_current')->values(),
+                $normalized->filter(fn (array $line): bool => $line['payment_timing'] === 'recurring_future')->values(),
+                $normalized,
+            ];
+            $receiptLines = collect($candidateGroups)->first(
+                fn ($group): bool => $group->isNotEmpty() && (int) $group->sum('amount_cents') === (int) $receipt->subtotal_amount_cents
+            );
+            $classified = $receiptLines ? $receiptLines->map(function (array $line): array {
+                $frequency = $line['frequency'];
+                $timing = $line['payment_timing'];
+                $category = $line['cost_category'];
+                $kind = in_array($frequency, ['month', 'monthly'], true) || str_contains($timing, 'recurring') || $timing === 'monthly_in_arrears'
+                    ? 'recurring'
+                    : (in_array($frequency, ['one_time', 'once'], true) || in_array($timing, ['due_on_acceptance', 'scheduled', 'supplemental_work_order', 'milestone'], true) || str_contains($category, 'implementation') || str_contains($category, 'milestone') ? 'one_time' : 'uncategorized');
+
+                return ['kind' => $kind, 'amount_cents' => $line['amount_cents']];
+            }) : collect();
+
+            return [
+                'paid_at' => $receipt->paid_at,
+                'tenant' => (string) ($receipt->tenant?->name ?? 'Client tenant'),
+                'total_cents' => (int) $receipt->total_amount_cents,
+                'refund_cents' => (int) $receipt->refunds->where('status', 'succeeded')->sum('amount_cents'),
+                'recurring_cents' => (int) $classified->where('kind', 'recurring')->sum('amount_cents'),
+                'one_time_cents' => (int) $classified->where('kind', 'one_time')->sum('amount_cents'),
+                'uncategorized_cents' => $receiptLines
+                    ? (int) $classified->where('kind', 'uncategorized')->sum('amount_cents')
+                    : (int) $receipt->subtotal_amount_cents,
+            ];
+        });
+
+        $summarize = static function ($periodRows): array {
+            $total = (int) $periodRows->sum('total_cents');
+            $refunds = (int) $periodRows->sum('refund_cents');
+
+            return [
+                'receipt_count' => $periodRows->count(),
+                'verified_cash_received_cents' => max(0, $total - $refunds),
+                'gross_receipts_cents' => $total,
+                'refund_cents' => $refunds,
+                'recurring_line_item_cents' => (int) $periodRows->sum('recurring_cents'),
+                'one_time_line_item_cents' => (int) $periodRows->sum('one_time_cents'),
+                'uncategorized_line_item_cents' => (int) $periodRows->sum('uncategorized_cents'),
+            ];
+        };
+        $now = now();
+        $periods = [
+            'month' => $summarize($rows->filter(fn (array $row): bool => $row['paid_at']?->greaterThanOrEqualTo($now->copy()->startOfMonth()) === true)),
+            'year' => $summarize($rows->filter(fn (array $row): bool => $row['paid_at']?->greaterThanOrEqualTo($now->copy()->startOfYear()) === true)),
+        ];
+        $history = $rows->filter(fn (array $row): bool => $row['paid_at']?->greaterThanOrEqualTo($now->copy()->subMonths(23)->startOfMonth()) === true)
+            ->groupBy(fn (array $row): string => $row['paid_at']->format('Y-m'))
+            ->map(fn ($monthRows, string $month): array => ['month' => $month, ...$summarize($monthRows)])
+            ->sortKeys()->values()->all();
+
+        return [
+            'available' => true,
+            'reason' => null,
+            'source' => 'Everbranch Stripe-confirmed landlord billing receipts',
+            'owner' => 'Evergrove Software',
+            'scope' => 'Landlord receipts from client tenants. Tenant commerce income is excluded.',
+            'basis' => 'Verified cash is Stripe-confirmed receipt totals less succeeded refunds. Recurring and one-time amounts are pre-tax billing-line classifications; taxes and refunds are not allocated between those categories.',
+            'currency' => $currency,
+            'mrr_run_rate_cents' => $this->monthlyRecurringRevenueCents(),
+            'periods' => $periods,
+            'history' => $history,
+            'observed_through' => optional($rows->max('paid_at'))->toIso8601String(),
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    protected function customerAcquisitionSummary(): array
+    {
+        if (! Schema::hasTable('landlord_prospects')) {
+            return [
+                'available' => false,
+                'reason' => 'The Everbranch landlord prospect pipeline is not available.',
+                'source' => 'Everbranch landlord prospect pipeline',
+                'manage_url' => 'https://app.theeverbranch.com/landlord/onboarding',
+                'stage_counts' => [],
+                'follow_up_due' => 0,
+                'needs_attention' => [],
+            ];
+        }
+
+        $terminal = ['converted', 'not_fit', 'unsubscribed'];
+        $counts = LandlordProspect::query()->selectRaw('status, COUNT(*) as aggregate')->groupBy('status')->pluck('aggregate', 'status')->map(fn ($count): int => (int) $count)->all();
+        $attention = LandlordProspect::query()
+            ->whereNotIn('status', $terminal)
+            ->where(function ($query): void {
+                $query->where('status', 'replied')
+                    ->orWhere('status', 'meeting_scheduled')
+                    ->orWhere(fn ($followUp) => $followUp->whereNotNull('next_follow_up_at')->where('next_follow_up_at', '<=', now()));
+            })
+            ->orderByRaw("case when status = 'replied' then 0 when status = 'meeting_scheduled' then 1 else 2 end")
+            ->orderBy('next_follow_up_at')
+            ->limit(12)
+            ->get(['id', 'business_name', 'trade', 'city', 'status', 'fit_score', 'opportunity_priority', 'next_follow_up_at'])
+            ->map(fn (LandlordProspect $prospect): array => [
+                'id' => (int) $prospect->id,
+                'business_name' => (string) $prospect->business_name,
+                'trade' => (string) $prospect->trade,
+                'city' => (string) ($prospect->city ?? ''),
+                'status' => (string) $prospect->status,
+                'fit_score' => $prospect->fit_score === null ? null : (int) $prospect->fit_score,
+                'priority' => $prospect->opportunity_priority,
+                'next_follow_up_at' => optional($prospect->next_follow_up_at)->toIso8601String(),
+            ])->values()->all();
+
+        return [
+            'available' => true,
+            'reason' => null,
+            'source' => 'Everbranch landlord prospect pipeline',
+            'manage_url' => 'https://app.theeverbranch.com/landlord/onboarding',
+            'stage_counts' => $counts,
+            'follow_up_due' => LandlordProspect::query()->whereNotIn('status', $terminal)->whereNotNull('next_follow_up_at')->where('next_follow_up_at', '<=', now())->count(),
+            'needs_attention' => $attention,
+            'safety' => 'Read-only summary. Discovery may incur provider cost and requires confirmation. Outreach sends, meeting bookings, conversion, and client onboarding require explicit operator review and confirmation in Everbranch.',
         ];
     }
 
