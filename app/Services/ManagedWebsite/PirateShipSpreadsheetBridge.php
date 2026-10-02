@@ -120,6 +120,7 @@ class PirateShipSpreadsheetBridge
                 if ($existing) {
                     if ($existing->provider === 'pirate_ship' && $existing->tracking_number === $row['tracking']) {
                         $already++;
+
                         continue;
                     }
                     throw ValidationException::withMessages(['file' => 'Order '.$row['number'].' already has a different shipment. Nothing was imported.']);

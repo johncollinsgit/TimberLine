@@ -64,7 +64,9 @@ test('email link grants only the shopper’s own Website order history', functio
         WebsiteOrder::query()->create(['tenant_id' => $tenant->id, 'tenant_site_id' => $site->id, 'website_customer_id' => $shopper->id, 'number' => 'WEB-ABC1234'.$index, 'lookup_token' => Str::random(56), 'payment_status' => 'paid', 'fulfillment_status' => 'unfulfilled', 'fulfillment_method' => 'ship', 'currency' => 'usd', 'subtotal_cents' => 2500, 'total_cents' => 2500, 'customer_snapshot' => ['email' => $shopper->email]]);
     }
     $mailBody = '';
-    Mail::shouldReceive('raw')->once()->andReturnUsing(function (string $body) use (&$mailBody): void { $mailBody = $body; });
+    Mail::shouldReceive('raw')->once()->andReturnUsing(function (string $body) use (&$mailBody): void {
+        $mailBody = $body;
+    });
     $host = 'https://sawyer-test.theeverbranch.com';
     $this->post($host.'/account/link', ['email' => 'buyer@example.com'])->assertRedirect();
     preg_match('#https://[^\s]+/account/verify/([A-Za-z0-9]+)#', $mailBody, $matches);
