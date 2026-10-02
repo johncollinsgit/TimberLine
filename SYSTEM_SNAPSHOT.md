@@ -1,5 +1,14 @@
 # SYSTEM SNAPSHOT
 
+## Website Commerce encrypted storage repair (2026-10-02)
+
+Website order, order-event, fulfillment-location, shipping-quote, shipment, and
+shipment-event private array fields now use `LONGTEXT` storage to match their
+encrypted Eloquent casts. The original MySQL JSON columns rejected ciphertext
+and prevented order creation. The additive repair migration is safe to retry
+after a partial MySQL DDL and encrypts any legacy plaintext JSON values. It
+does not alter Website checkout readiness, payment, or shipping gates.
+
 ## Everbranch Field App Store repair (development, 2026-10-01)
 
 The Safari in-app reviewer login exposed a production 419 on form POST even though a plain HTTP PKCE probe passed. An isolated, host-only, unpartitioned SameSite=Lax session cookie preserved Shopify embedded cookie behavior but did not clear the simulator 419. The new field build uses native email/password API login, with existing Fortify-style TOTP or recovery-code verification and the same 30-day mobile token as PKCE exchange. Confirm native login and secure token storage on simulator and a physical iPhone before submission.

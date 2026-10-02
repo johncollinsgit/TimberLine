@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_02_120000_repair_website_encrypted_column_storage.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['first encrypted Website column converted before the remaining JSON columns'],
+    ],
     '2026_09_14_120000_create_trajectory_tables.php' => [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['finance account tables retained before notification and valuation tables'],

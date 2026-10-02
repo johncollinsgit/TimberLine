@@ -1,5 +1,16 @@
 # Shared website catalog administration
 
+## Encrypted Website order and shipping storage
+
+The Website Commerce private array fields use encrypted model casts and
+`LONGTEXT` database columns. Migration
+`2026_10_02_120000_repair_website_encrypted_column_storage.php` repairs the
+original JSON columns, including order events and Pirate Ship shipment records.
+It converts any existing plaintext JSON values to encrypted text and resumes
+column by column after a partial MySQL deployment. Keep this migration in the
+normal GitHub migration safety gate and verify the active release through `/ready`
+before creating new production Website orders.
+
 All entitled Managed Website workspaces expose separate Products, Collections,
 Customers and Orders destinations. The website editor manages static page content.
 `WebsiteCatalogController` and `WebsiteCatalogService` own dedicated product and
