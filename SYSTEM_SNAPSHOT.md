@@ -1,5 +1,22 @@
 # SYSTEM SNAPSHOT
 
+## Modern Forestry birthday issuance coverage (development, 2026-10-02)
+
+- Production tenant `modern-forestry` now has an audited tenant-specific $10
+  birthday discount-code setting with a birthday-through-day-14 claim window,
+  matching the public Birthday Club offer. The older global fallback still
+  contains a migrated 50 Candle Cash amount; do not remove the tenant override
+  or treat that fallback as the retail offer.
+- The production daily issuance task currently selects only the first 500 of
+  roughly 2,900 birthday profiles. A full dry run found 132 currently eligible
+  profiles after that first slice. The pending command fix scans the full
+  tenant cohort in ID order and applies its 500 limit to eligible rewards,
+  preventing permanent starvation of later profiles.
+- Four 50 Candle Cash birthday awards were already posted before this
+  correction. Preserve their ledger history and review any customer balance
+  adjustment separately. The public Birthday Club page still links to the
+  retired `/apps/birthday` path, which returns 404.
+
 ## Public launch partner offer (2026-10-02)
 
 - Evergrove and Everbranch share the public Launch Partner offer in `config/product_surfaces.php`: $499 one-time setup, $89/month for the first six billing months, then $199/month. The first six months total $1,033 before taxes or add-ons.

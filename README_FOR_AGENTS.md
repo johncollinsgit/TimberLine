@@ -296,6 +296,11 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
 - Legacy points/Candle Cash and birthday records are production data. Preserve
   the compatibility layer and use its read-only checks before any retirement
   migration; do not reset its observations as part of routine verification.
+- For Modern Forestry retail, the audited tenant birthday override is a $10
+  discount code with a 14-day post-birthday window. Do not infer the retail
+  offer from the global legacy 50 Candle Cash fallback. The daily birthday
+  issuance command must scan the entire tenant cohort; its limit caps eligible
+  rewards processed, not the first profiles selected.
 
 ## Managed Website guardrails (approved contract; not yet enabled)
 
