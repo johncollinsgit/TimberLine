@@ -4,6 +4,59 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
+it('resumes Website encrypted column repair after MySQL retains an early column conversion', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    $columns = [
+        'website_orders' => ['customer_snapshot', 'shipping_address', 'billing_address', 'service_request'],
+        'website_order_events' => ['data'],
+        'website_fulfillment_locations' => ['address'],
+        'website_shipping_rate_quotes' => ['destination'],
+        'website_shipments' => ['destination'],
+        'website_shipment_events' => ['payload'],
+    ];
+    foreach ($columns as $tableName => $columnNames) {
+        if (! Schema::hasTable($tableName)) {
+            Schema::create($tableName, function (Blueprint $table): void {
+                $table->id();
+            });
+        }
+        foreach ($columnNames as $columnName) {
+            if (! Schema::hasColumn($tableName, $columnName)) {
+                Schema::table($tableName, function (Blueprint $table) use ($columnName): void {
+                    $table->json($columnName)->nullable();
+                });
+            }
+            if (Schema::getColumnType($tableName, $columnName) !== 'json') {
+                Schema::table($tableName, function (Blueprint $table) use ($tableName, $columnName): void {
+                    $column = $table->json($columnName);
+                    if (! in_array($tableName.'.'.$columnName, ['website_fulfillment_locations.address', 'website_shipping_rate_quotes.destination'], true)) {
+                        $column->nullable();
+                    }
+                    $column->change();
+                });
+            }
+        }
+    }
+
+    // The first ALTER survived, but Laravel did not record the migration.
+    Schema::table('website_orders', function (Blueprint $table): void {
+        $table->longText('customer_snapshot')->nullable()->change();
+    });
+
+    $migration = require database_path('migrations/2026_10_02_120000_repair_website_encrypted_column_storage.php');
+    $migration->up();
+    $migration->up();
+
+    foreach ($columns as $tableName => $columnNames) {
+        foreach ($columnNames as $columnName) {
+            expect(Schema::getColumnType($tableName, $columnName))->toBe('longtext');
+        }
+    }
+});
+
 uses(Tests\TestCase::class);
 
 it('resumes crew status creation after MySQL retains the table', function (): void {
