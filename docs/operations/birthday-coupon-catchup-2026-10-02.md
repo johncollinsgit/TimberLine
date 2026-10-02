@@ -38,6 +38,10 @@ plays the prebuilt balloons and confetti animation, and links to candle bundles.
 Regular future birthday messages use `/pages/birthday-celebration` with the
 same flow and no belated wording. A saved future birthday shows its next
 planned email date; an unset birthday can be entered on either page.
+The theme's animation is a prebuilt balloons and confetti Lottie asset by
+MD Abdur Rahim from LottieFiles (`celebration-balloon-confetti-animation-fQ35dRqK68`)
+under the Lottie Simple License. The theme self-hosts that asset and its
+`lottie-player` runtime; the runtime license is retained in the theme source.
 
 The coupon allows shipping discounts and disallows product and order discounts.
 Shopify requires reciprocal combination settings. The active retail free
