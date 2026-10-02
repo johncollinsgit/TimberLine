@@ -4,8 +4,12 @@
 
 - Fundraising in the verified retail Shopify app reads BSF-tagged imported
   orders. The first-of-month job queues approved prior-month invoices only;
-  QuickBooks creation and sending require separate staff clicks and default-off
-  production gates. Actual purchased-label costs are pulled by exact Shopify
+  QuickBooks creation and sending require separate staff clicks. The verified
+  production mapping enables these controls through GitHub deployment, while
+  non-production defaults stay off. Create makes a non-payable QuickBooks draft;
+  Send enables ACH/card, verifies the live customer link, and emails the payer.
+  The card-surcharge setting cannot be verified through Everbranch. Actual
+  purchased-label costs are pulled by exact Shopify
   order ID from ShopifyQL `shipping_labels` when available; staff reviews and
   approves each order. Missing reports require a receipt-backed manual entry.
   Never equate purchased-label cost with Shopify checkout shipping.

@@ -581,7 +581,7 @@ class ShopifyEmbeddedSettingsController extends Controller
 
         return response()->json([
             'ok' => true,
-            'message' => $send ? 'QuickBooks accepted the invoice send request.' : 'QuickBooks invoice created. Review its payable link before sending.',
+            'message' => $send ? 'QuickBooks accepted the invoice send request.' : 'Non-payable QuickBooks draft created. Review it in QuickBooks before sending.',
             'invoice_id' => $updated->quickbooks_invoice_id,
             'status' => $updated->status,
         ]);

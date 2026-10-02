@@ -6,6 +6,7 @@ use App\Models\IntegrationConnection;
 use App\Models\ModernForestryFundraiserInvoicePackage;
 use App\Models\ModernForestryFundraiserOrder;
 use App\Models\Order;
+use App\Models\Tenant;
 use App\Services\Integrations\QuickBooks\QuickBooksConnector;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -30,6 +31,13 @@ class ModernForestryFundraiserQuickBooksService
         }
         if (strcasecmp($this->deliveryAddress(), (string) $package->payer_email) !== 0) {
             throw ValidationException::withMessages(['quickbooks' => ['The controlled QuickBooks address does not match the fundraiser payer email. Nothing was created or sent.']]);
+        }
+
+        if (Tenant::query()->whereKey($package->tenant_id)->value('slug') !== 'modern-forestry') {
+            throw ValidationException::withMessages(['quickbooks' => ['This QuickBooks mapping is only approved for Modern Forestry.']]);
+        }
+        if ($send && ! filled($package->quickbooks_invoice_id)) {
+            throw ValidationException::withMessages(['quickbooks' => ['Create and review the QuickBooks draft before using Send.']]);
         }
 
         $connection = IntegrationConnection::query()->forTenant($package->tenant_id)
@@ -60,11 +68,29 @@ class ModernForestryFundraiserQuickBooksService
 
             if ($send && $locked->quickbooks_sent_at === null) {
                 $liveInvoice = (array) data_get($client->invoiceWithPaymentLink((string) $locked->quickbooks_invoice_id), 'Invoice', []);
-                if ((int) round(((float) ($liveInvoice['TotalAmt'] ?? -1)) * 100) !== (int) $locked->total_cents
-                    || (string) data_get($liveInvoice, 'CustomerRef.value') !== trim((string) config('services.quickbooks.fundraiser_customer_id'))
-                    || ! filter_var($liveInvoice['InvoiceLink'] ?? null, FILTER_VALIDATE_URL)
-                ) {
-                    throw ValidationException::withMessages(['quickbooks' => ['The live QuickBooks invoice amount, customer, or payable link could not be verified. Nothing was sent.']]);
+                $this->assertInvoiceMatchesPackage($liveInvoice, $locked);
+                if (strcasecmp((string) ($liveInvoice['EmailStatus'] ?? ''), 'EmailSent') === 0) {
+                    throw ValidationException::withMessages(['quickbooks' => ['QuickBooks shows this invoice was already emailed. Reconcile its delivery before retrying to avoid a duplicate email.']]);
+                }
+                if (($liveInvoice['AllowOnlineACHPayment'] ?? null) !== true
+                    || ($liveInvoice['AllowOnlineCreditCardPayment'] ?? null) !== true) {
+                    if (! filled($liveInvoice['SyncToken'] ?? null)) {
+                        throw ValidationException::withMessages(['quickbooks' => ['QuickBooks did not return an invoice version. Nothing was sent.']]);
+                    }
+                    $client->updateInvoice([
+                        'Id' => (string) $locked->quickbooks_invoice_id,
+                        'SyncToken' => (string) $liveInvoice['SyncToken'],
+                        'sparse' => true,
+                        'AllowOnlineACHPayment' => true,
+                        'AllowOnlineCreditCardPayment' => true,
+                    ], 'fundraiser-package-'.$locked->id.'-enable-payments-v1');
+                    $liveInvoice = (array) data_get($client->invoiceWithPaymentLink((string) $locked->quickbooks_invoice_id), 'Invoice', []);
+                    $this->assertInvoiceMatchesPackage($liveInvoice, $locked);
+                }
+                if (($liveInvoice['AllowOnlineACHPayment'] ?? null) !== true
+                    || ($liveInvoice['AllowOnlineCreditCardPayment'] ?? null) !== true
+                    || ! $this->validIntuitLink((string) ($liveInvoice['InvoiceLink'] ?? ''))) {
+                    throw ValidationException::withMessages(['quickbooks' => ['QuickBooks did not confirm both payment methods and a customer payment link. Nothing was sent.']]);
                 }
                 $client->sendInvoice((string) $locked->quickbooks_invoice_id, $this->deliveryAddress());
                 $locked->forceFill([
@@ -81,7 +107,7 @@ class ModernForestryFundraiserQuickBooksService
 
     public function verifiedPaymentLink(ModernForestryFundraiserInvoicePackage $package): ?string
     {
-        if (! filled($package->quickbooks_invoice_id)) {
+        if (! filled($package->quickbooks_invoice_id) || $package->quickbooks_sent_at === null) {
             return null;
         }
         $connection = IntegrationConnection::query()->forTenant($package->tenant_id)
@@ -91,11 +117,11 @@ class ModernForestryFundraiserQuickBooksService
             'Invoice', []
         );
         $link = (string) ($invoice['InvoiceLink'] ?? '');
-        $host = strtolower((string) parse_url($link, PHP_URL_HOST));
         if ((int) round(((float) ($invoice['TotalAmt'] ?? -1)) * 100) !== (int) $package->total_cents
             || (string) data_get($invoice, 'CustomerRef.value') !== trim((string) config('services.quickbooks.fundraiser_customer_id'))
-            || ! str_starts_with($link, 'https://')
-            || ! ($host === 'intuit.com' || str_ends_with($host, '.intuit.com'))) {
+            || ($invoice['AllowOnlineACHPayment'] ?? null) !== true
+            || ($invoice['AllowOnlineCreditCardPayment'] ?? null) !== true
+            || ! $this->validIntuitLink($link)) {
             return null;
         }
 
@@ -135,10 +161,31 @@ class ModernForestryFundraiserQuickBooksService
             'PrivateNote' => 'Created by Everbranch fundraiser reconciliation package '.$package->id.'.',
             'CustomerMemo' => ['value' => 'Monthly Bed Sheet Fundraiser reconciliation. Candle proceeds already reflect the agreed fundraiser share.'],
             'CurrencyRef' => ['value' => strtoupper((string) $package->currency)],
-            'AllowOnlineACHPayment' => true,
-            'AllowOnlineCreditCardPayment' => true,
+            'AllowOnlineACHPayment' => false,
+            'AllowOnlineCreditCardPayment' => false,
             'Line' => $lines,
         ];
+    }
+
+    /** @param array<string,mixed> $invoice */
+    protected function assertInvoiceMatchesPackage(array $invoice, ModernForestryFundraiserInvoicePackage $package): void
+    {
+        if ((string) ($invoice['Id'] ?? '') !== (string) $package->quickbooks_invoice_id
+            || (string) ($invoice['DocNumber'] ?? '') !== (string) $package->package_reference
+            || (int) round(((float) ($invoice['TotalAmt'] ?? -1)) * 100) !== (int) $package->total_cents
+            || (string) data_get($invoice, 'CustomerRef.value') !== trim((string) config('services.quickbooks.fundraiser_customer_id'))
+            || strcasecmp((string) data_get($invoice, 'BillEmail.Address'), $this->deliveryAddress()) !== 0) {
+            throw ValidationException::withMessages(['quickbooks' => ['The live QuickBooks invoice number, amount, customer, or email differs from the approved package. Nothing was sent.']]);
+        }
+    }
+
+    protected function validIntuitLink(string $link): bool
+    {
+        $host = strtolower((string) parse_url($link, PHP_URL_HOST));
+
+        return filter_var($link, FILTER_VALIDATE_URL)
+            && str_starts_with($link, 'https://')
+            && ($host === 'intuit.com' || str_ends_with($host, '.intuit.com'));
     }
 
     /** @return array<string,mixed> */

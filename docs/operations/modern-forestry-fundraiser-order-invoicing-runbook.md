@@ -22,12 +22,20 @@ and tax before approval and again before QuickBooks creation or sending.
 
 The first-of-month 9:00 AM ET job prepares approved prior-month packages but
 does not create or send a QuickBooks invoice. Staff uses separate **Create
-QuickBooks invoice** and **Send** controls. Both remain disabled by production
-gates until customer/item IDs and payer delivery address are verified. The
-customer payment URL is read back from Intuit with `include=invoiceLink`,
-checked against the invoice amount/customer and Intuit host, then exposed as a
-clickable link. An existing QuickBooks document number blocks a duplicate.
-QuickBooks is authoritative for payment status.
+QuickBooks draft** and **Send** controls. Both are enabled for the verified
+Modern Forestry production QuickBooks connection via GitHub deployment; the
+environment overrides remain emergency kill switches. The verified IDs are
+customer `100000001`, candle item `58`, and shipping item `59`. The controlled
+payer address is `info@bedsheetfundraising.com`. The Create action sets both
+online-payment flags to false to avoid QuickBooks' automatic send-on-import
+condition. The separate Send action enables card and ACH payments using a
+sparse invoice update, checks the live invoice number, amount, customer, email,
+payment flags, and Intuit-hosted customer link, then invokes QuickBooks send.
+The link is exposed in Everbranch only after that send succeeds. An existing
+QuickBooks document number blocks a duplicate. QuickBooks is authoritative
+for payment status. Everbranch cannot verify QuickBooks' card-surcharge setting;
+staff must check that separately before sending if card-fee passthrough is
+desired. Do not claim the fee is configured or apply it to ACH.
 
 The fundraiser queue's encrypted personal and line-item fields require the
 additive `2026_10_02_190000_repair_fundraiser_encrypted_column_storage.php`
@@ -95,8 +103,9 @@ store, host, secret, or QuickBooks identifier in the Zapier payload.
 2. Select approved orders (one order when cadence is `per_order`) and prepare
    the package.
 3. Review the package lines, QuickBooks customer, product/service, income
-   account, and tax code. Create the invoice in QuickBooks from the Fundraising
-   tab, open its verified payable customer link, then explicitly send.
+   account, tax code, and card-surcharge setting. Create the non-payable draft
+   in QuickBooks from the Fundraising tab, inspect it in QuickBooks, then
+   explicitly send. The verified customer payment link appears after sending.
 
 When the cadence is **Monthly review and gated invoice on the 1st**,
 Everbranch runs at 9:00 AM America/New_York on the first calendar day. The
@@ -106,30 +115,32 @@ whose source date is in that prior month, keeps currencies separate, and creates
 the same immutable review package. It does not approve orders. Existing packages
 with the same month reference are reused on a rerun. Previously saved
 `monthly_last_day` settings are interpreted as this first-day cadence.
-Default-off QuickBooks write and send gates control the later provider actions
-independently.
+QuickBooks write and send gates control the later provider actions
+independently. They are enabled only for this verified production deployment;
+non-production defaults remain off.
 
 The package begins at `review_required`, `not_sent`, and `not_available`. The
 normal schedule does not write to QuickBooks. A staff click, with the write
 gate and exact customer/candle/shipping item IDs configured, creates a
 deterministic `BSF-MMM-YYYY` invoice through the tenant-owned OAuth connection.
-With the separate send gate enabled, a second explicit action invokes Intuit's
-invoice-send endpoint and stores the provider invoice ID, document number, and
-created/sent timestamps. The dedicated send-to setting must match the package
-payer email; its current internal-test default will block a send to Dan until
-the production value is changed and reviewed. Replays reuse the provider
-invoice.
+With the separate send gate enabled, a second explicit action enables online
+payment and invokes Intuit's invoice-send endpoint, storing the provider
+invoice ID, document number, and created/sent timestamps. The dedicated
+send-to setting must match the package payer email. Replays reuse the provider
+invoice. The CLI monthly command has no send option; it only queues review.
 
-## Prerequisites before enabling delivery or QuickBooks write-back
+## Required checks before the first production send
 
 1. Obtain the payer's legal name, accounts-payable email, and billing address.
 2. Confirm a real Zapier sample against the above contract and a production
    replay test.
 3. Confirm an approved tax decision and how supplied tax/shipping values are
    reconciled.
-4. Configure the exact QuickBooks customer, candle item, and shipping item IDs.
-5. Enable the write gate for a controlled draft test, verify it in QuickBooks,
-   and only then enable the separate send gate.
+4. Recheck the exact QuickBooks customer, candle item, and shipping item IDs if
+   the account mappings change.
+5. Create a controlled non-payable draft, inspect it in QuickBooks, and verify
+   the card surcharge is configured as intended before clicking Send. A draft
+   is never sent by the scheduled job.
 
 ## Delivery/open status
 
