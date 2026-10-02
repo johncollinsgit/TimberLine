@@ -64,14 +64,17 @@ test('birthday reward activation creates exactly one shopify discount and stays 
 
     $lookupCalls = 0;
     $createCalls = 0;
+    $lookupQuery = null;
+    $createQuery = null;
     $createdDiscountInput = null;
 
-    Http::fake(function (\Illuminate\Http\Client\Request $request) use (&$lookupCalls, &$createCalls, &$createdDiscountInput) {
+    Http::fake(function (\Illuminate\Http\Client\Request $request) use (&$lookupCalls, &$createCalls, &$lookupQuery, &$createQuery, &$createdDiscountInput) {
         $payload = $request->data();
         $query = (string) ($payload['query'] ?? '');
 
         if (str_contains($query, 'BirthdayDiscountByCode')) {
             $lookupCalls++;
+            $lookupQuery = $query;
 
             return Http::response([
                 'data' => [
@@ -82,6 +85,7 @@ test('birthday reward activation creates exactly one shopify discount and stays 
 
         if (str_contains($query, 'BirthdayDiscountCodeBasicCreate')) {
             $createCalls++;
+            $createQuery = $query;
             $createdDiscountInput = data_get($payload, 'variables.basicCodeDiscount');
 
             return Http::response([
@@ -91,7 +95,6 @@ test('birthday reward activation creates exactly one shopify discount and stays 
                             'id' => 'gid://shopify/DiscountCodeNode/111',
                             'codeDiscount' => [
                                 '__typename' => 'DiscountCodeBasic',
-                                'id' => 'gid://shopify/DiscountCodeBasic/111',
                                 'title' => 'Birthday Candle Cash 2026 #1',
                                 'startsAt' => now()->subMinute()->toIso8601String(),
                                 'endsAt' => now()->addDays(14)->toIso8601String(),
@@ -122,12 +125,14 @@ test('birthday reward activation creates exactly one shopify discount and stays 
     expect((bool) ($first['ok'] ?? false))->toBeTrue()
         ->and((bool) ($second['ok'] ?? false))->toBeTrue()
         ->and((string) $fresh->status)->toBe('claimed')
-        ->and((string) $fresh->shopify_discount_id)->toBe('gid://shopify/DiscountCodeBasic/111')
+        ->and($fresh->shopify_discount_id)->toBeNull()
         ->and((string) $fresh->shopify_discount_node_id)->toBe('gid://shopify/DiscountCodeNode/111')
         ->and((string) $fresh->discount_sync_status)->toBe('synced')
         ->and($fresh->resolvedActivationAt())->not->toBeNull()
         ->and($lookupCalls)->toBe(1)
         ->and($createCalls)->toBe(1)
+        ->and($lookupQuery)->not->toMatch('/\.\.\. on DiscountCode(?:Basic|FreeShipping)\s*\{\s*id\b/s')
+        ->and($createQuery)->not->toMatch('/\.\.\. on DiscountCodeBasic\s*\{\s*id\b/s')
         ->and(data_get($createdDiscountInput, 'combinesWith'))->toBe([
             'orderDiscounts' => false,
             'productDiscounts' => false,

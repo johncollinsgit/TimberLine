@@ -20,13 +20,11 @@ query BirthdayDiscountByCode($code: String!) {
     codeDiscount {
       __typename
       ... on DiscountCodeBasic {
-        id
         title
         startsAt
         endsAt
       }
       ... on DiscountCodeFreeShipping {
-        id
         title
         startsAt
         endsAt
@@ -44,7 +42,6 @@ mutation BirthdayDiscountCodeBasicCreate($basicCodeDiscount: DiscountCodeBasicIn
       codeDiscount {
         __typename
         ... on DiscountCodeBasic {
-          id
           title
           startsAt
           endsAt
@@ -68,7 +65,6 @@ mutation BirthdayDiscountCodeFreeShippingCreate($freeShippingCodeDiscount: Disco
       codeDiscount {
         __typename
         ... on DiscountCodeFreeShipping {
-          id
           title
           startsAt
           endsAt
