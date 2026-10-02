@@ -4,14 +4,19 @@ namespace App\Services\Shopify;
 
 use App\Models\ModernForestryFundraiserInvoicePackage;
 use App\Models\ModernForestryFundraiserOrder;
+use App\Models\Order;
 use App\Models\Tenant;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class ModernForestryFundraiserInvoicePreparationService
 {
-    public function __construct(protected ModernForestryFundraiserInvoiceSettingsService $settings) {}
+    public function __construct(
+        protected ModernForestryFundraiserInvoiceSettingsService $settings,
+        protected ModernForestryFundraiserShopifyOrderService $shopifyOrders
+    ) {}
 
     /** @return array<string,mixed> */
     public function desk(Tenant $tenant): array
@@ -47,12 +52,21 @@ class ModernForestryFundraiserInvoicePreparationService
                 throw ValidationException::withMessages(['order' => ['A packaged fundraiser order cannot be approved again.']]);
             }
 
+            if ($order->source === 'shopify') {
+                if (! (bool) data_get($order->source_payload, 'shipping_verified')) {
+                    throw ValidationException::withMessages(['shipping' => ['Verify the purchased-label cost before approving this Shopify order.']]);
+                }
+                $this->shopifyOrders->assertCurrent($order);
+            }
+
             if ($order->status !== 'approved') {
                 $order->forceFill([
                     'status' => 'approved',
                     'reviewed_at' => now(),
                     'reviewed_by' => $actor,
-                    'review_notes' => 'Amounts supplied by Zapier were approved for accounting-package preparation. Tax treatment remains a QuickBooks review decision.',
+                    'review_notes' => $order->source === 'shopify'
+                        ? 'Shopify candle proceeds and purchased-label cost reviewed for invoicing.'
+                        : 'Amounts supplied by Zapier were approved for accounting-package preparation. Tax treatment remains a QuickBooks review decision.',
                 ])->save();
             }
 
@@ -79,9 +93,15 @@ class ModernForestryFundraiserInvoicePreparationService
         $groups = ModernForestryFundraiserOrder::query()
             ->forTenant($tenant)
             ->where('status', 'approved')
-            ->whereBetween('source_created_at', [$month->startOfMonth(), $month->endOfMonth()])
+            ->where(function ($query) use ($month): void {
+                $query->whereBetween('source_created_at', [$month->startOfMonth(), $month->endOfMonth()])
+                    ->orWhere('source', 'shopify');
+            })
             ->orderBy('id')
-            ->get()->groupBy('currency');
+            ->get()
+            ->filter(fn (ModernForestryFundraiserOrder $order): bool => $order->source !== 'shopify'
+                || data_get($order->source_payload, 'billing_month') === $month->format('Y-m'))
+            ->groupBy('currency');
 
         return $groups
             ->map(fn ($orders, $currency) => $this->prepare(
@@ -111,12 +131,6 @@ class ModernForestryFundraiserInvoicePreparationService
         }
 
         return DB::transaction(function () use ($tenant, $settings, $orderIds, $actor, $packageReference): ModernForestryFundraiserInvoicePackage {
-            if (filled($packageReference)) {
-                $existing = ModernForestryFundraiserInvoicePackage::query()->forTenant($tenant)->where('package_reference', $packageReference)->first();
-                if ($existing) {
-                    return $existing;
-                }
-            }
             $orders = ModernForestryFundraiserOrder::query()
                 ->forTenant($tenant)
                 ->whereIn('id', $orderIds)
@@ -127,8 +141,44 @@ class ModernForestryFundraiserInvoicePreparationService
             if ($orders->count() !== count($orderIds) || $orders->contains(fn (ModernForestryFundraiserOrder $order): bool => $order->status !== 'approved')) {
                 throw ValidationException::withMessages(['order_ids' => ['Every selected order must exist in this fundraiser queue and be approved before packaging.']]);
             }
+            foreach ($orders as $order) {
+                if ($order->source === 'shopify' && ! (bool) data_get($order->source_payload, 'shipping_verified')) {
+                    throw ValidationException::withMessages(['shipping' => ['A Shopify order is missing a verified purchased-label cost.']]);
+                }
+            }
             if ($orders->pluck('currency')->map(fn (string $currency): string => strtolower($currency))->unique()->count() !== 1) {
                 throw ValidationException::withMessages(['order_ids' => ['Selected orders must use the same currency before they can share an accounting package.']]);
+            }
+            if (($settings['invoice_cadence'] ?? null) === 'monthly_first_day' && $orders->contains(fn (ModernForestryFundraiserOrder $order): bool => $order->source === 'shopify')) {
+                $months = $orders->map(fn (ModernForestryFundraiserOrder $order): string => $order->source === 'shopify'
+                    ? (string) data_get($order->source_payload, 'billing_month')
+                    : $order->source_created_at->copy()->timezone('America/New_York')->format('Y-m'))->unique();
+                if ($months->count() !== 1 || ! preg_match('/^\d{4}-\d{2}$/', (string) $months->first())) {
+                    throw ValidationException::withMessages(['order_ids' => ['A monthly BSF invoice must contain orders from one calendar month.']]);
+                }
+                $month = CarbonImmutable::createFromFormat('!Y-m', (string) $months->first(), 'America/New_York');
+                $packageReference ??= 'BSF-'.strtoupper($month->format('M')).'-'.$month->format('Y');
+                $expected = Order::query()->forTenant($tenant)->where('shopify_store_key', 'retail')
+                    ->whereJsonContains('attribution_meta->order_tags', 'BSF')
+                    ->whereBetween('ordered_at', [$month->startOfMonth()->utc(), $month->endOfMonth()->utc()])
+                    ->where(fn ($query) => $query->whereNull('refund_total')->orWhere('refund_total', '<=', 0))
+                    ->pluck('shopify_order_id')->map(fn ($id): string => (string) $id)->sort()->values()->all();
+                $selected = $orders->where('source', 'shopify')->pluck('external_order_id')
+                    ->map(fn ($id): string => (string) $id)->sort()->values()->all();
+                if ($expected !== $selected) {
+                    throw ValidationException::withMessages(['order_ids' => ['The monthly package must include every BSF Shopify order for that month. Detect and approve missing orders first.']]);
+                }
+            }
+            if (filled($packageReference)) {
+                $existing = ModernForestryFundraiserInvoicePackage::query()->forTenant($tenant)
+                    ->where('package_reference', $packageReference)->first();
+                if ($existing) {
+                    if (array_diff((array) $existing->order_ids, $orderIds) !== [] || array_diff($orderIds, (array) $existing->order_ids) !== []) {
+                        throw ValidationException::withMessages(['order_ids' => ['This month already has a package with different orders. Reconcile the existing package before invoicing.']]);
+                    }
+
+                    return $existing;
+                }
             }
 
             $invoiceLines = [];
@@ -150,7 +200,7 @@ class ModernForestryFundraiserInvoicePreparationService
                     $invoiceLines[] = $this->adjustmentLine('discount', $order, 'Source-supplied discount', -1 * (int) $order->discount_cents);
                 }
                 if ((int) $order->shipping_cents > 0) {
-                    $invoiceLines[] = $this->adjustmentLine('shipping', $order, 'Source-supplied shipping', (int) $order->shipping_cents);
+                    $invoiceLines[] = $this->adjustmentLine('shipping', $order, $order->source === 'shopify' ? 'Purchased-label shipping' : 'Source-supplied shipping', (int) $order->shipping_cents);
                 }
                 if ((int) $order->tax_cents > 0) {
                     $invoiceLines[] = $this->adjustmentLine('tax_review', $order, 'Source-supplied tax amount — requires QuickBooks tax-code review', (int) $order->tax_cents);
@@ -180,7 +230,7 @@ class ModernForestryFundraiserInvoicePreparationService
                 'order_ids' => $orders->pluck('id')->all(),
                 'invoice_lines' => $invoiceLines,
                 'review_notes' => [
-                    'Fundraiser amounts came from Zapier and were manually approved in Everbranch.',
+                    'Fundraiser source amounts and actual label costs were reviewed in Everbranch.',
                     'This is an accounting-review package, not a QuickBooks invoice or payment request.',
                     'Confirm QuickBooks customer, products/services, income account, and tax code before creating and sending the actual invoice in QuickBooks.',
                 ],
@@ -207,6 +257,10 @@ class ModernForestryFundraiserInvoicePreparationService
             'received_at' => $order->received_at?->toIso8601String(),
             'source_created_at' => $order->source_created_at?->toIso8601String(),
             'items_count' => count((array) $order->line_items),
+            'source' => $order->source,
+            'shipping_cents' => (int) $order->shipping_cents,
+            'shipping_verified' => $order->source !== 'shopify' || (bool) data_get($order->source_payload, 'shipping_verified'),
+            'shopify_order_id' => $order->source === 'shopify' ? $order->external_order_id : null,
         ];
     }
 

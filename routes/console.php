@@ -171,11 +171,16 @@ Schedule::command('marketing:send-weekly-rewards-wishlist-summary', [
     ->withoutOverlapping(120)
     ->runInBackground();
 
-// Modern Forestry fundraiser orders arrive through the signed Zapier intake.
-// Only already-approved source amounts are packaged. QuickBooks creation and
-// controlled delivery stay inert unless both production gates and exact
-// Modern Forestry customer/item mappings are configured.
-Schedule::command('modern-forestry:prepare-fundraiser-monthly-packages', ['--send' => true])
+// Detect imported BSF-tagged Shopify orders into the review queue. A purchased
+// label cost must be verified before an order can be approved for invoicing.
+Schedule::command('modern-forestry:detect-fundraiser-orders')
+    ->hourlyAt(40)
+    ->withoutOverlapping(30)
+    ->runInBackground();
+
+// The first-of-month job prepares a review package only. Staff explicitly
+// creates the QuickBooks invoice and sends it from the Fundraising desk.
+Schedule::command('modern-forestry:prepare-fundraiser-monthly-packages')
     ->monthlyOn(1, '09:00')
     ->timezone('America/New_York')
     ->withoutOverlapping(30)

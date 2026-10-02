@@ -21,6 +21,10 @@
             route('shopify.app.edit', [], false),
             $embeddedUrlGenerator->contextQuery(request(), filled($host) ? (string) $host : null)
         );
+        $fundraisingHref = $embeddedUrlGenerator->append(
+            route('shopify.app.fundraising', [], false),
+            $embeddedUrlGenerator->contextQuery(request(), filled($host) ? (string) $host : null)
+        );
     @endphp
 
     <style>
@@ -534,10 +538,11 @@
                     <div>
                         <h2>Fundraiser Order Invoicing</h2>
                         <p>
-                            Record who the fundraiser company is, who receives the payable invoice, and how its orders should be grouped. Zapier orders enter a manual-review queue before the separately gated QuickBooks create-and-send step.
+                            Record who receives the payable invoice and how orders are grouped. BSF-tagged Shopify orders are managed in the Fundraising tab. Legacy Zapier intake remains available for separate source orders.
                         </p>
                     </div>
                     <div class="settings-badges" id="fundraiser-invoice-settings-status"></div>
+                    <p><a href="{{ $fundraisingHref }}" class="font-semibold text-emerald-800 underline">Open Fundraising tab to review orders and QuickBooks invoices</a></p>
                 </div>
 
                 <div class="settings-inline-status" id="fundraiser-invoice-settings-alert" hidden></div>
@@ -2526,13 +2531,13 @@
                         return `<article class="settings-sender-card">
                             <strong>${escapeHtml(order.reference || order.external_order_id || "Fundraiser order")}</strong>
                             <div style="margin-top:6px; color:rgba(15,23,42,.72); font-size:14px;">${escapeHtml(fundraiserMoney(order.total_cents, order.currency))} · ${Number(order.items_count || 0)} item(s) · ${escapeHtml(order.status || "needs_review")}</div>
-                            <div class="settings-sender-meta"><span class="settings-sender-pill">Zapier</span><span class="settings-sender-pill">${escapeHtml(order.status || "needs_review")}</span></div>
+                            <div class="settings-sender-meta"><span class="settings-sender-pill">${escapeHtml(order.source || "Zapier")}</span><span class="settings-sender-pill">${escapeHtml(order.status || "needs_review")}</span></div>
                             <div class="settings-actions">
                                 ${approved ? `<label style="display:inline-flex; align-items:center; gap:7px; font-size:13px;"><input type="checkbox" data-fundraiser-package-order="${Number(order.id)}"> Include in package</label>` : ""}
                                 ${review ? `<button class="settings-button" type="button" data-fundraiser-approve-order="${Number(order.id)}">Approve Amounts</button>` : ""}
                             </div>
                         </article>`;
-                    }).join("") : '<article class="settings-sender-card">No Zapier fundraiser orders have arrived yet.</article>';
+                    }).join("") : '<article class="settings-sender-card">No fundraiser orders have reached the review queue yet.</article>';
                 }
                 if (fundraiserPackages) {
                     const packages = Array.isArray(desk.packages) ? desk.packages : [];

@@ -92,6 +92,7 @@ use App\Http\Controllers\ShopifyEmbeddedAppController;
 use App\Http\Controllers\ShopifyEmbeddedCustomerMergeController;
 use App\Http\Controllers\ShopifyEmbeddedCustomersController;
 use App\Http\Controllers\ShopifyEmbeddedDevelopmentNotesController;
+use App\Http\Controllers\ShopifyEmbeddedFundraisingController;
 use App\Http\Controllers\ShopifyEmbeddedMessagingController;
 use App\Http\Controllers\ShopifyEmbeddedRewardsController;
 use App\Http\Controllers\ShopifyEmbeddedSalesTaxReportsController;
@@ -2134,6 +2135,7 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
     Route::get('/app/development-notes', [ShopifyEmbeddedDevelopmentNotesController::class, 'show'])->name('shopify.app.development-notes');
     Route::get('/app/edit', [ShopifyEmbeddedSettingsController::class, 'editApp'])->name('shopify.app.edit');
     Route::get('/app/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.app.settings');
+    Route::get('/app/fundraising', [ShopifyEmbeddedFundraisingController::class, 'show'])->name('shopify.app.fundraising');
     Route::prefix('app/api')->name('shopify.app.api.')->group(function () {
         Route::get('/dashboard', [ShopifyEmbeddedAppController::class, 'data'])->name('dashboard');
         Route::get('/dashboard-lite', [ShopifyEmbeddedAppController::class, 'liteData'])->name('dashboard-lite');
@@ -2324,6 +2326,18 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
             ->name('settings.fundraiser-invoicing.save');
         Route::get('/settings/fundraiser-invoicing/desk', [ShopifyEmbeddedSettingsController::class, 'fundraiserInvoiceDesk'])
             ->name('settings.fundraiser-invoicing.desk');
+        Route::post('/fundraising/detect', [ShopifyEmbeddedSettingsController::class, 'detectFundraiserShopifyOrders'])
+            ->name('fundraising.detect');
+        Route::post('/fundraising/orders/{order}/shipping', [ShopifyEmbeddedSettingsController::class, 'verifyFundraiserShipping'])
+            ->name('fundraising.orders.shipping');
+        Route::post('/fundraising/invoices/{package}/create', [ShopifyEmbeddedSettingsController::class, 'createFundraiserQuickBooksInvoice'])
+            ->name('fundraising.invoices.create');
+        Route::post('/fundraising/invoices/{package}/send', [ShopifyEmbeddedSettingsController::class, 'sendFundraiserQuickBooksInvoice'])
+            ->name('fundraising.invoices.send');
+        Route::get('/fundraising/invoices/{package}/payment-link', [ShopifyEmbeddedSettingsController::class, 'fundraiserPaymentLink'])
+            ->name('fundraising.invoices.payment-link');
+        Route::get('/fundraising/invoices/existing-august', [ShopifyEmbeddedSettingsController::class, 'existingAugustFundraiserInvoice'])
+            ->name('fundraising.invoices.existing-august');
         Route::post('/settings/fundraiser-invoicing/zapier-secret', [ShopifyEmbeddedSettingsController::class, 'rotateFundraiserZapierSecret'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('settings.fundraiser-invoicing.zapier-secret');

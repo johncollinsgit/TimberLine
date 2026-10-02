@@ -2,6 +2,38 @@
 
 ## Current state
 
+The verified Modern Forestry retail Shopify app has a dedicated **Fundraising**
+tab. It reads BSF-tagged imported Shopify orders, shows recent order-month
+proceeds, and manages a separate invoice review queue. The Shopify order ID is
+the durable link. An hourly detector queues orders from September 1, 2026
+onward. Earlier orders, including the already-created August QuickBooks
+invoice, are deliberately not backfilled into another payable invoice.
+
+The queued candle amount is Shopify's discounted order total less recorded
+customer shipping and tax. It is already the amount owed for candles; do not
+apply another 50% reduction. Shopify checkout shipping is not the purchased
+label cost. The hourly detector reads Shopify's `shipping_labels` report and
+links purchased-label cost by exact Shopify order ID. A missing report row or
+permission leaves the order in review for a receipt-backed manual entry.
+Staff still approves every order. An automatically linked label cost is
+rechecked against Shopify before approval and QuickBooks creation or sending.
+The app checks the live Shopify BSF tag, amount, cancellation, refund, currency,
+and tax before approval and again before QuickBooks creation or sending.
+
+The first-of-month 9:00 AM ET job prepares approved prior-month packages but
+does not create or send a QuickBooks invoice. Staff uses separate **Create
+QuickBooks invoice** and **Send** controls. Both remain disabled by production
+gates until customer/item IDs and payer delivery address are verified. The
+customer payment URL is read back from Intuit with `include=invoiceLink`,
+checked against the invoice amount/customer and Intuit host, then exposed as a
+clickable link. An existing QuickBooks document number blocks a duplicate.
+QuickBooks is authoritative for payment status.
+
+The fundraiser queue's encrypted personal and line-item fields require the
+additive `2026_10_02_190000_repair_fundraiser_encrypted_column_storage.php`
+migration before production writes. It converts incompatible MySQL JSON and
+short string columns to encrypted-text-capable storage and is safe to retry.
+
 The **Fundraiser Order Invoicing** card in the verified Modern Forestry retail
 Shopify Settings app records
 the fundraiser company, accounts-payable contact, internal notification email,
@@ -44,9 +76,9 @@ store, host, secret, or QuickBooks identifier in the Zapier payload.
 
 ## Operating boundary
 
-- Do not use legacy `orders`, Shopify customers/orders/checkout, Website
-  Commerce or platform `tenant_direct_invoices` for
-  fundraiser orders.
+- Read the existing tenant-scoped legacy `orders` import for BSF detection, but
+  do not mutate Shopify customers/orders/checkout, Website Commerce, or
+  platform `tenant_direct_invoices` for fundraiser billing.
 - Imported order data is tenant-scoped to Modern Forestry and idempotent. The
   endpoint does not accept a Zapier-supplied tenant, store, host, QuickBooks
   customer, or payment target.
@@ -57,17 +89,19 @@ store, host, secret, or QuickBooks identifier in the Zapier payload.
 
 ## Manual accounting-package workflow
 
-1. Verify the supplied shipping/tax amounts and approve each queued order.
+1. Review Shopify's linked purchased-label cost, or enter a receipt-backed
+   cost when Shopify has no row, and approve each queued order. A live Shopify
+   amount/tag check is required for Shopify rows.
 2. Select approved orders (one order when cadence is `per_order`) and prepare
    the package.
-3. Download the CSV and manually confirm QuickBooks customer, product/service,
-   income account, and tax code before creating and sending the actual
-   QuickBooks invoice in QuickBooks.
+3. Review the package lines, QuickBooks customer, product/service, income
+   account, and tax code. Create the invoice in QuickBooks from the Fundraising
+   tab, open its verified payable customer link, then explicitly send.
 
 When the cadence is **Monthly review and gated invoice on the 1st**,
 Everbranch runs at 9:00 AM America/New_York on the first calendar day. The
 command defaults to the previous calendar month, and operators may rerun a
-specific month with `--month=YYYY-MM`. It groups only approved Zapier orders
+specific month with `--month=YYYY-MM`. It groups only approved fundraiser orders
 whose source date is in that prior month, keeps currencies separate, and creates
 the same immutable review package. It does not approve orders. Existing packages
 with the same month reference are reused on a rerun. Previously saved
@@ -75,14 +109,16 @@ with the same month reference are reused on a rerun. Previously saved
 Default-off QuickBooks write and send gates control the later provider actions
 independently.
 
-The package begins at `review_required`, `not_sent`, and `not_available`. With
-the write gate and exact customer/candle/shipping item IDs configured, the
-command creates a deterministic `BSF-MMM-YYYY` invoice through the tenant-owned
-OAuth connection. With the separate send gate enabled, it invokes Intuit's
+The package begins at `review_required`, `not_sent`, and `not_available`. The
+normal schedule does not write to QuickBooks. A staff click, with the write
+gate and exact customer/candle/shipping item IDs configured, creates a
+deterministic `BSF-MMM-YYYY` invoice through the tenant-owned OAuth connection.
+With the separate send gate enabled, a second explicit action invokes Intuit's
 invoice-send endpoint and stores the provider invoice ID, document number, and
-created/sent timestamps. Delivery is currently forced to the controlled
-`info@theforestrystudio.com` address through the dedicated send-to setting;
-replays reuse that provider invoice.
+created/sent timestamps. The dedicated send-to setting must match the package
+payer email; its current internal-test default will block a send to Dan until
+the production value is changed and reviewed. Replays reuse the provider
+invoice.
 
 ## Prerequisites before enabling delivery or QuickBooks write-back
 

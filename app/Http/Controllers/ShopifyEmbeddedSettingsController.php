@@ -2,13 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\IntegrationConnection;
+use App\Models\ModernForestryFundraiserInvoicePackage;
 use App\Models\ShopifyStore;
 use App\Models\Tenant;
+use App\Services\Integrations\QuickBooks\QuickBooksConnector;
 use App\Services\Marketing\Email\TenantEmailDispatchService;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
 use App\Services\Marketing\TwilioSenderConfigService;
 use App\Services\Shopify\ModernForestryFundraiserInvoicePreparationService;
 use App\Services\Shopify\ModernForestryFundraiserInvoiceSettingsService;
+use App\Services\Shopify\ModernForestryFundraiserQuickBooksService;
+use App\Services\Shopify\ModernForestryFundraiserShopifyOrderService;
 use App\Services\Shopify\ShopifyAppContentService;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedPerformanceProbe;
@@ -411,6 +416,175 @@ class ShopifyEmbeddedSettingsController extends Controller
         $tenant = Tenant::query()->findOrFail($tenantId);
 
         return response()->json(['ok' => true, 'data' => $preparation->desk($tenant)]);
+    }
+
+    public function detectFundraiserShopifyOrders(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        ModernForestryFundraiserShopifyOrderService $orders
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidApiContextResponse($context);
+        }
+        $tenantId = $this->resolveTenantIdFromContext($context, $tenantResolver);
+        if (! $this->isModernForestryRetailContext($context, $tenantId)) {
+            return $this->fundraiserInvoicingUnavailableResponse();
+        }
+
+        return response()->json(['ok' => true, 'queued' => $orders->discover(Tenant::query()->findOrFail($tenantId))]);
+    }
+
+    public function verifyFundraiserShipping(
+        Request $request,
+        int $order,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        ModernForestryFundraiserShopifyOrderService $orders
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidApiContextResponse($context);
+        }
+        $tenantId = $this->resolveTenantIdFromContext($context, $tenantResolver);
+        if (! $this->isModernForestryRetailContext($context, $tenantId)) {
+            return $this->fundraiserInvoicingUnavailableResponse();
+        }
+        $input = $request->validate([
+            'shipping_cents' => ['required', 'integer', 'min:0', 'max:99999999'],
+            'evidence' => ['required', 'string', 'max:500'],
+        ]);
+        try {
+            $linked = $orders->verifyShipping(
+                Tenant::query()->findOrFail($tenantId), $order,
+                (int) $input['shipping_cents'], (string) $input['evidence'], $this->fundraiserActor($context)
+            );
+        } catch (ValidationException $exception) {
+            return response()->json(['ok' => false, 'message' => 'Label cost could not be verified.', 'errors' => $exception->errors()], 422);
+        }
+
+        return response()->json(['ok' => true, 'message' => 'Label cost recorded. Approve the order before invoicing.', 'order_id' => $linked->id]);
+    }
+
+    public function createFundraiserQuickBooksInvoice(
+        Request $request,
+        int $package,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        ModernForestryFundraiserQuickBooksService $quickBooks
+    ): JsonResponse {
+        return $this->fundraiserQuickBooksAction($request, $package, $contextService, $tenantResolver, $quickBooks, false);
+    }
+
+    public function sendFundraiserQuickBooksInvoice(
+        Request $request,
+        int $package,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        ModernForestryFundraiserQuickBooksService $quickBooks
+    ): JsonResponse {
+        return $this->fundraiserQuickBooksAction($request, $package, $contextService, $tenantResolver, $quickBooks, true);
+    }
+
+    public function fundraiserPaymentLink(
+        Request $request,
+        int $package,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        ModernForestryFundraiserQuickBooksService $quickBooks
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidApiContextResponse($context);
+        }
+        $tenantId = $this->resolveTenantIdFromContext($context, $tenantResolver);
+        if (! $this->isModernForestryRetailContext($context, $tenantId)) {
+            return $this->fundraiserInvoicingUnavailableResponse();
+        }
+        $invoice = ModernForestryFundraiserInvoicePackage::query()->forTenant($tenantId)->findOrFail($package);
+        $link = $quickBooks->verifiedPaymentLink($invoice);
+
+        return $link
+            ? response()->json(['ok' => true, 'payment_link' => $link])
+            : response()->json(['ok' => false, 'message' => 'No verified customer payment link is available for this invoice.'], 409);
+    }
+
+    public function existingAugustFundraiserInvoice(
+        Request $request,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        QuickBooksConnector $connector
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidApiContextResponse($context);
+        }
+        $tenantId = $this->resolveTenantIdFromContext($context, $tenantResolver);
+        if (! $this->isModernForestryRetailContext($context, $tenantId)) {
+            return $this->fundraiserInvoicingUnavailableResponse();
+        }
+        try {
+            $connection = IntegrationConnection::query()->forTenant($tenantId)
+                ->where('provider', 'quickbooks')->where('status', IntegrationConnection::STATUS_CONNECTED)->sole();
+            $client = $connector->client($connection);
+            $matches = (array) data_get($client->query("select * from Invoice where DocNumber = 'BSF-AUG-2026'"), 'QueryResponse.Invoice', []);
+            if (count($matches) !== 1 || ! filled($matches[0]['Id'] ?? null)) {
+                return response()->json(['ok' => false, 'message' => 'A unique August BSF invoice was not found in this QuickBooks company.'], 409);
+            }
+            $invoice = (array) data_get($client->invoiceWithPaymentLink((string) $matches[0]['Id']), 'Invoice', []);
+            $link = (string) ($invoice['InvoiceLink'] ?? '');
+            $host = strtolower((string) parse_url($link, PHP_URL_HOST));
+            if ((string) ($invoice['Id'] ?? '') !== (string) $matches[0]['Id']
+                || (string) ($invoice['DocNumber'] ?? '') !== 'BSF-AUG-2026'
+                || ! str_starts_with($link, 'https://')
+                || ! ($host === 'intuit.com' || str_ends_with($host, '.intuit.com'))) {
+                return response()->json(['ok' => false, 'message' => 'QuickBooks did not return a verified customer payment link for the August invoice.'], 409);
+            }
+
+            return response()->json(['ok' => true, 'invoice' => [
+                'number' => 'BSF-AUG-2026',
+                'total_cents' => (int) round(((float) ($invoice['TotalAmt'] ?? 0)) * 100),
+                'balance_cents' => (int) round(((float) ($invoice['Balance'] ?? 0)) * 100),
+                'payment_link' => $link,
+            ]]);
+        } catch (\Throwable) {
+            return response()->json(['ok' => false, 'message' => 'QuickBooks invoice lookup is unavailable. No invoice was changed.'], 503);
+        }
+    }
+
+    protected function fundraiserQuickBooksAction(
+        Request $request,
+        int $package,
+        ShopifyEmbeddedAppContext $contextService,
+        TenantResolver $tenantResolver,
+        ModernForestryFundraiserQuickBooksService $quickBooks,
+        bool $send
+    ): JsonResponse {
+        $context = $contextService->resolveAuthenticatedApiContext($request);
+        if (! ($context['ok'] ?? false)) {
+            return $this->invalidApiContextResponse($context);
+        }
+        $tenantId = $this->resolveTenantIdFromContext($context, $tenantResolver);
+        if (! $this->isModernForestryRetailContext($context, $tenantId)) {
+            return $this->fundraiserInvoicingUnavailableResponse();
+        }
+        $invoice = ModernForestryFundraiserInvoicePackage::query()->forTenant($tenantId)->findOrFail($package);
+        if ($send && (string) $request->input('confirmation') !== 'SEND '.$invoice->package_reference) {
+            return response()->json(['ok' => false, 'message' => 'Confirm the exact invoice number before sending.'], 422);
+        }
+        try {
+            $updated = $quickBooks->createAndMaybeSend($invoice, $send);
+        } catch (ValidationException $exception) {
+            return response()->json(['ok' => false, 'message' => 'QuickBooks invoice action was blocked.', 'errors' => $exception->errors()], 422);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => $send ? 'QuickBooks accepted the invoice send request.' : 'QuickBooks invoice created. Review its payable link before sending.',
+            'invoice_id' => $updated->quickbooks_invoice_id,
+            'status' => $updated->status,
+        ]);
     }
 
     public function rotateFundraiserZapierSecret(
