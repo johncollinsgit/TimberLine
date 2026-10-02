@@ -1,5 +1,19 @@
 # START HERE
 
+## Modern Forestry BSF Fundraising tab (development, 2026-10-02)
+
+- Fundraising in the verified retail Shopify app reads BSF-tagged imported
+  orders. The first-of-month job queues approved prior-month invoices only;
+  QuickBooks creation and sending require separate staff clicks and default-off
+  production gates. Actual purchased-label costs are pulled by exact Shopify
+  order ID from ShopifyQL `shipping_labels` when available; staff reviews and
+  approves each order. Missing reports require a receipt-backed manual entry.
+  Never equate purchased-label cost with Shopify checkout shipping.
+- Existing August `BSF-AUG-2026` is already in QuickBooks and is excluded from
+  automated backfill. The new encrypted-storage repair migration must run
+  before the hourly detector writes fundraiser queue records. See the
+  fundraiser order invoicing runbook for the full safety contract.
+
 ## Public launch partner pricing (2026-10-02)
 
 - The Evergrove/Everbranch public offer is $499 setup, $89/month for six months, then $199/month. It applies to future offers only. Preserve earlier client-specific agreement versions and subscription rates, including Collins Electric and Front Yard Foods; do not reprice their drafts to apply this public change.

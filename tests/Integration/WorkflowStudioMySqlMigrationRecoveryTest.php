@@ -4,6 +4,37 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
+it('resumes fundraiser encrypted storage repair after a partial MySQL conversion', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires MySQL.');
+    }
+
+    $columns = [
+        'modern_forestry_fundraiser_orders' => ['recipient_name', 'recipient_email', 'recipient_phone', 'shipping_address', 'line_items', 'source_payload'],
+        'modern_forestry_fundraiser_invoice_packages' => ['invoice_lines'],
+    ];
+    foreach ($columns as $tableName => $columnNames) {
+        expect(Schema::hasTable($tableName))->toBeTrue();
+        foreach ($columnNames as $columnName) {
+            expect(Schema::hasColumn($tableName, $columnName))->toBeTrue();
+        }
+    }
+
+    // One column still has its original JSON type after earlier ALTERs survived.
+    Schema::table('modern_forestry_fundraiser_orders', function (Blueprint $table): void {
+        $table->json('source_payload')->nullable()->change();
+    });
+    $migration = require database_path('migrations/2026_10_02_190000_repair_fundraiser_encrypted_column_storage.php');
+    $migration->up();
+    $migration->up();
+
+    foreach ($columns as $tableName => $columnNames) {
+        foreach ($columnNames as $columnName) {
+            expect(Schema::getColumnType($tableName, $columnName))->toBe('longtext');
+        }
+    }
+});
+
 it('resumes Website encrypted column repair after MySQL retains an early column conversion', function (): void {
     if (DB::connection()->getDriverName() !== 'mysql') {
         $this->markTestSkipped('This recovery contract requires MySQL.');

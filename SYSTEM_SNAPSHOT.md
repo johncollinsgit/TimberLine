@@ -1,5 +1,23 @@
 # SYSTEM SNAPSHOT
 
+## Modern Forestry fundraising invoice desk (development, 2026-10-02)
+
+- The Shopify embedded Fundraising tab reads tenant-scoped BSF-tagged imported
+  Shopify orders and displays recent order-month candle proceeds and linked
+  invoice queue/packages. The Shopify order ID is the match key. An hourly
+  detector queues orders from September 1 onward; the already-invoiced August
+  orders are intentionally outside automated backfill.
+- Purchased-label cost is pulled from ShopifyQL by exact order ID, with
+  receipt-backed manual entry when missing. Staff approves each order. It is
+  separate from checkout shipping. Live Shopify amount/tag/refund/label checks block stale
+  approvals and QuickBooks actions. The first-of-month task prepares packages
+  only; staff explicitly creates and sends the QuickBooks invoice behind the
+  default-off production gates. A customer payment link is fetched from the
+  matching Intuit invoice, not constructed from an admin URL.
+- The additive fundraiser encrypted-storage repair must deploy before detector
+  writes. No customer invoice was created or sent by this development change.
+  See `docs/operations/modern-forestry-fundraiser-order-invoicing-runbook.md`.
+
 ## Modern Forestry birthday issuance coverage (development, 2026-10-02)
 
 - Production tenant `modern-forestry` now has an audited tenant-specific $10

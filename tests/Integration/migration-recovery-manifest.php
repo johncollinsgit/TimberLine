@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_02_190000_repair_fundraiser_encrypted_column_storage.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['first encrypted fundraiser field converted before the remaining fields'],
+    ],
     '2026_10_02_120000_repair_website_encrypted_column_storage.php' => [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['first encrypted Website column converted before the remaining JSON columns'],

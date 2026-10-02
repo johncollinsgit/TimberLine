@@ -103,6 +103,20 @@ class QuickBooksOnlineClient
     }
 
     /** @return array<string,mixed> */
+    public function invoiceWithPaymentLink(string $invoiceId): array
+    {
+        $realmId = $this->realmId();
+
+        return $this->request()
+            ->get("/v3/company/{$realmId}/invoice/".rawurlencode($invoiceId), [
+                'include' => 'invoiceLink',
+                'minorversion' => $this->minorVersion,
+            ])
+            ->throw()
+            ->json() ?? [];
+    }
+
+    /** @return array<string,mixed> */
     public function report(string $report, array $parameters = []): array
     {
         $realmId = $this->realmId();

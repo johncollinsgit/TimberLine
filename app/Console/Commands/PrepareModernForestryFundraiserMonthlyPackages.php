@@ -28,6 +28,11 @@ class PrepareModernForestryFundraiserMonthlyPackages extends Command
         $tenant = Tenant::query()->where('slug', 'modern-forestry')->firstOrFail();
         $packages = $preparation->prepareApprovedMonth($tenant, $month, 'scheduled_monthly_fundraiser_review');
         $this->line('packages_prepared='.count($packages));
+        if (! $this->option('send')) {
+            $this->line('quickbooks=queued_for_manual_review');
+
+            return self::SUCCESS;
+        }
         if (! config('services.quickbooks.fundraiser_writes_enabled')) {
             $this->line('quickbooks=disabled');
 

@@ -3,6 +3,7 @@
 namespace App\Services\Shopify;
 
 use App\Models\MessagingConversation;
+use App\Models\Tenant;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantExperienceProfileService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
@@ -15,6 +16,7 @@ use Illuminate\Support\Facades\Schema;
 class ShopifyEmbeddedShellPayloadBuilder
 {
     protected const REQUEST_CACHE_KEY = '_shopify_embedded_shell_payload_cache';
+
     protected const SHARED_CACHE_PREFIX = 'shopify:embedded:shell';
 
     public function __construct(
@@ -23,8 +25,7 @@ class ShopifyEmbeddedShellPayloadBuilder
         protected TenantDisplayLabelResolver $displayLabelResolver,
         protected TenantExperienceProfileService $experienceProfileService,
         protected TenantModuleAccessResolver $moduleAccessResolver
-    ) {
-    }
+    ) {}
 
     /**
      * @return array<string,mixed>
@@ -41,7 +42,7 @@ class ShopifyEmbeddedShellPayloadBuilder
         $capabilityStates = $this->capabilityStates($tenantId, $request);
         $profile = $this->experienceProfile($tenantId, $request);
 
-        $items = array_map(function (array $page) use ($request, $displayLabels, $moduleStates): array {
+        $items = array_map(function (array $page) use ($displayLabels, $moduleStates): array {
             $item = [
                 'key' => (string) ($page['section'] ?? $page['key'] ?? ''),
                 'label' => $this->resolvedLabel($page, $displayLabels),
@@ -82,7 +83,8 @@ class ShopifyEmbeddedShellPayloadBuilder
             return $item;
         }, array_values(array_filter(
             $this->pageRegistry->pagesForGroup('primary'),
-            fn (array $page): bool => $this->pageVisibleForNavigation($page, $moduleStates, $capabilityStates)
+            fn (array $page): bool => $this->pageVisibleForTenant($page, $tenantId, $request)
+                && $this->pageVisibleForNavigation($page, $moduleStates, $capabilityStates)
         )));
 
         return [
@@ -246,6 +248,7 @@ class ShopifyEmbeddedShellPayloadBuilder
 
         $entries = collect($this->pageRegistry->pages())
             ->filter(fn (array $page): bool => (bool) ($page['searchable'] ?? false))
+            ->filter(fn (array $page): bool => $this->pageVisibleForTenant($page, $tenantId, $request))
             ->filter(fn (array $page): bool => $this->searchVisibleForModuleState($page, $moduleStates, $capabilityStates))
             ->map(function (array $page) use ($displayLabels, $normalizedQuery): ?array {
                 $title = $this->resolvedLabel($page, $displayLabels);
@@ -398,6 +401,7 @@ class ShopifyEmbeddedShellPayloadBuilder
         $activeChild = strtolower(trim((string) $activeChild));
 
         return collect($this->pageRegistry->pages())
+            ->filter(fn (array $page): bool => $this->pageVisibleForTenant($page, $tenantId, $request))
             ->filter(fn (array $page): bool => $this->searchVisibleForModuleState($page, $moduleStates, $capabilityStates))
             ->map(function (array $page) use ($displayLabels, $currentRoute, $activeSection, $activeChild): ?array {
                 $routeName = strtolower(trim((string) ($page['route_name'] ?? '')));
@@ -588,6 +592,17 @@ class ShopifyEmbeddedShellPayloadBuilder
         }
 
         return (bool) ($state['has_access'] ?? false);
+    }
+
+    protected function pageVisibleForTenant(array $page, ?int $tenantId, Request $request): bool
+    {
+        if (! (bool) ($page['modern_forestry_only'] ?? false)) {
+            return true;
+        }
+
+        return $tenantId !== null
+            && Tenant::query()->whereKey($tenantId)->where('slug', 'modern-forestry')->exists()
+            && strtolower((string) $request->query('shop', '')) === strtolower((string) config('services.shopify.stores.retail.shop'));
     }
 
     /**
