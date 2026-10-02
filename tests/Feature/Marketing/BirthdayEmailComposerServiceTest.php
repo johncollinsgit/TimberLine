@@ -55,6 +55,37 @@ test('birthday email composer renders Candle Cash rewards with an account link a
         ->toContain('https://theforestrystudio.com/account');
 });
 
+test('birthday catchup email explains the late coupon and links to the claim page', function () {
+    $profile = MarketingProfile::query()->create([
+        'first_name' => 'Avery',
+        'email' => 'avery-catchup@example.com',
+        'normalized_email' => 'avery-catchup@example.com',
+    ]);
+
+    $html = app(BirthdayEmailComposerService::class)->renderForDelivery(
+        'Your $10 Modern Forestry birthday coupon is ready',
+        [],
+        $profile,
+        [
+            'expiry_date' => 'October 16 2026',
+            'birthday_reward_message' => 'Your <strong>$10 birthday coupon</strong> is ready. Sign in to your rewards page to claim it.',
+            'birthday_cta_label' => 'Claim your birthday coupon',
+            'reward_apply_url' => 'https://theforestrystudio.com/pages/birthday-gift',
+        ],
+        'birthday_email_catchup_2026',
+    )['html'];
+
+    expect($html)->toContain('Happy belated birthday Avery!')
+        ->toContain('Our system had a hiccup')
+        ->toContain('As a small business')
+        ->toContain('modern-forestry-logo-white.png')
+        ->toContain('October 16 2026')
+        ->toContain('$10 off')
+        ->toContain('cannot be combined with Candle Cash')
+        ->toContain('https://theforestrystudio.com/pages/birthday-gift')
+        ->toContain('Unsubscribe');
+});
+
 test('birthday follow-ups target only active, expiring code rewards for the selected tenant', function () {
     $tenant = Tenant::query()->create(['name' => 'Birthday Follow-up', 'slug' => 'birthday-follow-up']);
     $profile = MarketingProfile::query()->create([

@@ -3,15 +3,24 @@
 ## Modern Forestry birthday issuance coverage (development, 2026-10-02)
 
 - Production tenant `modern-forestry` now has an audited tenant-specific $10
-  birthday discount-code setting with a birthday-through-day-14 claim window,
+  birthday discount-code setting with a birthday-through-day-30 claim window,
   matching the public Birthday Club offer. The older global fallback still
   contains a migrated 50 Candle Cash amount; do not remove the tenant override
   or treat that fallback as the retail offer.
-- The production daily issuance task currently selects only the first 500 of
-  roughly 2,900 birthday profiles. A full dry run found 132 currently eligible
-  profiles after that first slice. The pending command fix scans the full
-  tenant cohort in ID order and applies its 500 limit to eligible rewards,
-  preventing permanent starvation of later profiles.
+- Release `454fdcb` fixed the daily issuance task to scan all roughly 2,900
+  birthday profiles and cap eligible rewards at 500. A full dry run had found
+  132 eligible profiles beyond the old first-500 slice.
+- The reviewed catchup campaign for birthdays March 13–October 2, 2026 has
+  1,475 currently email-consented unrewarded profiles, representing at most
+  1,463 distinct deliverable addresses after duplicate and missing-email
+  checks. Its pending operator command uses fresh 30-day claim windows, a
+  dedicated belated-birthday template,
+  and an idempotent email event key. Do not run `--execute` until the owner
+  approves the email preview. Birthday codes will combine with eligible free
+  shipping discounts but not Candle Cash or other product/order discounts.
+  The new Shopify birthday gift page handles the belated cohort; a separate
+  birthday celebration page handles future rewards. Both reveal the $10 code
+  after sign-in and link to candle bundles.
 - Four 50 Candle Cash birthday awards were already posted before this
   correction. Preserve their ledger history and review any customer balance
   adjustment separately. The public Birthday Club page still links to the

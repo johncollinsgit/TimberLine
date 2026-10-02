@@ -297,10 +297,15 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   the compatibility layer and use its read-only checks before any retirement
   migration; do not reset its observations as part of routine verification.
 - For Modern Forestry retail, the audited tenant birthday override is a $10
-  discount code with a 14-day post-birthday window. Do not infer the retail
+  discount code with a 30-day post-birthday window. Do not infer the retail
   offer from the global legacy 50 Candle Cash fallback. The daily birthday
   issuance command must scan the entire tenant cohort; its limit caps eligible
   rewards processed, not the first profiles selected.
+- The 2026 retail catchup uses `marketing:backfill-birthday-coupons` after an
+  owner-approved email preview. Preview it without `--execute`; process only
+  consented profiles, skip existing annual rewards, and retry failed email
+  events deliberately with `--retry-failed`. See
+  `docs/operations/birthday-coupon-catchup-2026-10-02.md`.
 
 ## Managed Website guardrails (approved contract; not yet enabled)
 
