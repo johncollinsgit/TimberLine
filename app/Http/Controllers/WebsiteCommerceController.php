@@ -365,11 +365,18 @@ class WebsiteCommerceController extends Controller
     public function shop(Request $request, ManagedWebsiteService $websites): View
     {
         [$tenant, $site] = $this->publicSite($request, $websites);
+        $isSawyer = data_get($site->settings, 'theme_key') === 'sawyer-naturals';
         $products = WebsiteProduct::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->where('status', 'active')
             ->when(data_get($site->settings, 'domain_choice') === 'everbranch_subdomain', fn ($query) => $query->where('product_type', 'quote'))
             ->with('variants')->get();
+        if ($isSawyer) {
+            $category = (string) $request->query('category', 'all');
+            $search = trim(mb_substr((string) $request->query('q', ''), 0, 100));
+            $products = $products->filter(fn (WebsiteProduct $product) => ($category === 'all' || in_array($category, (array) data_get($product->service_details, 'categories', []), true))
+                && ($search === '' || mb_stripos($product->title, $search) !== false))->values();
+        }
 
-        return view('managed-website.shop', compact('tenant', 'site', 'products'));
+        return view('managed-website.shop', compact('tenant', 'site', 'products') + ['category' => $category ?? 'all', 'search' => $search ?? '']);
     }
 
     public function showProduct(Request $request, string $handle, ManagedWebsiteService $websites): View
@@ -382,14 +389,17 @@ class WebsiteCommerceController extends Controller
         return view('managed-website.product', compact('tenant', 'site', 'product'));
     }
 
-    public function cart(Request $request, ManagedWebsiteService $websites, WebsiteCommerceService $commerce): View
+    public function cart(Request $request, ManagedWebsiteService $websites, WebsiteCommerceService $commerce, WebsiteCommerceShippingService $shipping): View
     {
         [$tenant, $site] = $this->publicSite($request, $websites);
         $this->requireCommerce($tenant, $commerce);
         $cart = $commerce->cartFor($site, $request->session()->get($this->cartSessionKey($site)));
         $request->session()->put($this->cartSessionKey($site), $cart->token);
 
-        return view('managed-website.cart', compact('site', 'cart'));
+        return view('managed-website.cart', compact('site', 'cart') + [
+            'shippingEnabled' => $shipping->enabledFor($tenant),
+            'checkoutReady' => $commerce->checkoutReadiness($tenant)['ready'],
+        ]);
     }
 
     public function requestQuote(Request $request, string $handle, ManagedWebsiteService $websites): RedirectResponse
@@ -424,6 +434,17 @@ class WebsiteCommerceController extends Controller
         $request->session()->put($this->cartSessionKey($site), $cart->token);
 
         return redirect()->route('managed-website.store.cart')->with('cart_status', 'Added to cart.');
+    }
+
+    public function updateCartItem(Request $request, int $item, ManagedWebsiteService $websites, WebsiteCommerceService $commerce): RedirectResponse
+    {
+        [$tenant, $site] = $this->publicSite($request, $websites);
+        $this->requireCommerce($tenant, $commerce);
+        $cart = $commerce->cartFor($site, $request->session()->get($this->cartSessionKey($site)));
+        $quantity = (int) $request->validate(['quantity' => ['required', 'integer', 'min:0', 'max:20']])['quantity'];
+        $commerce->setCartQuantity($cart, $item, $quantity);
+
+        return redirect()->route('managed-website.store.cart')->with('cart_status', 'Bag updated.');
     }
 
     public function checkout(Request $request, ManagedWebsiteService $websites, WebsiteCommerceService $commerce): RedirectResponse
@@ -487,7 +508,11 @@ class WebsiteCommerceController extends Controller
             'status' => ['required', 'in:draft,active,archived'], 'price' => ['required', 'numeric', 'min:0', 'max:1000000'], 'wholesale_price' => ['nullable', 'numeric', 'min:0', 'max:1000000'], 'compare_at_price' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
             'variant_title' => ['nullable', 'string', 'max:190'], 'sku' => ['nullable', 'string', 'max:120'], 'track_inventory' => ['nullable', 'boolean'], 'inventory_quantity' => ['nullable', 'integer', 'min:0', 'max:1000000'], 'is_available' => ['nullable', 'boolean'],
             'shipping_weight_ounces' => ['nullable', 'integer', 'min:1', 'max:1000000'], 'shipping_length_inches' => ['nullable', 'integer', 'min:1', 'max:1000'], 'shipping_width_inches' => ['nullable', 'integer', 'min:1', 'max:1000'], 'shipping_height_inches' => ['nullable', 'integer', 'min:1', 'max:1000'],
-            'image_url' => ['nullable', 'url:http,https', 'max:2048'],
+            'image_url' => ['nullable', 'string', 'max:2048', function (string $attribute, mixed $value, \Closure $fail): void {
+                if (filter_var($value, FILTER_VALIDATE_URL) === false && preg_match('#^/images/[a-z0-9/_~.-]+$#i', (string) $value) !== 1) {
+                    $fail('Enter an HTTPS image URL or a hosted image path.');
+                }
+            }],
             'service_details' => ['nullable', 'array'], 'seo_title' => ['nullable', 'string', 'max:190'], 'seo_description' => ['nullable', 'string', 'max:320'],
         ]);
 

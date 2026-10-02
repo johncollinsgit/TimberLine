@@ -40,13 +40,17 @@ class WebsiteCommerceService
 
     public function enabledFor(Tenant $tenant): bool
     {
-        return (bool) config('managed_website.commerce_enabled', false)
-            && $this->websites->editorEnabledFor($tenant);
+        return $this->websites->editorEnabledFor($tenant)
+            && ((bool) config('managed_website.commerce_enabled', false)
+                || in_array((int) $tenant->id, (array) config('managed_website.commerce_preview_tenant_ids', []), true));
     }
 
     /** @return array{ready:bool,blockers:array<int,string>} */
     public function checkoutReadiness(Tenant $tenant): array
     {
+        if (! (bool) config('managed_website.commerce_enabled', false)) {
+            return ['ready' => false, 'blockers' => ['Website checkout is not enabled.']];
+        }
         if (! $this->enabledFor($tenant)) {
             return ['ready' => false, 'blockers' => ['Website Commerce is not enabled for this workspace.']];
         }
@@ -241,6 +245,28 @@ class WebsiteCommerceService
             $item->quantity = $nextQuantity;
             $item->save();
         });
+        WebsiteShippingRateQuote::query()->forTenantId($cart->tenant_id)->where('website_cart_id', $cart->id)->delete();
+
+        return $cart->fresh(['items.variant.product']);
+    }
+
+    public function setCartQuantity(WebsiteCart $cart, int $itemId, int $quantity): WebsiteCart
+    {
+        abort_unless($cart->status === 'active', 422, 'This cart is no longer active.');
+        $item = WebsiteCartItem::query()->forTenantId($cart->tenant_id)
+            ->where('website_cart_id', $cart->id)->findOrFail($itemId);
+        if ($quantity === 0) {
+            $item->delete();
+        } else {
+            abort_unless($quantity > 0 && $quantity <= 20, 422, 'Choose a quantity from 1 to 20.');
+            $variant = $item->variant()->with('product')->firstOrFail();
+            abort_unless($variant->is_available && $variant->product?->status === 'active', 422, 'This item is not available.');
+            if ($variant->product->track_inventory && $variant->inventory_quantity !== null && $quantity > $variant->inventory_quantity) {
+                throw ValidationException::withMessages(['quantity' => 'Only '.$variant->inventory_quantity.' available.']);
+            }
+            $item->forceFill(['quantity' => $quantity])->save();
+        }
+        WebsiteShippingRateQuote::query()->forTenantId($cart->tenant_id)->where('website_cart_id', $cart->id)->delete();
 
         return $cart->fresh(['items.variant.product']);
     }
@@ -284,6 +310,8 @@ class WebsiteCommerceService
                 $subtotal += $lineTotal;
                 $lines[] = compact('variant', 'item', 'lineTotal');
             }
+            $freeShippingThreshold = (int) data_get($site->publishedSiteVersion?->settings, 'free_shipping_threshold_cents', 0);
+            $shippingCents = $shippingQuote && ($freeShippingThreshold === 0 || $subtotal < $freeShippingThreshold) ? $shippingQuote->amount_cents : 0;
             $order = WebsiteOrder::query()->create([
                 'tenant_id' => $site->tenant_id,
                 'tenant_site_id' => $site->id,
@@ -298,12 +326,12 @@ class WebsiteCommerceService
                 'source' => 'native',
                 'subtotal_cents' => $subtotal,
                 'discount_cents' => 0,
-                'shipping_cents' => $shippingQuote?->amount_cents ?? 0,
-                'total_cents' => $subtotal + ($shippingQuote?->amount_cents ?? 0),
+                'shipping_cents' => $shippingCents,
+                'total_cents' => $subtotal + $shippingCents,
                 'customer_snapshot' => ['name' => trim((string) $buyer['name']), 'email' => strtolower(trim((string) $buyer['email'])), 'phone' => trim((string) ($buyer['phone'] ?? ''))],
                 'shipping_address' => $shippingQuote ? $buyer['shipping_address'] : null,
                 'billing_address' => null,
-                'shipping_rate_snapshot' => $shippingQuote ? ['quote_id' => $shippingQuote->id, 'carrier' => $shippingQuote->carrier, 'service' => $shippingQuote->service, 'amount_cents' => $shippingQuote->amount_cents, 'provider_shipment_id' => $shippingQuote->provider_shipment_id] : null,
+                'shipping_rate_snapshot' => $shippingQuote ? ['quote_id' => $shippingQuote->id, 'carrier' => $shippingQuote->carrier, 'service' => $shippingQuote->service, 'amount_cents' => $shippingQuote->amount_cents, 'customer_shipping_cents' => $shippingCents, 'provider_shipment_id' => $shippingQuote->provider_shipment_id] : null,
                 'service_request' => ['preferred_at' => trim((string) ($buyer['preferred_at'] ?? '')), 'notes' => trim((string) ($buyer['notes'] ?? ''))],
             ]);
             foreach ($lines as $line) {
@@ -502,13 +530,18 @@ class WebsiteCommerceService
     /** @param array<int,mixed> $media */
     private function safeMedia(array $media): array
     {
-        return collect($media)->filter(fn ($url) => is_string($url) && filter_var($url, FILTER_VALIDATE_URL))->take(12)->values()->all();
+        return collect($media)->filter(fn ($url) => is_string($url) && (filter_var($url, FILTER_VALIDATE_URL) || preg_match('#^/images/[a-z0-9/_~.-]+$#i', $url) === 1))->take(12)->values()->all();
     }
 
     /** @param array<string,mixed> $details */
     private function safeServiceDetails(array $details): array
     {
-        return collect($details)->only(['duration_minutes', 'intake_label'])->map(fn ($v) => is_scalar($v) ? strip_tags(mb_substr((string) $v, 0, 190)) : null)->filter()->all();
+        $safe = collect($details)->only(['duration_minutes', 'intake_label'])->map(fn ($v) => is_scalar($v) ? strip_tags(mb_substr((string) $v, 0, 190)) : null)->filter()->all();
+        $safe['categories'] = collect((array) ($details['categories'] ?? []))
+            ->filter(fn ($value) => is_string($value) && preg_match('/^[a-z0-9-]{1,40}$/', $value) === 1)
+            ->unique()->take(5)->values()->all();
+
+        return $safe;
     }
 
     /** @param array<string,mixed> $payload @return array<string,mixed> */
