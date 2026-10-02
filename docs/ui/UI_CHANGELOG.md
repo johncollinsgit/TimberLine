@@ -1,3 +1,8 @@
+## 2026-10-02 — Website workspace console links
+
+- A published tenant website may own its tenant subdomain, as Carolina Barrel Co. does. The Switch Console menu now opens that workspace on `app.theeverbranch.com` with its tenant selected, so the link reaches the authenticated dashboard instead of the public site's 404 page.
+- Other tenant console links retain their existing subdomain routing. Membership checks still resolve the selected tenant on the server.
+
 ## 2026-09-23 — Carolina Barrel quote queue
 
 - The Carolina Barrel catalog is presented as made-to-order, with quote requests collecting name, email, phone, and quantity.
