@@ -40,13 +40,17 @@ class WebsiteCommerceService
 
     public function enabledFor(Tenant $tenant): bool
     {
-        return (bool) config('managed_website.commerce_enabled', false)
-            && $this->websites->editorEnabledFor($tenant);
+        return $this->websites->editorEnabledFor($tenant)
+            && ((bool) config('managed_website.commerce_enabled', false)
+                || in_array((int) $tenant->id, (array) config('managed_website.commerce_preview_tenant_ids', []), true));
     }
 
     /** @return array{ready:bool,blockers:array<int,string>} */
     public function checkoutReadiness(Tenant $tenant): array
     {
+        if (! (bool) config('managed_website.commerce_enabled', false)) {
+            return ['ready' => false, 'blockers' => ['Website checkout is not enabled.']];
+        }
         if (! $this->enabledFor($tenant)) {
             return ['ready' => false, 'blockers' => ['Website Commerce is not enabled for this workspace.']];
         }

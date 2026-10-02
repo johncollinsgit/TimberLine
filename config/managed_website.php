@@ -18,6 +18,8 @@ $tenantIds = static function (string $key): array {
 return [
     // Every gate defaults to false. Empty allowlists never mean "everyone".
     'commerce_enabled' => $bool('MANAGED_WEBSITE_COMMERCE_ENABLED'),
+    // A tenant-specific catalog/cart preview without live payment checkout.
+    'commerce_preview_tenant_ids' => $tenantIds('MANAGED_WEBSITE_COMMERCE_PREVIEW_TENANT_IDS'),
     // Native retail operations, shipping, and connected-store imports each have
     // their own gate and allowlist. Enabling the Website editor or a legacy
     // Shopify connection can never implicitly enable one of these lanes.

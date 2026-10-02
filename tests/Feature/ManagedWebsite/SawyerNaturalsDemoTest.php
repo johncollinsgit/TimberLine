@@ -11,6 +11,7 @@ use App\Models\WebsiteProduct;
 use App\Models\WebsiteShipment;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
 use App\Services\ManagedWebsite\PirateShipSpreadsheetBridge;
+use App\Services\ManagedWebsite\WebsiteCommerceService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -54,6 +55,20 @@ test('Sawyer preparation is idempotent, private, and gives the requested admin a
 
     $this->artisan('everbranch:prepare-sawyer-naturals')->assertSuccessful();
     expect(WebsiteProduct::query()->forTenant($tenant)->count())->toBe($expectedCount);
+});
+
+test('Sawyer catalog and cart preview can open while checkout remains closed for every tenant', function (): void {
+    [$tenant] = sawyerTestSite();
+    [$other] = sawyerTestSite('other-preview');
+    config()->set('managed_website.commerce_enabled', false);
+    config()->set('managed_website.commerce_preview_tenant_ids', [$tenant->id]);
+    $commerce = app(WebsiteCommerceService::class);
+
+    expect($commerce->enabledFor($tenant))->toBeTrue()
+        ->and($commerce->enabledFor($other))->toBeFalse()
+        ->and($commerce->checkoutReadiness($tenant)['ready'])->toBeFalse();
+    $this->get('https://sawyer-test.theeverbranch.com/cart')->assertOk();
+    $this->get('https://other-preview.theeverbranch.com/cart')->assertStatus(423);
 });
 
 test('email link grants only the shopper’s own Website order history', function (): void {
