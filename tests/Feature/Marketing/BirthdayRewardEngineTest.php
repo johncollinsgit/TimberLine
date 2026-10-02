@@ -195,3 +195,60 @@ test('birthday issuance command requires tenant context and scopes issuance by t
     expect($tenantAIssuances)->toBe(1)
         ->and($tenantBIssuances)->toBe(0);
 });
+
+test('birthday issuance scans past ineligible profiles before applying its eligible reward limit', function () {
+    MarketingSetting::query()->updateOrCreate(
+        ['key' => 'birthday_reward_config'],
+        ['value' => [
+            'enabled' => true,
+            'reward_type' => 'discount_code',
+            'reward_name' => 'Birthday Coupon',
+            'reward_value' => 10,
+            'claim_window_days_before' => 0,
+            'claim_window_days_after' => 0,
+        ]]
+    );
+
+    $tenant = Tenant::query()->create([
+        'name' => 'Birthday Coverage Tenant',
+        'slug' => 'birthday-coverage-tenant',
+    ]);
+
+    $profiles = collect(['outside', 'first-eligible', 'second-eligible'])
+        ->map(function (string $name) use ($tenant): MarketingProfile {
+            return MarketingProfile::query()->create([
+                'tenant_id' => $tenant->id,
+                'first_name' => $name,
+                'email' => $name.'@example.com',
+                'normalized_email' => $name.'@example.com',
+                'accepts_email_marketing' => false,
+            ]);
+        });
+
+    foreach ($profiles as $index => $profile) {
+        $birthdayDate = $index === 0 ? now()->addDays(30) : now();
+        CustomerBirthdayProfile::query()->create([
+            'marketing_profile_id' => $profile->id,
+            'birth_month' => (int) $birthdayDate->month,
+            'birth_day' => (int) $birthdayDate->day,
+            'source' => 'test',
+            'source_captured_at' => now(),
+        ]);
+    }
+
+    $this->artisan('marketing:issue-birthday-rewards', [
+        '--tenant-id' => $tenant->id,
+        '--limit' => 1,
+    ])->assertSuccessful();
+
+    expect(BirthdayRewardIssuance::query()->where('marketing_profile_id', $profiles[0]->id)->exists())->toBeFalse()
+        ->and(BirthdayRewardIssuance::query()->where('marketing_profile_id', $profiles[1]->id)->exists())->toBeTrue()
+        ->and(BirthdayRewardIssuance::query()->where('marketing_profile_id', $profiles[2]->id)->exists())->toBeFalse();
+
+    $this->artisan('marketing:issue-birthday-rewards', [
+        '--tenant-id' => $tenant->id,
+        '--limit' => 1,
+    ])->assertSuccessful();
+
+    expect(BirthdayRewardIssuance::query()->where('marketing_profile_id', $profiles[2]->id)->exists())->toBeTrue();
+});

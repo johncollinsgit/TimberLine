@@ -11,7 +11,7 @@ class MarketingIssueBirthdayRewards extends Command
     protected $signature = 'marketing:issue-birthday-rewards
         {--tenant-id= : Restrict issuance to a tenant id}
         {--cycle-year= : Reward cycle year override}
-        {--limit=500 : Maximum profiles to evaluate}
+        {--limit=500 : Maximum eligible rewards to process}
         {--dry-run : Evaluate only without issuing rewards}';
 
     protected $description = 'Issue annual birthday rewards for eligible customers with guardrails.';
@@ -33,11 +33,7 @@ class MarketingIssueBirthdayRewards extends Command
             ->whereHas('marketingProfile', fn ($query) => $query->where('tenant_id', $tenantId))
             ->whereNotNull('birth_month')
             ->whereNotNull('birth_day')
-            ->orderBy('reward_last_issued_year')
-            ->orderBy('birth_month')
-            ->orderBy('birth_day')
-            ->limit($limit)
-            ->get();
+            ->lazyById(250);
 
         $summary = [
             'evaluated' => 0,
@@ -73,6 +69,10 @@ class MarketingIssueBirthdayRewards extends Command
 
             $summary['eligible']++;
             if ($dryRun) {
+                if ($summary['eligible'] >= $limit) {
+                    break;
+                }
+
                 continue;
             }
 
@@ -106,6 +106,10 @@ class MarketingIssueBirthdayRewards extends Command
                 } else {
                     $summary['skipped']++;
                 }
+            }
+
+            if ($summary['eligible'] >= $limit) {
+                break;
             }
         }
 
