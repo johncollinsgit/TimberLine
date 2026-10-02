@@ -492,7 +492,10 @@ class UnifiedAppNavigationService
         }
 
         $memberships = $user->tenants()
-            ->with(['setupStatus:id,tenant_id,landlord_review_status'])
+            ->with([
+                'setupStatus:id,tenant_id,landlord_review_status',
+                'managedSite:id,tenant_id,status,public_enabled,subdomain',
+            ])
             ->orderBy('tenants.name')
             ->get(['tenants.id', 'tenants.name', 'tenants.slug']);
 
@@ -503,9 +506,16 @@ class UnifiedAppNavigationService
 
             $tenantPath = $this->tenantConsolePath($tenant);
             $tenantHost = filled($tenant->slug) ? $this->tenantHostBuilder->hostForSlug((string) $tenant->slug) : null;
-            $tenantHref = $tenantHost !== null
-                ? ($this->tenantHostBuilder->urlForHostPath($tenantHost, $tenantPath) ?? $tenantPath)
-                : $tenantPath;
+            $site = $tenant->managedSite;
+            $tenantHostServesWebsite = $site !== null
+                && $site->status === 'published'
+                && $site->public_enabled
+                && (string) $site->subdomain === (string) $tenant->slug;
+            $tenantHref = $tenantHostServesWebsite
+                ? ($this->tenantHostBuilder->canonicalLandlordUrlForPath($tenantPath) ?? $tenantPath)
+                : ($tenantHost !== null
+                    ? ($this->tenantHostBuilder->urlForHostPath($tenantHost, $tenantPath) ?? $tenantPath)
+                    : $tenantPath);
 
             $switches[] = [
                 'key' => 'tenant-'.$tenant->id,
