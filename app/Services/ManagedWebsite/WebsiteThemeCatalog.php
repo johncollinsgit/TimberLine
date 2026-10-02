@@ -8,9 +8,52 @@ class WebsiteThemeCatalog
     public function all(): array
     {
         return [
+            $this->sawyerNaturals(),
             $this->hvac(),
             $this->collinsElectric(),
             $this->outdoorElements(),
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    protected function sawyerNaturals(): array
+    {
+        $family = '/images/sawyer-naturals/57b6a4_2ea3e0eb167241c99263023174fab410~mv2.webp';
+        $products = '/images/sawyer-naturals/57b6a4_7b967617417e452dbaa4841c5bff29d0~mv2.webp';
+        $soap = '/images/sawyer-naturals/57b6a4_f4652bc6caf94ba7b4cbd07de0e3707f~mv2.webp';
+
+        return [
+            'key' => 'sawyer-naturals', 'name' => 'Sawyer Naturals', 'eyebrow' => 'Homestead skincare',
+            'description' => 'A warm, image-led retail storefront for Sawyer Naturals.',
+            'thumbnail' => $products,
+            'settings' => array_replace_recursive($this->settings('sawyer-naturals', 'Sawyer Naturals', ['ink' => '#26352b', 'brand' => '#426647', 'surface' => '#fbfaf5', 'soft' => '#f0eee6', 'accent' => '#d7ac6a'], 'serif', 'rounded', 'Free shipping on orders over $49.99 · Before tax, after discounts'), [
+                'free_shipping_threshold_cents' => 5000,
+                'footer' => ['copyright' => '© '.now()->year.' Sawyer Naturals', 'tagline' => 'Natural skincare from our South Carolina homestead.'],
+            ]),
+            'navigation' => [
+                ['label' => 'Shop all', 'url' => '/shop', 'type' => 'link'],
+                ['label' => 'Deodorant', 'url' => '/shop?category=deodorant', 'type' => 'link'],
+                ['label' => 'Face care', 'url' => '/shop?category=face-care', 'type' => 'link'],
+                ['label' => 'Our story', 'url' => '/about', 'type' => 'page'],
+                ['label' => 'Contact', 'url' => '/contact', 'type' => 'page'],
+            ],
+            'source_manifest' => [['url' => 'https://www.sawyernaturals.com/', 'retrieved_on' => '2026-10-01', 'use' => 'Public brand copy, product photography, catalog names and prices; review before launch.']],
+            'pages' => [
+                $this->page('/', 'Home', 'home', [
+                    $this->hero('Skin that dances with confidence.', 'Natural skincare made on our South Carolina homestead. Feel good in your skin, wherever the day takes you.', 'Shop the collection', '/shop', $family, 'Sawyer Naturals products held outdoors.'),
+                    $this->trust('Thoughtful by nature.', [['Essential oils', 'No perfumes or synthetic fragrances.'], ['Aluminum free', 'Deodorant made without aluminum.'], ['Made in South Carolina', 'Crafted on our Upstate homestead.']]),
+                    $this->feature('Care made closer to home.', 'Alex and Laura Sawyer make skincare inspired by their homestead and a desire to know exactly what goes into the products they use.', $products, 'Sawyer Naturals jars arranged on a shelf.'),
+                    $this->cards('Find your daily ritual.', 'Explore deodorant, face care, handmade soap, and more.', [['Deodorant', 'Aluminum-free favorites for everyday confidence.'], ['Face care', 'Creams, balms, and serums for a considered routine.'], ['Soaps and body', 'Small-batch care made with essential oils.']]),
+                    $this->gallery('Made for real life.', 'A closer look at the homestead and the goods we make.', [['image_url' => $products, 'image_alt' => 'Sawyer Naturals skincare products.'], ['image_url' => $soap, 'image_alt' => 'Sawyer Naturals handmade soap display.'], ['image_url' => $family, 'image_alt' => 'Sawyer Naturals products outdoors.']]),
+                ]),
+                $this->page('about', 'Our Story', 'about', [
+                    $this->hero('From homesteading to skincare.', 'Alex and Laura Sawyer create natural skincare on their homestead north of Greenville, South Carolina.', 'Explore the shop', '/shop', $family, 'Sawyer Naturals products on the homestead.'),
+                    $this->text('Rooted in what goes on your skin.', 'After years of growing their own food, the Sawyers began asking the same questions about the products they put on their bodies. They studied ingredients and began making skincare that helped them feel confident in their skin.'),
+                    $this->feature('Made with intention.', 'From deodorant to soaps, moisturizers, and serums, Sawyer Naturals uses natural ingredients and essential oils instead of perfumes or synthetic fragrances.', $soap, 'Handmade Sawyer Naturals soap.'),
+                ]),
+                $this->page('contact', 'Contact', 'contact', [$this->hero('Come say hello.', 'Questions about your order or skincare routine? We would love to hear from you.', 'Email Sawyer Naturals', 'mailto:sawyernaturals@gmail.com', $products, 'Sawyer Naturals skincare products.'), $this->contact('Send us a note')]),
+                $this->page('shipping-returns', 'Shipping & Returns', 'faq', [$this->hero('Good to know before you order.', 'Shipping and returns, explained simply.'), $this->faq('Common questions', [['When is shipping free?', 'Orders over $49.99 qualify for free shipping before tax and after discounts.'], ['Can I return a product?', 'Unopened and unused full-size products may be returned or exchanged. Contact sawyernaturals@gmail.com within 14 days of delivery.'], ['What about samples?', 'Sample sets cannot be returned once shipped.']])]),
+            ],
         ];
     }
 

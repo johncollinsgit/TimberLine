@@ -25,6 +25,8 @@ return [
     'commerce_operations_tenant_ids' => $tenantIds('MANAGED_WEBSITE_COMMERCE_OPERATIONS_TENANT_IDS'),
     'commerce_shipping_enabled' => $bool('MANAGED_WEBSITE_COMMERCE_SHIPPING_ENABLED'),
     'commerce_shipping_tenant_ids' => $tenantIds('MANAGED_WEBSITE_COMMERCE_SHIPPING_TENANT_IDS'),
+    'pirate_ship_bridge_enabled' => $bool('MANAGED_WEBSITE_PIRATE_SHIP_BRIDGE_ENABLED'),
+    'pirate_ship_bridge_tenant_ids' => $tenantIds('MANAGED_WEBSITE_PIRATE_SHIP_BRIDGE_TENANT_IDS'),
     'commerce_imports_enabled' => $bool('MANAGED_WEBSITE_COMMERCE_IMPORTS_ENABLED'),
     'commerce_imports_tenant_ids' => $tenantIds('MANAGED_WEBSITE_COMMERCE_IMPORTS_TENANT_IDS'),
     'easypost_api_key' => env('MANAGED_WEBSITE_EASYPOST_API_KEY'),

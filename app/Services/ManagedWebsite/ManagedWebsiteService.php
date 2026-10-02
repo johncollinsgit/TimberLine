@@ -41,6 +41,7 @@ class ManagedWebsiteService
                 $this->saveDraft($site, $page, ['title' => $definition['title'], 'blocks' => $definition['blocks'], 'seo' => $definition['seo']], $actor);
                 $navigation[] = ['label' => $definition['title'], 'url' => $definition['slug'] === '/' ? '/' : '/'.ltrim($definition['slug'], '/'), 'type' => 'page'];
             }
+            $navigation = (array) ($theme['navigation'] ?? $navigation);
             $settings = (array) $theme['settings'];
             $settings['theme_thumbnail'] = $theme['thumbnail'] ?? null;
             $this->saveSiteDraft($site, ['settings' => $settings, 'navigation' => $navigation, 'source_manifest' => $theme['source_manifest'] ?? []], $actor);
@@ -434,6 +435,7 @@ class ManagedWebsiteService
             'footer' => ['copyright' => strip_tags(mb_substr(trim((string) ($footer['copyright'] ?? '')), 0, 300)), 'tagline' => strip_tags(mb_substr(trim((string) ($footer['tagline'] ?? '')), 0, 500))],
             'social_links' => collect((array) ($settings['social_links'] ?? []))->filter(fn (mixed $url): bool => is_string($url) && $this->safeUrl($url))->take(6)->values()->all(),
             'theme_thumbnail' => $this->safeUrl((string) ($settings['theme_thumbnail'] ?? '')) ? trim((string) $settings['theme_thumbnail']) : '',
+            'free_shipping_threshold_cents' => max(0, min(1000000, (int) ($settings['free_shipping_threshold_cents'] ?? 0))),
         ];
     }
 

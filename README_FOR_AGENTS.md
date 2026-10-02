@@ -355,6 +355,8 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
 
 ## Website Commerce isolation rule (2026-07-27)
 
+- Sawyer Naturals demo setup and the default-off Pirate Ship spreadsheet bridge are documented in `docs/operations/sawyer-naturals-demo-and-pirate-ship.md`. Keep the bridge in the tenant-owned Website lane; it is a manual CSV handoff, not a Pirate Ship API or Shopify fulfillment integration. Do not enable checkout or public launch merely because the seed command ran.
+
 - Native Website Commerce tables are named `website_*` and are the only data
   lane for Website catalog, cart, shopper, order, payment, inventory, and
   fulfillment behavior. Never reuse, join against, backfill, or write to the

@@ -471,6 +471,12 @@ Trajectory now opens with Personal, Business, and, when both authorized spaces e
   forms, service cards, and original generated starter imagery. Collins content
   remains a draft prepared only by explicit operator action; it is not published.
 
+## Sawyer Naturals Website demo and Pirate Ship spreadsheet bridge (2026-10-01)
+
+- The isolated `feature/sawyer-naturals-demo-2026-10-01` branch prepares a Sawyer Naturals tenant, the requested John admin membership, a sourced retail catalog and bundled imagery, branded public pages/storefront, a site-scoped shopper email-link account and order history, and a default-off tenant-allowlisted Pirate Ship CSV bridge. Sawyer's own user waits for his email.
+- Pirate Ship has no public API. The bridge exports paid shipping orders for Pirate Ship spreadsheet upload and imports verified tracking into tenant-owned `website_*` fulfillment/shipment records. Native EasyPost shipping remains a separate option. Shop Pay appears only as a disabled feasibility preview pending merchant Shopify configuration; no live payment, gift card redemption, or unverified apparel variant can be implied.
+- Live activation follows the existing Managed Website gates, GitHub/Forge release path, merchant content/rights review, verified host, Stripe/tax/webhook/shipping readiness. See `docs/operations/sawyer-naturals-demo-and-pirate-ship.md`.
+
 ## Website Commerce and live editor (default-disabled) (2026-07-27)
 
 - Website now has a dedicated full-screen editor route with a Shopify-inspired

@@ -8,6 +8,8 @@ commerce source.
 
 ## Carrier lifecycle
 
+For a tenant-allowlisted Pirate Ship manual workflow, use the separate CSV bridge in `sawyer-naturals-demo-and-pirate-ship.md`. It exports paid orders and imports tracking after staff buy the label in Pirate Ship. It cannot quote rates or purchase labels by API.
+
 1. A shopper supplies a US address and chooses an accepted EasyPost rate.
 2. Checkout stores the selected rate and address snapshot before Stripe
    payment. No client price is trusted.
