@@ -83,6 +83,25 @@ class WebsiteShopperAccountController extends Controller
         return redirect()->route('managed-website.store.account');
     }
 
+    public function updateProfile(Request $request, ManagedWebsiteService $websites): RedirectResponse
+    {
+        [$tenant, $site] = $this->publicSite($request, $websites);
+        $customer = $this->sessionCustomer($request, $tenant, $site);
+        abort_unless($customer, 403);
+        $data = $request->validate([
+            'first_name' => ['nullable', 'string', 'max:120'],
+            'last_name' => ['nullable', 'string', 'max:120'],
+            'phone' => ['nullable', 'string', 'max:80'],
+        ]);
+        $customer->forceFill([
+            'first_name' => trim((string) ($data['first_name'] ?? '')),
+            'last_name' => trim((string) ($data['last_name'] ?? '')),
+            'phone' => trim((string) ($data['phone'] ?? '')),
+        ])->save();
+
+        return redirect()->route('managed-website.store.account')->with('account_status', 'Contact details saved.');
+    }
+
     public function order(Request $request, string $number, ManagedWebsiteService $websites): View
     {
         [$tenant, $site] = $this->publicSite($request, $websites);

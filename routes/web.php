@@ -736,6 +736,7 @@ Route::post('/account/link', [WebsiteShopperAccountController::class, 'requestLi
 Route::get('/account/verify/{token}', [WebsiteShopperAccountController::class, 'verify'])->middleware('throttle:20,1')->name('managed-website.store.account.verify');
 Route::post('/account/verify/{token}', [WebsiteShopperAccountController::class, 'consume'])->middleware('throttle:20,1')->name('managed-website.store.account.consume');
 Route::post('/account/logout', [WebsiteShopperAccountController::class, 'logout'])->name('managed-website.store.account.logout');
+Route::post('/account/profile', [WebsiteShopperAccountController::class, 'updateProfile'])->middleware('throttle:20,1')->name('managed-website.store.account.profile');
 Route::get('/account/orders/{number}', [WebsiteShopperAccountController::class, 'order'])->name('managed-website.store.account.orders.show');
 Route::post('/cart/items/{variant}', [WebsiteCommerceController::class, 'addCartItem'])->middleware('throttle:30,1')->name('managed-website.store.cart.items.store');
 Route::post('/cart/lines/{item}', [WebsiteCommerceController::class, 'updateCartItem'])->middleware('throttle:30,1')->name('managed-website.store.cart.lines.update');

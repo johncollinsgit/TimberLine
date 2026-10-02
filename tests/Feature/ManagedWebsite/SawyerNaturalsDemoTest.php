@@ -75,6 +75,8 @@ test('email link grants only the shopper’s own Website order history', functio
     $this->get($host.'/account/verify/'.$token)->assertOk();
     $this->post($host.'/account/verify/'.$token)->assertRedirect();
     $this->get($host.'/account')->assertOk()->assertSee('WEB-ABC12340')->assertDontSee('WEB-ABC12341');
+    $this->post($host.'/account/profile', ['first_name' => 'Updated', 'last_name' => 'Buyer', 'phone' => '864-555-0100'])->assertRedirect();
+    expect($customer->fresh()->first_name)->toBe('Updated')->and($customer->fresh()->phone)->toBe('864-555-0100');
     $this->get($host.'/account/orders/WEB-ABC12341')->assertNotFound();
     $this->post($host.'/account/verify/'.$token)->assertNotFound();
 });

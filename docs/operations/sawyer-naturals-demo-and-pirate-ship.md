@@ -2,7 +2,7 @@
 
 ## What this branch prepares
 
-`feature/sawyer-naturals-demo-2026-10-01` adds a tenant-owned Sawyer Naturals site, a 62-product source catalog, 91 locally bundled and lightly enhanced source images, a responsive storefront, cart, passwordless shopper account and private order history. The seed command makes `johncollinemail@gmail.com` a Sawyer tenant admin. It does not invent Sawyer's personal email or create his user yet. The public website remains private until the normal publishing and rendering gates pass.
+`feature/sawyer-naturals-demo-2026-10-01` adds a tenant-owned Sawyer Naturals site, a 62-product source catalog, 91 locally bundled and lightly enhanced source images, a responsive storefront, cart, passwordless shopper account, editable contact details, and private order history. The seed command makes `johncollinemail@gmail.com` a Sawyer tenant admin. It does not invent Sawyer's personal email or create his user yet. The public website remains private until the normal publishing and rendering gates pass.
 
 The source catalog is `resources/data/sawyer-naturals-catalog.json`. Its source URLs and retrieval date are included there. Product names, categories and displayed prices came from the public Sawyer site on 2026-10-01 and need merchant review before a public launch. Gift card redemption and apparel size availability are unverified, so those catalog entries are visible but unavailable to buy. Do not infer inventory quantities from source pages.
 
@@ -34,7 +34,7 @@ The Sawyer cart shows a clearly disabled Shop Pay feasibility preview. Shopify's
 | --- | --- |
 | Website pages, brand, photos, catalog, categories, search, cart | Demo ready for merchant review |
 | Tenant admin, product editing, order operations, refunds, fulfillment, inventory primitives, native shipping | Existing Everbranch Website Commerce plus Sawyer admin seed; normal entitlements and gates apply |
-| Shopper login, profile landing page, order list/detail | New passwordless, site-scoped flow; email delivery must be configured in target environment |
+| Shopper login, editable contact details, order list/detail | New passwordless, site-scoped flow; email delivery must be configured in target environment |
 | Pirate Ship | CSV order export/tracking import; label purchase remains in Pirate Ship |
 | Gift cards and apparel | Listed; selling blocked until redemption, denomination, size, and inventory behavior are verified |
 | Payment, tax, live shipping, Shop Pay, Sawyer owner account, verified domain | Require merchant setup, credentials/approval, and release validation |
