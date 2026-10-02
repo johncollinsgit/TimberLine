@@ -2,8 +2,8 @@
 
 use App\Models\BirthdayMessageEvent;
 use App\Models\BirthdayRewardIssuance;
-use App\Models\CustomerExternalProfile;
 use App\Models\CustomerBirthdayProfile;
+use App\Models\CustomerExternalProfile;
 use App\Models\MarketingEmailDelivery;
 use App\Models\MarketingProfile;
 use App\Models\MarketingSetting;

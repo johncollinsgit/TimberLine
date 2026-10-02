@@ -91,26 +91,31 @@ class MarketingBackfillBirthdayCoupons extends Command
 
             if (! $emailConsented) {
                 $summary['email_suppressed_no_consent']++;
+
                 continue;
             }
             if ($email === '') {
                 $summary['missing_email_skipped']++;
+
                 continue;
             }
 
             if ($existing && ! $isCatchup) {
                 $summary['already_rewarded']++;
                 $coveredEmails[$email] = true;
+
                 continue;
             }
             if (! $existing && (int) $profile->reward_last_issued_year === $from->year) {
                 $summary['already_rewarded']++;
                 $coveredEmails[$email] = true;
+
                 continue;
             }
             if ($existing && ($existing->isExpired() || $this->hasCatchupEmail($existing, $templateKey, $retryFailed))) {
                 $summary['already_processed']++;
                 $coveredEmails[$email] = true;
+
                 continue;
             }
 
@@ -177,6 +182,7 @@ class MarketingBackfillBirthdayCoupons extends Command
                 if (! (bool) ($result['ok'] ?? false)) {
                     $summary['errors']++;
                     $this->warn('Issuance skipped for birthday profile '.$profile->id.': '.($result['error'] ?? 'unknown'));
+
                     continue;
                 }
 

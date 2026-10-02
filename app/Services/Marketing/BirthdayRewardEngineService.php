@@ -18,11 +18,10 @@ class BirthdayRewardEngineService
         protected BirthdayProfileService $birthdayProfileService,
         protected BirthdayEmailDispatchService $birthdayEmailDispatchService,
         protected TenantMarketingSettingsResolver $marketingSettingsResolver
-    ) {
-    }
+    ) {}
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array<string,mixed>
      */
     public function statusForProfile(?CustomerBirthdayProfile $birthdayProfile, array $options = []): array
@@ -122,7 +121,7 @@ class BirthdayRewardEngineService
     }
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array<string,mixed>
      */
     public function issueAnnualReward(CustomerBirthdayProfile $birthdayProfile, array $options = []): array
@@ -449,7 +448,7 @@ class BirthdayRewardEngineService
     }
 
     /**
-     * @param array<string,mixed> $config
+     * @param  array<string,mixed>  $config
      * @return array{starts_at:?CarbonImmutable,ends_at:?CarbonImmutable,birthday_date:?CarbonImmutable}
      */
     public function claimWindow(CustomerBirthdayProfile $birthdayProfile, int $cycleYear, array $config): array
@@ -532,7 +531,7 @@ class BirthdayRewardEngineService
     }
 
     /**
-     * @param array<string,mixed> $config
+     * @param  array<string,mixed>  $config
      */
     protected function generateCode(string $rewardType, int $cycleYear, array $config): string
     {
@@ -574,7 +573,7 @@ class BirthdayRewardEngineService
     }
 
     /**
-     * @param array<string,mixed> $config
+     * @param  array<string,mixed>  $config
      */
     protected function rewardName(array $config): string
     {
@@ -584,7 +583,7 @@ class BirthdayRewardEngineService
     }
 
     /**
-     * @param array<string,mixed> $config
+     * @param  array<string,mixed>  $config
      */
     protected function rewardValue(string $rewardType, array $config): ?string
     {

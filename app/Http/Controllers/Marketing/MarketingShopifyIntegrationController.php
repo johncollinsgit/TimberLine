@@ -4,12 +4,12 @@ namespace App\Http\Controllers\Marketing;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\ProvisionShopifyCustomerForMarketingProfile;
+use App\Models\BirthdayRewardIssuance;
 use App\Models\CandleCashRedemption;
 use App\Models\CandleCashReward;
 use App\Models\CandleCashTask;
 use App\Models\CandleCashTransaction;
 use App\Models\CustomerBirthdayProfile;
-use App\Models\BirthdayRewardIssuance;
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingConsentRequest;
 use App\Models\MarketingProfile;
@@ -36,8 +36,8 @@ use App\Services\Marketing\MarketingWishlistService;
 use App\Services\Marketing\ProductReviewService;
 use App\Services\Marketing\ShopifyBirthdayMetafieldService;
 use App\Services\Marketing\TenantRewardsPolicyService;
-use App\Services\Shopify\ShopifyStores;
 use App\Services\Shopify\ShopifyGraphqlClient;
+use App\Services\Shopify\ShopifyStores;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantResolver;
 use App\Support\Marketing\MarketingIdentityNormalizer;
@@ -3578,7 +3578,7 @@ class MarketingShopifyIntegrationController extends Controller
     }
 
     /** @param array{store_key:?string,tenant_id:?int} $storeContext
-     * @param array<string,mixed> $resolved
+     * @param  array<string,mixed>  $resolved
      * @return array<string,mixed>
      */
     protected function signedBirthdayIdentity(Request $request, array $storeContext, array $resolved): array
@@ -3659,7 +3659,7 @@ class MarketingShopifyIntegrationController extends Controller
      * only a unique catchup issuance after Shopify signs the customer id.
      * Other storefront identity and rewards flows remain on the linked profile.
      *
-     * @param array{store_key:?string,tenant_id:?int} $storeContext
+     * @param  array{store_key:?string,tenant_id:?int}  $storeContext
      */
     protected function birthdayCatchupProfileForSignedCustomer(Request $request, MarketingProfile $profile, array $storeContext): MarketingProfile
     {
