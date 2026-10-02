@@ -601,6 +601,7 @@ class ShopifyEmbeddedShellPayloadBuilder
         }
 
         return $tenantId !== null
+            && Schema::hasTable('tenants')
             && Tenant::query()->whereKey($tenantId)->where('slug', 'modern-forestry')->exists()
             && strtolower((string) $request->query('shop', '')) === strtolower((string) config('services.shopify.stores.retail.shop'));
     }
