@@ -1,5 +1,10 @@
 # SYSTEM SNAPSHOT
 
+## Public launch partner offer (2026-10-02)
+
+- Evergrove and Everbranch share the public Launch Partner offer in `config/product_surfaces.php`: $499 one-time setup, $89/month for the first six billing months, then $199/month. The first six months total $1,033 before taxes or add-ons.
+- This is prospective public pricing. Existing client agreements, subscription authorizations, Stripe subscriptions, and the client-specific Front Yard Foods and Collins Electric agreement templates retain their recorded terms and rates.
+
 ## Website Commerce encrypted storage repair (2026-10-02)
 
 Website order, order-event, fulfillment-location, shipping-quote, shipment, and

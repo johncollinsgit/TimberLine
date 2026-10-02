@@ -1,3 +1,8 @@
+## 2026-10-02 — Public Launch Partner pricing
+
+- Updated the shared Evergrove and Everbranch public pricing cards to $499 setup, $89/month for the first six months, and $199/month afterward. The six-month total is $1,033, and the comparison now states the correct $360 introductory savings against regular Starter.
+- Existing client agreements and billing retain their recorded rates; the Front Yard Foods and Collins Electric client-specific pricing templates were not changed.
+
 ## 2026-10-02 — Website workspace console links
 
 - A published tenant website may own its tenant subdomain, as Carolina Barrel Co. does. The Switch Console menu now opens that workspace on `app.theeverbranch.com` with its tenant selected, so the link reaches the authenticated dashboard instead of the public site's 404 page.
