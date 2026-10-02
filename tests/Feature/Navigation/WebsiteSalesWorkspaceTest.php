@@ -44,6 +44,32 @@ test('operator and client see identical focused tools without consulting unrelat
     expect(collect($catalog['modules'])->pluck('module_key')->all())->toBe(['managed_website']);
 });
 
+test('platform operator with active tenant admin membership can open a published website workspace from the app host', function (): void {
+    $operator = User::factory()->platformAdmin()->create(['is_active' => true]);
+    $operator->tenants()->attach($this->tenant, ['role' => 'admin', 'membership_active' => true]);
+    App\Models\TenantSite::create([
+        'tenant_id' => $this->tenant->id,
+        'status' => 'published',
+        'public_enabled' => true,
+        'subdomain' => $this->tenant->slug,
+    ]);
+
+    $this->actingAs($operator)
+        ->get('http://app.theeverbranch.com/dashboard?tenant='.$this->tenant->slug)
+        ->assertOk()
+        ->assertSee('data-sidebar-key="website-products"', false)
+        ->assertSee('data-sidebar-key="website-orders"', false);
+    $this->get('http://app.theeverbranch.com/website/products?tenant='.$this->tenant->slug)->assertOk();
+
+    $nav = app(UnifiedAppNavigationService::class)->build(request(), $operator);
+    $switch = collect($nav['console_switches'])->firstWhere('key', 'tenant-'.$this->tenant->id);
+    expect(collect($nav['items'])->pluck('key')->all())->toContain('website', 'website-products', 'website-customers', 'website-orders')
+        ->and($switch['href'])->toBe('https://app.theeverbranch.com/dashboard?tenant='.$this->tenant->slug);
+
+    $operator->tenants()->updateExistingPivot($this->tenant->id, ['membership_active' => false]);
+    $this->get('http://app.theeverbranch.com/website/products?tenant='.$this->tenant->slug)->assertForbidden();
+});
+
 test('website dashboard uses only current tenant website records and visible checklist tasks', function (): void {
     $other = Tenant::create(['name' => 'Other website', 'slug' => 'other-website']);
     $otherSite = App\Models\TenantSite::create(['tenant_id' => $other->id, 'status' => 'draft', 'subdomain' => 'other-website']);

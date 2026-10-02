@@ -330,7 +330,7 @@ class UnifiedAppNavigationService
         };
         $membership = $user->tenants()->whereKey($tenant->id)->wherePivot('membership_active', true)->first();
         $canWork = $user->is_active && $membership && in_array($membership->pivot->role, ['admin', 'owner', 'tenant_owner', 'manager', 'marketing_manager'], true)
-            && ($user->isAdmin() || $user->isManager() || $user->canAccessMarketing());
+            && ($user->isAdmin() || $user->isManager() || $user->canAccessMarketing() || \App\Support\Auth\HomeRedirect::isPlatformOperator($user));
         if ($canWork) {
             $add('home', 'Home', 'dashboard', 'home');
             if ($tenant->clientProjects()->where('metadata->checklist_enabled', true)->exists()) {
@@ -541,7 +541,7 @@ class UnifiedAppNavigationService
     {
         $tenant->loadMissing('setupStatus');
 
-        $path = (string) ($tenant->setupStatus?->landlord_review_status ?? '') === 'reviewed'
+        $path = ($tenant->setupStatus === null || (string) $tenant->setupStatus->landlord_review_status === 'reviewed')
             ? route('dashboard', absolute: false)
             : route('app.start', absolute: false);
 
