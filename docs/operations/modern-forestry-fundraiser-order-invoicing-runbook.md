@@ -60,12 +60,16 @@ store, host, secret, or QuickBooks identifier in the Zapier payload.
    income account, and tax code before creating and sending the actual
    QuickBooks invoice in QuickBooks.
 
-When the cadence is **Monthly review package on the last day of the month**,
-Everbranch runs at 5:00 PM America/New_York on the final calendar day. It groups
-only approved Zapier orders whose source date is in that calendar month, keeps
-currencies separate, and creates the same immutable review package. It does not
-approve orders. Default-off QuickBooks write and send gates control the later
-provider actions independently.
+When the cadence is **Monthly review and gated invoice on the 1st**,
+Everbranch runs at 9:00 AM America/New_York on the first calendar day. The
+command defaults to the previous calendar month, and operators may rerun a
+specific month with `--month=YYYY-MM`. It groups only approved Zapier orders
+whose source date is in that prior month, keeps currencies separate, and creates
+the same immutable review package. It does not approve orders. Existing packages
+with the same month reference are reused on a rerun. Previously saved
+`monthly_last_day` settings are interpreted as this first-day cadence.
+Default-off QuickBooks write and send gates control the later provider actions
+independently.
 
 The package begins at `review_required`, `not_sent`, and `not_available`. With
 the write gate and exact customer/candle/shipping item IDs configured, the

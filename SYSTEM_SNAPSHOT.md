@@ -271,7 +271,8 @@ Trajectory now opens with Personal, Business, and, when both authorized spaces e
   external order ID. It is never a Shopify, Website Commerce, or legacy-order
   record.
 - Operators manually approve each source amount before they can prepare an
-  immutable CSV accounting-review package. A final-day monthly cadence creates
+  immutable CSV accounting-review package. On the first day of each month, the
+  monthly cadence packages the prior calendar month's approved orders into
   deterministic `BSF-MMM-YYYY` packages. Separate default-off environment
   gates can create and send the reviewed invoice through the tenant-owned
   QuickBooks OAuth connection. Exact customer/item mappings are mandatory,

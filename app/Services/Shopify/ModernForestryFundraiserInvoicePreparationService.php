@@ -64,7 +64,7 @@ class ModernForestryFundraiserInvoicePreparationService
     public function prepareApprovedMonth(Tenant $tenant, \Carbon\CarbonImmutable $month, string $actor): array
     {
         $settings = (array) data_get($this->settings->forTenant((int) $tenant->id), 'settings', []);
-        if (($settings['invoice_cadence'] ?? null) !== 'monthly_last_day') {
+        if (($settings['invoice_cadence'] ?? null) !== 'monthly_first_day') {
             return [];
         }
 

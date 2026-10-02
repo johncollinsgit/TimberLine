@@ -176,7 +176,7 @@ Schedule::command('marketing:send-weekly-rewards-wishlist-summary', [
 // controlled delivery stay inert unless both production gates and exact
 // Modern Forestry customer/item mappings are configured.
 Schedule::command('modern-forestry:prepare-fundraiser-monthly-packages', ['--send' => true])
-    ->lastDayOfMonth('17:00')
+    ->monthlyOn(1, '09:00')
     ->timezone('America/New_York')
     ->withoutOverlapping(30)
     ->runInBackground();
