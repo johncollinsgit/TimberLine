@@ -192,6 +192,10 @@ Read `SYSTEM_SNAPSHOT.md` before making changes.
   `docs/operations/modern-forestry-fundraiser-order-invoicing-runbook.md` are
   satisfied. Never route the flow through legacy orders, Shopify Checkout, the
   Website commerce lane, or the platform's direct-invoice system.
+- The monthly command runs at 9:00 AM America/New_York on the 1st and processes
+  the prior calendar month. It only packages already approved Zapier orders.
+  QuickBooks writes and sends require separate production gates and exact
+  customer/item mappings; a scheduled command alone is not proof of delivery.
 
 ## Modern Forestry embedded app base (2026-08-19)
 

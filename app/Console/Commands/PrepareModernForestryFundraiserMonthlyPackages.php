@@ -10,7 +10,7 @@ use Illuminate\Console\Command;
 
 class PrepareModernForestryFundraiserMonthlyPackages extends Command
 {
-    protected $signature = 'modern-forestry:prepare-fundraiser-monthly-packages {--month= : Month to prepare (YYYY-MM)} {--send : Create and send the QuickBooks invoice when both production gates are enabled}';
+    protected $signature = 'modern-forestry:prepare-fundraiser-monthly-packages {--month= : Month to prepare (YYYY-MM; defaults to the prior calendar month)} {--send : Create and send the QuickBooks invoice when both production gates are enabled}';
 
     protected $description = 'Prepare idempotent monthly fundraiser packages and, when production gates are enabled, create or send the matching QuickBooks invoice.';
 
@@ -18,7 +18,7 @@ class PrepareModernForestryFundraiserMonthlyPackages extends Command
     {
         $month = $this->option('month')
             ? CarbonImmutable::createFromFormat('!Y-m', (string) $this->option('month'))
-            : now()->toImmutable();
+            : CarbonImmutable::now('America/New_York')->startOfMonth()->subMonth();
         if (! $month) {
             $this->error('The --month value must use YYYY-MM.');
 

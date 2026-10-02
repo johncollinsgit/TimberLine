@@ -16,6 +16,10 @@ the dedicated fundraiser order intake and accounting-review queue. It does not
 create a customer record, Shopify order, Stripe invoice, QuickBooks invoice,
 payment collection, invoice email, or recipient tracking event.
 
+The settings row description must fit the existing 255-character
+`tenant_marketing_settings.description` column. The saved configuration and
+Zapier token are blocked if that insert fails.
+
 ## Zapier intake contract
 
 Configure **Webhooks by Zapier** as a JSON `POST` to the webhook URL shown in
@@ -60,12 +64,16 @@ store, host, secret, or QuickBooks identifier in the Zapier payload.
    income account, and tax code before creating and sending the actual
    QuickBooks invoice in QuickBooks.
 
-When the cadence is **Monthly review package on the last day of the month**,
-Everbranch runs at 5:00 PM America/New_York on the final calendar day. It groups
-only approved Zapier orders whose source date is in that calendar month, keeps
-currencies separate, and creates the same immutable review package. It does not
-approve orders. Default-off QuickBooks write and send gates control the later
-provider actions independently.
+When the cadence is **Monthly review and gated invoice on the 1st**,
+Everbranch runs at 9:00 AM America/New_York on the first calendar day. The
+command defaults to the previous calendar month, and operators may rerun a
+specific month with `--month=YYYY-MM`. It groups only approved Zapier orders
+whose source date is in that prior month, keeps currencies separate, and creates
+the same immutable review package. It does not approve orders. Existing packages
+with the same month reference are reused on a rerun. Previously saved
+`monthly_last_day` settings are interpreted as this first-day cadence.
+Default-off QuickBooks write and send gates control the later provider actions
+independently.
 
 The package begins at `review_required`, `not_sent`, and `not_available`. With
 the write gate and exact customer/candle/shipping item IDs configured, the

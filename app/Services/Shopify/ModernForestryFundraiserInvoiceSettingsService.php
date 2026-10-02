@@ -16,6 +16,8 @@ class ModernForestryFundraiserInvoiceSettingsService
 {
     public const SETTING_KEY = 'modern_forestry_fundraiser_invoice_settings';
 
+    public const SETTING_DESCRIPTION = 'Modern Forestry fundraiser order intake and invoice review. QuickBooks creation and sending require separate production gates and verified mappings.';
+
     /** @return array<string,mixed> */
     public function defaults(): array
     {
@@ -74,7 +76,7 @@ class ModernForestryFundraiserInvoiceSettingsService
                     'updated_by' => $updatedBy,
                     'updated_at' => now()->toIso8601String(),
                 ],
-                'description' => 'Modern Forestry third-party fundraiser Zapier intake and accounting-review package settings. QuickBooks creation and controlled invoice delivery require separate production gates and exact mappings; payment collection, tax calculation, and recipient-open tracking remain outside this lane.',
+                'description' => self::SETTING_DESCRIPTION,
             ]
         );
     }
@@ -98,7 +100,7 @@ class ModernForestryFundraiserInvoiceSettingsService
             ['tenant_id' => $tenantId, 'key' => self::SETTING_KEY],
             [
                 'value' => $value,
-                'description' => 'Modern Forestry third-party fundraiser Zapier intake and accounting-review package settings. QuickBooks creation and controlled invoice delivery require separate production gates and exact mappings; payment collection, tax calculation, and recipient-open tracking remain outside this lane.',
+                'description' => self::SETTING_DESCRIPTION,
             ]
         );
 
@@ -137,9 +139,11 @@ class ModernForestryFundraiserInvoiceSettingsService
             'invoice_payer_name' => $this->text($payload['invoice_payer_name'] ?? null),
             'invoice_payer_email' => $this->email($payload['invoice_payer_email'] ?? null),
             'notification_email' => $this->email($payload['notification_email'] ?? null) ?? $defaults['notification_email'],
-            'invoice_cadence' => in_array($payload['invoice_cadence'] ?? null, ['per_order', 'weekly_summary', 'campaign_close', 'monthly_last_day'], true)
-                ? $payload['invoice_cadence']
-                : $defaults['invoice_cadence'],
+            'invoice_cadence' => match ($payload['invoice_cadence'] ?? null) {
+                'per_order', 'weekly_summary', 'campaign_close', 'monthly_first_day' => $payload['invoice_cadence'],
+                'monthly_last_day' => 'monthly_first_day',
+                default => $defaults['invoice_cadence'],
+            },
             'payment_terms_days' => max(1, min(90, (int) ($payload['payment_terms_days'] ?? $defaults['payment_terms_days']))),
             'shipping_treatment' => in_array($payload['shipping_treatment'] ?? null, ['source_amount', 'manual_review'], true)
                 ? $payload['shipping_treatment']

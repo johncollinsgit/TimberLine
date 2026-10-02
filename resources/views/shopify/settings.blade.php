@@ -579,7 +579,7 @@
                             <option value="per_order" @selected(($fundraiserSettings['invoice_cadence'] ?? 'per_order') === 'per_order')>One invoice per imported order</option>
                             <option value="weekly_summary" @selected(($fundraiserSettings['invoice_cadence'] ?? '') === 'weekly_summary')>Weekly summary invoice</option>
                             <option value="campaign_close" @selected(($fundraiserSettings['invoice_cadence'] ?? '') === 'campaign_close')>One invoice when the campaign closes</option>
-                            <option value="monthly_last_day" @selected(($fundraiserSettings['invoice_cadence'] ?? '') === 'monthly_last_day')>Monthly review package on the last day of the month</option>
+                            <option value="monthly_first_day" @selected(in_array(($fundraiserSettings['invoice_cadence'] ?? ''), ['monthly_first_day', 'monthly_last_day'], true))>Monthly review and gated invoice on the 1st</option>
                         </select>
                         <small>Choose the intended grouping now; no invoice is created from this setting alone.</small>
                         <div class="settings-field-error" data-error-for="invoice_cadence"></div>
@@ -1269,7 +1269,7 @@
                     invoice_payer_name: String(source.invoice_payer_name || ""),
                     invoice_payer_email: String(source.invoice_payer_email || ""),
                     notification_email: String(source.notification_email || "info@theforestrystudio.com"),
-                    invoice_cadence: ["per_order", "weekly_summary", "campaign_close", "monthly_last_day"].includes(source.invoice_cadence) ? source.invoice_cadence : "per_order",
+                    invoice_cadence: ["per_order", "weekly_summary", "campaign_close", "monthly_first_day"].includes(source.invoice_cadence) ? source.invoice_cadence : (source.invoice_cadence === "monthly_last_day" ? "monthly_first_day" : "per_order"),
                     payment_terms_days: Number.parseInt(source.payment_terms_days, 10) || 14,
                     shipping_treatment: ["source_amount", "manual_review"].includes(source.shipping_treatment) ? source.shipping_treatment : "source_amount",
                     tax_handling: ["manual_review_required", "source_amount_pending_review"].includes(source.tax_handling) ? source.tax_handling : "manual_review_required",
