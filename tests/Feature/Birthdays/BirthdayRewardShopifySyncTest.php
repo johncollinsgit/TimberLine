@@ -227,6 +227,42 @@ test('signed in retail customer sees a unique catchup coupon on a same email imp
         ->assertJsonPath('data.email_opted_in', true);
 });
 
+test('catchup coupon stays hidden without signed login and resolves an unlinked Shopify customer by verified email', function () {
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', 'birthday-proxy-secret');
+    config()->set('marketing.shopify.signing_secret', 'birthday-signing-secret');
+    configureStorefrontRetailStoreContext();
+
+    $tenant = Tenant::query()->create(['name' => 'Unlinked Catchup Tenant', 'slug' => 'unlinked-catchup-tenant']);
+    ShopifyStore::query()->updateOrCreate(
+        ['store_key' => 'retail'],
+        ['shop_domain' => 'retail.example.myshopify.com', 'access_token' => 'birthday-retail-token', 'tenant_id' => $tenant->id, 'installed_at' => now()]
+    );
+    [$profile, , $issuance] = birthdayRewardFixture([
+        'metadata' => ['catchup_campaign_key' => 'birthday-catchup-'.now()->year],
+    ], 52, $tenant->id);
+
+    $unsignedCustomer = birthdayAppProxySignedQuery([
+        'shop' => 'retail.example.myshopify.com',
+        'timestamp' => (string) time(),
+        'marketing_profile_id' => $profile->id,
+    ], 'birthday-proxy-secret');
+    $this->getJson(route('marketing.shopify.v1.birthday.status', $unsignedCustomer))
+        ->assertOk()
+        ->assertJsonPath('data.reward.issuance', null);
+
+    Http::fake(fn () => Http::response(['data' => ['customer' => ['email' => $profile->email]]], 200));
+    $signedCustomer = birthdayAppProxySignedQuery([
+        'shop' => 'retail.example.myshopify.com',
+        'timestamp' => (string) time(),
+        'logged_in_customer_id' => '54321',
+    ], 'birthday-proxy-secret');
+    $this->getJson(route('marketing.shopify.v1.birthday.status', $signedCustomer))
+        ->assertOk()
+        ->assertJsonPath('data.profile_id', $profile->id)
+        ->assertJsonPath('data.reward.issuance.reward_code', $issuance->reward_code);
+});
+
 test('storefront reward event endpoint logs idempotent interaction telemetry', function () {
     config()->set('marketing.shopify.app_proxy_enabled', true);
     config()->set('marketing.shopify.app_proxy_secret', 'birthday-proxy-secret');

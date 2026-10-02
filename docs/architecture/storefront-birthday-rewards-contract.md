@@ -153,6 +153,11 @@ shipping discount combinations and disallow product/order combinations,
 including Candle Cash. A free shipping discount must reciprocally allow the
 birthday discount class for both offers to apply.
 
+Imported catchup profiles without a direct Shopify link resolve only after a
+signed-in Shopify customer id is verified against the tenant's retail store.
+The fallback reads that customer's email from Shopify and requires a unique
+same-email catchup issuance. Anonymous profile ids never reveal those codes.
+
 1. customer clicks `Use My Birthday Coupon!`
 2. theme logs `reward_apply_click`
 3. theme redirects to `issuance.apply_path`

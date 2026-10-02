@@ -37,6 +37,7 @@ use App\Services\Marketing\ProductReviewService;
 use App\Services\Marketing\ShopifyBirthdayMetafieldService;
 use App\Services\Marketing\TenantRewardsPolicyService;
 use App\Services\Shopify\ShopifyStores;
+use App\Services\Shopify\ShopifyGraphqlClient;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantResolver;
 use App\Support\Marketing\MarketingIdentityNormalizer;
@@ -979,7 +980,11 @@ class MarketingShopifyIntegrationController extends Controller
             return $this->missingTenantContextResponse('birthday_status');
         }
 
-        $resolved = $this->resolveProfile($request, scope: 'birthday_status', allowCreate: false);
+        $resolved = $this->signedBirthdayIdentity(
+            $request,
+            $storeContext,
+            $this->resolveProfile($request, scope: 'birthday_status', allowCreate: false)
+        );
         if (! $resolved['profile']) {
             $states = ['unknown_customer', 'add_birthday_unlock_reward'];
             $this->logStorefrontEvent($request, 'widget_birthday_status_lookup', [
@@ -1003,6 +1008,14 @@ class MarketingShopifyIntegrationController extends Controller
 
         /** @var MarketingProfile $profile */
         $profile = $this->birthdayCatchupProfileForSignedCustomer($request, $resolved['profile'], $storeContext);
+        if ($this->isCatchupBirthdayProfile($profile) && $this->normalizeShopifyCustomerId($request->query('logged_in_customer_id', '')) === '') {
+            return MarketingStorefrontContract::success([
+                'profile_id' => null,
+                'state' => 'unknown_customer',
+                'birthday' => null,
+                'reward' => ['state' => 'add_birthday_unlock_reward', 'issuance' => null],
+            ], $this->contractMeta($request), ['unknown_customer']);
+        }
         $tenantId = $this->runtimeTenantId($storeContext, $profile);
         $birthdayProfile = $profile->birthdayProfile;
 
@@ -1190,13 +1203,20 @@ class MarketingShopifyIntegrationController extends Controller
             return $this->missingTenantContextResponse('birthday_claim');
         }
 
-        $resolved = $this->resolveProfile($request, scope: 'birthday_claim', allowCreate: false, allowBody: true);
+        $resolved = $this->signedBirthdayIdentity(
+            $request,
+            $storeContext,
+            $this->resolveProfile($request, scope: 'birthday_claim', allowCreate: false, allowBody: true)
+        );
         if (! $resolved['profile']) {
             return $this->identityErrorResponse($resolved['status'], $request);
         }
 
         /** @var MarketingProfile $profile */
         $profile = $this->birthdayCatchupProfileForSignedCustomer($request, $resolved['profile'], $storeContext);
+        if ($this->isCatchupBirthdayProfile($profile) && $this->normalizeShopifyCustomerId($request->query('logged_in_customer_id', '')) === '') {
+            return $this->identityErrorResponse('missing_identity', $request);
+        }
         $tenantId = $this->runtimeTenantId($storeContext, $profile);
         $birthdayProfile = $profile->birthdayProfile;
         if (! $birthdayProfile) {
@@ -3555,6 +3575,82 @@ class MarketingShopifyIntegrationController extends Controller
         }
 
         return $shopifyLinks->first();
+    }
+
+    /** @param array{store_key:?string,tenant_id:?int} $storeContext
+     * @param array<string,mixed> $resolved
+     * @return array<string,mixed>
+     */
+    protected function signedBirthdayIdentity(Request $request, array $storeContext, array $resolved): array
+    {
+        $customerId = $this->normalizeShopifyCustomerId($request->query('logged_in_customer_id', ''));
+        if ($customerId === '') {
+            return $resolved;
+        }
+
+        $profile = $this->profileFromShopifyCustomerId(
+            $customerId,
+            $storeContext['store_key'] ?? null,
+            (int) ($storeContext['tenant_id'] ?? 0)
+        );
+        if (! $profile) {
+            $profile = $this->catchupProfileFromVerifiedShopifyCustomer(
+                $customerId,
+                $storeContext['store_key'] ?? null,
+                (int) ($storeContext['tenant_id'] ?? 0)
+            );
+        }
+
+        return ['status' => $profile ? 'resolved' : 'not_found', 'profile' => $profile, 'sync' => []];
+    }
+
+    protected function catchupProfileFromVerifiedShopifyCustomer(string $customerId, ?string $storeKey, int $tenantId): ?MarketingProfile
+    {
+        $normalizedStoreKey = $this->normalizeStoreKey($storeKey);
+        if ($normalizedStoreKey === null || $tenantId <= 0 || ! ctype_digit($customerId)) {
+            return null;
+        }
+
+        $store = ShopifyStores::find($normalizedStoreKey);
+        if (! $store || (int) ($store['tenant_id'] ?? 0) !== $tenantId) {
+            return null;
+        }
+
+        try {
+            $client = new ShopifyGraphqlClient((string) $store['shop'], (string) $store['token'], (string) ($store['api_version'] ?? '2026-01'));
+            $result = $client->query('query BirthdaySignedCustomer($id: ID!) { customer(id: $id) { email } }', [
+                'id' => 'gid://shopify/Customer/'.$customerId,
+            ]);
+            $email = $this->identityNormalizer->normalizeEmail((string) data_get($result, 'customer.email', ''));
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if ($email === null) {
+            return null;
+        }
+
+        $matches = BirthdayRewardIssuance::query()
+            ->with('marketingProfile')
+            ->where('cycle_year', now()->year)
+            ->where('reward_type', 'discount_code')
+            ->where('metadata->catchup_campaign_key', 'birthday-catchup-'.now()->year)
+            ->whereHas('marketingProfile', fn ($query) => $query
+                ->where('tenant_id', $tenantId)
+                ->where('normalized_email', $email))
+            ->limit(2)
+            ->get();
+
+        return $matches->count() === 1 ? $matches->first()->marketingProfile : null;
+    }
+
+    protected function isCatchupBirthdayProfile(MarketingProfile $profile): bool
+    {
+        return BirthdayRewardIssuance::query()
+            ->where('marketing_profile_id', $profile->id)
+            ->where('cycle_year', now()->year)
+            ->where('metadata->catchup_campaign_key', 'birthday-catchup-'.now()->year)
+            ->exists();
     }
 
     /**
