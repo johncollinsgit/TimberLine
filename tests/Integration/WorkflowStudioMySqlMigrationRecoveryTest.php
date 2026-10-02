@@ -9,6 +9,14 @@ it('resumes fundraiser encrypted storage repair after a partial MySQL conversion
         $this->markTestSkipped('This recovery contract requires MySQL.');
     }
 
+    if (! Schema::hasTable('tenants')) {
+        Schema::create('tenants', function (Blueprint $table): void {
+            $table->id();
+        });
+    }
+    $foundation = require database_path('migrations/2026_08_19_140000_create_modern_forestry_fundraiser_invoice_preparation_tables.php');
+    $foundation->up();
+
     $columns = [
         'modern_forestry_fundraiser_orders' => ['recipient_name', 'recipient_email', 'recipient_phone', 'shipping_address', 'line_items', 'source_payload'],
         'modern_forestry_fundraiser_invoice_packages' => ['invoice_lines'],
@@ -20,9 +28,9 @@ it('resumes fundraiser encrypted storage repair after a partial MySQL conversion
         }
     }
 
-    // One column still has its original JSON type after earlier ALTERs survived.
+    // The first ALTER survived, but Laravel did not record the migration.
     Schema::table('modern_forestry_fundraiser_orders', function (Blueprint $table): void {
-        $table->json('source_payload')->nullable()->change();
+        $table->longText('recipient_name')->change();
     });
     $migration = require database_path('migrations/2026_10_02_190000_repair_fundraiser_encrypted_column_storage.php');
     $migration->up();
