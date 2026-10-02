@@ -9,6 +9,7 @@ use App\Models\CandleCashReward;
 use App\Models\CandleCashTask;
 use App\Models\CandleCashTransaction;
 use App\Models\CustomerBirthdayProfile;
+use App\Models\BirthdayRewardIssuance;
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingConsentRequest;
 use App\Models\MarketingProfile;
@@ -1001,7 +1002,7 @@ class MarketingShopifyIntegrationController extends Controller
         }
 
         /** @var MarketingProfile $profile */
-        $profile = $resolved['profile'];
+        $profile = $this->birthdayCatchupProfileForSignedCustomer($request, $resolved['profile'], $storeContext);
         $tenantId = $this->runtimeTenantId($storeContext, $profile);
         $birthdayProfile = $profile->birthdayProfile;
 
@@ -1017,6 +1018,13 @@ class MarketingShopifyIntegrationController extends Controller
             (string) ($status['state'] ?? 'birthday_saved'),
             $birthdayProfile ? 'birthday_saved' : 'add_birthday_unlock_reward',
         ])));
+
+        $nextBirthdayDate = $birthdayProfile
+            ? $rewardEngine->cycleBirthdayDate($birthdayProfile, now()->year)
+            : null;
+        if ($nextBirthdayDate && $nextBirthdayDate->lt(now()->startOfDay())) {
+            $nextBirthdayDate = $rewardEngine->cycleBirthdayDate($birthdayProfile, now()->year + 1);
+        }
 
         $this->logStorefrontEvent($request, 'widget_birthday_status_lookup', [
             'status' => 'ok',
@@ -1034,6 +1042,8 @@ class MarketingShopifyIntegrationController extends Controller
             'profile_id' => (int) $profile->id,
             'state' => (string) ($status['state'] ?? 'birthday_saved'),
             'birthday' => $birthdayProfile ? $this->birthdayPayload($birthdayProfile) : null,
+            'email_opted_in' => (bool) $profile->accepts_email_marketing,
+            'next_coupon_email_date' => $nextBirthdayDate?->toDateString(),
             'reward' => [
                 'state' => (string) ($status['state'] ?? 'birthday_saved'),
                 'issuance' => $this->birthdayIssuancePayload($status['issuance'] ?? null),
@@ -1186,7 +1196,7 @@ class MarketingShopifyIntegrationController extends Controller
         }
 
         /** @var MarketingProfile $profile */
-        $profile = $resolved['profile'];
+        $profile = $this->birthdayCatchupProfileForSignedCustomer($request, $resolved['profile'], $storeContext);
         $tenantId = $this->runtimeTenantId($storeContext, $profile);
         $birthdayProfile = $profile->birthdayProfile;
         if (! $birthdayProfile) {
@@ -1224,7 +1234,7 @@ class MarketingShopifyIntegrationController extends Controller
         $result = $activationService->activate($issuance, [
             'source_surface' => 'shopify_widget',
             'endpoint' => '/shopify/marketing/birthday/claim',
-            'store_key' => $this->preferredBirthdayStoreKey($profile),
+            'store_key' => $this->preferredBirthdayStoreKey($profile) ?: ($storeContext['store_key'] ?? null),
         ]);
         if (! (bool) ($result['ok'] ?? false)) {
             return MarketingStorefrontContract::error(
@@ -3545,6 +3555,50 @@ class MarketingShopifyIntegrationController extends Controller
         }
 
         return $shopifyLinks->first();
+    }
+
+    /**
+     * Some imported Birthday Club profiles have the same verified email as a
+     * Shopify customer but were never linked to that customer record. Resolve
+     * only a unique catchup issuance after Shopify signs the customer id.
+     * Other storefront identity and rewards flows remain on the linked profile.
+     *
+     * @param array{store_key:?string,tenant_id:?int} $storeContext
+     */
+    protected function birthdayCatchupProfileForSignedCustomer(Request $request, MarketingProfile $profile, array $storeContext): MarketingProfile
+    {
+        $customerId = $this->normalizeShopifyCustomerId($request->query('logged_in_customer_id', ''));
+        $storeKey = $this->normalizeStoreKey($storeContext['store_key'] ?? null);
+        $tenantId = (int) ($storeContext['tenant_id'] ?? 0);
+        $email = trim((string) $profile->normalized_email);
+
+        if ($customerId === '' || $storeKey === null || $tenantId <= 0 || $email === '') {
+            return $profile;
+        }
+
+        $linked = $this->profileFromShopifyCustomerId($customerId, $storeKey, $tenantId);
+        if (! $linked || (int) $linked->id !== (int) $profile->id) {
+            return $profile;
+        }
+
+        if (BirthdayRewardIssuance::query()->where('marketing_profile_id', $profile->id)->where('cycle_year', now()->year)->exists()) {
+            return $profile;
+        }
+
+        $matches = BirthdayRewardIssuance::query()
+            ->with('marketingProfile')
+            ->where('cycle_year', now()->year)
+            ->where('reward_type', 'discount_code')
+            ->where('metadata->catchup_campaign_key', 'birthday-catchup-'.now()->year)
+            ->whereHas('marketingProfile', fn ($query) => $query
+                ->where('tenant_id', $tenantId)
+                ->where('normalized_email', $email))
+            ->limit(2)
+            ->get();
+
+        return $matches->count() === 1 && $matches->first()->marketingProfile
+            ? $matches->first()->marketingProfile
+            : $profile;
     }
 
     protected function nullableString(mixed $value): ?string

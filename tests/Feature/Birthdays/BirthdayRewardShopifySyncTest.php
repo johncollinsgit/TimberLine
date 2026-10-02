@@ -3,6 +3,7 @@
 use App\Jobs\SyncMarketingProfileFromOrder;
 use App\Models\BirthdayRewardIssuance;
 use App\Models\CustomerBirthdayProfile;
+use App\Models\CustomerExternalProfile;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\MarketingSetting;
@@ -63,8 +64,9 @@ test('birthday reward activation creates exactly one shopify discount and stays 
 
     $lookupCalls = 0;
     $createCalls = 0;
+    $createdDiscountInput = null;
 
-    Http::fake(function (\Illuminate\Http\Client\Request $request) use (&$lookupCalls, &$createCalls) {
+    Http::fake(function (\Illuminate\Http\Client\Request $request) use (&$lookupCalls, &$createCalls, &$createdDiscountInput) {
         $payload = $request->data();
         $query = (string) ($payload['query'] ?? '');
 
@@ -80,6 +82,7 @@ test('birthday reward activation creates exactly one shopify discount and stays 
 
         if (str_contains($query, 'BirthdayDiscountCodeBasicCreate')) {
             $createCalls++;
+            $createdDiscountInput = data_get($payload, 'variables.basicCodeDiscount');
 
             return Http::response([
                 'data' => [
@@ -124,7 +127,12 @@ test('birthday reward activation creates exactly one shopify discount and stays 
         ->and((string) $fresh->discount_sync_status)->toBe('synced')
         ->and($fresh->resolvedActivationAt())->not->toBeNull()
         ->and($lookupCalls)->toBe(1)
-        ->and($createCalls)->toBe(1);
+        ->and($createCalls)->toBe(1)
+        ->and(data_get($createdDiscountInput, 'combinesWith'))->toBe([
+            'orderDiscounts' => false,
+            'productDiscounts' => false,
+            'shippingDiscounts' => true,
+        ]);
 });
 
 test('storefront birthday payload reflects activated reward state correctly', function () {
@@ -174,6 +182,49 @@ test('storefront birthday payload reflects activated reward state correctly', fu
         ->assertJsonPath('data.reward.issuance.is_usable', true)
         ->assertJsonPath('data.reward.issuance.shopify_discount_id', 'gid://shopify/DiscountCodeBasic/222')
         ->assertJsonPath('data.reward.issuance.shopify_store_key', 'retail');
+});
+
+test('signed in retail customer sees a unique catchup coupon on a same email imported birthday profile', function () {
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', 'birthday-proxy-secret');
+    config()->set('marketing.shopify.signing_secret', 'birthday-signing-secret');
+    configureStorefrontRetailStoreContext();
+
+    $tenant = Tenant::query()->create(['name' => 'Catchup Login Tenant', 'slug' => 'catchup-login-tenant']);
+    ShopifyStore::query()->updateOrCreate(
+        ['store_key' => 'retail'],
+        ['shop_domain' => 'retail.example.myshopify.com', 'access_token' => 'birthday-retail-token', 'tenant_id' => $tenant->id, 'installed_at' => now()]
+    );
+    [$imported, , $issuance] = birthdayRewardFixture([
+        'metadata' => ['catchup_campaign_key' => 'birthday-catchup-'.now()->year],
+    ], 51, $tenant->id);
+    $imported->forceFill(['accepts_email_marketing' => true])->save();
+    $linked = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'email' => $imported->email,
+        'normalized_email' => $imported->normalized_email,
+    ]);
+    CustomerExternalProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $linked->id,
+        'provider' => 'shopify',
+        'integration' => 'shopify',
+        'store_key' => 'retail',
+        'external_customer_id' => '12345',
+        'normalized_email' => $linked->normalized_email,
+    ]);
+
+    $query = birthdayAppProxySignedQuery([
+        'shop' => 'retail.example.myshopify.com',
+        'timestamp' => (string) time(),
+        'logged_in_customer_id' => '12345',
+    ], 'birthday-proxy-secret');
+
+    $this->getJson(route('marketing.shopify.v1.birthday.status', $query))
+        ->assertOk()
+        ->assertJsonPath('data.profile_id', $imported->id)
+        ->assertJsonPath('data.reward.issuance.reward_code', $issuance->reward_code)
+        ->assertJsonPath('data.email_opted_in', true);
 });
 
 test('storefront reward event endpoint logs idempotent interaction telemetry', function () {

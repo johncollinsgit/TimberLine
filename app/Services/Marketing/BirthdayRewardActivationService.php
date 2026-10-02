@@ -489,6 +489,11 @@ GRAPHQL;
             'startsAt' => $this->startsAtForDiscount($issuance)->toIso8601String(),
             'endsAt' => optional($this->endsAtForDiscount($issuance))->toIso8601String(),
             'appliesOncePerCustomer' => true,
+            'combinesWith' => [
+                'orderDiscounts' => false,
+                'productDiscounts' => false,
+                'shippingDiscounts' => true,
+            ],
             'customerSelection' => ['all' => true],
             'customerGets' => [
                 'items' => ['all' => true],

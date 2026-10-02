@@ -143,6 +143,16 @@ The storefront may show optimistic loading states, but it should rehydrate from 
 
 Birthday reward apply flow:
 
+The 2026 belated email links to `/pages/birthday-gift`; regular birthday emails
+link to `/pages/birthday-celebration`. Both pages use the signed Shopify app
+proxy to resolve the shopper and reveal the usable $10 code after Shopify
+confirms discount sync. A shopper without a saved birthday can enter the month
+and day, then see the next planned email date. The email must not present an
+unactivated code as usable at checkout. New $10 birthday code discounts allow
+shipping discount combinations and disallow product/order combinations,
+including Candle Cash. A free shipping discount must reciprocally allow the
+birthday discount class for both offers to apply.
+
 1. customer clicks `Use My Birthday Coupon!`
 2. theme logs `reward_apply_click`
 3. theme redirects to `issuance.apply_path`

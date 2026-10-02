@@ -111,6 +111,13 @@ test('birthday issuance sends through tenant email dispatch with sendgrid and pe
         ->and((int) data_get($issuance->metadata, 'birthday_email.delivery_id'))->toBe((int) $delivery->id);
 
     Http::assertSentCount(1);
+    Http::assertSent(function ($request): bool {
+        $payload = json_encode($request->data(), JSON_UNESCAPED_SLASHES);
+
+        return is_string($payload)
+            && str_contains($payload, 'https://theforestrystudio.com/pages/birthday-celebration')
+            && ! str_contains($payload, '/discount/');
+    });
 });
 
 test('birthday issuance fails honestly when tenant provider is unsupported and still writes delivery records', function () {
