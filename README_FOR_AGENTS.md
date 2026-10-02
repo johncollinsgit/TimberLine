@@ -1,5 +1,9 @@
 # START HERE
 
+## Public launch partner pricing (2026-10-02)
+
+- The Evergrove/Everbranch public offer is $499 setup, $89/month for six months, then $199/month. It applies to future offers only. Preserve earlier client-specific agreement versions and subscription rates, including Collins Electric and Front Yard Foods; do not reprice their drafts to apply this public change.
+
 ## Collins employee install release (2026-09-30)
 
 - Keep Collins' operational job browsing broad, but scope employee My Day and clock-in to assigned jobs. Financials, manager hours, and employee role changes stay server gated.

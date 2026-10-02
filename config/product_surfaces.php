@@ -244,10 +244,10 @@ return [
             'launch_partner' => [
                 'name' => 'Launch Partner',
                 'price_display' => '$89/mo for 6 months',
-                'summary' => 'Limited first-10-businesses partner offer with discounted onboarding and direct feedback access while Everbranch is shaped in the field.',
+                'summary' => 'Limited first-10-businesses partner offer with guided setup and direct feedback access while Everbranch is shaped in the field.',
                 'highlights' => [
-                    '$299 onboarding',
-                    '$149/mo after the first 6 months',
+                    '$499 one-time setup',
+                    '$199/mo after the first 6 months',
                     'Priority partner support and feedback calls',
                 ],
                 'cta' => [
@@ -349,7 +349,7 @@ return [
             'eyebrow' => 'One platform. Everything you need.',
             'title' => 'Launch partner pricing',
             'subtitle' => 'Starter includes everything. Growth gives you more capacity.',
-            'savings_note' => 'Launch partners save $560 in the first 6 months compared with regular Starter onboarding and monthly pricing.',
+            'savings_note' => 'Launch partners save $360 in the first 6 months compared with regular Starter setup and monthly pricing.',
             'recommended' => 'launch_partner',
             'plans' => [
                 'starter' => [
@@ -375,10 +375,10 @@ return [
                 ],
             ],
             'features' => [
-                ['label' => 'Onboarding', 'starter' => '$499 one-time', 'launch_partner' => '$299 one-time', 'growth' => '$999 one-time'],
+                ['label' => 'Setup', 'starter' => '$499 one-time', 'launch_partner' => '$499 one-time', 'growth' => '$999 one-time'],
                 ['label' => 'First 6 months', 'starter' => '$149/mo', 'launch_partner' => '$89/mo', 'growth' => '$249/mo'],
-                ['label' => 'After 6 months', 'starter' => '$149/mo', 'launch_partner' => '$149/mo', 'growth' => '$249/mo'],
-                ['label' => '6-month total', 'starter' => '$1,393', 'launch_partner' => '$833', 'growth' => '$2,493'],
+                ['label' => 'After 6 months', 'starter' => '$149/mo', 'launch_partner' => '$199/mo', 'growth' => '$249/mo'],
+                ['label' => '6-month total', 'starter' => '$1,393', 'launch_partner' => '$1,033', 'growth' => '$2,493'],
                 ['label' => 'Team members', 'starter' => 'Up to 3 users', 'launch_partner' => 'Up to 3 users', 'growth' => 'Unlimited users'],
                 ['label' => 'Email contacts', 'starter' => 'Up to 2,000 contacts', 'launch_partner' => 'Up to 2,000 contacts', 'growth' => 'Up to 15,000 contacts'],
                 ['label' => 'Automation workflows', 'starter' => 'Basic automations', 'launch_partner' => 'Basic automations', 'growth' => 'Advanced automations'],
