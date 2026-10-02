@@ -95,7 +95,7 @@
 
             <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
                 <h2 class="text-lg font-semibold text-zinc-950">Invoice packages</h2>
-                <p class="mt-1 text-sm text-zinc-600">Create in QuickBooks only after reviewing every line. Send is a separate confirmation. The customer payment link comes directly from the verified QuickBooks invoice.</p>
+                <p class="mt-1 text-sm text-zinc-600">Create a non-payable QuickBooks draft only after reviewing every line. Send is a separate confirmation that enables card and ACH payment, verifies the customer link, and emails the payer. Check the card-surcharge setting in QuickBooks before sending; Everbranch cannot verify it.</p>
                 <div class="mt-4 space-y-3">
                     @forelse($desk['packages'] as $invoice)
                         <article class="rounded-lg border border-zinc-200 p-4">
@@ -103,8 +103,8 @@
                             <div class="mt-1 text-sm text-zinc-600">{{ $invoice['payer_name'] }} ({{ $invoice['payer_email'] }}). Shipping {{ $money($invoice['shipping_cents']) }}. {{ $invoice['quickbooks_doc_number'] ? 'QuickBooks '.$invoice['quickbooks_doc_number'] : 'Not yet in QuickBooks' }}.</div>
                             <details class="mt-3 text-sm"><summary class="cursor-pointer font-medium">Invoice line items</summary><ul class="mt-2 space-y-1 pl-4">@foreach($invoice['invoice_lines'] as $line)<li>{{ $line['description'] ?? 'Item' }}: {{ $money($line['amount_cents'] ?? 0) }}</li>@endforeach</ul></details>
                             <div class="mt-3 flex flex-wrap gap-2">
-                                @if(!$invoice['quickbooks_invoice_id'])<button type="button" data-fundraising-action="create" data-id="{{ $invoice['id'] }}" class="rounded-lg bg-emerald-900 px-3 py-2 text-sm font-semibold text-white">Create QuickBooks invoice</button>@endif
-                                @if($invoice['quickbooks_invoice_id'])<button type="button" data-fundraising-action="link" data-id="{{ $invoice['id'] }}" class="rounded-lg border border-emerald-700 px-3 py-2 text-sm font-semibold text-emerald-900">Open customer payment link</button>@endif
+                                @if(!$invoice['quickbooks_invoice_id'])<button type="button" data-fundraising-action="create" data-id="{{ $invoice['id'] }}" class="rounded-lg bg-emerald-900 px-3 py-2 text-sm font-semibold text-white">Create QuickBooks draft</button>@endif
+                                @if($invoice['quickbooks_invoice_id'] && $invoice['status'] === 'sent')<button type="button" data-fundraising-action="link" data-id="{{ $invoice['id'] }}" class="rounded-lg border border-emerald-700 px-3 py-2 text-sm font-semibold text-emerald-900">Open customer payment link</button>@endif
                                 @if($invoice['quickbooks_invoice_id'] && $invoice['status'] !== 'sent')<button type="button" data-fundraising-action="send" data-id="{{ $invoice['id'] }}" data-reference="{{ $invoice['reference'] }}" class="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-white">Send to {{ $invoice['payer_email'] }}</button>@endif
                             </div>
                         </article>
@@ -172,7 +172,7 @@
                         }
                         if (action === 'send') {
                             const reference = button.dataset.reference;
-                            if (!confirm(`Send ${reference} to the payer through QuickBooks?`)) return;
+                            if (!confirm(`Send ${reference} to the payer through QuickBooks? This enables card and ACH payment. First confirm the card surcharge in QuickBooks if you want the fee applied only when a card is used.`)) return;
                             await request(url(`/fundraising/invoices/${id}/send`), 'POST', { confirmation: `SEND ${reference}` });
                         }
                         if (action === 'link') {

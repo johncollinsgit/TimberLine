@@ -7,7 +7,9 @@ use App\Models\Tenant;
 use App\Services\Shopify\ModernForestryFundraiserInvoiceSettingsService;
 use App\Services\Shopify\ModernForestryFundraiserQuickBooksService;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Validation\ValidationException;
 
 test('a reviewed fundraiser package creates and sends one replay-safe QuickBooks invoice', function (): void {
     config()->set('services.quickbooks.api_base', 'https://quickbooks.test');
@@ -20,16 +22,56 @@ test('a reviewed fundraiser package creates and sends one replay-safe QuickBooks
     IntegrationConnection::query()->create(['tenant_id' => $tenant->id, 'provider' => 'quickbooks', 'external_account_id' => 'fingerprint', 'external_account_secret' => 'realm-1', 'status' => 'connected', 'access_token' => 'token']);
     $order = ModernForestryFundraiserOrder::query()->create(['tenant_id' => $tenant->id, 'source' => 'zapier', 'external_order_id' => '32733', 'order_reference' => '32733', 'recipient_name' => 'Customer', 'shipping_address' => [], 'currency' => 'usd', 'subtotal_cents' => 1000, 'discount_cents' => 0, 'shipping_cents' => 935, 'tax_cents' => 0, 'total_cents' => 1935, 'status' => 'packaged', 'fingerprint' => str_repeat('a', 64), 'line_items' => [], 'received_at' => now()]);
     $package = ModernForestryFundraiserInvoicePackage::query()->create(['tenant_id' => $tenant->id, 'package_reference' => 'BSF-SEP-2026', 'status' => 'review_required', 'delivery_status' => 'not_sent', 'tracking_status' => 'not_available', 'payer_name' => 'Dan Arnoldussen', 'payer_email' => 'info@theforestrystudio.com', 'notification_email' => 'info@theforestrystudio.com', 'currency' => 'usd', 'payment_terms_days' => 14, 'invoice_date' => today(), 'due_date' => today()->addDays(14), 'subtotal_cents' => 1000, 'discount_cents' => 0, 'shipping_cents' => 935, 'tax_cents' => 0, 'total_cents' => 1935, 'order_ids' => [$order->id], 'invoice_lines' => [], 'prepared_at' => now()]);
-    Http::fake([
-        'quickbooks.test/v3/company/realm-1/query?*' => Http::response(['QueryResponse' => ['Invoice' => []]]),
-        'quickbooks.test/v3/company/realm-1/invoice?*' => Http::response(['Invoice' => ['Id' => 'invoice-9', 'DocNumber' => 'BSF-SEP-2026']]),
-        'quickbooks.test/v3/company/realm-1/invoice/invoice-9?*' => Http::response(['Invoice' => ['Id' => 'invoice-9', 'TotalAmt' => 19.35, 'CustomerRef' => ['value' => 'customer-7'], 'InvoiceLink' => 'https://links.notification.intuit.com/example']]),
-        'quickbooks.test/v3/company/realm-1/invoice/invoice-9/send?*' => Http::response(['Invoice' => ['Id' => 'invoice-9', 'EmailStatus' => 'EmailSent']]),
-    ]);
-    $sent = app(ModernForestryFundraiserQuickBooksService::class)->createAndMaybeSend($package, true);
+    $invoiceReads = 0;
+    Http::fake(function (Request $request) use (&$invoiceReads) {
+        $url = $request->url();
+        if (str_contains($url, '/query?')) {
+            return Http::response(['QueryResponse' => ['Invoice' => []]]);
+        }
+        if (str_contains($url, '/invoice/invoice-9/send?')) {
+            return Http::response(['Invoice' => ['Id' => 'invoice-9', 'EmailStatus' => 'EmailSent']]);
+        }
+        if ($request->method() === 'GET' && str_contains($url, '/invoice/invoice-9?')) {
+            $invoiceReads++;
+
+            return Http::response(['Invoice' => [
+                'Id' => 'invoice-9', 'DocNumber' => 'BSF-SEP-2026', 'SyncToken' => (string) ($invoiceReads - 1),
+                'TotalAmt' => 19.35, 'CustomerRef' => ['value' => 'customer-7'],
+                'BillEmail' => ['Address' => 'info@theforestrystudio.com'],
+                'AllowOnlineACHPayment' => $invoiceReads > 1,
+                'AllowOnlineCreditCardPayment' => $invoiceReads > 1,
+                'InvoiceLink' => $invoiceReads > 1 ? 'https://links.notification.intuit.com/example' : null,
+            ]]);
+        }
+        if ($request->method() === 'POST' && str_contains($url, '/invoice?')) {
+            return Http::response(['Invoice' => ['Id' => 'invoice-9', 'DocNumber' => 'BSF-SEP-2026']]);
+        }
+
+        return Http::response(['Fault' => ['Error' => [['Message' => 'Unexpected request']]]], 500);
+    });
+    $service = app(ModernForestryFundraiserQuickBooksService::class);
+    expect(fn () => $service->createAndMaybeSend($package, true))->toThrow(ValidationException::class);
+    Http::assertNothingSent();
+    $draft = $service->createAndMaybeSend($package, false);
+    expect($draft->status)->toBe('quickbooks_created')
+        ->and($draft->quickbooks_sent_at)->toBeNull()
+        ->and($service->verifiedPaymentLink($draft))->toBeNull();
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'POST'
+        && str_contains($request->url(), '/invoice?')
+        && str_contains($request->url(), 'requestid=fundraiser-package-')
+        && str_ends_with($request->url(), '-v1')
+        && $request['AllowOnlineACHPayment'] === false
+        && $request['AllowOnlineCreditCardPayment'] === false);
+    $sent = $service->createAndMaybeSend($draft, true);
     expect($sent->status)->toBe('sent')->and($sent->quickbooks_invoice_id)->toBe('invoice-9')->and($sent->quickbooks_sent_at)->not->toBeNull();
-    app(ModernForestryFundraiserQuickBooksService::class)->createAndMaybeSend($sent, true);
-    Http::assertSentCount(4);
+    $service->createAndMaybeSend($sent, true);
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'POST'
+        && str_contains($request->url(), 'enable-payments-v1')
+        && $request['sparse'] === true
+        && $request['SyncToken'] === '0'
+        && $request['AllowOnlineACHPayment'] === true
+        && $request['AllowOnlineCreditCardPayment'] === true);
+    Http::assertSentCount(6);
 });
 
 test('the monthly command packages only the prior calendar month on the first and reuses its package', function (): void {
