@@ -32,6 +32,7 @@ test('a reviewed fundraiser package creates and sends one replay-safe QuickBooks
     Http::assertSentCount(4);
 });
 
+
 test('the monthly command packages only the prior calendar month on the first and reuses its package', function (): void {
     $this->travelTo(CarbonImmutable::parse('2026-10-01 09:00:00', 'America/New_York'));
     config()->set('services.quickbooks.fundraiser_writes_enabled', false);
