@@ -89,7 +89,8 @@ test('modern forestry retail settings configure fundraiser invoice contacts with
 
     expect(data_get($stored->value, 'invoice_cadence'))->toBe('weekly_summary')
         ->and(data_get($stored->value, 'shipping_treatment'))->toBe('source_amount')
-        ->and(data_get($stored->value, 'tax_handling'))->toBe('manual_review_required');
+        ->and(data_get($stored->value, 'tax_handling'))->toBe('manual_review_required')
+        ->and(strlen((string) $stored->description))->toBeLessThanOrEqual(255);
 });
 
 test('fundraiser invoice settings reject a non-modern-forestry retail tenant', function () {

@@ -16,6 +16,10 @@ the dedicated fundraiser order intake and accounting-review queue. It does not
 create a customer record, Shopify order, Stripe invoice, QuickBooks invoice,
 payment collection, invoice email, or recipient tracking event.
 
+The settings row description must fit the existing 255-character
+`tenant_marketing_settings.description` column. The saved configuration and
+Zapier token are blocked if that insert fails.
+
 ## Zapier intake contract
 
 Configure **Webhooks by Zapier** as a JSON `POST` to the webhook URL shown in

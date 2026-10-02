@@ -16,6 +16,8 @@ class ModernForestryFundraiserInvoiceSettingsService
 {
     public const SETTING_KEY = 'modern_forestry_fundraiser_invoice_settings';
 
+    public const SETTING_DESCRIPTION = 'Modern Forestry fundraiser order intake and invoice review. QuickBooks creation and sending require separate production gates and verified mappings.';
+
     /** @return array<string,mixed> */
     public function defaults(): array
     {
@@ -74,7 +76,7 @@ class ModernForestryFundraiserInvoiceSettingsService
                     'updated_by' => $updatedBy,
                     'updated_at' => now()->toIso8601String(),
                 ],
-                'description' => 'Modern Forestry third-party fundraiser Zapier intake and accounting-review package settings. QuickBooks creation and controlled invoice delivery require separate production gates and exact mappings; payment collection, tax calculation, and recipient-open tracking remain outside this lane.',
+                'description' => self::SETTING_DESCRIPTION,
             ]
         );
     }
@@ -98,7 +100,7 @@ class ModernForestryFundraiserInvoiceSettingsService
             ['tenant_id' => $tenantId, 'key' => self::SETTING_KEY],
             [
                 'value' => $value,
-                'description' => 'Modern Forestry third-party fundraiser Zapier intake and accounting-review package settings. QuickBooks creation and controlled invoice delivery require separate production gates and exact mappings; payment collection, tax calculation, and recipient-open tracking remain outside this lane.',
+                'description' => self::SETTING_DESCRIPTION,
             ]
         );
 
