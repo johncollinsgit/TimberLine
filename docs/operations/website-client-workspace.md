@@ -12,6 +12,11 @@ Home, an enabled Launch checklist, Website, Products, Customers, Orders,
 Inquiries, Sales channels, User Agreements, and Account Help. Website entries
 still require Managed Website access. All destinations carry the tenant slug.
 Operator console switching and provider-checklist permissions remain separate.
+Platform operators with an active tenant admin membership can use these same
+tools without changing their global role. A published tenant website uses the
+canonical app host for its workspace console switch; the tenant slug in the URL
+selects the membership. A workspace without a setup-status record is treated as
+complete and switches to the dashboard, matching the onboarding completion gate.
 
 Home shows actual checklist progress and tenant-owned Website catalog/customer/
 order counts. It does not use legacy shipping queues or simulated storefront

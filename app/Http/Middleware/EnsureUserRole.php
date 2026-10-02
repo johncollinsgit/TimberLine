@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\User;
+use App\Support\Auth\HomeRedirect;
 use Closure;
 use Illuminate\Http\Request;
 
@@ -50,7 +51,7 @@ class EnsureUserRole
             return true;
         }
 
-        $tenantId = $this->resolveTenantIdForFallback($request);
+        $tenantId = $this->resolveTenantIdForFallback($request, $user);
         if ($tenantId === null) {
             return false;
         }
@@ -101,13 +102,41 @@ class EnsureUserRole
         };
     }
 
-    protected function resolveTenantIdForFallback(Request $request): ?int
+    protected function resolveTenantIdForFallback(Request $request, User $user): ?int
     {
+        $tenantToken = $request->query('tenant');
+        $requestedTenant = is_scalar($tenantToken) ? strtolower(trim((string) $tenantToken)) : '';
+        if ($requestedTenant !== '') {
+            if (ctype_digit($requestedTenant)) {
+                $tenantId = (int) $requestedTenant;
+
+                return $tenantId > 0 ? $tenantId : null;
+            }
+
+            // Tenant slugs are used by operator console switches. Keep this
+            // fallback limited to platform operators; other roles retain the
+            // existing role checks on the authenticated tenant routes.
+            if (! HomeRedirect::isPlatformOperator($user)) {
+                return null;
+            }
+
+            $membership = $user->tenants()
+                ->wherePivot('membership_active', true)
+                ->where(function ($query) use ($requestedTenant): void {
+                    $query->where('tenants.slug', $requestedTenant);
+                    if (ctype_digit($requestedTenant)) {
+                        $query->orWhere('tenants.id', (int) $requestedTenant);
+                    }
+                })
+                ->first();
+
+            return $membership ? (int) $membership->id : null;
+        }
+
         $candidates = [
             $request->attributes->get('current_tenant_id'),
-            $request->attributes->get('host_tenant_id'),
             $request->query('tenant_id'),
-            $request->query('tenant'),
+            $request->attributes->get('host_tenant_id'),
             $request->session()?->get('tenant_id'),
         ];
 
