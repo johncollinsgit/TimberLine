@@ -49,17 +49,27 @@ class HomeRedirect
         }
 
         if ($role === 'member') {
-            $memberTenant = $tenant ?? $user->tenants()
+            $activeTenants = $user->tenants()
                 ->wherePivot('membership_active', true)
                 ->orderBy('tenants.name')
-                ->first();
+                ->get();
+            $moduleAccess = app(TenantModuleAccessResolver::class);
+            $preferredTenant = $tenant instanceof Tenant
+                ? $activeTenants->firstWhere('id', $tenant->id)
+                : null;
+            $workTenant = $preferredTenant ?? $activeTenants->first(
+                fn (Tenant $candidate): bool => $moduleAccess->canAccess((int) $candidate->id, 'field_service')
+            );
 
-            if ($memberTenant instanceof Tenant
-                && app(TenantModuleAccessResolver::class)->canAccess((int) $memberTenant->id, 'field_service')) {
-                return route('field-service.index', absolute: false);
+            if ($workTenant instanceof Tenant && $moduleAccess->canAccess((int) $workTenant->id, 'field_service')) {
+                return route('field-service.index', ['tenant' => $workTenant->slug], absolute: false);
             }
 
-            return route('account-help.index', absolute: false);
+            $helpTenant = $preferredTenant ?? $activeTenants->first();
+
+            return $helpTenant instanceof Tenant
+                ? route('account-help.index', ['tenant' => $helpTenant->slug], absolute: false)
+                : route('profile.edit', absolute: false);
         }
 
         if ($role === 'marketing_manager') {

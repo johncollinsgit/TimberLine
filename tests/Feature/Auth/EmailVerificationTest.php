@@ -151,6 +151,19 @@ test('email link resumes an existing mobile authorization for its signed-in acco
     expect($user->fresh()->hasVerifiedEmail())->toBeTrue();
 });
 
+test('email link preserves a same-host absolute mobile authorization handoff', function (): void {
+    $user = User::factory()->unverified()->create();
+    $url = (new VerifyEmail)->toMail($user)->actionUrl;
+    $intended = 'https://app.theeverbranch.com/mobile/authorize?client_id=everbranch-mobile';
+
+    $this->actingAs($user)
+        ->withSession(['url.intended' => $intended])
+        ->get($url)
+        ->assertRedirect($intended);
+
+    expect($user->fresh()->hasVerifiedEmail())->toBeTrue();
+});
+
 test('member confirmation ignores a stale admin dashboard destination', function (): void {
     $this->withoutVite();
 
@@ -168,10 +181,10 @@ test('member confirmation ignores a stale admin dashboard destination', function
     $this->actingAs($user)
         ->withSession(['url.intended' => '/dashboard'])
         ->get($url)
-        ->assertRedirect(route('field-service.index', absolute: false).'?verified=1');
+        ->assertRedirect(route('field-service.index', ['tenant' => $tenant->slug], absolute: false).'&verified=1');
 
     expect($user->fresh()->hasVerifiedEmail())->toBeTrue();
-    $this->get('https://app.theeverbranch.com/field-service')->assertOk();
+    $this->get('https://app.theeverbranch.com/field-service?tenant='.$tenant->slug)->assertOk();
 });
 
 test('email confirmation rejects expired links and links for a different email', function (): void {

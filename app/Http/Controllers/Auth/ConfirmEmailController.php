@@ -23,6 +23,8 @@ class ConfirmEmailController extends Controller
         }
 
         if ($request->user()?->is($user)) {
+            $home = HomeRedirect::pathFor($user);
+            $verifiedHome = $home.(str_contains($home, '?') ? '&' : '?').'verified=1';
             $intended = $request->session()->get('url.intended');
             $path = is_string($intended) ? parse_url($intended, PHP_URL_PATH) : null;
             $host = is_string($intended) ? parse_url($intended, PHP_URL_HOST) : null;
@@ -32,12 +34,12 @@ class ConfirmEmailController extends Controller
             // admin-only page such as /dashboard after successful confirmation.
             if ($path === '/mobile/authorize'
                 && ($host === null || strcasecmp((string) $host, $request->getHost()) === 0)) {
-                return redirect()->intended(HomeRedirect::pathFor($user).'?verified=1');
+                return redirect()->intended($verifiedHome);
             }
 
             $request->session()->forget('url.intended');
 
-            return redirect()->to(HomeRedirect::pathFor($user).'?verified=1');
+            return redirect()->to($verifiedHome);
         }
 
         return response()->view('pages::auth.email-confirmed', [
