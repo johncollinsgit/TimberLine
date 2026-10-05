@@ -29,7 +29,7 @@ class TeamCommunicationService
                         $this->access->scopeVisibleJobs($jobs, $user, $tenant);
                     });
             })
-            ->with(['job:id,tenant_id,title', 'members:id,name'])
+            ->with(['job:id,tenant_id,title', 'members:id,name', 'lastMessage.author:id,name'])
             ->withCount('messages')
             ->orderByDesc('updated_at');
 

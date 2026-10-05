@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\FieldService\TeamCommunicationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class EverbranchMobileTeamController extends Controller
 {
@@ -103,6 +104,7 @@ class EverbranchMobileTeamController extends Controller
     protected function channelPayload(TeamChannel $channel, User $viewer): array
     {
         $other = $channel->kind === 'direct' ? $channel->members->firstWhere('id', '!=', (int) $viewer->id) : null;
+        $lastMessage = $channel->lastMessage;
 
         return [
             'id' => (int) $channel->id, 'kind' => $channel->kind,
@@ -115,6 +117,11 @@ class EverbranchMobileTeamController extends Controller
                 ->when($channel->members->firstWhere('id', (int) $viewer->id)?->pivot?->last_read_at, fn ($messages, $lastRead) => $messages->where('created_at', '>', $lastRead))
                 ->count(),
             'updated_at' => $channel->updated_at?->toIso8601String(),
+            'last_message' => $lastMessage ? [
+                'preview' => Str::limit(trim((string) preg_replace('/\s+/u', ' ', $lastMessage->body)), 120),
+                'author_name' => $lastMessage->author?->name,
+                'created_at' => $lastMessage->created_at?->toIso8601String(),
+            ] : null,
         ];
     }
 

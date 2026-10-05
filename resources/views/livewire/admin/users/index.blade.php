@@ -44,8 +44,8 @@
     @if($showInvite)
       <form wire:submit="inviteMember" class="border-b border-[var(--fb-border)] bg-white px-5 py-6 sm:px-7">
         <div class="mb-4">
-          <h3 class="text-base font-semibold text-[var(--fb-text)]">Invite a teammate</h3>
-          <p class="mt-1 text-sm text-[var(--fb-muted)]">They will receive an activation email if they do not already have an Everbranch account.</p>
+          <h3 class="text-base font-semibold text-[var(--fb-text)]">Invite to {{ $tenant->name }}</h3>
+          <p class="mt-1 text-sm text-[var(--fb-muted)]">This gives the teammate access to {{ $tenant->name }} only. They will receive an activation email if they do not already have an Everbranch account.</p>
         </div>
         <div class="grid gap-4 lg:grid-cols-[1fr_1.25fr_0.8fr_auto] lg:items-end">
           <flux:input wire:model="invite.name" label="Name" autocomplete="name" />
@@ -64,7 +64,7 @@
             wire:target="inviteMember"
             class="team-access-primary-action inline-flex h-10 items-center justify-center rounded-lg px-5 text-sm font-semibold transition disabled:cursor-wait disabled:opacity-60"
           >
-            <span wire:loading.remove wire:target="inviteMember">Send invite</span>
+            <span wire:loading.remove wire:target="inviteMember">Invite to {{ $tenant->name }}</span>
             <span wire:loading wire:target="inviteMember">Adding…</span>
           </button>
         </div>

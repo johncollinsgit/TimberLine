@@ -130,6 +130,23 @@ test('native email password sign in rejects a disabled account', function (): vo
     expect($user->tokens()->count())->toBe(0);
 });
 
+test('mobile workspace list excludes inactive memberships and their data stays inaccessible', function (): void {
+    $user = User::factory()->create(['is_active' => true, 'email_verified_at' => now()]);
+    $allowed = Tenant::query()->create(['name' => 'Collins Electric', 'slug' => 'collins-electric-test']);
+    $revoked = Tenant::query()->create(['name' => 'Modern Forestry', 'slug' => 'modern-forestry-test']);
+    $user->tenants()->attach($allowed->id, ['role' => 'member', 'membership_active' => true]);
+    $user->tenants()->attach($revoked->id, ['role' => 'member', 'membership_active' => false]);
+
+    Sanctum::actingAs($user, ['mobile:read']);
+
+    $this->getJson('/api/mobile/v1/workspaces')
+        ->assertOk()
+        ->assertJsonCount(1, 'workspaces')
+        ->assertJsonPath('workspaces.0.slug', 'collins-electric-test');
+    $this->getJson('/api/mobile/v1/workspaces/modern-forestry-test/bootstrap')->assertNotFound();
+    $this->getJson('/api/mobile/v1/workspaces/modern-forestry-test/work')->assertNotFound();
+});
+
 test('native email password sign in requires the existing two factor code or a single use recovery code', function (): void {
     $secret = app(\Laravel\Fortify\Contracts\TwoFactorAuthenticationProvider::class)->generateSecretKey();
     $user = User::factory()->create([
