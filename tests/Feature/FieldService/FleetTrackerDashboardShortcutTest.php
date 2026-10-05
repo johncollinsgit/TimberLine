@@ -7,8 +7,6 @@ use App\Models\User;
 use App\Services\Dashboard\UnifiedDashboardService;
 use Illuminate\Http\Request;
 
-uses(Tests\TestCase::class, Illuminate\Foundation\Testing\RefreshDatabase::class);
-
 test('Fleet Tracker appears on the web home only for an authorized workspace admin', function (): void {
     $tenant = Tenant::query()->create(['name' => 'Collins Electric', 'slug' => 'collins-electric']);
     TenantAccessProfile::query()->create(['tenant_id' => $tenant->id, 'plan_key' => 'base', 'operating_mode' => 'direct', 'source' => 'test']);
