@@ -1,5 +1,9 @@
 # SYSTEM SNAPSHOT
 
+## Field-service job creation for active members (2026-10-05)
+
+- Active members of an entitled field-service workspace can create a job from the browser or mobile app. Member-created jobs are assigned to their creator so they remain visible under assignment-only job visibility. Members cannot assign another user, add other participants, attach vehicles or invoices during creation; existing job management and financial permissions are unchanged.
+
 ## Collins general time and team alerts (2026-10-05)
 
 - Field employees may clock in without a job. A nullable `field_service_time_sessions.field_service_job_id` records general work; job-specific clock-ins retain assignment and shift checks. Time summaries, corrections, history, and audits preserve the null job instead of showing job ID zero.

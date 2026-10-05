@@ -35,8 +35,37 @@ test('an administrator can preview the field-service employee view without chang
         ->get(route('field-service.index', ['tenant' => $tenant->slug, 'employee_view' => 1]))
         ->assertOk()
         ->assertSeeText('Employee view')
-        ->assertDontSeeText('Create job')
+        ->assertSeeText('Create job')
+        ->assertSeeText('This job will be assigned to you.')
         ->assertSee('data-can-manage="0"', false);
+});
+
+test('a field-service member can create a job in the browser but cannot assign a teammate', function (): void {
+    [$tenant, $admin] = fieldServiceTenantAndUser();
+    $member = User::factory()->create(['role' => 'member', 'is_active' => true]);
+    $member->tenants()->attach($tenant->id, ['role' => 'member']);
+
+    $this->actingAs($member)
+        ->get(route('field-service.index', ['tenant' => $tenant->slug]))
+        ->assertOk()
+        ->assertSeeText('Create job')
+        ->assertSeeText('This job will be assigned to you.');
+
+    $this->actingAs($member)->post(route('field-service.jobs.store', ['tenant' => $tenant->slug]), [
+        'create_customer' => true,
+        'customer_name' => 'Browser Customer',
+        'title' => 'Member-created job',
+        'assigned_user_id' => $admin->id,
+    ])->assertForbidden();
+
+    $this->actingAs($member)->post(route('field-service.jobs.store', ['tenant' => $tenant->slug]), [
+        'create_customer' => true,
+        'customer_name' => 'Browser Customer',
+        'title' => 'Member-created job',
+    ])->assertRedirect();
+
+    $job = FieldServiceJob::query()->forTenantId((int) $tenant->id)->where('title', 'Member-created job')->sole();
+    expect((int) $job->assigned_user_id)->toBe((int) $member->id);
 });
 
 test('work grid data includes the summary used by the job popup', function (): void {

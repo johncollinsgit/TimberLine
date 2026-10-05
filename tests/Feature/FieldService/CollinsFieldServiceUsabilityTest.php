@@ -406,6 +406,48 @@ test('creating a mobile job saves a reusable customer and its supplied address',
         ->and(FieldServiceJob::query()->findOrFail($response->json('job_id'))->marketing_profile_id)->toBe($profile->id);
 });
 
+test('an active employee can create and open a self-assigned mobile job without management access', function (): void {
+    [$tenant, $owner, $member] = usabilityWorkspace();
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service?view=list')
+        ->assertOk()
+        ->assertJsonPath('viewer.capabilities.create_jobs', true)
+        ->assertJsonPath('viewer.capabilities.manage_jobs', false);
+
+    $response = $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs', [
+        'customer_name' => 'Morgan Customer',
+        'title' => 'Employee created service call',
+        'first_task' => 'Inspect panel',
+    ])->assertCreated();
+
+    $job = FieldServiceJob::query()->forTenantId((int) $tenant->id)->findOrFail($response->json('job_id'));
+    expect((int) $job->assigned_user_id)->toBe((int) $member->id)
+        ->and($job->participants()->whereKey((int) $member->id)->exists())->toBeTrue();
+
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id)->assertOk();
+    $this->patchJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id, ['title' => 'Changed by employee'])->assertForbidden();
+    $this->deleteJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id)->assertForbidden();
+    expect($job->fresh()->title)->toBe('Employee created service call');
+});
+
+test('employee job creation rejects other workspaces and manager-only assignment fields', function (): void {
+    [$tenant, $owner, $member] = usabilityWorkspace();
+    $otherTenant = Tenant::query()->create(['name' => 'Other Field Workspace', 'slug' => 'other-field-workspace']);
+    $otherCustomer = MarketingProfile::query()->create(['tenant_id' => $otherTenant->id, 'first_name' => 'Other', 'last_name' => 'Customer']);
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+
+    $url = '/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs';
+    $this->postJson($url, ['customer_name' => 'Local Customer', 'title' => 'Unauthorized assignment', 'assigned_user_id' => $owner->id])->assertForbidden();
+    $this->postJson($url, ['customer_name' => 'Local Customer', 'title' => 'Unauthorized invoice', 'invoice_ids' => [1]])->assertForbidden();
+    $this->postJson($url, ['customer_id' => $otherCustomer->id, 'title' => 'Other customer'])->assertStatus(422);
+    $this->postJson('/api/mobile/v1/workspaces/'.$otherTenant->slug.'/field-service/jobs', ['customer_name' => 'Other Customer', 'title' => 'Other workspace'])->assertNotFound();
+    expect(FieldServiceJob::query()->count())->toBe(0);
+
+    $member->tenants()->updateExistingPivot($tenant->id, ['membership_active' => false]);
+    $this->postJson($url, ['customer_name' => 'Local Customer', 'title' => 'Former member'])->assertNotFound();
+});
+
 test('completing a field job archives it while keeping it searchable in past jobs', function (): void {
     [$tenant, $owner] = usabilityWorkspace();
     $job = FieldServiceJob::query()->create([
