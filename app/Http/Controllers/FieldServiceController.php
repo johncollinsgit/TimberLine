@@ -330,7 +330,7 @@ class FieldServiceController extends Controller
     {
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
-        abort_unless($this->fieldServiceAccess->canManageJobs($request->user(), $tenant), 403);
+        abort_unless($this->fieldServiceAccess->canCreateJobs($request->user(), $tenant), 403);
 
         return response()->json(['address' => $suggestions->details($placeId)]);
     }
