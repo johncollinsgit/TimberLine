@@ -90,6 +90,7 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
                 Route::get('/field-service/my-day', [EverbranchMobileFieldServiceController::class, 'myDay'])->middleware('abilities:mobile:read')->name('workspace.field-service.my-day');
                 Route::get('/field-service/tasks', [EverbranchMobileFieldServiceController::class, 'tasks'])->middleware('abilities:mobile:read')->name('workspace.field-service.tasks.index');
                 Route::get('/field-service/clock/current', [EverbranchMobileTimeClockController::class, 'current'])->middleware('abilities:mobile:read')->name('workspace.field-service.clock.current');
+                Route::get('/field-service/clock/history', [EverbranchMobileTimeClockController::class, 'history'])->middleware('abilities:mobile:read')->name('workspace.field-service.clock.history');
                 Route::post('/field-service/clock/start', [EverbranchMobileTimeClockController::class, 'start'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->name('workspace.field-service.clock.start');
                 Route::post('/field-service/clock/pause', [EverbranchMobileTimeClockController::class, 'pause'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->name('workspace.field-service.clock.pause');
                 Route::post('/field-service/clock/resume', [EverbranchMobileTimeClockController::class, 'resume'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->name('workspace.field-service.clock.resume');

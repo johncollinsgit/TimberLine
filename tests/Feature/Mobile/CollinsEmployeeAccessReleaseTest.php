@@ -71,6 +71,7 @@ test('an employee sees assigned upcoming jobs and can clock only assigned curren
     $this->travel(15)->minutes();
     $this->postJson($base.'/clock/stop', ['client_uuid' => '77777777-7777-4777-8777-777777777777'])->assertOk()->assertJsonPath('timer.status', 'submitted');
     $this->getJson($base.'/time-clock-hours?range=week')->assertForbidden();
+    $this->getJson($base.'/clock/history')->assertForbidden();
 });
 
 test('managers can invite members but cannot grant administrator roles', function (): void {
