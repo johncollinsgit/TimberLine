@@ -97,7 +97,7 @@ class TeamCommunicationService
 
     public function assertAccess(Tenant $tenant, User $user, TeamChannel $channel): void
     {
-        abort_unless((int) $channel->tenant_id === (int) $tenant->id, 404);
+        abort_unless((int) $channel->tenant_id === (int) $tenant->id && $channel->archived_at === null, 404);
         if ($channel->kind === 'company') {
             return;
         }
@@ -108,7 +108,7 @@ class TeamCommunicationService
     }
 
     /** @param array<int,int> $mentionUserIds */
-    public function post(Tenant $tenant, User $user, TeamChannel $channel, string $body, string $clientUuid, array $mentionUserIds = [], ?int $parentId = null): TeamMessage
+    public function post(Tenant $tenant, User $user, TeamChannel $channel, string $body, string $clientUuid, array $mentionUserIds = [], ?int $parentId = null, array $attachmentIds = []): TeamMessage
     {
         $this->assertAccess($tenant, $user, $channel);
         $mentions = $tenant->users()->whereIn('users.id', $mentionUserIds)->pluck('users.id')->map(fn ($id): int => (int) $id)->all();
@@ -116,18 +116,20 @@ class TeamCommunicationService
             abort_unless($channel->messages()->whereKey($parentId)->exists(), 422, 'The reply target is not in this channel.');
         }
 
-        return DB::transaction(function () use ($tenant, $user, $channel, $body, $clientUuid, $mentions, $parentId): TeamMessage {
+        return DB::transaction(function () use ($tenant, $user, $channel, $body, $clientUuid, $mentions, $parentId, $attachmentIds): TeamMessage {
             $message = TeamMessage::query()->firstOrCreate(
                 ['tenant_id' => (int) $tenant->id, 'created_by_user_id' => (int) $user->id, 'client_uuid' => $clientUuid],
                 ['team_channel_id' => (int) $channel->id, 'parent_message_id' => $parentId, 'body' => trim($body), 'mention_user_ids' => $mentions]
             );
+            abort_unless((int) $message->team_channel_id === (int) $channel->id, 409, 'This message key belongs to another conversation.');
             if ($message->wasRecentlyCreated) {
+                app(TeamMessageAttachmentService::class)->attach($tenant, $user, $channel, $message, $attachmentIds);
                 SendTeamMessagePushNotification::dispatch((int) $message->id)->afterCommit();
             }
             $channel->forceFill(['updated_at' => now()])->save();
             $this->markRead($tenant, $user, $channel);
 
-            return $message->load('author:id,name');
+            return $message->load(['author:id,name', 'attachments']);
         });
     }
 

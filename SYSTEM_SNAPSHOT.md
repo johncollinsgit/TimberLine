@@ -2093,3 +2093,7 @@ Trajectory keeps imported Monarch history only before matching live Plaid covera
 - Bud's finance endpoint is scoped deterministic Bud Core. Generative Bud AI and
   empirical category benchmarking are not activated by this release.
 - See `docs/operations/trajectory-runbook.md` for setup, limits, and rollback.
+
+## Team message files (2026-10-05)
+
+Mobile conversations support up to five private photos/PDFs per message, 50 MB per file, through bounded 512 KiB chunk uploads. `team_message_attachments` owns these files on the private local disk. Channel access, current workspace membership, uploader ownership, exact checksums and detected MIME are checked server-side. Files become readable only after attachment to a visible message; workspace assets and Modern Forestry commerce are not involved.

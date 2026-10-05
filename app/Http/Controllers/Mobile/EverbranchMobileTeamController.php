@@ -39,7 +39,7 @@ class EverbranchMobileTeamController extends Controller
         $tenantModel = $this->tenant($request);
         $user = $this->user($request);
         $team->assertAccess($tenantModel, $user, $channel);
-        $messages = $channel->messages()->whereNull('deleted_at')->with('author:id,name')->latest('id')->limit(100)->get()->reverse()->values();
+        $messages = $channel->messages()->whereNull('deleted_at')->with(['author:id,name', 'attachments'])->latest('id')->limit(100)->get()->reverse()->values();
         if ($messages->isNotEmpty()) {
             $team->markRead($tenantModel, $user, $channel, $messages->last()->created_at);
         }
@@ -50,11 +50,12 @@ class EverbranchMobileTeamController extends Controller
     public function store(Request $request, string $tenant, TeamChannel $channel, TeamCommunicationService $team): JsonResponse
     {
         $validated = $request->validate([
-            'body' => ['required', 'string', 'max:10000'], 'client_uuid' => ['required', 'uuid'],
+            'body' => ['nullable', 'required_without:attachment_ids', 'string', 'max:10000'], 'client_uuid' => ['required', 'uuid'],
             'mention_user_ids' => ['nullable', 'array', 'max:50'], 'mention_user_ids.*' => ['integer'],
             'parent_message_id' => ['nullable', 'integer'],
+            'attachment_ids' => ['nullable', 'array', 'max:5'], 'attachment_ids.*' => ['required', 'integer', 'distinct'],
         ]);
-        $message = $team->post($this->tenant($request), $this->user($request), $channel, $validated['body'], $validated['client_uuid'], (array) ($validated['mention_user_ids'] ?? []), $validated['parent_message_id'] ?? null);
+        $message = $team->post($this->tenant($request), $this->user($request), $channel, (string) ($validated['body'] ?? ''), $validated['client_uuid'], (array) ($validated['mention_user_ids'] ?? []), $validated['parent_message_id'] ?? null, (array) ($validated['attachment_ids'] ?? []));
 
         return response()->json(['ok' => true, 'message' => $this->messagePayload($message)], 201);
     }
@@ -118,7 +119,7 @@ class EverbranchMobileTeamController extends Controller
                 ->count(),
             'updated_at' => $channel->updated_at?->toIso8601String(),
             'last_message' => $lastMessage ? [
-                'preview' => Str::limit(trim((string) preg_replace('/\s+/u', ' ', $lastMessage->body)), 120),
+                'preview' => Str::limit(trim((string) preg_replace('/\s+/u', ' ', $lastMessage->body)) ?: 'Shared a file', 120),
                 'author_name' => $lastMessage->author?->name,
                 'created_at' => $lastMessage->created_at?->toIso8601String(),
             ] : null,
@@ -128,7 +129,7 @@ class EverbranchMobileTeamController extends Controller
     /** @return array<string,mixed> */
     protected function messagePayload(TeamMessage $message): array
     {
-        return ['id' => (int) $message->id, 'client_uuid' => $message->client_uuid, 'body' => $message->body, 'author' => $message->author ? ['id' => (int) $message->author->id, 'name' => $message->author->name] : null, 'parent_message_id' => $message->parent_message_id, 'mention_user_ids' => $message->mention_user_ids ?: [], 'reactions' => $message->reactions ?: [], 'created_at' => $message->created_at?->toIso8601String()];
+        return ['id' => (int) $message->id, 'client_uuid' => $message->client_uuid, 'body' => $message->body, 'author' => $message->author ? ['id' => (int) $message->author->id, 'name' => $message->author->name] : null, 'parent_message_id' => $message->parent_message_id, 'mention_user_ids' => $message->mention_user_ids ?: [], 'reactions' => $message->reactions ?: [], 'attachments' => $message->attachments->map(fn ($file): array => ['id' => (int) $file->id, 'name' => $file->file_name, 'mime_type' => $file->mime_type, 'size' => (int) $file->file_size])->values(), 'created_at' => $message->created_at?->toIso8601String()];
     }
 
     protected function tenant(Request $request): Tenant

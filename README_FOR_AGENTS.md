@@ -1475,3 +1475,7 @@ Bud Core is deterministic and private to the selected space; no automatic suppor
 escalation, generative provider activation, or price invention. Follow the finance
 controls section of `docs/operations/trajectory-runbook.md` and run focused tests,
 full regression/build, and normal release gates.
+
+## Team message files (2026-10-05)
+
+Mobile conversations support up to five private photos/PDFs per message, 50 MB per file, through bounded 512 KiB chunk uploads. `team_message_attachments` owns these files on the private local disk. Channel access, current workspace membership, uploader ownership, exact checksums and detected MIME are checked server-side. Files become readable only after attachment to a visible message; workspace assets and Modern Forestry commerce are not involved.
