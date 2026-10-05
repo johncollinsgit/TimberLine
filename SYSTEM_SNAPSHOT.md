@@ -4,6 +4,11 @@
 
 - Active members of an entitled field-service workspace can create a job from the browser or mobile app. Member-created jobs are assigned to their creator so they remain visible under assignment-only job visibility. Members cannot assign another user, add other participants, attach vehicles or invoices during creation; existing job management and financial permissions are unchanged.
 
+## Collins material request evidence (2026-10-05)
+
+- The field mobile API accepts comments and camera/library photos on a specific job material request. Comments reuse tenant-scoped job notes with `metadata.field_service_material_id`; photos reuse team-visible workspace assets with the same material reference. The job detail returns `materials[].comments` and `materials[].photos` alongside existing material fields. No separate commerce, inventory, or QuickBooks record is created.
+- Every write resolves the current active workspace, job, and material on the server and requires the existing job progress permission. The material ID must belong to that job and tenant. Each photo request accepts one image so a retry cannot duplicate part of a batch. The iPhone JSON fallback validates the decoded image type, and photo retries use a per-material idempotency key.
+
 ## Collins general time and team alerts (2026-10-05)
 
 - Field employees may clock in without a job. A nullable `field_service_time_sessions.field_service_job_id` records general work; job-specific clock-ins retain assignment and shift checks. Time summaries, corrections, history, and audits preserve the null job instead of showing job ID zero.

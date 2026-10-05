@@ -1,5 +1,7 @@
 # START HERE
 
+Material request comments and photos use existing job notes and private workspace assets with `field_service_material_id` metadata. Keep material writes tenant-, job-, and assignment-scoped through `FieldServiceAccessService::canUpdateProgress`; never let a client supplied material ID select a different job or workspace. `materials[].comments/photos` in mobile job detail are derived only from assets and notes already visible to that viewer.
+
 General field time does not require a job. Keep `field_service_job_id` nullable through clock, hours, correction, and audit paths, while enforcing assignment for job-specific starts. Team message APNs uses active tenant memberships and channel visibility; never send message bodies in lock-screen alerts. The mobile Notifications section controls `tenant_member_preferences.team_message_notifications` for each workspace.
 
 For mobile team access, list only active `tenant_user` memberships. Every workspace data route must keep the `mobile.tenant` membership gate. The web teammate invitation form must identify the destination workspace because administrators may belong to several tenants.

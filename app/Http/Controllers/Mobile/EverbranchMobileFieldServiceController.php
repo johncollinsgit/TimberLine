@@ -207,7 +207,23 @@ class EverbranchMobileFieldServiceController extends Controller
             'completed_at' => $job->completed_at?->toIso8601String(),
             'canceled_at' => $job->canceled_at?->toIso8601String(),
             'blocked_reason' => $job->blocked_reason,
-            'materials' => $job->materials->map(fn (FieldServiceMaterial $material): array => $this->materialPayload($material))->values(),
+            'materials' => $job->materials->map(fn (FieldServiceMaterial $material): array => [
+                ...$this->materialPayload($material),
+                'comments' => $job->notes
+                    ->filter(fn (FieldServiceJobNote $note): bool => (int) data_get($note->metadata, 'field_service_material_id', 0) === (int) $material->id
+                        && data_get($note->metadata, 'source') === 'material_comment')
+                    ->sortBy('id')
+                    ->map(fn (FieldServiceJobNote $note): array => [
+                        'id' => (int) $note->id,
+                        'body' => (string) $note->body,
+                        'created_by' => $note->createdBy?->name ?: 'Team member',
+                        'created_at' => $note->created_at?->toIso8601String(),
+                    ])->values(),
+                'photos' => $job->assets
+                    ->filter(fn (WorkspaceAsset $asset): bool => (int) data_get($asset->metadata, 'field_service_material_id', 0) === (int) $material->id
+                        && str_starts_with((string) $asset->mime_type, 'image/'))
+                    ->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values(),
+            ])->values(),
             'tasks' => $job->tasks->sortBy(['sort_order', 'due_at'])->map(fn (FieldServiceTask $task): array => [
                 ...$assignments->payload($task),
                 'can_update' => $access->canUpdateTask($user, $tenantModel, $job, $task),
