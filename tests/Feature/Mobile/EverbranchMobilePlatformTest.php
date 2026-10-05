@@ -622,6 +622,8 @@ test('mobile branding is displayed for the tenant and only workspace admins can 
 });
 
 test('authorized landlord home reports revenue tenant mix growth and tenant operations', function (): void {
+    // The 01:00 and 02:00 fixture orders must precede the reporting cutoff, even in midnight CI runs.
+    $this->travelTo(\Illuminate\Support\Carbon::parse('2026-09-19 12:00:00', 'UTC'));
     config()->set('services.stripe.secret', 'sk_test_mobile_landlord');
     config()->set('tenancy.landlord.operator_roles', ['platform_admin']);
     config()->set('tenancy.landlord.operator_emails', []);
