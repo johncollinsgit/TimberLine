@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\Tenant;
+use App\Models\TenantAccessProfile;
 use App\Models\User;
 use App\Support\Auth\HomeRedirect;
 
@@ -38,3 +40,22 @@ test('a pouring user with a workspace membership lands in the pouring room, not 
     expect(HomeRedirect::pathFor($user))->toBe(route('pouring.index', absolute: false));
 });
 
+test('a field service member lands on work rather than the admin dashboard', function (): void {
+    $this->withoutVite();
+
+    $tenant = Tenant::query()->create(['name' => 'Collins Electric', 'slug' => 'collins-electric']);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'base',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+    ]);
+    $user = User::factory()->create(['role' => 'member', 'is_active' => true, 'email_verified_at' => now()]);
+    $user->tenants()->attach($tenant->id, ['role' => 'member', 'membership_active' => true]);
+
+    expect(HomeRedirect::pathFor($user))->toBe(route('field-service.index', absolute: false));
+
+    $this->actingAs($user)->get('https://app.theeverbranch.com/login')
+        ->assertRedirect(route('field-service.index', absolute: false));
+    $this->get('https://app.theeverbranch.com/field-service')->assertOk();
+});

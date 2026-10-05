@@ -5,12 +5,13 @@ namespace App\Support\Auth;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Onboarding\TenantOnboardingCompletionService;
+use App\Services\Tenancy\TenantModuleAccessResolver;
 
 class HomeRedirect
 {
     public static function pathFor(?User $user, ?Tenant $tenant = null): string
     {
-        if (!$user) {
+        if (! $user) {
             return route('login', absolute: false);
         }
 
@@ -45,6 +46,20 @@ class HomeRedirect
 
         if ($role === 'pouring') {
             return route('pouring.index', absolute: false);
+        }
+
+        if ($role === 'member') {
+            $memberTenant = $tenant ?? $user->tenants()
+                ->wherePivot('membership_active', true)
+                ->orderBy('tenants.name')
+                ->first();
+
+            if ($memberTenant instanceof Tenant
+                && app(TenantModuleAccessResolver::class)->canAccess((int) $memberTenant->id, 'field_service')) {
+                return route('field-service.index', absolute: false);
+            }
+
+            return route('account-help.index', absolute: false);
         }
 
         if ($role === 'marketing_manager') {
