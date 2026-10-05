@@ -91,6 +91,8 @@ The paired backend/native release based on current `main` offers email/password 
 
 The field app's first-party password request and setup forms on canonical Everbranch app and tenant hosts must use the same host-only, SameSite=Lax, unpartitioned session profile as its Safari login form. Otherwise iPhone WebKit can drop the session between reset-page GET and POST and show a 419 “Page Expired” despite a valid reset token. Keep the partitioned platform cookie profile for unrelated routes and Shopify embedding.
 
+Email verification notifications use a 60-minute signed `/email/confirm/{id}/{hash}` link on `app.theeverbranch.com`. The link confirms the addressed account without requiring the email browser to share a login session; a valid link never changes the signed-in account. The confirmation page uses the first-party mobile auth cookie profile so sign-in from that page can keep its session on iPhone. Existing Fortify `/email/verify` links remain valid under their original signed-in-account rule until they expire.
+
 Build 17's employee My Hours screen calls `GET /api/mobile/v1/workspaces/{tenant}/field-service/clock/history` with `period=day|week|month` and a nonnegative `offset`. The route returns the signed-in employee's own completed timer sessions and manual entries, grouped by the workspace timezone and clock-in/work date. Submitted and approved entries count toward totals; rejected entries remain visible but do not count. It requires the tenant's `time_tracking` entitlement and returns the latest correction-request status for each timer session. Installable development builds may be paired with the server before this route reaches production, but My Hours requires the backend release.
 
 ## Collins employee mobile release (2026-09-30)

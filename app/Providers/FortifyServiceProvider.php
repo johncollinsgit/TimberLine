@@ -124,14 +124,14 @@ class FortifyServiceProvider extends ServiceProvider
             $scheme = $hostBuilder->canonicalScheme();
 
             if (! is_string($host) || $host === '') {
-                return URL::temporarySignedRoute('verification.verify', $expiresAt, $parameters);
+                return URL::temporarySignedRoute('verification.confirm', $expiresAt, $parameters);
             }
 
             URL::forceRootUrl($scheme.'://'.$host);
             URL::forceScheme($scheme);
 
             try {
-                return URL::temporarySignedRoute('verification.verify', $expiresAt, $parameters);
+                return URL::temporarySignedRoute('verification.confirm', $expiresAt, $parameters);
             } finally {
                 URL::forceRootUrl(null);
                 URL::forceScheme(null);

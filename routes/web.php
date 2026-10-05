@@ -5,6 +5,7 @@ require __DIR__.'/highlevel.php';
 use App\Http\Controllers\AccountingCommandCenterController;
 use App\Http\Controllers\AdminMasterDataController;
 use App\Http\Controllers\AgreementProposalController;
+use App\Http\Controllers\Auth\ConfirmEmailController;
 use App\Http\Controllers\BirthdayEmailComposerController;
 use App\Http\Controllers\Birthdays\BirthdayPagesController;
 use App\Http\Controllers\ClassSchedulingController;
@@ -710,6 +711,10 @@ Route::get('/api/mobile/v1/modern-forestry/session-status', [ModernForestryProdu
 Route::get('/mobile/authorize', \App\Http\Controllers\Mobile\EverbranchMobileAuthorizationController::class)
     ->middleware('throttle:20,1')
     ->name('mobile.everbranch.authorize');
+Route::get('/email/confirm/{id}/{hash}', ConfirmEmailController::class)
+    ->middleware(['signed', 'throttle:6,1'])
+    ->whereNumber('id')
+    ->name('verification.confirm');
 Route::get('/sitemaps/discovery.xml', [BrandDiscoveryController::class, 'sitemap'])->name('discovery.sitemap');
 Route::get('/workspace-brand-assets/{profile}/{slot}', [TenantBrandController::class, 'asset'])
     ->whereNumber('profile')
