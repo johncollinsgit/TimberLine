@@ -93,6 +93,8 @@ The field app's first-party password request and setup forms on canonical Everbr
 
 Email verification notifications use a 60-minute signed `/email/confirm/{id}/{hash}` link on `app.theeverbranch.com`. The link confirms the addressed account without requiring the email browser to share a login session; a valid link never changes the signed-in account. The confirmation page uses the first-party mobile auth cookie profile so sign-in from that page can keep its session on iPhone. Existing Fortify `/email/verify` links remain valid under their original signed-in-account rule until they expire.
 
+The workspace team invite flow creates an unverified account and emails a password-setup token. After the password broker accepts that emailed token and the password is saved, the account is marked email-verified and emits `Verified`; a failed token or an unrelated password reset does not verify an account. Existing invitees who completed setup before this repair need a fresh signed confirmation link.
+
 Build 17's employee My Hours screen calls `GET /api/mobile/v1/workspaces/{tenant}/field-service/clock/history` with `period=day|week|month` and a nonnegative `offset`. The route returns the signed-in employee's own completed timer sessions and manual entries, grouped by the workspace timezone and clock-in/work date. Submitted and approved entries count toward totals; rejected entries remain visible but do not count. It requires the tenant's `time_tracking` entitlement and returns the latest correction-request status for each timer session. Installable development builds may be paired with the server before this route reaches production, but My Hours requires the backend release.
 
 ## Collins employee mobile release (2026-09-30)
