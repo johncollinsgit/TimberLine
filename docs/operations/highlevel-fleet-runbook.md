@@ -56,8 +56,14 @@ exposed as product navigation.
    separate high-entropy `HIGHLEVEL_BOUNCIE_WEBHOOK_KEY`. The established
    `/integrations/bouncie/callback` and `/webhooks/bouncie` remain available for
    standalone Everbranch users.
-8. Confirm the restricted browser map key already used by Fleet permits the
-   canonical Everbranch app origin. No new hosting service is required.
+8. Configure `GOOGLE_MAPS_FLEET_API_KEY` as a browser-referrer-restricted Maps
+   JavaScript API key for the canonical Everbranch app origin, with API
+   restrictions and a billing budget/alert. Production has no verified Fleet
+   map key as of this release; do not reuse a server-side Places key. No new
+   hosting service is required.
+9. Set the getting-started page to
+   `https://app.theeverbranch.com/crm/fleet/guide`. It uses the same narrow
+   iframe policy as the embedded Fleet workspace and requires no account data.
 
 The implementation pins the documented `2021-07-28` HighLevel API contract.
 Do not switch it to v3 without updating endpoint casing, pagination and fixtures.
@@ -81,10 +87,46 @@ HIGHLEVEL_FLEET_PILOT_LOCATIONS=
 
 Deploy migrations and code, verify `/ready` identifies the approved release,
 then configure secrets and enable the app surface while collection stays off.
-Check queue worker listens to `HIGHLEVEL_QUEUE` (default is the existing
-`default` queue) and runs with a timeout greater than the job timeout of 120s.
+Check the worker listens to `HIGHLEVEL_QUEUE` (default is the existing
+`default` queue). Production drains the database/default queue every minute
+through its existing scheduled `queue:work --stop-when-empty` command; no new
+daemon was provisioned. Worker and Fleet job timeouts are 120s. Keep the
+database reservation (`DB_QUEUE_RETRY_AFTER=180` in production) greater than
+the maximum job timeout so a running job is not reserved twice. Fleet jobs
+declare their own eight attempts, overriding the drain command's default.
 The existing scheduler runs `highlevel:fleet-maintain` every five minutes and
 `fleet-tracking:prune-location-points` on its established schedule.
+
+### Production iframe policy
+
+Forge's Nginx site configuration also adds a frame-ancestor policy. Browsers
+enforce the intersection of that policy and Laravel's policy, so both must
+permit the verified CRM parent. Site `3053351` now selects the CRM policy only
+for `/crm/fleet` or its descendant routes (including query strings):
+
+```nginx
+set $everbranch_frame_policy "frame-ancestors 'self' https://admin.shopify.com https://*.myshopify.com https://*.shopify.com";
+if ($request_uri ~ "^/crm/fleet(?:/|\\?|$)") {
+    set $everbranch_frame_policy "frame-ancestors 'self' https://app.gohighlevel.com https://app.bridgecitymarketing.agency";
+}
+add_header Content-Security-Policy $everbranch_frame_policy always;
+```
+
+Keep Laravel's exact parent-origin check as well. Do not broaden the global
+policy, change Shopify embedded cookies, or add a conflicting X-Frame-Options
+header. This configuration was saved and validated through Forge's Nginx
+editor. The original file is backed up privately under
+`/home/forge/.config/everbranch-fleet-backups/nginx-before-fleet-20261005.conf`.
+
+### Environment maintenance
+
+Secrets live in the existing shared production environment file. Before an
+authorized change, take a private backup, preserve unrelated values and file
+permissions, and rebuild the config cache. When running `config:cache` outside
+the deployment script, export `RELEASE_ID` from the current release's
+`git rev-parse HEAD` for that command; the deployment normally supplies it.
+Do not pin an old release ID in `.env`. Verify `/ready` still reports that
+exact SHA, then broadcast `queue:restart` after relevant queue/config changes.
 
 After native billing has been verified, use exactly the two pilot location IDs
 in `HIGHLEVEL_FLEET_PILOT_LOCATIONS`. Keep existing `FLEET_TRACKING_ENABLED`,
@@ -226,3 +268,34 @@ requires fresh authorization and billing confirmation.
 These tests use provider fixtures. They do not prove real provider account
 access, native billing/payouts, production capacity, or completion of the two
 live pilots. Collection stays off until live prerequisites are available.
+
+## Production setup evidence (2026-10-04)
+
+- PR #357 merged; GitHub tests run `37256053501` passed quality, full CI and
+  MySQL migration recovery. Deployment run `37256301413` passed the release
+  gate and triggered Forge deployment `79338404`.
+- `/ready` returned healthy release
+  `f53af086d246719fa240f53c518d1e1b0d06901c`. The embedded launch returned 200;
+  both Laravel and Nginx permitted only the configured CRM parents. The live
+  `/shopify/app` returned 200 with its original Shopify-only frame policies.
+- Production app surface is enabled; credentials and the exact app/plan IDs
+  are configured. Collection and billing verification are false and the pilot
+  location list is empty. No installation collects vehicle data by default.
+- Developer portal shows version 1.0.0 **Private / Live**, with zero installs.
+  The sidebar page, five scopes, OAuth callback, shared secret, default
+  lifecycle endpoint and $99 monthly no-trial plan are saved. Per-location
+  charging and agency resale behavior still require a real pilot check.
+- HighLevel's published payout process uses an invitation to Tipalti after
+  payout eligibility. Payout readiness is unverified; do not substitute a
+  separate Stripe subscription or claim payout onboarding is complete.
+- Remaining live inputs: two selected CRM accounts, two authorized Bouncie
+  accounts/devices, a restricted Fleet map key and native billing/payout verification.
+
+The existing Bouncie developer application `6a9c7a497e9ca0d25650940f` now
+registers both the established standalone callback and the dedicated Fleet
+callback. Fleet webhook `6ac3156cfbb712d6e1204f8c` has its own authentication
+key and subscribes only to tripStart, tripData, tripEnd and tripMetrics. It is
+**Deactivated** pending the pilot; the existing standalone webhook remains
+active. Activate the Fleet webhook only after native billing, collection gates
+and the two pilot locations are ready. No Bouncie account has been connected
+to a CRM workspace during this setup.

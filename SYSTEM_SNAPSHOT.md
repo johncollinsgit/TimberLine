@@ -14,6 +14,15 @@ Fleet, Connection and Settings only. See
 `docs/operations/highlevel-fleet-runbook.md` for onboarding, acceptance, support
 and safe rollback; existing production hosting and CI/Forge deployment are used.
 
+Production release `f53af086` passed GitHub gates and deployed through Forge.
+The developer portal shows private version 1.0.0 live, with no installations.
+Collection/billing verification remain off and the pilot allowlist is empty.
+Nginx limits CRM embedding to `/crm/fleet`; `/shopify/app` retains its Shopify
+frame policies. Queue reservations are 180s for the existing 120s scheduled
+worker. `/crm/fleet/guide` provides setup and disconnect instructions. The additional Bouncie callback and an inactive trip webhook are registered.
+The restricted browser map key, payouts and live pilots remain launch prerequisites. See the runbook for production evidence and config-cache
+release ID preservation.
+
 ## Modern Forestry fundraising invoice desk (development, 2026-10-02)
 
 - The Shopify embedded Fundraising tab reads tenant-scoped BSF-tagged imported
