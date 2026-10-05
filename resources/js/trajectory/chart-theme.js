@@ -4,7 +4,7 @@ const compact = new Intl.NumberFormat('en-US', {style:'currency',currency:'USD',
 export function chartPresentation(canvas, money, type, extra = {}) {
   const wrapper=canvas.parentElement;
   const legend=document.createElement('div');
-  legend.className='tr-chart-legend';
+  legend.className='tr-chart-legend'+(extra.valueLegend?' tr-value-legend':'');
   legend.setAttribute('role','group');
   legend.setAttribute('aria-label',`${canvas.getAttribute('aria-label')} — show or hide series`);
   wrapper.after(legend);
@@ -19,6 +19,7 @@ export function chartPresentation(canvas, money, type, extra = {}) {
       const button=document.createElement('button');button.type='button';button.setAttribute('aria-pressed',String(item.visible));
       const swatch=document.createElement('span');swatch.className='tr-chart-swatch';swatch.style.borderColor=item.color;if(item.dashed)swatch.style.borderTopStyle='dashed';
       button.append(swatch,document.createTextNode(item.label||'Value'));
+      if(extra.valueLegend){const value=document.createElement('strong');const amount=chart.data.datasets[0].data[item.i];const total=chart.data.datasets[0].data.reduce((sum,v)=>sum+v,0);value.textContent=`${money(amount)} · ${total?Math.round(amount/total*100):0}%`;button.append(value);}
       button.onclick=()=>{if(type==='doughnut')chart.toggleDataVisibility(item.i);else chart.setDatasetVisibility(item.i,!chart.isDatasetVisible(item.i));chart.update();};
       legend.append(button);
     });
@@ -40,9 +41,10 @@ export function chartPresentation(canvas, money, type, extra = {}) {
   },afterDestroy(){legend.remove();tooltip.remove();}};
   return {plugins:[plugin],options:{
     responsive:true,maintainAspectRatio:false,
+    ...(type==='doughnut'?{cutout:extra.cutout||'65%'}:{}),
     animation:matchMedia('(prefers-reduced-motion: reduce)').matches?false:{duration:250},
     layout:{padding:{top:extra.boundary!==undefined?30:12,right:12}},
-    interaction:{intersect:false,mode:'index'},
+    interaction:type==='doughnut'?{intersect:true,mode:'nearest'}:{intersect:false,mode:'index'},
     plugins:{legend:{display:false},tooltip:{enabled:false,external:({chart,tooltip:model})=>{
       tooltip.hidden=!model.opacity;if(!model.opacity)return;
       tooltip.replaceChildren();

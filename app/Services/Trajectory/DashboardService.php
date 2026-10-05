@@ -280,6 +280,7 @@ class DashboardService
             'tax_review' => app(TaxReviewService::class)->review($space, $selected, $records),
             'income_sources' => $incomeSources,
             'categories' => $categories, 'daily_series' => $dailySeries,
+            'spending_analysis' => ['largest_transactions' => $spending->where('amount_cents', '<', 0)->sortBy('amount_cents')->take(10)->values()->all(), 'transaction_count' => $spending->where('amount_cents', '<', 0)->count(), 'refund_cents' => (int) $spending->where('amount_cents', '>', 0)->sum('amount_cents')],
             'debt_suggestions' => app(PlaidService::class)->debtSuggestions($space), 'forecast' => $baseline, 'comparison' => $comparison, 'bills' => $bills, 'goals' => $goals, 'debts' => $debtRows, 'assets' => $assets, 'metals' => $metals, 'quotes' => $quotes,
             'recommendations' => $recommendations, 'recurring_suggestions' => $this->recurringSuggestions($entries, $schedules),
             'records' => $records->whereNotIn('kind', ['payroll'])->values()->all(),

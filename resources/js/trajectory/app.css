@@ -85,3 +85,24 @@
 
 .tr-outlook-grid.tr-outlook-comparison{grid-template-columns:1fr}
 .tr-outlook-tabs{overflow-x:auto}.tr-outlook-tabs button{white-space:nowrap;flex-shrink:0}
+
+/* Period selection and paired category breakdowns. */
+.tr-app .tr-period-tabs{display:flex;align-items:center;gap:3px;padding:4px;background:#edf1f4;border:1px solid #dfe6eb;border-radius:11px;flex-wrap:wrap}
+.tr-app .tr-period-tabs button{border:0;background:transparent;border-radius:7px;padding:9px 14px;color:#61727d;font-size:12px;font-weight:600;white-space:nowrap;min-height:38px;transition:background .15s,color .15s,box-shadow .15s}
+.tr-app .tr-period-tabs button:hover{background:#e1e8ed;color:#243c49}
+.tr-app .tr-period-tabs button[aria-pressed=true]{background:#fff;color:#195e54;box-shadow:0 1px 4px #233a4820}
+.tr-income-mode{width:fit-content;margin:0 0 18px}
+.tr-donut-total{display:flex;align-items:baseline;gap:14px;margin:18px 0 8px;flex-wrap:wrap}
+.tr-donut-total strong{font-size:28px;letter-spacing:-.8px;color:#243c49}
+.tr-donut-total span{color:#74828a;font-size:12px}
+.trajectory-site .tr-chart.donut{height:260px;max-width:360px;margin:0 auto}
+.tr-category-donuts{align-items:start;margin-bottom:22px}
+.tr-app .tr-value-legend{display:grid;gap:2px;margin:18px 0 12px}
+.tr-app .tr-value-legend button{width:100%;padding:10px 8px;border-bottom:1px solid #eef1f3;gap:12px;border-radius:5px}
+.tr-value-legend button strong{margin-left:auto;text-align:right;white-space:nowrap;font-size:11px;font-weight:600}
+.tr-value-legend .tr-chart-swatch{width:10px;height:10px;flex-basis:10px;border-width:5px!important;border-style:solid!important;border-radius:3px}
+@media(max-width:700px){.tr-app .tr-period-tabs{width:100%}.tr-app .tr-period-tabs button{flex:1;padding:8px 10px}.tr-category-donuts{grid-template-columns:1fr}.tr-donut-total strong{font-size:25px}}
+
+.tr-cost-summary{display:flex;gap:30px;align-items:center;border-bottom:1px solid #e7ecef;padding-bottom:18px;margin-bottom:18px}.tr-cost-summary>p{max-width:600px}.tr-cost-lists h3{font-size:13px;color:#526775;margin:0 0 12px}.tr-app .tr-cost-row{display:flex;justify-content:space-between;align-items:center;gap:20px;width:100%;padding:14px 8px;border:0;border-bottom:1px solid #eef1f3;background:transparent;text-align:left;border-radius:5px;font-size:12px}.tr-cost-row small{display:block;color:#74828a;margin-top:5px}.tr-cost-row>strong{white-space:nowrap}.tr-app .tr-cost-row:hover{background:#f0f6f4}@media(max-width:700px){.tr-cost-summary{display:block}.tr-cost-lists{grid-template-columns:1fr}}
+
+.tr-donut-context{min-height:48px;display:flex;align-items:center;color:#74828a;font-size:12px;margin-bottom:18px}

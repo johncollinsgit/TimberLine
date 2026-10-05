@@ -197,3 +197,24 @@ test('financial colleagues cannot reconnect or revoke another persons shared ban
     $this->deleteJson("/trajectory/spaces/{$business->id}/banks/{$connection->id}")->assertForbidden();
     $this->getJson("/trajectory/spaces/{$business->id}/banks/{$connection->id}/accounts")->assertForbidden();
 });
+
+test('year cost breakdown reconciles refunds and excludes transfers and debt principal', function () {
+    $fixtures = [
+        ['cost-mortgage', -200000, 'expense', 'housing', '2026-01-10'],
+        ['cost-vacation', -300000, 'expense', 'vacations', '2026-06-10'],
+        ['cost-refund', 50000, 'refund', 'vacations', '2026-06-15'],
+        ['cost-transfer', -900000, 'transfer', 'uncategorized', '2026-06-15'],
+        ['cost-loan', -800000, 'debt_payment', 'uncategorized', '2026-06-15'],
+        ['cost-last-year', -700000, 'expense', 'shopping', '2025-12-15'],
+    ];
+    foreach ($fixtures as [$id, $amount, $flow, $category, $date]) {
+        app(LedgerService::class)->ingest($this->account, [['id' => $id, 'date' => $date, 'merchant' => $id, 'amount_cents' => $amount]]);
+        Transaction::where('source_key', $this->account->source_key.':'.$id)->firstOrFail()->update(['flow' => $flow, 'category' => $category, 'reviewed' => true]);
+    }
+    $result = app(DashboardService::class)->build($this->space, 'year');
+    expect($result['summary']['spending_cents'])->toBe(450000)
+        ->and($result['spending_analysis']['transaction_count'])->toBe(2)
+        ->and($result['spending_analysis']['refund_cents'])->toBe(50000)
+        ->and(array_column($result['spending_analysis']['largest_transactions'], 'merchant'))->toBe(['cost-vacation', 'cost-mortgage'])
+        ->and(array_sum(array_column($result['categories'], 'amount_cents')))->toBe(450000);
+});
