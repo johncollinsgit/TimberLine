@@ -4,6 +4,7 @@
 
 - Andrew, Carlos, and Neal had unintended active Modern Forestry memberships from workspace invitations. Production memberships were corrected and audited: all three now belong only to Collins Electric as members. No account, customer, order, or job records were deleted.
 - The mobile workspace list now returns active memberships only, matching the server gate on every workspace data route. The web teammate invitation form names its target workspace next to the submit action so operators can verify the destination before inviting.
+- Team channel summaries include the latest visible message preview and author for a familiar mobile inbox. Previews are returned only inside a tenant-gated, channel-visible response.
 
 ## Private CRM Fleet integration (2026-10-04; pilot disabled)
 
