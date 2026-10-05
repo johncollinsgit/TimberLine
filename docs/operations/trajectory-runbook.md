@@ -397,3 +397,8 @@ cannot be represented as doughnut slices. Slice drilldowns use the full scoped
 evidence IDs, and legends show exact amounts and percentages. Today, Week, Month,
 Year, All history and Custom are responsive segmented period controls; Custom
 retains the existing date inputs. No financial calculations or records change.
+The default period is now Year (January 1 through today). The cost explanation
+section uses the same complete scoped ledger as summary/category totals, lists
+the ten largest negative spending records and every positive net spending
+category, and shows refund offsets explicitly. Transfers and debt principal are
+excluded consistently; repayments do not count card purchases twice.
