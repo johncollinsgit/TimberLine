@@ -42,6 +42,11 @@ class FieldServiceAccessService
             || $user->role === 'platform_admin';
     }
 
+    public function canCreateJobs(User $user, Tenant|int $tenant): bool
+    {
+        return $user->is_active !== false && $this->role($user, $tenant) !== '';
+    }
+
     public function canUpdateProgress(User $user, Tenant $tenant, FieldServiceJob $job): bool
     {
         if ($this->canManageJobs($user, $tenant)) {
@@ -101,7 +106,7 @@ class FieldServiceAccessService
         return [
             'view_all_jobs' => $this->canViewAllJobs($user, $tenant),
             'manage_jobs' => $manage,
-            'create_jobs' => $manage,
+            'create_jobs' => $this->canCreateJobs($user, $tenant),
             'manage_team' => $manage,
             'manage_any_task' => $manage,
             'update_participating_job_progress' => true,

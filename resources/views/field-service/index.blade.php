@@ -120,10 +120,14 @@
                         <input id="field-service-customer-email" name="customer_email" type="email" value="{{ old('customer_email') }}" class="rounded-xl border border-zinc-300 px-3 py-3 text-sm" placeholder="Customer email">
                         <input id="field-service-service-address" name="service_address_line_1" value="{{ old('service_address_line_1') }}" class="rounded-xl border border-zinc-300 px-3 py-3 text-sm xl:col-span-2" placeholder="Service address">
                         <input name="scheduled_for" type="datetime-local" class="rounded-xl border border-zinc-300 px-3 py-3 text-sm">
-                        <select name="assigned_user_id" class="rounded-xl border border-zinc-300 px-3 py-3 text-sm">
-                            <option value="">Unassigned</option>
-                            @foreach($team as $member)<option value="{{ $member->id }}">{{ $member->name }}</option>@endforeach
-                        </select>
+                        @if(data_get($capabilities ?? [], 'manage_jobs'))
+                            <select name="assigned_user_id" class="rounded-xl border border-zinc-300 px-3 py-3 text-sm">
+                                <option value="">Unassigned</option>
+                                @foreach($team as $member)<option value="{{ $member->id }}">{{ $member->name }}</option>@endforeach
+                            </select>
+                        @else
+                            <p class="flex items-center rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-3 text-sm text-zinc-700">This job will be assigned to you.</p>
+                        @endif
                         <textarea name="description" rows="2" class="rounded-xl border border-zinc-300 px-3 py-3 text-sm md:col-span-2" placeholder="Scope, access notes, or instructions"></textarea>
                         <button type="submit" class="fb-btn fb-btn-primary min-h-11 justify-center">Create job</button>
                     </form>

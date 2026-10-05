@@ -295,7 +295,8 @@ class EverbranchMobileFieldServiceController extends Controller
     {
         $tenant = $this->tenant($request);
         $user = $this->user($request);
-        abort_unless($access->canManageJobs($user, $tenant), 403);
+        abort_unless($access->canCreateJobs($user, $tenant), 403);
+        $canManage = $access->canManageJobs($user, $tenant);
         $validated = $request->validate([
             'customer_id' => ['nullable', 'integer'], 'customer_name' => ['required_without:customer_id', 'nullable', 'string', 'max:255'],
             'customer_email' => ['nullable', 'email', 'max:255'], 'customer_phone' => ['nullable', 'string', 'max:80'],
@@ -312,6 +313,11 @@ class EverbranchMobileFieldServiceController extends Controller
             'invoice_ids' => ['nullable', 'array', 'max:20'], 'invoice_ids.*' => ['integer'],
             'first_task' => ['nullable', 'string', 'max:255'],
         ]);
+        if (! $canManage) {
+            abort_if(filled($validated['assigned_user_id'] ?? null) && (int) $validated['assigned_user_id'] !== (int) $user->id, 403);
+            abort_if(collect($validated['participant_user_ids'] ?? [])->contains(fn ($id): bool => (int) $id !== (int) $user->id), 403);
+            abort_if(filled($validated['vehicle_ids'] ?? []) || filled($validated['invoice_ids'] ?? []), 403);
+        }
         $profile = null;
         if (is_numeric($validated['customer_id'] ?? null)) {
             $profile = MarketingProfile::query()->forTenantId((int) $tenant->id)->find((int) $validated['customer_id']);
@@ -362,7 +368,7 @@ class EverbranchMobileFieldServiceController extends Controller
                 }
             }
         }
-        $assigned = $this->tenantUserId($tenant, $validated['assigned_user_id'] ?? null);
+        $assigned = $canManage ? $this->tenantUserId($tenant, $validated['assigned_user_id'] ?? null) : (int) $user->id;
         $invoiceIds = collect((array) ($validated['invoice_ids'] ?? []))->filter(fn ($id): bool => is_numeric($id))->map(fn ($id): int => (int) $id)->unique()->values();
         if ($invoiceIds->isNotEmpty()) {
             $matching = FieldServiceFinancialDocument::query()->forTenantId((int) $tenant->id)
@@ -382,7 +388,9 @@ class EverbranchMobileFieldServiceController extends Controller
             'service_postal_code' => $validated['service_postal_code'] ?? null, 'service_country' => $validated['service_country'] ?? null,
             'scheduled_for' => $validated['scheduled_for'] ?? null, 'scheduled_end_at' => $validated['scheduled_end_at'] ?? null,
         ]);
-        $ids = $tenant->users()->whereIn('users.id', (array) ($validated['participant_user_ids'] ?? []))->pluck('users.id')->map(fn ($id): int => (int) $id);
+        $ids = $canManage
+            ? $tenant->users()->whereIn('users.id', (array) ($validated['participant_user_ids'] ?? []))->pluck('users.id')->map(fn ($id): int => (int) $id)
+            : collect([(int) $user->id]);
         $job->participants()->sync($ids->mapWithKeys(fn (int $id): array => [$id => ['tenant_id' => (int) $tenant->id, 'role' => 'member', 'following' => true]])->all());
         $vehicleIds = \App\Models\FieldServiceVehicle::query()->forTenantId((int) $tenant->id)->whereIn('id', (array) ($validated['vehicle_ids'] ?? []))->pluck('id')->map(fn ($id): int => (int) $id);
         $job->vehicles()->sync($vehicleIds->mapWithKeys(fn (int $id): array => [$id => ['tenant_id' => (int) $tenant->id, 'assigned_by_user_id' => (int) $user->id]])->all());

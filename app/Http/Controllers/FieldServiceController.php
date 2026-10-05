@@ -147,7 +147,7 @@ class FieldServiceController extends Controller
             $capabilities = [
                 ...$capabilities,
                 'manage_jobs' => false,
-                'create_jobs' => false,
+                'create_jobs' => $this->fieldServiceAccess->canCreateJobs($request->user(), $tenant),
                 'manage_team' => false,
                 'manage_any_task' => false,
             ];
@@ -320,7 +320,7 @@ class FieldServiceController extends Controller
     {
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
-        abort_unless($this->fieldServiceAccess->canManageJobs($request->user(), $tenant), 403);
+        abort_unless($this->fieldServiceAccess->canCreateJobs($request->user(), $tenant), 403);
         $validated = $request->validate(['q' => ['required', 'string', 'min:3', 'max:180']]);
 
         return response()->json(['suggestions' => $suggestions->suggest((string) $validated['q'])]);
@@ -709,7 +709,7 @@ class FieldServiceController extends Controller
     {
         $tenant = $this->tenant($request);
         $this->authorizeFieldService($tenant);
-        abort_unless($this->fieldServiceAccess->canManageJobs($request->user(), $tenant), 403);
+        abort_unless($this->fieldServiceAccess->canCreateJobs($request->user(), $tenant), 403);
 
         $validated = $request->validate([
             'marketing_profile_id' => ['nullable', 'integer'],
@@ -736,9 +736,16 @@ class FieldServiceController extends Controller
             'first_material' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $assignedUserId = $this->validatedTenantUserId($tenant, $validated['assigned_user_id'] ?? null);
-
         $actor = $request->user();
+        $canManage = $this->fieldServiceAccess->canManageJobs($actor, $tenant);
+        if (! $canManage) {
+            abort_if(filled($validated['assigned_user_id'] ?? null) && (int) $validated['assigned_user_id'] !== (int) $actor->id, 403);
+            abort_if(collect($validated['participant_ids'] ?? [])->contains(fn ($id): bool => (int) $id !== (int) $actor->id), 403);
+        }
+        $assignedUserId = $canManage
+            ? $this->validatedTenantUserId($tenant, $validated['assigned_user_id'] ?? null)
+            : (int) $actor->id;
+
         DB::transaction(function () use ($tenant, $validated, $assignedUserId, $actor): void {
             $profile = $this->resolveJobCustomer($tenant, $validated);
             $validated = $this->prefillJobCustomerDetails($validated, $profile);
