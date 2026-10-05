@@ -19,9 +19,8 @@ The developer portal shows private version 1.0.0 live, with no installations.
 Collection/billing verification remain off and the pilot allowlist is empty.
 Nginx limits CRM embedding to `/crm/fleet`; `/shopify/app` retains its Shopify
 frame policies. Queue reservations are 180s for the existing 120s scheduled
-worker. `/crm/fleet/guide` provides setup and disconnect instructions. Bouncie
-registration, the restricted browser map key, payouts and live pilots remain
-launch prerequisites. See the runbook for production evidence and config-cache
+worker. `/crm/fleet/guide` provides setup and disconnect instructions. The additional Bouncie callback and an inactive trip webhook are registered.
+The restricted browser map key, payouts and live pilots remain launch prerequisites. See the runbook for production evidence and config-cache
 release ID preservation.
 
 ## Modern Forestry BSF Fundraising tab (development, 2026-10-02)

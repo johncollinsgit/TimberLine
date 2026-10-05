@@ -289,5 +289,13 @@ live pilots. Collection stays off until live prerequisites are available.
   payout eligibility. Payout readiness is unverified; do not substitute a
   separate Stripe subscription or claim payout onboarding is complete.
 - Remaining live inputs: two selected CRM accounts, two authorized Bouncie
-  accounts/devices, Bouncie registration of the additional callback/webhook,
-  a restricted Fleet map key and native billing/payout verification.
+  accounts/devices, a restricted Fleet map key and native billing/payout verification.
+
+The existing Bouncie developer application `6a9c7a497e9ca0d25650940f` now
+registers both the established standalone callback and the dedicated Fleet
+callback. Fleet webhook `6ac3156cfbb712d6e1204f8c` has its own authentication
+key and subscribes only to tripStart, tripData, tripEnd and tripMetrics. It is
+**Deactivated** pending the pilot; the existing standalone webhook remains
+active. Activate the Fleet webhook only after native billing, collection gates
+and the two pilot locations are ready. No Bouncie account has been connected
+to a CRM workspace during this setup.
