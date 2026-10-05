@@ -5,12 +5,13 @@ namespace App\Support\Auth;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Onboarding\TenantOnboardingCompletionService;
+use App\Services\Tenancy\TenantModuleAccessResolver;
 
 class HomeRedirect
 {
     public static function pathFor(?User $user, ?Tenant $tenant = null): string
     {
-        if (!$user) {
+        if (! $user) {
             return route('login', absolute: false);
         }
 
@@ -45,6 +46,30 @@ class HomeRedirect
 
         if ($role === 'pouring') {
             return route('pouring.index', absolute: false);
+        }
+
+        if ($role === 'member') {
+            $activeTenants = $user->tenants()
+                ->wherePivot('membership_active', true)
+                ->orderBy('tenants.name')
+                ->get();
+            $moduleAccess = app(TenantModuleAccessResolver::class);
+            $preferredTenant = $tenant instanceof Tenant
+                ? $activeTenants->firstWhere('id', $tenant->id)
+                : null;
+            $workTenant = $preferredTenant ?? $activeTenants->first(
+                fn (Tenant $candidate): bool => $moduleAccess->canAccess((int) $candidate->id, 'field_service')
+            );
+
+            if ($workTenant instanceof Tenant && $moduleAccess->canAccess((int) $workTenant->id, 'field_service')) {
+                return route('field-service.index', ['tenant' => $workTenant->slug], absolute: false);
+            }
+
+            $helpTenant = $preferredTenant ?? $activeTenants->first();
+
+            return $helpTenant instanceof Tenant
+                ? route('account-help.index', ['tenant' => $helpTenant->slug], absolute: false)
+                : route('profile.edit', absolute: false);
         }
 
         if ($role === 'marketing_manager') {

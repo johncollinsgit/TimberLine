@@ -1,10 +1,16 @@
 <?php
 
+use App\Models\Tenant;
+use App\Models\TenantAccessProfile;
 use App\Models\User;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\URL;
+
+beforeEach(function (): void {
+    $this->withoutVite();
+});
 
 test('email verification screen can be rendered', function () {
     $user = User::factory()->unverified()->create();
@@ -143,6 +149,42 @@ test('email link resumes an existing mobile authorization for its signed-in acco
         ->assertRedirect($intended);
 
     expect($user->fresh()->hasVerifiedEmail())->toBeTrue();
+});
+
+test('email link preserves a same-host absolute mobile authorization handoff', function (): void {
+    $user = User::factory()->unverified()->create();
+    $url = (new VerifyEmail)->toMail($user)->actionUrl;
+    $intended = 'https://app.theeverbranch.com/mobile/authorize?client_id=everbranch-mobile';
+
+    $this->actingAs($user)
+        ->withSession(['url.intended' => $intended])
+        ->get($url)
+        ->assertRedirect($intended);
+
+    expect($user->fresh()->hasVerifiedEmail())->toBeTrue();
+});
+
+test('member confirmation ignores a stale admin dashboard destination', function (): void {
+    $this->withoutVite();
+
+    $tenant = Tenant::query()->create(['name' => 'Collins Electric', 'slug' => 'collins-electric']);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'base',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+    ]);
+    $user = User::factory()->unverified()->create(['role' => 'member', 'is_active' => true]);
+    $user->tenants()->attach($tenant->id, ['role' => 'member', 'membership_active' => true]);
+    $url = (new VerifyEmail)->toMail($user)->actionUrl;
+
+    $this->actingAs($user)
+        ->withSession(['url.intended' => '/dashboard'])
+        ->get($url)
+        ->assertRedirect(route('field-service.index', ['tenant' => $tenant->slug], absolute: false).'&verified=1');
+
+    expect($user->fresh()->hasVerifiedEmail())->toBeTrue();
+    $this->get('https://app.theeverbranch.com/field-service?tenant='.$tenant->slug)->assertOk();
 });
 
 test('email confirmation rejects expired links and links for a different email', function (): void {
