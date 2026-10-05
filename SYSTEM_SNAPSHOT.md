@@ -1,5 +1,10 @@
 # SYSTEM SNAPSHOT
 
+## Collins general time and team alerts (2026-10-05)
+
+- Field employees may clock in without a job. A nullable `field_service_time_sessions.field_service_job_id` records general work; job-specific clock-ins retain assignment and shift checks. Time summaries, corrections, history, and audits preserve the null job instead of showing job ID zero.
+- New team messages queue an iOS APNs alert after commit for active members who can access the channel. The sender, muted members, and members who turn off team message alerts are excluded. Alerts carry workspace and channel IDs but no message body. The mobile app registers its device token after permission, opens the channel from the alert, and exposes a Team messages switch under Notifications. APNs delivery still requires the production Everbranch APNs key configuration and device permission.
+
 ## Collins employee mobile workspace correction (2026-10-05)
 
 - Andrew, Carlos, and Neal had unintended active Modern Forestry memberships from workspace invitations. Production memberships were corrected and audited: all three now belong only to Collins Electric as members. No account, customer, order, or job records were deleted.

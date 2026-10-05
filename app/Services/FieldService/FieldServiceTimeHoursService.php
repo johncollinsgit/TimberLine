@@ -174,7 +174,7 @@ class FieldServiceTimeHoursService
                 $jobs,
                 $days,
                 (int) $session->user_id,
-                (int) $session->field_service_job_id,
+                $session->field_service_job_id === null ? null : (int) $session->field_service_job_id,
                 $session->clocked_in_at->setTimezone($timezone)->toDateString(),
                 (string) $session->status,
                 $duration,
@@ -365,7 +365,7 @@ class FieldServiceTimeHoursService
         }
 
         $userId = $this->resolvedUserId($tenant, $changes, (int) $session->user_id);
-        $jobId = $this->resolvedJobId($tenant, $changes, (int) $session->field_service_job_id, false);
+        $jobId = $this->resolvedJobId($tenant, $changes, $session->field_service_job_id === null ? null : (int) $session->field_service_job_id, true);
         if ($userId !== (int) $session->user_id
             && FieldServiceTimeSession::query()->forTenantId((int) $tenant->id)
                 ->where('user_id', $userId)
@@ -593,7 +593,7 @@ class FieldServiceTimeHoursService
         return [
             'id' => (int) $session->id,
             'user_id' => (int) $session->user_id,
-            'job_id' => (int) $session->field_service_job_id,
+            'job_id' => $session->field_service_job_id === null ? null : (int) $session->field_service_job_id,
             'clocked_in_at' => $session->clocked_in_at?->toIso8601String(),
             'clocked_out_at' => $session->clocked_out_at?->toIso8601String(),
             'break_seconds' => (int) $session->break_seconds,

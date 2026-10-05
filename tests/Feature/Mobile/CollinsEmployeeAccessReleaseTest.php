@@ -1,12 +1,45 @@
 <?php
 
+use App\Jobs\SendTeamMessagePushNotification;
 use App\Models\FieldServiceJob;
+use App\Models\FieldServiceTimeSession;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
+use App\Models\TenantMemberPreference;
 use App\Models\TenantModuleEntitlement;
 use App\Models\User;
+use App\Services\FieldService\FieldServiceAccessService;
+use App\Services\FieldService\TeamCommunicationService;
+use App\Services\Mobile\EverbranchApnsService;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
+
+test('new direct messages queue push only for active opted-in teammates', function (): void {
+    Queue::fake();
+    $tenant = Tenant::query()->create(['name' => 'Crew Alerts', 'slug' => 'crew-alerts']);
+    $sender = User::factory()->create(['is_active' => true]);
+    $recipient = User::factory()->create(['is_active' => true]);
+    $other = User::factory()->create(['is_active' => true]);
+    foreach ([$sender, $recipient, $other] as $user) {
+        $user->tenants()->attach($tenant->id, ['role' => 'member', 'membership_active' => true]);
+    }
+    $team = app(TeamCommunicationService::class);
+    $channel = $team->directChannel($tenant, $sender, $recipient);
+    $message = $team->post($tenant, $sender, $channel, 'Check the site plans', 'dddddddd-dddd-4ddd-8ddd-dddddddddddd');
+    $team->post($tenant, $sender, $channel, 'Check the site plans', 'dddddddd-dddd-4ddd-8ddd-dddddddddddd');
+    Queue::assertPushed(SendTeamMessagePushNotification::class, 1);
+    $apns = Mockery::mock(EverbranchApnsService::class);
+    $apns->shouldReceive('sendTeamMessage')->once()->withArgs(fn ($sent, $target, $ids): bool => (int) $sent->id === (int) $message->id && (int) $target->id === (int) $channel->id && $ids->all() === [(int) $recipient->id]
+    )->andReturn(['sent' => 1, 'failed' => 0, 'skipped' => 0]);
+    (new SendTeamMessagePushNotification((int) $message->id))->handle($apns, app(FieldServiceAccessService::class));
+
+    TenantMemberPreference::query()->create(['tenant_id' => $tenant->id, 'user_id' => $recipient->id, 'team_message_notifications' => false]);
+    $apns = Mockery::mock(EverbranchApnsService::class);
+    $apns->shouldReceive('sendTeamMessage')->once()->withArgs(fn ($sent, $target, $ids): bool => $ids->isEmpty())
+        ->andReturn(['sent' => 0, 'failed' => 0, 'skipped' => 0]);
+    (new SendTeamMessagePushNotification((int) $message->id))->handle($apns, app(FieldServiceAccessService::class));
+});
 
 test('employees can create a private group only with active teammates in their workspace', function (): void {
     $tenant = Tenant::query()->create(['name' => 'Field Messages', 'slug' => 'field-messages']);
@@ -71,6 +104,20 @@ test('an employee sees assigned upcoming jobs and can clock only assigned curren
     $this->postJson($base.'/clock/resume', ['client_uuid' => '66666666-6666-4666-8666-666666666666'])->assertOk()->assertJsonPath('timer.status', 'running');
     $this->travel(15)->minutes();
     $this->postJson($base.'/clock/stop', ['client_uuid' => '77777777-7777-4777-8777-777777777777'])->assertOk()->assertJsonPath('timer.status', 'submitted');
+    $generalUuid = '99999999-9999-4999-8999-999999999999';
+    $this->postJson($base.'/clock/start', ['client_uuid' => $generalUuid])->assertCreated()
+        ->assertJsonPath('timer.status', 'running')->assertJsonPath('timer.job', null);
+    $this->postJson($base.'/clock/start', ['client_uuid' => $generalUuid])->assertCreated()
+        ->assertJsonPath('timer.job', null);
+    $this->getJson($base.'/clock/current')->assertOk()->assertJsonPath('timer.job', null);
+    $this->postJson($base.'/clock/pause', ['client_uuid' => 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'])->assertOk()
+        ->assertJsonPath('timer.status', 'paused')->assertJsonPath('timer.job', null);
+    $this->postJson($base.'/clock/resume', ['client_uuid' => 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'])->assertOk()
+        ->assertJsonPath('timer.status', 'running')->assertJsonPath('timer.job', null);
+    $this->travel(5)->minutes();
+    $this->postJson($base.'/clock/stop', ['client_uuid' => 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'])->assertOk()
+        ->assertJsonPath('timer.status', 'submitted')->assertJsonPath('timer.job', null);
+    expect(FieldServiceTimeSession::query()->where('client_uuid', $generalUuid)->firstOrFail()->field_service_job_id)->toBeNull();
     $this->getJson($base.'/time-clock-hours?range=week')->assertForbidden();
     $this->getJson($base.'/clock/history')->assertForbidden();
 });

@@ -107,13 +107,17 @@ class EverbranchMobileTimeClockController extends Controller
     public function start(Request $request, FieldServiceTimeClockService $clock, FieldServiceAccessService $access): JsonResponse
     {
         $validated = $request->validate([
-            'job_id' => ['required', 'integer'], 'client_uuid' => ['required', 'uuid'],
+            'job_id' => ['nullable', 'integer'], 'client_uuid' => ['required', 'uuid'],
             'device_context' => ['nullable', 'array'], 'device_context.platform' => ['nullable', 'in:ios,android,web'],
         ]);
         $tenant = $this->tenant($request);
         $user = $this->user($request);
-        $job = FieldServiceJob::query()->forTenantId((int) $tenant->id)->findOrFail((int) $validated['job_id']);
-        abort_unless($access->canClockJob($user, $tenant, $job), 404, 'Choose a job assigned to you.');
+        $job = isset($validated['job_id'])
+            ? FieldServiceJob::query()->forTenantId((int) $tenant->id)->findOrFail((int) $validated['job_id'])
+            : null;
+        if ($job !== null) {
+            abort_unless($access->canClockJob($user, $tenant, $job), 404, 'Choose a job assigned to you.');
+        }
         $session = $clock->start($tenant, $user, $job, $validated['client_uuid'], (array) ($validated['device_context'] ?? []));
 
         return response()->json(['ok' => true, 'timer' => $this->payload($session)], 201);
