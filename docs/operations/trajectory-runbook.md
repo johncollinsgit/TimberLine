@@ -386,3 +386,14 @@ prior-year income evidence, month selection, ranking, import replay, excluded
 flows, and shared-allocation privacy tests. Check all three tabs at desktop/mobile
 widths, source controls, chart tables/bar details, the card's empty state and
 transaction return path.
+
+### Category doughnuts and period tabs
+
+The overview places paired incoming-money and spending doughnuts immediately
+below the summary. Incoming defaults to external cash received with an earned-only
+switch; internal transfers are excluded. Spending uses the existing net category
+amounts; net-refund categories are listed separately because negative amounts
+cannot be represented as doughnut slices. Slice drilldowns use the full scoped
+evidence IDs, and legends show exact amounts and percentages. Today, Week, Month,
+Year, All history and Custom are responsive segmented period controls; Custom
+retains the existing date inputs. No financial calculations or records change.
