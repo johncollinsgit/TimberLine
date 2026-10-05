@@ -45,6 +45,7 @@ class EverbranchMobileController extends Controller
         return response()->json([
             'user' => $this->userPayload($user),
             'workspaces' => $user->tenants()
+                ->wherePivot('membership_active', true)
                 ->orderBy('tenants.name')
                 ->get(['tenants.id', 'tenants.name', 'tenants.slug'])
                 ->map(fn (Tenant $tenant): array => [

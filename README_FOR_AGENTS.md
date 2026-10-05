@@ -1,5 +1,7 @@
 # START HERE
 
+For mobile team access, list only active `tenant_user` memberships. Every workspace data route must keep the `mobile.tenant` membership gate. The web teammate invitation form must identify the destination workspace because administrators may belong to several tenants.
+
 ## Private CRM Fleet integration (2026-10-04; pilot disabled)
 
 Everbranch Fleet adds a private HighLevel installation layer at `/crm/fleet`,
