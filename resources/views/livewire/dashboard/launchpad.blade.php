@@ -43,6 +43,25 @@
             </div>
         </header>
 
+        @if(is_array($dashboard['fleet_tracker'] ?? null))
+            <nav class="grid gap-2" aria-label="Field operations shortcuts">
+                <a href="{{ $dashboard['fleet_tracker']['href'] }}" class="flex min-h-20 items-center justify-between gap-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-emerald-950 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700">
+                    <span class="flex items-center gap-4">
+                        <span class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-emerald-800 text-white" aria-hidden="true"><svg class="size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6.5 9 4l6 2 6-2.5v14L15 20l-6-2-6 2.5v-14Z"/><path d="M9 4v14m6-12v14"/><circle cx="15" cy="11" r="2"/><path d="m15 13 1.5 2"/></svg></span>
+                        <span><strong class="block text-base font-semibold">Fleet Tracker</strong><small class="mt-0.5 block text-sm text-emerald-800">Find company vehicle locations and routes</small></span>
+                    </span>
+                    <span class="text-xl" aria-hidden="true">→</span>
+                </a>
+                <a href="{{ $dashboard['fleet_tracker']['hours_href'] }}" class="flex min-h-20 items-center justify-between gap-4 rounded-2xl border border-zinc-200 bg-white px-5 py-4 text-zinc-950 shadow-sm transition hover:border-emerald-300 hover:bg-zinc-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700">
+                    <span class="flex items-center gap-4">
+                        <span class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-zinc-900 text-white" aria-hidden="true"><svg class="size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></span>
+                        <span><strong class="block text-base font-semibold">Time Clock &amp; Hours</strong><small class="mt-0.5 block text-sm text-zinc-600">Review team time and work hours</small></span>
+                    </span>
+                    <span class="text-xl" aria-hidden="true">→</span>
+                </a>
+            </nav>
+        @endif
+
         @if($channelPulse)
             <section class="eb-channel-pulse" aria-label="Channel performance" wire:poll.30s.visible>
                 <div class="eb-channel-pulse__context">

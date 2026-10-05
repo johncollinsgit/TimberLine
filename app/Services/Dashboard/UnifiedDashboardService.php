@@ -20,6 +20,7 @@ use App\Models\User;
 use App\Models\WebsiteOrder;
 use App\Services\FieldService\FieldServiceAccessService;
 use App\Services\FieldService\QuickBooksOwnerReportingService;
+use App\Services\FleetTracking\FleetTrackingAccessService;
 use App\Services\Reporting\SalesChannelSummaryService;
 use App\Services\Tenancy\AuthenticatedTenantContextResolver;
 use App\Services\Tenancy\TenantBlueprintProfileService;
@@ -44,6 +45,7 @@ class UnifiedDashboardService
         protected QuickBooksOwnerReportingService $ownerReports,
         protected SalesChannelSummaryService $salesChannels,
         protected FieldServiceAccessService $fieldServiceAccess,
+        protected FleetTrackingAccessService $fleetTrackingAccess,
     ) {}
 
     /**
@@ -98,6 +100,16 @@ class UnifiedDashboardService
             ],
             'experience_profile' => $profile,
             'hero' => $hero,
+            'fleet_tracker' => $clientFacingFieldService && $tenant instanceof Tenant && $user instanceof User
+                && $this->fleetTrackingAccess->enabledFor($tenant)
+                && $this->fleetTrackingAccess->canView($user, $tenant)
+                && Route::has('field-service.fleet-tracking.index')
+                && Route::has('field-service.payroll-hours')
+                    ? [
+                        'href' => route('field-service.fleet-tracking.index'),
+                        'hours_href' => route('field-service.payroll-hours'),
+                    ]
+                    : null,
             'summary_cards' => $summaryCards,
             'channel_pulse' => $channelPulse,
             'upcoming_jobs' => $clientFacingFieldService ? ($ownerReport['upcoming_jobs'] ?? $this->upcomingJobs($tenant)) : [],

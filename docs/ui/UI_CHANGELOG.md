@@ -1,3 +1,8 @@
+## 2026-10-05 — Field admin tracker shortcut
+
+- The web home screen puts Fleet Tracker directly above Time Clock & Hours for workspace owners, admins, and managers with the Fleet Tracking module enabled. The tracker link opens the existing company vehicle location and route view.
+- The shortcut uses the same tenant, module, global feature, and viewer checks as the tracker route. Employees do not receive it, and location collection settings remain unchanged.
+
 ## 2026-10-02 — Public Launch Partner pricing
 
 - Updated the shared Evergrove and Everbranch public pricing cards to $499 setup, $89/month for the first six months, and $199/month afterward. The six-month total is $1,033, and the comparison now states the correct $360 introductory savings against regular Starter.
