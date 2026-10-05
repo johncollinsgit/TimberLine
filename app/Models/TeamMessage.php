@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\HasTenantScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TeamMessage extends Model
 {
@@ -22,5 +23,10 @@ class TeamMessage extends Model
     public function author(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(TeamMessageAttachment::class);
     }
 }
