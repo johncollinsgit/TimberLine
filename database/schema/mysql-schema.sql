@@ -3234,6 +3234,22 @@ CREATE TABLE `fleet_location_points` (
   CONSTRAINT `ft_point_vehicle_fk` FOREIGN KEY (`field_service_vehicle_id`) REFERENCES `field_service_vehicles` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `fleet_provider_device_claims`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `fleet_provider_device_claims` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `provider` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `external_device_id` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `integration_connection_id` bigint unsigned DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `fleet_claim_provider_device_uq` (`provider`,`external_device_id`),
+  KEY `fleet_claim_connection_fk` (`integration_connection_id`),
+  CONSTRAINT `fleet_claim_connection_fk` FOREIGN KEY (`integration_connection_id`) REFERENCES `integration_connections` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `fleet_tracking_devices`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -3249,10 +3265,12 @@ CREATE TABLE `fleet_tracking_devices` (
   `uninstalled_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
+  `integration_connection_id` bigint unsigned DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `ft_device_provider_unique` (`tenant_id`,`provider`,`external_device_id`),
   UNIQUE KEY `ft_device_vehicle_unique` (`tenant_id`,`field_service_vehicle_id`),
   KEY `ft_device_vehicle_fk` (`field_service_vehicle_id`),
+  KEY `fleet_device_connection_idx` (`integration_connection_id`),
   CONSTRAINT `ft_device_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
   CONSTRAINT `ft_device_vehicle_fk` FOREIGN KEY (`field_service_vehicle_id`) REFERENCES `field_service_vehicles` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -3505,6 +3523,138 @@ CREATE TABLE `google_business_profile_sync_runs` (
   KEY `gbp_sync_runs_finished_idx` (`finished_at`),
   CONSTRAINT `gbp_sync_runs_connection_fk` FOREIGN KEY (`google_business_profile_connection_id`) REFERENCES `google_business_profile_connections` (`id`) ON DELETE CASCADE,
   CONSTRAINT `google_business_profile_sync_runs_triggered_by_user_id_foreign` FOREIGN KEY (`triggered_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `highlevel_authorizations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `highlevel_authorizations` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `app_id` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `company_id` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `installer_user_id` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `access_token` longtext COLLATE utf8mb4_unicode_ci,
+  `refresh_token` longtext COLLATE utf8mb4_unicode_ci,
+  `expires_at` timestamp NULL DEFAULT NULL,
+  `status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'authorized',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `hl_auth_app_company_uq` (`app_id`,`company_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `highlevel_installations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `highlevel_installations` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `app_id` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `company_id` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `location_id` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned DEFAULT NULL,
+  `actor_user_id` bigint unsigned DEFAULT NULL,
+  `plan_id` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `payment_status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'PENDING',
+  `parent_origin` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `access_token` longtext COLLATE utf8mb4_unicode_ci,
+  `refresh_token` longtext COLLATE utf8mb4_unicode_ci,
+  `expires_at` timestamp NULL DEFAULT NULL,
+  `installed_at` timestamp NULL DEFAULT NULL,
+  `uninstalled_at` timestamp NULL DEFAULT NULL,
+  `grace_ends_at` timestamp NULL DEFAULT NULL,
+  `lifecycle_at` timestamp NULL DEFAULT NULL,
+  `payment_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `hl_install_app_location_uq` (`app_id`,`location_id`),
+  UNIQUE KEY `hl_install_tenant_uq` (`tenant_id`),
+  KEY `hl_install_actor_fk` (`actor_user_id`),
+  KEY `hl_install_company_idx` (`company_id`),
+  CONSTRAINT `hl_install_actor_fk` FOREIGN KEY (`actor_user_id`) REFERENCES `users` (`id`),
+  CONSTRAINT `hl_install_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `highlevel_oauth_states`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `highlevel_oauth_states` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `state_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `session_id` bigint unsigned DEFAULT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci,
+  `expires_at` timestamp NOT NULL,
+  `consumed_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `hl_oauth_state_uq` (`state_hash`),
+  KEY `hl_oauth_session_fk` (`session_id`),
+  KEY `hl_oauth_expiry_idx` (`expires_at`),
+  CONSTRAINT `hl_oauth_session_fk` FOREIGN KEY (`session_id`) REFERENCES `highlevel_sessions` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `highlevel_sessions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `highlevel_sessions` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `installation_id` bigint unsigned NOT NULL,
+  `binding_id` bigint unsigned NOT NULL,
+  `token_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `parent_origin` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `expires_at` timestamp NOT NULL,
+  `revoked_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `hl_session_token_uq` (`token_hash`),
+  KEY `hl_session_install_fk` (`installation_id`),
+  KEY `hl_session_binding_fk` (`binding_id`),
+  KEY `hl_session_expiry_idx` (`expires_at`),
+  CONSTRAINT `hl_session_binding_fk` FOREIGN KEY (`binding_id`) REFERENCES `highlevel_user_bindings` (`id`),
+  CONSTRAINT `hl_session_install_fk` FOREIGN KEY (`installation_id`) REFERENCES `highlevel_installations` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `highlevel_user_bindings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `highlevel_user_bindings` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `installation_id` bigint unsigned NOT NULL,
+  `provider_user_id` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `role` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'admin',
+  `verified_at` timestamp NOT NULL,
+  `revoked_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `hl_binding_install_user_uq` (`installation_id`,`provider_user_id`),
+  KEY `hl_binding_user_fk` (`user_id`),
+  CONSTRAINT `hl_binding_install_fk` FOREIGN KEY (`installation_id`) REFERENCES `highlevel_installations` (`id`),
+  CONSTRAINT `hl_binding_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `highlevel_webhook_events`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `highlevel_webhook_events` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `provider` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `event_key` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci,
+  `received_at` timestamp NOT NULL,
+  `processed_at` timestamp NULL DEFAULT NULL,
+  `attempts` int unsigned NOT NULL DEFAULT '0',
+  `error_code` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `hl_event_provider_key_uq` (`provider`,`event_key`),
+  KEY `hl_event_pending_idx` (`processed_at`,`received_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `import_normalizations`;
@@ -5949,7 +6099,7 @@ CREATE TABLE `modern_forestry_fundraiser_invoice_packages` (
   `tax_cents` int unsigned NOT NULL DEFAULT '0',
   `total_cents` int unsigned NOT NULL,
   `order_ids` json NOT NULL,
-  `invoice_lines` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `invoice_lines` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `review_notes` json DEFAULT NULL,
   `prepared_by` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `prepared_at` timestamp NOT NULL,
@@ -5971,10 +6121,10 @@ CREATE TABLE `modern_forestry_fundraiser_orders` (
   `source` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'zapier',
   `external_order_id` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `order_reference` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `recipient_name` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
-  `recipient_email` longtext COLLATE utf8mb4_unicode_ci,
-  `recipient_phone` longtext COLLATE utf8mb4_unicode_ci,
-  `shipping_address` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `recipient_name` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `recipient_email` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `recipient_phone` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `shipping_address` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `currency` varchar(3) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'usd',
   `subtotal_cents` int unsigned NOT NULL,
   `discount_cents` int unsigned NOT NULL DEFAULT '0',
@@ -5983,8 +6133,8 @@ CREATE TABLE `modern_forestry_fundraiser_orders` (
   `total_cents` int unsigned NOT NULL,
   `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'needs_review',
   `fingerprint` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `line_items` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
-  `source_payload` longtext COLLATE utf8mb4_unicode_ci,
+  `line_items` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `source_payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `source_created_at` timestamp NULL DEFAULT NULL,
   `received_at` timestamp NOT NULL,
   `reviewed_at` timestamp NULL DEFAULT NULL,
@@ -10755,3 +10905,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (267,'2026_09_21_21
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (268,'2026_09_30_180000_add_quickbooks_delivery_to_fundraiser_invoice_packages',14);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (269,'2026_10_02_120000_repair_website_encrypted_column_storage',15);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (270,'2026_10_02_190000_repair_fundraiser_encrypted_column_storage',16);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (271,'2026_10_04_220000_create_highlevel_fleet_tables',17);

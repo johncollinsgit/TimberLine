@@ -73,6 +73,12 @@ jobs:
       - name: Build frontend assets
         run: npm run build
 
+      - name: Install browsers for Fleet embedding checks
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Verify Fleet embedding and allowance in Chromium and WebKit
+        run: npm run test:highlevel-fleet
+
       - name: Run tests in parallel
         run: php -d memory_limit=1G ./vendor/bin/pest --parallel --compact
 
@@ -156,7 +162,7 @@ jobs:
         run: php scripts/ci/lint-migrations.php --base="${{ steps.migration-base.outputs.sha }}"
 
       - name: Verify clean and partial migration paths
-        run: php ./vendor/bin/pest tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php --compact
+        run: php ./vendor/bin/pest tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php tests/Integration/HighLevelFleetMySqlMigrationRecoveryTest.php --compact
 
       - name: Rehearse prior production schema upgrade
         run: scripts/ci/rehearse-migrations.sh "${{ steps.migration-base.outputs.sha }}"

@@ -10,7 +10,7 @@ class FleetTrackingDevice extends Model
 {
     use HasTenantScope;
 
-    protected $fillable = ['tenant_id', 'field_service_vehicle_id', 'provider', 'external_device_id', 'label', 'status', 'installed_at', 'uninstalled_at'];
+    protected $fillable = ['tenant_id', 'field_service_vehicle_id', 'integration_connection_id', 'provider', 'external_device_id', 'label', 'status', 'installed_at', 'uninstalled_at'];
 
     protected $casts = ['tenant_id' => 'integer', 'field_service_vehicle_id' => 'integer', 'installed_at' => 'datetime', 'uninstalled_at' => 'datetime'];
 

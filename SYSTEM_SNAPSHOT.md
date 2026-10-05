@@ -1,5 +1,19 @@
 # SYSTEM SNAPSHOT
 
+## Private CRM Fleet integration (2026-10-04; pilot disabled)
+
+Everbranch Fleet adds a private HighLevel installation layer at `/crm/fleet`,
+with one new tenant per client location, encrypted provider grants, verified
+CRM administrator bindings, cookie-independent short-lived sessions, native
+HighLevel subscription authority, durable signed lifecycle webhooks, and
+Bouncie device selection limited to 25. Collection remains disabled until
+native billing and the two-client pilot are verified; `config/highlevel.php`
+contains the separate surface, billing, collection and location allowlist gates.
+Standalone Fleet/Bouncie routes remain available. The embedded app exposes
+Fleet, Connection and Settings only. See
+`docs/operations/highlevel-fleet-runbook.md` for onboarding, acceptance, support
+and safe rollback; existing production hosting and CI/Forge deployment are used.
+
 ## Modern Forestry fundraising invoice desk (development, 2026-10-02)
 
 - The Shopify embedded Fundraising tab reads tenant-scoped BSF-tagged imported
