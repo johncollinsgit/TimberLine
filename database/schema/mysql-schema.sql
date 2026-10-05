@@ -7785,6 +7785,38 @@ CREATE TABLE `team_channels` (
   CONSTRAINT `team_channel_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `team_message_attachments`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `team_message_attachments` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `team_channel_id` bigint unsigned NOT NULL,
+  `team_message_id` bigint unsigned DEFAULT NULL,
+  `uploaded_by_user_id` bigint unsigned NOT NULL,
+  `client_uuid` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `file_name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `mime_type` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `file_size` bigint unsigned NOT NULL,
+  `received_bytes` bigint unsigned NOT NULL DEFAULT '0',
+  `status` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'uploading',
+  `storage_path` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `checksum_sha256` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `expires_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `team_attach_upload_unique` (`tenant_id`,`uploaded_by_user_id`,`client_uuid`),
+  KEY `team_attach_channel_idx` (`tenant_id`,`team_channel_id`,`status`),
+  KEY `team_attach_channel_fk` (`team_channel_id`),
+  KEY `team_attach_message_fk` (`team_message_id`),
+  KEY `team_attach_uploader_fk` (`uploaded_by_user_id`),
+  CONSTRAINT `team_attach_channel_fk` FOREIGN KEY (`team_channel_id`) REFERENCES `team_channels` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `team_attach_message_fk` FOREIGN KEY (`team_message_id`) REFERENCES `team_messages` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `team_attach_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `team_attach_uploader_fk` FOREIGN KEY (`uploaded_by_user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `team_messages`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -10909,3 +10941,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (270,'2026_10_02_19
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (271,'2026_10_04_220000_create_highlevel_fleet_tables',17);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (272,'2026_10_05_190000_allow_jobless_field_service_time_sessions',18);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (273,'2026_10_05_191000_add_team_message_notification_preference',18);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (274,'2026_10_05_200000_create_team_message_attachments',19);

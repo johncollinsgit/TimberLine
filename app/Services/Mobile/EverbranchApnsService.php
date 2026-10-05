@@ -162,7 +162,7 @@ class EverbranchApnsService
         }
         foreach ($hosts as $index => $host) {
             try {
-                $response = Http::timeout((int) $config['timeout'])->withHeaders($headers)
+                $response = Http::withOptions(['version' => 2.0])->timeout((int) $config['timeout'])->withHeaders($headers)
                     ->withBody(json_encode($payload, JSON_THROW_ON_ERROR), 'application/json')->send('POST', $host.'/3/device/'.$deviceToken);
             } catch (Throwable $exception) {
                 Log::warning('Everbranch APNs request failed.', ['device_id' => (int) $device->id, ...$logContext, 'exception' => class_basename($exception)]);
