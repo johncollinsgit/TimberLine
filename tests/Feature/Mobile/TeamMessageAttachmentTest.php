@@ -79,3 +79,31 @@ test('message upload rejects disguised files and files selected in another conve
     $this->assertDatabaseCount('team_message_attachments', 0);
     $this->assertDatabaseCount('team_messages', 0);
 });
+
+test('message upload recovers a durable partial chunk without accepting conflicting bytes', function (): void {
+    $this->withoutVite();
+    Storage::fake('local');
+    $tenant = Tenant::query()->create(['name' => 'File Recovery', 'slug' => 'file-recovery']);
+    TenantAccessProfile::query()->create(['tenant_id' => $tenant->id, 'plan_key' => 'base', 'operating_mode' => 'direct', 'source' => 'test']);
+    $sender = User::factory()->create(['is_active' => true, 'email_verified_at' => now()]);
+    $sender->tenants()->attach($tenant->id, ['role' => 'member', 'membership_active' => true]);
+    $channel = app(TeamCommunicationService::class)->companyChannel($tenant, $sender);
+    Sanctum::actingAs($sender, ['mobile:read', 'mobile:write']);
+    $base = '/api/mobile/v1/workspaces/file-recovery/field-service/channels/'.$channel->id;
+    $bytes = "%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n";
+    $upload = $this->postJson($base.'/attachments/initialize', ['file_name' => 'recovered.pdf', 'mime_type' => 'application/pdf', 'file_size' => strlen($bytes), 'client_uuid' => 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'])->assertCreated()->json();
+    $record = \App\Models\TeamMessageAttachment::query()->findOrFail($upload['upload_id']);
+    // Reproduce a worker stopping mid-write before its metadata transaction commits.
+    Storage::disk('local')->put($record->storage_path, substr($bytes, 0, 13));
+    expect($record->received_bytes)->toBe(0);
+    $endpoint = $base.'/attachments/'.$upload['upload_id'];
+    $conflicting = 'x'.substr($bytes, 1);
+    $this->postJson($endpoint.'/chunks', ['token' => $upload['token'], 'offset' => 0, 'contents_base64' => base64_encode($conflicting), 'checksum_sha256' => hash('sha256', $conflicting)])->assertConflict();
+    expect(Storage::disk('local')->get($record->storage_path))->toBe(substr($bytes, 0, 13));
+    $chunk = ['token' => $upload['token'], 'offset' => 0, 'contents_base64' => base64_encode($bytes), 'checksum_sha256' => hash('sha256', $bytes)];
+    $this->postJson($endpoint.'/chunks', $chunk)->assertOk()->assertJsonPath('received_bytes', strlen($bytes));
+    $this->postJson($endpoint.'/chunks', $chunk)->assertOk()->assertJsonPath('received_bytes', strlen($bytes));
+    $this->postJson($endpoint.'/complete', ['token' => $upload['token'], 'checksum_sha256' => hash('sha256', $bytes)])->assertOk();
+    expect(Storage::disk('local')->get($record->storage_path))->toBe($bytes);
+    expect($record->fresh()->received_bytes)->toBe(strlen($bytes));
+});

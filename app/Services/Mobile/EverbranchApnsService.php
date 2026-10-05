@@ -217,8 +217,8 @@ class EverbranchApnsService
         $rLength = ord($der[$offset]);
         $r = substr($der, $offset + 1, $rLength);
         $offset += 1 + $rLength + 1;
-        $sLength = ord($der[$offset - 1]);
-        $s = substr($der, $offset, $sLength);
+        $sLength = ord($der[$offset]);
+        $s = substr($der, $offset + 1, $sLength);
 
         return $this->base64Url(str_pad(ltrim($r, "\x00"), $length / 2, "\x00", STR_PAD_LEFT).str_pad(ltrim($s, "\x00"), $length / 2, "\x00", STR_PAD_LEFT));
     }

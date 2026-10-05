@@ -75,15 +75,27 @@ class TeamMessageAttachmentService
                 $size = (int) fstat($handle)['size'];
                 abort_if($offset > $size, 409, 'Upload the preceding file chunk first.');
                 fseek($handle, $offset);
+                $storedLength = 0;
                 if ($offset < $size) {
-                    abort_unless($offset + strlen($bytes) <= $size && hash_equals(hash('sha256', $bytes), hash('sha256', (string) fread($handle, strlen($bytes)))), 409, 'This chunk conflicts with bytes already stored.');
-                } else {
-                    abort_unless(fwrite($handle, $bytes) === strlen($bytes), 503, 'The file chunk could not be saved completely.');
-                    fflush($handle);
-                    if (function_exists('fsync')) {
-                        fsync($handle);
+                    // A process may stop after appending only part of a chunk, before updating its row.
+                    // Verify the durable prefix before finishing that same chunk on retry.
+                    $storedLength = min(strlen($bytes), $size - $offset);
+                    abort_unless(hash_equals(hash('sha256', substr($bytes, 0, $storedLength)), hash('sha256', (string) fread($handle, $storedLength))), 409, 'This chunk conflicts with bytes already stored.');
+                }
+                if ($storedLength < strlen($bytes)) {
+                    $remaining = substr($bytes, $storedLength);
+                    fseek($handle, $size);
+                    if (fwrite($handle, $remaining) !== strlen($remaining)) {
+                        // Preserve the previously durable prefix when storage rejects a short write.
+                        ftruncate($handle, $size);
+                        fflush($handle);
+                        if (function_exists('fsync')) {
+                            fsync($handle);
+                        }
+                        abort(503, 'The file chunk could not be saved completely.');
                     }
-                    $size += strlen($bytes);
+                    abort_unless(fflush($handle) && (! function_exists('fsync') || fsync($handle)), 503, 'The file chunk could not be saved durably.');
+                    $size += strlen($remaining);
                 }
                 $upload->forceFill(['received_bytes' => $size])->save();
 
