@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "npm run typecheck && npm run test:trajectory && vite build",
+    "test:highlevel-fleet": "node --test tests/e2e/highlevel-fleet.test.mjs",
     "test:trajectory": "node --test tests/e2e/trajectory-money.test.mjs tests/e2e/trajectory-charts.test.mjs",
     "media:optimize-public": "node scripts/media/optimize-public-image.mjs",
     "test:visual": "playwright test --config=playwright.public.config.ts",

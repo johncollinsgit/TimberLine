@@ -288,3 +288,9 @@ Schedule::command('ai:invoice-closed-usage', ['--send' => true])
 Schedule::command('wholesale:deliver-applications')->everyMinute()->withoutOverlapping(10)->runInBackground();
 
 Schedule::command('trajectory:review-emails')->everyFifteenMinutes()->withoutOverlapping(10);
+
+// Uses the existing scheduler and queue infrastructure; collection gates are
+// evaluated again at processing time rather than when a delivery was accepted.
+Schedule::command('highlevel:fleet-maintain')->everyFiveMinutes()->withoutOverlapping();
+
+Schedule::command('highlevel:fleet-reconcile')->hourly()->withoutOverlapping();

@@ -111,4 +111,8 @@ return [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['partial QuickBooks delivery columns retained before the remaining columns and unique index'],
     ],
+    '2026_10_04_220000_create_highlevel_fleet_tables.php' => [
+        'test' => 'tests/Integration/HighLevelFleetMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['authorization table retained before installation tables', 'device connection column retained before its index'],
+    ],
 ];

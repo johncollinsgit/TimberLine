@@ -73,7 +73,7 @@ class FleetLocationIngestionService
     }
 
     /** @param array<string,mixed> $event */
-    private function ingestBouncieEvent(array $event): bool
+    public function ingestBouncieEvent(array $event): bool
     {
         $deviceId = (string) (data_get($event, 'device.imei') ?? data_get($event, 'device.id') ?? data_get($event, 'imei') ?? data_get($event, 'deviceId') ?? '');
         if ($deviceId === '') {
@@ -132,6 +132,13 @@ class FleetLocationIngestionService
 
     private function recordBounciePoint(Tenant $tenant, FleetTrackingDevice $device, array $location, mixed $timestamp, string $eventType): bool
     {
+        $installation = \App\Models\HighLevel\Installation::where('tenant_id', $tenant->id)->first();
+        if ($installation && (! $installation->collectionAllowed()
+            || ! $device->integration_connection_id
+            || ! \App\Models\IntegrationConnection::forTenantId($tenant->id)->whereKey($device->integration_connection_id)
+                ->where('provider', 'bouncie')->where('status', \App\Models\IntegrationConnection::STATUS_CONNECTED)->exists())) {
+            return false;
+        }
         $settings = $this->access->settings($tenant);
         if (! $this->access->enabledFor($tenant) || ! $settings->bouncie_tracking_enabled || ! $this->access->isPolicyApproved($settings)
             || ! $device->vehicle()->where('tenant_id', $tenant->id)->where('status', 'active')->exists()) {

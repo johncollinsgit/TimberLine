@@ -7,6 +7,8 @@ use App\Models\Tenant;
 use App\Services\Integrations\Contracts\ProviderConnector;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
@@ -26,7 +28,7 @@ class BouncieConnector implements ProviderConnector
     {
         return rtrim((string) config('services.fleet_tracking.bouncie_authorization_url'), '?').'?'.http_build_query([
             'client_id' => (string) config('services.fleet_tracking.bouncie_client_id'),
-            'redirect_uri' => (string) config('services.fleet_tracking.bouncie_redirect_uri'),
+            'redirect_uri' => (string) ($options['redirect_uri'] ?? config('services.fleet_tracking.bouncie_redirect_uri')),
             'response_type' => 'code',
             'state' => (string) ($options['state'] ?? Str::random(48)),
             'code_challenge' => (string) ($options['code_challenge'] ?? ''),
@@ -44,7 +46,7 @@ class BouncieConnector implements ProviderConnector
         $tokens = $this->tokenRequest([
             'grant_type' => 'authorization_code',
             'code' => $code,
-            'redirect_uri' => (string) config('services.fleet_tracking.bouncie_redirect_uri'),
+            'redirect_uri' => (string) $request->attributes->get('bouncie_redirect_uri', config('services.fleet_tracking.bouncie_redirect_uri')),
             'code_verifier' => $verifier,
         ]);
         $temporary = new IntegrationConnection([
@@ -84,24 +86,40 @@ class BouncieConnector implements ProviderConnector
 
     public function refresh(IntegrationConnection $connection): IntegrationConnection
     {
-        $tokens = $this->tokenRequest([
-            'grant_type' => 'refresh_token',
-            'refresh_token' => (string) $connection->refresh_token,
-        ]);
+        $observedRefresh = (string) $connection->refresh_token;
 
-        $connection->forceFill([
-            'status' => IntegrationConnection::STATUS_CONNECTED,
-            'access_token' => (string) ($tokens['access_token'] ?? ''),
-            // Bouncie rotates refresh tokens; always persist the returned replacement.
-            'refresh_token' => (string) ($tokens['refresh_token'] ?? ''),
-            'token_type' => (string) ($tokens['token_type'] ?? 'Bearer'),
-            'expires_at' => now()->addSeconds((int) ($tokens['expires_in'] ?? 3600)),
-            'last_error_code' => null,
-            'last_error_message' => null,
-            'last_error_at' => null,
-        ])->save();
+        return Cache::lock('bouncie:refresh:'.$connection->id, 45)->block(5, function () use ($connection, $observedRefresh): IntegrationConnection {
+            $connection->refresh();
+            abort_unless($connection->status === IntegrationConnection::STATUS_CONNECTED, 403);
+            // A concurrent request already rotated this credential. Reuse it.
+            if ((string) $connection->refresh_token !== $observedRefresh) {
+                return $connection;
+            }
+            $tokens = $this->tokenRequest([
+                'grant_type' => 'refresh_token',
+                'refresh_token' => (string) $connection->refresh_token,
+            ]);
 
-        return $connection;
+            DB::transaction(function () use ($connection, $tokens, $observedRefresh): void {
+                $current = IntegrationConnection::whereKey($connection->id)->lockForUpdate()->firstOrFail();
+                abort_unless($current->status === IntegrationConnection::STATUS_CONNECTED
+                    && (string) $current->refresh_token === $observedRefresh, 403, 'Bouncie authorization changed. Reconnect the account.');
+                $current->forceFill([
+                    'status' => IntegrationConnection::STATUS_CONNECTED,
+                    'access_token' => (string) ($tokens['access_token'] ?? ''),
+                    // Bouncie rotates refresh tokens; always persist the returned replacement.
+                    'refresh_token' => (string) ($tokens['refresh_token'] ?? ''),
+                    'token_type' => (string) ($tokens['token_type'] ?? 'Bearer'),
+                    'expires_at' => now()->addSeconds((int) ($tokens['expires_in'] ?? 3600)),
+                    'last_error_code' => null,
+                    'last_error_message' => null,
+                    'last_error_at' => null,
+                ])->save();
+                $connection->refresh();
+            });
+
+            return $connection;
+        });
     }
 
     public function client(IntegrationConnection $connection): BouncieApiClient
@@ -119,7 +137,7 @@ class BouncieConnector implements ProviderConnector
     private function tokenRequest(array $payload): array
     {
         $response = Http::acceptJson()->asJson()
-            ->connectTimeout(5)->timeout(15)->retry(2, 250, throw: false)
+            ->connectTimeout(5)->timeout(15)
             ->post((string) config('services.fleet_tracking.bouncie_token_url'), array_merge([
                 'client_id' => (string) config('services.fleet_tracking.bouncie_client_id'),
                 'client_secret' => (string) config('services.fleet_tracking.bouncie_client_secret'),
