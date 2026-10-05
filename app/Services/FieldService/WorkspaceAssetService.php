@@ -42,7 +42,7 @@ class WorkspaceAssetService
 
     /** @var array<int,string> */
     protected array $allowedMimes = [
-        'image/jpeg', 'image/png', 'image/gif', 'image/tiff', 'image/heic', 'image/heif', 'application/pdf', 'text/plain', 'text/csv',
+        'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/tiff', 'image/heic', 'image/heif', 'application/pdf', 'text/plain', 'text/csv',
         'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     ];

@@ -11,6 +11,7 @@ use App\Http\Controllers\Mobile\EverbranchMobileEstimatorController;
 use App\Http\Controllers\Mobile\EverbranchMobileFieldServiceController;
 use App\Http\Controllers\Mobile\EverbranchMobileInvoiceController;
 use App\Http\Controllers\Mobile\EverbranchMobileLandlordController;
+use App\Http\Controllers\Mobile\EverbranchMobileMaterialEvidenceController;
 use App\Http\Controllers\Mobile\EverbranchMobileTeamController;
 use App\Http\Controllers\Mobile\EverbranchMobileTimeClockController;
 use App\Http\Controllers\Mobile\EverbranchMobileTimeHoursController;
@@ -164,6 +165,9 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
                 Route::post('/field-service/jobs/{job}/tasks/{task}/handoff', [EverbranchMobileFieldServiceController::class, 'handoffTask'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->whereNumber('job')->whereNumber('task')->name('workspace.field-service.jobs.tasks.handoff');
                 Route::post('/field-service/jobs/{job}/tasks/{task}/send-to-office', [EverbranchMobileFieldServiceController::class, 'sendTaskToOffice'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->whereNumber('job')->whereNumber('task')->name('workspace.field-service.jobs.tasks.send-to-office');
                 Route::post('/field-service/jobs/{job}/materials/requests', [EverbranchMobileFieldServiceController::class, 'storeMaterialRequest'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->whereNumber('job')->name('workspace.field-service.jobs.materials.requests.store');
+                Route::post('/field-service/jobs/{job}/materials/{material}/comments', [EverbranchMobileMaterialEvidenceController::class, 'storeComment'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->whereNumber(['job', 'material'])->name('workspace.field-service.jobs.materials.comments.store');
+                Route::post('/field-service/jobs/{job}/materials/{material}/photos', [EverbranchMobileMaterialEvidenceController::class, 'storePhotos'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->whereNumber(['job', 'material'])->name('workspace.field-service.jobs.materials.photos.store');
+                Route::post('/field-service/jobs/{job}/materials/{material}/photos/payload', [EverbranchMobileMaterialEvidenceController::class, 'storePhotoPayload'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->whereNumber(['job', 'material'])->name('workspace.field-service.jobs.materials.photos.payload');
                 Route::patch('/field-service/jobs/{job}/materials/{material}', [EverbranchMobileFieldServiceController::class, 'updateMaterial'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->whereNumber('job')->whereNumber('material')->name('workspace.field-service.jobs.materials.update');
                 Route::delete('/field-service/jobs/{job}/materials/{material}', [EverbranchMobileFieldServiceController::class, 'destroyMaterial'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->whereNumber('job')->whereNumber('material')->name('workspace.field-service.jobs.materials.destroy');
                 Route::get('/field-service/assets/{asset}', [EverbranchMobileFieldServiceController::class, 'downloadAsset'])->middleware('abilities:mobile:read')->whereNumber('asset')->name('workspace.field-service.assets.show');
