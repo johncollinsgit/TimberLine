@@ -2,6 +2,7 @@
 
 namespace App\Services\FieldService;
 
+use App\Jobs\SendTeamMessagePushNotification;
 use App\Models\FieldServiceJob;
 use App\Models\TeamChannel;
 use App\Models\TeamMessage;
@@ -120,6 +121,9 @@ class TeamCommunicationService
                 ['tenant_id' => (int) $tenant->id, 'created_by_user_id' => (int) $user->id, 'client_uuid' => $clientUuid],
                 ['team_channel_id' => (int) $channel->id, 'parent_message_id' => $parentId, 'body' => trim($body), 'mention_user_ids' => $mentions]
             );
+            if ($message->wasRecentlyCreated) {
+                SendTeamMessagePushNotification::dispatch((int) $message->id)->afterCommit();
+            }
             $channel->forceFill(['updated_at' => now()])->save();
             $this->markRead($tenant, $user, $channel);
 

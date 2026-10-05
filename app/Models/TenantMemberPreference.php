@@ -12,7 +12,7 @@ class TenantMemberPreference extends Model
 
     protected $fillable = [
         'tenant_id', 'user_id', 'phone', 'phone_verified_at', 'push_enabled', 'operational_sms_enabled',
-        'operational_sms_opted_in_at', 'job_comment_notifications', 'upcoming_job_notifications',
+        'operational_sms_opted_in_at', 'job_comment_notifications', 'upcoming_job_notifications', 'team_message_notifications',
     ];
 
     protected $casts = [
@@ -24,6 +24,7 @@ class TenantMemberPreference extends Model
         'operational_sms_enabled' => 'boolean',
         'operational_sms_opted_in_at' => 'datetime',
         'upcoming_job_notifications' => 'boolean',
+        'team_message_notifications' => 'boolean',
     ];
 
     public function tenant(): BelongsTo

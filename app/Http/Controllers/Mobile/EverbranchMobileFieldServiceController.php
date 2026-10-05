@@ -1110,7 +1110,7 @@ class EverbranchMobileFieldServiceController extends Controller
     public function updatePreferences(Request $request): JsonResponse
     {
         $tenant = $this->tenant($request);
-        $validated = $request->validate(['phone' => ['sometimes', 'nullable', 'string', 'max:40'], 'push_enabled' => ['sometimes', 'boolean'], 'operational_sms_enabled' => ['sometimes', 'boolean'], 'job_comment_notifications' => ['sometimes', 'in:participating,mentions,none'], 'upcoming_job_notifications' => ['sometimes', 'boolean']]);
+        $validated = $request->validate(['phone' => ['sometimes', 'nullable', 'string', 'max:40'], 'push_enabled' => ['sometimes', 'boolean'], 'operational_sms_enabled' => ['sometimes', 'boolean'], 'job_comment_notifications' => ['sometimes', 'in:participating,mentions,none'], 'upcoming_job_notifications' => ['sometimes', 'boolean'], 'team_message_notifications' => ['sometimes', 'boolean']]);
         $preference = TenantMemberPreference::query()->firstOrCreate(['tenant_id' => (int) $tenant->id, 'user_id' => (int) $this->user($request)->id]);
         if (array_key_exists('phone', $validated) && $validated['phone'] !== $preference->phone) {
             $preference->phone_verified_at = null;
@@ -1604,7 +1604,7 @@ class EverbranchMobileFieldServiceController extends Controller
     /** @return array<string,mixed> */
     protected function preference(TenantMemberPreference $preference): array
     {
-        return ['phone' => $preference->phone, 'phone_verified' => (bool) $preference->phone_verified_at, 'push_enabled' => $preference->push_enabled, 'operational_sms_enabled' => $preference->operational_sms_enabled, 'operational_sms_opted_in_at' => $preference->operational_sms_opted_in_at?->toIso8601String(), 'job_comment_notifications' => $preference->job_comment_notifications, 'upcoming_job_notifications' => $preference->upcoming_job_notifications];
+        return ['phone' => $preference->phone, 'phone_verified' => (bool) $preference->phone_verified_at, 'push_enabled' => $preference->push_enabled, 'operational_sms_enabled' => $preference->operational_sms_enabled, 'operational_sms_opted_in_at' => $preference->operational_sms_opted_in_at?->toIso8601String(), 'job_comment_notifications' => $preference->job_comment_notifications, 'upcoming_job_notifications' => $preference->upcoming_job_notifications, 'team_message_notifications' => (bool) $preference->team_message_notifications];
     }
 
     protected function tenantUserId(Tenant $tenant, mixed $candidate): ?int

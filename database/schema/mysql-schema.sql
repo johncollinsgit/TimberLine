@@ -3028,7 +3028,7 @@ DROP TABLE IF EXISTS `field_service_time_sessions`;
 CREATE TABLE `field_service_time_sessions` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `tenant_id` bigint unsigned NOT NULL,
-  `field_service_job_id` bigint unsigned NOT NULL,
+  `field_service_job_id` bigint unsigned DEFAULT NULL,
   `user_id` bigint unsigned NOT NULL,
   `reviewed_by_user_id` bigint unsigned DEFAULT NULL,
   `client_uuid` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -3239,8 +3239,8 @@ DROP TABLE IF EXISTS `fleet_provider_device_claims`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `fleet_provider_device_claims` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `provider` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `external_device_id` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `external_device_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `integration_connection_id` bigint unsigned DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -3530,13 +3530,13 @@ DROP TABLE IF EXISTS `highlevel_authorizations`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `highlevel_authorizations` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `app_id` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `company_id` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `installer_user_id` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `access_token` longtext COLLATE utf8mb4_unicode_ci,
-  `refresh_token` longtext COLLATE utf8mb4_unicode_ci,
+  `app_id` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `company_id` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `installer_user_id` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `access_token` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `refresh_token` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `expires_at` timestamp NULL DEFAULT NULL,
-  `status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'authorized',
+  `status` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'authorized',
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -3548,17 +3548,17 @@ DROP TABLE IF EXISTS `highlevel_installations`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `highlevel_installations` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `app_id` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `company_id` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `location_id` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `app_id` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `company_id` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `location_id` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned DEFAULT NULL,
   `actor_user_id` bigint unsigned DEFAULT NULL,
-  `plan_id` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
-  `payment_status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'PENDING',
-  `parent_origin` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `access_token` longtext COLLATE utf8mb4_unicode_ci,
-  `refresh_token` longtext COLLATE utf8mb4_unicode_ci,
+  `plan_id` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `payment_status` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'PENDING',
+  `parent_origin` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `access_token` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `refresh_token` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `expires_at` timestamp NULL DEFAULT NULL,
   `installed_at` timestamp NULL DEFAULT NULL,
   `uninstalled_at` timestamp NULL DEFAULT NULL,
@@ -3581,10 +3581,10 @@ DROP TABLE IF EXISTS `highlevel_oauth_states`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `highlevel_oauth_states` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `state_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `provider` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `state_hash` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `session_id` bigint unsigned DEFAULT NULL,
-  `payload` longtext COLLATE utf8mb4_unicode_ci,
+  `payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `expires_at` timestamp NOT NULL,
   `consumed_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
@@ -3603,8 +3603,8 @@ CREATE TABLE `highlevel_sessions` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `installation_id` bigint unsigned NOT NULL,
   `binding_id` bigint unsigned NOT NULL,
-  `token_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `parent_origin` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `token_hash` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `parent_origin` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `expires_at` timestamp NOT NULL,
   `revoked_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
@@ -3624,9 +3624,9 @@ DROP TABLE IF EXISTS `highlevel_user_bindings`;
 CREATE TABLE `highlevel_user_bindings` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `installation_id` bigint unsigned NOT NULL,
-  `provider_user_id` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider_user_id` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `user_id` bigint unsigned NOT NULL,
-  `role` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'admin',
+  `role` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'admin',
   `verified_at` timestamp NOT NULL,
   `revoked_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
@@ -3643,13 +3643,13 @@ DROP TABLE IF EXISTS `highlevel_webhook_events`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `highlevel_webhook_events` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `provider` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `event_key` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `payload` longtext COLLATE utf8mb4_unicode_ci,
+  `provider` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `event_key` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `received_at` timestamp NOT NULL,
   `processed_at` timestamp NULL DEFAULT NULL,
   `attempts` int unsigned NOT NULL DEFAULT '0',
-  `error_code` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `error_code` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -8506,6 +8506,7 @@ CREATE TABLE `tenant_member_preferences` (
   `upcoming_job_notifications` tinyint(1) NOT NULL DEFAULT '1',
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
+  `team_message_notifications` tinyint(1) NOT NULL DEFAULT '1',
   PRIMARY KEY (`id`),
   UNIQUE KEY `tenant_member_preference_unique` (`tenant_id`,`user_id`),
   KEY `tenant_member_pref_user_fk` (`user_id`),
@@ -10906,3 +10907,5 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (268,'2026_09_30_18
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (269,'2026_10_02_120000_repair_website_encrypted_column_storage',15);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (270,'2026_10_02_190000_repair_fundraiser_encrypted_column_storage',16);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (271,'2026_10_04_220000_create_highlevel_fleet_tables',17);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (272,'2026_10_05_190000_allow_jobless_field_service_time_sessions',18);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (273,'2026_10_05_191000_add_team_message_notification_preference',18);

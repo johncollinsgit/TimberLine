@@ -25,11 +25,13 @@ class FieldServiceTimeClockService
     }
 
     /** @param array<string,mixed> $context */
-    public function start(Tenant $tenant, User $user, FieldServiceJob $job, string $clientUuid, array $context = []): FieldServiceTimeSession
+    public function start(Tenant $tenant, User $user, ?FieldServiceJob $job, string $clientUuid, array $context = []): FieldServiceTimeSession
     {
-        abort_unless((int) $job->tenant_id === (int) $tenant->id, 404);
-        abort_unless(in_array((string) $job->operational_status, ['active', 'scheduled', 'needs_details', 'blocked'], true), 422, 'Choose a current job to clock in.');
-        $this->workforce->assertClockingAllowed($tenant, $user, (int) $job->id);
+        if ($job !== null) {
+            abort_unless((int) $job->tenant_id === (int) $tenant->id, 404);
+            abort_unless(in_array((string) $job->operational_status, ['active', 'scheduled', 'needs_details', 'blocked'], true), 422, 'Choose a current job to clock in.');
+        }
+        $this->workforce->assertClockingAllowed($tenant, $user, $job?->id);
 
         return DB::transaction(function () use ($tenant, $user, $job, $clientUuid, $context): FieldServiceTimeSession {
             $replayed = FieldServiceTimeSession::query()->forTenantId((int) $tenant->id)
@@ -39,12 +41,12 @@ class FieldServiceTimeClockService
             }
 
             if ($this->current($tenant, $user)) {
-                throw ValidationException::withMessages(['timer' => 'Clock out of the active job before starting another timer.']);
+                throw ValidationException::withMessages(['timer' => 'Clock out of your active timer before starting another.']);
             }
 
             return FieldServiceTimeSession::query()->create([
                 'tenant_id' => (int) $tenant->id,
-                'field_service_job_id' => (int) $job->id,
+                'field_service_job_id' => $job?->id,
                 'user_id' => (int) $user->id,
                 'client_uuid' => $clientUuid,
                 'active_user_key' => (int) $user->id,
