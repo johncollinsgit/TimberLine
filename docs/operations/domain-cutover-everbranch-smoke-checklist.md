@@ -18,7 +18,7 @@
 
 ## URL Emission Checks
 1. Password reset links use `app.theeverbranch.com` fallback host.
-2. Email verification links use `app.theeverbranch.com`.
+2. Email verification links use `app.theeverbranch.com/email/confirm/...`; a fresh signed link confirms its account in a browser without an existing session and presents a sign-in action. An expired or altered link is rejected.
 3. Shopify OAuth `redirect_uri` host is `app.theeverbranch.com`.
 4. Shopify webhook callback URLs point to `https://app.theeverbranch.com/webhooks/shopify/...`.
 5. Billing hosted handoff return/success/cancel URLs use `<slug>.theeverbranch.com` where tenant context applies.
