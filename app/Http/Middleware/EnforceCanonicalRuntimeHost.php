@@ -33,15 +33,19 @@ class EnforceCanonicalRuntimeHost
             'session.partitioned' => $defaults['partitioned'],
         ]);
 
-        // The field app signs in through Safari's in-app browser. Its
-        // first-party login form needs a regular cookie: WebKit may discard
-        // the partitioned cookie used by embedded Shopify surfaces, leaving
-        // the POST without the session that issued its CSRF token.
+        // The field app opens login and password setup in Safari's in-app
+        // browser. These first-party forms need a regular cookie: WebKit may
+        // discard the partitioned cookie used by embedded Shopify surfaces,
+        // leaving the POST without the session that issued its CSRF token.
+        $canonicalBaseDomain = $this->normalizeHost((string) config('tenancy.domains.canonical.base_domain'));
+        $canonicalAuthHost = $canonicalBaseDomain !== null
+            && ($host === $canonicalBaseDomain || str_ends_with($host, '.'.$canonicalBaseDomain));
         $mobileAuthCookiePresent = $request->cookies->has('everbranch-mobile-auth-session');
         $mobileAuthRoute = $request->is('mobile/authorize')
+            || $request->is('forgot-password', 'reset-password', 'reset-password/*')
             || ($request->is('login') && $request->boolean('mobile_email'))
             || ($mobileAuthCookiePresent && $request->is('login', 'two-factor-challenge', 'email/verify*'));
-        if ($host === 'app.theeverbranch.com' && $mobileAuthRoute) {
+        if ($canonicalAuthHost && $mobileAuthRoute) {
             config([
                 'session.cookie' => 'everbranch-mobile-auth-session',
                 'session.domain' => null,
