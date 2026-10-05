@@ -13,6 +13,7 @@ Route::prefix('crm/fleet')->name('highlevel.')->middleware([HighLevelSurface::cl
         \Illuminate\View\Middleware\ShareErrorsFromSession::class,
         \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class])->group(function (): void {
             Route::get('/launch', [HighLevelController::class, 'launch'])->name('launch');
+            Route::view('/guide', 'highlevel.guide')->name('guide');
             Route::get('/install', [HighLevelController::class, 'install'])->name('install');
             Route::get('/oauth/callback', [HighLevelController::class, 'callback'])->name('oauth.callback');
             Route::get('/session/challenge', [HighLevelController::class, 'challenge'])->middleware('throttle:30,1');

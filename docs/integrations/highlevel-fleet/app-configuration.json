@@ -11,6 +11,7 @@
     "url": "https://app.theeverbranch.com/crm/fleet/launch"
   },
   "oauthRedirect": "https://app.theeverbranch.com/crm/fleet/oauth/callback",
+  "gettingStartedUrl": "https://app.theeverbranch.com/crm/fleet/guide",
   "scopes": [
     "locations.readonly",
     "users.readonly",
