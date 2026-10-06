@@ -55,13 +55,14 @@ class UnifiedAppNavigationService
         $roleCanAccessMarketing = $user?->canAccessMarketing() ?? false;
 
         $moduleStates = $tenantId !== null
-            ? (array) ($this->moduleAccessResolver->resolveForTenant($tenantId, ['birthdays', 'customers', 'campaigns', 'wishlist', 'reporting', 'rewards', 'reviews', 'field_service', 'class_scheduling', 'plant_inventory', 'messaging', 'workflow_automations', 'accounting_command_center'])['modules'] ?? [])
+            ? (array) ($this->moduleAccessResolver->resolveForTenant($tenantId, ['birthdays', 'customers', 'campaigns', 'wishlist', 'reporting', 'rewards', 'reviews', 'field_service', 'class_scheduling', 'plant_inventory', 'messaging', 'email', 'workflow_automations', 'accounting_command_center'])['modules'] ?? [])
             : [];
         $fieldServiceEnabled = $this->moduleStateEnabled($moduleStates['field_service'] ?? null);
         $classSchedulingEnabled = $this->moduleStateEnabled($moduleStates['class_scheduling'] ?? null);
         $plantInventoryEnabled = $this->moduleStateEnabled($moduleStates['plant_inventory'] ?? null);
         $customersEnabled = $this->moduleStateEnabled($moduleStates['customers'] ?? null);
         $messagingRelevant = $this->moduleStateRelevant($moduleStates['messaging'] ?? null);
+        $emailEnabled = $this->moduleStateEnabled($moduleStates['email'] ?? null);
         $workflowAutomationsEnabled = $this->moduleStateEnabled($moduleStates['workflow_automations'] ?? null);
         $accountingEnabled = $this->moduleStateEnabled($moduleStates['accounting_command_center'] ?? null);
         $marketingHeavyEnabled = collect(['birthdays', 'campaigns', 'wishlist', 'rewards', 'reviews'])
@@ -75,6 +76,12 @@ class UnifiedAppNavigationService
 
         $items = [];
         $items[] = ['key' => 'home', 'icon' => 'home', 'href' => $homeHref, 'label' => 'Home', 'current' => request()->routeIs('dashboard')];
+
+        if ($emailEnabled && $tenantId !== null && Route::has('mail.index')) {
+            $items[] = ['key' => 'mail', 'icon' => 'envelope', 'href' => route('mail.index'), 'label' => 'Mail', 'current' => request()->routeIs('mail.*')];
+        } elseif ($tenantId !== null && $isAdmin && Route::has('mail.setup')) {
+            $items[] = ['key' => 'mail-setup', 'icon' => 'envelope', 'href' => route('mail.setup'), 'label' => 'Set up Mail', 'current' => request()->routeIs('mail.setup*')];
+        }
 
         if ($canAccessMarketing) {
             $birthdaysRelevant = $tenantId === null

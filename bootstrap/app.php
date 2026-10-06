@@ -61,6 +61,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->dontFlash(['api_token']);
         $exceptions->report(function (Throwable $e): void {
             try {
                 $request = request();

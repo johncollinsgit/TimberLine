@@ -1,5 +1,11 @@
 # START HERE
 
+## Tenant mailbox rollout (2026-10-06)
+
+- The Email Branch has a staged `/mail` UI, tenant-owned domains and addresses, explicit user grants, and SendGrid/direct transport paths. Follow `docs/operations/everbranch-mail-service.md`; creating a local address is not proof that DNS or delivery is working.
+- Direct SMTP/JMAP is disabled until a dedicated mail host, credentials, DNS, backups, monitoring, and an end-to-end send/receive test are ready. Never put mailbox passwords or provider keys in source, browser payloads, or Site configuration files.
+- Do not treat Stalwart Community as a native multi-tenant boundary. Everbranch's tenant/module/membership guards remain mandatory, and mail-server administrators are privileged across tenants.
+
 Read `SYSTEM_SNAPSHOT.md` before making changes.
 
 ## Accounting Command Center guardrails (2026-07-23)

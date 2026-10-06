@@ -1,5 +1,9 @@
 # Modern Forestry Backstage
 
+## Tenant mailboxes (staged)
+
+The Email Branch includes a tenant-scoped shared mailbox UI and admin-managed addresses. SendGrid is the default provider; a guarded direct SMTP/JMAP transport is prepared for a dedicated mail host. No customer domain is activated by installing this code. See [Everbranch mail service rollout](docs/operations/everbranch-mail-service.md).
+
 ## Accounting Command Center
 
 Everbranch includes a reusable, disabled-by-default Accounting Command Center

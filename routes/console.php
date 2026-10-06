@@ -208,3 +208,9 @@ Schedule::command('messaging:invoice-closed-usage', ['--send' => true])
     ->dailyAt('09:15')
     ->withoutOverlapping(30)
     ->runInBackground();
+
+Schedule::command('mailboxes:sync')
+    ->everyMinute()
+    ->when(fn (): bool => (bool) config('mailbox.direct_enabled'))
+    ->withoutOverlapping(10)
+    ->runInBackground();

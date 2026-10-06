@@ -1,5 +1,12 @@
 # UI Changelog
 
+## 2026-10-06 — Tenant mail workspace (staged)
+
+- Added a Mail navigation item for workspaces with the Email Branch enabled.
+- Added a responsive inbox, sent/draft/trash folders, search, message reader, compose, read/unread and star controls, and admin forms for domains, addresses, and member access.
+- Pending domains and addresses show their setup state and block sending. Direct-server provisioning controls remain unavailable until the server gate is configured.
+- The mail service is not yet activated in production. See `docs/operations/everbranch-mail-service.md` for DNS, transport, testing, and rollout work.
+
 ## 2026-07-24 — Functional Workflow Studio
 
 ### What Changed
@@ -1888,3 +1895,7 @@
 - Live checkout defaults off and is tenant-allowlisted.
 - Acceptance alone creates no charge, pending ACH is not treated as paid, and implementation-only payments cannot change module access.
 - Tax collection, Relay payout verification, webhook signing, and production credentials remain explicit launch blockers.
+# 2026-10-06 Mail setup
+
+- Workspace admins can record a pending mail address before Email Branch activation, see domain ownership and MX records, and request access through the module catalog.
+- Cloudflare DNS setup accepts a one-use zone-scoped token, adds ownership proof, and adds MX only after transport readiness and an existing-MX check. Other DNS providers use the manual instructions.

@@ -1,5 +1,12 @@
 # SYSTEM SNAPSHOT
 
+## Tenant mailboxes (2026-10-06, implementation staged)
+
+- The Email Branch now has tenant-scoped mail domains, shared mailboxes, explicit member grants, and a three-pane inbox/compose workspace at `/mail`. Mail remains module-gated and pending until domain transport verification; no mailbox is activated merely by creating its address.
+- SendGrid remains the default outbound provider and can feed a strictly token-guarded inbound parse endpoint. A separate, disabled-by-default direct transport can submit via per-mailbox authenticated SMTP and sync inbound messages over JMAP from a dedicated Stalwart host. The management API provisions domains and accounts only after the direct transport gate is enabled.
+- Wren Family Soccer is tenant slug `wren-family-soccer`, with planned address `info@easleyfamilysoccer.com`. The address is not live until server, DNS, credentials, module entitlement, and end-to-end delivery checks complete. The operational plan is `docs/operations/everbranch-mail-service.md`.
+- Stalwart Community does not provide native multi-tenant isolation. Everbranch's per-tenant domain uniqueness, route/module checks, mailbox membership checks, and encrypted account credentials are required boundaries. Mail-server administrators retain cross-tenant privilege.
+
 ## Canonical Customer Alias Identity Rule (2026-07-24)
 
 - Customer merges retain archived `marketing_profiles` aliases for auditability,
