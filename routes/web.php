@@ -44,6 +44,7 @@ use App\Http\Controllers\Landlord\LandlordSupportTicketController;
 use App\Http\Controllers\Landlord\LandlordTenantDirectoryController;
 use App\Http\Controllers\Landlord\LandlordTenantOperationsController;
 use App\Http\Controllers\Landlord\LandlordTransactionController;
+use App\Http\Controllers\MailboxInboundController;
 use App\Http\Controllers\ManagedWebsiteController;
 use App\Http\Controllers\Marketing\CandleCashPagesController;
 use App\Http\Controllers\Marketing\GoogleBusinessProfileController;
@@ -109,6 +110,7 @@ use App\Http\Controllers\SubscriptionStorefrontController;
 use App\Http\Controllers\TenantAgreementController;
 use App\Http\Controllers\TenantBrandController;
 use App\Http\Controllers\TenantEmployeeInvitationController;
+use App\Http\Controllers\TenantMailboxController;
 use App\Http\Controllers\TenantSupportTicketController;
 use App\Http\Controllers\UiPreferencesController;
 use App\Http\Controllers\WebsiteCommerceController;
@@ -993,6 +995,27 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->post('/start/setup-status', [CustomerStartHereController::class, 'updateSetupStatus'])
         ->name('app.setup-status.update');
 
+    Route::middleware(['tenant.access', 'role:admin'])
+        ->prefix('mail/setup')->name('mail.')->group(function (): void {
+            Route::get('/', [TenantMailboxController::class, 'setup'])->name('setup');
+            Route::post('/', [TenantMailboxController::class, 'signup'])->name('setup.store');
+            Route::post('/domains/{domain}/cloudflare', [TenantMailboxController::class, 'setupCloudflare'])->name('setup.cloudflare');
+            Route::post('/domains/{domain}/verify', [TenantMailboxController::class, 'verifyDomain'])->name('setup.verify');
+        });
+
+    Route::middleware(['tenant.access', 'module:email', 'role:admin,manager,marketing_manager,member,employee'])
+        ->prefix('mail')->name('mail.')->group(function (): void {
+            Route::get('/', [TenantMailboxController::class, 'index'])->name('index');
+            Route::post('/domains', [TenantMailboxController::class, 'createDomain'])->name('domains.store');
+            Route::post('/domains/{domain}/verify', [TenantMailboxController::class, 'verifyDomain'])->name('domains.verify');
+            Route::post('/domains/{domain}/provision', [TenantMailboxController::class, 'provisionDomain'])->name('domains.provision');
+            Route::post('/mailboxes', [TenantMailboxController::class, 'createMailbox'])->name('mailboxes.store');
+            Route::post('/mailboxes/{mailbox}/provision', [TenantMailboxController::class, 'provisionMailbox'])->name('mailboxes.provision');
+            Route::post('/mailboxes/{mailbox}/members', [TenantMailboxController::class, 'grant'])->name('mailboxes.members');
+            Route::post('/mailboxes/{mailbox}/send', [TenantMailboxController::class, 'send'])->name('send');
+            Route::post('/mailboxes/{mailbox}/messages/{message}/action', [TenantMailboxController::class, 'action'])->name('messages.action');
+        });
+
     Route::middleware(['role:admin,manager,marketing_manager,member', 'tenant.access'])
         ->prefix('account-help')
         ->name('account-help.')
@@ -1777,6 +1800,11 @@ Route::prefix('webhooks/sendgrid')->group(function () {
         ->withoutMiddleware([VerifyCsrfToken::class])
         ->name('marketing.webhooks.sendgrid-inbound');
 });
+
+Route::post('/webhooks/mailboxes/sendgrid', [MailboxInboundController::class, 'sendGrid'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:120,1')
+    ->name('mail.webhooks.sendgrid');
 
 Route::post('/webhooks/ses/events', [SesWebhookController::class, 'events'])
     ->withoutMiddleware([VerifyCsrfToken::class])

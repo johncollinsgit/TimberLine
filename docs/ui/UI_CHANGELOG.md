@@ -2726,3 +2726,9 @@
 - Approve and Deny now post to their form endpoints; Resend honors its explicit button override. This fixes the embedded Safari CSRF symptom caused by posting back to the detail page.
 
 - Paid proposals include a dedicated confirmation banner. The payment-confirmation email uses provider-confirmed amounts, a reconciled breakdown, and receipt/agreement links without a payment prompt.
+## 2026-10-06 — Tenant mail setup and inbox (staged)
+
+- Added a Mail branch for entitled workspaces and a Set up Mail branch for admins who need to request it.
+- Added tenant-scoped inbox, sent, draft, and trash views; search, compose, read/unread, stars, and admin controls for addresses and member access.
+- Cloudflare setup accepts a one-use zone-scoped token. It adds ownership proof and changes MX only after transport readiness and a conflict check. Other DNS providers can use the manual records.
+- No production mail server or customer domain is activated by this change.

@@ -1,5 +1,9 @@
 # Modern Forestry Backstage
 
+## Tenant mailboxes (staged)
+
+Everbranch Mail now has tenant-scoped shared inboxes and guided domain setup. A Cloudflare quick path can add the ownership record with a zone-scoped token; the direct SMTP/JMAP transport remains gated until a dedicated host passes delivery checks. See [Everbranch mail service rollout](docs/operations/everbranch-mail-service.md).
+
 ## Everbranch public marketing site
 
 The platform marketing site is a separate public-only surface with a warm

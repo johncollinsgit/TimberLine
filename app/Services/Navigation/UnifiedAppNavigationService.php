@@ -62,7 +62,7 @@ class UnifiedAppNavigationService
         $roleCanAccessMarketing = $user?->canAccessMarketing() ?? false;
 
         $moduleStates = $tenantId !== null
-            ? (array) ($this->moduleAccessResolver->resolveForTenant($tenantId, ['birthdays', 'customers', 'campaigns', 'wishlist', 'reporting', 'rewards', 'reviews', 'field_service', 'fleet_tracking', 'class_scheduling', 'plant_inventory', 'messaging', 'workflow_automations', 'managed_website', 'accounting_command_center'])['modules'] ?? [])
+            ? (array) ($this->moduleAccessResolver->resolveForTenant($tenantId, ['birthdays', 'customers', 'campaigns', 'wishlist', 'reporting', 'rewards', 'reviews', 'field_service', 'fleet_tracking', 'class_scheduling', 'plant_inventory', 'messaging', 'email', 'workflow_automations', 'managed_website', 'accounting_command_center'])['modules'] ?? [])
             : [];
         $fieldServiceEnabled = $this->moduleStateEnabled($moduleStates['field_service'] ?? null);
         $fleetTrackingEnabled = $this->moduleStateEnabled($moduleStates['fleet_tracking'] ?? null);
@@ -70,6 +70,7 @@ class UnifiedAppNavigationService
         $plantInventoryEnabled = $this->moduleStateEnabled($moduleStates['plant_inventory'] ?? null);
         $customersEnabled = $this->moduleStateEnabled($moduleStates['customers'] ?? null);
         $messagingRelevant = $this->moduleStateRelevant($moduleStates['messaging'] ?? null);
+        $emailEnabled = $this->moduleStateEnabled($moduleStates['email'] ?? null);
         $workflowAutomationsEnabled = $this->moduleStateEnabled($moduleStates['workflow_automations'] ?? null);
         $managedWebsiteEnabled = $this->moduleStateEnabled($moduleStates['managed_website'] ?? null);
         $accountingEnabled = $this->moduleStateEnabled($moduleStates['accounting_command_center'] ?? null);
@@ -98,6 +99,11 @@ class UnifiedAppNavigationService
         // Enabled branches are collected and rendered together near Settings.
         // Core work remains the first scanning destination in the sidebar.
         $branchChildren = [];
+        if ($emailEnabled && $tenantId !== null && Route::has('mail.index')) {
+            $branchChildren[] = ['key' => 'branch-mail', 'icon' => 'envelope', 'href' => route('mail.index'), 'label' => 'Mail', 'current' => request()->routeIs('mail.*')];
+        } elseif ($tenantId !== null && $isAdmin && Route::has('mail.setup')) {
+            $branchChildren[] = ['key' => 'branch-mail-setup', 'icon' => 'envelope', 'href' => route('mail.setup'), 'label' => 'Set up Mail', 'current' => request()->routeIs('mail.setup*')];
+        }
         $websiteCommerceRoute = request()->routeIs(
             'managed-website.products.*',
             'managed-website.collections.*',
