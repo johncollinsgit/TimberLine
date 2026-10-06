@@ -1,5 +1,12 @@
 # SYSTEM SNAPSHOT
 
+## Everbranch Field shared jobs and Collins access (2026-10-06)
+
+- Active field-service members can view, create, edit, photograph, comment on, and clock time against every current job in their tenant. Job assignment no longer grants access. Team members selected on a job are followers, and legacy lead assignments remain historical data only. The mobile dispatch assignment route is retired.
+- A deleted mobile job enters a tenant-scoped recycle bin. It is hidden from ordinary job reads and reports; owner/admin/manager roles can list and restore it. Team members may recycle jobs but cannot browse or restore the bin.
+- The `collins-electric` client list is restricted to the verified active account `collinselectric91@gmail.com`. Other Collins members cannot reach customer, customer messaging, or customer search APIs. Only a manager with that identity can edit a job's customer fields. Team reporting has week/month/year job counts without financial amounts.
+- A Job Notes mention creates a tenant-scoped direct team message containing an in-app job reference. The mobile Messages view opens that job from the message. Job photos and note attachments retain the shared tenant and job guards.
+
 ## Field mobile Job Notes PDF attachments (2026-10-06)
 
 - Mobile job comments accept `attachment_asset_ids` for PDFs already uploaded in guarded chunks to the same job by the same user. The API verifies tenant, job, uploader, team visibility, type, and unused note association, then links the PDF to the new note. Job Notes on iOS, Android, and web return the same attached asset.

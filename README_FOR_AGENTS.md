@@ -1,5 +1,7 @@
 # START HERE
 
+For the paired Everbranch Field 2.3.23/build 37 release, current tenant members can access and edit every current job and clock job time without a lead assignment. Customer fields remain restricted to managers, and on `collins-electric` only the verified active `collinselectric91@gmail.com` account may access the client list or edit customer fields. Team members can move jobs to an admin recycle bin; only managers can list and restore them. Job Notes mentions send a direct team message with a job reference. Team reporting contains week/month/year job counts and no financial amounts. These rules supersede the older assignment-scoped notes below.
+
 Everbranch Field iOS and Android share one mobile source repository. Mobile Job Notes may send `attachment_asset_ids` for PDFs already uploaded in guarded chunks. Before linking one to a note, validate the current tenant, job, uploader, team visibility, PDF MIME type, and absence of a prior note association. Both native apps rely on this contract to show the PDF in the note thread.
 
 Material request comments and photos use existing job notes and private workspace assets with `field_service_material_id` metadata. Keep material writes tenant-, job-, and assignment-scoped through `FieldServiceAccessService::canUpdateProgress`; never let a client supplied material ID select a different job or workspace. `materials[].comments/photos` in mobile job detail are derived only from assets and notes already visible to that viewer.

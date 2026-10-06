@@ -18,6 +18,7 @@ use App\Services\Billing\StripeHostedBillingService;
 use App\Services\Bud\TenantBudService;
 use App\Services\Dashboard\UnifiedDashboardService;
 use App\Services\FieldService\FieldServiceWorkProfileService;
+use App\Services\FieldService\CollinsClientAccessService;
 use App\Services\FieldService\WorkspaceAssetService;
 use App\Services\Mobile\MobileLandlordAccessService;
 use App\Services\Mobile\TenantMobileMessagingService;
@@ -89,7 +90,7 @@ class EverbranchMobileController extends Controller
             'branding' => $this->brandingPayload($tenant, $role),
             'experience_profile' => $experienceProfiles->forTenant((int) $tenant->id, $user, $tenant),
             'work_profile' => $workProfiles->forTenant($tenant),
-            'primary_navigation' => $this->primaryNavigation($role, $fieldOperations),
+            'primary_navigation' => $this->primaryNavigation($role, $fieldOperations, app(CollinsClientAccessService::class)->allows($user, $tenant)),
             'dashboard' => $dashboard->forRequest($request, $user),
             'workspace_insights' => $this->workspaceInsights($tenant, count($manifest)),
             'branches' => $manifest,
@@ -102,7 +103,8 @@ class EverbranchMobileController extends Controller
             'permissions' => [
                 'manage_billing' => $this->canManageBilling($user, $tenant),
                 'request_modules' => in_array($this->tenantRole($user, $tenant), ['admin', 'manager', 'marketing_manager'], true),
-                'manage_customers' => $role === 'admin',
+                'manage_customers' => $role === 'admin' && app(CollinsClientAccessService::class)->allows($user, $tenant),
+                'view_customers' => app(CollinsClientAccessService::class)->allows($user, $tenant),
             ],
         ])->setEtag(hash('sha256', (string) $user->id.'|'.$tenant->id.'|'.now()->format('Y-m-d-H-i')));
     }
@@ -110,7 +112,7 @@ class EverbranchMobileController extends Controller
     public function moduleScreen(Request $request, string $tenant, string $moduleKey, TenantMobileModuleRegistry $registry): JsonResponse
     {
         $tenantModel = $this->tenant($request);
-        $range = $request->validate(['range' => ['nullable', 'in:1d,1w,1m,30d,ytd']])['range'] ?? null;
+        $range = $request->validate(['range' => ['nullable', 'in:1d,1w,1m,30d,ytd,week,month,year']])['range'] ?? null;
 
         return response()->json($registry->screen((int) $tenantModel->id, $moduleKey, $this->user($request), $range));
     }
@@ -118,6 +120,7 @@ class EverbranchMobileController extends Controller
     public function customers(Request $request, TenantMobileResourceService $resources, TenantMobileModuleRegistry $registry): JsonResponse
     {
         $tenant = $this->tenant($request);
+        $this->requireCollinsClientAccess($request, $tenant);
         $this->requireBranch($registry, (int) $tenant->id, 'customers');
         $validated = $request->validate(['q' => ['nullable', 'string', 'max:160'], 'cursor' => ['nullable', 'string', 'max:1000'], 'limit' => ['nullable', 'integer', 'min:10', 'max:50']]);
 
@@ -133,6 +136,7 @@ class EverbranchMobileController extends Controller
     public function customer(Request $request, string $tenant, int $customer, TenantMobileResourceService $resources, TenantMobileModuleRegistry $registry): JsonResponse
     {
         $tenantModel = $this->tenant($request);
+        $this->requireCollinsClientAccess($request, $tenantModel);
         $this->requireBranch($registry, (int) $tenantModel->id, 'customers');
 
         $profile = MarketingProfile::query()->forTenantId((int) $tenantModel->id)->findOrFail($customer);
@@ -219,6 +223,8 @@ class EverbranchMobileController extends Controller
     {
         $tenant = $this->tenant($request);
         $this->requireWorkBranch($registry, (int) $tenant->id);
+        abort_if($resources->workKind($tenant, $this->user($request)) === 'clients'
+            && ! app(CollinsClientAccessService::class)->allows($this->user($request), $tenant), 403);
         $validated = $request->validate(['q' => ['nullable', 'string', 'max:160'], 'limit' => ['nullable', 'integer', 'min:10', 'max:50']]);
 
         return response()->json($resources->work($tenant, $this->user($request), (string) ($validated['q'] ?? ''), (int) ($validated['limit'] ?? 30)));
@@ -228,6 +234,8 @@ class EverbranchMobileController extends Controller
     {
         $tenantModel = $this->tenant($request);
         $this->requireWorkBranch($registry, (int) $tenantModel->id);
+        abort_if($kind === 'clients'
+            && ! app(CollinsClientAccessService::class)->allows($this->user($request), $tenantModel), 403);
 
         return response()->json($resources->workDetail($tenantModel, $this->user($request), $kind, $resource));
     }
@@ -235,6 +243,7 @@ class EverbranchMobileController extends Controller
     public function conversations(Request $request, TenantMobileMessagingService $messaging, TenantMobileModuleRegistry $registry): JsonResponse
     {
         $tenant = $this->tenant($request);
+        $this->requireCollinsClientAccess($request, $tenant);
         $this->requireBranch($registry, (int) $tenant->id, 'messaging');
         $validated = $request->validate(['q' => ['nullable', 'string', 'max:160'], 'filter' => ['nullable', 'in:open,unread,all,closed,archived'], 'channel' => ['nullable', 'in:all,text,email,app'], 'limit' => ['nullable', 'integer', 'min:10', 'max:50']]);
 
@@ -244,6 +253,7 @@ class EverbranchMobileController extends Controller
     public function conversation(Request $request, string $tenant, int $conversation, TenantMobileMessagingService $messaging, TenantMobileModuleRegistry $registry): JsonResponse
     {
         $tenantModel = $this->tenant($request);
+        $this->requireCollinsClientAccess($request, $tenantModel);
         $this->requireBranch($registry, (int) $tenantModel->id, 'messaging');
 
         return response()->json($messaging->show((int) $tenantModel->id, $conversation));
@@ -252,6 +262,7 @@ class EverbranchMobileController extends Controller
     public function messageCustomers(Request $request, TenantMobileMessagingService $messaging, TenantMobileModuleRegistry $registry): JsonResponse
     {
         $tenant = $this->tenant($request);
+        $this->requireCollinsClientAccess($request, $tenant);
         $this->requireBranch($registry, (int) $tenant->id, 'messaging');
         $validated = $request->validate(['q' => ['nullable', 'string', 'max:160'], 'customer_id' => ['nullable', 'integer']]);
 
@@ -261,6 +272,7 @@ class EverbranchMobileController extends Controller
     public function composeMessage(Request $request, TenantMobileMessagingService $messaging, TenantMobileModuleRegistry $registry): JsonResponse
     {
         $tenant = $this->tenant($request);
+        $this->requireCollinsClientAccess($request, $tenant);
         $this->requireBranch($registry, (int) $tenant->id, 'messaging');
         $validated = $request->validate(['customer_id' => ['required', 'integer'], 'channel' => ['required', 'in:text,email,app'], 'body' => ['required', 'string', 'max:10000'], 'subject' => ['nullable', 'string', 'max:255']]);
 
@@ -270,6 +282,7 @@ class EverbranchMobileController extends Controller
     public function replyMessage(Request $request, string $tenant, int $conversation, TenantMobileMessagingService $messaging, TenantMobileModuleRegistry $registry): JsonResponse
     {
         $tenantModel = $this->tenant($request);
+        $this->requireCollinsClientAccess($request, $tenantModel);
         $this->requireBranch($registry, (int) $tenantModel->id, 'messaging');
         $validated = $request->validate(['body' => ['required', 'string', 'max:10000'], 'subject' => ['nullable', 'string', 'max:255']]);
 
@@ -279,6 +292,7 @@ class EverbranchMobileController extends Controller
     public function conversationAction(Request $request, string $tenant, int $conversation, TenantMobileMessagingService $messaging, TenantMobileModuleRegistry $registry): JsonResponse
     {
         $tenantModel = $this->tenant($request);
+        $this->requireCollinsClientAccess($request, $tenantModel);
         $this->requireBranch($registry, (int) $tenantModel->id, 'messaging');
         $validated = $request->validate(['action' => ['required', 'in:mark_read,mark_unread,assign_to_me,unassign,close,reopen,archive']]);
 
@@ -549,9 +563,14 @@ class EverbranchMobileController extends Controller
             };
 
             return $destination ? [...$result, 'mobile_destination' => $destination] : $result;
-        });
+        })->when(! app(CollinsClientAccessService::class)->allows($this->user($request), $tenant),
+            fn ($items) => $items->reject(fn (array $item): bool =>
+                in_array((string) ($item['type'] ?? ''), ['customer', 'client'], true)
+                || in_array((string) ($item['mobile_destination']['kind'] ?? ''), ['customer', 'clients'], true)
+                || preg_match('~/(customers|clients)(/|$)~i', (string) ($item['url'] ?? '')) === 1));
         $work = $resources->work($tenant, $this->user($request), $query, 8);
-        if (($work['kind'] ?? null) !== 'orders') {
+        if (($work['kind'] ?? null) !== 'orders'
+            && (($work['kind'] ?? null) !== 'clients' || app(CollinsClientAccessService::class)->allows($this->user($request), $tenant))) {
             $results = $results->concat(collect($work['items'] ?? [])->map(fn (array $item): array => [
                 'type' => rtrim((string) $work['kind'], 's'),
                 'title' => $item['title'],
@@ -562,6 +581,11 @@ class EverbranchMobileController extends Controller
         }
         $payload['results'] = $results->take((int) ($validated['limit'] ?? 20))->values()->all();
         $payload['total'] = count($payload['results']);
+        $payload['groups'] = collect($payload['results'])->groupBy(fn (array $item): string => (string) ($item['type'] ?? 'other'))
+            ->map(fn ($items): array => $items->values()->all())->all();
+        if ($payload['total'] === 0 && ! app(CollinsClientAccessService::class)->allows($this->user($request), $tenant)) {
+            $payload['empty_state'] = ['title' => 'No matches', 'subtitle' => 'Try a job, module, or team destination.'];
+        }
 
         return response()->json($payload);
     }
@@ -688,11 +712,17 @@ class EverbranchMobileController extends Controller
 
     protected function requireCustomerAdmin(Request $request, Tenant $tenant): void
     {
+        $this->requireCollinsClientAccess($request, $tenant);
         abort_unless(
             $this->tenantRole($this->user($request), $tenant) === 'admin',
             403,
             'Only a workspace admin can change customers.'
         );
+    }
+
+    protected function requireCollinsClientAccess(Request $request, Tenant $tenant): void
+    {
+        abort_unless(app(CollinsClientAccessService::class)->allows($this->user($request), $tenant), 403, 'The client list is restricted.');
     }
 
     /** @return array<string,string|null> */
@@ -779,7 +809,7 @@ class EverbranchMobileController extends Controller
     /** @param array<string,array<string,mixed>> $modules
      * @return array<int,array<string,mixed>>
      */
-    protected function primaryNavigation(string $role, array $modules): array
+    protected function primaryNavigation(string $role, array $modules, bool $viewCustomers): array
     {
         $enabled = fn (string $key): bool => (bool) data_get($modules, $key.'.enabled', false);
         if (! $enabled('field_service')) {
@@ -792,13 +822,13 @@ class EverbranchMobileController extends Controller
             ];
         }
         if (in_array($role, ['admin', 'manager'], true)) {
-            return [
+            return array_values(array_filter([
                 ['key' => 'home', 'label' => 'Home', 'icon' => 'house'],
                 ['key' => 'work', 'label' => 'Work', 'icon' => 'briefcase-business'],
-                ['key' => 'customers', 'label' => 'Customers', 'icon' => 'users-round'],
+                $viewCustomers ? ['key' => 'customers', 'label' => 'Customers', 'icon' => 'users-round'] : null,
                 ['key' => 'team', 'label' => 'Team', 'icon' => 'messages-square'],
                 ['key' => 'more', 'label' => 'More', 'icon' => 'ellipsis'],
-            ];
+            ]));
         }
 
         return array_values(array_filter([

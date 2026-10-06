@@ -16,6 +16,7 @@ use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantMemberPreference;
 use App\Models\TenantModuleEntitlement;
+use App\Models\TeamMessage;
 use App\Models\User;
 use App\Models\WorkspaceAsset;
 use App\Models\WorkspaceAssetUpload;
@@ -113,7 +114,7 @@ test('quickbooks lifecycle derives active quote complete and history without rep
         ->and($manual->fresh()->status_source)->toBe('manual');
 });
 
-test('field service mobile keeps members on participating jobs and lets owners see all financial detail', function (): void {
+test('field service mobile shares all jobs while keeping financial detail with owners', function (): void {
     [$tenant, $owner, $member, $other] = usabilityWorkspace();
     $assigned = FieldServiceJob::query()->create([
         'tenant_id' => $tenant->id, 'assigned_user_id' => $member->id, 'title' => 'Assigned panel job',
@@ -131,15 +132,16 @@ test('field service mobile keeps members on participating jobs and lets owners s
 
     Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
     $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service?view=list&filter=mine')
-        ->assertOk()->assertJsonPath('jobs.0.id', $assigned->id)->assertJsonMissing(['id' => $private->id]);
+        ->assertOk()->assertJsonCount(2, 'jobs');
     $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$assigned->id)
         ->assertOk()->assertJsonCount(0, 'job.financials');
-    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$private->id)->assertNotFound();
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$private->id)->assertOk()->assertJsonPath('job.can_edit', true);
 
     $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$assigned->id.'/comments', [
         'body' => 'Panel is labeled and ready for inspection.',
         'mention_user_ids' => [$owner->id],
     ])->assertCreated();
+    expect(TeamMessage::query()->where('body', 'like', '%[[job:'.$assigned->id.']]%')->exists())->toBeTrue();
     $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$assigned->id.'/comments', [
         'body' => 'Trying to close the job.',
         'status_update' => 'complete',
@@ -406,7 +408,7 @@ test('creating a mobile job saves a reusable customer and its supplied address',
         ->and(FieldServiceJob::query()->findOrFail($response->json('job_id'))->marketing_profile_id)->toBe($profile->id);
 });
 
-test('an active employee can create and open a self-assigned mobile job without management access', function (): void {
+test('an active employee can create edit and recycle a shared job for admin restoration', function (): void {
     [$tenant, $owner, $member] = usabilityWorkspace();
     Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
 
@@ -416,19 +418,24 @@ test('an active employee can create and open a self-assigned mobile job without 
         ->assertJsonPath('viewer.capabilities.manage_jobs', false);
 
     $response = $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs', [
-        'customer_name' => 'Morgan Customer',
         'title' => 'Employee created service call',
         'first_task' => 'Inspect panel',
     ])->assertCreated();
 
     $job = FieldServiceJob::query()->forTenantId((int) $tenant->id)->findOrFail($response->json('job_id'));
-    expect((int) $job->assigned_user_id)->toBe((int) $member->id)
+    expect($job->assigned_user_id)->toBeNull()
         ->and($job->participants()->whereKey((int) $member->id)->exists())->toBeTrue();
 
     $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id)->assertOk();
-    $this->patchJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id, ['title' => 'Changed by employee'])->assertForbidden();
-    $this->deleteJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id)->assertForbidden();
-    expect($job->fresh()->title)->toBe('Employee created service call');
+    $this->patchJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id, ['title' => 'Changed by employee'])->assertOk();
+    $this->patchJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id, ['customer_name' => 'Private'])->assertForbidden();
+    $this->deleteJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id)->assertOk();
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id)->assertNotFound();
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/recycle-bin')->assertForbidden();
+    Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/recycle-bin')->assertOk()->assertJsonPath('jobs.0.id', $job->id);
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/restore')->assertOk();
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id)->assertOk()->assertJsonPath('job.title', 'Changed by employee');
 });
 
 test('employee job creation rejects other workspaces and manager-only assignment fields', function (): void {
@@ -440,7 +447,7 @@ test('employee job creation rejects other workspaces and manager-only assignment
     $url = '/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs';
     $this->postJson($url, ['customer_name' => 'Local Customer', 'title' => 'Unauthorized assignment', 'assigned_user_id' => $owner->id])->assertForbidden();
     $this->postJson($url, ['customer_name' => 'Local Customer', 'title' => 'Unauthorized invoice', 'invoice_ids' => [1]])->assertForbidden();
-    $this->postJson($url, ['customer_id' => $otherCustomer->id, 'title' => 'Other customer'])->assertStatus(422);
+    $this->postJson($url, ['customer_id' => $otherCustomer->id, 'title' => 'Other customer'])->assertForbidden();
     $this->postJson('/api/mobile/v1/workspaces/'.$otherTenant->slug.'/field-service/jobs', ['customer_name' => 'Other Customer', 'title' => 'Other workspace'])->assertNotFound();
     expect(FieldServiceJob::query()->count())->toBe(0);
 
@@ -487,7 +494,7 @@ test('work 2 readiness and field transitions preserve manager and participant bo
     expect(app(FieldServiceJobReadinessService::class)->forJob($job)['ready'])->toBeTrue();
 
     Sanctum::actingAs($other, ['mobile:read', 'mobile:write']);
-    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/transitions', ['action' => 'start'])->assertForbidden();
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id)->assertOk();
 
     Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
     $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/transitions', ['action' => 'block'])->assertUnprocessable();
@@ -1038,7 +1045,7 @@ test('resumable PDF uploads store three independent multi-page files above the p
         ->and(Storage::disk('local')->exists($completedAsset->storage_path))->toBeTrue();
 });
 
-test('resumable PDF chunks reject unauthorized gaps altered bytes and false PDF contents', function (): void {
+test('resumable PDF chunks allow shared jobs and reject gaps altered bytes and false PDF contents', function (): void {
     Storage::fake('local');
     config()->set('filesystems.workspace_asset_disk', 'local');
     config()->set('filesystems.workspace_asset_max_upload_mb', 50);
@@ -1058,7 +1065,7 @@ test('resumable PDF chunks reject unauthorized gaps altered bytes and false PDF 
         'mime_type' => 'application/pdf',
         'file_size' => strlen($pdf),
         'job_id' => $job->id,
-    ])->assertForbidden();
+    ])->assertCreated();
 
     Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
     $initialize = $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/initialize', [
@@ -1085,9 +1092,6 @@ test('resumable PDF chunks reject unauthorized gaps altered bytes and false PDF 
         ...$firstPayload,
         'token' => str_repeat('x', 64),
     ])->assertNotFound();
-    $job->forceFill(['assigned_user_id' => $other->id])->save();
-    $this->putJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/'.$uploadId.'/chunks/0', $firstPayload)->assertForbidden();
-    $job->forceFill(['assigned_user_id' => $member->id])->save();
     $this->putJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/'.$uploadId.'/chunks/1', [
         'token' => $token,
         'offset' => WorkspaceAssetService::CHUNK_SIZE,
@@ -1113,12 +1117,6 @@ test('resumable PDF chunks reject unauthorized gaps altered bytes and false PDF 
             'checksum_sha256' => hash('sha256', $chunk),
         ])->assertOk();
     }
-    $job->forceFill(['assigned_user_id' => $other->id])->save();
-    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/uploads/complete', [
-        'token' => $token,
-        'checksum_sha256' => hash('sha256', $pdf),
-    ])->assertForbidden();
-    $job->forceFill(['assigned_user_id' => $member->id])->save();
     $upload = WorkspaceAssetUpload::query()->findOrFail($uploadId);
     $invalidTail = "\nstartxref\n999999999\n%%EOF\n";
     $invalidPrefix = "%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n";
@@ -1215,9 +1213,9 @@ test('resumable PDF initialization enforces file and active staging quotas', fun
         ->assertJsonPath('message', 'This workspace has too many active uploads. Try again shortly.');
 });
 
-test('job photo mutations require assignment while assigned members and admins retain cross-transport replay', function (): void {
+test('job photo uploads retain cross-transport replay and tenant isolation', function (): void {
     Storage::fake('local');
-    [$tenant, $owner, $member, $other] = usabilityWorkspace();
+    [$tenant, $owner, $member] = usabilityWorkspace();
     TenantModuleEntitlement::query()
         ->where('tenant_id', $tenant->id)
         ->where('module_key', 'field_service')
@@ -1234,17 +1232,6 @@ test('job photo mutations require assignment while assigned members and admins r
     $contents = (string) file_get_contents($image->getRealPath());
     $key = (string) Str::uuid();
     $url = '/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/photos';
-
-    Sanctum::actingAs($other, ['mobile:read', 'mobile:write']);
-    $this->withHeaders(['Idempotency-Key' => $key, 'Accept' => 'application/json'])->post($url, [
-        'photos' => [UploadedFile::fake()->image('unassigned.jpg', 20, 20)],
-    ])->assertForbidden();
-    $this->withHeader('Idempotency-Key', $key)->postJson($url.'/payload', [
-        'file_name' => 'unassigned.jpg',
-        'mime_type' => 'image/jpeg',
-        'contents_base64' => base64_encode($contents),
-    ])->assertForbidden();
-    expect(WorkspaceAsset::query()->forTenantId($tenant->id)->count())->toBe(0);
 
     Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
     $first = $this->withHeader('Idempotency-Key', $key)->post($url, [
