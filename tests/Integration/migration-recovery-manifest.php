@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_06_170000_create_tenant_mailboxes.php' => [
+        'test' => 'tests/Integration/TenantMailMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['domain, mailbox, and grant tables retained before message table creation'],
+    ],
     '2026_10_02_190000_repair_fundraiser_encrypted_column_storage.php' => [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['first encrypted fundraiser field converted before the remaining fields'],

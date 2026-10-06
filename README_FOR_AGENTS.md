@@ -1,5 +1,11 @@
 # START HERE
 
+## Tenant mailbox rollout (2026-10-06)
+
+- Email Branch includes pending customer address signup at `/mail/setup`, a tenant-scoped inbox at `/mail`, explicit grants, and SendGrid/direct transport paths. Follow `docs/operations/everbranch-mail-service.md`; creating an address does not prove DNS or delivery.
+- Cloudflare quick setup uses a one-time zone-scoped token and preserves an existing MX. Direct SMTP/JMAP remains disabled until the dedicated host, DNS, backups, monitoring, and end-to-end tests are ready.
+- Stalwart Community has no native tenant boundary. Everbranch tenant/module/membership checks remain mandatory; mail-server administrators are privileged across tenants.
+
 Everbranch Field iOS and Android share one mobile source repository. Mobile Job Notes may send `attachment_asset_ids` for PDFs already uploaded in guarded chunks. Before linking one to a note, validate the current tenant, job, uploader, team visibility, PDF MIME type, and absence of a prior note association. Both native apps rely on this contract to show the PDF in the note thread.
 
 Material request comments and photos use existing job notes and private workspace assets with `field_service_material_id` metadata. Keep material writes tenant-, job-, and assignment-scoped through `FieldServiceAccessService::canUpdateProgress`; never let a client supplied material ID select a different job or workspace. `materials[].comments/photos` in mobile job detail are derived only from assets and notes already visible to that viewer.

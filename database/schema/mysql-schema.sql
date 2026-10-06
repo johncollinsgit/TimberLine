@@ -7794,14 +7794,14 @@ CREATE TABLE `team_message_attachments` (
   `team_channel_id` bigint unsigned NOT NULL,
   `team_message_id` bigint unsigned DEFAULT NULL,
   `uploaded_by_user_id` bigint unsigned NOT NULL,
-  `client_uuid` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `file_name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `mime_type` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `client_uuid` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `file_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `mime_type` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `file_size` bigint unsigned NOT NULL,
   `received_bytes` bigint unsigned NOT NULL DEFAULT '0',
-  `status` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'uploading',
-  `storage_path` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `checksum_sha256` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'uploading',
+  `storage_path` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `checksum_sha256` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `expires_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -8503,6 +8503,98 @@ CREATE TABLE `tenant_forms` (
   CONSTRAINT `tenant_forms_form_template_id_foreign` FOREIGN KEY (`form_template_id`) REFERENCES `form_templates` (`id`) ON DELETE SET NULL,
   CONSTRAINT `tenant_forms_tenant_id_foreign` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
   CONSTRAINT `tenant_forms_updated_by_foreign` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `tenant_mail_domains`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `tenant_mail_domains` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `domain` varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `transport` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'sendgrid',
+  `status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending_dns',
+  `provider_domain_id` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `dns_records` json DEFAULT NULL,
+  `verified_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `tenant_mail_domains_domain_unique` (`domain`),
+  KEY `mail_domain_tenant_status_idx` (`tenant_id`,`status`),
+  CONSTRAINT `tenant_mail_domains_tenant_id_foreign` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `tenant_mail_messages`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `tenant_mail_messages` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `tenant_mailbox_id` bigint unsigned NOT NULL,
+  `folder` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'inbox',
+  `direction` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `from_address` varchar(320) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `to_address` varchar(320) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `subject` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `text_body` mediumtext COLLATE utf8mb4_unicode_ci,
+  `provider_message_id` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `thread_key` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `delivery_status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'received',
+  `read_at` timestamp NULL DEFAULT NULL,
+  `starred_at` timestamp NULL DEFAULT NULL,
+  `occurred_at` timestamp NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `mail_msg_provider_dedupe_idx` (`tenant_mailbox_id`,`direction`,`provider_message_id`),
+  KEY `mail_msg_folder_time_idx` (`tenant_mailbox_id`,`folder`,`occurred_at`),
+  KEY `mail_msg_tenant_thread_idx` (`tenant_id`,`thread_key`),
+  CONSTRAINT `tenant_mail_messages_tenant_id_foreign` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `tenant_mail_messages_tenant_mailbox_id_foreign` FOREIGN KEY (`tenant_mailbox_id`) REFERENCES `tenant_mailboxes` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `tenant_mailbox_users`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `tenant_mailbox_users` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `tenant_mailbox_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `permission` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'read_write',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `mailbox_user_unique` (`tenant_mailbox_id`,`user_id`),
+  KEY `tenant_mailbox_users_user_id_foreign` (`user_id`),
+  KEY `mailbox_user_tenant_idx` (`tenant_id`,`user_id`),
+  CONSTRAINT `tenant_mailbox_users_tenant_id_foreign` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `tenant_mailbox_users_tenant_mailbox_id_foreign` FOREIGN KEY (`tenant_mailbox_id`) REFERENCES `tenant_mailboxes` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `tenant_mailbox_users_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `tenant_mailboxes`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `tenant_mailboxes` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `tenant_mail_domain_id` bigint unsigned NOT NULL,
+  `address` varchar(320) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `display_name` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending_domain',
+  `provider_account_id` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `provider_credentials` text COLLATE utf8mb4_unicode_ci,
+  `last_synced_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `tenant_mailboxes_address_unique` (`address`),
+  KEY `tenant_mailboxes_tenant_mail_domain_id_foreign` (`tenant_mail_domain_id`),
+  KEY `mailbox_tenant_status_idx` (`tenant_id`,`status`),
+  CONSTRAINT `tenant_mailboxes_tenant_id_foreign` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `tenant_mailboxes_tenant_mail_domain_id_foreign` FOREIGN KEY (`tenant_mail_domain_id`) REFERENCES `tenant_mail_domains` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `tenant_marketing_settings`;
@@ -10942,3 +11034,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (271,'2026_10_04_22
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (272,'2026_10_05_190000_allow_jobless_field_service_time_sessions',18);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (273,'2026_10_05_191000_add_team_message_notification_preference',18);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (274,'2026_10_05_200000_create_team_message_attachments',19);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (275,'2026_10_06_170000_create_tenant_mailboxes',20);

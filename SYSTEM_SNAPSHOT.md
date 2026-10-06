@@ -1,5 +1,11 @@
 # SYSTEM SNAPSHOT
 
+## Tenant mailboxes (2026-10-06, implementation staged)
+
+- Tenant mail domains, mailboxes, grants, messages, inbox UI, and guided signup are implemented on the email provider reliability branch. Signup creates a pending record and an auditable Email Branch access request; it does not activate delivery.
+- Cloudflare quick setup uses a one-time token scoped to an active matching zone. It adds the ownership TXT and adds MX only after the transport is provisioned and no other MX exists. Other DNS providers use the same displayed records manually.
+- SendGrid inbound parse and a disabled-by-default dedicated Stalwart SMTP/JMAP transport are prepared. Wren's `info@easleyfamilysoccer.com` remains unprovisioned in production. See `docs/operations/everbranch-mail-service.md`.
+
 ## Field mobile Job Notes PDF attachments (2026-10-06)
 
 - Mobile job comments accept `attachment_asset_ids` for PDFs already uploaded in guarded chunks to the same job by the same user. The API verifies tenant, job, uploader, team visibility, type, and unused note association, then links the PDF to the new note. Job Notes on iOS, Android, and web return the same attached asset.
