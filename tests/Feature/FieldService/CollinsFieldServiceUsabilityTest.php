@@ -1436,6 +1436,41 @@ test('job details and update attachments stay editable and visible to the full C
         ->assertJsonFragment(['name' => 'service-after.jpg']);
 });
 
+test('a PDF uploaded in chunks can be linked to a team-visible mobile job note', function (): void {
+    Storage::fake('local');
+    [$tenant, $owner, $member] = usabilityWorkspace();
+    TenantModuleEntitlement::query()->forTenantId($tenant->id)->where('module_key', 'field_service')->update([
+        'metadata' => ['member_job_visibility' => 'all_operational'],
+    ]);
+    $job = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'assigned_user_id' => $owner->id,
+        'title' => 'Panel drawings',
+        'status' => 'open',
+        'operational_status' => 'active',
+    ]);
+    $asset = app(WorkspaceAssetService::class)->storeUpload(
+        $tenant, $owner, UploadedFile::fake()->createWithContent('panel.pdf', resumableTwoPagePdf(1000)),
+        [(int) $job->id], 'team', null, ['job-document'],
+    );
+
+    Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/comments', [
+        'body' => 'Use this panel drawing.',
+        'attachment_asset_ids' => [$asset->id],
+    ])->assertCreated()->assertJsonPath('attachments.0.id', $asset->id);
+
+    expect(data_get($asset->fresh()->metadata, 'field_service_job_note_id'))->toBeInt();
+    Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/comments', [
+        'body' => 'Trying to relink an existing PDF.',
+        'attachment_asset_ids' => [$asset->id],
+    ])->assertUnprocessable();
+    $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id)
+        ->assertOk()
+        ->assertJsonFragment(['name' => 'panel.pdf']);
+});
+
 test('website job updates return a clear success response for photo posts', function (): void {
     Storage::fake('local');
     [$tenant, $owner] = usabilityWorkspace();

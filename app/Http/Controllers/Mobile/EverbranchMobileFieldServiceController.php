@@ -455,17 +455,26 @@ class EverbranchMobileFieldServiceController extends Controller
         $user = $this->user($request);
         abort_unless($access->canAccessJob($user, $tenantModel, $job), 404);
         $validated = $request->validate([
-            'body' => ['nullable', 'string', 'max:5000', 'required_without:attachments'],
+            'body' => ['nullable', 'string', 'max:5000', 'required_without_all:attachments,attachment_asset_ids'],
             'mention_user_ids' => ['nullable', 'array', 'max:30'],
             'mention_user_ids.*' => ['integer'],
             'status_update' => ['nullable', 'in:active,blocked,complete,quote'],
             'attachments' => ['nullable', 'array', 'max:20'],
             'attachments.*' => ['required', 'file', 'max:25600'],
+            'attachment_asset_ids' => ['nullable', 'array', 'max:20'],
+            'attachment_asset_ids.*' => ['required', 'integer', 'distinct', 'min:1'],
         ]);
         if (filled($validated['status_update'] ?? null)) {
             abort_unless($access->canManageJobs($user, $tenantModel), 403);
         }
         $mentionIds = $tenantModel->users()->whereIn('users.id', (array) ($validated['mention_user_ids'] ?? []))->pluck('users.id')->map(fn ($id): int => (int) $id)->all();
+        $linkedIds = collect($validated['attachment_asset_ids'] ?? [])->map(fn ($id): int => (int) $id)->all();
+        $linkedAssets = WorkspaceAsset::query()->forTenantId((int) $tenantModel->id)
+            ->whereIn('id', $linkedIds)->where('uploaded_by_user_id', (int) $user->id)
+            ->where('visibility', 'team')->where('mime_type', 'application/pdf')
+            ->whereHas('jobs', fn ($query) => $query->whereKey((int) $job->id))
+            ->get();
+        abort_unless($linkedAssets->count() === count($linkedIds) && $linkedAssets->every(fn (WorkspaceAsset $asset): bool => ! data_get($asset->metadata, 'field_service_job_note_id')), 422, 'A selected PDF is not available for this job note.');
         $note = FieldServiceJobNote::query()->create([
             'tenant_id' => (int) $tenantModel->id, 'field_service_job_id' => (int) $job->id,
             'created_by_user_id' => (int) $user->id, 'body' => trim((string) ($validated['body'] ?? '')) ?: 'Added attachments.',
@@ -484,8 +493,12 @@ class EverbranchMobileFieldServiceController extends Controller
             ['job-update'],
             ['field_service_job_note_id' => (int) $note->id],
         ));
-        if ($attachments->isNotEmpty()) {
-            $note->forceFill(['metadata' => ['source' => 'everbranch_mobile', 'attachment_asset_ids' => $attachments->pluck('id')->map(fn ($id): int => (int) $id)->all()]])->save();
+        foreach ($linkedAssets as $linkedAsset) {
+            $linkedAsset->forceFill(['metadata' => [...($linkedAsset->metadata ?: []), 'field_service_job_note_id' => (int) $note->id]])->save();
+        }
+        $allAttachments = $attachments->concat($linkedAssets);
+        if ($allAttachments->isNotEmpty()) {
+            $note->forceFill(['metadata' => ['source' => 'everbranch_mobile', 'attachment_asset_ids' => $allAttachments->pluck('id')->map(fn ($id): int => (int) $id)->all()]])->save();
         }
         if ($mentionIds !== []) {
             $note->mentions()->sync(collect($mentionIds)->mapWithKeys(fn (int $id): array => [$id => ['tenant_id' => (int) $tenantModel->id]])->all());
@@ -495,7 +508,7 @@ class EverbranchMobileFieldServiceController extends Controller
         }
         $delivery = $notifications->notifyComment($job, $note, $user, $mentionIds);
 
-        return response()->json(['ok' => true, 'comment_id' => (int) $note->id, 'attachments' => $attachments->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values(), 'delivery' => $delivery], 201);
+        return response()->json(['ok' => true, 'comment_id' => (int) $note->id, 'attachments' => $allAttachments->map(fn (WorkspaceAsset $asset): array => $this->assetPayload($asset, $tenantModel))->values(), 'delivery' => $delivery], 201);
     }
 
     public function destroyComment(Request $request, string $tenant, FieldServiceJob $job, FieldServiceJobNote $note, FieldServiceAccessService $access): JsonResponse
