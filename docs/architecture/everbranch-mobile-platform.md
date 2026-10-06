@@ -25,7 +25,9 @@
 - Bootstrap resolves one server-owned profile (`trades`, `professional`, `retail_production`, `generic`) from tenant blueprint metadata. Entitlement metadata controls `experience_version`; Collins is the first version-2 trades pilot.
 - Contract v4 adds profile labels/capabilities, viewer capabilities, readiness, typed destinations, My Day, guarded transitions, task ownership/completion, notification feed/unread state, and separate photo/document counts.
 - Mobile and web use the same readiness, access, lifecycle, and transition services. Clients display permissions but never grant them.
-- Everbranch APNs uses the `com.everbranch.app` device table and dedicated credentials. Modern Forestry push infrastructure is a separate product boundary.
+- Everbranch push devices share the Everbranch-only device table and are separated by platform. iOS delivery uses the dedicated `com.everbranch.app` APNs credentials; Android delivery uses a dedicated Firebase service account through FCM HTTP v1. Modern Forestry push infrastructure remains a separate product boundary.
+
+Android push delivery stays disabled until `EVERBRANCH_FCM_ENABLED=true` and the project ID, service-account client email, and one private-key source are configured. The sender exchanges a short-lived signed service-account JWT at Google's OAuth token endpoint, requests only the `firebase.messaging` scope, and sends directly to the configured Firebase project. Never commit the service-account JSON or private key. A Firebase `UNREGISTERED` response disables only that device token so a later app registration can replace it.
 - Compatibility routes remain active. Other tenant profiles continue their existing Work surfaces until their renderer is deliberately upgraded and tested.
 
 ## Manager Time Clock & Hours Contract (2026-09-03)
