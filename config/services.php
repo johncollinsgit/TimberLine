@@ -195,7 +195,10 @@ return [
         'fundraiser_customer_id' => env('MODERN_FORESTRY_FUNDRAISER_QBO_CUSTOMER_ID', env('APP_ENV') === 'production' ? '100000001' : null),
         'fundraiser_item_id' => env('MODERN_FORESTRY_FUNDRAISER_QBO_ITEM_ID', env('APP_ENV') === 'production' ? '58' : null),
         'fundraiser_shipping_item_id' => env('MODERN_FORESTRY_FUNDRAISER_QBO_SHIPPING_ITEM_ID', env('APP_ENV') === 'production' ? '59' : null),
-        'fundraiser_send_to' => env('MODERN_FORESTRY_FUNDRAISER_QBO_SEND_TO', env('APP_ENV') === 'production' ? 'info@bedsheetfundraising.com' : 'info@theforestrystudio.com'),
+        'fundraiser_send_to' => env('MODERN_FORESTRY_FUNDRAISER_QBO_SEND_TO', 'info@theforestrystudio.com'),
+        'fundraiser_connected_by' => env('MODERN_FORESTRY_FUNDRAISER_QBO_CONNECTED_BY', 'johncollinsemail@gmail.com'),
+        'fundraiser_company_name' => env('MODERN_FORESTRY_FUNDRAISER_QBO_COMPANY_NAME', 'Modern Forestry'),
+        'fundraiser_company_email' => env('MODERN_FORESTRY_FUNDRAISER_QBO_COMPANY_EMAIL', 'info@theforestrystudio.com'),
     ],
 
     // Instagram API with Instagram Login. Credentials are application-wide while

@@ -28,7 +28,7 @@ class ShopifyEmbeddedFundraisingController extends Controller
             && strtolower((string) ($store['key'] ?? '')) === 'retail'
             && Tenant::query()->whereKey($tenantId)->where('slug', 'modern-forestry')->exists();
 
-        return response()->view('shopify.fundraising', [
+        $response = response()->view('shopify.fundraising', [
             'authorized' => $authorized,
             'shopifyApiKey' => $authorized ? (string) ($store['client_id'] ?? '') : null,
             'shopDomain' => $authorized ? (string) ($store['shop'] ?? '') : ($context['shop_domain'] ?? null),
@@ -37,5 +37,9 @@ class ShopifyEmbeddedFundraisingController extends Controller
             'pageActions' => [],
             'desk' => $authorized ? $desk->snapshot(Tenant::query()->findOrFail($tenantId)) : null,
         ]);
+        $response->headers->set('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;');
+        $response->headers->remove('X-Frame-Options');
+
+        return $response;
     }
 }

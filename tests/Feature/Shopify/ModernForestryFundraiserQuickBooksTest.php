@@ -4,6 +4,7 @@ use App\Models\IntegrationConnection;
 use App\Models\ModernForestryFundraiserInvoicePackage;
 use App\Models\ModernForestryFundraiserOrder;
 use App\Models\Tenant;
+use App\Models\User;
 use App\Services\Shopify\ModernForestryFundraiserInvoiceSettingsService;
 use App\Services\Shopify\ModernForestryFundraiserQuickBooksService;
 use Carbon\CarbonImmutable;
@@ -19,12 +20,16 @@ test('a reviewed fundraiser package creates and sends one replay-safe QuickBooks
     config()->set('services.quickbooks.fundraiser_item_id', 'item-candles');
     config()->set('services.quickbooks.fundraiser_shipping_item_id', 'item-shipping');
     $tenant = Tenant::query()->create(['name' => 'Modern Forestry', 'slug' => 'modern-forestry']);
-    IntegrationConnection::query()->create(['tenant_id' => $tenant->id, 'provider' => 'quickbooks', 'external_account_id' => 'fingerprint', 'external_account_secret' => 'realm-1', 'status' => 'connected', 'access_token' => 'token']);
+    $operator = User::factory()->create(['email' => 'johncollinsemail@gmail.com']);
+    IntegrationConnection::query()->create(['tenant_id' => $tenant->id, 'provider' => 'quickbooks', 'external_account_id' => 'fingerprint', 'external_account_secret' => 'realm-1', 'status' => 'connected', 'access_token' => 'token', 'connected_by_user_id' => $operator->id]);
     $order = ModernForestryFundraiserOrder::query()->create(['tenant_id' => $tenant->id, 'source' => 'zapier', 'external_order_id' => '32733', 'order_reference' => '32733', 'recipient_name' => 'Customer', 'shipping_address' => [], 'currency' => 'usd', 'subtotal_cents' => 1000, 'discount_cents' => 0, 'shipping_cents' => 935, 'tax_cents' => 0, 'total_cents' => 1935, 'status' => 'packaged', 'fingerprint' => str_repeat('a', 64), 'line_items' => [], 'received_at' => now()]);
     $package = ModernForestryFundraiserInvoicePackage::query()->create(['tenant_id' => $tenant->id, 'package_reference' => 'BSF-SEP-2026', 'status' => 'review_required', 'delivery_status' => 'not_sent', 'tracking_status' => 'not_available', 'payer_name' => 'Dan Arnoldussen', 'payer_email' => 'info@theforestrystudio.com', 'notification_email' => 'info@theforestrystudio.com', 'currency' => 'usd', 'payment_terms_days' => 14, 'invoice_date' => today(), 'due_date' => today()->addDays(14), 'subtotal_cents' => 1000, 'discount_cents' => 0, 'shipping_cents' => 935, 'tax_cents' => 0, 'total_cents' => 1935, 'order_ids' => [$order->id], 'invoice_lines' => [], 'prepared_at' => now()]);
     $invoiceReads = 0;
     Http::fake(function (Request $request) use (&$invoiceReads) {
         $url = $request->url();
+        if (str_contains($url, '/query?') && str_contains($url, 'CompanyInfo')) {
+            return Http::response(['QueryResponse' => ['CompanyInfo' => [['CompanyName' => 'Modern Forestry', 'Email' => ['Address' => 'info@theforestrystudio.com']]]]]);
+        }
         if (str_contains($url, '/query?')) {
             return Http::response(['QueryResponse' => ['Invoice' => []]]);
         }
@@ -71,7 +76,28 @@ test('a reviewed fundraiser package creates and sends one replay-safe QuickBooks
         && $request['SyncToken'] === '0'
         && $request['AllowOnlineACHPayment'] === true
         && $request['AllowOnlineCreditCardPayment'] === true);
-    Http::assertSentCount(6);
+    Http::assertSentCount(9);
+});
+
+test('fundraiser QuickBooks writes stop before invoice creation for a different company or connector owner', function (): void {
+    config()->set('services.quickbooks.api_base', 'https://quickbooks.test');
+    config()->set('services.quickbooks.fundraiser_writes_enabled', true);
+    $tenant = Tenant::query()->create(['name' => 'Modern Forestry', 'slug' => 'modern-forestry']);
+    $nate = User::factory()->create(['email' => 'nate@example.com']);
+    $connection = IntegrationConnection::query()->create(['tenant_id' => $tenant->id, 'provider' => 'quickbooks', 'external_account_id' => 'fingerprint', 'external_account_secret' => 'collins-realm', 'status' => 'connected', 'access_token' => 'token', 'connected_by_user_id' => $nate->id]);
+    $package = ModernForestryFundraiserInvoicePackage::query()->create(['tenant_id' => $tenant->id, 'package_reference' => 'BSF-SEP-2026', 'status' => 'review_required', 'delivery_status' => 'not_sent', 'tracking_status' => 'not_available', 'payer_name' => 'Modern Forestry', 'payer_email' => 'info@theforestrystudio.com', 'notification_email' => 'info@theforestrystudio.com', 'currency' => 'usd', 'payment_terms_days' => 14, 'invoice_date' => today(), 'due_date' => today()->addDays(14), 'subtotal_cents' => 1000, 'discount_cents' => 0, 'shipping_cents' => 0, 'tax_cents' => 0, 'total_cents' => 1000, 'order_ids' => [], 'invoice_lines' => [], 'prepared_at' => now()]);
+    Http::fake(['*' => Http::response(['QueryResponse' => ['CompanyInfo' => [['CompanyName' => 'Collins Upstate Electric', 'Email' => ['Address' => 'nate@example.com']]]]])]);
+
+    expect(fn () => app(ModernForestryFundraiserQuickBooksService::class)->createAndMaybeSend($package, false))
+        ->toThrow(ValidationException::class);
+    Http::assertNothingSent();
+
+    $john = User::factory()->create(['email' => 'johncollinsemail@gmail.com']);
+    $connection->forceFill(['connected_by_user_id' => $john->id])->save();
+    expect(fn () => app(ModernForestryFundraiserQuickBooksService::class)->createAndMaybeSend($package, false))
+        ->toThrow(ValidationException::class);
+    Http::assertSentCount(1);
+    Http::assertNotSent(fn (Request $request): bool => $request->method() === 'POST');
 });
 
 test('the monthly command packages only the prior calendar month on the first and reuses its package', function (): void {

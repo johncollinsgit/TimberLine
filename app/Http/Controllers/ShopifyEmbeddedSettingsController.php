@@ -2,11 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\IntegrationConnection;
 use App\Models\ModernForestryFundraiserInvoicePackage;
 use App\Models\ShopifyStore;
 use App\Models\Tenant;
-use App\Services\Integrations\QuickBooks\QuickBooksConnector;
 use App\Services\Marketing\Email\TenantEmailDispatchService;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
 use App\Services\Marketing\TwilioSenderConfigService;
@@ -514,7 +512,7 @@ class ShopifyEmbeddedSettingsController extends Controller
         Request $request,
         ShopifyEmbeddedAppContext $contextService,
         TenantResolver $tenantResolver,
-        QuickBooksConnector $connector
+        ModernForestryFundraiserQuickBooksService $quickBooks
     ): JsonResponse {
         $context = $contextService->resolveAuthenticatedApiContext($request);
         if (! ($context['ok'] ?? false)) {
@@ -525,9 +523,7 @@ class ShopifyEmbeddedSettingsController extends Controller
             return $this->fundraiserInvoicingUnavailableResponse();
         }
         try {
-            $connection = IntegrationConnection::query()->forTenant($tenantId)
-                ->where('provider', 'quickbooks')->where('status', IntegrationConnection::STATUS_CONNECTED)->sole();
-            $client = $connector->client($connection);
+            $client = $quickBooks->approvedCompanyClient((int) $tenantId);
             $matches = (array) data_get($client->query("select * from Invoice where DocNumber = 'BSF-AUG-2026'"), 'QueryResponse.Invoice', []);
             if (count($matches) !== 1 || ! filled($matches[0]['Id'] ?? null)) {
                 return response()->json(['ok' => false, 'message' => 'A unique August BSF invoice was not found in this QuickBooks company.'], 409);

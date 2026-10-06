@@ -2334,12 +2334,16 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
         Route::get('/settings/fundraiser-invoicing/desk', [ShopifyEmbeddedSettingsController::class, 'fundraiserInvoiceDesk'])
             ->name('settings.fundraiser-invoicing.desk');
         Route::post('/fundraising/detect', [ShopifyEmbeddedSettingsController::class, 'detectFundraiserShopifyOrders'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('fundraising.detect');
         Route::post('/fundraising/orders/{order}/shipping', [ShopifyEmbeddedSettingsController::class, 'verifyFundraiserShipping'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('fundraising.orders.shipping');
         Route::post('/fundraising/invoices/{package}/create', [ShopifyEmbeddedSettingsController::class, 'createFundraiserQuickBooksInvoice'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('fundraising.invoices.create');
         Route::post('/fundraising/invoices/{package}/send', [ShopifyEmbeddedSettingsController::class, 'sendFundraiserQuickBooksInvoice'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('fundraising.invoices.send');
         Route::get('/fundraising/invoices/{package}/payment-link', [ShopifyEmbeddedSettingsController::class, 'fundraiserPaymentLink'])
             ->name('fundraising.invoices.payment-link');
