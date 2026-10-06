@@ -4,7 +4,8 @@
 
 The verified Modern Forestry retail Shopify app has a dedicated **Fundraising**
 tab. It reads BSF-tagged imported Shopify orders, shows recent order-month
-proceeds, and manages a separate invoice review queue. The Shopify order ID is
+proceeds, purchased product titles and quantities, and a separate invoice
+review queue. The Shopify order ID is
 the durable link. An hourly detector queues orders from September 1, 2026
 onward. Earlier orders, including the already-created August QuickBooks
 invoice, are deliberately not backfilled into another payable invoice.
@@ -26,7 +27,13 @@ QuickBooks draft** and **Send** controls. Both are enabled for the verified
 Modern Forestry production QuickBooks connection via GitHub deployment; the
 environment overrides remain emergency kill switches. The verified IDs are
 customer `100000001`, candle item `58`, and shipping item `59`. The controlled
-payer address is `info@bedsheetfundraising.com`. The Create action sets both
+invoice delivery address is `info@theforestrystudio.com`. The connected
+QuickBooks company must report name `Modern Forestry` and company email
+`info@theforestrystudio.com`, and its Backstage connection must have been made
+by `johncollinsemail@gmail.com`. These checks reject the Collins Upstate
+Electric connection before an invoice write. The QuickBooks customer mapping
+remains the verified fundraiser customer; changing the delivery address does
+not change the customer. The Create action sets both
 online-payment flags to false to avoid QuickBooks' automatic send-on-import
 condition. The separate Send action enables card and ACH payments using a
 sparse invoice update, checks the live invoice number, amount, customer, email,
@@ -47,9 +54,9 @@ Shopify Settings app records
 the fundraiser company, accounts-payable contact, internal notification email,
 invoice grouping, payment terms, and the intended source-shipping/tax posture.
 
-`info@theforestrystudio.com` is the default internal notification address. It
-is not the invoice payer and must not be used as a substitute for the
-fundraiser's accounts-payable address.
+`info@theforestrystudio.com` is the approved invoice delivery and internal
+notification address for this workflow. Staff must review the QuickBooks
+customer and invoice lines before the separate send approval.
 
 The same verified surface can generate a one-time Zapier token. It enables only
 the dedicated fundraiser order intake and accounting-review queue. It does not
@@ -99,10 +106,11 @@ store, host, secret, or QuickBooks identifier in the Zapier payload.
 
 1. Review Shopify's linked purchased-label cost, or enter a receipt-backed
    cost when Shopify has no row, and approve each queued order. A live Shopify
-   amount/tag check is required for Shopify rows.
+   amount/tag check is required for Shopify rows. The linked order and review
+   queue show product titles and quantities from the imported Shopify order.
 2. Select approved orders (one order when cadence is `per_order`) and prepare
    the package.
-3. Review the package lines, QuickBooks customer, product/service, income
+3. Review the package lines and purchased products, QuickBooks customer, product/service, income
    account, tax code, and card-surcharge setting. Create the non-payable draft
    in QuickBooks from the Fundraising tab, inspect it in QuickBooks, then
    explicitly send. The verified customer payment link appears after sending.

@@ -49,6 +49,14 @@ release ID preservation.
 
 ## Modern Forestry fundraising invoice desk (development, 2026-10-02)
 
+- The October 6 repair gives the Shopify embedded fundraiser POST controls the
+  same session-token authentication path as other embedded actions without an
+  iframe CSRF cookie. The order list, review queue, and invoice packages show
+  purchased Shopify product titles and quantities. Invoice delivery is
+  controlled to `info@theforestrystudio.com`. Before a QuickBooks invoice
+  write, the connected operator and live company identity must match John
+  Collins's Modern Forestry connection; a Collins Upstate Electric connection
+  fails closed.
 - The Shopify embedded Fundraising tab reads tenant-scoped BSF-tagged imported
   Shopify orders and displays recent order-month candle proceeds and linked
   invoice queue/packages. The Shopify order ID is the match key. An hourly

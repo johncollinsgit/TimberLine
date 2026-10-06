@@ -7,6 +7,7 @@ use App\Models\ModernForestryFundraiserInvoicePackage;
 use App\Models\ModernForestryFundraiserOrder;
 use App\Models\Order;
 use App\Models\Tenant;
+use App\Models\User;
 use App\Services\Integrations\QuickBooks\QuickBooksConnector;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -40,9 +41,7 @@ class ModernForestryFundraiserQuickBooksService
             throw ValidationException::withMessages(['quickbooks' => ['Create and review the QuickBooks draft before using Send.']]);
         }
 
-        $connection = IntegrationConnection::query()->forTenant($package->tenant_id)
-            ->where('provider', 'quickbooks')->where('status', IntegrationConnection::STATUS_CONNECTED)->sole();
-        $client = $this->connector->client($connection);
+        $client = $this->approvedCompanyClient((int) $package->tenant_id);
 
         return DB::transaction(function () use ($package, $client, $send): ModernForestryFundraiserInvoicePackage {
             $locked = ModernForestryFundraiserInvoicePackage::query()->forTenant($package->tenant_id)->lockForUpdate()->findOrFail($package->id);
@@ -110,10 +109,8 @@ class ModernForestryFundraiserQuickBooksService
         if (! filled($package->quickbooks_invoice_id) || $package->quickbooks_sent_at === null) {
             return null;
         }
-        $connection = IntegrationConnection::query()->forTenant($package->tenant_id)
-            ->where('provider', 'quickbooks')->where('status', IntegrationConnection::STATUS_CONNECTED)->sole();
         $invoice = (array) data_get(
-            $this->connector->client($connection)->invoiceWithPaymentLink((string) $package->quickbooks_invoice_id),
+            $this->approvedCompanyClient((int) $package->tenant_id)->invoiceWithPaymentLink((string) $package->quickbooks_invoice_id),
             'Invoice', []
         );
         $link = (string) ($invoice['InvoiceLink'] ?? '');
@@ -207,6 +204,29 @@ class ModernForestryFundraiserQuickBooksService
         }
 
         return $address;
+    }
+
+    public function approvedCompanyClient(int $tenantId): \App\Services\Integrations\QuickBooks\QuickBooksOnlineClient
+    {
+        $connection = IntegrationConnection::query()->forTenant($tenantId)
+            ->where('provider', 'quickbooks')->where('status', IntegrationConnection::STATUS_CONNECTED)->sole();
+        $expectedOwner = strtolower(trim((string) config('services.quickbooks.fundraiser_connected_by')));
+        $owner = strtolower(trim((string) User::query()->whereKey($connection->connected_by_user_id)->value('email')));
+        if ($expectedOwner === '' || $owner !== $expectedOwner) {
+            throw ValidationException::withMessages(['quickbooks' => ['The connected QuickBooks account was not linked by the approved Modern Forestry operator. No invoice was changed.']]);
+        }
+
+        $client = $this->connector->client($connection);
+        $companies = (array) data_get($client->query('select * from CompanyInfo'), 'QueryResponse.CompanyInfo', []);
+        $company = count($companies) === 1 ? $companies[0] : [];
+        if (strcasecmp(trim((string) data_get($company, 'CompanyName')), trim((string) config('services.quickbooks.fundraiser_company_name'))) !== 0
+            || strcasecmp(trim((string) data_get($company, 'Email.Address')), trim((string) config('services.quickbooks.fundraiser_company_email'))) !== 0
+            || ! filled(data_get($company, 'CompanyName'))
+            || ! filled(data_get($company, 'Email.Address'))) {
+            throw ValidationException::withMessages(['quickbooks' => ['The connected QuickBooks company is not the approved Modern Forestry company. No invoice was changed.']]);
+        }
+
+        return $client;
     }
 
     protected function assertSourceOrdersCurrent(ModernForestryFundraiserInvoicePackage $package): void

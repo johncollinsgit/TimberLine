@@ -15,12 +15,31 @@ class ModernForestryFundraisingDeskService
         $sourceOrders = Order::query()->forTenant($tenant)
             ->where('shopify_store_key', 'retail')
             ->whereJsonContains('attribution_meta->order_tags', 'BSF')
+            ->with('lines')
             ->orderByDesc('ordered_at')->limit(250)->get();
         $queue = ModernForestryFundraiserOrder::query()->forTenant($tenant)
             ->orderByDesc('received_at')->limit(250)->get();
         $queueByShopifyId = $queue->where('source', 'shopify')->keyBy('external_order_id');
+        $sourceByShopifyId = $sourceOrders->keyBy(fn (Order $order): string => (string) $order->shopify_order_id);
+        $missingShopifyIds = $queueByShopifyId->keys()->diff($sourceByShopifyId->keys())->all();
+        if ($missingShopifyIds !== []) {
+            Order::query()->forTenant($tenant)->where('shopify_store_key', 'retail')
+                ->whereIn('shopify_order_id', $missingShopifyIds)->with('lines')->get()
+                ->each(fn (Order $order) => $sourceByShopifyId->put((string) $order->shopify_order_id, $order));
+        }
         $packages = ModernForestryFundraiserInvoicePackage::query()->forTenant($tenant)
             ->orderByDesc('prepared_at')->limit(24)->get();
+        $packageOrderIds = $packages->flatMap(fn (ModernForestryFundraiserInvoicePackage $package): array => (array) $package->order_ids)
+            ->unique()->values()->all();
+        $packageOrders = ModernForestryFundraiserOrder::query()->forTenant($tenant)
+            ->whereIn('id', $packageOrderIds)->get()->keyBy('id');
+        $packageShopifyIds = $packageOrders->where('source', 'shopify')->pluck('external_order_id');
+        $missingShopifyIds = $packageShopifyIds->diff($sourceByShopifyId->keys())->all();
+        if ($missingShopifyIds !== []) {
+            Order::query()->forTenant($tenant)->where('shopify_store_key', 'retail')
+                ->whereIn('shopify_order_id', $missingShopifyIds)->with('lines')->get()
+                ->each(fn (Order $order) => $sourceByShopifyId->put((string) $order->shopify_order_id, $order));
+        }
 
         $orders = $sourceOrders->map(function (Order $order) use ($queueByShopifyId): array {
             $proceeds = $this->moneyCents($order->total_price)
@@ -41,6 +60,7 @@ class ModernForestryFundraisingDeskService
                 'queue_id' => $linked?->id,
                 'queue_status' => $linked?->status,
                 'shipping_verified' => $linked && (bool) data_get($linked->source_payload, 'shipping_verified'),
+                'products' => $this->products($order),
             ];
         })->values();
 
@@ -65,6 +85,12 @@ class ModernForestryFundraisingDeskService
                 'shipping_verified' => $row->source !== 'shopify' || (bool) data_get($row->source_payload, 'shipping_verified'),
                 'total_cents' => (int) $row->total_cents,
                 'currency' => strtoupper((string) $row->currency),
+                'products' => $row->source === 'shopify'
+                    ? $this->products($sourceByShopifyId->get((string) $row->external_order_id))
+                    : collect((array) $row->line_items)->map(fn ($line): array => [
+                        'title' => (string) ($line['description'] ?? 'Item'),
+                        'quantity' => (int) ($line['quantity'] ?? 0),
+                    ])->all(),
             ])->values()->all(),
             'packages' => $packages->map(fn (ModernForestryFundraiserInvoicePackage $package): array => [
                 'id' => $package->id,
@@ -79,6 +105,19 @@ class ModernForestryFundraisingDeskService
                 'quickbooks_invoice_id' => $package->quickbooks_invoice_id,
                 'quickbooks_doc_number' => $package->quickbooks_doc_number,
                 'invoice_lines' => (array) $package->invoice_lines,
+                'order_products' => collect((array) $package->order_ids)->map(function ($id) use ($packageOrders, $sourceByShopifyId): array {
+                    $order = $packageOrders->get((int) $id);
+
+                    return [
+                        'reference' => $order?->order_reference ?: $order?->external_order_id ?: 'Order',
+                        'products' => $order?->source === 'shopify'
+                            ? $this->products($sourceByShopifyId->get((string) $order->external_order_id))
+                            : collect((array) $order?->line_items)->map(fn ($line): array => [
+                                'title' => (string) ($line['description'] ?? 'Item'),
+                                'quantity' => (int) ($line['quantity'] ?? 0),
+                            ])->all(),
+                    ];
+                })->all(),
             ])->values()->all(),
             'note' => 'Shopify order totals already contain the agreed candle proceeds. Customer shipping charged at checkout is not the purchased-label cost. The existing August QuickBooks invoice predates this queue and must not be recreated.',
         ];
@@ -87,5 +126,14 @@ class ModernForestryFundraisingDeskService
     private function moneyCents(mixed $value): int
     {
         return (int) round(((float) $value) * 100);
+    }
+
+    /** @return list<array{title:string,quantity:int}> */
+    private function products(?Order $order): array
+    {
+        return $order?->lines->map(fn ($line): array => [
+            'title' => trim((string) ($line->raw_title ?: $line->sku ?: 'Shopify item')),
+            'quantity' => (int) ($line->ordered_qty ?: $line->quantity),
+        ])->values()->all() ?? [];
     }
 }

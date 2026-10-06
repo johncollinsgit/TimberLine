@@ -31,6 +31,13 @@ release ID preservation.
 
 ## Modern Forestry BSF Fundraising tab (development, 2026-10-02)
 
+- Shopify embedded fundraiser POST actions rely on a verified App Bridge
+  bearer token and are exempt from iframe CSRF state. Purchased Shopify
+  products appear with quantities on orders, in the review queue, and in
+  package review. Invoice delivery is controlled to
+  `info@theforestrystudio.com`; the live QuickBooks company must identify as
+  Modern Forestry and the Backstage connector owner must be
+  `johncollinsemail@gmail.com` before any invoice write or payment-link read.
 - Fundraising in the verified retail Shopify app reads BSF-tagged imported
   orders. The first-of-month job queues approved prior-month invoices only;
   QuickBooks creation and sending require separate staff clicks. The verified

@@ -17,6 +17,16 @@
                 $monthly = (array) ($desk['monthly'] ?? []);
                 $maxMonthly = max(1, ...array_map(fn ($row) => (int) ($row['candle_proceeds_cents'] ?? 0), $monthly));
                 $money = static fn ($cents) => '$'.number_format(((int) $cents) / 100, 2);
+                $fundraisingEndpoints = [
+                    'detect' => route('shopify.app.api.fundraising.detect', [], false),
+                    'shipping' => route('shopify.app.api.fundraising.orders.shipping', ['order' => '__ORDER__'], false),
+                    'approve' => route('shopify.app.api.settings.fundraiser-invoicing.orders.approve', ['order' => '__ORDER__'], false),
+                    'prepare' => route('shopify.app.api.settings.fundraiser-invoicing.packages.prepare', [], false),
+                    'create' => route('shopify.app.api.fundraising.invoices.create', ['package' => '__PACKAGE__'], false),
+                    'send' => route('shopify.app.api.fundraising.invoices.send', ['package' => '__PACKAGE__'], false),
+                    'paymentLink' => route('shopify.app.api.fundraising.invoices.payment-link', ['package' => '__PACKAGE__'], false),
+                    'existingAugust' => route('shopify.app.api.fundraising.invoices.existing-august', [], false),
+                ];
             @endphp
             <div id="fundraising-alert" class="hidden rounded-xl border p-4 text-sm" role="status"></div>
             <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
@@ -25,9 +35,9 @@
                         <h2 class="text-lg font-semibold text-zinc-950">BSF invoice desk</h2>
                         <p class="mt-1 max-w-3xl text-sm text-zinc-600">{{ $desk['note'] }}</p>
                     </div>
-                    <button type="button" data-fundraising-action="detect" class="rounded-lg bg-emerald-900 px-4 py-2 text-sm font-semibold text-white">Detect Shopify orders</button>
+                    <button type="button" data-fundraising-action="detect" class="rounded-lg bg-emerald-900 px-4 py-2 text-sm font-semibold text-white">Search new orders</button>
                 </div>
-                <p class="mt-3 text-sm text-amber-900">The first-of-month job queues reviewed orders. Creating and sending a QuickBooks invoice are separate staff actions. No Shopify checkout shipping amount is treated as a label cost.</p>
+                <p class="mt-3 text-sm text-amber-900">Search checks BSF orders already imported from Shopify; the store import runs on its schedule. The first-of-month job queues reviewed orders. Creating and sending a QuickBooks invoice are separate staff actions. No Shopify checkout shipping amount is treated as a label cost.</p>
             </section>
 
             <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
@@ -55,11 +65,11 @@
 
             <section class="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
                 <div class="border-b border-zinc-200 px-5 py-4"><h2 class="font-semibold text-zinc-950">Linked Shopify orders</h2><p class="mt-1 text-sm text-zinc-600">The BSF tag and Shopify order ID determine the match.</p></div>
-                <div class="overflow-x-auto"><table class="min-w-full text-left text-sm"><thead class="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500"><tr><th class="px-4 py-3">Order</th><th class="px-4 py-3">Order date</th><th class="px-4 py-3 text-right">Candle proceeds</th><th class="px-4 py-3 text-right">Verified label</th><th class="px-4 py-3">Queue</th></tr></thead><tbody class="divide-y divide-zinc-100">
+                <div class="overflow-x-auto"><table class="min-w-full text-left text-sm"><thead class="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500"><tr><th class="px-4 py-3">Order</th><th class="px-4 py-3">Order date</th><th class="px-4 py-3">Products purchased</th><th class="px-4 py-3 text-right">Candle proceeds</th><th class="px-4 py-3 text-right">Verified label</th><th class="px-4 py-3">Queue</th></tr></thead><tbody class="divide-y divide-zinc-100">
                     @forelse($desk['orders'] as $order)
-                        <tr><td class="px-4 py-3 font-medium">{{ $order['reference'] }}</td><td class="px-4 py-3">{{ $order['ordered_at'] }}</td><td class="px-4 py-3 text-right">{{ $money($order['candle_proceeds_cents']) }}</td><td class="px-4 py-3 text-right">{{ $order['label_cost_cents'] === null ? 'Needs receipt' : $money($order['label_cost_cents']) }}</td><td class="px-4 py-3">{{ $order['queue_status'] ?: 'Not queued' }}</td></tr>
+                        <tr><td class="px-4 py-3 font-medium">{{ $order['reference'] }}</td><td class="px-4 py-3">{{ $order['ordered_at'] }}</td><td class="px-4 py-3"><ul>@forelse($order['products'] as $product)<li>{{ $product['quantity'] }} × {{ $product['title'] }}</li>@empty<li class="text-zinc-500">Product details unavailable</li>@endforelse</ul></td><td class="px-4 py-3 text-right">{{ $money($order['candle_proceeds_cents']) }}</td><td class="px-4 py-3 text-right">{{ $order['label_cost_cents'] === null ? 'Needs receipt' : $money($order['label_cost_cents']) }}</td><td class="px-4 py-3">{{ $order['queue_status'] ?: 'Not queued' }}</td></tr>
                     @empty
-                        <tr><td colspan="5" class="px-4 py-6 text-zinc-500">No BSF orders found.</td></tr>
+                        <tr><td colspan="6" class="px-4 py-6 text-zinc-500">No BSF orders found.</td></tr>
                     @endforelse
                 </tbody></table></div>
             </section>
@@ -72,6 +82,7 @@
                         <article class="rounded-lg border border-zinc-200 p-4" data-queue-id="{{ $row['id'] }}">
                             <div class="flex flex-wrap items-center justify-between gap-2"><div><strong>{{ $row['reference'] }}</strong><span class="ml-2 text-xs uppercase text-zinc-500">{{ $row['source'] }} / {{ str_replace('_', ' ', $row['status']) }}</span></div><strong>{{ $money($row['total_cents']) }}</strong></div>
                             <div class="mt-1 text-sm text-zinc-600">Candle proceeds {{ $money($row['candle_proceeds_cents']) }}. Label cost {{ $row['shipping_verified'] ? $money($row['label_cost_cents']) : 'not verified' }}.</div>
+                            <div class="mt-2 text-sm text-zinc-700"><span class="font-medium">Products purchased:</span> @forelse($row['products'] as $product)<span class="mr-2">{{ $product['quantity'] }} × {{ $product['title'] }}</span>@empty<span class="text-zinc-500">Product details unavailable</span>@endforelse</div>
                             @if($row['source'] === 'shopify' && $row['status'] !== 'packaged')
                                 <div class="mt-3 flex flex-wrap items-end gap-2">
                                     <label class="text-xs text-zinc-600">Actual label cost ($)<input data-shipping-amount="{{ $row['id'] }}" type="number" min="0" step="0.01" value="{{ number_format($row['label_cost_cents'] / 100, 2, '.', '') }}" class="mt-1 block w-32 rounded border-zinc-300 text-sm"></label>
@@ -95,17 +106,18 @@
 
             <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
                 <h2 class="text-lg font-semibold text-zinc-950">Invoice packages</h2>
-                <p class="mt-1 text-sm text-zinc-600">Create a non-payable QuickBooks draft only after reviewing every line. Send is a separate confirmation that enables card and ACH payment, verifies the customer link, and emails the payer. Check the card-surcharge setting in QuickBooks before sending; Everbranch cannot verify it.</p>
+                <p class="mt-1 text-sm text-zinc-600">Drafts are created only in the connected Modern Forestry QuickBooks company linked by johncollinsemail@gmail.com. Review every line before creating a draft. Approve and send separately to info@theforestrystudio.com. Check the card-surcharge setting in QuickBooks before sending; Everbranch cannot verify it.</p>
                 <div class="mt-4 space-y-3">
                     @forelse($desk['packages'] as $invoice)
                         <article class="rounded-lg border border-zinc-200 p-4">
                             <div class="flex flex-wrap justify-between gap-2"><div><strong>{{ $invoice['reference'] }}</strong><span class="ml-2 text-xs uppercase text-zinc-500">{{ str_replace('_', ' ', $invoice['status']) }}</span></div><strong>{{ $money($invoice['total_cents']) }}</strong></div>
                             <div class="mt-1 text-sm text-zinc-600">{{ $invoice['payer_name'] }} ({{ $invoice['payer_email'] }}). Shipping {{ $money($invoice['shipping_cents']) }}. {{ $invoice['quickbooks_doc_number'] ? 'QuickBooks '.$invoice['quickbooks_doc_number'] : 'Not yet in QuickBooks' }}.</div>
                             <details class="mt-3 text-sm"><summary class="cursor-pointer font-medium">Invoice line items</summary><ul class="mt-2 space-y-1 pl-4">@foreach($invoice['invoice_lines'] as $line)<li>{{ $line['description'] ?? 'Item' }}: {{ $money($line['amount_cents'] ?? 0) }}</li>@endforeach</ul></details>
+                            <details class="mt-2 text-sm"><summary class="cursor-pointer font-medium">Products in these orders</summary><div class="mt-2 space-y-2">@foreach($invoice['order_products'] as $order)<div><strong>{{ $order['reference'] }}</strong><ul class="pl-4">@forelse($order['products'] as $product)<li>{{ $product['quantity'] }} × {{ $product['title'] }}</li>@empty<li class="text-zinc-500">Product details unavailable</li>@endforelse</ul></div>@endforeach</div></details>
                             <div class="mt-3 flex flex-wrap gap-2">
                                 @if(!$invoice['quickbooks_invoice_id'])<button type="button" data-fundraising-action="create" data-id="{{ $invoice['id'] }}" class="rounded-lg bg-emerald-900 px-3 py-2 text-sm font-semibold text-white">Create QuickBooks draft</button>@endif
                                 @if($invoice['quickbooks_invoice_id'] && $invoice['status'] === 'sent')<button type="button" data-fundraising-action="link" data-id="{{ $invoice['id'] }}" class="rounded-lg border border-emerald-700 px-3 py-2 text-sm font-semibold text-emerald-900">Open customer payment link</button>@endif
-                                @if($invoice['quickbooks_invoice_id'] && $invoice['status'] !== 'sent')<button type="button" data-fundraising-action="send" data-id="{{ $invoice['id'] }}" data-reference="{{ $invoice['reference'] }}" class="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-white">Send to {{ $invoice['payer_email'] }}</button>@endif
+                                @if($invoice['quickbooks_invoice_id'] && $invoice['status'] !== 'sent')<button type="button" data-fundraising-action="send" data-id="{{ $invoice['id'] }}" data-reference="{{ $invoice['reference'] }}" class="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-white">Approve and send to {{ $invoice['payer_email'] }}</button>@endif
                             </div>
                         </article>
                     @empty
@@ -119,8 +131,7 @@
         <script>
             (() => {
                 const alert = document.getElementById('fundraising-alert');
-                const endpoint = @json(route('shopify.app.api.fundraising.detect', [], false));
-                const base = @json(route('shopify.app.api.settings.fundraiser-invoicing.desk', [], false));
+                const endpoints = @json($fundraisingEndpoints);
                 const show = (message, error = false) => { alert.textContent = message; alert.className = `rounded-xl border p-4 text-sm ${error ? 'border-red-300 bg-red-50 text-red-900' : 'border-emerald-300 bg-emerald-50 text-emerald-900'}`; };
                 const request = async (url, method = 'POST', body = null) => {
                     const resolver = window.ForestryEmbeddedApp?.resolveEmbeddedAuthHeaders;
@@ -128,10 +139,11 @@
                     const headers = await resolver();
                     const response = await fetch(url, { method, credentials: 'same-origin', headers: { ...headers, Accept: 'application/json', 'Content-Type': 'application/json' }, body: body === null ? null : JSON.stringify(body) });
                     const data = await response.json().catch(() => ({}));
-                    if (!response.ok) throw new Error(data.message || Object.values(data.errors || {}).flat().join(' ') || 'Request failed.');
+                    if (!response.ok) throw new Error(Object.values(data.errors || {}).flat().join(' ') || data.message || `Request failed (${response.status}).`);
                     return data;
                 };
-                const url = (suffix) => base.replace('/settings/fundraiser-invoicing/desk', suffix);
+                const orderUrl = (key, id) => endpoints[key].replace('__ORDER__', String(id));
+                const packageUrl = (key, id) => endpoints[key].replace('__PACKAGE__', String(id));
                 document.addEventListener('click', async (event) => {
                     const button = event.target.closest('[data-fundraising-action]');
                     if (!button) return;
@@ -139,22 +151,27 @@
                     const id = Number(button.dataset.id || 0);
                     button.disabled = true;
                     try {
-                        if (action === 'detect') await request(endpoint);
+                        if (action === 'detect') {
+                            const result = await request(endpoints.detect);
+                            show(`Search complete. ${Number(result.queued || 0)} new order(s) added to review. Refreshing…`);
+                            window.location.reload();
+                            return;
+                        }
                         if (action === 'shipping') {
                             const amount = document.querySelector(`[data-shipping-amount="${id}"]`)?.value;
                             const evidence = document.querySelector(`[data-shipping-evidence="${id}"]`)?.value;
                             if (!/^\d+(\.\d{1,2})?$/.test(String(amount || ''))) throw new Error('Enter the actual label cost in dollars and cents.');
-                            await request(url(`/fundraising/orders/${id}/shipping`), 'POST', { shipping_cents: Math.round(Number(amount) * 100), evidence });
+                            await request(orderUrl('shipping', id), 'POST', { shipping_cents: Math.round(Number(amount) * 100), evidence });
                         }
-                        if (action === 'approve') await request(url(`/settings/fundraiser-invoicing/orders/${id}/approve`));
+                        if (action === 'approve') await request(orderUrl('approve', id));
                         if (action === 'prepare') {
                             const order_ids = [...document.querySelectorAll('[data-package-order]:checked')].map((input) => Number(input.dataset.packageOrder));
                             if (!order_ids.length) throw new Error('Select approved orders first.');
-                            await request(url('/settings/fundraiser-invoicing/invoice-packages'), 'POST', { order_ids });
+                            await request(endpoints.prepare, 'POST', { order_ids });
                         }
-                        if (action === 'create') await request(url(`/fundraising/invoices/${id}/create`));
+                        if (action === 'create') await request(packageUrl('create', id));
                         if (action === 'existing-august') {
-                            const data = await request(url('/fundraising/invoices/existing-august'), 'GET');
+                            const data = await request(endpoints.existingAugust, 'GET');
                             const invoice = data.invoice || {};
                             const result = document.getElementById('existing-august-invoice');
                             const total = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(invoice.total_cents || 0) / 100);
@@ -172,11 +189,11 @@
                         }
                         if (action === 'send') {
                             const reference = button.dataset.reference;
-                            if (!confirm(`Send ${reference} to the payer through QuickBooks? This enables card and ACH payment. First confirm the card surcharge in QuickBooks if you want the fee applied only when a card is used.`)) return;
-                            await request(url(`/fundraising/invoices/${id}/send`), 'POST', { confirmation: `SEND ${reference}` });
+                            if (!confirm(`Approve and send ${reference} to info@theforestrystudio.com from the Modern Forestry QuickBooks company? This enables card and ACH payment. First confirm the card surcharge in QuickBooks if you want the fee applied only when a card is used.`)) return;
+                            await request(packageUrl('send', id), 'POST', { confirmation: `SEND ${reference}` });
                         }
                         if (action === 'link') {
-                            const data = await request(url(`/fundraising/invoices/${id}/payment-link`), 'GET');
+                            const data = await request(packageUrl('paymentLink', id), 'GET');
                             const link = document.createElement('a');
                             link.href = data.payment_link;
                             link.target = '_blank';
