@@ -29,10 +29,9 @@
     <p><strong>Addresses:</strong> {{ $domain->mailboxes->pluck('address')->join(', ') ?: 'None yet' }}</p>
     <div style="background:#eaf3fb;border-radius:12px;padding:18px;margin:20px 0">
       <h3 style="font-size:17px;font-weight:700;margin:0 0 7px">Quick setup with Cloudflare</h3>
-      <p style="margin:5px 0 12px">Create a token limited to this zone with Zone Read and DNS Write, then enter it with the zone ID. Everbranch uses it for this request and does not save it. We add the ownership record now; we add MX only after the mail transport is ready and only when no other MX is in place.</p>
+      <p style="margin:5px 0 12px">Create a token limited to this domain with Zone Read and DNS Write, then paste it below. Everbranch finds the zone automatically, uses the token once, and does not save it. We add the ownership record now; we add MX only after the mail transport is ready and only when no other MX is in place.</p>
       <form method="post" action="{{ route('mail.setup.cloudflare', ['domain'=>$domain->id]) }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
         @csrf
-        <label style="display:grid;gap:4px">Cloudflare zone ID<input name="zone_id" required pattern="[a-fA-F0-9]{32}" maxlength="32" autocomplete="off" style="padding:9px;border:1px solid #b8c8d4;border-radius:8px"></label>
         <label style="display:grid;gap:4px">Scoped API token<input type="password" name="api_token" required autocomplete="off" style="padding:9px;border:1px solid #b8c8d4;border-radius:8px"></label>
         <button style="background:#0e6199;color:white;border:0;border-radius:22px;padding:11px 17px;font-weight:700">Set up Cloudflare records</button>
       </form>

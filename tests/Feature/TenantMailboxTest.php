@@ -55,13 +55,12 @@ test('Cloudflare quick setup adds ownership proof without changing MX before tra
     $admin = User::factory()->create(['role' => 'admin']);
     $tenant->users()->attach($admin->id, ['role' => 'admin', 'membership_active' => true]);
     $domain = app(TenantMailboxService::class)->createDomain($tenant, 'easleyfamilysoccer.com', 'direct');
-    $zoneId = str_repeat('a', 32);
     Http::fakeSequence()
-        ->push(['success' => true, 'result' => ['name' => $domain->domain, 'status' => 'active']])
+        ->push(['success' => true, 'result' => [['id' => str_repeat('a', 32), 'name' => $domain->domain, 'status' => 'active']]])
         ->push(['success' => true, 'result' => []])
         ->push(['success' => true, 'result' => ['id' => 'proof-record']]);
 
-    $message = app(CloudflareDnsSetupService::class)->apply($domain, $zoneId, 'scoped-token');
+    $message = app(CloudflareDnsSetupService::class)->apply($domain, 'scoped-token');
     expect($message)->toContain('ownership record added');
     Http::assertSentCount(3);
     Http::assertSent(fn ($request) => $request->method() === 'POST' && $request['type'] === 'TXT'
@@ -78,14 +77,24 @@ test('Cloudflare quick setup preserves an existing mail provider MX', function (
     $service->createMailbox($domain, 'info', 'Wren', $admin)->update(['provider_account_id' => 'server-account']);
     config()->set('mailbox.direct_enabled', true);
     Http::fakeSequence()
-        ->push(['success' => true, 'result' => ['name' => $domain->domain, 'status' => 'active']])
+        ->push(['success' => true, 'result' => [['id' => str_repeat('a', 32), 'name' => $domain->domain, 'status' => 'active']]])
         ->push(['success' => true, 'result' => []])
         ->push(['success' => true, 'result' => ['id' => 'proof-record']])
         ->push(['success' => true, 'result' => [['name' => $domain->domain, 'content' => 'aspmx.l.google.com']]]);
 
-    $message = app(CloudflareDnsSetupService::class)->apply($domain, str_repeat('a', 32), 'scoped-token');
+    $message = app(CloudflareDnsSetupService::class)->apply($domain, 'scoped-token');
     expect($message)->toContain('routing was left unchanged');
     Http::assertSentCount(4);
+});
+
+test('Cloudflare quick setup rejects a token scoped to another domain', function () {
+    $tenant = Tenant::query()->create(['name' => 'Wren', 'slug' => 'wren-cloudflare-zone-test']);
+    $domain = app(TenantMailboxService::class)->createDomain($tenant, 'easleyfamilysoccer.com', 'direct');
+    Http::fakeSequence()->push(['success' => true, 'result' => [['id' => str_repeat('a', 32), 'name' => 'another-domain.com', 'status' => 'active']]]);
+
+    expect(fn () => app(CloudflareDnsSetupService::class)->apply($domain, 'wrong-zone-token'))
+        ->toThrow(ValidationException::class);
+    Http::assertSentCount(1);
 });
 
 test('signed inbound parse saves only the exact ready mailbox and deduplicates message ids', function () {
