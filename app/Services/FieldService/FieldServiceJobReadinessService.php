@@ -23,16 +23,12 @@ class FieldServiceJobReadinessService
         if (blank($job->customer_phone) && blank($job->customer_email)) {
             $missing[] = 'customer_contact';
         }
-        if (! $this->hasAssignedTeam($job)) {
-            $missing[] = 'team';
-        }
 
         $labels = [
             'schedule' => 'Schedule',
             'address' => 'Job-site address',
             'description' => 'Work description',
             'customer_contact' => 'Customer phone or email',
-            'team' => 'Assigned technician or team member',
         ];
 
         return [
@@ -40,16 +36,5 @@ class FieldServiceJobReadinessService
             'missing' => $missing,
             'missing_labels' => array_values(array_map(fn (string $key): string => $labels[$key], $missing)),
         ];
-    }
-
-    private function hasAssignedTeam(FieldServiceJob $job): bool
-    {
-        if ($job->assigned_user_id) {
-            return true;
-        }
-
-        return $job->relationLoaded('participants')
-            ? $job->participants->isNotEmpty()
-            : $job->participants()->exists();
     }
 }

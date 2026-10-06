@@ -24,16 +24,9 @@ class FieldServiceAccessService
 
     public function canViewAllJobs(User $user, Tenant|int $tenant): bool
     {
-        $tenantModel = $tenant instanceof Tenant ? $tenant : Tenant::query()->find($tenant);
-        $metadata = $tenantModel
-            ? (array) ($tenantModel->moduleEntitlements()->where('module_key', 'field_service')->value('metadata') ?? [])
-            : [];
-
         $role = $this->role($user, $tenant);
 
-        return ($role !== '' && data_get($metadata, 'member_job_visibility') === 'all_operational')
-            || in_array($role, ['owner', 'tenant_owner', 'admin', 'manager'], true)
-            || $user->role === 'platform_admin';
+        return $user->is_active !== false && $role !== '';
     }
 
     public function canManageJobs(User $user, Tenant|int $tenant): bool
@@ -57,25 +50,18 @@ class FieldServiceAccessService
             return false;
         }
 
-        return (int) $job->assigned_user_id === (int) $user->id
-            || $job->participants()->whereKey((int) $user->id)->exists();
+        return $user->is_active !== false && $this->role($user, $tenant) !== '';
     }
 
     public function scopeAssignedJobs(Builder $query, User $user): Builder
     {
-        return $query->where(fn (Builder $assigned) => $assigned
-            ->where('assigned_user_id', (int) $user->id)
-            ->orWhereHas('participants', fn (Builder $participants) => $participants->whereKey((int) $user->id))
-            ->orWhereHas('tasks', fn (Builder $tasks) => $tasks
-                ->where('assigned_user_id', (int) $user->id)
-                ->orWhereHas('assignees', fn (Builder $assignees) => $assignees->whereKey((int) $user->id))));
+        // Crew membership describes who is working on a job, not who may see it.
+        return $user->is_active !== false ? $query : $query->whereRaw('1 = 0');
     }
 
     public function canClockJob(User $user, Tenant $tenant, FieldServiceJob $job): bool
     {
-        return (int) $job->tenant_id === (int) $tenant->id
-            && ($this->canManageJobs($user, $tenant)
-                || $this->scopeAssignedJobs(FieldServiceJob::query()->whereKey($job->id), $user)->exists());
+        return $this->canUpdateProgress($user, $tenant, $job);
     }
 
     public function canCreateTask(User $user, Tenant $tenant, FieldServiceJob $job): bool
@@ -92,10 +78,7 @@ class FieldServiceAccessService
             return true;
         }
 
-        return $this->canUpdateProgress($user, $tenant, $job)
-            && ($task->assigned_user_id === null
-                || (int) $task->assigned_user_id === (int) $user->id
-                || $task->assignees()->whereKey((int) $user->id)->exists());
+        return $this->canUpdateProgress($user, $tenant, $job);
     }
 
     /** @return array<string,bool> */
@@ -107,6 +90,10 @@ class FieldServiceAccessService
             'view_all_jobs' => $this->canViewAllJobs($user, $tenant),
             'manage_jobs' => $manage,
             'create_jobs' => $this->canCreateJobs($user, $tenant),
+            'edit_jobs' => $this->canCreateJobs($user, $tenant),
+            'delete_jobs' => $this->canCreateJobs($user, $tenant),
+            'restore_jobs' => $manage,
+            'edit_customer' => $manage && app(CollinsClientAccessService::class)->allows($user, $tenant),
             'manage_team' => $manage,
             'manage_any_task' => $manage,
             'update_participating_job_progress' => true,
@@ -115,18 +102,12 @@ class FieldServiceAccessService
 
     public function scopeVisibleJobs(Builder $query, User $user, Tenant|int $tenant): Builder
     {
+        $query->whereNull('metadata->recycled_at');
         if ($this->canViewAllJobs($user, $tenant)) {
             return $query;
         }
 
-        return $query->where(function (Builder $visible) use ($user): void {
-            $visible->where('assigned_user_id', (int) $user->id)
-                ->orWhereHas('participants', fn (Builder $participants) => $participants->whereKey((int) $user->id))
-                ->orWhereHas('tasks', fn (Builder $tasks) => $tasks
-                    ->where('assigned_user_id', (int) $user->id)
-                    ->orWhereHas('assignees', fn (Builder $assignees) => $assignees->whereKey((int) $user->id)))
-                ->orWhereHas('notes.mentions', fn (Builder $mentions) => $mentions->whereKey((int) $user->id));
-        });
+        return $query->whereRaw('1 = 0');
     }
 
     public function canAccessJob(User $user, Tenant $tenant, FieldServiceJob $job): bool

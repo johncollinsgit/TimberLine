@@ -1,5 +1,7 @@
 # START HERE
 
+For the paired Everbranch Field 2.3.23/build 37 release, current tenant members can access and edit every current job and clock job time without a lead assignment. Customer fields remain restricted to managers, and on `collins-electric` only the verified active `collinselectric91@gmail.com` account may access the client list or edit customer fields. Team members can move jobs to an admin recycle bin; only managers can list and restore them. Job Notes mentions send a direct team message with a job reference. Team reporting contains week/month/year job counts and no financial amounts. These rules supersede the older assignment-scoped notes below.
+
 ## Tenant mailbox rollout (2026-10-06)
 
 - Email Branch includes pending customer address signup at `/mail/setup`, a tenant-scoped inbox at `/mail`, explicit grants, and SendGrid/direct transport paths. Follow `docs/operations/everbranch-mail-service.md`; creating an address does not prove DNS or delivery.

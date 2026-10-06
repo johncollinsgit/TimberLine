@@ -407,7 +407,6 @@ test('manager job edit options expose only tenant vehicles and job changes are a
         'project_manager_name' => 'Alex Builder',
         'project_manager_company' => 'Builder Co',
         'lock_box_code' => 'new-code',
-        'assigned_user_id' => $employee->id,
         'participant_user_ids' => [$employee->id],
         'vehicle_ids' => [$vehicle->id],
     ])->assertOk();
@@ -423,10 +422,9 @@ test('manager job edit options expose only tenant vehicles and job changes are a
     $this->patchJson($base.'/jobs/'.$job->id, ['vehicle_ids' => [$otherVehicle->id]])->assertUnprocessable();
     expect($job->fresh()->vehicles()->whereKey($vehicle->id)->exists())->toBeTrue();
     $this->patchJson($base.'/jobs/'.$otherJob->id, ['title' => 'Leaked edit'])->assertNotFound();
-    $this->patchJson($base.'/jobs/'.$job->id, ['assigned_user_id' => $inactiveEmployee->id])->assertUnprocessable();
     $this->patchJson($base.'/jobs/'.$job->id, ['scheduled_for' => '2026-09-04T12:00:00-04:00'])->assertUnprocessable();
     expect(LandlordOperatorAction::query()->forTenantId((int) $tenant->id)->where('action_type', 'field_service.job.updated')->count())->toBe(1);
 
     Sanctum::actingAs($employee, ['mobile:read']);
-    $this->getJson($base.'/team')->assertOk()->assertJsonCount(0, 'vehicles');
+    $this->getJson($base.'/team')->assertOk()->assertJsonCount(1, 'vehicles');
 });

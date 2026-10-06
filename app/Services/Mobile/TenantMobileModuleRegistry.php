@@ -9,6 +9,7 @@ use App\Models\ScheduledClass;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WorkspaceAsset;
+use App\Services\FieldService\CollinsClientAccessService;
 use App\Services\FieldService\FieldServiceAccessService;
 use App\Services\FieldService\QuickBooksOwnerReportingService;
 use App\Services\Tenancy\TenantFinancialAccess;
@@ -25,6 +26,7 @@ class TenantMobileModuleRegistry
         protected TenantFinancialAccess $financialAccess,
         protected QuickBooksOwnerReportingService $ownerReports,
         protected FieldServiceAccessService $fieldServiceAccess,
+        protected CollinsClientAccessService $collinsClients,
     ) {}
 
     /** @return array<int,array<string,mixed>> */
@@ -45,6 +47,12 @@ class TenantMobileModuleRegistry
                 }
                 if ($moduleKey === 'work_core' && (bool) data_get($states, 'field_service.enabled', false)) {
                     return null;
+                }
+                if ($user instanceof User && in_array($moduleKey, ['customers', 'messaging'], true)) {
+                    $tenant = Tenant::query()->find($tenantId);
+                    if ($tenant && ! $this->collinsClients->allows($user, $tenant)) {
+                        return null;
+                    }
                 }
                 $minVersion = (string) data_get($definition, 'mobile.min_app_version', '1.0.0');
                 if (filled($appVersion) && version_compare((string) $appVersion, $minVersion, '<')) {
@@ -86,6 +94,9 @@ class TenantMobileModuleRegistry
     public function screen(int $tenantId, string $moduleKey, ?User $user = null, ?string $rangeKey = null): array
     {
         $moduleKey = strtolower(trim($moduleKey));
+        if ($user instanceof User && in_array($moduleKey, ['customers', 'messaging'], true)) {
+            abort_unless($this->collinsClients->allows($user, Tenant::query()->findOrFail($tenantId)), 403);
+        }
         $module = collect($this->manifest($tenantId))->firstWhere('module_key', $moduleKey);
         abort_unless(is_array($module), 404);
 
@@ -269,9 +280,31 @@ class TenantMobileModuleRegistry
     protected function reportingScreen(int $tenantId, ?User $user, ?string $rangeKey): array
     {
         $tenant = Tenant::query()->findOrFail($tenantId);
-        $range = app(\App\Services\Dashboard\DashboardDateRange::class)->resolve($rangeKey);
+        $owner = $user instanceof User && $this->financialAccess->allows($user, $tenant);
+        if ($owner) {
+            $range = app(\App\Services\Dashboard\DashboardDateRange::class)->resolve($rangeKey);
+        } else {
+            $key = in_array($rangeKey, ['week', 'month', 'year'], true) ? $rangeKey : 'week';
+            $start = match ($key) {
+                'month' => now()->startOfMonth(),
+                'year' => now()->startOfYear(),
+                default => now()->startOfWeek(),
+            };
+            $range = [
+                'key' => $key,
+                'short_label' => ucfirst($key),
+                'starts_at' => $start,
+                'ends_at' => now()->endOfDay(),
+                'options' => ['week' => 'Week', 'month' => 'Month', 'year' => 'Year'],
+            ];
+        }
+        $jobsInPeriod = Schema::hasTable('field_service_jobs')
+            ? FieldServiceJob::query()->forTenantId($tenantId)->whereNull('metadata->recycled_at')
+                ->whereBetween('created_at', [$range['starts_at'], $range['ends_at']])->count()
+            : 0;
         $completed = Schema::hasTable('field_service_jobs')
-            ? FieldServiceJob::query()->forTenantId($tenantId)->whereNotNull('completed_at')->whereBetween('completed_at', [$range['starts_at'], $range['ends_at']])->count()
+            ? FieldServiceJob::query()->forTenantId($tenantId)->whereNull('metadata->recycled_at')
+                ->whereNotNull('completed_at')->whereBetween('completed_at', [$range['starts_at'], $range['ends_at']])->count()
             : 0;
         $upcomingQuery = FieldServiceJob::query()->forTenantId($tenantId);
         if ($user instanceof User) {
@@ -281,9 +314,9 @@ class TenantMobileModuleRegistry
             ? $upcomingQuery->whereNotNull('scheduled_for')->where('scheduled_for', '>=', now())
                 ->whereNotIn('operational_status', ['complete', 'history'])->with('assignedUser:id,name')->orderBy('scheduled_for')->limit(5)->get()
             : collect();
-        $owner = $user instanceof User && $this->financialAccess->allows($user, $tenant);
         $report = $owner ? $this->ownerReports->report($tenant, $range['key'], false) : null;
         $metrics = [
+            ['label' => 'Jobs this '.$range['key'], 'value' => number_format($jobsInPeriod), 'tone' => 'blue', 'destination' => ['kind' => 'field_service', 'filter' => 'active']],
             ['label' => 'Jobs completed', 'value' => number_format($completed), 'tone' => 'teal', 'destination' => ['kind' => 'field_service', 'filter' => 'history']],
             ['label' => 'Upcoming jobs', 'value' => number_format($upcoming->count()), 'tone' => 'blue', 'destination' => ['kind' => 'field_service', 'filter' => 'active']],
         ];
