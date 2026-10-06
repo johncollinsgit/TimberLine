@@ -17,8 +17,8 @@ use App\Models\User;
 use App\Services\Billing\StripeHostedBillingService;
 use App\Services\Bud\TenantBudService;
 use App\Services\Dashboard\UnifiedDashboardService;
-use App\Services\FieldService\FieldServiceWorkProfileService;
 use App\Services\FieldService\CollinsClientAccessService;
+use App\Services\FieldService\FieldServiceWorkProfileService;
 use App\Services\FieldService\WorkspaceAssetService;
 use App\Services\Mobile\MobileLandlordAccessService;
 use App\Services\Mobile\TenantMobileMessagingService;
@@ -564,8 +564,7 @@ class EverbranchMobileController extends Controller
 
             return $destination ? [...$result, 'mobile_destination' => $destination] : $result;
         })->when(! app(CollinsClientAccessService::class)->allows($this->user($request), $tenant),
-            fn ($items) => $items->reject(fn (array $item): bool =>
-                in_array((string) ($item['type'] ?? ''), ['customer', 'client'], true)
+            fn ($items) => $items->reject(fn (array $item): bool => in_array((string) ($item['type'] ?? ''), ['customer', 'client'], true)
                 || in_array((string) ($item['mobile_destination']['kind'] ?? ''), ['customer', 'clients'], true)
                 || preg_match('~/(customers|clients)(/|$)~i', (string) ($item['url'] ?? '')) === 1));
         $work = $resources->work($tenant, $this->user($request), $query, 8);

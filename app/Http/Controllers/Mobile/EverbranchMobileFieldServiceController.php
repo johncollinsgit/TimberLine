@@ -16,9 +16,8 @@ use App\Models\Tenant;
 use App\Models\TenantMemberPreference;
 use App\Models\User;
 use App\Models\WorkspaceAsset;
-use App\Services\FieldService\FieldServiceAccessService;
-use App\Services\FieldService\TeamCommunicationService;
 use App\Services\FieldService\CollinsClientAccessService;
+use App\Services\FieldService\FieldServiceAccessService;
 use App\Services\FieldService\FieldServiceJobLifecycleService;
 use App\Services\FieldService\FieldServiceJobNotificationService;
 use App\Services\FieldService\FieldServiceJobReadinessService;
@@ -27,6 +26,7 @@ use App\Services\FieldService\FieldServiceMyDayService;
 use App\Services\FieldService\FieldServiceTaskAssignmentService;
 use App\Services\FieldService\FieldServiceWorkCandidateService;
 use App\Services\FieldService\FieldServiceWorkProfileService;
+use App\Services\FieldService\TeamCommunicationService;
 use App\Services\FieldService\WorkspaceAssetAuditService;
 use App\Services\FieldService\WorkspaceAssetService;
 use App\Services\Mobile\TenantMobileModuleRegistry;
@@ -524,7 +524,7 @@ class EverbranchMobileFieldServiceController extends Controller
             if ($recipient) {
                 $channel = $team->directChannel($tenantModel, $user, $recipient);
                 $team->post($tenantModel, $user, $channel,
-                    $user->name.' mentioned you in '.$job->title."\n[[job:".$job->id."]]",
+                    $user->name.' mentioned you in '.$job->title."\n[[job:".$job->id.']]',
                     'job-note-mention-'.$note->id.'-'.$mentionedId);
             }
         }
@@ -1194,11 +1194,11 @@ class EverbranchMobileFieldServiceController extends Controller
                 return ['id' => (int) $user->id, 'name' => $user->name, 'email' => $user->email, 'role' => $role, 'office_handoff_recipient' => in_array($role, ['owner', 'tenant_owner', 'admin', 'manager'], true)];
             })->values(),
             'vehicles' => FieldServiceVehicle::query()->forTenantId((int) $tenant->id)->where('status', 'active')->orderBy('name')->orderBy('id')->get(['id', 'name', 'identifier', 'status'])->map(fn (FieldServiceVehicle $vehicle): array => [
-                    'id' => (int) $vehicle->id,
-                    'name' => (string) $vehicle->name,
-                    'identifier' => $vehicle->identifier,
-                    'status' => (string) $vehicle->status,
-                ])->values(),
+                'id' => (int) $vehicle->id,
+                'name' => (string) $vehicle->name,
+                'identifier' => $vehicle->identifier,
+                'status' => (string) $vehicle->status,
+            ])->values(),
         ]);
     }
 
