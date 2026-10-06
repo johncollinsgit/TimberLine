@@ -982,12 +982,6 @@ class EverbranchMobileFieldServiceController extends Controller
         }
         // Assignment is obsolete. Accept the old field without applying it.
         unset($validated['assigned_user_id']);
-        $assignedId = null;
-        if (array_key_exists('assigned_user_id', $validated) && $validated['assigned_user_id'] !== null) {
-            $assignedId = $tenantModel->users()->wherePivot('membership_active', true)->where('users.is_active', true)->whereKey((int) $validated['assigned_user_id'])->value('users.id');
-            abort_unless($assignedId !== null, 422, 'Choose an active lead from this workspace.');
-            $assignedId = (int) $assignedId;
-        }
         $participantIds = collect((array) ($validated['participant_user_ids'] ?? []))->map(fn ($id): int => (int) $id)->unique()->values();
         if (array_key_exists('participant_user_ids', $validated)) {
             $matchingParticipants = $tenantModel->users()->wherePivot('membership_active', true)->where('users.is_active', true)->whereIn('users.id', $participantIds)->pluck('users.id')->map(fn ($id): int => (int) $id)->values();
@@ -1001,7 +995,7 @@ class EverbranchMobileFieldServiceController extends Controller
             $vehicleIds = $matchingVehicles;
         }
         $beforeSchedule = $job->only(['scheduled_for', 'scheduled_end_at', 'assigned_user_id']);
-        $updatedJob = DB::transaction(function () use ($tenantModel, $user, $job, $validated, $assignedId, $participantIds, $vehicleIds, $lifecycle, $readiness, $audit): FieldServiceJob {
+        $updatedJob = DB::transaction(function () use ($tenantModel, $user, $job, $validated, $participantIds, $vehicleIds, $lifecycle, $readiness, $audit): FieldServiceJob {
             $locked = FieldServiceJob::query()->forTenantId((int) $tenantModel->id)->whereKey($job->id)->lockForUpdate()->firstOrFail();
             $locked->load(['participants:id', 'vehicles:id']);
             $scheduledFor = array_key_exists('scheduled_for', $validated) ? $validated['scheduled_for'] : $locked->scheduled_for;
@@ -1011,9 +1005,6 @@ class EverbranchMobileFieldServiceController extends Controller
             $before = $this->jobAuditState($locked);
             $lockBoxChanged = array_key_exists('lock_box_code', $validated) && (string) $locked->lock_box_code !== (string) ($validated['lock_box_code'] ?? '');
             $locked->fill(collect($validated)->except(['assigned_user_id', 'participant_user_ids', 'vehicle_ids', 'operational_status'])->all());
-            if (array_key_exists('assigned_user_id', $validated)) {
-                $locked->assigned_user_id = $assignedId;
-            }
             $locked->save();
             if (array_key_exists('participant_user_ids', $validated)) {
                 $locked->participants()->sync($participantIds->mapWithKeys(fn (int $id): array => [$id => ['tenant_id' => (int) $tenantModel->id, 'role' => 'member', 'following' => true]])->all());

@@ -2,7 +2,6 @@
 
 use App\Models\FieldServiceCrewStatus;
 use App\Models\FieldServiceJob;
-use App\Models\FieldServiceJobNotification;
 use App\Models\FieldServiceTimeSession;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
@@ -135,7 +134,7 @@ test('dispatch is manager only tenant scoped and reflects clocks and field statu
     expect(collect($response->json('jobs'))->pluck('title'))->toContain('Service upgrade')->not->toContain('Private job');
 });
 
-test('dispatch assignment is tenant safe and notifies the new employee with a job destination', function (): void {
+test('dispatch assignment endpoint is removed for shared jobs', function (): void {
     [$tenant, $manager, $employee] = voiceDispatchWorkspace('assign');
     [, , $otherEmployee] = voiceDispatchWorkspace('assign-other');
     $job = FieldServiceJob::query()->create([
@@ -144,13 +143,9 @@ test('dispatch assignment is tenant safe and notifies the new employee with a jo
     $url = '/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/dispatch/jobs/'.$job->id;
     Sanctum::actingAs($manager, ['mobile:read', 'mobile:write']);
 
-    $this->patchJson($url, ['assigned_user_id' => $otherEmployee->id])->assertUnprocessable();
-    $this->patchJson($url, ['assigned_user_id' => $employee->id])->assertOk();
-    expect($job->fresh()->assigned_user_id)->toBe($employee->id);
-    $notification = FieldServiceJobNotification::query()->forTenantId((int) $tenant->id)
-        ->where('user_id', $employee->id)->where('event_type', 'assigned')->firstOrFail();
-    expect(data_get($notification->metadata, 'destination.kind'))->toBe('field_service_job')
-        ->and((int) data_get($notification->metadata, 'destination.id'))->toBe($job->id);
+    $this->patchJson($url, ['assigned_user_id' => $otherEmployee->id])->assertNotFound();
+    $this->patchJson($url, ['assigned_user_id' => $employee->id])->assertNotFound();
+    expect($job->fresh()->assigned_user_id)->toBeNull();
 });
 
 test('employees can publish only authorized job statuses for the dispatch board', function (): void {

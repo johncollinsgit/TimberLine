@@ -81,11 +81,11 @@ test('an assigned employee can comment and add a private photo to a material req
     expect(WorkspaceAsset::query()->forTenantId($tenant->id)->where('metadata->field_service_material_id', $material->id)->count())->toBe(1);
 });
 
-test('material evidence remains within the assigned job and tenant', function (): void {
+test('material evidence is shared across teammates but remains within its job and tenant', function (): void {
     [$tenant, $member, $other, $job, $material] = materialEvidenceFixture();
     $base = '/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/materials/';
     Sanctum::actingAs($other, ['mobile:read', 'mobile:write']);
-    $this->postJson($base.$material->id.'/comments', ['body' => 'Cannot post'])->assertNotFound();
+    $this->postJson($base.$material->id.'/comments', ['body' => 'Team follow-up'])->assertCreated();
 
     $otherJob = FieldServiceJob::query()->create([
         'tenant_id' => $tenant->id,

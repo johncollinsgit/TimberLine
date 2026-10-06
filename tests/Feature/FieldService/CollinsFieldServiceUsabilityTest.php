@@ -1480,7 +1480,7 @@ test('website job updates return a clear success response for photo posts', func
         ->assertJsonPath('note_id', FieldServiceJobNote::query()->forTenantId($tenant->id)->sole()->id);
 });
 
-test('field operations v7 lets configured members browse every job without broadening mutations or financial payloads', function (): void {
+test('field operations v7 lets members browse and edit every job without financial payloads', function (): void {
     [$tenant, $owner, $member, $other] = usabilityWorkspace();
     TenantModuleEntitlement::query()->forTenantId($tenant->id)->where('module_key', 'field_service')->update([
         'metadata' => ['member_job_visibility' => 'all_operational', 'field_service_contract_version' => 7],
@@ -1503,8 +1503,10 @@ test('field operations v7 lets configured members browse every job without broad
         ->assertJsonPath('jobs.0.address.formatted', '14 Trade Street, Greenville, SC')
         ->assertJsonPath('jobs.0.project_manager.phone', '+18645550199');
     expect(json_encode($list->json()))->not->toContain('2400', '900', 'Never expose this note', 'financial_total', 'financial_balance');
-    $this->patchJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id, ['title' => 'Unauthorized rename'])->assertForbidden();
-    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/transitions', ['action' => 'complete'])->assertForbidden();
+    $this->patchJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id, ['title' => 'Team rename'])
+        ->assertOk();
+    expect($job->fresh()->title)->toBe('Team rename');
+    $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id.'/transitions', ['action' => 'complete'])->assertOk();
 
     Sanctum::actingAs($owner, ['mobile:read', 'mobile:write']);
     $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/field-service/jobs/'.$job->id)

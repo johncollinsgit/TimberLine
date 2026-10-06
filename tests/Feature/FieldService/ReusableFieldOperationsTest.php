@@ -292,7 +292,9 @@ test('job channels are permission scoped and message client uuids are idempotent
     $second = $team->post($tenant, $employee, $channel, 'Duplicate retry', $uuid);
 
     expect($second->id)->toBe($first->id)->and($channel->messages()->count())->toBe(1);
-    expect(fn () => $team->assertAccess($tenant, $outsider, $channel))->toThrow(Symfony\Component\HttpKernel\Exception\NotFoundHttpException::class);
+    $team->assertAccess($tenant, $outsider, $channel);
+    $foreign = User::factory()->create();
+    expect(fn () => $team->assertAccess($tenant, $foreign, $channel))->toThrow(Symfony\Component\HttpKernel\Exception\NotFoundHttpException::class);
 });
 
 test('employee invitations are single use and preserve an existing explicit tenant role', function (): void {

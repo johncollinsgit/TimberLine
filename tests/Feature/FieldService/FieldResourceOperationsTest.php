@@ -103,7 +103,7 @@ test('resource operations reject records owned by another workspace', function (
         ->assertNotFound();
 });
 
-test('members see only participating deployments and cannot mutate resources', function (): void {
+test('members see every job deployment and cannot mutate resources', function (): void {
     [$tenant, $owner, $employee] = fieldResourceWorkspace('resource-member');
     $visibleJob = FieldServiceJob::query()->create([
         'tenant_id' => $tenant->id,
@@ -139,8 +139,8 @@ test('members see only participating deployments and cannot mutate resources', f
         ->get(route('field-service.resources', ['tenant' => $tenant->slug]))
         ->assertOk()
         ->assertSeeText($visibleJob->title)
-        ->assertDontSeeText('Owner-only service call')
-        ->assertDontSeeText('Hidden job material')
+        ->assertSeeText('Owner-only service call')
+        ->assertSeeText('Hidden job material')
         ->assertDontSeeText('Create item');
 
     $this->post(route('field-service.resources.inventory.store', ['tenant' => $tenant->slug]), [
