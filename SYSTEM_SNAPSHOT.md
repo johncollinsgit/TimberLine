@@ -51,7 +51,7 @@ release ID preservation.
 
 - The October 6 repair gives the Shopify embedded fundraiser POST controls the
   same session-token authentication path as other embedded actions without an
-  iframe CSRF cookie. The order list, review queue, and invoice packages show
+  iframe CSRF cookie and the correct Shopify frame response policy. The order list, review queue, and invoice packages show
   purchased Shopify product titles and quantities. Invoice delivery is
   controlled to `info@theforestrystudio.com`. Before a QuickBooks invoice
   write, the connected operator and live company identity must match John

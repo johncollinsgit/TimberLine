@@ -32,7 +32,8 @@ release ID preservation.
 ## Modern Forestry BSF Fundraising tab (development, 2026-10-02)
 
 - Shopify embedded fundraiser POST actions rely on a verified App Bridge
-  bearer token and are exempt from iframe CSRF state. Purchased Shopify
+  bearer token and are exempt from iframe CSRF state. The page uses the same
+  Shopify frame response policy as the rest of the embedded app. Purchased Shopify
   products appear with quantities on orders, in the review queue, and in
   package review. Invoice delivery is controlled to
   `info@theforestrystudio.com`; the live QuickBooks company must identify as

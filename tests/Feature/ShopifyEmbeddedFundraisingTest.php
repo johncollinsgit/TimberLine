@@ -51,7 +51,8 @@ test('fundraising tab detects BSF Shopify orders and queues only new periods', f
     $this->get(route('shopify.app.fundraising', retailEmbeddedSignedQuery()))
         ->assertOk()->assertSeeText('BSF invoice desk')->assertSeeText('#33070')
         ->assertSeeText('Needs receipt')->assertSeeText('Invoice packages')
-        ->assertSeeText('2 × Soy Candle | Peach Orchard - 8oz');
+        ->assertSeeText('2 × Soy Candle | Peach Orchard - 8oz')
+        ->assertHeader('Content-Security-Policy', 'frame-ancestors https://admin.shopify.com https://*.myshopify.com https://*.shopify.com;');
 });
 
 test('search new orders accepts a Shopify Admin bearer token without an iframe CSRF cookie', function (): void {
