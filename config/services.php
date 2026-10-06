@@ -253,6 +253,17 @@ return [
         'timeout' => (int) env('EVERBRANCH_APNS_TIMEOUT', 10),
     ],
 
+    'everbranch_fcm' => [
+        'enabled' => env('EVERBRANCH_FCM_ENABLED', false),
+        'project_id' => env('EVERBRANCH_FCM_PROJECT_ID'),
+        'client_email' => env('EVERBRANCH_FCM_CLIENT_EMAIL'),
+        'private_key' => env('EVERBRANCH_FCM_PRIVATE_KEY'),
+        'private_key_base64' => env('EVERBRANCH_FCM_PRIVATE_KEY_BASE64'),
+        'private_key_path' => env('EVERBRANCH_FCM_PRIVATE_KEY_PATH'),
+        'token_uri' => env('EVERBRANCH_FCM_TOKEN_URI', 'https://oauth2.googleapis.com/token'),
+        'timeout' => (int) env('EVERBRANCH_FCM_TIMEOUT', 10),
+    ],
+
     'modern_forestry' => [
         'support_alert_phone' => env('MODERN_FORESTRY_SUPPORT_ALERT_PHONE'),
     ],

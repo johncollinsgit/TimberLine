@@ -1,5 +1,9 @@
 # SYSTEM SNAPSHOT
 
+## Everbranch Android push delivery (development, 2026-10-05)
+
+- Android push delivery is implemented through Firebase Cloud Messaging HTTP v1. It uses the existing Everbranch platform-separated device registration and a dedicated, default-disabled Firebase service-account configuration. Production remains disabled until the credentials are installed through Forge and the release gate completes.
+
 ## Field-service job creation for active members (2026-10-05)
 
 - Active members of an entitled field-service workspace can create a job from the browser or mobile app. Member-created jobs are assigned to their creator so they remain visible under assignment-only job visibility. Members cannot assign another user, add other participants, attach vehicles or invoices during creation; existing job management and financial permissions are unchanged.

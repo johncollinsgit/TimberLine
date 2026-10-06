@@ -96,7 +96,7 @@ Lifecycle values are derived alongside QuickBooks source records; they do not re
 - The canonical job statuses are `quote`, `needs_details`, `scheduled`, `active`, `blocked`, `complete`, `canceled`, and `history`. A blocked transition requires a reason. Lead technicians and participants may progress their own jobs; cancellation/reopen, assignments, and job editing remain manager/admin actions.
 - Ready for field means schedule + service address + work description + customer phone/email + at least one lead/participant. Readiness is computed, never a second mutable status flag.
 - My Day is role-aware and tenant-scoped. Nathan, John, and Collins managers see team attention queues; active members can browse all operational jobs but My Day remains focused on their assigned schedule and tasks. Financial payloads continue through the separate owner/admin financial gate.
-- Everbranch APNs is dedicated to `com.everbranch.app`. Never reuse Modern Forestry keys or push-device rows. Assignment, schedule, mention, comment, task, status, 24-hour, and 2-hour events may create in-app/push records; operational SMS stays fail-closed.
+- Everbranch APNs is dedicated to `com.everbranch.app`, and Android FCM HTTP v1 uses a dedicated Everbranch Firebase service account. Never reuse Modern Forestry keys, Firebase projects, or push-device rows. Assignment, schedule, mention, comment, task, status, 24-hour, and 2-hour events may create in-app/push records; operational SMS stays fail-closed.
 - iCloud and Shared Album photos are user-selected through the system picker, resized on device, uploaded sequentially, and stored as authenticated team-visible Everbranch assets. Photos and documents have separate counts and must not render twice.
 
 ## QuickBooks handling
