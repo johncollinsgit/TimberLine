@@ -1,5 +1,10 @@
 # SYSTEM SNAPSHOT
 
+## Field mobile Job Notes PDF attachments (2026-10-06)
+
+- Mobile job comments accept `attachment_asset_ids` for PDFs already uploaded in guarded chunks to the same job by the same user. The API verifies tenant, job, uploader, team visibility, type, and unused note association, then links the PDF to the new note. Job Notes on iOS, Android, and web return the same attached asset.
+- Deploy this API contract before Everbranch Field 2.3.22/build 36; its Job Notes composer sends these IDs after secure PDF upload.
+
 ## Everbranch Android push delivery (development, 2026-10-05)
 
 - Android push delivery is implemented through Firebase Cloud Messaging HTTP v1. It uses the existing Everbranch platform-separated device registration and a dedicated, default-disabled Firebase service-account configuration. Production remains disabled until the credentials are installed through Forge and the release gate completes.
