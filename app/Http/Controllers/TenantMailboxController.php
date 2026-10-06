@@ -55,11 +55,10 @@ class TenantMailboxController extends Controller
         $tenant = $this->adminTenant($request);
         $record = TenantMailDomain::query()->forTenantId($tenant->id)->findOrFail($domain);
         $data = $request->validate([
-            'zone_id' => ['required', 'string', 'regex:/^[a-f0-9]{32}$/i'],
             'api_token' => ['required', 'string', 'max:500'],
         ]);
         try {
-            $message = $cloudflare->apply($record, $data['zone_id'], $data['api_token']);
+            $message = $cloudflare->apply($record, $data['api_token']);
         } catch (\Illuminate\Http\Client\ConnectionException) {
             return back()->withErrors(['cloudflare' => 'Cloudflare could not be reached. Try again shortly.']);
         }

@@ -9,17 +9,19 @@ use Illuminate\Validation\ValidationException;
 
 class CloudflareDnsSetupService
 {
-    public function apply(TenantMailDomain $domain, string $zoneId, string $token): string
+    public function apply(TenantMailDomain $domain, string $token): string
     {
-        if (! preg_match('/^[a-f0-9]{32}$/i', $zoneId) || trim($token) === '') {
-            throw ValidationException::withMessages(['cloudflare' => 'Enter the Cloudflare zone ID and a zone-scoped API token.']);
+        if (trim($token) === '') {
+            throw ValidationException::withMessages(['cloudflare' => 'Enter a zone-scoped Cloudflare API token.']);
+        }
+        $client = Http::withToken(trim($token))->acceptJson()->timeout(12);
+        $zones = $client->get('https://api.cloudflare.com/client/v4/zones', ['name' => $domain->domain, 'per_page' => 50]);
+        $zone = collect($zones->json('result', []))->first(fn (array $row): bool => strtolower((string) ($row['name'] ?? '')) === $domain->domain && ($row['status'] ?? null) === 'active');
+        $zoneId = is_array($zone) ? (string) ($zone['id'] ?? '') : '';
+        if (! $zones->successful() || ! $zones->json('success') || ! preg_match('/^[a-f0-9]{32}$/i', $zoneId)) {
+            throw ValidationException::withMessages(['cloudflare' => 'This token cannot access the active Cloudflare zone for your mail domain. Give it Zone Read and DNS Write for that zone.']);
         }
         $base = 'https://api.cloudflare.com/client/v4/zones/'.$zoneId;
-        $client = Http::withToken(trim($token))->acceptJson()->timeout(12);
-        $zone = $client->get($base);
-        if (! $zone->successful() || ! $zone->json('success') || strtolower((string) $zone->json('result.name')) !== $domain->domain || $zone->json('result.status') !== 'active') {
-            throw ValidationException::withMessages(['cloudflare' => 'The token cannot access an active Cloudflare zone matching this mail domain.']);
-        }
         $proof = collect($domain->dns_records)->firstWhere('type', 'TXT');
         $mx = collect($domain->dns_records)->firstWhere('type', 'MX');
         if (! is_array($proof) || ! is_array($mx)) {
