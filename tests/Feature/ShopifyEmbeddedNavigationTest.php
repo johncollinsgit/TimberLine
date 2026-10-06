@@ -59,6 +59,7 @@ test('embedded app navigation metadata matches each top-level section route', fu
     'messaging responses' => ['shopify.app.messaging.responses', 'messaging', 'responses'],
     'edit app' => ['shopify.app.edit', 'edit_app', null],
     'settings' => ['shopify.app.settings', 'settings', null],
+    'fundraising' => ['shopify.app.fundraising', 'fundraising', null],
 ]);
 
 test('customers routes and aliases keep customers section active with correct subnav tab', function (string $routeName, string $activeTab, string $visibleText) {
@@ -227,7 +228,7 @@ test('embedded navigation order includes messaging when module access is enabled
 
             return $keys === ['home', 'subscriptions', 'assistant', 'customers', 'reporting', 'messaging', 'rewards', 'edit_app', 'settings']
                 && $labels[2] === 'AI Assistant'
-                && $labels[4] === 'Marketing Results'
+                && $labels[4] === 'Sales Tax Reports'
                 && $labels[5] === 'Messages';
         });
 });

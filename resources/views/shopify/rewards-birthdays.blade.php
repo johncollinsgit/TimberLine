@@ -383,6 +383,7 @@
                         Track the birthday funnel from reward issuance to delivery engagement and redemption revenue using delivery records.
                     </p>
                 </div>
+                <a class="birthday-analytics-button birthday-analytics-button--primary" href="{{ route('shopify.app.rewards.birthdays.email', [], false) }}">Design birthday email</a>
             </div>
 
             <form class="birthday-analytics-filters" id="birthday-analytics-filters">

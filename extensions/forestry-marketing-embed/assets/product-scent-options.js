@@ -46,7 +46,14 @@
       return;
     }
 
+    if (form.dataset.everbranchProductOptionsAttached === 'true') {
+      root.remove();
+      return;
+    }
+    form.dataset.everbranchProductOptionsAttached = 'true';
+
     if (!form.id) form.id = 'everbranch-product-form-' + Math.random().toString(36).slice(2, 10);
+    placeInsideProductForm(root, form);
 
     const count = Math.max(1, Number(ruleset.option_count || 1));
     const values = Array.isArray(ruleset.allowed_values) ? ruleset.allowed_values.filter(Boolean) : [];
@@ -68,6 +75,7 @@
     const fields = document.createElement('div');
     fields.className = 'everbranch-product-options__fields';
     const selects = [];
+    const propertyInputs = [];
 
     for (let index = 1; index <= count; index += 1) {
       const field = document.createElement('label');
@@ -79,10 +87,18 @@
 
       const select = document.createElement('select');
       select.className = 'everbranch-product-options__select';
-      select.name = 'properties[Scent ' + index + ']';
-      select.setAttribute('form', form.id);
       select.required = true;
       select.dataset.scentPosition = String(index);
+
+      // Prestige's AJAX cart serializer is only reliable for inputs that are
+      // direct members of the product form. Keep the visible selector
+      // presentation-only and maintain the Shopify line-item properties as
+      // hidden inputs on that form. This also works with a normal HTML submit.
+      const propertyInput = document.createElement('input');
+      propertyInput.type = 'hidden';
+      propertyInput.name = 'properties[Scent ' + index + ']';
+      propertyInput.dataset.everbranchScentPosition = String(index);
+      form.appendChild(propertyInput);
 
       const placeholder = document.createElement('option');
       placeholder.value = '';
@@ -102,6 +118,7 @@
       field.appendChild(select);
       fields.appendChild(field);
       selects.push(select);
+      propertyInputs.push(propertyInput);
     }
 
     root.appendChild(fields);
@@ -112,34 +129,98 @@
     error.setAttribute('aria-live', 'polite');
     root.appendChild(error);
 
-    form.addEventListener('submit', function (event) {
+    function syncProperties() {
+      selects.forEach((select, index) => {
+        propertyInputs[index].value = select.value;
+      });
+    }
+
+    selects.forEach((select) => {
+      select.addEventListener('change', syncProperties);
+    });
+
+    function validate(event) {
       error.hidden = true;
       error.textContent = '';
 
+      syncProperties();
+
       const missing = selects.find((select) => !select.value);
       if (missing) {
-        event.preventDefault();
+        blockEvent(event);
         error.textContent = 'Choose all ' + count + ' scent' + (count === 1 ? '' : 's') + ' before adding this bundle.';
         error.hidden = false;
         missing.focus();
-        return;
+        return false;
       }
 
       if (ruleset.require_distinct_values) {
         const chosen = selects.map((select) => select.value);
         if (new Set(chosen).size !== chosen.length) {
-          event.preventDefault();
+          blockEvent(event);
           error.textContent = 'Choose a different scent for each item in this bundle.';
           error.hidden = false;
           selects[0].focus();
+          return false;
         }
+      }
+
+      return true;
+    }
+
+    form.addEventListener('submit', validate, true);
+    form.addEventListener('click', function (event) {
+      if (isCheckoutControl(event.target)) {
+        validate(event);
       }
     }, true);
   }
 
   function findProductForm(root) {
-    return root.closest('form[action*="/cart/add"]')
-      || document.querySelector('form[action*="/cart/add"]');
+    const closest = root.closest('form[action*="/cart/add"]');
+    if (closest) return closest;
+
+    const forms = Array.from(document.querySelectorAll('form[action*="/cart/add"]'))
+      .filter((form) => form.querySelector('[name="id"]'));
+
+    return forms.find((form) => form.getClientRects().length > 0)
+      || forms[0]
+      || null;
+  }
+
+  function placeInsideProductForm(root, form) {
+    if (root.closest('form') === form) return;
+
+    const anchor = form.querySelector(
+      '.product-form__buttons, .product-form__payment-container, .shopify-payment-button, shopify-accelerated-checkout, button[type="submit"], input[type="submit"]'
+    );
+
+    if (anchor) {
+      let insertionPoint = anchor;
+      while (insertionPoint.parentElement && insertionPoint.parentElement !== form) {
+        insertionPoint = insertionPoint.parentElement;
+      }
+      form.insertBefore(root, insertionPoint);
+    } else {
+      form.appendChild(root);
+    }
+  }
+
+  function isCheckoutControl(target) {
+    if (!(target instanceof Element)) return false;
+
+    return Boolean(target.closest(
+      'button[type="submit"], input[type="submit"], .shopify-payment-button, shopify-accelerated-checkout, [data-shopify="payment-button"]'
+    ));
+  }
+
+  function blockEvent(event) {
+    if (!event) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (typeof event.stopImmediatePropagation === 'function') {
+      event.stopImmediatePropagation();
+    }
   }
 
   if (document.readyState === 'loading') {

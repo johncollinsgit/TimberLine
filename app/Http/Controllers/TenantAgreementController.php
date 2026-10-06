@@ -9,7 +9,7 @@ use App\Services\Tenancy\TenantFinancialAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TenantAgreementController extends Controller
 {
@@ -43,7 +43,7 @@ class TenantAgreementController extends Controller
         return view('agreements.tenant.show', ['tenant' => $tenant, 'agreement' => $agreement->load(['currentVersion', 'acceptance', 'termination'])]);
     }
 
-    public function download(Request $request, Agreement $agreement): BinaryFileResponse
+    public function download(Request $request, Agreement $agreement): StreamedResponse
     {
         $tenant = $this->tenant($request);
         abort_unless((int) $agreement->tenant_id === (int) $tenant->id

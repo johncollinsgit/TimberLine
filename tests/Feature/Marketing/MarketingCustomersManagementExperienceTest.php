@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\CandleCashBalance;
 use App\Models\CustomerExternalProfile;
 use App\Models\MarketingEmailDelivery;
 use App\Models\MarketingProfile;
@@ -9,6 +10,7 @@ use App\Models\MarketingReviewHistory;
 use App\Models\MarketingReviewSummary;
 use App\Models\Order;
 use App\Models\SquareCustomer;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Support\Carbon;
@@ -104,6 +106,101 @@ test('customers index renders canonical customer rows with loyalty enrichment an
         ->assertJsonPath('data.0.customer', 'Avery Lane')
         ->assertJsonPath('data.0.tier', 'Platinum')
         ->assertJsonPath('data.0.legacy_growave_points', 135);
+});
+
+test('customers index summary is isolated to the active tenant', function () {
+    $tenant = Tenant::query()->create(['name' => 'Collins Upstate Electric', 'slug' => 'collins-summary']);
+    $otherTenant = Tenant::query()->create(['name' => 'Other Workspace', 'slug' => 'other-summary']);
+
+    $collinsCustomer = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Collins',
+        'last_name' => 'Customer',
+        'email' => 'collins.customer@example.com',
+        'normalized_email' => 'collins.customer@example.com',
+        'phone' => '8645550100',
+        'normalized_phone' => '8645550100',
+    ]);
+    MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Missing',
+        'last_name' => 'Contact',
+    ]);
+
+    $otherCustomers = collect(range(1, 3))->map(fn (int $index) => MarketingProfile::query()->create([
+        'tenant_id' => $otherTenant->id,
+        'first_name' => 'Other',
+        'last_name' => 'Customer '.$index,
+    ]));
+
+    CandleCashBalance::query()->create([
+        'marketing_profile_id' => $collinsCustomer->id,
+        'balance' => 25,
+    ]);
+    foreach ($otherCustomers->take(2) as $otherCustomer) {
+        CandleCashBalance::query()->create([
+            'marketing_profile_id' => $otherCustomer->id,
+            'balance' => 50,
+        ]);
+    }
+
+    CustomerExternalProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $collinsCustomer->id,
+        'provider' => 'shopify',
+        'integration' => 'growave',
+        'store_key' => 'retail',
+        'external_customer_id' => 'COLLINS-1',
+    ]);
+    foreach ($otherCustomers->take(2) as $index => $otherCustomer) {
+        CustomerExternalProfile::query()->create([
+            'tenant_id' => $otherTenant->id,
+            'marketing_profile_id' => $otherCustomer->id,
+            'provider' => 'shopify',
+            'integration' => 'growave',
+            'store_key' => 'retail',
+            'external_customer_id' => 'OTHER-'.($index + 1),
+        ]);
+    }
+
+    MarketingProfileLink::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $collinsCustomer->id,
+        'source_type' => 'shopify_customer',
+        'source_id' => 'retail:COLLINS-1',
+        'source_meta' => [],
+        'match_method' => 'seed',
+        'confidence' => 1.00,
+    ]);
+    foreach ($otherCustomers as $index => $otherCustomer) {
+        MarketingProfileLink::query()->create([
+            'tenant_id' => $otherTenant->id,
+            'marketing_profile_id' => $otherCustomer->id,
+            'source_type' => 'shopify_customer',
+            'source_id' => 'retail:OTHER-'.($index + 1),
+            'source_meta' => [],
+            'match_method' => 'seed',
+            'confidence' => 1.00,
+        ]);
+    }
+
+    $admin = User::factory()->create([
+        'role' => 'admin',
+        'email_verified_at' => now(),
+    ]);
+    $admin->tenants()->attach($tenant->id, ['role' => 'admin']);
+
+    $this->actingAs($admin)
+        ->withSession(['tenant_id' => $tenant->id])
+        ->get(route('marketing.customers'))
+        ->assertOk()
+        ->assertViewHas('quickStats', fn (array $stats): bool => $stats === [
+            'total_customers' => 2,
+            'candle_cash_holders' => 1,
+            'growave_linked' => 1,
+            'shopify_or_order_linked' => 1,
+            'missing_contact' => 1,
+        ]);
 });
 
 test('customers projections prefer data-rich Growave rows over newer empty duplicates', function () {

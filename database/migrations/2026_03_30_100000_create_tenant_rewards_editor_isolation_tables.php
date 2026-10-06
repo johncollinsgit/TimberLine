@@ -43,7 +43,9 @@ return new class extends Migration
             Schema::create('tenant_candle_cash_reward_overrides', function (Blueprint $table): void {
                 $table->id();
                 $table->foreignId('tenant_id')->constrained('tenants')->cascadeOnDelete();
-                $table->foreignId('candle_cash_reward_id')->constrained('candle_cash_rewards')->cascadeOnDelete();
+                $table->foreignId('candle_cash_reward_id')
+                    ->constrained('candle_cash_rewards', 'id', 'tenant_cc_reward_override_reward_fk')
+                    ->cascadeOnDelete();
                 $table->string('name');
                 $table->text('description')->nullable();
                 $table->unsignedInteger('candle_cash_cost');

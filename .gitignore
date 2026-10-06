@@ -1,5 +1,6 @@
 /.phpunit.cache
 /node_modules
+/remotion/node_modules
 /public/build
 /public/hot
 /public/storage
@@ -25,3 +26,7 @@ yarn-error.log
 .DS_Store
 **/.DS_Store
 /test-results/click-path/
+/test-results/
+/.lighthouseci/
+
+/output/trajectory/

@@ -21,12 +21,36 @@ class QuickBooksOnlineClient
         return $this->allMatching($entity, null, $pageSize);
     }
 
+    /**
+     * QuickBooks name-list queries only return active records by default. Customer
+     * reconciliation must explicitly request both states so an inactive customer
+     * does not silently disappear from Everbranch.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public function allCustomers(int $pageSize = 100): array
+    {
+        return $this->allMatching('Customer', 'Active IN (true, false)', $pageSize);
+    }
+
     /** @return array<int,array<string,mixed>> */
     public function allSince(string $entity, CarbonInterface $since, int $pageSize = 100): array
     {
         $timestamp = $since->copy()->utc()->format('Y-m-d\TH:i:sP');
 
         return $this->allMatching($entity, "MetaData.LastUpdatedTime > '{$timestamp}'", $pageSize);
+    }
+
+    /** @return array<int,array<string,mixed>> */
+    public function allCustomersSince(CarbonInterface $since, int $pageSize = 100): array
+    {
+        $timestamp = $since->copy()->utc()->format('Y-m-d\TH:i:sP');
+
+        return $this->allMatching(
+            'Customer',
+            "Active IN (true, false) AND MetaData.LastUpdatedTime > '{$timestamp}'",
+            $pageSize
+        );
     }
 
     /** @return array<int,array<string,mixed>> */
@@ -79,6 +103,20 @@ class QuickBooksOnlineClient
     }
 
     /** @return array<string,mixed> */
+    public function invoiceWithPaymentLink(string $invoiceId): array
+    {
+        $realmId = $this->realmId();
+
+        return $this->request()
+            ->get("/v3/company/{$realmId}/invoice/".rawurlencode($invoiceId), [
+                'include' => 'invoiceLink',
+                'minorversion' => $this->minorVersion,
+            ])
+            ->throw()
+            ->json() ?? [];
+    }
+
+    /** @return array<string,mixed> */
     public function report(string $report, array $parameters = []): array
     {
         $realmId = $this->realmId();
@@ -89,6 +127,33 @@ class QuickBooksOnlineClient
             ])
             ->throw()
             ->json();
+    }
+
+    /** @param array<string,mixed> $invoice */
+    public function createInvoice(array $invoice, string $requestId): array
+    {
+        return $this->request()->post('/v3/company/'.$this->realmId().'/invoice?'.http_build_query([
+            'minorversion' => $this->minorVersion,
+            'requestid' => $requestId,
+        ]), $invoice)->throw()->json();
+    }
+
+    /** @param array<string,mixed> $invoice */
+    public function updateInvoice(array $invoice, string $requestId): array
+    {
+        return $this->request()->post('/v3/company/'.$this->realmId().'/invoice?'.http_build_query([
+            'minorversion' => $this->minorVersion,
+            'requestid' => $requestId,
+        ]), $invoice)->throw()->json();
+    }
+
+    public function sendInvoice(string $invoiceId, string $recipient): array
+    {
+        return $this->request()->withBody('', 'application/octet-stream')
+            ->post('/v3/company/'.$this->realmId().'/invoice/'.rawurlencode($invoiceId).'/send?'.http_build_query([
+                'sendTo' => $recipient,
+                'minorversion' => $this->minorVersion,
+            ]))->throw()->json();
     }
 
     public function realmId(): string

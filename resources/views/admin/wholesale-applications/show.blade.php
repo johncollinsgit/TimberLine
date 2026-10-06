@@ -45,11 +45,7 @@
                     <span class="inline-flex rounded-full border px-3 py-1.5 text-xs font-semibold {{ $badgeClasses }}">
                         {{ \Illuminate\Support\Str::headline((string) $accessRequest->status) }}
                     </span>
-                    @if ($accessRequest->user)
-                        <span class="inline-flex rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700">
-                            User record: {{ $accessRequest->user->is_active ? 'active' : 'inactive' }}
-                        </span>
-                    @endif
+
                 </div>
             </div>
         </section>
@@ -84,33 +80,33 @@
                                     >{{ old('decision_note', (string) ($accessRequest->decision_note ?? '')) }}</textarea>
                                 </label>
                                 <div class="flex flex-wrap gap-2">
-                                    @if ($accessRequest->status !== 'approved')
+                                    @if ($accessRequest->status === 'pending')
                                         <button type="submit" class="rounded-full bg-emerald-700 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-600">
                                             Approve application
                                         </button>
                                     @endif
                                     @if ($accessRequest->status === 'approved')
                                         <button type="submit" formaction="{{ route('admin.wholesale.applications.resend-activation', $accessRequest) }}" class="rounded-full border border-zinc-300 px-4 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">
-                                            Resend activation
+                                            Resend welcome email
                                         </button>
                                     @endif
                                 </div>
                             </form>
 
-                            @if ($accessRequest->status !== 'approved')
+                            @if ($accessRequest->status === 'pending')
                                 <form method="POST" action="{{ route('admin.wholesale.applications.reject', $accessRequest) }}" class="space-y-3">
                                     @csrf
                                     <label class="block space-y-2">
-                                        <span class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Rejection note</span>
+                                        <span class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">Internal denial note</span>
                                         <textarea
                                             name="rejection_note"
                                             rows="3"
                                             class="w-full rounded-2xl border border-zinc-300 px-4 py-3 text-sm text-zinc-900 shadow-sm focus:border-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-200"
-                                            placeholder="Optional reason for rejection"
+                                            placeholder="Optional internal note; never sent to the applicant"
                                         >{{ old('rejection_note', (string) ($accessRequest->rejection_note ?? '')) }}</textarea>
                                     </label>
                                     <button type="submit" class="rounded-full bg-rose-700 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-600">
-                                        Reject application
+                                        Deny application
                                     </button>
                                 </form>
                             @endif
@@ -135,8 +131,8 @@
                             <dd class="font-medium text-zinc-900">{{ $accessRequest->formSubmission?->id ? 'Captured' : 'Missing' }}</dd>
                         </div>
                         <div class="flex items-start justify-between gap-4">
-                            <dt class="text-zinc-500">Shopify user record</dt>
-                            <dd class="font-medium text-zinc-900">{{ $accessRequest->user?->email ?? 'Not linked yet' }}</dd>
+                            <dt class="text-zinc-500">Shopify customer</dt>
+                            <dd class="font-medium text-zinc-900">{{ data_get($accessRequest->metadata, 'shopify_customer_gid') ? 'Access granted' : 'No access granted' }}</dd>
                         </div>
                         <div class="flex items-start justify-between gap-4">
                             <dt class="text-zinc-500">Tenant slug</dt>

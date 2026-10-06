@@ -13,6 +13,7 @@ use App\Services\Automation\V2\Operations\Native\CreateJobTaskActionOperation;
 use App\Services\Automation\V2\Operations\Native\CustomerCreatedTriggerOperation;
 use App\Services\Automation\V2\Operations\Native\JobCreatedTriggerOperation;
 use App\Services\Automation\V2\Operations\Native\JobStatusChangedTriggerOperation;
+use App\Services\Automation\V2\Operations\Native\PrepareCustomerLoopDraftActionOperation;
 use App\Services\Automation\V2\Operations\Native\SendEmailActionOperation;
 use App\Services\Automation\V2\Operations\Native\TaskCompletedTriggerOperation;
 use App\Services\Automation\V2\Operations\PathsControlHandler;
@@ -149,6 +150,34 @@ class WorkflowComponentCatalog
                     'timezone' => (string) config('app.timezone', 'UTC'),
                     'default_duration_minutes' => 60,
                     'date_only_mode' => 'all_day',
+                ]],
+            ],
+            'completed_job_follow_up_draft' => [
+                'key' => 'completed_job_follow_up_draft',
+                'name' => 'Completed job follow-up draft',
+                'description' => 'When a job is completed, prepare a thoughtful follow-up for a person to review.',
+                'available' => true,
+                'trigger_component_key' => 'everbranch.job.status_changed',
+                'step_component_keys' => ['everbranch.customer_loop.draft.prepare'],
+                'trigger_config' => ['to_status' => 'completed'],
+                'step_configs' => [[
+                    'template' => 'follow_up',
+                    'title' => 'Follow up after completed job',
+                    'summary' => 'Prepared from a completed field-service job. Review before sending.',
+                ]],
+            ],
+            'shopify_order_review_request_draft' => [
+                'key' => 'shopify_order_review_request_draft',
+                'name' => 'Shopify order review-request draft',
+                'description' => 'When a Shopify order arrives, prepare a review-request draft for a person to choose and send later.',
+                'available' => true,
+                'trigger_component_key' => 'shopify.order.created_or_updated',
+                'step_component_keys' => ['everbranch.customer_loop.draft.prepare'],
+                'trigger_config' => ['schedule_source' => 'fulfillment', 'poll_limit' => 100],
+                'step_configs' => [[
+                    'template' => 'review_request',
+                    'title' => 'Review request after Shopify order',
+                    'summary' => 'Prepared from a Shopify order. Review before sending.',
                 ]],
             ],
         ];
@@ -342,6 +371,40 @@ class WorkflowComponentCatalog
                 outputFields: [
                     $this->schemaField('message_id', 'Message ID', 'string'),
                     $this->schemaField('accepted_at', 'Accepted at', 'datetime'),
+                ],
+            ),
+            $this->componentDefinition(
+                key: 'everbranch.customer_loop.draft.prepare',
+                label: 'Prepare Customer Loop draft',
+                description: 'Creates a follow-up, review, email, text, or social draft for a person to review. It never sends or publishes.',
+                kind: 'action',
+                provider: 'everbranch',
+                providerLabel: 'Everbranch',
+                category: 'apps',
+                icon: 'everbranch',
+                handler: PrepareCustomerLoopDraftActionOperation::class,
+                connectionRequired: false,
+                testPolicy: 'transaction_rollback',
+                configFields: [
+                    $this->configField('template', 'Draft type', 'select', true, options: [
+                        ['value' => 'follow_up', 'label' => 'Follow up'],
+                        ['value' => 'review_request', 'label' => 'Review request'],
+                        ['value' => 'email_draft', 'label' => 'Email draft'],
+                        ['value' => 'text_draft', 'label' => 'Text draft'],
+                        ['value' => 'social_draft', 'label' => 'Social draft'],
+                    ], default: 'follow_up'),
+                    $this->configField('title', 'Queue title', 'mapped_value', true),
+                    $this->configField('summary', 'Why now', 'mapped_value', false),
+                ],
+                inputFields: [
+                    $this->schemaField('template', 'Draft type', 'string', true),
+                    $this->schemaField('title', 'Queue title', 'string', true),
+                    $this->schemaField('summary', 'Why now', 'string'),
+                ],
+                outputFields: [
+                    $this->schemaField('customer_loop_action_id', 'Customer Loop action ID', 'string'),
+                    $this->schemaField('status', 'Draft status', 'string'),
+                    $this->schemaField('draft_only', 'Draft only', 'boolean'),
                 ],
             ),
             $this->componentDefinition(

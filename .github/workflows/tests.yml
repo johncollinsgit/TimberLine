@@ -25,6 +25,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -34,7 +36,7 @@ jobs:
           coverage: none
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
           cache: npm
@@ -44,7 +46,7 @@ jobs:
         run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
 
       - name: Cache Composer downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: ${{ runner.os }}-php-8.4-composer-${{ hashFiles('**/composer.lock') }}
@@ -70,6 +72,12 @@ jobs:
 
       - name: Build frontend assets
         run: npm run build
+
+      - name: Install browsers for Fleet embedding checks
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Verify Fleet embedding and allowance in Chromium and WebKit
+        run: npm run test:highlevel-fleet
 
       - name: Run tests in parallel
         run: php -d memory_limit=1G ./vendor/bin/pest --parallel --compact
@@ -102,6 +110,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -115,7 +125,7 @@ jobs:
         run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
 
       - name: Cache Composer downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: ${{ runner.os }}-php-8.4-composer-${{ hashFiles('**/composer.lock') }}
@@ -136,5 +146,44 @@ jobs:
           cp .env.example .env
           php artisan key:generate
 
+      - name: Resolve migration rehearsal baseline
+        id: migration-base
+        env:
+          PULL_REQUEST_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          base_sha="$PULL_REQUEST_BASE"
+          if [ -z "$base_sha" ]; then
+            base_sha="$(git rev-parse HEAD^)"
+          fi
+          echo "sha=$base_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Lint changed migrations
+        run: php scripts/ci/lint-migrations.php --base="${{ steps.migration-base.outputs.sha }}"
+
       - name: Verify clean and partial migration paths
-        run: php ./vendor/bin/pest tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php --compact
+        run: php ./vendor/bin/pest tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php tests/Integration/HighLevelFleetMySqlMigrationRecoveryTest.php --compact
+
+      - name: Rehearse prior production schema upgrade
+        run: scripts/ci/rehearse-migrations.sh "${{ steps.migration-base.outputs.sha }}"
+
+      - name: Build a baseline candidate when one is missing
+        if: ${{ !hashFiles('database/schema/mysql-schema.sql') || !hashFiles('database/schema/mysql-schema.sha256') }}
+        run: scripts/ci/refresh-mysql-schema-baseline.sh
+
+      - name: Verify committed MySQL schema baseline
+        run: scripts/ci/verify-mysql-schema-baseline.sh
+
+      - name: Upload MySQL schema baseline candidate
+        if: always() && hashFiles('database/schema/mysql-schema.sql') && hashFiles('database/schema/mysql-schema.sha256')
+        uses: actions/upload-artifact@v4
+        with:
+          name: mysql-schema-baseline-${{ github.run_id }}
+          path: database/schema/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Require the reviewed baseline in source control
+        run: |
+          set -euo pipefail
+          git ls-files --error-unmatch database/schema/mysql-schema.sql database/schema/mysql-schema.sha256 >/dev/null

@@ -36,7 +36,10 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index(['tenant_id', 'status']);
-            $table->index(['tenant_billing_receipt_id', 'created_at']);
+            $table->index(
+                ['tenant_billing_receipt_id', 'created_at'],
+                'billing_refunds_receipt_created_idx'
+            );
         });
     }
 

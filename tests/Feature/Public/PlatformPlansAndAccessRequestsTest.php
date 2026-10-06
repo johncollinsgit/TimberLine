@@ -1,8 +1,10 @@
 <?php
 
 use App\Models\CustomerAccessRequest;
+use App\Models\OperatorAlertLog;
 use App\Models\User;
 use App\Notifications\WholesaleApplicationReviewNotification;
+use App\Services\Marketing\TwilioSmsService;
 use App\Support\Wholesale\WholesaleApplicationInboxUrl;
 use Illuminate\Support\Facades\Notification;
 
@@ -17,7 +19,10 @@ test('public plans page renders tiers and add-ons', function (): void {
         ->assertSeeText('Plans')
         ->assertSeeText('Add-ons')
         ->assertSeeText('Module Map')
-        ->assertSeeText('Included now');
+        ->assertSeeText('Included now')
+        ->assertSeeText('$89/mo for 6 months')
+        ->assertSeeText('$499 one-time setup')
+        ->assertSeeText('$199/mo after the first 6 months');
 });
 
 test('public demo request page renders access request form', function (): void {
@@ -54,8 +59,11 @@ test('public start as a client page renders plan interest inputs', function (): 
         ->assertSeeText('Pricing')
         ->assertSeeText('Launch partner pricing')
         ->assertSeeText('$149')
-        ->assertSeeText('$299')
-        ->assertSeeText('$59')
+        ->assertSeeText('$499 one-time')
+        ->assertSeeText('$89/mo')
+        ->assertSeeText('$199/mo')
+        ->assertSeeText('$1,033')
+        ->assertSeeText('save $360 in the first 6 months')
         ->assertSeeText('Limited to 10')
         ->assertSeeText('First 10 businesses')
         ->assertSeeText('Unlimited users')
@@ -97,6 +105,40 @@ test('demo access request submission persists a pending request', function (): v
     expect($user)->not->toBeNull()
         ->and((bool) $user->is_active)->toBeFalse()
         ->and((string) $user->requested_via)->toBe('customer_demo');
+});
+
+test('a real guided walkthrough request sends one production safe operator text', function (): void {
+    Notification::fake();
+    config()->set('everbranch.operator_alert_sms_enabled', true);
+    config()->set('everbranch.operator_alert_phone', '+1 (555) 010-0101');
+
+    $twilio = \Mockery::mock(TwilioSmsService::class);
+    $twilio->shouldReceive('sendSms')
+        ->once()
+        ->with(
+            '15550100101',
+            'Everbranch: New guided walkthrough request from Ridge Workshop.',
+            \Mockery::on(fn (array $options): bool => ($options['source_type'] ?? null) === 'operator_alert')
+        )
+        ->andReturn(['success' => true, 'provider' => 'twilio', 'error_code' => null]);
+    app()->instance(TwilioSmsService::class, $twilio);
+
+    $url = 'https://theeverbranch.com/platform/access-request';
+    $payload = [
+        'intent' => 'demo',
+        'name' => 'Riley Morgan',
+        'email' => 'owner@ridgeworkshop.co',
+        'company' => 'Ridge Workshop',
+        'message' => 'I would like a walkthrough.',
+    ];
+
+    $this->post($url, $payload)
+        ->assertRedirect(route('platform.request-submitted', ['intent' => 'demo'], absolute: false));
+    $this->post($url, $payload)
+        ->assertRedirect(route('platform.request-submitted', ['intent' => 'demo'], absolute: false));
+
+    expect(OperatorAlertLog::query()->where('event_key', 'platform_access_request.created')->count())->toBe(1)
+        ->and(OperatorAlertLog::query()->where('event_key', 'platform_access_request.created')->value('status'))->toBe('sent');
 });
 
 test('demo request captures business context without production commercial writes', function (): void {

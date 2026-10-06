@@ -54,6 +54,33 @@ test('shopify embedded app route renders verified admin shell for configured sto
     expect($response->headers->get('X-Frame-Options'))->toBeNull();
 });
 
+test('shopify embedded app route accepts Shopify Admin theme metadata in its signed launch query', function () {
+    configureEmbeddedRetailStore();
+
+    $response = $this->get(route('shopify.app', retailEmbeddedExtendedSignedQuery([
+        'admin_theme' => 'admin',
+    ])));
+
+    $response->assertOk()
+        ->assertSeeText('Dashboard')
+        ->assertSeeText('Fast loyalty snapshot for recent program activity.')
+        ->assertDontSeeText('We could not verify this Shopify request');
+});
+
+test('shopify embedded app route accepts future scalar metadata that Shopify signs', function () {
+    configureEmbeddedRetailStore();
+
+    $response = $this->get(route('shopify.app', retailEmbeddedExtendedSignedQuery([
+        'admin_theme' => 'admin',
+        'shopify_launch_context' => 'future-shopify-ui-value',
+    ])));
+
+    $response->assertOk()
+        ->assertSeeText('Dashboard')
+        ->assertSeeText('Fast loyalty snapshot for recent program activity.')
+        ->assertDontSeeText('We could not verify this Shopify request');
+});
+
 test('shopify embedded retail app route redirects a verified wholesale store to wholesale overview', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Modern Forestry',
@@ -91,6 +118,27 @@ test('shopify embedded wholesale entry route fails closed without signed query p
         ->assertDontSeeText('What needs attention')
         ->assertDontSee('name="shopify-api-key"', false)
         ->assertDontSeeText('Fast loyalty snapshot for recent program activity.');
+});
+
+test('shopify embedded wholesale entry uses its verified session after an oauth redirect supplies only host', function () {
+    $tenant = Tenant::query()->create([
+        'name' => 'Modern Forestry',
+        'slug' => 'modern-forestry',
+        'plan' => 'pro',
+    ]);
+    configureEmbeddedWholesaleStore((int) $tenant->id);
+
+    $this->get(route('shopify.app.wholesale', wholesaleEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSeeText('Wholesale Operations');
+
+    $this->get(route('shopify.app.wholesale', [
+        'store_key' => 'wholesale',
+        'host' => 'admin-host-from-oauth-redirect',
+    ]))
+        ->assertOk()
+        ->assertSeeText('Wholesale Operations')
+        ->assertDontSeeText('We could not verify this Shopify request');
 });
 
 test('shopify embedded app route can load the full analytics dashboard from the stored session page context', function () {

@@ -1,0 +1,71 @@
+name: Provision Green Shield Pest Control Demo
+
+on:
+  workflow_dispatch:
+    inputs:
+      grant_email:
+        description: Existing Everbranch account that should administer the fictional demo workspace
+        required: true
+        type: string
+      confirm_provision:
+        description: Create or refresh the fictional Green Shield demo in production
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  provision:
+    name: Provision fictional demo workspace
+    if: ${{ inputs.confirm_provision == true }}
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - name: Validate deployment access
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          TARGET_EMAIL: ${{ inputs.grant_email }}
+        run: |
+          set -euo pipefail
+          for var in DEPLOY_HOST DEPLOY_USER DEPLOY_PORT DEPLOY_PATH DEPLOY_SSH_KEY; do
+            if [ -z "${!var}" ]; then
+              echo "::error::Missing required secret: $var"
+              exit 1
+            fi
+          done
+          if ! printf '%s' "$TARGET_EMAIL" | grep -Eiq '^[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}$'; then
+            echo "::error::Invalid existing-account email."
+            exit 1
+          fi
+
+      - name: Configure SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Create the fictional workspace and grant its administrator
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          TARGET_EMAIL: ${{ inputs.grant_email }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "set -euo pipefail; cd '$DEPLOY_PATH'; php artisan everbranch:prepare-pest-control-demo --force-production --grant-email='$TARGET_EMAIL'"

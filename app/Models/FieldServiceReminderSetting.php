@@ -18,6 +18,7 @@ class FieldServiceReminderSetting extends Model
         'send_time',
         'timezone',
         'provider_status',
+        'job_update_sms',
         'customer_copy',
         'internal_notes',
     ];
@@ -25,6 +26,7 @@ class FieldServiceReminderSetting extends Model
     protected $casts = [
         'tenant_id' => 'integer',
         'enabled' => 'boolean',
+        'job_update_sms' => 'array',
     ];
 
     public function tenant(): BelongsTo

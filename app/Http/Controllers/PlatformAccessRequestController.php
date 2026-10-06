@@ -6,7 +6,7 @@ use App\Notifications\WholesaleApplicationReviewNotification;
 use App\Services\Forms\TenantFormSubmissionService;
 use App\Services\Onboarding\CustomerAccessRequestService;
 use App\Services\Onboarding\WholesaleApplicationReviewInboxResolver;
-use App\Services\Shopify\ShopifyWholesaleApplicationCustomerService;
+use App\Services\Operations\OperatorAlertService;
 use App\Services\Tenancy\TenantCommercialExperienceService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,7 +20,8 @@ class PlatformAccessRequestController extends Controller
         Request $request,
         CustomerAccessRequestService $service,
         WholesaleApplicationReviewInboxResolver $reviewInboxResolver,
-        TenantCommercialExperienceService $experienceService
+        TenantCommercialExperienceService $experienceService,
+        OperatorAlertService $operatorAlerts,
     ): RedirectResponse {
         $formOptions = $experienceService->publicAccessRequestOptions();
         $businessTypeKeys = array_keys((array) ($formOptions['business_types'] ?? []));
@@ -66,6 +67,7 @@ class PlatformAccessRequestController extends Controller
         ]);
 
         $this->notifyReviewInbox($requestRecord, $reviewInboxResolver);
+        $this->notifyOperatorOfPlatformRequest($request, $requestRecord, $operatorAlerts);
 
         return redirect()
             ->route('platform.request-submitted', ['intent' => (string) $validated['intent']])
@@ -75,12 +77,11 @@ class PlatformAccessRequestController extends Controller
     public function storeForWholesaleStorefront(
         Request $request,
         CustomerAccessRequestService $service,
-        ShopifyWholesaleApplicationCustomerService $shopifyWholesaleApplicationCustomerService,
-        WholesaleApplicationReviewInboxResolver $reviewInboxResolver,
         TenantFormSubmissionService $tenantFormSubmissionService
     ) {
         $validated = $request->validate([
             'intent' => ['nullable', 'string', 'in:production,demo'],
+            'contact.company_fax' => ['nullable', 'string', 'max:0'],
             'contact.name' => ['required', 'string', 'max:190'],
             'contact.email' => ['required', 'email', 'max:190'],
             'contact.phone' => ['required', 'string', 'max:50'],
@@ -105,51 +106,49 @@ class PlatformAccessRequestController extends Controller
 
         $contact = (array) ($validated['contact'] ?? []);
 
-        $requestRecord = $service->submit([
-            'intent' => 'production',
-            'application_kind' => \App\Models\CustomerAccessRequest::KIND_WHOLESALE_APPLICATION,
-            'name' => trim((string) ($contact['name'] ?? '')),
-            'email' => trim((string) ($contact['email'] ?? '')),
-            'company' => trim((string) ($contact['company'] ?? '')),
-            'requested_tenant_slug' => (string) config(
-                'product_surfaces.access_request.wholesale_storefront_tenant_slug',
-                'modern-forestry'
-            ),
-            'business_type' => trim((string) ($contact['store_type'] ?? '')),
-            'website' => trim((string) ($contact['website'] ?? '')),
-            'message' => trim((string) ($contact['body'] ?? $contact['business_info'] ?? '')),
-            'phone' => trim((string) ($contact['phone'] ?? '')),
-            'city' => trim((string) ($contact['city'] ?? '')),
-            'state' => trim((string) ($contact['state'] ?? '')),
-            'zip' => trim((string) ($contact['zip'] ?? '')),
-            'country' => trim((string) ($contact['country'] ?? '')),
-            'address' => trim((string) ($contact['address'] ?? '')),
-            'address2' => trim((string) ($contact['address2'] ?? '')),
-            'retail_license_number' => trim((string) ($contact['retail_license_number'] ?? '')),
-            'position' => trim((string) ($contact['position'] ?? '')),
-            'referral' => trim((string) ($contact['referral'] ?? '')),
-            'current_suppliers' => trim((string) ($contact['current_suppliers'] ?? '')),
-            'contact_preference' => trim((string) ($contact['contact_preference'] ?? '')),
-            'agreement' => $request->boolean('contact.agreement'),
-        ]);
-
-        try {
-            $shopifyWholesaleApplicationCustomerService->syncByEmail((string) $requestRecord->email, [
-                'name' => (string) ($requestRecord->name ?: ($contact['name'] ?? '')),
+        $requestRecord = \Illuminate\Support\Facades\DB::transaction(function () use ($service, $contact, $request, $tenantFormSubmissionService) {
+            $requestRecord = $service->submit([
+                'intent' => 'production',
+                'application_kind' => \App\Models\CustomerAccessRequest::KIND_WHOLESALE_APPLICATION,
+                'name' => trim((string) ($contact['name'] ?? '')),
+                'email' => trim((string) ($contact['email'] ?? '')),
+                'company' => trim((string) ($contact['company'] ?? '')),
+                'requested_tenant_slug' => (string) config(
+                    'product_surfaces.access_request.wholesale_storefront_tenant_slug',
+                    'modern-forestry'
+                ),
+                'business_type' => trim((string) ($contact['store_type'] ?? '')),
+                'website' => trim((string) ($contact['website'] ?? '')),
+                'message' => trim((string) ($contact['body'] ?? $contact['business_info'] ?? '')),
+                'phone' => trim((string) ($contact['phone'] ?? '')),
+                'city' => trim((string) ($contact['city'] ?? '')),
+                'state' => trim((string) ($contact['state'] ?? '')),
+                'zip' => trim((string) ($contact['zip'] ?? '')),
+                'country' => trim((string) ($contact['country'] ?? '')),
+                'address' => trim((string) ($contact['address'] ?? '')),
+                'address2' => trim((string) ($contact['address2'] ?? '')),
+                'retail_license_number' => trim((string) ($contact['retail_license_number'] ?? '')),
+                'position' => trim((string) ($contact['position'] ?? '')),
+                'referral' => trim((string) ($contact['referral'] ?? '')),
+                'current_suppliers' => trim((string) ($contact['current_suppliers'] ?? '')),
+                'contact_preference' => trim((string) ($contact['contact_preference'] ?? '')),
+                'agreement' => $request->boolean('contact.agreement'),
             ]);
-        } catch (Throwable $e) {
-            report($e);
-        }
 
-        try {
+            $tenant = \App\Models\Tenant::query()->where('slug', $requestRecord->requested_tenant_slug)->firstOrFail();
+            $requestRecord->forceFill(['tenant_id' => $tenant->id])->save();
             $tenantFormSubmissionService->recordWholesaleApplicationFromAccessRequest($requestRecord);
-        } catch (Throwable $e) {
-            report($e);
-        }
+            $delivery = app(\App\Services\Onboarding\WholesaleApplicationDeliveryService::class);
+            $delivery->enqueue($requestRecord, 'review');
 
-        $this->notifyReviewInbox($requestRecord, $reviewInboxResolver);
+            return $requestRecord->fresh();
+        });
 
-        return response()->noContent();
+        // The durable delivery state is committed before acknowledging receipt.
+        // The scheduler recovers delivery even if a queue worker is unavailable.
+        return $request->expectsJson()
+            ? response()->json(['ok' => true, 'receipt' => 'WF-'.$requestRecord->id, 'status' => 'received'])
+            : response()->noContent();
     }
 
     protected function notifyReviewInbox(
@@ -161,6 +160,36 @@ class PlatformAccessRequestController extends Controller
                 'mail',
                 $reviewInboxResolver->resolve($requestRecord)
             )->notify(new WholesaleApplicationReviewNotification($requestRecord));
+        } catch (Throwable $e) {
+            report($e);
+        }
+    }
+
+    protected function notifyOperatorOfPlatformRequest(
+        Request $request,
+        \App\Models\CustomerAccessRequest $requestRecord,
+        OperatorAlertService $operatorAlerts
+    ): void {
+        try {
+            $requestType = (string) $requestRecord->intent === 'demo'
+                ? 'guided walkthrough'
+                : 'workspace access';
+            $requester = trim((string) ($requestRecord->company ?: $requestRecord->name ?: 'New prospect'));
+
+            $operatorAlerts->notify(
+                'platform_access_request.created',
+                "Everbranch: New {$requestType} request from {$requester}.",
+                [
+                    'dedupe_key' => 'platform-access-request:'.$requestRecord->id,
+                    'target_type' => 'customer_access_request',
+                    'target_id' => (int) $requestRecord->id,
+                    'request_host' => $request->getHost(),
+                    'request_email' => (string) $requestRecord->email,
+                    'request_intent' => (string) $requestRecord->intent,
+                    'request_company' => (string) $requestRecord->company,
+                    'request_name' => (string) $requestRecord->name,
+                ]
+            );
         } catch (Throwable $e) {
             report($e);
         }

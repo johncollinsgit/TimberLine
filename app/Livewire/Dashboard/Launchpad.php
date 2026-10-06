@@ -15,11 +15,32 @@ class Launchpad extends Component
     #[Url(as: 'range', except: '1m')]
     public string $range = '1m';
 
+    #[Url(as: 'metric', except: 'sales')]
+    public string $metric = 'sales';
+
     public function updatedRange(): void
     {
         if (! array_key_exists($this->range, app(\App\Services\Dashboard\DashboardDateRange::class)->options())) {
             $this->range = '1m';
         }
+    }
+
+    public function updatedMetric(): void
+    {
+        if (! in_array($this->metric, self::pulseMetricKeys(), true)) {
+            $this->metric = 'sales';
+        }
+    }
+
+    public function selectPulseMetric(string $metric): void
+    {
+        $this->metric = in_array($metric, self::pulseMetricKeys(), true) ? $metric : 'sales';
+    }
+
+    /** @return array<int,string> */
+    private static function pulseMetricKeys(): array
+    {
+        return ['sessions', 'sales', 'orders', 'conversion', 'visitors'];
     }
 
     public function submitSearch()
@@ -46,7 +67,7 @@ class Launchpad extends Component
 
     public function render()
     {
-        $dashboard = app(UnifiedDashboardService::class)->forRequest(request(), auth()->user(), $this->range);
+        $dashboard = app(UnifiedDashboardService::class)->forRequest(request(), auth()->user(), $this->range, $this->metric);
 
         return view('livewire.dashboard.launchpad', [
             'dashboard' => $dashboard,

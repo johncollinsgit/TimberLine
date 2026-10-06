@@ -11,12 +11,17 @@ use App\Models\FieldServiceVehicle;
 use App\Models\MarketingIdentityReview;
 use App\Models\MarketingImportRun;
 use App\Models\MarketingProfile;
+use App\Models\MarketingStorefrontEvent;
 use App\Models\Order;
 use App\Models\ScheduledClass;
 use App\Models\Tenant;
 use App\Models\TenantBillingOrder;
 use App\Models\User;
+use App\Models\WebsiteOrder;
+use App\Services\FieldService\FieldServiceAccessService;
 use App\Services\FieldService\QuickBooksOwnerReportingService;
+use App\Services\FleetTracking\FleetTrackingAccessService;
+use App\Services\Reporting\SalesChannelSummaryService;
 use App\Services\Tenancy\AuthenticatedTenantContextResolver;
 use App\Services\Tenancy\TenantBlueprintProfileService;
 use App\Services\Tenancy\TenantExperienceProfileService;
@@ -38,12 +43,15 @@ class UnifiedDashboardService
         protected TenantFinancialAccess $financialAccess,
         protected TenantModuleAccessResolver $moduleAccess,
         protected QuickBooksOwnerReportingService $ownerReports,
+        protected SalesChannelSummaryService $salesChannels,
+        protected FieldServiceAccessService $fieldServiceAccess,
+        protected FleetTrackingAccessService $fleetTrackingAccess,
     ) {}
 
     /**
      * @return array<string,mixed>
      */
-    public function forRequest(Request $request, ?User $user = null, ?string $rangeKey = null): array
+    public function forRequest(Request $request, ?User $user = null, ?string $rangeKey = null, ?string $metricKey = null): array
     {
         $user ??= $request->user();
         $attributeTenant = $request->attributes->get('current_tenant');
@@ -52,8 +60,13 @@ class UnifiedDashboardService
             : ($user ? $this->tenantContextResolver->resolveForRequest($request, $user) : null);
         $tenantId = $tenant ? (int) $tenant->id : null;
         $profile = $this->experienceProfileService->forTenant($tenantId, $user, $tenant);
+        if (($profile['workspace_focus'] ?? null) === 'website_sales' && $tenant && $user) {
+            return $this->websiteSalesDashboard($request, $tenant, $user, $profile, $rangeKey);
+        }
         $canAccessMarketing = $user?->canAccessMarketing() ?? false;
-        $canAccessOps = ($user?->isAdmin() ?? false) || ($user?->isManager() ?? false);
+        $canAccessOps = ($user?->isAdmin() ?? false)
+            || ($user?->isManager() ?? false)
+            || ($user instanceof User && $tenant instanceof Tenant && $this->fieldServiceAccess->canManageJobs($user, $tenant));
         $catalog = ($tenantId !== null && $canAccessMarketing)
             ? $this->moduleCatalogService->tenantStorePayload($tenantId, 'marketing')
             : ['sections' => []];
@@ -72,6 +85,7 @@ class UnifiedDashboardService
 
             return $card;
         }, $summaryCards);
+        $channelPulse = $this->channelPulse($tenantId, $canAccessMarketing || $canAccessOps, $range, $metricKey);
 
         return [
             'tenant_id' => $tenantId,
@@ -86,7 +100,18 @@ class UnifiedDashboardService
             ],
             'experience_profile' => $profile,
             'hero' => $hero,
+            'fleet_tracker' => $clientFacingFieldService && $tenant instanceof Tenant && $user instanceof User
+                && $this->fleetTrackingAccess->enabledFor($tenant)
+                && $this->fleetTrackingAccess->canView($user, $tenant)
+                && Route::has('field-service.fleet-tracking.index')
+                && Route::has('field-service.payroll-hours')
+                    ? [
+                        'href' => route('field-service.fleet-tracking.index'),
+                        'hours_href' => route('field-service.payroll-hours'),
+                    ]
+                    : null,
             'summary_cards' => $summaryCards,
+            'channel_pulse' => $channelPulse,
             'upcoming_jobs' => $clientFacingFieldService ? ($ownerReport['upcoming_jobs'] ?? $this->upcomingJobs($tenant)) : [],
             'class_calendar' => $this->classCalendar($tenant),
             'front_yard_launch' => $this->frontYardLaunch($tenant),
@@ -95,6 +120,401 @@ class UnifiedDashboardService
             'next_actions' => $this->nextActions($tenantId, $profile, $catalog, $canAccessMarketing, $canAccessOps, $clientFacingFieldService),
             'pinned_modules' => $canAccessMarketing ? $this->pinnedModules($catalog) : [],
         ];
+    }
+
+    protected function websiteSalesDashboard(Request $request, Tenant $tenant, User $user, array $profile, ?string $rangeKey): array
+    {
+        $checklists = app(\App\Services\ClientProjects\ProjectChecklistService::class);
+        $checklists->assertMembership($user, $tenant);
+        $range = $this->dateRanges->resolve($rangeKey ?? $request->query('range'));
+        $tasks = $checklists->projects($tenant)->flatMap->tickets->flatMap->tasks;
+        $websiteEnabled = $this->moduleAccess->canAccess((int) $tenant->id, 'managed_website');
+        $site = $websiteEnabled ? \App\Models\TenantSite::query()->forTenantId($tenant->id)->first() : null;
+        $url = fn (string $route): string => route($route, ['tenant' => $tenant->slug]);
+        $cards = [];
+        $actions = [];
+        if ($tasks->isNotEmpty()) {
+            $cards[] = ['label' => 'Launch checklist', 'value' => $tasks->where('status', 'done')->count().' / '.$tasks->count(),
+                'detail' => 'Completed launch tasks', 'href' => $url('client.projects.checklist')];
+            $actions[] = ['label' => 'Continue the launch checklist', 'description' => 'Review what you and Evergrove need to do next.', 'href' => $url('client.projects.checklist')];
+        }
+        if ($websiteEnabled) {
+            foreach ([
+                ['Products', \App\Models\WebsiteProduct::class, 'managed-website.products.index'],
+                ['Customers', \App\Models\WebsiteCustomer::class, 'managed-website.customers.index'],
+                ['Orders', \App\Models\WebsiteOrder::class, 'managed-website.orders.index'],
+            ] as [$label, $model, $route]) {
+                $cards[] = ['label' => $label, 'value' => (string) $model::query()->forTenantId($tenant->id)->count(),
+                    'detail' => 'Website '.strtolower($label), 'href' => $url($route)];
+            }
+            $actions[] = ['label' => 'Review the website', 'description' => 'Review your pages, photos, and launch setup.', 'href' => $url('managed-website.index')];
+        }
+
+        return [
+            'tenant_id' => $tenant->id, 'tenant_slug' => $tenant->slug, 'experience_profile' => $profile,
+            'date_range' => ['key' => $range['key'], 'label' => $range['label'], 'short_label' => $range['short_label'],
+                'starts_at' => $range['starts_at']->toIso8601String(), 'ends_at' => $range['ends_at']->toIso8601String(), 'options' => $range['options']],
+            'hero' => ['label' => 'Website status', 'value' => ! $websiteEnabled ? 'Unavailable' : ($site?->public_enabled && $site?->published_site_version_id ? 'Published' : 'Draft'),
+                'supporting' => $site?->public_enabled && $site?->published_site_version_id ? 'Review your website and sales activity.' : 'Prepare the website and complete the shared launch checklist.',
+                'href' => $url($websiteEnabled ? 'managed-website.index' : 'account-help.index'), 'tone' => 'emerald'],
+            'summary_cards' => $cards, 'next_actions' => $actions, 'channel_pulse' => null,
+            'upcoming_jobs' => [], 'class_calendar' => null, 'front_yard_launch' => null,
+            'workflow_automation_health' => null, 'owner_reporting' => null, 'pinned_modules' => [],
+        ];
+    }
+
+    /**
+     * A compact, tenant-scoped version of the sales-channel pulse used at the
+     * top of Home. Storefront sessions come only from recorded events; when a
+     * tenant has not connected tracking, the UI says so instead of implying
+     * that a zero is a measured conversion result.
+     *
+     * @param  array{key:string,label:string,short_label:string,starts_at:\Carbon\CarbonImmutable,ends_at:\Carbon\CarbonImmutable,options:array<string,string>}  $range
+     * @return array<string,mixed>|null
+     */
+    protected function channelPulse(?int $tenantId, bool $roleAllowed, array $range, ?string $metricKey = null): ?array
+    {
+        if (! $roleAllowed || $tenantId === null) {
+            return null;
+        }
+
+        $sales = $this->salesChannels->forTenant($tenantId, $range['starts_at'], $range['ends_at']);
+        $priorRange = $this->previousRange($range);
+        $priorSales = $this->salesChannels->forTenant($tenantId, $priorRange['starts_at'], $priorRange['ends_at']);
+        $sessions = $this->storefrontSessionCount($tenantId, $range['starts_at'], $range['ends_at']);
+        $priorSessions = $this->storefrontSessionCount($tenantId, $priorRange['starts_at'], $priorRange['ends_at']);
+        $liveVisitors = $this->liveStorefrontVisitorCount($tenantId);
+        $conversion = $sessions === null || $sessions === 0
+            ? null
+            : (($sales['order_count'] / $sessions) * 100);
+        $priorConversion = $priorSessions === null || $priorSessions === 0
+            ? null
+            : (($priorSales['order_count'] / $priorSessions) * 100);
+        $href = route('sales-channels.index', ['range' => $range['key']]);
+
+        return [
+            'range_label' => $range['key'] === '1d' ? 'Today' : $range['label'],
+            'href' => $href,
+            'metrics' => [
+                [
+                    'key' => 'sessions',
+                    'label' => 'Sessions',
+                    'value' => $sessions === null ? '—' : number_format($sessions),
+                    'detail' => $sessions === null ? 'Tracking not connected' : 'Tracked storefront sessions',
+                    'trend' => $sessions === null ? null : $this->percentageTrend($sessions, $priorSessions),
+                    'href' => $href,
+                ],
+                [
+                    'key' => 'sales',
+                    'label' => 'Total sales',
+                    'value' => '$'.number_format($sales['revenue_cents'] / 100, 2),
+                    'detail' => $this->channelDetail($sales),
+                    'trend' => $this->percentageTrend($sales['revenue_cents'], $priorSales['revenue_cents']),
+                    'href' => $href,
+                ],
+                [
+                    'key' => 'orders',
+                    'label' => 'Orders',
+                    'value' => number_format($sales['order_count']),
+                    'detail' => 'Confirmed sales across channels',
+                    'trend' => $this->percentageTrend($sales['order_count'], $priorSales['order_count']),
+                    'href' => $href,
+                ],
+                [
+                    'key' => 'conversion',
+                    'label' => 'Conversion rate',
+                    'value' => $conversion === null ? '—' : number_format($conversion, 2).'%',
+                    'detail' => $conversion === null ? 'Needs tracked sessions' : 'Orders ÷ tracked sessions',
+                    'trend' => $conversion === null ? null : $this->percentageTrend($conversion, $priorConversion),
+                    'href' => $href,
+                ],
+                [
+                    'key' => 'visitors',
+                    'label' => 'Live visitors',
+                    'value' => $liveVisitors === null ? '—' : number_format($liveVisitors),
+                    'detail' => $liveVisitors === null ? 'Tracking not connected' : 'Active in the last 5 minutes',
+                    'live' => $liveVisitors !== null,
+                    'href' => $href,
+                ],
+            ],
+            'chart' => $this->channelPulseChart($tenantId, $range, $metricKey),
+        ];
+    }
+
+    /**
+     * @param  array{starts_at:\Carbon\CarbonImmutable,ends_at:\Carbon\CarbonImmutable}  $range
+     * @return array{key:string,starts_at:\Carbon\CarbonImmutable,ends_at:\Carbon\CarbonImmutable}
+     */
+    protected function previousRange(array $range): array
+    {
+        $seconds = max(1, $range['ends_at']->diffInSeconds($range['starts_at']));
+        $endsAt = $range['starts_at']->subSecond();
+
+        return [
+            'key' => $range['key'],
+            'starts_at' => $endsAt->subSeconds($seconds),
+            'ends_at' => $endsAt,
+        ];
+    }
+
+    protected function storefrontSessionCount(int $tenantId, \Carbon\CarbonImmutable $startsAt, \Carbon\CarbonImmutable $endsAt): ?int
+    {
+        if (! Schema::hasTable('marketing_storefront_events')) {
+            return null;
+        }
+
+        return (int) MarketingStorefrontEvent::query()
+            ->forTenantId($tenantId)
+            ->where('event_type', 'session_started')
+            ->whereBetween('occurred_at', [$startsAt, $endsAt])
+            ->where('source_id', 'like', 'session_started:%')
+            ->distinct()
+            ->count('source_id');
+    }
+
+    protected function liveStorefrontVisitorCount(int $tenantId): ?int
+    {
+        if (! Schema::hasTable('marketing_storefront_events')) {
+            return null;
+        }
+
+        return (int) MarketingStorefrontEvent::query()
+            ->forTenantId($tenantId)
+            ->where('event_type', 'session_started')
+            ->where('occurred_at', '>=', now()->subMinutes(5))
+            ->where('source_id', 'like', 'session_started:%')
+            ->distinct()
+            ->count('source_id');
+    }
+
+    /** @return array{label:string,tone:string}|null */
+    protected function percentageTrend(int|float $current, int|float|null $previous): ?array
+    {
+        if ($previous === null) {
+            return null;
+        }
+
+        if ($previous <= 0) {
+            return $current > 0 ? ['label' => 'New', 'tone' => 'positive'] : null;
+        }
+
+        $change = (($current - $previous) / $previous) * 100;
+        $rounded = (int) round(abs($change));
+
+        if ($rounded === 0) {
+            return ['label' => 'No change', 'tone' => 'neutral'];
+        }
+
+        return [
+            'label' => ($change > 0 ? '+' : '−').number_format($rounded).'%',
+            'tone' => $change > 0 ? 'positive' : 'negative',
+        ];
+    }
+
+    /** @param array{channel_count:int,channels:array<int,array{label:string}>} $sales */
+    protected function channelDetail(array $sales): string
+    {
+        if ($sales['channel_count'] === 0) {
+            return 'No confirmed sales in this period';
+        }
+
+        if ($sales['channel_count'] === 1) {
+            return (string) ($sales['channels'][0]['label'] ?? 'Sales channel');
+        }
+
+        return number_format($sales['channel_count']).' sales channels';
+    }
+
+    /**
+     * The Home chart intentionally stays inside the dashboard. It compares the
+     * selected period with the equivalent preceding period using the same
+     * isolated sales and storefront-event lanes as the top strip.
+     *
+     * @param  array{key:string,label:string,short_label:string,starts_at:\Carbon\CarbonImmutable,ends_at:\Carbon\CarbonImmutable,options:array<string,string>}  $range
+     * @return array<string,mixed>
+     */
+    protected function channelPulseChart(int $tenantId, array $range, ?string $metricKey): array
+    {
+        $metricKey = in_array($metricKey, ['sessions', 'sales', 'orders', 'conversion', 'visitors'], true)
+            ? $metricKey
+            : 'sales';
+        $priorRange = $this->previousRange($range);
+        $current = $this->pulseSeries($tenantId, $range, $metricKey);
+        $prior = $this->pulseSeries($tenantId, $priorRange, $metricKey);
+        $definitions = [
+            'sessions' => ['title' => 'Sessions over time', 'subtitle' => 'Tracked storefront sessions in the selected period.', 'unit' => 'count'],
+            'sales' => ['title' => 'Total sales over time', 'subtitle' => 'Confirmed sales from each connected channel.', 'unit' => 'currency'],
+            'orders' => ['title' => 'Orders over time', 'subtitle' => 'Confirmed orders from each connected channel.', 'unit' => 'count'],
+            'conversion' => ['title' => 'Conversion rate over time', 'subtitle' => 'Confirmed orders divided by tracked storefront sessions.', 'unit' => 'percent'],
+            'visitors' => ['title' => 'Visitor activity over time', 'subtitle' => 'Tracked session starts in the selected period. The top number remains the last five minutes.', 'unit' => 'count'],
+        ];
+        $definition = $definitions[$metricKey];
+
+        return [
+            'key' => $metricKey,
+            'title' => $definition['title'],
+            'subtitle' => $definition['subtitle'],
+            'unit' => $definition['unit'],
+            'value' => $this->formatPulseChartValue($metricKey, $current),
+            'labels' => $current['labels'],
+            'current' => $current['values'],
+            'previous' => $prior['values'],
+            'current_label' => $this->pulseRangeLabel($range),
+            'previous_label' => $this->pulseRangeLabel($priorRange),
+            'has_data' => $current['has_measurement'] || $prior['has_measurement'],
+            'empty_message' => $metricKey === 'conversion'
+                ? 'Track storefront sessions and confirmed orders to plot conversion.'
+                : 'No tracked data is available for this period yet.',
+        ];
+    }
+
+    /**
+     * @param  array{starts_at:\Carbon\CarbonImmutable,ends_at:\Carbon\CarbonImmutable}  $range
+     * @return array{labels:array<int,string>,values:array<int,float|int>,sales_total:int,order_total:int,session_total:int,has_measurement:bool}
+     */
+    protected function pulseSeries(int $tenantId, array $range, string $metricKey): array
+    {
+        $unit = $this->pulseBucketUnit($range);
+        $buckets = $this->pulseBuckets($range, $unit);
+        $sales = array_fill_keys(array_keys($buckets), 0);
+        $orders = array_fill_keys(array_keys($buckets), 0);
+        $sessions = array_fill_keys(array_keys($buckets), []);
+
+        if (Schema::hasTable('orders')) {
+            Order::query()
+                ->forTenantId($tenantId)
+                ->whereBetween('ordered_at', [$range['starts_at'], $range['ends_at']])
+                ->get(['ordered_at', 'total_price'])
+                ->each(function (Order $order) use (&$sales, &$orders, $unit): void {
+                    if (! $order->ordered_at) {
+                        return;
+                    }
+                    $key = $this->pulseBucketKey($order->ordered_at, $unit);
+                    if (! array_key_exists($key, $sales)) {
+                        return;
+                    }
+                    $sales[$key] += (int) round(((float) $order->total_price) * 100);
+                    $orders[$key]++;
+                });
+        }
+
+        if (Schema::hasTable('website_orders')) {
+            WebsiteOrder::query()
+                ->forTenantId($tenantId)
+                ->where('payment_status', 'paid')
+                ->whereBetween('paid_at', [$range['starts_at'], $range['ends_at']])
+                ->get(['paid_at', 'total_cents'])
+                ->each(function (WebsiteOrder $order) use (&$sales, &$orders, $unit): void {
+                    if (! $order->paid_at) {
+                        return;
+                    }
+                    $key = $this->pulseBucketKey($order->paid_at, $unit);
+                    if (! array_key_exists($key, $sales)) {
+                        return;
+                    }
+                    $sales[$key] += (int) $order->total_cents;
+                    $orders[$key]++;
+                });
+        }
+
+        if (Schema::hasTable('marketing_storefront_events')) {
+            MarketingStorefrontEvent::query()
+                ->forTenantId($tenantId)
+                ->where('event_type', 'session_started')
+                ->whereBetween('occurred_at', [$range['starts_at'], $range['ends_at']])
+                ->where('source_id', 'like', 'session_started:%')
+                ->get(['source_id', 'occurred_at'])
+                ->each(function (MarketingStorefrontEvent $event) use (&$sessions, $unit): void {
+                    if (! $event->occurred_at) {
+                        return;
+                    }
+                    $key = $this->pulseBucketKey($event->occurred_at, $unit);
+                    if (array_key_exists($key, $sessions)) {
+                        $sessions[$key][(string) $event->source_id] = true;
+                    }
+                });
+        }
+
+        $sessionCounts = array_map(static fn (array $sourceIds): int => count($sourceIds), $sessions);
+        $values = match ($metricKey) {
+            'sales' => array_values($sales),
+            'orders' => array_values($orders),
+            'conversion' => array_values(array_map(static fn (int $orderCount, int $sessionCount): float => $sessionCount > 0 ? ($orderCount / $sessionCount) * 100 : 0, $orders, $sessionCounts)),
+            'sessions', 'visitors' => array_values($sessionCounts),
+            default => array_values($sales),
+        };
+        $salesTotal = array_sum($sales);
+        $orderTotal = array_sum($orders);
+        $sessionTotal = array_sum($sessionCounts);
+
+        return [
+            'labels' => array_values(array_column($buckets, 'label')),
+            'values' => $values,
+            'sales_total' => $salesTotal,
+            'order_total' => $orderTotal,
+            'session_total' => $sessionTotal,
+            'has_measurement' => match ($metricKey) {
+                'sales', 'orders' => $orderTotal > 0,
+                'conversion', 'sessions', 'visitors' => $sessionTotal > 0,
+                default => false,
+            },
+        ];
+    }
+
+    /** @param array{starts_at:\Carbon\CarbonImmutable,ends_at:\Carbon\CarbonImmutable} $range */
+    protected function pulseBucketUnit(array $range): string
+    {
+        return $range['key'] === '1d' ? 'hour' : 'day';
+    }
+
+    /**
+     * @param  array{starts_at:\Carbon\CarbonImmutable,ends_at:\Carbon\CarbonImmutable}  $range
+     * @return array<string,array{label:string}>
+     */
+    protected function pulseBuckets(array $range, string $unit): array
+    {
+        $cursor = $unit === 'hour' ? $range['starts_at']->startOfHour() : $range['starts_at']->startOfDay();
+        $end = $unit === 'hour' ? $range['ends_at']->startOfHour() : $range['ends_at']->startOfDay();
+        $buckets = [];
+
+        while ($cursor->lte($end)) {
+            $key = $this->pulseBucketKey($cursor, $unit);
+            $buckets[$key] = [
+                'label' => $unit === 'hour' ? $cursor->format('g A') : $cursor->format('M j'),
+            ];
+            $cursor = $unit === 'hour' ? $cursor->addHour() : $cursor->addDay();
+        }
+
+        return $buckets;
+    }
+
+    protected function pulseBucketKey(\Carbon\CarbonInterface $at, string $unit): string
+    {
+        return $at->format($unit === 'hour' ? 'Y-m-d-H' : 'Y-m-d');
+    }
+
+    /**
+     * @param  array{sales_total:int,order_total:int,session_total:int}  $series
+     */
+    protected function formatPulseChartValue(string $metricKey, array $series): string
+    {
+        return match ($metricKey) {
+            'sales' => '$'.number_format($series['sales_total'] / 100, 2),
+            'orders' => number_format($series['order_total']),
+            'conversion' => $series['session_total'] > 0
+                ? number_format(($series['order_total'] / $series['session_total']) * 100, 2).'%'
+                : '—',
+            'sessions', 'visitors' => number_format($series['session_total']),
+            default => '—',
+        };
+    }
+
+    /** @param array{starts_at:\Carbon\CarbonImmutable,ends_at:\Carbon\CarbonImmutable} $range */
+    protected function pulseRangeLabel(array $range): string
+    {
+        return $range['starts_at']->isSameDay($range['ends_at'])
+            ? $range['starts_at']->format('M j, Y')
+            : $range['starts_at']->format('M j').'–'.$range['ends_at']->format('M j, Y');
     }
 
     /** @return array<string,mixed>|null */
@@ -199,6 +619,7 @@ class UnifiedDashboardService
     protected function ownerReport(?Tenant $tenant, ?User $user, string $rangeKey): ?array
     {
         if (! $tenant || ! $user
+            || in_array(strtolower(trim((string) $tenant->slug)), ['collins-electric', 'collins-upstate-electric'], true)
             || ! Schema::hasTable('quickbooks_reporting_settings')
             || ! $this->financialAccess->allows($user, $tenant)
             || ! $this->moduleAccess->canAccess((int) $tenant->id, 'quickbooks')) {
@@ -298,18 +719,23 @@ class UnifiedDashboardService
             ];
         }
 
-        if ($tenantId !== null && Schema::hasTable('orders') && in_array($channelType, ['shopify', 'hybrid'], true) && ($canAccessMarketing || $canAccessOps)) {
-            $query = Order::query()->forTenantId($tenantId);
-            $revenue = (float) (clone $query)->whereBetween('ordered_at', [$range['starts_at'], $range['ends_at']])->sum('total_price');
-            $orders = (int) (clone $query)->whereBetween('ordered_at', [$range['starts_at'], $range['ends_at']])->count();
+        if ($tenantId !== null && ($canAccessMarketing || $canAccessOps)) {
+            $sales = $this->salesChannels->forTenant($tenantId, $range['starts_at'], $range['ends_at']);
+            $hasRelevantChannel = in_array($channelType, ['shopify', 'hybrid'], true) || $sales['has_website_channel'];
 
-            return [
-                'label' => 'Order-linked revenue · '.$range['short_label'],
-                'value' => '$'.number_format($revenue, 2),
-                'supporting' => number_format($orders).' recent orders',
-                'tone' => 'emerald',
-                'destination' => ['kind' => 'orders'],
-            ];
+            if ($hasRelevantChannel && $sales['order_count'] > 0) {
+                $channelDetail = $sales['channel_count'] === 1
+                    ? ($sales['channels'][0]['label'] ?? 'Sales channel')
+                    : number_format($sales['channel_count']).' channels';
+
+                return [
+                    'label' => 'Sales-channel revenue · '.$range['short_label'],
+                    'value' => '$'.number_format($sales['revenue_cents'] / 100, 2),
+                    'supporting' => number_format($sales['order_count']).' confirmed orders · '.$channelDetail,
+                    'tone' => 'emerald',
+                    'destination' => ['kind' => 'sales_channels'],
+                ];
+            }
         }
 
         if ($clientFacingFieldService && $canAccessOps && $tenantId !== null && $useCase === 'field_service' && Schema::hasTable('field_service_jobs')) {
@@ -604,7 +1030,7 @@ class UnifiedDashboardService
             $actions[] = [
                 'label' => 'Invite your team',
                 'description' => 'Add the people who need access.',
-                'href' => route('admin.index', ['tab' => 'users']),
+                'href' => route('admin.users'),
                 'tone' => 'neutral',
             ];
 
@@ -654,8 +1080,8 @@ class UnifiedDashboardService
 
         if ($canAccessMarketing && $tenantId !== null && ((array) ($catalog['sections']['available'] ?? [])) !== []) {
             $actions[] = [
-                'label' => 'Explore modules',
-                'description' => 'See which modules can be activated or requested next for this tenant.',
+                'label' => 'Explore Branches',
+                'description' => 'See what is included, what can be added now, and what requires a request.',
                 'href' => route('marketing.modules'),
                 'tone' => 'info',
             ];
@@ -707,6 +1133,9 @@ class UnifiedDashboardService
                 'display_name' => (string) ($module['display_name'] ?? 'Module'),
                 'description' => (string) ($module['description'] ?? ''),
                 'state_label' => (string) data_get($module, 'module_state.state_label', 'Available'),
+                'price_label' => filled(data_get($module, 'purchase.price_display'))
+                    ? (string) data_get($module, 'purchase.price_display')
+                    : (string) ($module['pricing_impact_label'] ?? 'Included or request-based'),
                 'href' => route('marketing.modules', ['module' => (string) ($module['module_key'] ?? '')]),
             ];
         }, $rows);
@@ -730,6 +1159,7 @@ class UnifiedDashboardService
             'field_service', 'field_service_job' => route('field-service.index').($destination['section'] ?? false ? '#'.(string) $destination['section'] : ''),
             'customers', 'customer' => route('marketing.customers'),
             'orders' => route('shipping.orders'),
+            'sales_channels' => route('sales-channels.index', ['range' => $rangeKey]),
             'imports' => route('marketing.providers-integrations'),
             'modules' => route('marketing.modules'),
             'reporting' => $tenant ? route('quickbooks.reports.index', ['tenant' => $tenant->slug, 'range' => $rangeKey]) : null,

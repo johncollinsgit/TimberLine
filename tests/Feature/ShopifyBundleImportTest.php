@@ -2,11 +2,11 @@
 
 namespace Tests\Feature;
 
-use App\Models\OrderLine;
 use App\Models\MappingException;
+use App\Models\OrderLine;
 use App\Models\Scent;
-use App\Models\Size;
 use App\Models\ShopifyImportException;
+use App\Models\Size;
 use App\Services\Shopify\ShopifyOrderIngestor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -15,7 +15,7 @@ class ShopifyBundleImportTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function testBundleExpandsIntoMultipleLines(): void
+    public function test_bundle_expands_into_multiple_lines(): void
     {
         Size::query()->firstOrCreate(
             ['code' => '8oz-cotton'],
@@ -72,7 +72,122 @@ class ShopifyBundleImportTest extends TestCase
         $this->assertNotNull($lines[0]->external_key);
     }
 
-    public function testBundleMissingScentCreatesImportException(): void
+    public function test_every_everbranch_option_set_normalizes_into_individual_scent_and_size_lines(): void
+    {
+        $sizes = collect([
+            '4oz-cotton' => '4oz Cotton Wick',
+            '8oz-cotton' => '8oz Cotton Wick',
+            '16oz-cotton' => '16oz Cotton Wick',
+            'wax-melts' => 'Wax Melts',
+            'room-sprays' => 'Room Sprays',
+        ])->mapWithKeys(function (string $label, string $code): array {
+            $size = Size::query()->firstOrCreate(
+                ['code' => $code],
+                ['label' => $label, 'is_active' => true]
+            );
+
+            return [$code => $size];
+        });
+
+        $scentNames = [
+            'River Birch',
+            'Pumpkin Chai',
+            'Lavender',
+            'Lava Rock',
+            'White Tea',
+        ];
+        foreach ($scentNames as $name) {
+            Scent::query()->firstOrCreate(
+                ['name' => $name],
+                ['display_name' => $name, 'is_active' => true]
+            );
+        }
+
+        $cases = [
+            [
+                'title' => '3 (4oz) Soy Candle Bundle',
+                'product_type' => 'Soy Candles',
+                'variant_title' => 'Default Title',
+                'count' => 3,
+                'size' => '4oz-cotton',
+            ],
+            [
+                'title' => '3 (8oz) Soy Candle Bundle',
+                'product_type' => 'Soy Candles',
+                'variant_title' => 'Cotton Wick',
+                'count' => 3,
+                'size' => '8oz-cotton',
+            ],
+            [
+                'title' => 'Teacher Candles',
+                'product_type' => 'Soy Candles',
+                'variant_title' => '16oz Cotton Wick',
+                'count' => 2,
+                'size' => '16oz-cotton',
+            ],
+            [
+                'title' => 'Teacher Candles',
+                'product_type' => 'Soy Candles',
+                'variant_title' => 'Wax Melt',
+                'count' => 2,
+                'size' => 'wax-melts',
+            ],
+            [
+                'title' => '5 Wax Melts Bundle',
+                'product_type' => 'Soy Candles',
+                'variant_title' => 'Default Title',
+                'count' => 5,
+                'size' => 'wax-melts',
+            ],
+            [
+                'title' => 'Three Room Sprays for $30',
+                'product_type' => 'Room Sprays',
+                'variant_title' => 'Default Title',
+                'count' => 3,
+                'size' => 'room-sprays',
+            ],
+        ];
+
+        $ingestor = app(ShopifyOrderIngestor::class);
+        foreach ($cases as $caseIndex => $case) {
+            $properties = [];
+            for ($slot = 1; $slot <= $case['count']; $slot++) {
+                $properties[] = [
+                    'name' => "Scent {$slot}",
+                    'value' => $scentNames[$slot - 1],
+                ];
+            }
+
+            $lines = $ingestor->mergeLineItems([[
+                'id' => 9000 + $caseIndex,
+                'title' => $case['title'],
+                'product_type' => $case['product_type'],
+                'variant_title' => $case['variant_title'],
+                'quantity' => 1,
+                'properties' => $properties,
+            ]]);
+
+            $this->assertCount($case['count'], $lines, $case['title'].' should create one line per scent.');
+            $this->assertSame(
+                array_slice($scentNames, 0, $case['count']),
+                array_column($lines, 'title'),
+                $case['title'].' should preserve each selected scent.'
+            );
+            $this->assertSame(
+                array_fill(0, $case['count'], (int) $sizes[$case['size']]->id),
+                array_map(static fn (array $line): int => (int) $line['size_id'], $lines),
+                $case['title'].' should normalize every scent to the selected product size.'
+            );
+            $this->assertSame(
+                array_fill(0, $case['count'], 1),
+                array_column($lines, 'quantity'),
+                $case['title'].' should create one unit per selection.'
+            );
+            $this->assertSame(0, ShopifyImportException::query()->count());
+        }
+    }
+
+    public function test_bundle_missing_scent_creates_import_exception(): void
     {
         Size::query()->firstOrCreate(
             ['code' => '8oz-cotton'],
@@ -105,7 +220,7 @@ class ShopifyBundleImportTest extends TestCase
         $this->assertSame('bundle_scent_count_mismatch', ShopifyImportException::query()->first()->reason);
     }
 
-    public function testReimportDoesNotDuplicateBundleLines(): void
+    public function test_reimport_does_not_duplicate_bundle_lines(): void
     {
         Size::query()->firstOrCreate(
             ['code' => '8oz-cotton'],
@@ -151,7 +266,7 @@ class ShopifyBundleImportTest extends TestCase
         $this->assertSame(3, OrderLine::query()->count());
     }
 
-    public function testSaleCandlesUsesVariantAsScentSourceForWholesaleImport(): void
+    public function test_sale_candles_uses_variant_as_scent_source_for_wholesale_import(): void
     {
         $size = Size::query()->firstOrCreate(
             ['code' => '8oz-cotton'],
@@ -195,7 +310,7 @@ class ShopifyBundleImportTest extends TestCase
         $this->assertSame(0, MappingException::query()->count());
     }
 
-    public function testCustomScentUsesVariantAsScentSourceForWholesaleImport(): void
+    public function test_custom_scent_uses_variant_as_scent_source_for_wholesale_import(): void
     {
         $size = Size::query()->firstOrCreate(
             ['code' => '8oz-cotton'],

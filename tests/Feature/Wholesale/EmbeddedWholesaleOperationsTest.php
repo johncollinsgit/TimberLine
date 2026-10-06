@@ -7,7 +7,11 @@ use App\Models\OrderLine;
 use App\Models\ShopifyStore;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Models\WholesaleEmailMessengerDraft;
 use App\Models\WholesaleOrderClassification;
+use App\Services\Shopify\ShopifyEmbeddedAppContext;
+use App\Services\Shopify\ShopifyStores;
+use App\Services\Wholesale\WholesaleEmailMessengerService;
 use App\Services\Wholesale\WholesaleOrderClassificationService;
 
 beforeEach(function (): void {
@@ -163,11 +167,11 @@ test('embedded mutation controls wait for a fresh shopify admin session token', 
         ->assertSee('getShopifySessionToken', false);
 });
 
-test('wholesale app navigation emits one hidden home link and seven visible noun links', function (): void {
+test('wholesale app navigation puts email messenger before suggestions', function (): void {
     $html = $this->get(route('shopify.app.wholesale', wholesaleEmbeddedSignedQuery()))->assertOk()->getContent();
     preg_match_all('/<s-link\b([^>]*)>(.*?)<\/s-link>/s', $html, $matches, PREG_SET_ORDER);
 
-    expect($matches)->toHaveCount(8)
+    expect($matches)->toHaveCount(9)
         ->and($matches[0][1])->toContain('rel="home"')
         ->and(trim(strip_tags($matches[0][2])))->toBe('Overview');
 
@@ -175,10 +179,67 @@ test('wholesale app navigation emits one hidden home link and seven visible noun
         ->map(fn (array $match): string => trim(strip_tags($match[2])))
         ->values()
         ->all();
-    expect($visibleLabels)->toBe(['Suggestions', 'Customers', 'Orders', 'Follow-Ups', 'Prospects', 'Discover', 'Applications']);
+    expect($visibleLabels)->toBe(['Email Messenger', 'Suggestions', 'Customers', 'Orders', 'Follow-Ups', 'Prospects', 'Discover', 'Applications']);
     foreach ($matches as $match) {
         expect($match[1])->toContain('href="/shopify/app/wholesale');
     }
+});
+
+test('wholesale email messenger creates and persists the approved sixteen-block draft', function (): void {
+    $response = $this->get(route('shopify.app.wholesale.messaging', wholesaleEmbeddedSignedQuery()));
+    $response->assertOk()->assertSeeText('Email Messenger')->assertSee('Bring Modern Forestry to your store')->assertSee('cdn.shopify.com');
+    expect(WholesaleEmailMessengerDraft::query()->where('tenant_id', $this->tenant->id)->firstOrFail()->sections)->toHaveCount(16);
+});
+
+test('wholesale email messenger uses the configured embedded app client id for Shopify Admin session tokens', function (): void {
+    config()->set('services.shopify.stores.wholesale.client_id', 'wholesale-admin-client-id');
+    config()->set('services.shopify.stores.wholesale.embedded_client_id', 'wholesale-embedded-client-id');
+    config()->set('services.shopify.stores.wholesale.embedded_client_secret', 'wholesale-embedded-client-secret');
+
+    $this->get(route('shopify.app.wholesale.messaging', wholesaleEmbeddedSignedQuery()))
+        ->assertOk()
+        ->assertSee('<meta name="shopify-api-key" content="wholesale-embedded-client-id">', false);
+});
+
+test('wholesale email messenger saves with a server-issued page context when Safari has no embedded session cookie', function (): void {
+    $draft = app(WholesaleEmailMessengerService::class)->draft((int) $this->tenant->id, 'wholesale');
+    $store = ShopifyStores::find('wholesale', true);
+    $contextToken = app(ShopifyEmbeddedAppContext::class)->issueContextToken([
+        'store' => $store,
+        'shop_domain' => $store['shop'],
+        'host' => 'wholesale-admin-host-token',
+    ]);
+
+    $this->postJson(route('shopify.app.api.wholesale.messaging.save'), [
+        'subject' => $draft['subject'],
+        'sections' => $draft['sections'],
+        'personalization' => $draft['personalization'],
+        'revision' => $draft['revision'],
+        'context_token' => $contextToken,
+    ])->assertOk()->assertJsonPath('ok', true);
+});
+
+test('wholesale email messenger repairs only the legacy placeholder candle assets in an existing draft', function (): void {
+    $service = app(WholesaleEmailMessengerService::class);
+    $service->draft($this->tenant->id, 'wholesale');
+    $draft = WholesaleEmailMessengerDraft::query()->where('tenant_id', $this->tenant->id)->firstOrFail();
+    $sections = $draft->sections;
+    $sections[0]['imageUrl'] = 'https://theforestrystudio.com/cdn/shop/files/modern-forestry-wholesale-hero.jpg';
+    $sections[10]['products'][0] = [
+        'title' => 'Merchant-written product title',
+        'imageUrl' => 'https://theforestrystudio.com/cdn/shop/files/cedar-smoke-candle.jpg',
+        'href' => 'https://theforestrystudio.com/products/cedar-smoke-candle',
+        'buttonLabel' => 'Merchant-written link label',
+    ];
+    $draft->forceFill(['sections' => $sections])->save();
+
+    $payload = $service->draft($this->tenant->id, 'wholesale');
+
+    expect(data_get($payload, 'sections.0.imageUrl'))->toStartWith('https://cdn.shopify.com/')
+        ->and(data_get($payload, 'sections.10.products.0.href'))->toBe('https://theforestrystudio.com/products/forest-spice')
+        ->and(data_get($payload, 'sections.10.products.0.imageUrl'))->toStartWith('https://cdn.shopify.com/')
+        ->and(data_get($payload, 'sections.10.products.0.title'))->toBe('Merchant-written product title')
+        ->and(data_get($payload, 'sections.10.products.0.buttonLabel'))->toBe('Merchant-written link label');
 });
 
 test('wholesale pages fail closed when the authenticated store has no tenant mapping', function (): void {

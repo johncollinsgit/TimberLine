@@ -3,6 +3,10 @@
 return [
 
     'workspace_asset_disk' => env('WORKSPACE_ASSET_DISK', 'local'),
+    'workspace_asset_max_upload_mb' => max(1, min(1024, (int) env('WORKSPACE_ASSET_MAX_UPLOAD_MB', 50))),
+    'workspace_asset_active_upload_reservation_mb' => max(1, min(4096, (int) env('WORKSPACE_ASSET_ACTIVE_UPLOAD_RESERVATION_MB', 500))),
+    'workspace_asset_pdf_validator_binary' => env('WORKSPACE_ASSET_PDF_VALIDATOR_BINARY', '/usr/bin/gs'),
+    'workspace_asset_pdf_validator_timeout_seconds' => max(10, min(300, (int) env('WORKSPACE_ASSET_PDF_VALIDATOR_TIMEOUT_SECONDS', 120))),
 
     /*
     |--------------------------------------------------------------------------

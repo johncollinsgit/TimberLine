@@ -16,7 +16,7 @@ class CustomerEquipment extends Model
     protected $fillable = [
         'tenant_id', 'marketing_profile_id', 'assigned_user_id', 'equipment_type', 'name', 'manufacturer',
         'model_number', 'serial_number', 'installed_at', 'maintenance_interval_days', 'last_serviced_at',
-        'next_service_due_at', 'status', 'notes',
+        'next_service_due_at', 'status', 'external_source', 'external_id', 'notes',
     ];
 
     protected $casts = [

@@ -193,8 +193,10 @@ class ShopifyEmbeddedMessagingController extends Controller
             alphaBootstrapService: $alphaBootstrapService,
             activeKey: 'responses',
             headline: 'Inbox',
-            subheadline: 'Review inbound SMS and email replies in one Everbranch inbox.',
-            bootstrapOverrides: []
+            subheadline: 'Review inbound SMS, email, and Instagram replies in one Everbranch inbox.',
+            bootstrapOverrides: [
+                'channel_options' => ['sms', 'email', 'instagram'],
+            ]
         );
     }
 
@@ -1652,7 +1654,7 @@ class ShopifyEmbeddedMessagingController extends Controller
 
         try {
             $filters = validator($request->query(), [
-                'channel' => ['nullable', 'in:sms,email,all'],
+                'channel' => ['nullable', 'in:sms,email,instagram,all'],
                 'filter' => ['nullable', 'in:open,unread,opted_out,assigned_to_me,all'],
                 'source' => ['nullable', 'in:all,mobile_app,standard'],
                 'search' => ['nullable', 'string', 'max:120'],

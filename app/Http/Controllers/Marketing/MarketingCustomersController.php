@@ -9,27 +9,29 @@ use App\Models\CandleCashReward;
 use App\Models\CandleCashTaskCompletion;
 use App\Models\CustomerBirthdayProfile;
 use App\Models\CustomerExternalProfile;
+use App\Models\FieldServiceJob;
+use App\Models\MarketingCampaign;
+use App\Models\MarketingEmailDelivery;
+use App\Models\MarketingGroup;
 use App\Models\MarketingImportRun;
+use App\Models\MarketingOrderEventAttribution;
+use App\Models\MarketingProfile;
+use App\Models\MarketingProfileLink;
 use App\Models\MarketingReviewHistory;
 use App\Models\MarketingReviewSummary;
-use App\Models\MarketingProfile;
-use App\Models\MarketingEmailDelivery;
-use App\Models\MarketingProfileLink;
 use App\Models\MarketingSegment;
-use App\Models\MarketingOrderEventAttribution;
-use App\Models\MarketingCampaign;
-use App\Models\MarketingGroup;
 use App\Models\Order;
 use App\Models\SquareCustomer;
 use App\Models\SquareOrder;
 use App\Models\SquarePayment;
 use App\Models\Tenant;
+use App\Services\FieldService\FieldServiceWorkProfileService;
+use App\Services\Marketing\BirthdayEmailDeliveryStatusNormalizer;
 use App\Services\Marketing\BirthdayProfileService;
 use App\Services\Marketing\BirthdayReportingService;
 use App\Services\Marketing\BirthdayRewardEngineService;
-use App\Services\Marketing\BirthdayEmailDeliveryStatusNormalizer;
-use App\Services\Marketing\CandleCashService;
 use App\Services\Marketing\CandleCashRedemptionReconciliationService;
+use App\Services\Marketing\CandleCashService;
 use App\Services\Marketing\GrowaveProjectionService;
 use App\Services\Marketing\MarketingConsentService;
 use App\Services\Marketing\MarketingEmailDeliveryProviderContext;
@@ -44,14 +46,14 @@ use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Support\Marketing\MarketingIdentityNormalizer;
 use App\Support\Marketing\MarketingSectionRegistry;
 use Carbon\CarbonInterface;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -76,18 +78,19 @@ class MarketingCustomersController extends Controller
         protected GrowaveProjectionService $growaveProjectionService,
         protected MarketingWishlistService $wishlistService,
         protected MarketingEmailDeliveryProviderContext $emailDeliveryProviderContextResolver
-    ) {
-    }
+    ) {}
 
     public function index(Request $request): View
     {
         $tenantId = $this->currentTenantId($request);
+        $operationalDirectory = $this->usesOperationalCustomerDirectory($request);
         $filters = $this->normalizeIndexFilters($request);
         $totalProfiles = MarketingProfile::query()
             ->forTenantId($tenantId)
+            ->whereNull('archived_at')
             ->count();
         $emptyStateDiagnostics = $this->buildEmptyStateDiagnostics($totalProfiles);
-        $quickStats = $this->buildIndexQuickStats($totalProfiles);
+        $quickStats = $this->buildIndexQuickStats($totalProfiles, $tenantId, $operationalDirectory);
 
         return view('marketing.customers.index', [
             'section' => MarketingSectionRegistry::section('customers'),
@@ -103,11 +106,14 @@ class MarketingCustomersController extends Controller
             'hasPhoneFilter' => (string) $filters['has_phone'],
             'emptyStateDiagnostics' => $emptyStateDiagnostics,
             'quickStats' => $quickStats,
+            'operationalDirectory' => $operationalDirectory,
             'customerGrid' => [
                 'endpoint' => route('marketing.customers.data'),
                 'detail_base_url' => url('/marketing/customers'),
+                'bulk_action_url' => route('marketing.customers.bulk-archive'),
+                'operational_directory' => $operationalDirectory,
                 'filters' => $filters,
-                'sort_options' => $this->customerIndexSortOptions(),
+                'sort_options' => $this->customerIndexSortOptions($operationalDirectory),
             ],
         ]);
     }
@@ -115,22 +121,25 @@ class MarketingCustomersController extends Controller
     public function data(Request $request): JsonResponse
     {
         $tenantId = $this->currentTenantId($request);
+        $operationalDirectory = $this->usesOperationalCustomerDirectory($request);
         $filters = $this->normalizeIndexFilters($request);
-        $profiles = $this->customerIndexQuery($filters, $tenantId)
-            ->with(['birthdayProfile:id,marketing_profile_id,birth_month,birth_day,birth_year,birthday_full_date,source,reward_last_issued_at,reward_last_issued_year'])
+        $profiles = $this->customerIndexQuery($filters, $tenantId, $operationalDirectory)
+            ->when(! $operationalDirectory, fn (Builder $query) => $query->with(['birthdayProfile:id,marketing_profile_id,birth_month,birth_day,birth_year,birthday_full_date,source,reward_last_issued_at,reward_last_issued_year']))
+            ->when($operationalDirectory, fn (Builder $query) => $query->withCount('fieldServiceJobs'))
             ->withCount('links')
             ->paginate((int) $filters['per_page'])
             ->withQueryString();
 
         $derivedStats = $this->buildDerivedStats($profiles->getCollection());
-        $loyaltyStats = $this->buildLoyaltyEnrichment($profiles->getCollection());
+        $loyaltyStats = $operationalDirectory ? [] : $this->buildLoyaltyEnrichment($profiles->getCollection());
 
         $rows = $profiles->getCollection()
-            ->map(function (MarketingProfile $profile) use ($derivedStats, $loyaltyStats): array {
+            ->map(function (MarketingProfile $profile) use ($derivedStats, $loyaltyStats, $operationalDirectory): array {
                 return $this->serializeCustomerGridRow(
                     $profile,
                     $derivedStats[(int) $profile->id] ?? null,
-                    $loyaltyStats[(int) $profile->id] ?? null
+                    $loyaltyStats[(int) $profile->id] ?? null,
+                    $operationalDirectory,
                 );
             })
             ->values()
@@ -140,7 +149,7 @@ class MarketingCustomersController extends Controller
             'data' => $rows,
             'rows' => $rows,
             'meta' => [
-                'columns' => $this->customerGridColumns(),
+                'columns' => $this->customerGridColumns($operationalDirectory),
                 'pagination' => [
                     'page' => $profiles->currentPage(),
                     'per_page' => $profiles->perPage(),
@@ -148,7 +157,7 @@ class MarketingCustomersController extends Controller
                     'last_page' => $profiles->lastPage(),
                 ],
                 'filters' => $filters,
-                'sort_options' => $this->customerIndexSortOptions(),
+                'sort_options' => $this->customerIndexSortOptions($operationalDirectory),
             ],
         ]);
     }
@@ -162,7 +171,8 @@ class MarketingCustomersController extends Controller
      *   birthday_filter:string,
      *   source:string,
      *   has_points:string,
-     *   has_phone:string
+     *   has_phone:string,
+     *   status:string
      * }
      */
     protected function normalizeIndexFilters(Request $request): array
@@ -175,6 +185,7 @@ class MarketingCustomersController extends Controller
         $sourceFilter = trim((string) $request->query('source', 'all'));
         $hasPointsFilter = trim((string) $request->query('has_points', 'all'));
         $hasPhoneFilter = trim((string) $request->query('has_phone', 'all'));
+        $status = trim((string) $request->query('status', 'active'));
 
         if (! in_array($birthdayFilter, ['all', 'today', 'week', 'month', 'missing'], true)) {
             $birthdayFilter = 'all';
@@ -187,6 +198,9 @@ class MarketingCustomersController extends Controller
         }
         if (! in_array($hasPhoneFilter, ['all', 'yes', 'no'], true)) {
             $hasPhoneFilter = 'all';
+        }
+        if (! in_array($status, ['active', 'archived'], true)) {
+            $status = 'active';
         }
 
         if (! in_array($sort, ['updated_at', 'created_at', 'email', 'first_name', 'last_name', 'candle_cash_balance'], true)) {
@@ -202,13 +216,14 @@ class MarketingCustomersController extends Controller
             'source' => $sourceFilter,
             'has_points' => $hasPointsFilter,
             'has_phone' => $hasPhoneFilter,
+            'status' => $status,
         ];
     }
 
     /**
-     * @param array<string,mixed> $filters
+     * @param  array<string,mixed>  $filters
      */
-    protected function customerIndexQuery(array $filters, ?int $tenantId = null): Builder
+    protected function customerIndexQuery(array $filters, ?int $tenantId = null, bool $operationalDirectory = false): Builder
     {
         $search = (string) ($filters['search'] ?? '');
         $sort = (string) ($filters['sort'] ?? 'updated_at');
@@ -217,14 +232,16 @@ class MarketingCustomersController extends Controller
         $sourceFilter = (string) ($filters['source'] ?? 'all');
         $hasPointsFilter = (string) ($filters['has_points'] ?? 'all');
         $hasPhoneFilter = (string) ($filters['has_phone'] ?? 'all');
+        $status = (string) ($filters['status'] ?? 'active');
 
         $today = now();
         $weekTuples = $this->birthdayWeekTuples($today);
         $supportsCandleCashBalances = Schema::hasTable('candle_cash_balances');
-        $searchLike = '%' . $search . '%';
+        $searchLike = '%'.$search.'%';
 
         $query = MarketingProfile::query()
             ->forTenantId($tenantId)
+            ->when($status === 'archived', fn (Builder $builder) => $builder->whereNotNull('archived_at'), fn (Builder $builder) => $builder->whereNull('archived_at'))
             ->when($search !== '', function ($builder) use ($searchLike): void {
                 $builder->where(function ($nested) use ($searchLike): void {
                     $nested->where('first_name', 'like', $searchLike)
@@ -245,7 +262,7 @@ class MarketingCustomersController extends Controller
                         });
                 });
             })
-            ->when($sourceFilter !== 'all', function ($builder) use ($sourceFilter): void {
+            ->when(! $operationalDirectory && $sourceFilter !== 'all', function ($builder) use ($sourceFilter): void {
                 $this->applySourceFilter($builder, $sourceFilter);
             })
             ->when($hasPhoneFilter === 'yes', function ($builder): void {
@@ -254,7 +271,7 @@ class MarketingCustomersController extends Controller
             ->when($hasPhoneFilter === 'no', function ($builder): void {
                 $builder->whereNull('normalized_phone');
             })
-            ->when($hasPointsFilter === 'yes', function ($builder) use ($supportsCandleCashBalances): void {
+            ->when(! $operationalDirectory && $hasPointsFilter === 'yes', function ($builder) use ($supportsCandleCashBalances): void {
                 $builder->where(function ($pointsQuery) use ($supportsCandleCashBalances): void {
                     $pointsQuery->whereHas('externalProfiles', function ($externalQuery): void {
                         $externalQuery
@@ -269,7 +286,7 @@ class MarketingCustomersController extends Controller
                     }
                 });
             })
-            ->when($hasPointsFilter === 'no', function ($builder) use ($supportsCandleCashBalances): void {
+            ->when(! $operationalDirectory && $hasPointsFilter === 'no', function ($builder) use ($supportsCandleCashBalances): void {
                 $builder->whereDoesntHave('externalProfiles', function ($externalQuery): void {
                     $externalQuery
                         ->where('integration', 'growave')
@@ -282,14 +299,14 @@ class MarketingCustomersController extends Controller
                     });
                 }
             })
-            ->when($birthdayFilter === 'today', function ($builder) use ($today): void {
+            ->when(! $operationalDirectory && $birthdayFilter === 'today', function ($builder) use ($today): void {
                 $builder->whereHas('birthdayProfile', function ($birthdayQuery) use ($today): void {
                     $birthdayQuery
                         ->where('birth_month', (int) $today->month)
                         ->where('birth_day', (int) $today->day);
                 });
             })
-            ->when($birthdayFilter === 'week', function ($builder) use ($weekTuples): void {
+            ->when(! $operationalDirectory && $birthdayFilter === 'week', function ($builder) use ($weekTuples): void {
                 $builder->whereHas('birthdayProfile', function ($birthdayQuery) use ($weekTuples): void {
                     $birthdayQuery->where(function ($tupleQuery) use ($weekTuples): void {
                         foreach ($weekTuples as [$month, $day]) {
@@ -300,12 +317,12 @@ class MarketingCustomersController extends Controller
                     });
                 });
             })
-            ->when($birthdayFilter === 'month', function ($builder) use ($today): void {
+            ->when(! $operationalDirectory && $birthdayFilter === 'month', function ($builder) use ($today): void {
                 $builder->whereHas('birthdayProfile', function ($birthdayQuery) use ($today): void {
                     $birthdayQuery->where('birth_month', (int) $today->month);
                 });
             })
-            ->when($birthdayFilter === 'missing', function ($builder): void {
+            ->when(! $operationalDirectory && $birthdayFilter === 'missing', function ($builder): void {
                 $builder->where(function ($missingQuery): void {
                     $missingQuery->whereDoesntHave('birthdayProfile')
                         ->orWhereHas('birthdayProfile', function ($birthdayQuery): void {
@@ -316,7 +333,7 @@ class MarketingCustomersController extends Controller
                 });
             });
 
-        if ($sort === 'candle_cash_balance' && $supportsCandleCashBalances) {
+        if (! $operationalDirectory && $sort === 'candle_cash_balance' && $supportsCandleCashBalances) {
             $query->orderBy(
                 CandleCashBalance::query()
                     ->select('balance')
@@ -334,11 +351,11 @@ class MarketingCustomersController extends Controller
     /**
      * @return array<int,array{value:string,label:string}>
      */
-    protected function customerIndexSortOptions(): array
+    protected function customerIndexSortOptions(bool $operationalDirectory = false): array
     {
         $rewardsBalanceLabel = $this->displayLabel('rewards_balance_label', 'Rewards balance');
 
-        return [
+        $options = [
             ['value' => 'updated_at', 'label' => 'Updated'],
             ['value' => 'created_at', 'label' => 'Created'],
             ['value' => 'candle_cash_balance', 'label' => $rewardsBalanceLabel],
@@ -346,13 +363,28 @@ class MarketingCustomersController extends Controller
             ['value' => 'first_name', 'label' => 'First name'],
             ['value' => 'last_name', 'label' => 'Last name'],
         ];
+
+        return $operationalDirectory
+            ? array_values(array_filter($options, fn (array $option): bool => $option['value'] !== 'candle_cash_balance'))
+            : $options;
     }
 
     /**
      * @return array<int,array{key:string,label:string,type:string}>
      */
-    protected function customerGridColumns(): array
+    protected function customerGridColumns(bool $operationalDirectory = false): array
     {
+        if ($operationalDirectory) {
+            return [
+                ['key' => 'customer', 'label' => 'Customer', 'type' => 'text'],
+                ['key' => 'email', 'label' => 'Email', 'type' => 'text'],
+                ['key' => 'phone', 'label' => 'Phone', 'type' => 'text'],
+                ['key' => 'service_address', 'label' => 'Address', 'type' => 'text'],
+                ['key' => 'job_count', 'label' => 'Jobs', 'type' => 'number'],
+                ['key' => 'updated_at', 'label' => 'Updated', 'type' => 'text'],
+            ];
+        }
+
         $rewardsLabel = $this->displayLabel('rewards_label', 'Rewards');
 
         return [
@@ -375,11 +407,11 @@ class MarketingCustomersController extends Controller
     }
 
     /**
-     * @param array<string,mixed>|null $stats
-     * @param array<string,mixed>|null $loyalty
+     * @param  array<string,mixed>|null  $stats
+     * @param  array<string,mixed>|null  $loyalty
      * @return array<string,mixed>
      */
-    protected function serializeCustomerGridRow(MarketingProfile $profile, ?array $stats, ?array $loyalty): array
+    protected function serializeCustomerGridRow(MarketingProfile $profile, ?array $stats, ?array $loyalty, bool $operationalDirectory = false): array
     {
         $stats = $stats ?? ['order_count' => 0, 'last_order_at' => null, 'source_badges' => []];
         $loyalty = $loyalty ?? [
@@ -392,9 +424,9 @@ class MarketingCustomersController extends Controller
             'average_rating' => null,
         ];
 
-        $displayName = trim((string) ($profile->first_name . ' ' . $profile->last_name));
+        $displayName = trim((string) ($profile->first_name.' '.$profile->last_name));
         if ($displayName === '') {
-            $displayName = $profile->email ?: ($profile->phone ?: 'Profile #' . $profile->id);
+            $displayName = $profile->email ?: ($profile->phone ?: 'Profile #'.$profile->id);
         }
 
         $birthday = 'Missing';
@@ -417,6 +449,19 @@ class MarketingCustomersController extends Controller
             ->unique()
             ->values()
             ->implode(', ');
+
+        if ($operationalDirectory) {
+            return [
+                'id' => (int) $profile->id,
+                'customer' => $displayName,
+                'email' => $profile->email ?: '—',
+                'phone' => $profile->phone ?: '—',
+                'service_address' => trim(implode(', ', array_filter([$profile->address_line_1, $profile->city, $profile->state, $profile->postal_code]))) ?: '—',
+                'job_count' => (int) ($profile->field_service_jobs_count ?? 0),
+                'updated_at' => optional($profile->updated_at)->format('Y-m-d H:i') ?: '—',
+                'profile_url' => route('marketing.customers.show', $profile),
+            ];
+        }
 
         return [
             'id' => (int) $profile->id,
@@ -603,6 +648,24 @@ class MarketingCustomersController extends Controller
     {
         $this->assertProfileInTenantScope($marketingProfile, $request);
         $tenantId = $this->currentTenantId($request);
+
+        if ($this->usesOperationalCustomerDirectory($request)) {
+            $jobs = FieldServiceJob::query()
+                ->forTenantId((int) $tenantId)
+                ->where('marketing_profile_id', (int) $marketingProfile->id)
+                ->with('assignedUser:id,name')
+                ->orderByRaw('CASE WHEN scheduled_for IS NULL THEN 1 ELSE 0 END')
+                ->orderByDesc('scheduled_for')
+                ->limit(50)
+                ->get();
+
+            return view('marketing.customers.operational-show', [
+                'profile' => $marketingProfile,
+                'jobs' => $jobs,
+                'isArchived' => $marketingProfile->archived_at !== null,
+            ]);
+        }
+
         $marketingProfile->load([
             'links' => fn ($query) => $query->orderByDesc('id'),
             'groups:id,name,is_internal',
@@ -1040,6 +1103,35 @@ class MarketingCustomersController extends Controller
         ]);
     }
 
+    public function bulkArchive(Request $request): JsonResponse
+    {
+        if (! $this->usesOperationalCustomerDirectory($request)) {
+            abort(404);
+        }
+
+        $data = $request->validate([
+            'action' => ['required', 'in:archive,restore'],
+            'profile_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'profile_ids.*' => ['integer', 'distinct'],
+        ]);
+        $tenantId = $this->requireTenantId($request);
+        $profileIds = collect($data['profile_ids'])->map(fn (mixed $id): int => (int) $id)->filter(fn (int $id): bool => $id > 0)->values();
+        $archiving = (string) $data['action'] === 'archive';
+
+        $affected = MarketingProfile::query()
+            ->forTenantId($tenantId)
+            ->whereIn('id', $profileIds->all())
+            ->when($archiving, fn (Builder $query) => $query->whereNull('archived_at'), fn (Builder $query) => $query->whereNotNull('archived_at'))
+            ->update(['archived_at' => $archiving ? now() : null, 'updated_at' => now()]);
+
+        return response()->json([
+            'affected' => $affected,
+            'message' => $archiving
+                ? $affected.' customer profile'.($affected === 1 ? ' was' : 's were').' archived. Jobs and history were kept.'
+                : $affected.' customer profile'.($affected === 1 ? ' was' : 's were').' restored to the active directory.',
+        ]);
+    }
+
     public function exportEmailDeliveries(MarketingProfile $marketingProfile, Request $request): StreamedResponse
     {
         $this->assertProfileInTenantScope($marketingProfile, $request);
@@ -1097,6 +1189,7 @@ class MarketingCustomersController extends Controller
                     $value = $record[$column] ?? '';
                     if (is_bool($value)) {
                         $row[] = $value ? 'true' : 'false';
+
                         continue;
                     }
 
@@ -1432,7 +1525,7 @@ class MarketingCustomersController extends Controller
     }
 
     /**
-     * @param Collection<int,array{delivery:MarketingEmailDelivery,provider_context:array<string,mixed>,context_label:string,failure_context_hint:?string,normalized_status:string}> $rows
+     * @param  Collection<int,array{delivery:MarketingEmailDelivery,provider_context:array<string,mixed>,context_label:string,failure_context_hint:?string,normalized_status:string}>  $rows
      * @return array<int,array<string,string|bool>>
      */
     protected function buildEmailDeliveryTimelineExportRows(Collection $rows): array
@@ -1484,7 +1577,7 @@ class MarketingCustomersController extends Controller
     }
 
     /**
-     * @param Collection<int,MarketingEmailDelivery> $deliveries
+     * @param  Collection<int,MarketingEmailDelivery>  $deliveries
      * @return Collection<int,array{
      *   delivery:MarketingEmailDelivery,
      *   provider_context:array<string,mixed>,
@@ -1512,7 +1605,7 @@ class MarketingCustomersController extends Controller
     }
 
     /**
-     * @param Collection<int,array{delivery:MarketingEmailDelivery,provider_context:array<string,mixed>,context_label:string,failure_context_hint:?string,normalized_status:string}> $rows
+     * @param  Collection<int,array{delivery:MarketingEmailDelivery,provider_context:array<string,mixed>,context_label:string,failure_context_hint:?string,normalized_status:string}>  $rows
      * @return array{
      *   total_attempts:int,
      *   tenant_path_attempts:int,
@@ -1665,7 +1758,7 @@ class MarketingCustomersController extends Controller
     }
 
     /**
-     * @param array<string,mixed> $providerContext
+     * @param  array<string,mixed>  $providerContext
      */
     protected function customerEmailProviderContextLabel(array $providerContext): string
     {
@@ -1696,7 +1789,7 @@ class MarketingCustomersController extends Controller
         }
 
         if ($resolutionSource === 'tenant' && $readinessStatus === 'ready') {
-            return 'Sent via tenant-configured ' . $provider . '.';
+            return 'Sent via tenant-configured '.$provider.'.';
         }
 
         if ($resolutionSource === 'none') {
@@ -1707,7 +1800,7 @@ class MarketingCustomersController extends Controller
     }
 
     /**
-     * @param array<string,mixed> $providerContext
+     * @param  array<string,mixed>  $providerContext
      */
     protected function customerEmailProviderFailureHint(MarketingEmailDelivery $delivery, array $providerContext): ?string
     {
@@ -1929,7 +2022,7 @@ class MarketingCustomersController extends Controller
             ->route('marketing.customers.show', $marketingProfile)
             ->with('toast', [
                 'style' => 'success',
-                'message' => 'Reward balance updated. New balance: ' . $this->candleCashService->formatCandleCash($this->candleCashService->amountFromPoints($result['balance'] ?? 0)),
+                'message' => 'Reward balance updated. New balance: '.$this->candleCashService->formatCandleCash($this->candleCashService->amountFromPoints($result['balance'] ?? 0)),
             ]);
     }
 
@@ -1965,7 +2058,7 @@ class MarketingCustomersController extends Controller
             ->route('marketing.customers.show', $marketingProfile)
             ->with('toast', [
                 'style' => 'success',
-                'message' => 'Reward redeemed. Code: ' . (string) ($result['code'] ?? 'n/a'),
+                'message' => 'Reward redeemed. Code: '.(string) ($result['code'] ?? 'n/a'),
             ]);
     }
 
@@ -2026,7 +2119,7 @@ class MarketingCustomersController extends Controller
     }
 
     /**
-     * @param array<string,mixed> $wizardState
+     * @param  array<string,mixed>  $wizardState
      */
     protected function finalizeCustomerCreateWizard(array $wizardState, ?int $actorId = null, ?int $tenantId = null): MarketingProfile
     {
@@ -2047,10 +2140,10 @@ class MarketingCustomersController extends Controller
             $notesParts[] = (string) $additional['notes'];
         }
         if (($additional['company_store_name'] ?? null) !== null) {
-            $notesParts[] = 'Company/Store: ' . (string) $additional['company_store_name'];
+            $notesParts[] = 'Company/Store: '.(string) $additional['company_store_name'];
         }
         if (($additional['tags'] ?? null) !== null) {
-            $notesParts[] = 'Tags: ' . (string) $additional['tags'];
+            $notesParts[] = 'Tags: '.(string) $additional['tags'];
         }
         $composedNotes = $notesParts !== [] ? implode(PHP_EOL, $notesParts) : null;
 
@@ -2110,7 +2203,7 @@ class MarketingCustomersController extends Controller
                     [
                         'tenant_id' => $tenantId,
                         'source_type' => 'manual_customer',
-                        'source_id' => 'manual_profile:' . $profile->id,
+                        'source_id' => 'manual_profile:'.$profile->id,
                     ],
                     [
                         'marketing_profile_id' => $profile->id,
@@ -2149,7 +2242,7 @@ class MarketingCustomersController extends Controller
                 'tenant_id' => $tenantId,
                 'marketing_profile_id' => $profile->id,
                 'source_type' => 'manual_customer',
-                'source_id' => 'manual_profile:' . $profile->id,
+                'source_id' => 'manual_profile:'.$profile->id,
                 'source_meta' => [
                     'created_by' => $actorId,
                     'flow' => 'customers_wizard',
@@ -2163,7 +2256,7 @@ class MarketingCustomersController extends Controller
     }
 
     /**
-     * @param array<string,mixed> $wizardState
+     * @param  array<string,mixed>  $wizardState
      * @return Collection<int,array{profile:MarketingProfile,reasons:array<int,string>}>
      */
     protected function buildDuplicateCandidates(array $wizardState, ?int $tenantId = null): Collection
@@ -2208,19 +2301,19 @@ class MarketingCustomersController extends Controller
             MarketingProfile::query()
                 ->where(function ($nameQuery) use ($firstName, $lastName): void {
                     if ($firstName !== '' && $lastName !== '') {
-                        $nameQuery->where('first_name', 'like', '%' . $firstName . '%')
-                            ->where('last_name', 'like', '%' . $lastName . '%');
+                        $nameQuery->where('first_name', 'like', '%'.$firstName.'%')
+                            ->where('last_name', 'like', '%'.$lastName.'%');
 
                         return;
                     }
 
                     if ($firstName !== '') {
-                        $nameQuery->where('first_name', 'like', '%' . $firstName . '%');
+                        $nameQuery->where('first_name', 'like', '%'.$firstName.'%');
 
                         return;
                     }
 
-                    $nameQuery->where('last_name', 'like', '%' . $lastName . '%');
+                    $nameQuery->where('last_name', 'like', '%'.$lastName.'%');
                 })
                 ->limit(20)
                 ->get(['id'])
@@ -2267,7 +2360,7 @@ class MarketingCustomersController extends Controller
     }
 
     /**
-     * @param array<string,mixed> $state
+     * @param  array<string,mixed>  $state
      */
     protected function persistCustomerCreateWizardState(Request $request, array $state): void
     {
@@ -2333,7 +2426,7 @@ class MarketingCustomersController extends Controller
     }
 
     /**
-     * @param Collection<int,MarketingProfile> $profiles
+     * @param  Collection<int,MarketingProfile>  $profiles
      * @return array<int,array{
      *   candle_cash_delta:int,
      *   tier:?string,
@@ -2449,18 +2542,23 @@ class MarketingCustomersController extends Controller
     }
 
     /**
-     * @return array{total_customers:int,candle_cash_holders:int,growave_linked:int,shopify_or_order_linked:int,missing_contact:int}
+     * @return array{total_customers:int,candle_cash_holders:int,growave_linked:int,shopify_or_order_linked:int,missing_contact:int,missing_address?:int}
      */
-    protected function buildIndexQuickStats(int $totalProfiles): array
+    protected function buildIndexQuickStats(int $totalProfiles, ?int $tenantId, bool $operationalDirectory = false): array
     {
         $candleCashHolders = Schema::hasTable('candle_cash_balances')
             ? (int) CandleCashBalance::query()
+                ->when($tenantId !== null, fn ($query) => $query->whereHas(
+                    'profile',
+                    fn ($profileQuery) => $profileQuery->forTenantId($tenantId)
+                ))
                 ->where('balance', '>', 0)
                 ->count()
             : 0;
 
         $growaveLinked = Schema::hasTable('customer_external_profiles')
             ? (int) CustomerExternalProfile::query()
+                ->forTenantId($tenantId)
                 ->where('integration', 'growave')
                 ->whereNotNull('marketing_profile_id')
                 ->distinct('marketing_profile_id')
@@ -2468,11 +2566,13 @@ class MarketingCustomersController extends Controller
             : 0;
 
         $shopifyOrOrderLinked = (int) MarketingProfileLink::query()
+            ->forTenantId($tenantId)
             ->whereIn('source_type', ['order', 'shopify_order', 'shopify_customer'])
             ->distinct('marketing_profile_id')
             ->count('marketing_profile_id');
 
         $missingContact = (int) MarketingProfile::query()
+            ->forTenantId($tenantId)
             ->where(function ($query): void {
                 $query->whereNull('normalized_email')->orWhere('normalized_email', '');
             })
@@ -2480,18 +2580,29 @@ class MarketingCustomersController extends Controller
                 $query->whereNull('normalized_phone')->orWhere('normalized_phone', '');
             })
             ->count();
-
-        return [
+        $stats = [
             'total_customers' => $totalProfiles,
             'candle_cash_holders' => $candleCashHolders,
             'growave_linked' => $growaveLinked,
             'shopify_or_order_linked' => $shopifyOrOrderLinked,
             'missing_contact' => $missingContact,
         ];
+
+        if ($operationalDirectory) {
+            $stats['missing_address'] = (int) MarketingProfile::query()
+                ->forTenantId($tenantId)
+                ->whereNull('archived_at')
+                ->where(function ($query): void {
+                    $query->whereNull('address_line_1')->orWhere('address_line_1', '');
+                })
+                ->count();
+        }
+
+        return $stats;
     }
 
     /**
-     * @param Collection<int,MarketingProfile> $profiles
+     * @param  Collection<int,MarketingProfile>  $profiles
      * @return array<int,array{order_count:int,last_order_at:?string,last_activity_at:?string,source_badges:array<int,string>}>
      */
     protected function buildDerivedStats(Collection $profiles): array
@@ -2660,7 +2771,7 @@ class MarketingCustomersController extends Controller
                 ->sortByDesc(fn (Order $order) => optional($order->ordered_at)->timestamp ?? 0)
                 ->first();
 
-        $squareOrderDates = $profileLinks->where('source_type', 'square_order')
+            $squareOrderDates = $profileLinks->where('source_type', 'square_order')
                 ->map(fn (MarketingProfileLink $link) => optional($squareOrdersById->get((string) $link->source_id)?->closed_at)->timestamp)
                 ->filter();
             $squarePaymentDates = $profileLinks->where('source_type', 'square_payment')
@@ -2733,11 +2844,11 @@ class MarketingCustomersController extends Controller
 
     protected function shopifyCustomerOrderKey(string $storeKey, string $customerId): string
     {
-        return strtolower(trim($storeKey)) . ':' . trim($customerId);
+        return strtolower(trim($storeKey)).':'.trim($customerId);
     }
 
     /**
-     * @param Collection<int,\App\Models\CandleCashTransaction> $transactions
+     * @param  Collection<int,\App\Models\CandleCashTransaction>  $transactions
      * @return Collection<int,array{
      *   id:int,
      *   occurred_at:?string,
@@ -3010,6 +3121,21 @@ class MarketingCustomersController extends Controller
         return $resolver->label($this->currentTenantId(request()), $key, $fallback);
     }
 
+    protected function usesOperationalCustomerDirectory(Request $request): bool
+    {
+        $tenantId = $this->currentTenantId($request);
+        if ($tenantId === null) {
+            return false;
+        }
+
+        $tenant = Tenant::query()->find($tenantId);
+        if (! $tenant) {
+            return false;
+        }
+
+        return (string) data_get(app(FieldServiceWorkProfileService::class)->forTenant($tenant), 'key') === 'trades';
+    }
+
     protected function assertProfileInTenantScope(MarketingProfile $profile, Request $request): void
     {
         $tenantId = $this->currentTenantId($request);
@@ -3033,7 +3159,7 @@ class MarketingCustomersController extends Controller
                 'key' => $key,
                 'label' => $section['label'],
                 'href' => route($section['route']),
-                'current' => request()->routeIs($section['route']) || request()->routeIs($section['route'] . '.*'),
+                'current' => request()->routeIs($section['route']) || request()->routeIs($section['route'].'.*'),
             ];
         }
 

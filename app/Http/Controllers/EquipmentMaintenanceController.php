@@ -8,6 +8,7 @@ use App\Models\FieldServiceTask;
 use App\Models\MarketingProfile;
 use App\Models\Tenant;
 use App\Services\FieldService\FieldServiceAccessService;
+use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,12 +24,15 @@ class EquipmentMaintenanceController extends Controller
         $equipment = CustomerEquipment::query()->forTenantId((int) $tenant->id)
             ->with(['customer', 'assignedUser'])
             ->withCount(['serviceJobs as open_service_jobs_count' => fn ($query) => $query->whereIn('operational_status', ['needs_details', 'scheduled', 'active', 'blocked'])])
-            ->orderByRaw('CASE WHEN next_service_due_at IS NULL THEN 1 ELSE 0 END')
-            ->orderBy('next_service_due_at')->orderBy('name')->get();
+            ->orderByRaw('CASE WHEN installed_at IS NULL THEN 1 ELSE 0 END')
+            ->orderByDesc('installed_at')->orderBy('name')->get();
 
         return view('field-service.equipment.index', [
             'tenant' => $tenant,
             'equipment' => $equipment,
+            'equipmentByInstallationYear' => $equipment->groupBy(
+                fn (CustomerEquipment $item): string => $item->installed_at?->format('Y') ?? 'Installation date not recorded'
+            ),
             'customers' => MarketingProfile::query()->forTenantId((int) $tenant->id)->whereNull('merged_into_profile_id')->orderBy('last_name')->orderBy('first_name')->limit(1000)->get(['id', 'first_name', 'last_name', 'email']),
             'team' => $tenant->users()->orderBy('name')->get(['users.id', 'users.name', 'users.email']),
             'canManage' => $this->access->canManageJobs($request->user(), $tenant),
@@ -46,6 +50,31 @@ class EquipmentMaintenanceController extends Controller
             'equipment' => $equipment,
             'team' => $tenant->users()->orderBy('name')->get(['users.id', 'users.name', 'users.email']),
             'canManage' => $this->access->canManageJobs($request->user(), $tenant),
+        ]);
+    }
+
+    public function calendar(Request $request): View
+    {
+        $tenant = $this->tenant($request);
+        $data = $request->validate(['month' => ['nullable', 'date_format:Y-m']]);
+        $month = Carbon::createFromFormat('!Y-m', $data['month'] ?? now()->format('Y-m'));
+        $calendarStart = $month->copy()->startOfMonth()->startOfWeek(Carbon::SUNDAY);
+        $calendarEnd = $month->copy()->endOfMonth()->endOfWeek(Carbon::SATURDAY);
+        $dueEquipment = CustomerEquipment::query()->forTenantId((int) $tenant->id)
+            ->with(['customer', 'assignedUser'])
+            ->whereBetween('next_service_due_at', [$month->copy()->startOfMonth()->toDateString(), $month->copy()->endOfMonth()->toDateString()])
+            ->orderBy('next_service_due_at')->orderBy('name')->get();
+        $calendarDays = collect();
+
+        for ($day = $calendarStart->copy(); $day->lte($calendarEnd); $day->addDay()) {
+            $calendarDays->push($day->copy());
+        }
+
+        return view('field-service.equipment.calendar', [
+            'tenant' => $tenant,
+            'month' => $month,
+            'calendarDays' => $calendarDays,
+            'dueEquipmentByDate' => $dueEquipment->groupBy(fn (CustomerEquipment $item): ?string => $item->next_service_due_at?->toDateString()),
         ]);
     }
 

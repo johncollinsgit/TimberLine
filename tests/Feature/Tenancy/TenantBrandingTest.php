@@ -30,14 +30,20 @@ test('collins gets its branded profile and bundled launch asset manifest', funct
     $profile = app(TenantBrandProfileService::class)->ensureForTenant($tenant);
 
     expect($profile->display_name)->toBe('Collins Upstate Electric')
-        ->and($profile->theme_key)->toBe('collins-upstate-electric')
-        ->and($profile->decor_preset)->toBe('signal')
+        ->and($profile->theme_key)->toBe('custom')
+        ->and($profile->decor_preset)->toBe('none')
+        ->and($profile->primary_color)->toBe('#123C43')
+        ->and($profile->accent_color)->toBe('#1E5A63')
+        ->and($profile->text_color)->toBe('#0F1C1F')
         ->and($profile->assets()->count())->toBeGreaterThanOrEqual(15);
 
     $presentation = app(TenantBrandProfileService::class)->presentationFor($tenant);
     expect($presentation['light_logo_url'])->toContain('collins-lockup-navy.svg')
         ->and($presentation['dark_logo_url'])->toContain('collins-lockup-white.svg')
-        ->and($presentation['icon_url'])->toContain('collins-icon.svg');
+        ->and($presentation['icon_url'])->toContain('collins-icon.svg')
+        ->and($presentation['primary_color'])->toBe('#123C43')
+        ->and($presentation['accent_color'])->toBe('#1E5A63')
+        ->and($presentation['text_color'])->toBe('#0F1C1F');
 });
 
 test('tenant owner can open custom workspace controls and the workspace shell resolves the Collins theme', function (): void {
@@ -50,7 +56,7 @@ test('tenant owner can open custom workspace controls and the workspace shell re
     $response->assertOk()
         ->assertSeeText('Customize workspace')
         ->assertSeeText('Collins launch kit')
-        ->assertSee('data-tenant-theme="collins-upstate-electric"', false)
+        ->assertSee('data-tenant-theme="custom"', false)
         ->assertSee('Customize workspace', false);
 });
 

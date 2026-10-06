@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasTenantScope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -64,6 +65,20 @@ class FieldServiceJob extends Model
         'archived_at' => 'datetime',
         'metadata' => 'array',
     ];
+
+    /**
+     * Imported QuickBooks invoices are draft opportunities, not operational jobs.
+     * Keep legacy invoice-generated records out of every working job view while
+     * retaining them in the database for audit history and their invoice link.
+     */
+    public function scopeNotGeneratedQuickBooksInvoice(Builder $query): Builder
+    {
+        return $query->where(function (Builder $jobs): void {
+            $jobs->whereNull('external_source')
+                ->orWhere('external_source', '!=', 'quickbooks')
+                ->orWhere('external_id', 'not like', 'quickbooks:invoice:%');
+        });
+    }
 
     public function tenant(): BelongsTo
     {

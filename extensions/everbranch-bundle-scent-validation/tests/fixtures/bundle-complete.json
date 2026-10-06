@@ -1,0 +1,63 @@
+{
+  "payload": {
+    "export": "cart-validations-generate-run",
+    "target": "cart.validations.generate.run",
+    "input": {
+      "cart": {
+        "lines": [
+          {
+            "id": "gid://shopify/CartLine/complete",
+            "scent1": { "value": "Lavender" },
+            "scent2": { "value": "River Birch" },
+            "scent3": { "value": "Lava Rock" },
+            "scent4": null,
+            "scent5": null,
+            "scent6": null,
+            "scent7": null,
+            "scent8": null,
+            "scent9": null,
+            "scent10": null,
+            "scent11": null,
+            "scent12": null,
+            "scent13": null,
+            "scent14": null,
+            "scent15": null,
+            "scent16": null,
+            "scent17": null,
+            "scent18": null,
+            "scent19": null,
+            "scent20": null,
+            "scent21": null,
+            "scent22": null,
+            "scent23": null,
+            "scent24": null,
+            "merchandise": {
+              "__typename": "ProductVariant",
+              "product": {
+                "handle": "custom-flight",
+                "title": "Custom Flight",
+                "bundleScentRule": {
+                  "jsonValue": {
+                    "enabled": true,
+                    "option_count": 3,
+                    "require_distinct_values": true,
+                    "allowed_values": ["Lavender", "River Birch", "Lava Rock"]
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "output": {
+      "operations": [
+        {
+          "validationAdd": {
+            "errors": []
+          }
+        }
+      ]
+    }
+  }
+}

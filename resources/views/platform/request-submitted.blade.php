@@ -41,7 +41,7 @@
                 @if($intentValue === 'demo')
                     <a href="{{ route('platform.start') }}" class="fb-btn fb-btn-secondary">Start as a client</a>
                 @else
-                    <a href="{{ route('platform.demo') }}" class="fb-btn fb-btn-secondary">See a live demo</a>
+                    <a href="{{ route('platform.contact', ['intent' => 'walkthrough']) }}" class="fb-btn fb-btn-secondary">Request a walkthrough</a>
                 @endif
                 <a href="{{ route('platform.plans') }}" class="fb-btn fb-btn-secondary">Compare plans</a>
                 <a href="{{ route('platform.contact') }}" class="fb-btn fb-btn-secondary">Talk to sales</a>

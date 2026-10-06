@@ -2,6 +2,7 @@
 
 use App\Jobs\ReleaseDueAutomationWorkflowRunItemsJob;
 use App\Models\TenantWholesaleSetting;
+use App\Services\FieldService\WorkspaceAssetService;
 use App\Services\Wholesale\WholesaleSuggestionGenerator;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -57,6 +58,13 @@ Schedule::command('marketing:reconcile-pending-customer-merges', ['--limit' => 2
 Schedule::command('scheduler:heartbeat')
     ->everyMinute()
     ->withoutOverlapping(5)
+    ->runInBackground();
+
+// A data-free information_schema signature catches unexpected live DDL. It is
+// intentionally read-only and shares the existing Forge scheduler heartbeat.
+Schedule::command('schema:fingerprint')
+    ->dailyAt('03:10')
+    ->withoutOverlapping(20)
     ->runInBackground();
 
 // Shopify webhook subscription drift audit for BOTH storefronts (non-destructive;
@@ -129,6 +137,13 @@ Schedule::command('integration-health:prune')
     ->withoutOverlapping(30)
     ->runInBackground();
 
+// Location data is intentionally short-lived. Each tenant setting is capped at
+// 30 days and this command permanently removes points past that retention limit.
+Schedule::command('fleet-tracking:prune-location-points')
+    ->dailyAt('02:35')
+    ->withoutOverlapping(20)
+    ->runInBackground();
+
 Schedule::command('marketing:process-tenant-rewards-reminders', [
     '--limit' => 200,
 ])
@@ -146,6 +161,31 @@ Schedule::command('marketing:send-modern-forestry-scent-quiz-report')
     ->withoutOverlapping(120)
     ->runInBackground();
 
+Schedule::command('marketing:send-weekly-rewards-wishlist-summary', [
+    '--tenant' => 'modern-forestry',
+    '--email' => 'info@theforestrystudio.com',
+    '--days' => 7,
+])
+    ->weeklyOn(1, '08:30')
+    ->timezone('America/New_York')
+    ->withoutOverlapping(120)
+    ->runInBackground();
+
+// Detect imported BSF-tagged Shopify orders into the review queue. A purchased
+// label cost must be verified before an order can be approved for invoicing.
+Schedule::command('modern-forestry:detect-fundraiser-orders')
+    ->hourlyAt(40)
+    ->withoutOverlapping(30)
+    ->runInBackground();
+
+// The first-of-month job prepares a review package only. Staff explicitly
+// creates the QuickBooks invoice and sends it from the Fundraising desk.
+Schedule::command('modern-forestry:prepare-fundraiser-monthly-packages')
+    ->monthlyOn(1, '09:00')
+    ->timezone('America/New_York')
+    ->withoutOverlapping(30)
+    ->runInBackground();
+
 Schedule::command('operator:send-weekly-snapshot')
     ->weeklyOn(1, '08:00')
     ->timezone('America/New_York')
@@ -157,6 +197,27 @@ Schedule::command('marketing:send-modern-forestry-bag-reminders', [
     '--limit' => 100,
 ])
     ->hourlyAt(25)
+    ->withoutOverlapping(120)
+    ->runInBackground();
+
+// Native Everbranch replacement for Happy Birthday: issue the annual reward
+// at the prior 10:00 AM cadence, then send one consent-gated reminder only
+// for unredeemed expiring code rewards. Each delivery is idempotent.
+Schedule::command('marketing:issue-birthday-rewards', [
+    '--tenant-id' => 1,
+    '--limit' => 500,
+])
+    ->dailyAt('10:00')
+    ->timezone('America/New_York')
+    ->withoutOverlapping(120)
+    ->runInBackground();
+
+Schedule::command('marketing:send-birthday-followups', [
+    '--tenant-id' => 1,
+    '--limit' => 500,
+])
+    ->dailyAt('10:15')
+    ->timezone('America/New_York')
     ->withoutOverlapping(120)
     ->runInBackground();
 
@@ -201,6 +262,14 @@ Schedule::command('field-service:scan-equipment-maintenance')
     ->withoutOverlapping(30)
     ->runInBackground();
 
+// Resumable document chunks are short-lived staging data. Expired sessions
+// and any deterministic final file left by an interrupted promotion are safe
+// to remove because completed assets use a different, durable database state.
+Schedule::call(fn (): int => app(WorkspaceAssetService::class)->pruneExpiredUploads(250))
+    ->name('workspace-assets:prune-expired-uploads')
+    ->everyThirtyMinutes()
+    ->withoutOverlapping(10);
+
 // Accepted contract allowances reset by calendar month. Once a period closes,
 // create one auditable Stripe invoice for any metered overage and link it back
 // to the immutable usage periods so retries cannot bill the same usage twice.
@@ -214,3 +283,20 @@ Schedule::command('mailboxes:sync')
     ->when(fn (): bool => (bool) config('mailbox.direct_enabled'))
     ->withoutOverlapping(10)
     ->runInBackground();
+
+Schedule::command('ai:invoice-closed-usage', ['--send' => true])
+    ->dailyAt('09:20')
+    ->withoutOverlapping(30)
+    ->runInBackground();
+
+\Illuminate\Support\Facades\Schedule::command('trajectory:refresh --notify')->dailyAt('13:00')->withoutOverlapping();
+
+Schedule::command('wholesale:deliver-applications')->everyMinute()->withoutOverlapping(10)->runInBackground();
+
+Schedule::command('trajectory:review-emails')->everyFifteenMinutes()->withoutOverlapping(10);
+
+// Uses the existing scheduler and queue infrastructure; collection gates are
+// evaluated again at processing time rather than when a delivery was accepted.
+Schedule::command('highlevel:fleet-maintain')->everyFiveMinutes()->withoutOverlapping();
+
+Schedule::command('highlevel:fleet-reconcile')->hourly()->withoutOverlapping();

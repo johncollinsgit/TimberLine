@@ -304,9 +304,11 @@ test('admin surface routes through Livewire component for approval actions', fun
     expect($shopifyRequests)->toBeEmpty();
 });
 
-test('approval still completes when Shopify sync fails', function (): void {
+test('wholesale approval remains pending when Shopify sync fails', function (): void {
     Notification::fake();
     seedWholesaleShopifyStoreForApprovalLifecycleTest();
+
+    $this->mock(\App\Services\Shopify\ShopifyWholesaleCustomerApprovalService::class)->shouldReceive('syncByEmail')->andThrow(new RuntimeException('unavailable'));
 
     $shopifyRequests = [];
     Http::fake(function (Request $request) use (&$shopifyRequests) {
@@ -355,6 +357,8 @@ test('approval still completes when Shopify sync fails', function (): void {
         throw new \RuntimeException('Unexpected Shopify request during approval failure test.');
     });
 
+    $tenant = Tenant::create(['name' => 'Acme', 'slug' => 'acme']);
+    config(['product_surfaces.access_request.wholesale_storefront_tenant_slug' => 'acme']);
     $approver = User::factory()->create(['role' => 'admin', 'is_active' => true]);
     $accessRequest = CustomerAccessRequest::query()->create([
         'intent' => 'production',
@@ -364,17 +368,12 @@ test('approval still completes when Shopify sync fails', function (): void {
         'email' => 'ops-failure@example.com',
         'company' => 'Acme Candle Co',
         'requested_tenant_slug' => 'acme',
+        'tenant_id' => $tenant->id,
     ]);
 
     $service = app(CustomerAccessApprovalService::class);
-    $service->approve((int) $accessRequest->id, (int) $approver->id);
-
-    $accessRequest->refresh();
-    $user = User::query()->where('email', 'ops-failure@example.com')->firstOrFail();
-
-    expect((string) $accessRequest->status)->toBe('approved')
-        ->and((bool) $user->is_active)->toBeTrue()
-        ->and($shopifyRequests)->toHaveCount(2);
-
-    Notification::assertSentToTimes($user, ApprovalPasswordSetupNotification::class, 1);
+    expect(fn () => $service->approve((int) $accessRequest->id, (int) $approver->id))->toThrow(DomainException::class);
+    expect($accessRequest->fresh()->status)->toBe('pending');
+    expect(User::where('email', 'ops-failure@example.com')->exists())->toBeFalse();
+    Notification::assertNothingSent();
 });

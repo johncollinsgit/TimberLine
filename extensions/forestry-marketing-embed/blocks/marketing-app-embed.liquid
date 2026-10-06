@@ -6,6 +6,9 @@
 %}
 
 {{ 'marketing-storefront-tracker.css' | asset_url | stylesheet_tag }}
+{% if product %}
+  {{ 'product-scent-options.css' | asset_url | stylesheet_tag }}
+{% endif %}
 
 <script id="forestry-storefront-tracking-config" type="application/json">
   {
@@ -29,6 +32,21 @@
   }
 </script>
 <script src="{{ 'marketing-storefront-tracker.js' | asset_url }}" defer></script>
+{% if product %}
+  <div
+    class="everbranch-product-options"
+    data-everbranch-product-options
+    data-proxy-endpoint="/apps/forestry/product-options"
+    data-product-id="{{ product.id }}"
+    data-product-handle="{{ product.handle | escape }}"
+    data-heading="Choose your scents"
+    data-help-text="Choose one scent for each item in this bundle."
+    hidden
+  >
+    <div class="everbranch-product-options__loading" aria-live="polite">Loading scent options…</div>
+  </div>
+  <script src="{{ 'product-scent-options.js' | asset_url }}" defer></script>
+{% endif %}
 
 {% schema %}
 {

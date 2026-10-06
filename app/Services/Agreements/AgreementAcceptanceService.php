@@ -6,8 +6,8 @@ use App\Models\Agreement;
 use App\Models\AgreementAcceptance;
 use App\Models\SubscriptionAuthorization;
 use App\Services\Billing\AgreementBillingOrderService;
-use App\Services\Tenancy\LandlordOperatorActionAuditService;
 use App\Services\Operations\OperatorAlertService;
+use App\Services\Tenancy\LandlordOperatorActionAuditService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -129,7 +129,16 @@ class AgreementAcceptanceService
                 ]);
                 $this->operatorAlerts->notify('agreement.accepted', "Everbranch: {$locked->tenant->name} accepted {$locked->title}.", [
                     'dedupe_key' => 'agreement-accepted:'.$locked->id.':'.$locked->currentVersion->id,
-                    'tenant_id' => (int) $locked->tenant_id, 'target_type' => 'agreement', 'target_id' => (int) $locked->id,
+                    'tenant_id' => (int) $locked->tenant_id,
+                    'tenant_name' => $locked->tenant->name,
+                    'tenant_slug' => $locked->tenant->slug,
+                    'target_type' => 'agreement',
+                    'target_id' => (int) $locked->id,
+                    'agreement_type' => $locked->agreement_type,
+                    'agreement_template_key' => $locked->template_key,
+                    'agreement_title' => $locked->title,
+                    'signer_email' => $evidence['signer_email'],
+                    'request_host' => $request->getHost(),
                 ]);
 
                 return $acceptance;

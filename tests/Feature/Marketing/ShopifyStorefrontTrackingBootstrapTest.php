@@ -24,7 +24,7 @@ test('shopify storefront tracking bootstrap files exist with expected proxy conf
     $pixelCode = file_get_contents($pixelSource);
 
     expect($appConfig)->toContain('embedded = true')
-        ->toContain('application_url = "https://app.theeverbranch.com/shopify/app"')
+        ->toContain('application_url = "https://app.theeverbranch.com"')
         ->toContain('read_discounts')
         ->toContain('write_discounts')
         ->toContain('read_customer_events')

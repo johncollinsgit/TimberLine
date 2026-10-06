@@ -8,6 +8,7 @@ use App\Services\Tenancy\TenantMarketingSettingsResolver;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 use RuntimeException;
 
 class BirthdayRewardEngineService
@@ -17,11 +18,10 @@ class BirthdayRewardEngineService
         protected BirthdayProfileService $birthdayProfileService,
         protected BirthdayEmailDispatchService $birthdayEmailDispatchService,
         protected TenantMarketingSettingsResolver $marketingSettingsResolver
-    ) {
-    }
+    ) {}
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array<string,mixed>
      */
     public function statusForProfile(?CustomerBirthdayProfile $birthdayProfile, array $options = []): array
@@ -50,6 +50,10 @@ class BirthdayRewardEngineService
             ->where('reward_type', $rewardType)
             ->orderByDesc('id')
             ->first();
+        if ($issuance && $issuance->claim_window_starts_at && $issuance->claim_window_ends_at) {
+            $window['starts_at'] = $issuance->claim_window_starts_at;
+            $window['ends_at'] = $issuance->claim_window_ends_at;
+        }
 
         if ($issuance && (string) $issuance->status === 'redeemed') {
             return [
@@ -117,7 +121,7 @@ class BirthdayRewardEngineService
     }
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array<string,mixed>
      */
     public function issueAnnualReward(CustomerBirthdayProfile $birthdayProfile, array $options = []): array
@@ -143,6 +147,18 @@ class BirthdayRewardEngineService
         $cycleYear = (int) ($options['cycle_year'] ?? now()->year);
         $rewardType = $this->normalizeRewardType((string) ($config['reward_type'] ?? 'candle_cash'));
         $window = $this->claimWindow($birthdayProfile, $cycleYear, $config);
+        if (array_key_exists('claim_window_override', $options)) {
+            $override = $options['claim_window_override'];
+            if (! is_array($override)
+                || ! ($override['starts_at'] ?? null) instanceof CarbonImmutable
+                || ! ($override['ends_at'] ?? null) instanceof CarbonImmutable
+                || $override['ends_at']->lessThan($override['starts_at'])) {
+                throw new InvalidArgumentException('Birthday claim window override is invalid.');
+            }
+
+            $window['starts_at'] = $override['starts_at'];
+            $window['ends_at'] = $override['ends_at'];
+        }
         $now = now()->toImmutable();
 
         if ($window['starts_at'] && $window['ends_at'] && ! $now->betweenIncluded($window['starts_at'], $window['ends_at'])) {
@@ -154,7 +170,7 @@ class BirthdayRewardEngineService
             ];
         }
 
-        $result = DB::transaction(function () use ($birthdayProfile, $cycleYear, $rewardType, $config, $window, $now): array {
+        $result = DB::transaction(function () use ($birthdayProfile, $cycleYear, $rewardType, $config, $window, $now, $options): array {
             $locked = CustomerBirthdayProfile::query()
                 ->whereKey($birthdayProfile->id)
                 ->lockForUpdate()
@@ -222,6 +238,9 @@ class BirthdayRewardEngineService
                 'order_total' => null,
                 'attributed_revenue' => null,
                 'campaign_type' => 'birthday_email',
+                'metadata' => is_array($options['issuance_metadata'] ?? null)
+                    ? $options['issuance_metadata']
+                    : null,
             ];
 
             if ($rewardType === 'candle_cash') {
@@ -245,6 +264,7 @@ class BirthdayRewardEngineService
                 $issuancePayload['claimed_at'] = $now;
                 $issuancePayload['activated_at'] = $now;
                 $issuancePayload['metadata'] = [
+                    ...((array) ($issuancePayload['metadata'] ?? [])),
                     'transaction_id' => (int) ($result['transaction_id'] ?? 0),
                     'balance_after' => (int) ($result['balance'] ?? 0),
                 ];
@@ -285,9 +305,12 @@ class BirthdayRewardEngineService
         });
 
         $issued = $result['issuance'] ?? null;
-        if ($issued instanceof BirthdayRewardIssuance) {
+        if ($issued instanceof BirthdayRewardIssuance && (bool) ($options['send_email'] ?? true)) {
             try {
-                $result['email_delivery'] = $this->birthdayEmailDispatchService->sendIssuanceEmail($issued);
+                $result['email_delivery'] = $this->birthdayEmailDispatchService->sendIssuanceEmail(
+                    $issued,
+                    is_array($options['email_options'] ?? null) ? $options['email_options'] : []
+                );
             } catch (\Throwable $exception) {
                 $result['email_delivery'] = [
                     'ok' => false,
@@ -425,7 +448,7 @@ class BirthdayRewardEngineService
     }
 
     /**
-     * @param array<string,mixed> $config
+     * @param  array<string,mixed>  $config
      * @return array{starts_at:?CarbonImmutable,ends_at:?CarbonImmutable,birthday_date:?CarbonImmutable}
      */
     public function claimWindow(CustomerBirthdayProfile $birthdayProfile, int $cycleYear, array $config): array
@@ -508,7 +531,7 @@ class BirthdayRewardEngineService
     }
 
     /**
-     * @param array<string,mixed> $config
+     * @param  array<string,mixed>  $config
      */
     protected function generateCode(string $rewardType, int $cycleYear, array $config): string
     {
@@ -550,7 +573,7 @@ class BirthdayRewardEngineService
     }
 
     /**
-     * @param array<string,mixed> $config
+     * @param  array<string,mixed>  $config
      */
     protected function rewardName(array $config): string
     {
@@ -560,7 +583,7 @@ class BirthdayRewardEngineService
     }
 
     /**
-     * @param array<string,mixed> $config
+     * @param  array<string,mixed>  $config
      */
     protected function rewardValue(string $rewardType, array $config): ?string
     {

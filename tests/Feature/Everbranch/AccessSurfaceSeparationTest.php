@@ -3,6 +3,7 @@
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantSetupStatus;
+use App\Models\TenantSite;
 use App\Models\User;
 use App\Services\Onboarding\TenantOnboardingBlueprintStore;
 use App\Support\Tenancy\TenantHostBuilder;
@@ -243,4 +244,28 @@ test('platform admin attached to Modern Forestry can switch between operator and
         ->assertSee('Tenant console')
         ->assertSee('Everbranch Admin')
         ->assertSee($landlordUrl ?? '', false);
+});
+
+test('published tenant website keeps the console switch on the app host', function (): void {
+    $tenant = everbranchAccessLaneTenant('carolina-barrel-co', 'Carolina Barrel Co.', 'production', 'reviewed');
+    TenantSite::query()->create([
+        'tenant_id' => (int) $tenant->id,
+        'status' => 'published',
+        'public_enabled' => true,
+        'subdomain' => 'carolina-barrel-co',
+        'settings' => [],
+    ]);
+
+    $user = User::factory()->tenantAdmin()->create();
+    $user->tenants()->attach((int) $tenant->id, ['role' => 'admin', 'membership_active' => true]);
+
+    $appUrl = app(TenantHostBuilder::class)->canonicalLandlordUrlForPath(
+        route('dashboard', ['tenant' => 'carolina-barrel-co'], absolute: false)
+    );
+
+    $this->actingAs($user)
+        ->get('http://app.theeverbranch.com/dashboard?tenant=carolina-barrel-co')
+        ->assertOk()
+        ->assertSee('Carolina Barrel Co.')
+        ->assertSee($appUrl ?? '', false);
 });

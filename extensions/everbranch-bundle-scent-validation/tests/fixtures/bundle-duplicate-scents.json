@@ -1,0 +1,61 @@
+{
+  "payload": {
+    "export": "cart-validations-generate-run",
+    "target": "cart.validations.generate.run",
+    "input": {
+      "cart": {
+        "lines": [
+          {
+            "id": "gid://shopify/CartLine/duplicate",
+            "scent1": { "value": "Lavender" },
+            "scent2": { "value": "Lavender" },
+            "scent3": { "value": "River Birch" },
+            "scent4": null,
+            "scent5": null,
+            "scent6": null,
+            "scent7": null,
+            "scent8": null,
+            "scent9": null,
+            "scent10": null,
+            "scent11": null,
+            "scent12": null,
+            "scent13": null,
+            "scent14": null,
+            "scent15": null,
+            "scent16": null,
+            "scent17": null,
+            "scent18": null,
+            "scent19": null,
+            "scent20": null,
+            "scent21": null,
+            "scent22": null,
+            "scent23": null,
+            "scent24": null,
+            "merchandise": {
+              "__typename": "ProductVariant",
+              "product": {
+                "handle": "4oz-3-soy-candle-bundle-save-on-three-soy-candle-by-modern-forestry",
+                "title": "3 (4oz) Soy Candle Bundle",
+                "bundleScentRule": null
+              }
+            }
+          }
+        ]
+      }
+    },
+    "output": {
+      "operations": [
+        {
+          "validationAdd": {
+            "errors": [
+              {
+                "message": "3 (4oz) Soy Candle Bundle requires a different scent for each selection.",
+                "target": "$.cart"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

@@ -431,6 +431,50 @@ test('shopify wishlist storefront rejects invalid signatures', function () {
         ->assertJsonPath('error.code', 'unauthorized_storefront_request');
 });
 
+test('a native wishlist can be shared without exposing the shopper identity', function () {
+    config()->set('marketing.shopify.app_proxy_enabled', true);
+    config()->set('marketing.shopify.app_proxy_secret', 'wishlist-proxy-secret');
+    config()->set('marketing.shopify.signing_secret', 'wishlist-signing-secret');
+    config()->set('marketing.shopify.allow_legacy_token', false);
+    configureWishlistStorefrontStores();
+
+    $guestToken = 'guest-private-token-that-must-not-leak';
+    $addPayload = [
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) time(),
+        'guest_token' => $guestToken,
+        'product_id' => 'wsku-share-101',
+        'product_handle' => 'shared-cedar-glow',
+        'product_title' => 'Shared Cedar Glow',
+        'product_url' => '/products/shared-cedar-glow',
+    ];
+
+    $this->postJson(route('marketing.shopify.v1.wishlist.add', wishlistSignedQuery([
+        'shop' => $addPayload['shop'],
+        'timestamp' => $addPayload['timestamp'],
+    ], 'wishlist-proxy-secret')), $addPayload)->assertOk();
+
+    $share = $this->postJson(route('marketing.shopify.v1.wishlist.share', wishlistSignedQuery([
+        'shop' => $addPayload['shop'],
+        'timestamp' => (string) (time() + 1),
+    ], 'wishlist-proxy-secret')), [
+        'shop' => $addPayload['shop'],
+        'timestamp' => (string) (time() + 1),
+        'guest_token' => $guestToken,
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.state', 'wishlist_share_ready')
+        ->assertJsonPath('data.list.item_count', 1);
+
+    $shareUrl = (string) $share->json('data.share_url');
+    expect($shareUrl)->toContain('/share/wishlist/');
+
+    $this->get($shareUrl)
+        ->assertOk()
+        ->assertSee('Shared Cedar Glow')
+        ->assertDontSee($guestToken);
+});
+
 function wishlistSignedQuery(array $params, string $secret): array
 {
     $params = array_filter($params, static fn ($value) => $value !== null);

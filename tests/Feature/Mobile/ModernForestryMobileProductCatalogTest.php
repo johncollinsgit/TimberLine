@@ -3,6 +3,7 @@
 use App\Models\CandleCashBalance;
 use App\Models\CandleCashReward;
 use App\Models\CandleCashTransaction;
+use App\Models\CustomerBirthdayProfile;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\MarketingProfileScentQuizResult;
@@ -500,6 +501,79 @@ test('mobile customer auth config exposes only public oauth fields', function ()
 
     expect(json_encode($payload))->not->toContain('customer-account-secret')
         ->and(json_encode($payload))->not->toContain('graphql');
+});
+
+test('mobile customer auth accepts the Shopify public PKCE client without a client secret', function (): void {
+    $originalEnvironment = app()->environment();
+
+    try {
+        app()->instance('env', 'production');
+        config()->set('marketing.candle_cash.storefront_base_url', 'https://theforestrystudio.com');
+        config()->set('services.shopify.customer_account.client_id', 'public-customer-account-client');
+        config()->set('services.shopify.customer_account.client_secret', null);
+        config()->set('services.shopify.customer_account.authorization_endpoint', null);
+        config()->set('services.shopify.customer_account.token_endpoint', null);
+        config()->set('services.shopify.customer_account.graphql_endpoint', null);
+        config()->set('services.shopify.customer_account.redirect_uri', 'https://app.theeverbranch.com/api/mobile/v1/modern-forestry/auth/callback');
+        config()->set('services.shopify.customer_account.callback_scheme', 'shop.20812479.modernforestry');
+
+        Http::fake([
+            'https://theforestrystudio.com/.well-known/openid-configuration' => Http::response([
+                'authorization_endpoint' => 'https://account.theforestrystudio.com/authentication/oauth/authorize',
+                'token_endpoint' => 'https://account.theforestrystudio.com/authentication/oauth/token',
+                'token_endpoint_auth_methods_supported' => ['client_secret_basic'],
+            ]),
+            'https://theforestrystudio.com/.well-known/customer-account-api' => Http::response([
+                'graphql_api' => 'https://account.theforestrystudio.com/customer/api/2026-07/graphql',
+            ]),
+        ]);
+
+        $this->getJson('/api/mobile/v1/modern-forestry/auth/config')
+            ->assertOk()
+            ->assertJsonPath('data.configured', true)
+            ->assertJsonPath('data.clientId', 'public-customer-account-client')
+            ->assertJsonPath('data.authorizationEndpoint', 'https://account.theforestrystudio.com/authentication/oauth/authorize');
+    } finally {
+        app()->instance('env', $originalEnvironment);
+    }
+});
+
+test('reading mobile customer auth config does not mutate Candle Cash birthdays or customer identity', function (): void {
+    config()->set('services.shopify.customer_account.client_id', 'public-customer-account-client');
+    config()->set('services.shopify.customer_account.client_secret', null);
+    config()->set('services.shopify.customer_account.authorization_endpoint', 'https://account.theforestrystudio.com/authentication/oauth/authorize');
+    config()->set('services.shopify.customer_account.token_endpoint', 'https://account.theforestrystudio.com/authentication/oauth/token');
+    config()->set('services.shopify.customer_account.graphql_endpoint', 'https://account.theforestrystudio.com/customer/api/2026-07/graphql');
+
+    $tenant = Tenant::query()->where('slug', 'modern-forestry')->firstOrFail();
+    $profile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Login',
+        'last_name' => 'Regression',
+        'email' => 'login-regression@example.com',
+        'normalized_email' => 'login-regression@example.com',
+    ]);
+    CandleCashBalance::query()->create([
+        'marketing_profile_id' => $profile->id,
+        'balance' => 42,
+    ]);
+    $birthday = CustomerBirthdayProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $profile->id,
+        'birth_month' => 7,
+        'birth_day' => 25,
+        'source' => 'customer',
+    ]);
+
+    $this->getJson('/api/mobile/v1/modern-forestry/auth/config')
+        ->assertOk()
+        ->assertJsonPath('data.configured', true);
+
+    expect($profile->fresh()->email)->toBe('login-regression@example.com')
+        ->and($profile->candleCashBalance()->firstOrFail()->balance)->toBe(42.0)
+        ->and($birthday->fresh()->birth_month)->toBe(7)
+        ->and($birthday->fresh()->birth_day)->toBe(25)
+        ->and(CandleCashTransaction::query()->where('marketing_profile_id', $profile->id)->count())->toBe(0);
 });
 
 test('mobile customer auth callback bridges shopify https redirects back to the native app scheme', function (): void {
@@ -1563,6 +1637,50 @@ test('mobile product detail uses the assigned everbranch product options ruleset
         ->and(data_get($payload, 'data.bundle.requireDistinctValues'))->toBeTrue()
         ->and(collect(data_get($payload, 'data.bundle.availableScents', []))->pluck('displayName')->all())
         ->toBe(['Lavender', 'Violet Spice']);
+});
+
+test('mobile product detail does not infer scent selections for an unassigned fixed bundle', function (): void {
+    $shopifyPayload = shopifyMobileProductDetailPayload();
+    $shopifyPayload['data']['products']['nodes'][0]['title'] = 'Apple Bundle (3 Candles)';
+    $shopifyPayload['data']['products']['nodes'][0]['handle'] = 'apple-bundle-3-candles';
+    $shopifyPayload['data']['products']['nodes'][0]['productType'] = 'Bundle';
+    $shopifyPayload['data']['products']['nodes'][0]['tags'] = ['bundle', 'apple'];
+
+    Http::fake([
+        'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json' => Http::response($shopifyPayload, 200),
+    ]);
+
+    $this->getJson('/api/mobile/v1/modern-forestry/products/apple-bundle-3-candles')
+        ->assertOk()
+        ->assertJsonPath('data.bundle', null);
+});
+
+test('mobile checkout rejects scent selections on an unassigned fixed bundle', function (): void {
+    $shopifyPayload = shopifyMobileProductDetailPayload();
+    $shopifyPayload['data']['products']['nodes'][0]['title'] = 'Apple Bundle (3 Candles)';
+    $shopifyPayload['data']['products']['nodes'][0]['handle'] = 'apple-bundle-3-candles';
+    $shopifyPayload['data']['products']['nodes'][0]['productType'] = 'Bundle';
+    $shopifyPayload['data']['products']['nodes'][0]['tags'] = ['bundle', 'apple'];
+
+    Http::fake([
+        'https://modernforestry-test.myshopify.com/admin/api/2026-01/graphql.json' => Http::response($shopifyPayload, 200),
+    ]);
+
+    $this->postJson('/api/mobile/v1/modern-forestry/checkout', [
+        'items' => [[
+            'productHandle' => 'apple-bundle-3-candles',
+            'variantId' => '9001',
+            'quantity' => 1,
+            'attributes' => [
+                ['key' => 'Scent 1', 'value' => "Apple Pickin'"],
+                ['key' => 'Scent 2', 'value' => 'Pumpkin Streusel'],
+                ['key' => 'Scent 3', 'value' => 'Pumpkin Chai'],
+            ],
+        ]],
+    ])
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'invalid_bundle_selection')
+        ->assertJsonPath('error.message', 'This product has fixed scents and cannot accept scent selections.');
 });
 
 test('mobile product detail includes laravel-backed review summary and approved reviews', function (): void {
@@ -2668,12 +2786,6 @@ test('mobile checkout creates a shopify storefront cart and returns checkout url
                     'productHandle' => 'forest-ember-candle',
                     'variantId' => '9001',
                     'quantity' => 2,
-                    'attributes' => [
-                        [
-                            'key' => 'Scent 1',
-                            'value' => 'Forest Ember',
-                        ],
-                    ],
                 ],
             ],
             'discountCode' => ' candlecash10 ',
@@ -2702,12 +2814,7 @@ test('mobile checkout creates a shopify storefront cart and returns checkout url
     expect($body['query'])->not->toContain('customer {');
     expect($body['variables']['input']['lines'][0]['merchandiseId'])->toBe('gid://shopify/ProductVariant/9001');
     expect($body['variables']['input']['lines'][0]['quantity'])->toBe(2);
-    expect($body['variables']['input']['lines'][0]['attributes'])->toBe([
-        [
-            'key' => 'Scent 1',
-            'value' => 'Forest Ember',
-        ],
-    ]);
+    expect($body['variables']['input']['lines'][0])->not->toHaveKey('attributes');
     expect($body['variables']['input']['discountCodes'])->toBe(['CANDLECASH10']);
     expect($body['variables']['input']['buyerIdentity']['customerAccessToken'])->toBe('mf-test-profile:'.$profile->id);
 

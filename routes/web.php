@@ -1,8 +1,12 @@
 <?php
 
+require __DIR__.'/highlevel.php';
+
 use App\Http\Controllers\AccountingCommandCenterController;
 use App\Http\Controllers\AdminMasterDataController;
 use App\Http\Controllers\AgreementProposalController;
+use App\Http\Controllers\Auth\ConfirmEmailController;
+use App\Http\Controllers\BirthdayEmailComposerController;
 use App\Http\Controllers\Birthdays\BirthdayPagesController;
 use App\Http\Controllers\ClassSchedulingController;
 use App\Http\Controllers\ClientProjectController;
@@ -15,8 +19,14 @@ use App\Http\Controllers\EvergroveServicesController;
 use App\Http\Controllers\FieldServiceController;
 use App\Http\Controllers\FieldServiceEstimatorController;
 use App\Http\Controllers\FieldServiceResourcesController;
+use App\Http\Controllers\FieldServiceWorkforceController;
+use App\Http\Controllers\FleetTrackingController;
+use App\Http\Controllers\FleetTrackingWebhookController;
 use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\GoogleAuthController;
+use App\Http\Controllers\Integrations\BouncieConnectionController;
+use App\Http\Controllers\Integrations\InstagramConnectionController;
+use App\Http\Controllers\Integrations\InstagramWebhookController;
 use App\Http\Controllers\Integrations\QuickBooksConnectionController;
 use App\Http\Controllers\Landlord\LandlordAgreementController;
 use App\Http\Controllers\Landlord\LandlordBranchPreviewController;
@@ -26,6 +36,8 @@ use App\Http\Controllers\Landlord\LandlordCustomModuleRequestController;
 use App\Http\Controllers\Landlord\LandlordDeveloperDashboardController;
 use App\Http\Controllers\Landlord\LandlordDirectInvoiceController;
 use App\Http\Controllers\Landlord\LandlordOnboardingJourneyDiagnosticsController;
+use App\Http\Controllers\Landlord\LandlordProspectOnboardingController;
+use App\Http\Controllers\Landlord\LandlordSearchController;
 use App\Http\Controllers\Landlord\LandlordSelfServiceReadinessController;
 use App\Http\Controllers\Landlord\LandlordServiceInquiryController;
 use App\Http\Controllers\Landlord\LandlordSupportTicketController;
@@ -33,6 +45,7 @@ use App\Http\Controllers\Landlord\LandlordTenantDirectoryController;
 use App\Http\Controllers\Landlord\LandlordTenantOperationsController;
 use App\Http\Controllers\Landlord\LandlordTransactionController;
 use App\Http\Controllers\MailboxInboundController;
+use App\Http\Controllers\ManagedWebsiteController;
 use App\Http\Controllers\Marketing\CandleCashPagesController;
 use App\Http\Controllers\Marketing\GoogleBusinessProfileController;
 use App\Http\Controllers\Marketing\MarketingAllOptedInSendController;
@@ -54,17 +67,20 @@ use App\Http\Controllers\Marketing\MarketingSegmentsController;
 use App\Http\Controllers\Marketing\MarketingShopifyIntegrationController;
 use App\Http\Controllers\Marketing\MarketingShortLinkRedirectController;
 use App\Http\Controllers\Marketing\MarketingWishlistController;
+use App\Http\Controllers\Marketing\MarketingWishlistShareController;
 use App\Http\Controllers\Marketing\ModernForestryAppFeedbackController;
 use App\Http\Controllers\Marketing\SendGridInboundWebhookController;
 use App\Http\Controllers\Marketing\SendGridWebhookController;
 use App\Http\Controllers\Marketing\SesWebhookController;
 use App\Http\Controllers\Marketing\TwilioWebhookController;
 use App\Http\Controllers\Mobile\ModernForestryProductCatalogController;
+use App\Http\Controllers\ModernForestryFundraiserZapierController;
 use App\Http\Controllers\Onboarding\CustomerStartHereController;
 use App\Http\Controllers\Onboarding\FirstLoginWorkspaceController;
 use App\Http\Controllers\Onboarding\OnboardingHarnessController;
 use App\Http\Controllers\Onboarding\OnboardingProvisioningApiController;
 use App\Http\Controllers\Onboarding\OnboardingWizardApiController;
+use App\Http\Controllers\PirateShipBridgeController;
 use App\Http\Controllers\PlantInventoryController;
 use App\Http\Controllers\PlatformAccessRequestController;
 use App\Http\Controllers\PlatformProductPagesController;
@@ -73,14 +89,17 @@ use App\Http\Controllers\PublicBudConversationController;
 use App\Http\Controllers\PublicClassSignupController;
 use App\Http\Controllers\PublicLegalController;
 use App\Http\Controllers\QuickBooksReportsController;
+use App\Http\Controllers\SalesChannelController;
 use App\Http\Controllers\ShopifyAuthController;
 use App\Http\Controllers\ShopifyEmbeddedAiAssistantController;
 use App\Http\Controllers\ShopifyEmbeddedAppController;
 use App\Http\Controllers\ShopifyEmbeddedCustomerMergeController;
 use App\Http\Controllers\ShopifyEmbeddedCustomersController;
 use App\Http\Controllers\ShopifyEmbeddedDevelopmentNotesController;
+use App\Http\Controllers\ShopifyEmbeddedFundraisingController;
 use App\Http\Controllers\ShopifyEmbeddedMessagingController;
 use App\Http\Controllers\ShopifyEmbeddedRewardsController;
+use App\Http\Controllers\ShopifyEmbeddedSalesTaxReportsController;
 use App\Http\Controllers\ShopifyEmbeddedSettingsController;
 use App\Http\Controllers\ShopifyEmbeddedSubscriptionsController;
 use App\Http\Controllers\ShopifyPrivacyWebhookController;
@@ -94,7 +113,10 @@ use App\Http\Controllers\TenantEmployeeInvitationController;
 use App\Http\Controllers\TenantMailboxController;
 use App\Http\Controllers\TenantSupportTicketController;
 use App\Http\Controllers\UiPreferencesController;
+use App\Http\Controllers\WebsiteCommerceController;
+use App\Http\Controllers\WebsiteShopperAccountController;
 use App\Http\Controllers\WholesaleApplicationInboxController;
+use App\Http\Controllers\WholesaleEmailMessengerController;
 use App\Http\Controllers\WikiAdminController;
 use App\Http\Controllers\WikiController;
 use App\Http\Controllers\WorkspaceDocumentsController;
@@ -138,6 +160,7 @@ use App\Livewire\Shipping\Orders as ShippingOrders;
 use App\Models\Blend;
 use App\Models\CandleClubScent;
 use App\Models\WholesaleCustomScent;
+use App\Services\ManagedWebsite\ManagedWebsiteService;
 use App\Services\Shopify\ShopifyClient;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
 use App\Services\Shopify\ShopifyEmbeddedUrlGenerator;
@@ -147,11 +170,20 @@ use App\Services\Tenancy\TenantCommercialExperienceService;
 use App\Services\Tenancy\TenantDisplayLabelResolver;
 use App\Services\Tenancy\TenantResolver;
 use App\Support\Auth\HomeRedirect;
+use App\Support\Tenancy\HostTenantContext;
 use App\Support\Wiki\WikiRepository;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
+use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
+
+require __DIR__.'/trajectory.php';
+
+Route::post('/webhooks/modern-forestry/fundraiser-orders', [ModernForestryFundraiserZapierController::class, 'store'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:60,1')
+    ->name('modern-forestry.fundraiser-zapier.orders');
 
 $normalizeHost = static function (mixed $value): ?string {
     $host = strtolower(trim((string) $value));
@@ -183,7 +215,8 @@ Route::get('/', function (
     TenantDisplayLabelResolver $displayLabelResolver,
     PlatformProductPagesController $platformPagesController,
     TenantCommercialExperienceService $experienceService,
-    ModernForestryAlphaBootstrapService $alphaBootstrapService
+    ModernForestryAlphaBootstrapService $alphaBootstrapService,
+    ManagedWebsiteService $managedWebsites
 ) use ($evergrovePublicHosts, $normalizeHost) {
     if ($contextService->hasPageContext($request)) {
         return $controller->show($request, $contextService, $tenantResolver, $displayLabelResolver, $experienceService, $alphaBootstrapService);
@@ -192,6 +225,19 @@ Route::get('/', function (
     $requestHost = $normalizeHost($request->getHost()) ?? '';
     if ($requestHost !== '' && in_array($requestHost, $evergrovePublicHosts, true)) {
         return $evergroveController->home();
+    }
+
+    // A managed site is opt-in, published-only, and gated independently from
+    // tenant host resolution. This does not alter Modern Forestry's Shopify app
+    // or Checkout routes because those remain explicit routes and no site exists
+    // without a separately entitled, rollout-approved workspace.
+    $hostTenant = $request->attributes->get('host_tenant');
+    // theeverbranch.com is the Everbranch public home, never a tenant's
+    // Website. This keeps a published flagship draft from replacing the
+    // platform product page through host-context fallback.
+    $isPlatformPublicHost = $requestHost === $normalizeHost((string) config('tenancy.domains.canonical.public_host', ''));
+    if (! $isPlatformPublicHost && $hostTenant instanceof \App\Models\Tenant && $managedWebsites->publicPage($hostTenant, '') !== null) {
+        return app(ManagedWebsiteController::class)->showPublic($request, '', $managedWebsites);
     }
 
     if (auth()->check()) {
@@ -232,6 +278,9 @@ Route::get('/join-team', [TenantEmployeeInvitationController::class, 'show'])
 Route::post('/join-team', [TenantEmployeeInvitationController::class, 'accept'])
     ->middleware(['auth', 'verified', 'throttle:20,1'])
     ->name('employee-invitations.accept');
+Route::post('/join-team/register', [TenantEmployeeInvitationController::class, 'register'])
+    ->middleware(['guest', 'throttle:10,1'])
+    ->name('employee-invitations.register');
 
 $landlordHosts = collect((array) config('tenancy.landlord.hosts', []))
     ->map(static fn (mixed $host): ?string => $normalizeHost($host))
@@ -250,6 +299,8 @@ $landlordHosts = array_values(array_unique(array_filter($landlordHosts, static f
 $landlordRoutes = static function (): void {
     Route::get('/landlord', [LandlordTenantDirectoryController::class, 'dashboard'])
         ->name('dashboard');
+    Route::get('/landlord/search', LandlordSearchController::class)
+        ->name('search');
     Route::post('/landlord/operator-costs', [LandlordTenantDirectoryController::class, 'storeRecurringCost'])
         ->name('operator-costs.store');
     Route::get('/landlord/transactions', [LandlordTransactionController::class, 'index'])
@@ -267,6 +318,32 @@ $landlordRoutes = static function (): void {
         ->name('onboarding.wizard');
     Route::get('/landlord/onboarding/intake', [LandlordOnboardingJourneyDiagnosticsController::class, 'intake'])
         ->name('onboarding.intake');
+    Route::get('/landlord/onboarding', [LandlordProspectOnboardingController::class, 'index'])
+        ->name('onboarding.prospects.index');
+    Route::post('/landlord/onboarding', [LandlordProspectOnboardingController::class, 'store'])
+        ->name('onboarding.prospects.store');
+    Route::post('/landlord/onboarding/discovery', [LandlordProspectOnboardingController::class, 'discover'])
+        ->name('onboarding.prospects.discovery.store');
+    Route::patch('/landlord/onboarding/{prospect}', [LandlordProspectOnboardingController::class, 'update'])
+        ->name('onboarding.prospects.update');
+    Route::post('/landlord/onboarding/{prospect}/drafts', [LandlordProspectOnboardingController::class, 'createOutreachDraft'])
+        ->name('onboarding.prospects.drafts.store');
+    Route::post('/landlord/onboarding/{prospect}/email-drafts', [LandlordProspectOnboardingController::class, 'createBlankEmailDraft'])
+        ->name('onboarding.prospects.email-drafts.store');
+    Route::post('/landlord/onboarding/{prospect}/communications', [LandlordProspectOnboardingController::class, 'storeCommunication'])
+        ->name('onboarding.prospects.communications.store');
+    Route::patch('/landlord/onboarding/{prospect}/communications/{communication}', [LandlordProspectOnboardingController::class, 'updateCommunication'])
+        ->name('onboarding.prospects.communications.update');
+    Route::post('/landlord/onboarding/{prospect}/communications/{communication}/save', [LandlordProspectOnboardingController::class, 'updateCommunication'])
+        ->name('onboarding.prospects.communications.save');
+    Route::post('/landlord/onboarding/{prospect}/communications/{communication}/template', [LandlordProspectOnboardingController::class, 'applyTemplateToCommunication'])
+        ->name('onboarding.prospects.communications.template');
+    Route::patch('/landlord/onboarding/{prospect}/communications/{communication}/sent', [LandlordProspectOnboardingController::class, 'markCommunicationSent'])
+        ->name('onboarding.prospects.communications.sent');
+    Route::post('/landlord/onboarding/{prospect}/communications/{communication}/send', [LandlordProspectOnboardingController::class, 'sendCommunication'])
+        ->name('onboarding.prospects.communications.send');
+    Route::get('/landlord/onboarding-export.csv', [LandlordProspectOnboardingController::class, 'export'])
+        ->name('onboarding.prospects.export');
     Route::post('/landlord/onboarding/setup-status/{tenant}', [LandlordOnboardingJourneyDiagnosticsController::class, 'updateSetupStatus'])
         ->name('onboarding.setup-status.update');
     Route::get('/landlord/commercial-intent', [LandlordOnboardingJourneyDiagnosticsController::class, 'commercialIntent'])
@@ -295,6 +372,8 @@ $landlordRoutes = static function (): void {
         ->name('support-tickets.update');
     Route::post('/landlord/bud-settings/{setting}/review', [LandlordSupportTicketController::class, 'reviewBud'])
         ->name('bud-settings.review');
+    Route::post('/landlord/bud-settings/{setting}/ai-review', [LandlordSupportTicketController::class, 'reviewBudAi'])
+        ->name('bud-settings.ai-review');
     Route::get('/landlord/commercial', [LandlordCommercialConfigurationController::class, 'index'])
         ->name('commercial.index');
     Route::get('/landlord/branches', LandlordBranchPreviewController::class)
@@ -460,6 +539,9 @@ Route::get('/assistant/activity', function (Request $request, ShopifyEmbeddedUrl
 })->name('shopify.embedded.assistant.activity');
 Route::get('/go/{code}', [MarketingShortLinkRedirectController::class, 'show'])->name('marketing.short-links.redirect');
 Route::get('/lander', [EvergroveServicesController::class, 'lander'])->name('evergrove.lander');
+Route::get('/book', [EvergroveServicesController::class, 'book'])
+    ->middleware(EnsureEvergroveProposalHost::class)
+    ->name('evergrove.book');
 Route::get('/tools/project-estimate', [EvergroveServicesController::class, 'projectEstimate'])->name('evergrove.tools.project-estimate');
 Route::get('/tools/ai-roi', [EvergroveServicesController::class, 'aiRoi'])->name('evergrove.tools.ai-roi');
 Route::get('/tools/automation-savings', [EvergroveServicesController::class, 'automationSavings'])->name('evergrove.tools.automation-savings');
@@ -468,6 +550,22 @@ Route::post('/platform/bud/conversations', [PublicBudConversationController::cla
     ->middleware('throttle:20,1')
     ->name('platform.bud.conversations');
 Route::get('/platform/promo', [PlatformProductPagesController::class, 'promo'])->name('platform.promo');
+Route::view('/story/field-notes-7c8b', 'platform.rickroll-story')->name('platform.story.rickroll');
+Route::get('/platform/examples/{discipline?}', [PlatformProductPagesController::class, 'industryDemo'])
+    ->where('discipline', 'retail|field|projects|studio|practice|community')
+    ->name('platform.industry-demo');
+Route::get('/platform/demos/green-shield-pest-control', [PlatformProductPagesController::class, 'pestControlFleetDemo'])
+    ->name('platform.pest-control-fleet-demo');
+Route::post('/platform/demos/green-shield-pest-control/login', [PlatformProductPagesController::class, 'pestControlFleetDemoLogin'])
+    ->middleware('guest')
+    ->name('platform.pest-control-fleet-demo.login');
+Route::get('/platform/demos/green-shield-pest-control/login', fn () => redirect()->route('platform.pest-control-fleet-demo'))
+    ->name('platform.pest-control-fleet-demo.login.redirect');
+Route::get('/platform/demos/green-shield-pest-control/website', [PlatformProductPagesController::class, 'pestControlWebsite'])
+    ->name('platform.pest-control-website');
+Route::post('/platform/demos/green-shield-pest-control/website/reminders', [PlatformProductPagesController::class, 'submitPestControlReminder'])
+    ->middleware('throttle:6,1')
+    ->name('platform.pest-control-website.reminders');
 Route::get('/platform/plans', [PlatformProductPagesController::class, 'plans'])->name('platform.plans');
 Route::get('/platform/demo', [PlatformProductPagesController::class, 'demo'])->name('platform.demo');
 Route::get('/platform/start', [PlatformProductPagesController::class, 'start'])->name('platform.start');
@@ -475,6 +573,10 @@ Route::get('/platform/request-submitted', [PlatformProductPagesController::class
 Route::get('/platform/contact', [PlatformProductPagesController::class, 'contact'])->name('platform.contact');
 Route::post('/platform/access-request', [PlatformAccessRequestController::class, 'store'])->name('platform.access-request');
 Route::get('/platform/catalog', [PlatformProductPagesController::class, 'catalogFeed'])->name('platform.catalog.feed');
+Route::get('/explore/modules', [PlatformProductPagesController::class, 'moduleExplorer'])->name('platform.modules.explore');
+Route::get('/explore/modules/{module}', [PlatformProductPagesController::class, 'moduleExplorer'])
+    ->where('module', '[A-Za-z0-9_-]+')
+    ->name('platform.modules.show');
 Route::get('/.well-known/brand-discovery.json', [BrandDiscoveryController::class, 'wellKnown'])->name('discovery.well-known.brand');
 Route::get('/api/public/discovery/brand/{tenant}', [BrandDiscoveryController::class, 'byTenant'])->name('discovery.public.brand');
 Route::get('/api/public/discovery/structured/{tenant?}', [BrandDiscoveryController::class, 'structured'])->name('discovery.public.structured');
@@ -611,11 +713,49 @@ Route::get('/api/mobile/v1/modern-forestry/session-status', [ModernForestryProdu
 Route::get('/mobile/authorize', \App\Http\Controllers\Mobile\EverbranchMobileAuthorizationController::class)
     ->middleware('throttle:20,1')
     ->name('mobile.everbranch.authorize');
+Route::get('/email/confirm/{id}/{hash}', ConfirmEmailController::class)
+    ->middleware(['signed', 'throttle:6,1'])
+    ->whereNumber('id')
+    ->name('verification.confirm');
 Route::get('/sitemaps/discovery.xml', [BrandDiscoveryController::class, 'sitemap'])->name('discovery.sitemap');
 Route::get('/workspace-brand-assets/{profile}/{slot}', [TenantBrandController::class, 'asset'])
     ->whereNumber('profile')
     ->whereIn('slot', ['light_logo', 'dark_logo', 'icon'])
     ->name('tenant.brand.assets.show');
+
+Route::post('/website/forms/{page}', [ManagedWebsiteController::class, 'submitForm'])
+    ->middleware('throttle:6,1')
+    ->name('managed-website.forms.submit');
+
+Route::get('/website-catalog-media/{media}', [\App\Http\Controllers\WebsiteCatalogController::class, 'media'])->name('managed-website.catalog.media');
+
+Route::get('/website-media/{media}', [ManagedWebsiteController::class, 'showMedia'])
+    ->name('managed-website.media.show');
+Route::get('/website-thumbnail-source/{siteVersion}/{pageVersion}', [ManagedWebsiteController::class, 'thumbnailSource'])
+    ->middleware('signed')
+    ->name('managed-website.thumbnail.source');
+
+// Native Website Commerce routes are host-resolved inside the controller. They
+// intentionally do not share any Shopify or legacy Order route/model.
+Route::get('/shop', [WebsiteCommerceController::class, 'shop'])->name('managed-website.store.index');
+Route::get('/products/{handle}', [WebsiteCommerceController::class, 'showProduct'])->name('managed-website.store.products.show');
+Route::post('/products/{handle}/quote', [WebsiteCommerceController::class, 'requestQuote'])->middleware('throttle:6,1')->name('managed-website.store.products.quote');
+Route::get('/cart', [WebsiteCommerceController::class, 'cart'])->name('managed-website.store.cart');
+Route::get('/account', [WebsiteShopperAccountController::class, 'index'])->name('managed-website.store.account');
+Route::post('/account/link', [WebsiteShopperAccountController::class, 'requestLink'])->middleware('throttle:5,1')->name('managed-website.store.account.link');
+Route::get('/account/verify/{token}', [WebsiteShopperAccountController::class, 'verify'])->middleware('throttle:20,1')->name('managed-website.store.account.verify');
+Route::post('/account/verify/{token}', [WebsiteShopperAccountController::class, 'consume'])->middleware('throttle:20,1')->name('managed-website.store.account.consume');
+Route::post('/account/logout', [WebsiteShopperAccountController::class, 'logout'])->name('managed-website.store.account.logout');
+Route::post('/account/profile', [WebsiteShopperAccountController::class, 'updateProfile'])->middleware('throttle:20,1')->name('managed-website.store.account.profile');
+Route::get('/account/orders/{number}', [WebsiteShopperAccountController::class, 'order'])->name('managed-website.store.account.orders.show');
+Route::post('/cart/items/{variant}', [WebsiteCommerceController::class, 'addCartItem'])->middleware('throttle:30,1')->name('managed-website.store.cart.items.store');
+Route::post('/cart/lines/{item}', [WebsiteCommerceController::class, 'updateCartItem'])->middleware('throttle:30,1')->name('managed-website.store.cart.lines.update');
+Route::post('/checkout/website', [WebsiteCommerceController::class, 'checkout'])->middleware('throttle:10,1')->name('managed-website.store.checkout');
+Route::post('/cart/shipping-rates', [WebsiteCommerceController::class, 'shippingRates'])->middleware('throttle:10,1')->name('managed-website.store.shipping-rates');
+Route::get('/checkout/website/success', [WebsiteCommerceController::class, 'success'])->name('managed-website.store.success');
+Route::post('/webhooks/website-stripe', [WebsiteCommerceController::class, 'webhook'])->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:120,1')->name('managed-website.store.webhook');
+Route::post('/webhooks/website-easypost', [WebsiteCommerceController::class, 'shippingWebhook'])->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:120,1')->name('managed-website.store.shipping-webhook');
+Route::post('/webhooks/bouncie', [FleetTrackingWebhookController::class, 'bouncie'])->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:120,1')->name('fleet-tracking.webhooks.bouncie');
 
 Route::prefix('signup/classes/{tenant:slug}')
     ->name('public.classes.')
@@ -629,6 +769,86 @@ Route::prefix('signup/classes/{tenant:slug}')
     });
 
 Route::middleware(['auth', 'verified'])->group(function () {
+
+    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
+        ->get('/sales-channels', [SalesChannelController::class, 'index'])
+        ->name('sales-channels.index');
+
+    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access', 'module:managed_website', \App\Http\Middleware\UseConnectedWebsiteEditor::class])
+        ->prefix('website')
+        ->name('managed-website.')
+        ->group(function (): void {
+            Route::get('/', [ManagedWebsiteController::class, 'index'])->name('index');
+            Route::get('/connected', [\App\Http\Controllers\ConnectedWebsiteController::class, 'index'])->name('connected.index');
+            Route::post('/connected/draft', [\App\Http\Controllers\ConnectedWebsiteController::class, 'save'])->name('connected.save');
+            Route::post('/connected/publish', [\App\Http\Controllers\ConnectedWebsiteController::class, 'publish'])->name('connected.publish');
+            Route::post('/connected/restore', [\App\Http\Controllers\ConnectedWebsiteController::class, 'restore'])->name('connected.restore');
+            Route::post('/', [ManagedWebsiteController::class, 'create'])->name('create');
+            Route::post('/setup', [ManagedWebsiteController::class, 'saveSetup'])->name('setup.save');
+            Route::post('/mobile-previewed', [ManagedWebsiteController::class, 'markMobilePreviewed'])->name('mobile-previewed');
+            Route::get('/leads', [ManagedWebsiteController::class, 'leads'])->name('leads.index');
+            Route::get('/services', [WebsiteCommerceController::class, 'services'])->name('services.index');
+            Route::post('/services', [WebsiteCommerceController::class, 'storeService'])->name('services.store');
+            Route::put('/services/{product}', [WebsiteCommerceController::class, 'updateService'])->name('services.update');
+            Route::post('/themes', [ManagedWebsiteController::class, 'applyTheme'])->name('themes.apply');
+            Route::post('/domains', [ManagedWebsiteController::class, 'requestDomain'])->name('domains.request');
+            Route::post('/domains/{domain}/verify', [ManagedWebsiteController::class, 'verifyDomain'])->name('domains.verify');
+            Route::post('/domains/{domain}/activate', [ManagedWebsiteController::class, 'activateDomain'])->name('domains.activate');
+            Route::post('/domains/{domain}/deactivate', [ManagedWebsiteController::class, 'deactivateDomain'])->name('domains.deactivate');
+            Route::post('/domains/{domain}/cancel', [ManagedWebsiteController::class, 'cancelDomain'])->name('domains.cancel');
+            Route::put('/editor/theme', [ManagedWebsiteController::class, 'saveTheme'])->name('editor.theme.save');
+            Route::get('/editor/{page}', [ManagedWebsiteController::class, 'editor'])->name('editor');
+            Route::put('/editor/{page}', [ManagedWebsiteController::class, 'saveEditor'])->name('editor.save');
+            Route::get('/editor/{page}/preview', [ManagedWebsiteController::class, 'preview'])->name('editor.preview');
+            Route::get('/editor/{page}/preview-site', [ManagedWebsiteController::class, 'previewSite'])->name('editor.preview.site');
+            Route::post('/editor/publish', [ManagedWebsiteController::class, 'publishEditor'])->name('editor.publish');
+            Route::get('/media', [ManagedWebsiteController::class, 'media'])->name('media.index');
+            Route::post('/media', [ManagedWebsiteController::class, 'storeMedia'])->name('media.store');
+            Route::get('/thumbnails/{siteVersion}', [ManagedWebsiteController::class, 'showThumbnail'])->name('thumbnails.show');
+            Route::get('/products', [\App\Http\Controllers\WebsiteCatalogController::class, 'index'])->name('products.index');
+            Route::get('/products/create', [\App\Http\Controllers\WebsiteCatalogController::class, 'create'])->name('products.create');
+            Route::get('/products/{product}/edit', [\App\Http\Controllers\WebsiteCatalogController::class, 'edit'])->name('products.edit');
+            Route::get('/collections', [\App\Http\Controllers\WebsiteCatalogController::class, 'collections'])->name('collections.index');
+            Route::get('/collections/create', [\App\Http\Controllers\WebsiteCatalogController::class, 'createCollection'])->name('collections.create');
+            Route::post('/collections', [\App\Http\Controllers\WebsiteCatalogController::class, 'storeCollection'])->name('collections.store');
+            Route::get('/collections/{collection}/edit', [\App\Http\Controllers\WebsiteCatalogController::class, 'editCollection'])->name('collections.edit');
+            Route::put('/collections/{collection}', [\App\Http\Controllers\WebsiteCatalogController::class, 'updateCollection'])->name('collections.update');
+            Route::get('/commerce/imports', [WebsiteCommerceController::class, 'imports'])->name('commerce.imports');
+            Route::post('/commerce/imports/dry-run', [WebsiteCommerceController::class, 'createImportDryRun'])->name('commerce.imports.dry-run');
+            Route::get('/commerce/shipping', [WebsiteCommerceController::class, 'shippingSettings'])->name('commerce.shipping');
+            Route::get('/commerce/pirate-ship', [PirateShipBridgeController::class, 'index'])->name('commerce.pirate-ship');
+            Route::get('/commerce/pirate-ship/orders.csv', [PirateShipBridgeController::class, 'export'])->name('commerce.pirate-ship.export');
+            Route::post('/commerce/pirate-ship/tracking', [PirateShipBridgeController::class, 'import'])->name('commerce.pirate-ship.import');
+            Route::post('/commerce/shipping/locations', [WebsiteCommerceController::class, 'saveFulfillmentLocation'])->name('commerce.shipping.locations.store');
+            Route::post('/commerce/shipping/packages', [WebsiteCommerceController::class, 'saveShippingPackage'])->name('commerce.shipping.packages.store');
+            Route::get('/products/export', [WebsiteCommerceController::class, 'exportProducts'])->name('products.export');
+            Route::post('/products/import', [WebsiteCommerceController::class, 'importProducts'])->name('products.import');
+            Route::post('/products', [\App\Http\Controllers\WebsiteCatalogController::class, 'store'])->name('products.store');
+            Route::put('/products/{product}', [\App\Http\Controllers\WebsiteCatalogController::class, 'update'])->name('products.update');
+            Route::delete('/products/{product}', [\App\Http\Controllers\WebsiteCatalogController::class, 'archive'])->name('products.destroy');
+            Route::get('/customers', [WebsiteCommerceController::class, 'customers'])->name('customers.index');
+            Route::get('/customers/create', [WebsiteCommerceController::class, 'createCustomer'])->name('customers.create');
+            Route::post('/customers', [WebsiteCommerceController::class, 'storeCustomer'])->name('customers.store');
+            Route::get('/customers/{customer}', [WebsiteCommerceController::class, 'showCustomer'])->name('customers.show');
+            Route::put('/customers/{customer}', [WebsiteCommerceController::class, 'updateCustomer'])->name('customers.update');
+            Route::get('/orders', [WebsiteCommerceController::class, 'orders'])->name('orders.index');
+            Route::get('/orders/quotes', [\App\Http\Controllers\WebsiteQuoteController::class, 'index'])->name('quotes.index');
+            Route::post('/orders/quotes/{submission}/reply', [\App\Http\Controllers\WebsiteQuoteController::class, 'reply'])->name('quotes.reply');
+            Route::get('/orders/create', [WebsiteCommerceController::class, 'createOrder'])->name('orders.create');
+            Route::post('/orders/drafts', [WebsiteCommerceController::class, 'storeDraftOrder'])->name('orders.drafts.store');
+            Route::get('/orders/{order}', [WebsiteCommerceController::class, 'showOrder'])->name('orders.show');
+            Route::post('/orders/{order}/fulfill', [WebsiteCommerceController::class, 'fulfill'])->name('orders.fulfill');
+            Route::post('/orders/{order}/cancel', [WebsiteCommerceController::class, 'cancel'])->name('orders.cancel');
+            Route::post('/orders/{order}/refund', [WebsiteCommerceController::class, 'refund'])->name('orders.refund');
+            Route::post('/orders/{order}/notes', [WebsiteCommerceController::class, 'addOrderNote'])->name('orders.notes.store');
+            Route::post('/orders/{order}/labels', [WebsiteCommerceController::class, 'purchaseLabel'])->name('orders.labels.purchase');
+            Route::post('/shipments/{shipment}/void', [WebsiteCommerceController::class, 'voidLabel'])->name('shipments.void');
+            Route::post('/pages', [ManagedWebsiteController::class, 'storePage'])->name('pages.store');
+            Route::delete('/pages/{page}', [ManagedWebsiteController::class, 'destroyPage'])->name('pages.destroy');
+            Route::put('/pages/{page}', [ManagedWebsiteController::class, 'savePage'])->name('pages.update');
+            Route::post('/publish', [ManagedWebsiteController::class, 'publish'])->name('publish');
+            Route::post('/pages/{page}/versions/{version}/rollback', [ManagedWebsiteController::class, 'rollback'])->name('pages.rollback');
+        });
 
     Route::middleware(['tenant.access', 'role:admin'])->prefix('workspace/brand')->name('tenant.brand.')->group(function (): void {
         Route::get('/', [TenantBrandController::class, 'edit'])->name('edit');
@@ -695,6 +915,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/integrations/quickbooks/callback', [QuickBooksConnectionController::class, 'callback'])
         ->name('integrations.quickbooks.callback');
 
+    Route::get('/integrations/bouncie/callback', [BouncieConnectionController::class, 'callback'])
+        ->name('integrations.bouncie.callback');
+
+    Route::middleware(['role:admin'])
+        ->get('/integrations/instagram', [InstagramConnectionController::class, 'index'])
+        ->name('integrations.instagram.index');
+
+    Route::middleware(['tenant.access', 'module:integrations'])
+        ->prefix('workspaces/{tenant:slug}/integrations/instagram')
+        ->name('integrations.instagram.')
+        ->group(function (): void {
+            Route::get('/connect', [InstagramConnectionController::class, 'connect'])->name('connect');
+        });
+
+    Route::get('/integrations/instagram/callback', [InstagramConnectionController::class, 'callback'])
+        ->name('integrations.instagram.callback');
+
     Route::middleware(['tenant.access', 'module:quickbooks'])
         ->prefix('workspaces/{tenant:slug}/reports')
         ->name('quickbooks.reports.')
@@ -719,6 +956,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->group(function (): void {
             Route::get('/', [WorkspaceDocumentsController::class, 'index'])->name('index');
             Route::post('/', [WorkspaceDocumentsController::class, 'store'])->name('store');
+            Route::get('/{asset}/preview', [WorkspaceDocumentsController::class, 'preview'])->name('preview');
             Route::get('/{asset}/download', [WorkspaceDocumentsController::class, 'download'])->name('download');
             Route::put('/{asset}/jobs', [WorkspaceDocumentsController::class, 'updateLinks'])->name('links');
             Route::delete('/{asset}', [WorkspaceDocumentsController::class, 'destroy'])->name('destroy');
@@ -788,6 +1026,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/tickets/{ticket}/reply', [TenantSupportTicketController::class, 'reply'])->name('reply');
             Route::post('/bud/request', [TenantSupportTicketController::class, 'requestBud'])->name('bud.request');
             Route::post('/bud/ask', [TenantSupportTicketController::class, 'askBud'])->name('bud.ask');
+            Route::post('/bud/ai/request', [TenantSupportTicketController::class, 'requestBudAi'])->name('bud.ai.request');
         });
 
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
@@ -795,6 +1034,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('client.projects.')
         ->group(function (): void {
             Route::get('/', [ClientProjectController::class, 'index'])->name('index');
+            Route::get('/checklist', [\App\Http\Controllers\ClientProjectChecklistController::class, 'index'])->name('checklist');
+            Route::patch('/checklist/tasks/{task}', [\App\Http\Controllers\ClientProjectChecklistController::class, 'update'])->whereNumber('task')->name('checklist.update');
             Route::get('/requests', [ClientProjectTicketController::class, 'index'])->name('requests.index');
             Route::get('/requests/{ticket}', [ClientProjectTicketController::class, 'show'])->name('requests.show');
             Route::get('/{project}/requests/create', [ClientProjectTicketController::class, 'create'])->name('requests.create');
@@ -814,22 +1055,41 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/resources/deployments', [FieldServiceResourcesController::class, 'deployCrew'])->name('resources.deployments.store');
             Route::post('/resources/deployments/use-stock', [FieldServiceResourcesController::class, 'consumeVehicleStock'])->name('resources.deployments.use-stock');
             Route::get('/jobs-data', [FieldServiceController::class, 'jobsData'])->name('jobs.data');
+            Route::get('/address-suggestions', [FieldServiceController::class, 'addressSuggestions'])->middleware('throttle:30,1')->name('address-suggestions');
+            Route::get('/address-suggestions/{placeId}', [FieldServiceController::class, 'addressDetails'])->middleware('throttle:30,1')->name('address-details');
             Route::patch('/jobs/{job}', [FieldServiceController::class, 'updateJobGrid'])->name('jobs.update');
             Route::post('/work-candidates/{candidate}/review', [FieldServiceController::class, 'reviewWorkCandidate'])->name('work-candidates.review');
             Route::get('/calendar', [FieldServiceController::class, 'calendar'])->name('calendar');
             Route::get('/payroll-hours', [FieldServiceController::class, 'payrollHours'])->name('payroll-hours');
+            Route::post('/workforce-settings', [FieldServiceWorkforceController::class, 'updateSettings'])->name('workforce.settings.update');
+            Route::post('/shifts', [FieldServiceWorkforceController::class, 'storeShift'])->name('shifts.store');
+            Route::post('/shifts/{shift}/cancel', [FieldServiceWorkforceController::class, 'cancelShift'])->name('shifts.cancel');
             Route::post('/payroll-hours', [FieldServiceController::class, 'storeTimeEntry'])->name('payroll-hours.store');
             Route::post('/payroll-hours/{timeEntry}/review', [FieldServiceController::class, 'reviewTimeEntry'])->name('payroll-hours.review');
             Route::post('/payroll-timers/{timeSession}/review', [FieldServiceController::class, 'reviewTimerSession'])->name('payroll-timers.review');
+            Route::post('/payroll-timers/{session}/change-request', [FieldServiceWorkforceController::class, 'requestSessionCorrection'])->name('payroll-timers.change-request');
+            Route::post('/time-change-requests/{change}/resolve', [FieldServiceWorkforceController::class, 'resolveSessionCorrection'])->name('time-change-requests.resolve');
             Route::get('/payroll-hours-export', [FieldServiceController::class, 'exportTimeEntries'])->name('payroll-hours.export');
+            Route::middleware('module:fleet_tracking')->prefix('fleet-tracking')->name('fleet-tracking.')->group(function (): void {
+                Route::get('/', [FleetTrackingController::class, 'index'])->name('index');
+                Route::post('/settings', [FleetTrackingController::class, 'updateSettings'])->name('settings.update');
+                Route::post('/devices', [FleetTrackingController::class, 'storeDevice'])->name('devices.store');
+                Route::post('/bouncie/sync-vehicles', [FleetTrackingController::class, 'syncBouncieVehicles'])->name('bouncie.sync-vehicles');
+                Route::get('/bouncie/connect', [BouncieConnectionController::class, 'connect'])->name('bouncie.connect');
+                Route::post('/bouncie/disconnect', [BouncieConnectionController::class, 'disconnect'])->name('bouncie.disconnect');
+            });
             Route::post('/jobs', [FieldServiceController::class, 'storeJob'])->name('jobs.store');
             Route::get('/jobs/{job}', [FieldServiceController::class, 'showJob'])->name('jobs.show');
+            Route::get('/jobs/{job}/updates', [FieldServiceController::class, 'jobUpdates'])->name('jobs.updates');
+            Route::post('/jobs/{job}/details', [FieldServiceController::class, 'updateJobDetails'])->name('jobs.details.update');
             Route::post('/jobs/{job}/transitions', [FieldServiceController::class, 'transitionJob'])->name('jobs.transitions');
             Route::post('/jobs/{job}/notes', [FieldServiceController::class, 'storeNote'])->name('notes.store');
+            Route::delete('/jobs/{job}/notes/{note}', [FieldServiceController::class, 'destroyNote'])->name('notes.destroy');
             Route::post('/jobs/{job}/tasks', [FieldServiceController::class, 'storeTask'])->name('tasks.store');
             Route::patch('/jobs/{job}/tasks/{task}', [FieldServiceController::class, 'updateTask'])->name('tasks.update');
             Route::post('/jobs/{job}/tasks/{task}/handoff', [FieldServiceController::class, 'handoffTask'])->name('tasks.handoff');
             Route::post('/jobs/{job}/photos', [FieldServiceController::class, 'storePhoto'])->name('photos.store');
+            Route::delete('/jobs/{job}/assets/{asset}', [FieldServiceController::class, 'destroyJobAsset'])->name('assets.destroy');
             Route::post('/materials', [FieldServiceController::class, 'storeMaterial'])->name('materials.store');
             Route::post('/reminders', [FieldServiceController::class, 'updateReminderSettings'])->name('reminders.update');
             Route::post('/vehicles', [FieldServiceController::class, 'storeVehicle'])->name('vehicles.store');
@@ -840,6 +1100,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('field-service.equipment.')
         ->group(function (): void {
             Route::get('/', [EquipmentMaintenanceController::class, 'index'])->name('index');
+            Route::get('/calendar', [EquipmentMaintenanceController::class, 'calendar'])->name('calendar');
             Route::post('/', [EquipmentMaintenanceController::class, 'store'])->name('store');
             Route::get('/{equipment}', [EquipmentMaintenanceController::class, 'show'])->name('show');
             Route::post('/{equipment}/service-jobs', [EquipmentMaintenanceController::class, 'storeServiceJob'])->name('service-jobs.store');
@@ -853,6 +1114,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/create', [CustomModuleRequestController::class, 'create'])->name('create');
             Route::post('/', [CustomModuleRequestController::class, 'store'])->name('store');
             Route::get('/{customModuleRequest}', [CustomModuleRequestController::class, 'show'])->name('show');
+        });
+
+    Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
+        ->prefix('customer-loop')
+        ->name('customer-loop.')
+        ->controller(\App\Http\Controllers\CustomerLoopController::class)
+        ->group(function (): void {
+            Route::get('/', 'index')->name('index');
+            Route::post('/', 'store')->name('store');
+            Route::post('/{action}/prepare', 'prepare')->name('prepare');
+            Route::post('/{action}/complete', 'complete')->name('complete');
+            Route::post('/{action}/snooze', 'snooze')->name('snooze');
         });
 
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access', 'module:workflow_automations'])
@@ -993,6 +1266,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Admin landing page
     Route::middleware(['role:admin,manager'])->group(function () {
         Route::get('/admin', AdminHome::class)
+            ->middleware(\App\Http\Middleware\RedirectLegacyTeamAccess::class)
             ->name('admin.index');
 
         Route::get('/admin/catalog', function () {
@@ -1082,6 +1356,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('analytics.index');
     });
 
+    // Branches is the shared tenant catalog. Keep it available without granting
+    // access to the broader Marketing workspace or its mutation actions.
+    Route::middleware(['role:admin,marketing_manager,manager,member,pouring', 'tenant.access'])
+        ->prefix('marketing')
+        ->name('marketing.')
+        ->group(function (): void {
+            Route::get('/modules', [MarketingModuleStoreController::class, 'index'])->name('modules');
+        });
+
     // Marketing
     Route::middleware(['role:admin,marketing_manager,manager'])
         ->prefix('marketing')
@@ -1093,6 +1376,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                     ->name('results');
                 Route::get('/customers', [MarketingCustomersController::class, 'index'])->name('customers');
                 Route::get('/customers/data', [MarketingCustomersController::class, 'data'])->name('customers.data');
+                Route::post('/customers/bulk-archive', [MarketingCustomersController::class, 'bulkArchive'])->name('customers.bulk-archive');
                 Route::get('/customers/create', [MarketingCustomersController::class, 'create'])->name('customers.create');
                 Route::post('/customers/create', [MarketingCustomersController::class, 'storeCreate'])->name('customers.store-create');
                 Route::get('/customers/{marketingProfile}', [MarketingCustomersController::class, 'show'])->name('customers.show');
@@ -1244,7 +1528,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
                     ->defaults('section', 'reviews')
                     ->name('reviews');
                 Route::middleware(['tenant.access'])->group(function (): void {
-                    Route::get('/modules', [MarketingModuleStoreController::class, 'index'])->name('modules');
                     Route::post('/modules/{moduleKey}/activate', [MarketingModuleStoreController::class, 'activate'])->name('modules.activate');
                     Route::post('/modules/{moduleKey}/request', [MarketingModuleStoreController::class, 'requestAccess'])->name('modules.request');
                 });
@@ -1427,6 +1710,13 @@ if (app()->environment('local') && config('app.debug')) {
     });
 }
 
+Route::get('/webhooks/instagram', [InstagramWebhookController::class, 'verify'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->name('instagram.webhooks.verify');
+Route::post('/webhooks/instagram', [InstagramWebhookController::class, 'handle'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->name('instagram.webhooks.handle');
+
 Route::prefix('webhooks/shopify')->group(function () {
     Route::post('/orders/create', [ShopifyWebhookController::class, 'ordersCreate'])
         ->withoutMiddleware([VerifyCsrfToken::class])
@@ -1554,6 +1844,10 @@ Route::post('/account/rewards/redeem', [MarketingPublicEventController::class, '
 Route::get('/marketing/consent/confirm', [MarketingPublicEventController::class, 'showConsentConfirm'])
     ->middleware('throttle:30,1')
     ->name('marketing.public.consent-confirm');
+Route::get('/share/wishlist/{token}', [MarketingWishlistShareController::class, 'show'])
+    ->middleware('throttle:60,1')
+    ->name('marketing.public.wishlist-share');
+
 Route::get('/share/scent-personality/{token}/image.png', [MarketingPublicEventController::class, 'showScentPersonalityShareImage'])
     ->where('token', '[A-Za-z0-9]{20,80}')
     ->middleware('throttle:60,1')
@@ -1670,6 +1964,9 @@ Route::prefix('shopify/marketing')
         Route::post('/wishlist/lists/create', [MarketingShopifyIntegrationController::class, 'createWishlistList'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('wishlist.lists.create');
+        Route::post('/wishlist/share', [MarketingShopifyIntegrationController::class, 'shareWishlistList'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('wishlist.share');
         Route::post('/wishlist/remove', [MarketingShopifyIntegrationController::class, 'removeWishlistItem'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('wishlist.remove');
@@ -1767,6 +2064,9 @@ Route::prefix('shopify/marketing/v1')
         Route::post('/wishlist/lists/create', [MarketingShopifyIntegrationController::class, 'createWishlistList'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('wishlist.lists.create');
+        Route::post('/wishlist/share', [MarketingShopifyIntegrationController::class, 'shareWishlistList'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('wishlist.share');
         Route::post('/wishlist/remove', [MarketingShopifyIntegrationController::class, 'removeWishlistItem'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('wishlist.remove');
@@ -1820,6 +2120,8 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
         ->name('shopify.app.wholesale.applications.approve');
     Route::post('/app/wholesale/applications/{accessRequest}/reject', [ShopifyEmbeddedAppController::class, 'rejectWholesaleApplication'])
         ->name('shopify.app.wholesale.applications.reject');
+    Route::get('/app/wholesale/messaging', [WholesaleEmailMessengerController::class, 'show'])
+        ->name('shopify.app.wholesale.messaging');
     Route::post('/app/wholesale/applications/{accessRequest}/resend-activation', [ShopifyEmbeddedAppController::class, 'resendWholesaleApplicationActivation'])
         ->name('shopify.app.wholesale.applications.resend-activation');
     Route::get('/app/start', [ShopifyEmbeddedAppController::class, 'startHere'])->name('shopify.app.start');
@@ -1837,6 +2139,7 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
     Route::get('/app/rewards/redeem', [ShopifyEmbeddedRewardsController::class, 'redeem'])->name('shopify.app.rewards.redeem');
     Route::get('/app/rewards/referrals', [ShopifyEmbeddedRewardsController::class, 'referrals'])->name('shopify.app.rewards.referrals');
     Route::get('/app/rewards/birthdays', [ShopifyEmbeddedRewardsController::class, 'birthdays'])->name('shopify.app.rewards.birthdays');
+    Route::get('/app/rewards/birthdays/email', [BirthdayEmailComposerController::class, 'show'])->name('shopify.app.rewards.birthdays.email');
     Route::get('/app/rewards/vip', [ShopifyEmbeddedRewardsController::class, 'vip'])->name('shopify.app.rewards.vip');
     Route::get('/app/rewards/notifications', [ShopifyEmbeddedRewardsController::class, 'notifications'])->name('shopify.app.rewards.notifications');
     Route::get('/app/customers', [ShopifyEmbeddedCustomersController::class, 'manage'])->name('shopify.app.customers');
@@ -1861,11 +2164,13 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
     Route::get('/app/messaging/setup', [ShopifyEmbeddedMessagingController::class, 'setup'])->name('shopify.app.messaging.setup');
     Route::get('/app/messaging/analytics', [ShopifyEmbeddedMessagingController::class, 'analytics'])->name('shopify.app.messaging.analytics');
     Route::get('/app/reporting/marketing-results', [ShopifyEmbeddedMessagingController::class, 'marketingResults'])->name('shopify.app.reporting.marketing-results');
+    Route::get('/app/reporting/sales-tax', [ShopifyEmbeddedSalesTaxReportsController::class, 'show'])->name('shopify.app.reporting.sales-tax');
     Route::get('/app/messaging/responses', [ShopifyEmbeddedMessagingController::class, 'responses'])->name('shopify.app.messaging.responses');
     Route::get('/app/messaging/app-messages', [ShopifyEmbeddedMessagingController::class, 'appMessages'])->name('shopify.app.messaging.app-messages');
     Route::get('/app/development-notes', [ShopifyEmbeddedDevelopmentNotesController::class, 'show'])->name('shopify.app.development-notes');
     Route::get('/app/edit', [ShopifyEmbeddedSettingsController::class, 'editApp'])->name('shopify.app.edit');
     Route::get('/app/settings', [ShopifyEmbeddedSettingsController::class, 'show'])->name('shopify.app.settings');
+    Route::get('/app/fundraising', [ShopifyEmbeddedFundraisingController::class, 'show'])->name('shopify.app.fundraising');
     Route::prefix('app/api')->name('shopify.app.api.')->group(function () {
         Route::get('/dashboard', [ShopifyEmbeddedAppController::class, 'data'])->name('dashboard');
         Route::get('/dashboard-lite', [ShopifyEmbeddedAppController::class, 'liteData'])->name('dashboard-lite');
@@ -1995,6 +2300,18 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
             ->name('messaging.responses.index');
         Route::get('/messaging/responses/{conversation}', [ShopifyEmbeddedMessagingController::class, 'responsesShow'])
             ->name('messaging.responses.show');
+        Route::post('/wholesale/messaging/draft', [WholesaleEmailMessengerController::class, 'save'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('wholesale.messaging.save');
+        Route::post('/wholesale/messaging/test-send', [WholesaleEmailMessengerController::class, 'testSend'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('wholesale.messaging.test-send');
+        Route::post('/rewards/birthdays/email/draft', [BirthdayEmailComposerController::class, 'save'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('rewards.birthdays.email.save');
+        Route::post('/rewards/birthdays/email/test-send', [BirthdayEmailComposerController::class, 'testSend'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('rewards.birthdays.email.test-send');
         Route::post('/messaging/responses/{conversation}/actions', [ShopifyEmbeddedMessagingController::class, 'responsesUpdate'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('messaging.responses.update');
@@ -2037,6 +2354,40 @@ Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group
         Route::post('/settings/widgets', [ShopifyEmbeddedSettingsController::class, 'saveWidgetSettings'])
             ->withoutMiddleware([VerifyCsrfToken::class])
             ->name('settings.widgets.save');
+        Route::get('/settings/fundraiser-invoicing', [ShopifyEmbeddedSettingsController::class, 'fundraiserInvoiceSettings'])
+            ->name('settings.fundraiser-invoicing');
+        Route::post('/settings/fundraiser-invoicing', [ShopifyEmbeddedSettingsController::class, 'saveFundraiserInvoiceSettings'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('settings.fundraiser-invoicing.save');
+        Route::get('/settings/fundraiser-invoicing/desk', [ShopifyEmbeddedSettingsController::class, 'fundraiserInvoiceDesk'])
+            ->name('settings.fundraiser-invoicing.desk');
+        Route::post('/fundraising/detect', [ShopifyEmbeddedSettingsController::class, 'detectFundraiserShopifyOrders'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('fundraising.detect');
+        Route::post('/fundraising/orders/{order}/shipping', [ShopifyEmbeddedSettingsController::class, 'verifyFundraiserShipping'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('fundraising.orders.shipping');
+        Route::post('/fundraising/invoices/{package}/create', [ShopifyEmbeddedSettingsController::class, 'createFundraiserQuickBooksInvoice'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('fundraising.invoices.create');
+        Route::post('/fundraising/invoices/{package}/send', [ShopifyEmbeddedSettingsController::class, 'sendFundraiserQuickBooksInvoice'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('fundraising.invoices.send');
+        Route::get('/fundraising/invoices/{package}/payment-link', [ShopifyEmbeddedSettingsController::class, 'fundraiserPaymentLink'])
+            ->name('fundraising.invoices.payment-link');
+        Route::get('/fundraising/invoices/existing-august', [ShopifyEmbeddedSettingsController::class, 'existingAugustFundraiserInvoice'])
+            ->name('fundraising.invoices.existing-august');
+        Route::post('/settings/fundraiser-invoicing/zapier-secret', [ShopifyEmbeddedSettingsController::class, 'rotateFundraiserZapierSecret'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('settings.fundraiser-invoicing.zapier-secret');
+        Route::post('/settings/fundraiser-invoicing/orders/{order}/approve', [ShopifyEmbeddedSettingsController::class, 'approveFundraiserOrder'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('settings.fundraiser-invoicing.orders.approve');
+        Route::post('/settings/fundraiser-invoicing/invoice-packages', [ShopifyEmbeddedSettingsController::class, 'prepareFundraiserInvoicePackage'])
+            ->withoutMiddleware([VerifyCsrfToken::class])
+            ->name('settings.fundraiser-invoicing.packages.prepare');
+        Route::get('/settings/fundraiser-invoicing/invoice-packages/{package}/export', [ShopifyEmbeddedSettingsController::class, 'exportFundraiserInvoicePackage'])
+            ->name('settings.fundraiser-invoicing.packages.export');
         Route::get('/development-notes/access', [ShopifyEmbeddedDevelopmentNotesController::class, 'access'])
             ->name('development-notes.access');
         Route::get('/development-notes/bootstrap', [ShopifyEmbeddedDevelopmentNotesController::class, 'bootstrap'])
@@ -2097,3 +2448,45 @@ Route::middleware('signed')
     ->name('rewards.policy.exports.signed');
 
 require __DIR__.'/settings.php';
+
+// Published customer pages are resolved only after every explicit platform,
+// Shopify, checkout, webhook, and workspace route has had precedence. A
+// Laravel fallback avoids turning unrelated unknown methods into a 405 while
+// keeping custom-domain rendering strictly host-scoped.
+// Laravel's Route::fallback helper is GET-only. Marking this all-method route
+// as a fallback preserves final-route precedence while allowing non-GET/HEAD
+// misses to return the required 404 instead of a framework 405.
+Route::any('/{managedWebsiteFallbackPath}', function (Request $request, ManagedWebsiteService $managedWebsites) {
+    if (! $request->isMethod('GET') && ! $request->isMethod('HEAD')) {
+        // Preserve a real route's normal 405 contract. Unknown paths match
+        // only this final fallback and deliberately become a normal 404.
+        $getProbe = $request->duplicate();
+        $getProbe->setMethod('GET');
+        $getRoute = app('router')->getRoutes()->match($getProbe);
+
+        if (! $getRoute->isFallback) {
+            throw new MethodNotAllowedHttpException($getRoute->methods());
+        }
+
+        abort(404);
+    }
+
+    if ($request->expectsJson()) {
+        abort(404);
+    }
+
+    $context = $request->attributes->get('host_tenant_context');
+    abort_unless(
+        $context instanceof HostTenantContext
+        && $context->strategy === 'managed_website_custom_domain'
+        && $context->tenant instanceof \App\Models\Tenant,
+        404,
+    );
+
+    $payload = $managedWebsites->publicPage($context->tenant, $request->path());
+    abort_unless($payload !== null, 404);
+
+    return view('managed-website.public', $payload + ['tenant' => $context->tenant]);
+})->where('managedWebsiteFallbackPath', '.*')
+    ->fallback()
+    ->name('managed-website.public.fallback');

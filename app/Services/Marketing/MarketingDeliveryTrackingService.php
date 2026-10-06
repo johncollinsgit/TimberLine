@@ -5,6 +5,7 @@ namespace App\Services\Marketing;
 use App\Models\MarketingCampaignRecipient;
 use App\Models\MarketingDeliveryEvent;
 use App\Models\MarketingMessageDelivery;
+use App\Models\MessagingConversationMessage;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Log;
 
@@ -105,6 +106,16 @@ class MarketingDeliveryTrackingService
         if ($delivery->recipient) {
             $this->updateRecipientFromDelivery($delivery->recipient, $status, $occurredAt);
         }
+
+        // Inbox replies use the same Twilio delivery record as campaign sends, but
+        // their visible status lives on the conversation message. Keep it in sync
+        // with Twilio's callback so the mobile and web inboxes do not remain queued.
+        MessagingConversationMessage::query()
+            ->where('marketing_message_delivery_id', $delivery->id)
+            ->update([
+                'delivery_status' => $status,
+                'updated_at' => now(),
+            ]);
 
         return [
             'matched' => true,

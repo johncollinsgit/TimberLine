@@ -18,25 +18,104 @@ concurrency:
 
 permissions:
   contents: read
+  checks: read
+  pull-requests: read
 
 jobs:
   setup:
     name: Setup
     runs-on: ubuntu-latest
     outputs:
-      run_tests: ${{ steps.gate.outputs.run_tests }}
+      run_full_gate: ${{ steps.gate.outputs.run_full_gate }}
+      run_migration_safety: ${{ steps.gate.outputs.run_migration_safety }}
+      verification_mode: ${{ steps.gate.outputs.verification_mode }}
     steps:
-      - name: Decide whether to run the test/build gate
+      - name: Resolve release verification plan
         id: gate
-        # Always run the gate on push to main. Only a manual dispatch that
-        # explicitly unchecks run_tests may bypass it (emergency hotfix).
-        run: echo "run_tests=${{ github.event_name != 'workflow_dispatch' || github.event.inputs.run_tests == 'true' }}" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+          RELEASE_SHA: ${{ github.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          MANUAL_RUN_TESTS: ${{ github.event.inputs.run_tests }}
+        # Direct pushes always run both gates. Only a manual dispatch that
+        # explicitly unchecks run_tests may skip the broader test/build gate.
+        #
+        # A merged PR with an identical final tree is the one safe exception:
+        # it has already passed the named PR checks, so repeating the whole
+        # test/build job after merge would only delay the exact same artifact.
+        run: |
+          set -euo pipefail
+
+          run_full_gate=true
+          run_migration_safety=true
+          verification_mode=full_gate
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$MANUAL_RUN_TESTS" = "false" ]; then
+            run_full_gate=false
+            verification_mode=approved_emergency
+          elif [ "$EVENT_NAME" = "push" ]; then
+            associated_prs="$(gh api --paginate "repos/${REPOSITORY}/commits/${RELEASE_SHA}/pulls" 2>/dev/null || true)"
+            verified_pr="$(printf '%s' "$associated_prs" | jq -c --arg sha "$RELEASE_SHA" '
+              [ .[]
+                | select(.merged_at != null)
+                | select(.base.ref == "main")
+                | select(.merge_commit_sha == $sha or .head.sha == $sha)
+              ]
+              | first // empty
+            ' 2>/dev/null || true)"
+
+            if [ -n "$verified_pr" ]; then
+              pr_head_sha="$(printf '%s' "$verified_pr" | jq -r '.head.sha')"
+              release_tree="$(gh api "repos/${REPOSITORY}/git/commits/${RELEASE_SHA}" --jq '.tree.sha' 2>/dev/null || true)"
+              pr_tree="$(gh api "repos/${REPOSITORY}/git/commits/${pr_head_sha}" --jq '.tree.sha' 2>/dev/null || true)"
+              checks="$(gh api "repos/${REPOSITORY}/commits/${pr_head_sha}/check-runs?per_page=100" 2>/dev/null || true)"
+
+              checks_pass=true
+              for check_name in "quality" "ci (8.4)" "mysql migration recovery"; do
+                if ! printf '%s' "$checks" | jq -e --arg expected "$check_name" '
+                  [ .check_runs[] | select(.name == $expected) ]
+                  | sort_by(.completed_at)
+                  | last
+                  | .status == "completed" and .conclusion == "success"
+                ' >/dev/null 2>&1; then
+                  checks_pass=false
+                  break
+                fi
+              done
+
+              if [ -n "$release_tree" ] && [ "$release_tree" = "$pr_tree" ] && [ "$checks_pass" = "true" ]; then
+                run_full_gate=false
+                verification_mode=verified_pr_tree
+                echo "Reusing approved PR #$(printf '%s' "$verified_pr" | jq -r '.number') for an identical release tree."
+              fi
+            fi
+          fi
+
+          # MySQL rehearsal is required for direct and emergency releases and
+          # for every verified merge that changes schema/migration tooling. A
+          # verified non-schema merge reuses its already-passed MySQL PR gate.
+          if [ "$verification_mode" = "verified_pr_tree" ]; then
+            if [ -n "$PUSH_BEFORE" ] && ! printf '%s' "$PUSH_BEFORE" | grep -q '^0\{40\}$'; then
+              if changed_files="$(gh api --paginate "repos/${REPOSITORY}/compare/${PUSH_BEFORE}...${RELEASE_SHA}" --jq '.files[].filename' 2>/dev/null)"; then
+                if ! printf '%s\n' "$changed_files" | grep -Eq '^(database/(migrations|schema)/|scripts/ci/(lint-migrations|rehearse-migrations|verify-mysql-schema-baseline|legacy-migration)|tests/Integration/(WorkflowStudioMySqlMigrationRecoveryTest\.php|HighLevelFleetMySqlMigrationRecoveryTest\.php|migration-recovery-manifest\.php)|composer\.(json|lock)$|config/database\.php$)'; then
+                  run_migration_safety=false
+                fi
+              fi
+            fi
+          fi
+
+          echo "run_full_gate=${run_full_gate}" >> "$GITHUB_OUTPUT"
+          echo "run_migration_safety=${run_migration_safety}" >> "$GITHUB_OUTPUT"
+          echo "verification_mode=${verification_mode}" >> "$GITHUB_OUTPUT"
+          echo "Release verification mode: ${verification_mode}; full gate: ${run_full_gate}; migration safety: ${run_migration_safety}."
 
   test_and_build:
     name: Test And Build Gate
     runs-on: ubuntu-latest
     needs: setup
-    if: needs.setup.outputs.run_tests == 'true'
+    if: needs.setup.outputs.run_full_gate == 'true'
     environment: Testing
     steps:
       - name: Checkout code
@@ -50,7 +129,7 @@ jobs:
           coverage: none
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: npm
@@ -60,7 +139,7 @@ jobs:
         run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
 
       - name: Cache Composer downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: ${{ runner.os }}-php-8.4-composer-${{ hashFiles('**/composer.lock') }}
@@ -101,8 +180,104 @@ jobs:
       - name: Build frontend assets
         run: npm run build
 
+      - name: Install browsers for Fleet embedding checks
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Verify Fleet embedding and allowance in Chromium and WebKit
+        run: npm run test:highlevel-fleet
+
       - name: Run tests in parallel
         run: php -d memory_limit=1G ./vendor/bin/pest --parallel --compact
+
+  migration_safety:
+    name: Migration Safety Gate
+    runs-on: ubuntu-latest
+    needs: setup
+    if: needs.setup.outputs.run_migration_safety == 'true'
+    environment: Testing
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: everbranch_ci
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --host=127.0.0.1 --password=root"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=12
+    env:
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: everbranch_ci
+      DB_USERNAME: root
+      DB_PASSWORD: root
+
+    steps:
+      - name: Checkout code with release history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          tools: composer:v2
+          coverage: none
+
+      - name: Locate Composer cache
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Composer downloads
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-php-8.4-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-php-8.4-composer-
+
+      - name: Configure Flux composer auth
+        env:
+          FLUX_USERNAME: ${{ secrets.FLUX_USERNAME }}
+          FLUX_LICENSE_KEY: ${{ secrets.FLUX_LICENSE_KEY }}
+        run: composer config http-basic.composer.fluxui.dev "$FLUX_USERNAME" "$FLUX_LICENSE_KEY"
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Prepare app key for migration rehearsal
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Resolve previous production commit
+        id: migration-base
+        env:
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          base_sha="$PUSH_BEFORE"
+          if [ -z "$base_sha" ] || printf '%s' "$base_sha" | grep --quiet '^0\{40\}$'; then
+            base_sha="$(git rev-parse HEAD^)"
+          fi
+          echo "sha=$base_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Lint changed migrations
+        run: php scripts/ci/lint-migrations.php --base="${{ steps.migration-base.outputs.sha }}"
+
+      - name: Verify interrupted migration recovery
+        run: php ./vendor/bin/pest tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php tests/Integration/HighLevelFleetMySqlMigrationRecoveryTest.php --compact
+
+      - name: Rehearse prior production schema upgrade
+        run: scripts/ci/rehearse-migrations.sh "${{ steps.migration-base.outputs.sha }}"
+
+      - name: Verify committed MySQL schema baseline
+        run: scripts/ci/verify-mysql-schema-baseline.sh
 
   deploy:
     name: Deploy
@@ -110,17 +285,21 @@ jobs:
     needs:
       - setup
       - test_and_build
-    # Deploy only when the gate passed. A 'skipped' gate is allowed ONLY for the
-    # manual emergency-hotfix path (workflow_dispatch with run_tests unchecked);
-    # on a normal push the gate runs, so a test failure here blocks the deploy.
+      - migration_safety
+    # A skipped gate is allowed only when Setup either verified the exact merged
+    # PR tree against its named checks or an operator chose the audited emergency
+    # path. Direct pushes still take both gates in full.
     if: >
       always() &&
       needs.setup.result == 'success' &&
-      (needs.test_and_build.result == 'success' ||
-        (needs.test_and_build.result == 'skipped' && github.event_name == 'workflow_dispatch'))
+      (needs.migration_safety.result == 'success' || needs.migration_safety.result == 'skipped') &&
+      (needs.test_and_build.result == 'success' || needs.test_and_build.result == 'skipped')
     environment:
       name: production
     steps:
+      - name: Checkout deployment diagnostics
+        uses: actions/checkout@v6
+
       - name: Validate deployment secrets
         env:
           FORGE_DEPLOY_HOOK_URL: ${{ secrets.FORGE_DEPLOY_HOOK_URL }}
@@ -131,9 +310,51 @@ jobs:
             exit 1
           fi
 
+      - name: Report operational observer configuration
+        continue-on-error: true
+        env:
+          FORGE_API_TOKEN: ${{ secrets.FORGE_API_TOKEN }}
+          FORGE_ORGANIZATION_SLUG: ${{ vars.FORGE_ORGANIZATION_SLUG }}
+          FORGE_SERVER_ID: ${{ vars.FORGE_SERVER_ID }}
+          FORGE_SITE_ID: ${{ vars.FORGE_SITE_ID }}
+        run: php scripts/ci/verify-forge-observer-config.php
+
       - name: Trigger Forge atomic release
         env:
           FORGE_DEPLOY_HOOK_URL: ${{ secrets.FORGE_DEPLOY_HOOK_URL }}
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --max-time 30 --request POST "$FORGE_DEPLOY_HOOK_URL"
+
+      - name: Verify the activated Forge release
+        env:
+          EXPECTED_RELEASE: ${{ github.sha }}
+          READY_URL: https://app.theeverbranch.com/ready
+        run: |
+          set -euo pipefail
+
+          for attempt in $(seq 1 40); do
+            response="$(curl --fail --silent --show-error --max-time 15 "$READY_URL" || true)"
+
+            if printf '%s' "$response" | grep --fixed-strings --quiet "\"release\":\"$EXPECTED_RELEASE\""; then
+              echo "Forge activated $EXPECTED_RELEASE on attempt $attempt."
+              exit 0
+            fi
+
+            echo "Waiting for Forge to activate $EXPECTED_RELEASE (attempt $attempt/40; response: $response)"
+            sleep 3
+          done
+
+          echo "::error::Forge did not activate the expected release $EXPECTED_RELEASE. Production remains protected, but this deployment must be investigated before it can be called live."
+          exit 1
+
+      - name: Report latest Forge deployment after a verification failure
+        if: failure()
+        continue-on-error: true
+        env:
+          EXPECTED_RELEASE: ${{ github.sha }}
+          FORGE_API_TOKEN: ${{ secrets.FORGE_API_TOKEN }}
+          FORGE_ORGANIZATION_SLUG: ${{ vars.FORGE_ORGANIZATION_SLUG }}
+          FORGE_SERVER_ID: ${{ vars.FORGE_SERVER_ID }}
+          FORGE_SITE_ID: ${{ vars.FORGE_SITE_ID }}
+        run: php scripts/ci/report-forge-deployment.php

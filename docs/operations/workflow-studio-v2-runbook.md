@@ -135,6 +135,7 @@ does not expose private handler classes.
 ### Actions
 
 - Everbranch — Send email
+- Everbranch — Prepare Customer Loop draft (review-only; never sends or publishes)
 - Everbranch — Create job task
 - Everbranch — Add job note
 - Everbranch — Change job status
@@ -153,8 +154,11 @@ not launch components. A provider may be described in Connections as roadmap
 work, but that state must never create a workflow step.
 
 Templates are optional definitions generated from this same registry. The
-launch starters are Asana, Shopify, and Square to Google Calendar; they are not
-a separate preview-only implementation.
+launch starters include calendar automations plus review-only completed-job and
+Shopify-order Customer Loop drafts; they are not a separate preview-only
+implementation. Customer Loop templates create a draft queue item only. A
+person must still review and use the appropriate approved communication surface
+to deliver any message.
 
 ## Authenticated JSON endpoints
 

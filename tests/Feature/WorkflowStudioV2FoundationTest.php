@@ -187,6 +187,7 @@ test('the public catalog exposes only executable launch components and hides han
             'shopify.order.created_or_updated',
             'square.order.created_or_updated',
             'everbranch.email.send',
+            'everbranch.customer_loop.draft.prepare',
             'everbranch.job.task.create',
             'everbranch.job.note.add',
             'everbranch.job.status.change',
@@ -239,6 +240,8 @@ test('the public catalog exposes only executable launch components and hides han
             'asana_to_google_calendar',
             'shopify_order_to_google_calendar',
             'square_order_to_google_calendar',
+            'completed_job_follow_up_draft',
+            'shopify_order_review_request_draft',
         ]);
 });
 

@@ -35,6 +35,13 @@ class ConfigDoctor extends Command
                 ['services.shopify.stores.retail.client_id', 'SHOPIFY_RETAIL_CLIENT_ID', $isProd],
                 ['services.shopify.stores.retail.client_secret', 'SHOPIFY_RETAIL_CLIENT_SECRET', $isProd],
             ],
+            'Modern Forestry mobile customer login' => [
+                ['services.shopify.customer_account.client_id', 'SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID', $isProd],
+                // The Headless storefront is a public PKCE client. A secret is optional
+                // and must never be required merely because discovery advertises support
+                // for confidential clients.
+                ['services.shopify.customer_account.client_secret', 'SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET', false],
+            ],
             'Square (legacy reconciliation)' => [
                 ['services.square.access_token', 'SQUARE_ACCESS_TOKEN', false],
                 ['services.square.location_id', 'SQUARE_LOCATION_ID', false],

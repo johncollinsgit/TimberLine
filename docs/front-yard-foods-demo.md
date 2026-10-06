@@ -68,7 +68,7 @@ The signed agreement and customer proposal page must say plainly that Evergrove 
 
 The proposal must keep four cost buckets visibly separate: Shopify store expenses; third-party apps and services; Everbranch one-time setup and monthly service; and Evergrove implementation services. Stripe is the direct-client processor for Everbranch/Evergrove charges; Relay is the verified payout bank only. Shopify App Store billing remains a separate disabled lane.
 
-It idempotently prepares Customers, Class Scheduling, Field Service, Messaging, and Reporting; six fictional customers with test phone `8646165468`; four classes covering sourdough, vegetable growing, preserving, and edible garden design; four consultation/installation jobs; enrollments; preview reminders; and durable job photos.
+It idempotently prepares Customers, Class Scheduling, Field Service, Messaging, and Reporting; six fictional customers with reserved test phone `5550100101`; four classes covering sourdough, vegetable growing, preserving, and edible garden design; four consultation/installation jobs; enrollments; preview reminders; and durable job photos.
 
 ## Public and Mobile Surfaces
 
@@ -94,7 +94,7 @@ Each downloaded image is stored as a private tenant workspace asset and records 
 4. Confirm the public page lists only published/open classes and rejects full or duplicate registrations.
 5. Confirm another tenant cannot read class, enrollment, customer, job, asset, or reminder records.
 6. Confirm desktop and iPhone cards open the intended details and the calendar remains usable at narrow widths.
-7. Only after provider/consent readiness and explicit action-time confirmation, deliver at most one test SMS to `8646165468` and one test email to `johncollinsemail@gmail.com`.
+7. Only after provider/consent readiness and explicit action-time confirmation, deliver at most one test SMS to an explicitly configured operator-owned test number and one test email to `johncollinsemail@gmail.com`. Do not use fixture customer phone `5550100101` for live delivery.
 8. Confirm `/landlord/agreements` shows the draft/version hash and the proposal is only available on an Evergrove host after password entry.
 9. Confirm tenant `/agreements` only exposes the accepted copy and provider-confirmed receipts, without internal notes or raw access evidence.
 10. Confirm acceptance alone creates no charge; payment requires the locked Stripe action and access remains blocked until settlement, schedule configuration, provider verification, and audited fulfillment exist.

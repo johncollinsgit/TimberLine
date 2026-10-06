@@ -1,0 +1,37 @@
+{
+  "routes": [
+    {
+      "path": "/platform/promo",
+      "label": "Everbranch Public Studio"
+    },
+    {
+      "path": "/platform/examples/field",
+      "label": "Everbranch Field Service Example"
+    }
+  ],
+  "dangerousActionGuards": [
+    "delete",
+    "remove",
+    "archive",
+    "disconnect",
+    "sync now",
+    "sync",
+    "import",
+    "send",
+    "redeem",
+    "payout",
+    "save",
+    "create",
+    "submit",
+    "run",
+    "retry",
+    "trigger",
+    "approve",
+    "reject",
+    "activate",
+    "deactivate",
+    "reprocess"
+  ],
+  "maxLinksPerPage": 80,
+  "maxButtonsPerPage": 40
+}

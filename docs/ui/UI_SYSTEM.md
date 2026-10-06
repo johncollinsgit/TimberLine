@@ -68,6 +68,155 @@ Transform Everbranch into a premium, calm, high-trust software experience with o
 - Reuse the same token system and typography for public, auth, admin, and embedded.
 - Prefer shared classes/components over page-local style blocks.
 - Keep page-level exceptions minimal and document them in `docs/ui/UI_CHANGELOG.md`.
+- Consistency means the same semantic role has the same appearance and
+  interaction. It does not mean every screen uses the same density or is made
+  from cards.
+
+## Canonical Page Shapes
+
+New or substantially revised screens should start from one of these shapes:
+
+1. **Dashboard:** a small number of health/outcome summaries followed by the
+   next best actions. Do not reproduce the full navigation as cards.
+2. **List:** a compact searchable list or table with filters, visible state,
+   pagination, and an instructive empty state.
+3. **List + detail:** a scanning pane and a shareable detail destination or
+   drawer. Use for catalogs, inboxes, requests, and histories.
+4. **Form/workflow:** one clear page header, grouped fields, contextual help,
+   validation next to the affected field, and a stable action row.
+5. **Immersive tool:** a purpose-built application frame for builders,
+   calendars, grids, or studios. It still uses shared tokens, controls,
+   feedback, and accessibility rules.
+
+Cards are not a page shape. Use them only when an item needs independent visual
+identity or as a small dashboard summary. Prefer rows, sections, and separators
+for information that users need to scan or compare.
+
+## Operational UI Standard (Required)
+
+Shopify Admin is a usability reference only. Everbranch keeps its own identity,
+colors, copy, and accessibility system while following these operational norms
+across tenant workspaces, Everbranch Admin, and Shopify-embedded Backstage:
+
+- **Global command bar:** authenticated workspace and landlord pages use the
+  persistent charcoal command bar owned by the shared shell. Everbranch sits
+  at the left, command search is centered, and workspace/Bud controls sit at
+  the right. Do not add a second page-level search banner or workspace title.
+- **Header:** use a 20–24px Inter title at the left and cluster utilities plus
+  one primary action at the right. Add a sentence only when it changes the
+  user's next decision. Do not lead routine pages with a display hero, eyebrow,
+  repeated URL, or title/subtitle card.
+- **Density:** body text is 14–15px, metadata and labels are 12–13px, and
+  textual actions are quiet medium-weight links. Status is a compact badge;
+  it must not become an explanatory paragraph.
+- **Canvas width:** landlord/operator pages use the full available canvas beside
+  the navigation rail so review queues, filters, tables, and configuration
+  controls remain usable. Tenant reading surfaces may retain a restrained
+  content width; a user-selected wide layout uses the full canvas as well.
+- **Surfaces:** a row, divider, toolbar, or right rail is preferred to a card.
+  Cards are reserved for an independent decision, summary, or exception. Avoid
+  nested cards and decorative shadows in operational work.
+- **Lists:** use one header toolbar for search, filters, display choices, and
+  the primary create action; use sortable/scannable rows with status columns;
+  open a shareable detail page for deeper work.
+- **Detail:** retain the object’s key state and actions in a compact header;
+  place the active work/timeline in the main column and customer/context/settings
+  in a narrow right rail.
+- **Wizards:** ask one useful question per step, keep safe guidance contextual,
+  and use a stable footer for Back/Cancel/Continue/Save. Do not leave an
+  onboarding tutorial permanently occupying the work surface.
+- **Builders:** use a compact product header, left outline, central real canvas,
+  right inspector, and persistent save/publish status. A canvas click edits the
+  matching item; it does not fake customer navigation.
+- **Navigation:** core work comes first. Rows use unboxed 16px icons, 32px
+  targets, 13px labels, and one quiet selected background. A parent with a
+  selected child does not receive a second active pill. Enabled optional
+  products live in the compact **Branches** group near Settings with **Browse
+  branches**. Customer Loop is part of Marketing, not a disconnected follow-up
+  module.
+- **Typography:** Fraunces is reserved for public storytelling and rare
+  intentional empty states. Everyday work, controls, tables, forms, landlord,
+  and embedded surfaces use Inter.
+
+### Shopify-reference control map
+
+This map records the interaction patterns observed in Shopify Admin. Future
+work should reproduce the placement and task hierarchy, while retaining
+Everbranch names, colors, permissions, and data contracts.
+
+| Shopify pattern | Everbranch standard |
+| --- | --- |
+| Black global bar with centered search | Shared charcoal command bar with command palette |
+| Neutral left rail with expandable channels/apps | Core navigation followed by quiet Branches and Settings groups |
+| Title left; export/more/create right | Compact object/page header with utilities then one primary action |
+| Search/filter/display row above a table | One reusable list toolbar immediately above dense rows |
+| Online Store leads with active theme preview | Website leads with its real draft/live preview and Edit Website |
+| Theme state and actions in preview footer | Website name, live/draft state, publish, and edit in one footer |
+| Pages/preferences are subordinate destinations | Pages are rows; domains and safety guidance use progressive disclosure |
+| Object details keep work central and context at right | Main operational column plus compact customer/settings rail |
+
+Do not copy Shopify trademarks, icons, wording, or proprietary styling. The
+reference is the placement and interaction grammar, not a visual clone.
+
+### Authenticated surface audit
+
+Every UI change must classify its destination before implementation:
+
+| Surface | Required shape | Current operational owner |
+| --- | --- | --- |
+| Workspace and landlord home | Dashboard | Shared shell + dashboard views |
+| Website overview and domains | Dashboard / focused wizard | Managed Website |
+| Website editor | Immersive builder | Managed Website editor |
+| Website products, orders, customers | Searchable list / object detail | Website Commerce |
+| Customer Loop | Searchable/actionable list + guided launcher | Marketing |
+| Workflow Studio | Immersive builder | Workflow Studio |
+| Shopify Backstage | Shared shell / list / detail | Embedded shell |
+
+Future changes must extend this table rather than inventing a page-local visual
+language. Modern Forestry is covered by the same presentation rules, but its
+Shopify credentials, checkout, orders, rewards, shipping, and customer lanes
+remain behaviorally isolated.
+
+## Semantic Interaction Rules
+
+- The same action hierarchy is used everywhere: one primary action, quiet
+  secondary actions, and explicit destructive styling.
+- Loading disables duplicate submission and keeps the control width stable.
+- Success and failure are confirmed by a toast, inline state, or destination
+  screen appropriate to the consequence of the action.
+- Empty states explain what belongs there, why it may be empty, and the next
+  useful action.
+- First-time Managed Website setup is an empty state until a draft exists. It
+  offers approved starter themes and states clearly that setup remains private
+  and does not publish or activate billing.
+- Popovers hold small choices; dialogs hold focused decisions; drawers preserve
+  list context; full pages host deep or shareable workflows.
+- Destructive confirmations name the record, consequence, and reversibility.
+- Keyboard behavior, focus return, reduced motion, and 44px mobile targets are
+  product requirements, not page-level polish.
+
+### Managed Website editor preview
+
+- The Website canvas is an edit surface: a normal click selects the matching
+  individual text field, button, image, repeated card/FAQ item, header, footer,
+  announcement, or menu control. The inspector focuses the exact matching
+  setting; repeated content opens as a small item-only editor rather than a
+  whole-section form. It does not simulate customer navigation.
+- Full customer navigation is tested only through the private **Preview site**
+  action. That route is authenticated and no-store, resolves internal pages on
+  the server for the current Website only, and shows a preview-only return to
+  the matching editor page. Public sites never receive editor chrome.
+
+## Embedded Content Editors
+- Use a three-pane layout when an embedded editor combines an outline, a live
+  content preview, and an inspector: keep the editable artifact as the larger
+  centered pane, with the inspector on the right.
+- Preview blocks must be directly selectable and visibly show the active
+  selection. Selecting a block from either the outline or the preview opens
+  the same inspector fields; links in a preview never navigate away while
+  editing.
+- Non-editable compliance content is visually distinct and remains outside the
+  editable outline and inspector.
 
 ## Login/Auth Branding Rules
 - Keep tenant presentation hooks intact (`authTenantPresentation`, host tenant context, landlord mode flags).
@@ -146,6 +295,9 @@ Source of truth: `resources/css/forestry-ui.css` (`:root`)
 - Public pages:
   - `/platform/promo` -> `PlatformProductPagesController::promo`
   - `/platform/contact` -> `PlatformProductPagesController::contact`
+  - `/book` -> `EvergroveServicesController::book` on the Evergrove public site
+  - `/explore/modules` and `/explore/modules/{module}` ->
+    `PlatformProductPagesController::moduleExplorer`
 - Auth pages: Fortify views under `resources/views/pages/auth/*` via `FortifyServiceProvider`
 - Owner accounting:
   - `/workspaces/{tenant}/accounting` -> `AccountingCommandCenterController`
@@ -182,6 +334,12 @@ Source of truth: `resources/css/forestry-ui.css` (`:root`)
     desktop canvas
 - Explanation block (admin/operator screens): `x-ui.page-explainer` + `.fb-page-explainer*`
 - Embedded shell primitives: `.app-shell*`, `.app-topbar*`, `.app-sidebar*`
+- Shared command palette:
+  - `resources/views/components/app-command-palette.blade.php`
+  - tenant requests use `GlobalSearchCoordinator`
+  - landlord requests use `LandlordSearchCoordinator`
+  - never combine those provider sets or filter tenant operational results only
+    in the browser
 
 ## Workflow Studio Interaction Contract
 
@@ -255,7 +413,8 @@ Brand asset directory: `public/brand/`
 - `everbranch-mark.svg`: primary mark for app shells, icons, and tab-sized uses
 - `everbranch-favicon.svg`: SVG favicon wrapper
 - `everbranch-auth.svg`: auth lockup variant
-- Current Everbranch asset pass is cache-tagged from `config('everbranch.brand_assets.cache_tag')`, currently `v=eb1`.
+- Public link previews use `og-image-v2.png`; the active brand-asset set is
+  cache-tagged from `config('everbranch.brand_assets.cache_tag')`.
 - Legacy `forestry-backstage-*` assets remain in `public/brand/` for compatibility/history and should not be used on Everbranch platform surfaces.
 
 Primary usage points:
@@ -281,6 +440,8 @@ Primary usage points:
 - FAQ
 - plan summary
 - final CTA + footer
+
+The Evergrove consultation page at `resources/views/evergrove/book.blade.php` reuses the Evergrove public navigation, brand assets, typography, buttons, and responsive tokens. Its compact footer lives at `resources/views/evergrove/partials/footer.blade.php`.
 
 ## Auth Branding Behavior
 - `resources/views/layouts/auth/simple.blade.php` renders brand panel + auth card with tenant presentation content.

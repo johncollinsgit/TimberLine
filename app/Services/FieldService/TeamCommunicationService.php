@@ -2,11 +2,13 @@
 
 namespace App\Services\FieldService;
 
+use App\Jobs\SendTeamMessagePushNotification;
 use App\Models\FieldServiceJob;
 use App\Models\TeamChannel;
 use App\Models\TeamMessage;
 use App\Models\Tenant;
 use App\Models\User;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -28,7 +30,7 @@ class TeamCommunicationService
                         $this->access->scopeVisibleJobs($jobs, $user, $tenant);
                     });
             })
-            ->with(['job:id,tenant_id,title', 'members:id,name'])
+            ->with(['job:id,tenant_id,title', 'members:id,name', 'lastMessage.author:id,name'])
             ->withCount('messages')
             ->orderByDesc('updated_at');
 
@@ -55,7 +57,7 @@ class TeamCommunicationService
 
     public function directChannel(Tenant $tenant, User $actor, User $other): TeamChannel
     {
-        abort_unless($tenant->users()->whereKey((int) $other->id)->exists(), 404);
+        abort_unless($tenant->users()->whereKey((int) $other->id)->wherePivot('membership_active', true)->where('users.is_active', true)->exists(), 404);
         $ids = collect([(int) $actor->id, (int) $other->id])->sort()->values();
         $key = $ids->implode(':');
         $channel = TeamChannel::query()->firstOrCreate(
@@ -67,9 +69,35 @@ class TeamCommunicationService
         return $channel;
     }
 
+    /** @param array<int,int> $memberIds */
+    public function groupChannel(Tenant $tenant, User $actor, string $name, array $memberIds): TeamChannel
+    {
+        abort_unless(mb_strlen(trim($name)) >= 2, 422, 'Name the group.');
+        $ids = collect($memberIds)->map(fn ($id): int => (int) $id)->unique()
+            ->reject(fn (int $id): bool => $id === (int) $actor->id)->values();
+        abort_unless($ids->isNotEmpty() && $ids->count() <= 49, 422, 'Choose at least one teammate.');
+        $activeIds = $tenant->users()->wherePivot('membership_active', true)->where('users.is_active', true)->whereIn('users.id', $ids->all())
+            ->pluck('users.id')->map(fn ($id): int => (int) $id);
+        abort_unless($activeIds->count() === $ids->count(), 422, 'A teammate is no longer active in this workspace.');
+
+        return DB::transaction(function () use ($tenant, $actor, $name, $activeIds): TeamChannel {
+            $channel = TeamChannel::query()->create([
+                'tenant_id' => (int) $tenant->id,
+                'kind' => 'group',
+                'name' => trim($name),
+                'created_by_user_id' => (int) $actor->id,
+            ]);
+            $members = $activeIds->push((int) $actor->id)
+                ->mapWithKeys(fn (int $id): array => [$id => ['tenant_id' => (int) $tenant->id]])->all();
+            $channel->members()->sync($members);
+
+            return $channel->load('members:id,name');
+        });
+    }
+
     public function assertAccess(Tenant $tenant, User $user, TeamChannel $channel): void
     {
-        abort_unless((int) $channel->tenant_id === (int) $tenant->id, 404);
+        abort_unless((int) $channel->tenant_id === (int) $tenant->id && $channel->archived_at === null, 404);
         if ($channel->kind === 'company') {
             return;
         }
@@ -80,7 +108,7 @@ class TeamCommunicationService
     }
 
     /** @param array<int,int> $mentionUserIds */
-    public function post(Tenant $tenant, User $user, TeamChannel $channel, string $body, string $clientUuid, array $mentionUserIds = [], ?int $parentId = null): TeamMessage
+    public function post(Tenant $tenant, User $user, TeamChannel $channel, string $body, string $clientUuid, array $mentionUserIds = [], ?int $parentId = null, array $attachmentIds = []): TeamMessage
     {
         $this->assertAccess($tenant, $user, $channel);
         $mentions = $tenant->users()->whereIn('users.id', $mentionUserIds)->pluck('users.id')->map(fn ($id): int => (int) $id)->all();
@@ -88,22 +116,39 @@ class TeamCommunicationService
             abort_unless($channel->messages()->whereKey($parentId)->exists(), 422, 'The reply target is not in this channel.');
         }
 
-        return DB::transaction(function () use ($tenant, $user, $channel, $body, $clientUuid, $mentions, $parentId): TeamMessage {
+        return DB::transaction(function () use ($tenant, $user, $channel, $body, $clientUuid, $mentions, $parentId, $attachmentIds): TeamMessage {
             $message = TeamMessage::query()->firstOrCreate(
                 ['tenant_id' => (int) $tenant->id, 'created_by_user_id' => (int) $user->id, 'client_uuid' => $clientUuid],
                 ['team_channel_id' => (int) $channel->id, 'parent_message_id' => $parentId, 'body' => trim($body), 'mention_user_ids' => $mentions]
             );
+            abort_unless((int) $message->team_channel_id === (int) $channel->id, 409, 'This message key belongs to another conversation.');
+            if ($message->wasRecentlyCreated) {
+                app(TeamMessageAttachmentService::class)->attach($tenant, $user, $channel, $message, $attachmentIds);
+                SendTeamMessagePushNotification::dispatch((int) $message->id)->afterCommit();
+            }
             $channel->forceFill(['updated_at' => now()])->save();
             $this->markRead($tenant, $user, $channel);
 
-            return $message->load('author:id,name');
+            return $message->load(['author:id,name', 'attachments']);
         });
     }
 
-    public function markRead(Tenant $tenant, User $user, TeamChannel $channel): void
+    public function markRead(Tenant $tenant, User $user, TeamChannel $channel, ?CarbonInterface $readThrough = null): void
     {
         $this->assertAccess($tenant, $user, $channel);
-        $channel->members()->syncWithoutDetaching([(int) $user->id => ['tenant_id' => (int) $tenant->id, 'last_read_at' => now()]]);
-        $channel->members()->updateExistingPivot((int) $user->id, ['last_read_at' => now()]);
+        $at = $readThrough ?: now();
+        $channel->members()->syncWithoutDetaching([(int) $user->id => ['tenant_id' => (int) $tenant->id, 'last_read_at' => $at]]);
+        $channel->members()->updateExistingPivot((int) $user->id, ['last_read_at' => $at]);
+    }
+
+    public function markUnread(Tenant $tenant, User $user, TeamChannel $channel): void
+    {
+        $this->assertAccess($tenant, $user, $channel);
+        $latest = $channel->messages()->whereNull('deleted_at')->where('created_by_user_id', '!=', (int) $user->id)->latest('id')->first();
+        if (! $latest) {
+            return;
+        }
+        $channel->members()->syncWithoutDetaching([(int) $user->id => ['tenant_id' => (int) $tenant->id]]);
+        $channel->members()->updateExistingPivot((int) $user->id, ['last_read_at' => $latest->created_at->copy()->subSecond()]);
     }
 }

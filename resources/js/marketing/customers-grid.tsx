@@ -3,10 +3,13 @@ import axios from "axios";
 import "@glideapps/glide-data-grid/dist/index.css";
 import {
     DataEditor,
+    CustomCell,
+    CustomRenderer,
     GridCell,
     GridCellKind,
     GridColumn,
     Item,
+    roundedRect,
     type Theme,
 } from "@glideapps/glide-data-grid";
 import {
@@ -49,6 +52,7 @@ type FilterState = {
     source: string;
     has_points: string;
     has_phone: string;
+    status: string;
 };
 
 type ResponseMeta = {
@@ -68,6 +72,8 @@ type RootDataset = {
     endpoint: string;
     addCustomerUrl: string;
     messageCustomerUrl: string;
+    bulkActionUrl: string;
+    operationalDirectory: boolean;
     initialFilters: FilterState;
     sortOptions: SortOption[];
 };
@@ -75,6 +81,41 @@ type RootDataset = {
 type ElementSize = {
     width: number;
     height: number;
+};
+
+type CustomerSelectCell = CustomCell<{ kind: "customer-select"; selected: boolean }>;
+
+const customerSelectRenderer: CustomRenderer<CustomerSelectCell> = {
+    kind: GridCellKind.Custom,
+    isMatch: (cell): cell is CustomerSelectCell => cell.data.kind === "customer-select",
+    needsHover: true,
+    draw: ({ ctx, rect, hoverAmount, overrideCursor, cell }) => {
+        const size = 18;
+        const x = rect.x + (rect.width - size) / 2;
+        const y = rect.y + (rect.height - size) / 2;
+        overrideCursor?.("pointer");
+        ctx.save();
+        ctx.beginPath();
+        roundedRect(ctx, x, y, size, size, 4);
+        ctx.fillStyle = cell.data.selected ? "#0f766e" : (hoverAmount > 0 ? "#f0fdfa" : "#ffffff");
+        ctx.fill();
+        ctx.strokeStyle = cell.data.selected ? "#0f766e" : "#6d7175";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        if (cell.data.selected) {
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 2;
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            ctx.beginPath();
+            ctx.moveTo(x + 4, y + 9);
+            ctx.lineTo(x + 7.5, y + 12.5);
+            ctx.lineTo(x + 14.5, y + 5.5);
+            ctx.stroke();
+        }
+        ctx.restore();
+        return true;
+    },
 };
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -147,38 +188,34 @@ function alphaColor(rgbTriplet: string, alpha: number): string {
 }
 
 function resolveGridTheme(): Theme {
-    const accent = readCssVar("--mf-accent", "16, 185, 129");
-    const accentSoft = readCssVar("--mf-accent-2", accent);
-    const panelBorder = readCssVar("--mf-panel-border", "rgba(110, 231, 183, 0.12)");
-    const panelBorderStrong = readCssVar("--mf-panel-strong-border", "rgba(110, 231, 183, 0.22)");
-    const fontBody = readCssVar(
-        "--mf-font-body",
-        "Manrope, ui-sans-serif, system-ui, sans-serif"
-    );
+    const accent = readCssVar("--shopify-accent", "0, 128, 96");
+    const panelBorder = readCssVar("--shopify-panel-border", "#e1e3e5");
+    const panelBorderStrong = readCssVar("--shopify-panel-strong-border", "#c9cccf");
+    const fontBody = readCssVar("--shopify-font-body", "Inter, ui-sans-serif, system-ui, sans-serif");
 
     return {
         accentColor: alphaColor(accent, 1),
-        accentFg: "#ecfdf5",
-        accentLight: alphaColor(accentSoft, 0.16),
-        textDark: "#e8fff5",
-        textMedium: "#b8d8ca",
-        textLight: "#7ca997",
-        textBubble: "#e8fff5",
-        bgIconHeader: alphaColor(accentSoft, 0.18),
-        fgIconHeader: "#d1fae5",
-        textHeader: "#e8fff5",
-        textGroupHeader: "#7ca997",
-        textHeaderSelected: "#ecfdf5",
-        bgCell: "#091510",
-        bgCellMedium: "#0d1b15",
-        bgHeader: "#113428",
-        bgHeaderHasFocus: "#164235",
-        bgHeaderHovered: "#153d30",
-        bgBubble: "#163d31",
-        bgBubbleSelected: "#1d4b3c",
-        bgSearchResult: "#194536",
-        borderColor: panelBorder,
-        drilldownBorder: panelBorderStrong,
+        accentFg: "#ffffff",
+        accentLight: "#e3f1df",
+        textDark: "#202223",
+        textMedium: "#6d7175",
+        textLight: "#8c9196",
+        textBubble: "#202223",
+        bgIconHeader: "#f1f2f3",
+        fgIconHeader: "#5c5f62",
+        textHeader: "#202223",
+        textGroupHeader: "#6d7175",
+        textHeaderSelected: "#202223",
+        bgCell: "#ffffff",
+        bgCellMedium: "#f6f6f7",
+        bgHeader: "#f6f6f7",
+        bgHeaderHasFocus: "#edeeef",
+        bgHeaderHovered: "#edeeef",
+        bgBubble: "#f1f2f3",
+        bgBubbleSelected: "#d9f3ec",
+        bgSearchResult: "#fff5ea",
+        borderColor: "#e1e3e5",
+        drilldownBorder: "#c9cccf",
         linkColor: alphaColor(accent, 1),
         cellHorizontalPadding: 14,
         cellVerticalPadding: 8,
@@ -244,6 +281,8 @@ function parseRootDataset(root: HTMLElement): RootDataset {
         endpoint: root.dataset.endpoint || "/marketing/customers/data",
         addCustomerUrl: root.dataset.addCustomerUrl || "/marketing/customers/create",
         messageCustomerUrl: root.dataset.messageCustomerUrl || "",
+        bulkActionUrl: root.dataset.bulkActionUrl || "",
+        operationalDirectory: root.dataset.operationalDirectory === "true",
         initialFilters: {
             search: initialFilters.search || "",
             sort: initialFilters.sort || "updated_at",
@@ -253,6 +292,7 @@ function parseRootDataset(root: HTMLElement): RootDataset {
             source: initialFilters.source || "all",
             has_points: initialFilters.has_points || "all",
             has_phone: initialFilters.has_phone || "all",
+            status: initialFilters.status === "archived" ? "archived" : "active",
         },
         sortOptions,
     };
@@ -282,7 +322,7 @@ function columnWidth(column: ColumnMeta): number {
     }
 }
 
-function buildColumns(meta: ResponseMeta | null): GridColumn[] {
+function buildColumns(meta: ResponseMeta | null, operationalDirectory: boolean): GridColumn[] {
     const columns = (meta?.columns ?? []).map((column) => ({
         id: column.key,
         title: column.label,
@@ -290,6 +330,7 @@ function buildColumns(meta: ResponseMeta | null): GridColumn[] {
     }));
 
     return [
+        ...(operationalDirectory ? [{ id: "__select", title: "Select", width: 70 }] : []),
         ...columns,
         {
             id: "__actions",
@@ -300,29 +341,29 @@ function buildColumns(meta: ResponseMeta | null): GridColumn[] {
 }
 
 function fieldClass(): string {
-    return "h-11 w-full rounded-xl border border-white/10 bg-black/25 px-3 text-sm text-white outline-none transition placeholder:text-white/35 focus:border-emerald-300/25 focus:bg-black/35";
+    return "h-10 w-full rounded-lg border border-[#c9cccf] bg-white px-3 text-sm text-[#202223] outline-none transition placeholder:text-[#8c9196] focus:border-[#008060] focus:ring-2 focus:ring-[#008060]/20";
 }
 
 function buttonClass(): string {
-    return "inline-flex h-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white/85 transition hover:bg-white/10";
+    return "inline-flex h-10 items-center justify-center rounded-lg border border-[#c9cccf] bg-white px-3.5 text-sm font-medium text-[#202223] shadow-sm transition hover:bg-[#f6f6f7]";
 }
 
 function primaryButtonClass(): string {
-    return "inline-flex h-11 items-center justify-center rounded-xl border border-emerald-300/35 bg-emerald-500/15 px-4 text-sm font-medium text-white transition hover:bg-emerald-500/25";
+    return "inline-flex h-10 items-center justify-center rounded-lg border border-[#008060] bg-[#008060] px-3.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#006e52]";
 }
 
 function filterChipClass(active = true): string {
     return active
-        ? "inline-flex items-center rounded-full border border-emerald-300/25 bg-emerald-500/15 px-3 py-1 text-xs font-medium text-emerald-50"
-        : "inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/65";
+        ? "inline-flex items-center rounded-full border border-[#aee9d1] bg-[#e3f1df] px-3 py-1 text-xs font-medium text-[#006e52]"
+        : "inline-flex items-center rounded-full border border-[#e1e3e5] bg-[#f6f6f7] px-3 py-1 text-xs font-medium text-[#5c5f62]";
 }
 
 function paginationButtonClass(): string {
-    return "inline-flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 text-xs font-semibold uppercase tracking-wider text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40";
+    return "inline-flex h-9 items-center justify-center rounded-lg border border-[#c9cccf] bg-white px-3 text-xs font-semibold uppercase tracking-wider text-[#202223] shadow-sm transition hover:bg-[#f6f6f7] disabled:cursor-not-allowed disabled:opacity-40";
 }
 
 function pageSizeSelectClass(): string {
-    return "h-9 min-w-[80px] rounded-xl border border-white/10 bg-black/25 px-2 text-xs text-white outline-none transition focus:border-emerald-300/25 focus:bg-black/35";
+    return "h-9 min-w-[80px] rounded-lg border border-[#c9cccf] bg-white px-2 text-xs text-[#202223] outline-none transition focus:border-[#008060] focus:ring-2 focus:ring-[#008060]/20";
 }
 
 function formatCellValue(column: ColumnMeta | null, rawValue: unknown): string {
@@ -363,6 +404,9 @@ function MarketingCustomersGridApp(props: RootDataset) {
     const [hasPoints, setHasPoints] = useState(props.initialFilters.has_points);
     const [hasPhone, setHasPhone] = useState(props.initialFilters.has_phone);
     const [birthdayFilter, setBirthdayFilter] = useState(props.initialFilters.birthday_filter);
+    const [status, setStatus] = useState(props.initialFilters.status);
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
+    const [bulkWorking, setBulkWorking] = useState(false);
     const [sortField, setSortField] = useState(props.initialFilters.sort);
     const [sortDir, setSortDir] = useState<"asc" | "desc">(props.initialFilters.dir);
     const [perPage, setPerPage] = useState(props.initialFilters.per_page);
@@ -380,7 +424,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
     const [gridWrapRef, gridBounds] = useElementSize<HTMLDivElement>();
     const gridTheme = useMemo(() => resolveGridTheme(), []);
     const gridCssVars = useMemo(() => gridThemeVars(gridTheme), [gridTheme]);
-    const columns = useMemo(() => buildColumns(meta), [meta]);
+    const columns = useMemo(() => buildColumns(meta, props.operationalDirectory), [meta, props.operationalDirectory]);
     const gridHeight = Math.max(gridBounds.height, 560);
     const canRenderGrid = gridBounds.width > 0 && gridHeight > 0;
 
@@ -396,6 +440,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
             has_points: hasPoints,
             has_phone: hasPhone,
             birthday_filter: birthdayFilter,
+            status,
             sort: sortField,
             dir: sortDir,
             per_page: String(perPage),
@@ -417,7 +462,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
         }
 
         window.history.replaceState({}, "", `${url.pathname}?${url.searchParams.toString()}`);
-    }, [birthdayFilter, hasPhone, hasPoints, page, perPage, search, sortDir, sortField, source]);
+    }, [birthdayFilter, hasPhone, hasPoints, page, perPage, search, sortDir, sortField, source, status]);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -437,6 +482,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
                         has_points: hasPoints !== "all" ? hasPoints : undefined,
                         has_phone: hasPhone !== "all" ? hasPhone : undefined,
                         birthday_filter: birthdayFilter !== "all" ? birthdayFilter : undefined,
+                        status: props.operationalDirectory ? status : undefined,
                         sort: sortField,
                         dir: sortDir,
                     },
@@ -472,11 +518,15 @@ function MarketingCustomersGridApp(props: RootDataset) {
         return () => {
             controller.abort();
         };
-    }, [birthdayFilter, hasPhone, hasPoints, page, perPage, props.endpoint, reloadToken, search, sortDir, sortField, source]);
+    }, [birthdayFilter, hasPhone, hasPoints, page, perPage, props.endpoint, props.operationalDirectory, reloadToken, search, sortDir, sortField, source, status]);
 
     useEffect(() => {
         setPage(1);
-    }, [birthdayFilter, hasPhone, hasPoints, perPage, search, sortDir, sortField, source]);
+    }, [birthdayFilter, hasPhone, hasPoints, perPage, search, sortDir, sortField, source, status]);
+
+    useEffect(() => {
+        setSelectedIds([]);
+    }, [page, reloadToken, status]);
 
     const getCellContent = ([col, row]: Item): GridCell => {
         const rowData = rows[row];
@@ -503,6 +553,18 @@ function MarketingCustomersGridApp(props: RootDataset) {
             };
         }
 
+        if (gridColumn.id === "__select") {
+            const selected = selectedIds.includes(rowData.id);
+
+            return {
+                kind: GridCellKind.Custom,
+                data: { kind: "customer-select", selected },
+                copyData: selected ? "Selected" : "",
+                allowOverlay: false,
+                readonly: true,
+            };
+        }
+
         const value = formatCellValue(column, rowData[String(gridColumn.id)]);
 
         return {
@@ -514,8 +576,16 @@ function MarketingCustomersGridApp(props: RootDataset) {
         };
     };
 
-    const handleCellClicked = ([, row]: Item) => {
+    const handleCellClicked = ([col, row]: Item) => {
         const rowData = rows[row];
+        const gridColumn = columns[col];
+        if (gridColumn?.id === "__select" && rowData) {
+            setSelectedIds((current) => current.includes(rowData.id)
+                ? current.filter((id) => id !== rowData.id)
+                : [...current, rowData.id]);
+            return;
+        }
+
         if (!rowData?.profile_url) {
             return;
         }
@@ -529,6 +599,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
         setHasPoints("all");
         setHasPhone("all");
         setBirthdayFilter("all");
+        setStatus("active");
         setSortField("updated_at");
         setSortDir("desc");
         setPerPage(25);
@@ -548,23 +619,53 @@ function MarketingCustomersGridApp(props: RootDataset) {
         hasPoints !== "all" ? (hasPoints === "yes" ? "Has Candle Cash" : "No Candle Cash") : null,
         hasPhone !== "all" ? (hasPhone === "yes" ? "Has phone" : "Missing phone") : null,
         birthdayFilter !== "all" ? `Birthday: ${birthdayFilter}` : null,
+        props.operationalDirectory && status === "archived" ? "Archived customers" : null,
         sortField !== "updated_at" ? `Sort: ${sortField}` : null,
         sortDir !== "desc" ? "Ascending" : null,
         perPage !== 25 ? `${perPage} rows` : null,
     ].filter((value): value is string => Boolean(value));
 
+    const archiveSelected = async () => {
+        if (selectedIds.length === 0 || bulkWorking || props.bulkActionUrl === "") {
+            return;
+        }
+
+        const action = status === "archived" ? "restore" : "archive";
+        const verb = action === "archive" ? "delete" : "restore";
+        if (!window.confirm(`${verb[0].toUpperCase()}${verb.slice(1)} ${selectedIds.length} selected customer${selectedIds.length === 1 ? "" : "s"}? Jobs and history will be kept.`)) {
+            return;
+        }
+
+        setBulkWorking(true);
+        setError("");
+        try {
+            const response = await axios.post(props.bulkActionUrl, { action, profile_ids: selectedIds });
+            setSelectedIds([]);
+            setReloadToken((current) => current + 1);
+            setError("");
+            window.alert(response.data?.message || "Customer directory updated.");
+        } catch (requestError) {
+            setError(axios.isAxiosError(requestError)
+                ? requestError.response?.data?.message || "Could not update the selected customers."
+                : "Could not update the selected customers.");
+        } finally {
+            setBulkWorking(false);
+        }
+    };
+
     return (
         <div className="space-y-4">
-            <section className="rounded-3xl border border-white/10 bg-black/15 p-5 shadow-[0_24px_60px_-42px_rgba(0,0,0,0.72)] sm:p-6">
+            <section className="border-b border-[#e1e3e5] pb-5">
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                     <div>
-                        <div className="text-[11px] uppercase tracking-[0.35em] text-emerald-100/60">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#6d7175]">
                             Customer index
                         </div>
-                        <h2 className="mt-2 text-2xl font-semibold text-white">Manage Customers</h2>
-                        <p className="mt-2 max-w-3xl text-sm text-emerald-50/70">
-                            Search customer profiles, keep Candle Cash separate from the legacy Growave loyalty balance,
-                            and open full customer records without fighting a long static table.
+                        <h2 className="mt-1 text-xl font-semibold tracking-[-0.01em] text-[#202223]">Manage Customers</h2>
+                        <p className="mt-1.5 max-w-3xl text-sm leading-6 text-[#6d7175]">
+                            {props.operationalDirectory
+                                ? "Search customers, keep service addresses current, and archive outdated records without losing job history."
+                                : "Search customer profiles, keep Candle Cash separate from the legacy Growave loyalty balance, and open full customer records without fighting a long static table."}
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -572,6 +673,11 @@ function MarketingCustomersGridApp(props: RootDataset) {
                             <a href={props.messageCustomerUrl} className={buttonClass()}>
                                 Text a customer
                             </a>
+                        ) : null}
+                        {props.operationalDirectory && selectedIds.length > 0 ? (
+                            <button type="button" onClick={() => void archiveSelected()} disabled={bulkWorking} className={buttonClass()}>
+                                {bulkWorking ? "Updating…" : `${status === "archived" ? "Restore" : "Delete"} selected (${selectedIds.length})`}
+                            </button>
                         ) : null}
                         <a href={props.addCustomerUrl} className={primaryButtonClass()}>
                             Add Customer
@@ -597,7 +703,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
                             type="search"
                             value={searchInput}
                             onChange={(event) => setSearchInput(event.target.value)}
-                            placeholder="Search name, email, phone, source ID"
+                            placeholder={props.operationalDirectory ? "Search name, email, phone, or address" : "Search name, email, phone, source ID"}
                             className={fieldClass()}
                         />
                         </div>
@@ -638,8 +744,14 @@ function MarketingCustomersGridApp(props: RootDataset) {
                     </div>
 
                     {filtersOpen ? (
-                        <div className="grid gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 md:grid-cols-2 xl:grid-cols-6">
-                            <select value={source} onChange={(event) => setSource(event.target.value)} className={fieldClass()}>
+                        <div className="grid gap-3 border-y border-[#e1e3e5] py-4 md:grid-cols-2 xl:grid-cols-6">
+                            {props.operationalDirectory ? (
+                                <select value={status} onChange={(event) => setStatus(event.target.value === "archived" ? "archived" : "active")} className={fieldClass()}>
+                                    <option value="active">Active customers</option>
+                                    <option value="archived">Archived customers</option>
+                                </select>
+                            ) : (
+                                <select value={source} onChange={(event) => setSource(event.target.value)} className={fieldClass()}>
                                 <option value="all">All sources</option>
                                 <option value="shopify">Shopify</option>
                                 <option value="growave">Growave</option>
@@ -648,23 +760,26 @@ function MarketingCustomersGridApp(props: RootDataset) {
                                 <option value="event">Event</option>
                                 <option value="manual">Manual</option>
                             </select>
-                            <select value={hasPoints} onChange={(event) => setHasPoints(event.target.value)} className={fieldClass()}>
+                            )}
+                            {!props.operationalDirectory ? <select value={hasPoints} onChange={(event) => setHasPoints(event.target.value)} className={fieldClass()}>
                                 <option value="all">All Candle Cash states</option>
                                 <option value="yes">Has Candle Cash</option>
                                 <option value="no">No Candle Cash</option>
                             </select>
+                            : null}
                             <select value={hasPhone} onChange={(event) => setHasPhone(event.target.value)} className={fieldClass()}>
                                 <option value="all">All phone states</option>
                                 <option value="yes">Has phone</option>
                                 <option value="no">No phone</option>
                             </select>
-                            <select value={birthdayFilter} onChange={(event) => setBirthdayFilter(event.target.value)} className={fieldClass()}>
+                            {!props.operationalDirectory ? <select value={birthdayFilter} onChange={(event) => setBirthdayFilter(event.target.value)} className={fieldClass()}>
                                 <option value="all">All birthdays</option>
                                 <option value="today">Birthday today</option>
                                 <option value="week">Birthday this week</option>
                                 <option value="month">Birthday this month</option>
                                 <option value="missing">Birthday missing</option>
                             </select>
+                            : null}
                             <select value={sortField} onChange={(event) => setSortField(event.target.value)} className={fieldClass()}>
                                 {(meta?.sort_options ?? props.sortOptions).map((option) => (
                                     <option key={option.value} value={option.value}>
@@ -680,8 +795,8 @@ function MarketingCustomersGridApp(props: RootDataset) {
                     ) : null}
                 </div>
 
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-                    <div className="text-xs font-medium uppercase tracking-[0.2em] text-emerald-100/60">
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
+                    <div className="font-medium text-[#5c5f62]">
                         {loading
                             ? "Loading customers…"
                             : pagination
@@ -689,7 +804,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
                                 : "Customer results"}
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        <span className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-white/60">
+                        <span className="inline-flex items-center rounded-full bg-[#f1f2f3] px-3 py-1 text-xs text-[#5c5f62]">
                             Advanced filters are tucked away until you need them.
                         </span>
                     </div>
@@ -697,12 +812,12 @@ function MarketingCustomersGridApp(props: RootDataset) {
             </section>
 
             {error !== "" ? (
-                <div className="rounded-2xl border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-50">
+                <div className="rounded-lg border border-[#fecaca] bg-[#fff4f4] px-4 py-3 text-sm text-[#b91c1c]">
                     {error}
                 </div>
             ) : null}
 
-            <section className="flex min-h-[36rem] flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+            <section className="flex min-h-[36rem] flex-col overflow-hidden rounded-lg border border-[#e1e3e5] bg-white">
                 <div
                     ref={gridWrapRef}
                     className="relative flex-1 min-h-[36rem] w-full"
@@ -714,6 +829,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
                             rows={rows.length}
                             getCellContent={getCellContent}
                             onCellClicked={handleCellClicked}
+                            customRenderers={[customerSelectRenderer]}
                             width={gridBounds.width}
                             height={gridHeight}
                             rowMarkers={{ kind: "number", theme: gridTheme }}
@@ -726,27 +842,27 @@ function MarketingCustomersGridApp(props: RootDataset) {
                             theme={gridTheme}
                         />
                     ) : (
-                        <div className="flex h-full items-center justify-center text-sm text-emerald-50/60">
+                        <div className="flex h-full items-center justify-center text-sm text-[#6d7175]">
                             Loading customer grid…
                         </div>
                     )}
                     {loading ? (
-                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/50 text-sm font-semibold text-white/90">
+                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/85 text-sm font-semibold text-[#202223]">
                             Loading customers…
                         </div>
                     ) : null}
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/10 bg-white/5 px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-4 border-t border-[#e1e3e5] bg-[#f6f6f7] px-4 py-3">
                     <div className="flex flex-col gap-1">
-                        <div className="text-sm font-semibold text-white">
+                        <div className="text-sm font-semibold text-[#202223]">
                             {loading
                                 ? "Loading customers…"
                                 : pagination
                                     ? `Showing ${resultStart.toLocaleString()}-${resultEnd.toLocaleString()} of ${pagination.total.toLocaleString()} customers`
                                     : "Showing 0 customers"}
                         </div>
-                        <div className="text-xs text-white/60">
+                        <div className="text-xs text-[#6d7175]">
                             Click any row to open the full customer record.
                         </div>
                     </div>
@@ -759,7 +875,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
                         >
                             Previous
                         </button>
-                        <div className="text-sm text-white/70">
+                        <div className="text-sm text-[#5c5f62]">
                             {pagination ? `Page ${pagination.page} of ${pagination.last_page}` : "Page 1"}
                         </div>
                         <button
@@ -773,7 +889,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
                         >
                             Next
                         </button>
-                        <label className="ml-2 flex items-center gap-2 text-xs text-white/60">
+                        <label className="ml-2 flex items-center gap-2 text-xs text-[#5c5f62]">
                             Rows
                             <select value={perPage} onChange={(event) => setPerPage(Number(event.target.value) || 25)} className={pageSizeSelectClass()}>
                                 {[25, 50, 100].map((value) => (
@@ -803,11 +919,13 @@ function scheduleIdleTask(callback: () => void): void {
     window.setTimeout(callback, 200);
 }
 
-function mountMarketingCustomersGrid() {
+export function mountMarketingCustomersGrid() {
     const root = document.getElementById("marketing-customers-grid");
-    if (!root) {
+    if (!root || root.dataset.gridMounted === "true") {
         return;
     }
+
+    root.dataset.gridMounted = "true";
 
     const mount = () => {
         createRoot(root).render(<MarketingCustomersGridApp {...parseRootDataset(root)} />);

@@ -539,6 +539,103 @@ test('shopify v1 candle cash status returns central contract for linked customer
         ->and(data_get($vote, 'eligibility.claimable'))->toBeFalse();
 });
 
+test('shopify v1 candle cash status resolves duplicate emails only within the active Shopify store', function () {
+    configureStage10RewardsStorefront();
+
+    $tenant = Tenant::query()->create([
+        'name' => 'Retail and Wholesale Rewards Tenant',
+        'slug' => 'retail-wholesale-rewards-tenant',
+    ]);
+    ShopifyStore::query()->create([
+        'tenant_id' => $tenant->id,
+        'store_key' => 'retail',
+        'shop_domain' => 'timberline.example.myshopify.com',
+        'access_token' => 'stage10-retail-token',
+        'scopes' => 'read_customers',
+        'installed_at' => now(),
+    ]);
+
+    $retailProfile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Retail',
+        'last_name' => 'Customer',
+        'email' => 'shared.customer@example.com',
+        'normalized_email' => 'shared.customer@example.com',
+    ]);
+    $wholesaleProfile = MarketingProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'first_name' => 'Wholesale',
+        'last_name' => 'Customer',
+        'email' => 'shared.customer@example.com',
+        'normalized_email' => 'shared.customer@example.com',
+    ]);
+
+    CustomerExternalProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $retailProfile->id,
+        'provider' => 'shopify',
+        'integration' => 'shopify_admin',
+        'store_key' => 'retail',
+        'external_customer_id' => '900001',
+        'email' => $retailProfile->email,
+        'normalized_email' => $retailProfile->normalized_email,
+        'synced_at' => now(),
+    ]);
+    CustomerExternalProfile::query()->create([
+        // Legacy wholesale imports may have no tenant_id even when the linked
+        // marketing profile belongs to the same tenant.
+        'tenant_id' => null,
+        'marketing_profile_id' => $wholesaleProfile->id,
+        'provider' => 'shopify',
+        'integration' => 'shopify_admin',
+        'store_key' => 'wholesale',
+        'external_customer_id' => '900002',
+        'email' => $wholesaleProfile->email,
+        'normalized_email' => $wholesaleProfile->normalized_email,
+        'synced_at' => now(),
+    ]);
+
+    CandleCashBalance::query()->create(['marketing_profile_id' => $retailProfile->id, 'balance' => 105]);
+    CandleCashBalance::query()->create(['marketing_profile_id' => $wholesaleProfile->id, 'balance' => 196.8]);
+
+    app()->forgetInstance(\App\Services\Tenancy\TenantResolver::class);
+
+    $emailQuery = stage10AppProxySignedQuery([
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) time(),
+        'email' => 'shared.customer@example.com',
+    ], 'stage10-proxy-secret');
+
+    $this->getJson(route('marketing.shopify.v1.candle-cash.status', $emailQuery))
+        ->assertOk()
+        ->assertJsonPath('data.profile_id', $retailProfile->id)
+        ->assertJsonPath('data.balance.candle_cash', 105);
+
+    $signedSessionQuery = stage10AppProxySignedQuery([
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) time(),
+        'logged_in_customer_id' => 'gid://shopify/Customer/900001',
+    ], 'stage10-proxy-secret');
+
+    $this->getJson(route('marketing.shopify.v1.candle-cash.status', $signedSessionQuery))
+        ->assertOk()
+        ->assertJsonPath('data.profile_id', $retailProfile->id)
+        ->assertJsonPath('data.balance.candle_cash', 105);
+
+    $crossStoreProfileQuery = stage10AppProxySignedQuery([
+        'shop' => 'timberline.example.myshopify.com',
+        'timestamp' => (string) time(),
+        'marketing_profile_id' => $wholesaleProfile->id,
+    ], 'stage10-proxy-secret');
+
+    $this->getJson(route('marketing.shopify.v1.candle-cash.status', $crossStoreProfileQuery))
+        ->assertOk()
+        ->assertJsonPath('data.profile_id', null)
+        ->assertJsonPath('data.state', 'unknown_customer');
+
+    app()->forgetInstance(\App\Services\Tenancy\TenantResolver::class);
+});
+
 test('shopify v1 candle cash status resolves a retained merge alias to the survivor balance', function () {
     configureStage10RewardsStorefront();
 
@@ -574,6 +671,18 @@ test('shopify v1 candle cash status resolves a retained merge alias to the survi
         'normalized_phone' => '+15557773434',
         'merged_into_profile_id' => $survivor->id,
         'merged_at' => now(),
+    ]);
+
+    CustomerExternalProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'marketing_profile_id' => $survivor->id,
+        'provider' => 'shopify',
+        'integration' => 'shopify_admin',
+        'store_key' => 'retail',
+        'external_customer_id' => 'canonical-alias-customer',
+        'email' => $survivor->email,
+        'normalized_email' => $survivor->normalized_email,
+        'synced_at' => now(),
     ]);
 
     CandleCashBalance::query()->create([

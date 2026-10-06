@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AgreementProposalController extends Controller
 {
@@ -32,10 +32,11 @@ class AgreementProposalController extends Controller
     public function show(Request $request, string $token, AgreementProposalAccessService $access): View
     {
         $agreement = $access->resolve($token);
+        $access->openFromLink($request, $agreement);
 
         $order = $agreement->billingOrders->sortByDesc('id')->first();
 
-        return view('agreements.proposal', ['agreement' => $agreement, 'token' => $token, 'unlocked' => $access->isUnlocked($request, $agreement), 'billingOrder' => $order, 'checkoutAvailable' => $order ? app(AgreementStripeCheckoutService::class)->availableFor($order) : false]);
+        return view('agreements.proposal', ['agreement' => $agreement, 'token' => $token, 'billingOrder' => $order, 'checkoutAvailable' => $order ? app(AgreementStripeCheckoutService::class)->availableFor($order) : false]);
     }
 
     public function unlock(Request $request, string $token, AgreementProposalAccessService $access): RedirectResponse
@@ -94,7 +95,7 @@ class AgreementProposalController extends Controller
         return redirect()->route('proposals.show', ['token' => $token])->with('status', 'Agreement accepted. Your permanent copy is ready.');
     }
 
-    public function download(Request $request, string $token, AgreementProposalAccessService $access): BinaryFileResponse
+    public function download(Request $request, string $token, AgreementProposalAccessService $access): StreamedResponse
     {
         $agreement = $access->resolve($token);
         abort_unless($access->isUnlocked($request, $agreement), 403);

@@ -74,6 +74,42 @@ class TenantEmployeeInvitationService
         });
     }
 
+    /** Create a limited account from a single-use, email-bound team invitation. */
+    public function register(string $plainToken, string $name, string $password): User
+    {
+        return DB::transaction(function () use ($plainToken, $name, $password): User {
+            $invitation = TenantEmployeeInvitation::query()->withoutGlobalScopes()
+                ->where('token_hash', hash('sha256', $plainToken))->lockForUpdate()->first();
+            if (! $invitation || $invitation->status !== 'pending' || $invitation->expires_at->isPast() || ! $invitation->email) {
+                throw ValidationException::withMessages(['token' => 'This email invitation is invalid, expired, or already used.']);
+            }
+            if (User::query()->where('email', $invitation->email)->exists()) {
+                throw ValidationException::withMessages(['token' => 'An account already uses this email. Sign in to accept the invitation.']);
+            }
+
+            $user = User::query()->create([
+                'name' => trim($name),
+                'email' => $invitation->email,
+                'password' => $password,
+                'role' => 'pouring',
+                'is_active' => true,
+                'requested_via' => 'employee_invitation',
+                'approved_at' => now(),
+                'approved_by' => $invitation->invited_by_user_id,
+            ]);
+            // The single-use link is issued to the manager for this specific email identity.
+            // Keep mobile sign-in usable immediately after the recipient claims it.
+            $user->forceFill(['email_verified_at' => now()])->save();
+            $tenant = Tenant::query()->findOrFail((int) $invitation->tenant_id);
+            $user->tenants()->attach((int) $tenant->id, [
+                'role' => $invitation->role, 'membership_active' => true, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $invitation->forceFill(['status' => 'accepted', 'accepted_by_user_id' => (int) $user->id, 'accepted_at' => now()])->save();
+
+            return $user;
+        });
+    }
+
     protected function deliver(Tenant $tenant, TenantEmployeeInvitation $invitation, string $url): void
     {
         if (! $invitation->phone) {

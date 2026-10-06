@@ -5,7 +5,7 @@ use Tests\TestCase;
 
 uses(TestCase::class);
 
-test('shopify oauth always requests customer events pixel scopes', function (): void {
+test('shopify oauth always requests storefront tracking and checkout validation scopes', function (): void {
     config()->set('services.shopify.scopes', 'read_orders,read_products');
 
     $scopes = app(ShopifyOAuth::class)->requestedScopes();
@@ -13,6 +13,8 @@ test('shopify oauth always requests customer events pixel scopes', function (): 
     expect($scopes)->toContain('read_pixels');
     expect($scopes)->toContain('write_pixels');
     expect($scopes)->toContain('read_customer_events');
+    expect($scopes)->toContain('read_validations');
+    expect($scopes)->toContain('write_validations');
     expect($scopes)->toContain('unauthenticated_read_checkouts');
     expect($scopes)->toContain('unauthenticated_read_collection_listings');
     expect($scopes)->toContain('unauthenticated_read_product_listings');

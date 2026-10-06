@@ -1,0 +1,43 @@
+query CartValidationsGenerateRunInput {
+  cart {
+    lines {
+      id
+      scent1: attribute(key: "Scent 1") { value }
+      scent2: attribute(key: "Scent 2") { value }
+      scent3: attribute(key: "Scent 3") { value }
+      scent4: attribute(key: "Scent 4") { value }
+      scent5: attribute(key: "Scent 5") { value }
+      scent6: attribute(key: "Scent 6") { value }
+      scent7: attribute(key: "Scent 7") { value }
+      scent8: attribute(key: "Scent 8") { value }
+      scent9: attribute(key: "Scent 9") { value }
+      scent10: attribute(key: "Scent 10") { value }
+      scent11: attribute(key: "Scent 11") { value }
+      scent12: attribute(key: "Scent 12") { value }
+      scent13: attribute(key: "Scent 13") { value }
+      scent14: attribute(key: "Scent 14") { value }
+      scent15: attribute(key: "Scent 15") { value }
+      scent16: attribute(key: "Scent 16") { value }
+      scent17: attribute(key: "Scent 17") { value }
+      scent18: attribute(key: "Scent 18") { value }
+      scent19: attribute(key: "Scent 19") { value }
+      scent20: attribute(key: "Scent 20") { value }
+      scent21: attribute(key: "Scent 21") { value }
+      scent22: attribute(key: "Scent 22") { value }
+      scent23: attribute(key: "Scent 23") { value }
+      scent24: attribute(key: "Scent 24") { value }
+      merchandise {
+        __typename
+        ... on ProductVariant {
+          product {
+            handle
+            title
+            bundleScentRule: metafield(namespace: "everbranch", key: "bundle_scent_rule") {
+              jsonValue
+            }
+          }
+        }
+      }
+    }
+  }
+}

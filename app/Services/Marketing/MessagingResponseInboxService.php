@@ -26,6 +26,7 @@ class MessagingResponseInboxService
         protected MessagingEmailReplyAddressService $replyAddressService,
         protected TwilioSmsService $twilioSmsService,
         protected SendGridEmailService $sendGridEmailService,
+        protected InstagramMessagingService $instagramMessagingService,
         protected ModernForestryApnsService $apnsService,
         protected MarketingIdentityNormalizer $identityNormalizer,
         protected TenantHostBuilder $hostBuilder,
@@ -37,7 +38,7 @@ class MessagingResponseInboxService
      */
     public function index(int $tenantId, ?string $storeKey, array $filters = []): array
     {
-        $channel = in_array(($filters['channel'] ?? null), ['sms', 'email', 'all'], true)
+        $channel = in_array(($filters['channel'] ?? null), ['sms', 'email', 'instagram', 'all'], true)
             ? (string) $filters['channel']
             : 'sms';
         $search = trim((string) ($filters['search'] ?? ''));
@@ -172,7 +173,9 @@ class MessagingResponseInboxService
         $body = trim((string) $validated['body']);
         $subject = $this->nullableString($validated['subject'] ?? null);
 
-        if ($conversation->channel === 'sms') {
+        if ($conversation->channel === 'instagram') {
+            $this->instagramMessagingService->sendReply($conversation, $body, $actor);
+        } elseif ($conversation->channel === 'sms') {
             if ($this->isMobileAppConversation($conversation)) {
                 $this->appendMobileAppReply($conversation, $body, $actor);
 
@@ -220,6 +223,7 @@ class MessagingResponseInboxService
         return [
             'sms_unread' => (clone $baseQuery)->where('channel', 'sms')->sum('unread_count'),
             'email_unread' => (clone $baseQuery)->where('channel', 'email')->sum('unread_count'),
+            'instagram_unread' => (clone $baseQuery)->where('channel', 'instagram')->sum('unread_count'),
             'open' => (clone $baseQuery)->where('status', 'open')->count(),
             'needs_follow_up' => (clone $baseQuery)->where('status', 'needs_follow_up')->count(),
             'opted_out_today' => $optedOutToday,
@@ -469,9 +473,13 @@ class MessagingResponseInboxService
     protected function serializeConversation(MessagingConversation $conversation, bool $includeProfile = false): array
     {
         $profile = $conversation->profile;
-        $identity = $conversation->channel === 'sms'
-            ? ($conversation->phone ?: 'Unknown phone')
-            : ($conversation->email ?: 'Unknown email');
+        $identity = match ($conversation->channel) {
+            'sms' => $conversation->phone ?: 'Unknown phone',
+            'instagram' => data_get($conversation->source_context, 'instagram_username')
+                ? '@'.ltrim((string) data_get($conversation->source_context, 'instagram_username'), '@')
+                : 'Instagram conversation',
+            default => $conversation->email ?: 'Unknown email',
+        };
         $displayName = trim(implode(' ', array_filter([
             $profile?->first_name,
             $profile?->last_name,

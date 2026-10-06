@@ -98,11 +98,12 @@ class TenantMobileMessagingService
     }
 
     /** @return array<int,array<string,mixed>> */
-    public function searchCustomers(int $tenantId, string $search, int $limit = 20): array
+    public function searchCustomers(int $tenantId, string $search, int $limit = 20, ?int $profileId = null): array
     {
         $search = trim($search);
         $rows = MarketingProfile::query()->forTenantId($tenantId)
             ->select(['id', 'first_name', 'last_name', 'email', 'phone', 'accepts_sms_marketing', 'accepts_email_marketing'])
+            ->when($profileId, fn ($query) => $query->whereKey($profileId))
             ->when($search !== '', function ($query) use ($search): void {
                 $like = '%'.$search.'%';
                 $query->where(function ($builder) use ($like): void {

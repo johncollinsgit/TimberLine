@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ShopifyProductOptionRuleset;
 use App\Models\ShopifyStore;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
+use App\Services\Shopify\ShopifyProductOptionMetafieldSyncService;
 use App\Services\Shopify\ShopifyProductOptionsService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use App\Services\Tenancy\TenantResolver;
@@ -63,7 +64,8 @@ class ShopifyProductOptionsController extends Controller
         ShopifyEmbeddedAppContext $contextService,
         TenantResolver $tenantResolver,
         TenantModuleAccessResolver $moduleAccessResolver,
-        ShopifyProductOptionsService $productOptions
+        ShopifyProductOptionsService $productOptions,
+        ShopifyProductOptionMetafieldSyncService $metafields
     ): JsonResponse {
         $tenantId = $this->authorizedTenantId($request, $contextService, $tenantResolver, $moduleAccessResolver);
         if ($tenantId === null) {
@@ -72,10 +74,14 @@ class ShopifyProductOptionsController extends Controller
 
         $validated = $this->validateRuleset($request, $tenantId);
 
+        $created = $productOptions->createRuleset($tenantId, $validated);
+        $ruleset = ShopifyProductOptionRuleset::query()->findOrFail((int) $created['id']);
+
         return response()->json([
             'ok' => true,
             'message' => 'Ruleset created.',
-            'data' => $productOptions->createRuleset($tenantId, $validated),
+            'data' => $created,
+            'checkout_validation' => $metafields->syncRuleset($ruleset),
         ], 201);
     }
 
@@ -85,7 +91,8 @@ class ShopifyProductOptionsController extends Controller
         ShopifyEmbeddedAppContext $contextService,
         TenantResolver $tenantResolver,
         TenantModuleAccessResolver $moduleAccessResolver,
-        ShopifyProductOptionsService $productOptions
+        ShopifyProductOptionsService $productOptions,
+        ShopifyProductOptionMetafieldSyncService $metafields
     ): JsonResponse {
         $tenantId = $this->authorizedTenantId($request, $contextService, $tenantResolver, $moduleAccessResolver);
         if ($tenantId === null || (int) $ruleset->tenant_id !== $tenantId) {
@@ -94,10 +101,18 @@ class ShopifyProductOptionsController extends Controller
 
         $validated = $this->validateRuleset($request, $tenantId, (int) $ruleset->id);
 
+        $previousHandles = $ruleset->assignments()
+            ->pluck('product_handle')
+            ->filter()
+            ->values()
+            ->all();
+        $updated = $productOptions->updateRuleset($ruleset, $tenantId, $validated);
+
         return response()->json([
             'ok' => true,
             'message' => 'Ruleset saved.',
-            'data' => $productOptions->updateRuleset($ruleset, $tenantId, $validated),
+            'data' => $updated,
+            'checkout_validation' => $metafields->syncRuleset($ruleset->fresh('assignments'), $previousHandles),
         ]);
     }
 
@@ -107,18 +122,25 @@ class ShopifyProductOptionsController extends Controller
         ShopifyEmbeddedAppContext $contextService,
         TenantResolver $tenantResolver,
         TenantModuleAccessResolver $moduleAccessResolver,
-        ShopifyProductOptionsService $productOptions
+        ShopifyProductOptionsService $productOptions,
+        ShopifyProductOptionMetafieldSyncService $metafields
     ): JsonResponse {
         $tenantId = $this->authorizedTenantId($request, $contextService, $tenantResolver, $moduleAccessResolver);
         if ($tenantId === null || (int) $ruleset->tenant_id !== $tenantId) {
             return response()->json(['ok' => false, 'message' => 'Product Options access could not be verified.'], 403);
         }
 
+        $handles = $ruleset->assignments()
+            ->pluck('product_handle')
+            ->filter()
+            ->values()
+            ->all();
         $productOptions->deleteRuleset($ruleset, $tenantId);
 
         return response()->json([
             'ok' => true,
             'message' => 'Ruleset and its product assignments deleted.',
+            'checkout_validation' => $metafields->clearHandles($tenantId, $handles),
         ]);
     }
 

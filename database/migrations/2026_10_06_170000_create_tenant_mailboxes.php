@@ -8,7 +8,8 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('tenant_mail_domains', function (Blueprint $table): void {
+        if (! Schema::hasTable('tenant_mail_domains')) {
+            Schema::create('tenant_mail_domains', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('tenant_id')->constrained()->cascadeOnDelete();
             $table->string('domain', 253)->unique();
@@ -19,8 +20,10 @@ return new class extends Migration
             $table->timestamp('verified_at')->nullable();
             $table->timestamps();
             $table->index(['tenant_id', 'status'], 'mail_domain_tenant_status_idx');
-        });
-        Schema::create('tenant_mailboxes', function (Blueprint $table): void {
+            });
+        }
+        if (! Schema::hasTable('tenant_mailboxes')) {
+            Schema::create('tenant_mailboxes', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('tenant_id')->constrained()->cascadeOnDelete();
             $table->foreignId('tenant_mail_domain_id')->constrained('tenant_mail_domains')->cascadeOnDelete();
@@ -32,8 +35,10 @@ return new class extends Migration
             $table->timestamp('last_synced_at')->nullable();
             $table->timestamps();
             $table->index(['tenant_id', 'status'], 'mailbox_tenant_status_idx');
-        });
-        Schema::create('tenant_mailbox_users', function (Blueprint $table): void {
+            });
+        }
+        if (! Schema::hasTable('tenant_mailbox_users')) {
+            Schema::create('tenant_mailbox_users', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('tenant_id')->constrained()->cascadeOnDelete();
             $table->foreignId('tenant_mailbox_id')->constrained('tenant_mailboxes')->cascadeOnDelete();
@@ -42,8 +47,10 @@ return new class extends Migration
             $table->timestamps();
             $table->unique(['tenant_mailbox_id', 'user_id'], 'mailbox_user_unique');
             $table->index(['tenant_id', 'user_id'], 'mailbox_user_tenant_idx');
-        });
-        Schema::create('tenant_mail_messages', function (Blueprint $table): void {
+            });
+        }
+        if (! Schema::hasTable('tenant_mail_messages')) {
+            Schema::create('tenant_mail_messages', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('tenant_id')->constrained()->cascadeOnDelete();
             $table->foreignId('tenant_mailbox_id')->constrained('tenant_mailboxes')->cascadeOnDelete();
@@ -63,7 +70,8 @@ return new class extends Migration
             $table->index(['tenant_mailbox_id', 'folder', 'occurred_at'], 'mail_msg_folder_time_idx');
             $table->unique(['tenant_mailbox_id', 'direction', 'provider_message_id'], 'mail_msg_provider_dedupe_idx');
             $table->index(['tenant_id', 'thread_key'], 'mail_msg_tenant_thread_idx');
-        });
+            });
+        }
     }
 
     public function down(): void

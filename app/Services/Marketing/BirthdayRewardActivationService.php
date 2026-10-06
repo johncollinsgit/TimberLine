@@ -20,13 +20,11 @@ query BirthdayDiscountByCode($code: String!) {
     codeDiscount {
       __typename
       ... on DiscountCodeBasic {
-        id
         title
         startsAt
         endsAt
       }
       ... on DiscountCodeFreeShipping {
-        id
         title
         startsAt
         endsAt
@@ -44,7 +42,6 @@ mutation BirthdayDiscountCodeBasicCreate($basicCodeDiscount: DiscountCodeBasicIn
       codeDiscount {
         __typename
         ... on DiscountCodeBasic {
-          id
           title
           startsAt
           endsAt
@@ -68,7 +65,6 @@ mutation BirthdayDiscountCodeFreeShippingCreate($freeShippingCodeDiscount: Disco
       codeDiscount {
         __typename
         ... on DiscountCodeFreeShipping {
-          id
           title
           startsAt
           endsAt
@@ -88,11 +84,10 @@ GRAPHQL;
         protected BirthdayRewardEngineService $rewardEngine,
         protected BirthdayProfileService $birthdayProfileService,
         protected MarketingStorefrontEventLogger $eventLogger
-    ) {
-    }
+    ) {}
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array<string,mixed>
      */
     public function activate(BirthdayRewardIssuance $issuance, array $options = []): array
@@ -271,7 +266,7 @@ GRAPHQL;
                 'marketing_profile_id' => (int) $failed->marketing_profile_id,
                 'source_type' => 'birthday_reward',
                 'source_id' => (string) $failed->id,
-                'dedupe_key' => sha1('birthday_reward_discount_sync_failed|' . $failed->id . '|' . $failed->shopify_store_key . '|' . $failed->reward_code),
+                'dedupe_key' => sha1('birthday_reward_discount_sync_failed|'.$failed->id.'|'.$failed->shopify_store_key.'|'.$failed->reward_code),
                 'meta' => [
                     'reward_code' => $failed->reward_code,
                     'shopify_store_key' => $failed->shopify_store_key,
@@ -332,7 +327,7 @@ GRAPHQL;
             'marketing_profile_id' => (int) $activated->marketing_profile_id,
             'source_type' => 'birthday_reward',
             'source_id' => (string) $activated->id,
-            'dedupe_key' => sha1('birthday_reward_discount_synced|' . $activated->id . '|' . $activated->shopify_store_key . '|' . $activated->reward_code),
+            'dedupe_key' => sha1('birthday_reward_discount_synced|'.$activated->id.'|'.$activated->shopify_store_key.'|'.$activated->reward_code),
             'meta' => [
                 'reward_code' => $activated->reward_code,
                 'shopify_store_key' => $activated->shopify_store_key,
@@ -351,7 +346,7 @@ GRAPHQL;
     }
 
     /**
-     * @param array<string,mixed> $store
+     * @param  array<string,mixed>  $store
      * @return array{discount_id:?string,discount_node_id:?string,store_key:string,starts_at:?string,ends_at:?\Carbon\CarbonInterface}
      */
     protected function ensureShopifyDiscount(BirthdayRewardIssuance $issuance, array $store): array
@@ -397,7 +392,7 @@ GRAPHQL;
 
         $errors = $this->extractUserErrors((array) ($payload['userErrors'] ?? []));
         if ($errors !== []) {
-            throw new RuntimeException('Shopify discount create failed: ' . implode(' | ', $errors));
+            throw new RuntimeException('Shopify discount create failed: '.implode(' | ', $errors));
         }
 
         $created = $this->discountIdentifiersFromPayload($payload['codeDiscountNode'] ?? null);
@@ -415,7 +410,7 @@ GRAPHQL;
     }
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array<string,mixed>|null
      */
     protected function resolveStoreConfig(BirthdayRewardIssuance $issuance, array $options = []): ?array
@@ -489,6 +484,11 @@ GRAPHQL;
             'startsAt' => $this->startsAtForDiscount($issuance)->toIso8601String(),
             'endsAt' => optional($this->endsAtForDiscount($issuance))->toIso8601String(),
             'appliesOncePerCustomer' => true,
+            'combinesWith' => [
+                'orderDiscounts' => false,
+                'productDiscounts' => false,
+                'shippingDiscounts' => true,
+            ],
             'customerSelection' => ['all' => true],
             'customerGets' => [
                 'items' => ['all' => true],
@@ -536,7 +536,6 @@ GRAPHQL;
     }
 
     /**
-     * @param mixed $payload
      * @return array{discount_id:?string,discount_node_id:?string,starts_at:?string,ends_at:?\Carbon\CarbonInterface}|null
      */
     protected function discountIdentifiersFromPayload(mixed $payload): ?array
@@ -567,7 +566,7 @@ GRAPHQL;
     }
 
     /**
-     * @param array<int,mixed> $errors
+     * @param  array<int,mixed>  $errors
      * @return array<int,string>
      */
     protected function extractUserErrors(array $errors): array
@@ -586,7 +585,7 @@ GRAPHQL;
     }
 
     /**
-     * @param array<string,mixed> $payload
+     * @param  array<string,mixed>  $payload
      */
     protected function writeAudit(BirthdayRewardIssuance $issuance, string $action, array $payload = []): void
     {
@@ -615,7 +614,7 @@ GRAPHQL;
     }
 
     /**
-     * @param array<string,mixed> $store
+     * @param  array<string,mixed>  $store
      */
     protected function storeOwnedByTenant(array $store, int $tenantId): bool
     {

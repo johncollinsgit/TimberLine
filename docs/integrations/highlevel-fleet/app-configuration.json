@@ -1,0 +1,42 @@
+{
+  "name": "Everbranch Fleet",
+  "developerAppId": "6ac30456b707d87f0573a733",
+  "distribution": "private",
+  "target": "sub-account",
+  "installer": "agency-only",
+  "bulkInstallation": true,
+  "listing": "white-label",
+  "navigation": {
+    "name": "Everbranch",
+    "url": "https://app.theeverbranch.com/crm/fleet/launch"
+  },
+  "oauthRedirect": "https://app.theeverbranch.com/crm/fleet/oauth/callback",
+  "gettingStartedUrl": "https://app.theeverbranch.com/crm/fleet/guide",
+  "scopes": [
+    "locations.readonly",
+    "users.readonly",
+    "oauth.readonly",
+    "oauth.write",
+    "marketplace-installer-details.readonly"
+  ],
+  "webhookUrl": "https://app.theeverbranch.com/crm/fleet/webhooks/lifecycle",
+  "webhookEvents": [
+    "INSTALL",
+    "UPDATE",
+    "UNINSTALL",
+    "APP_PAYMENT_STATUS"
+  ],
+  "billing": {
+    "authority": "highlevel",
+    "interval": "monthly",
+    "currency": "USD",
+    "price": 99,
+    "vehicleLimit": 25,
+    "trialDays": 0,
+    "setupCharge": 0,
+    "planId": "6ac309e6efe2cd1f9e8defc1"
+  },
+  "bouncieRedirect": "https://app.theeverbranch.com/crm/fleet/bouncie/callback",
+  "bouncieWebhookUrl": "https://app.theeverbranch.com/crm/fleet/webhooks/bouncie",
+  "note": "Operator configuration reference, not a Marketplace CLI import schema. Do not place provider secrets here."
+}

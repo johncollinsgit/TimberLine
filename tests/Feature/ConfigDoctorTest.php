@@ -13,6 +13,7 @@ function configureConfigDoctorProductionRequirements(): void
     config()->set('services.shopify.stores.retail.shop', 'x.myshopify.com');
     config()->set('services.shopify.stores.retail.client_id', 'id');
     config()->set('services.shopify.stores.retail.client_secret', 'secret');
+    config()->set('services.shopify.customer_account.client_id', 'customer-account-client');
 }
 
 function configureAgreementStripe(string $publishableKey, string $secretKey, string $webhookSecret = 'whsec_example'): void
@@ -57,6 +58,7 @@ test('config doctor passes when the required production keys are present', funct
     config()->set('services.shopify.stores.retail.access_token', 'token');
     config()->set('services.shopify.stores.retail.client_id', 'id');
     config()->set('services.shopify.stores.retail.client_secret', 'secret');
+    config()->set('services.shopify.customer_account.client_id', 'customer-account-client');
 
     $this->artisan('config:doctor --env=production')->assertSuccessful();
 });
@@ -69,6 +71,18 @@ test('config doctor fails loudly when the required retail store keys are missing
     config()->set('services.shopify.stores.retail.access_token', null);
     config()->set('services.shopify.stores.retail.client_id', null);
     config()->set('services.shopify.stores.retail.client_secret', null);
+    config()->set('services.shopify.customer_account.client_id', 'customer-account-client');
+
+    $this->artisan('config:doctor --env=production')->assertFailed();
+});
+
+test('config doctor requires the Modern Forestry customer account client id but not a secret in production', function (): void {
+    configureConfigDoctorProductionRequirements();
+    config()->set('services.shopify.customer_account.client_secret', null);
+
+    $this->artisan('config:doctor --env=production')->assertSuccessful();
+
+    config()->set('services.shopify.customer_account.client_id', null);
 
     $this->artisan('config:doctor --env=production')->assertFailed();
 });

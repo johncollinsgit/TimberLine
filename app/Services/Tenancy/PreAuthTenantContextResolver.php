@@ -3,6 +3,7 @@
 namespace App\Services\Tenancy;
 
 use App\Models\Tenant;
+use App\Services\ManagedWebsite\ManagedWebsiteDomainService;
 use App\Support\Tenancy\HostTenantContext;
 use Illuminate\Http\Request;
 
@@ -13,6 +14,8 @@ class PreAuthTenantContextResolver
      */
     protected array $tenantBySlugCache = [];
 
+    public function __construct(private readonly ManagedWebsiteDomainService $managedWebsiteDomains) {}
+
     public function resolveForRequest(Request $request): HostTenantContext
     {
         $host = $this->normalizeHost((string) $request->getHost());
@@ -22,6 +25,19 @@ class PreAuthTenantContextResolver
 
         if ($this->isLandlordHost($host)) {
             return HostTenantContext::landlord(host: $host, strategy: 'landlord_host');
+        }
+
+        // Custom domains are public-site-only and resolve only after an
+        // explicit verified/active record exists. They are never folded into
+        // the platform host map or generic tenant-subdomain logic.
+        $customDomainTenant = $this->managedWebsiteDomains->tenantForActiveHost($host);
+        if ($customDomainTenant) {
+            return new HostTenantContext(
+                tenant: $customDomainTenant,
+                classification: HostTenantContext::TENANT,
+                strategy: 'managed_website_custom_domain',
+                host: $host,
+            );
         }
 
         $hostMap = $this->hostMap();

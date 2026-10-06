@@ -4,6 +4,10 @@ namespace App\Services\Mobile;
 
 use App\Models\EverbranchMobilePushDevice;
 use App\Models\FieldServiceJobNotification;
+use App\Models\TeamChannel;
+use App\Models\TeamMessage;
+use App\Models\Tenant;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -39,7 +43,40 @@ class EverbranchApnsService
         $payload = $this->payload($notification);
         $results = ['sent' => 0, 'failed' => 0, 'skipped' => 0];
         foreach ($devices as $device) {
-            $state = $this->sendToDevice($device, $config, $token, $payload, $notification);
+            $state = $this->sendToDevice($device, $config, $token, $payload, 'everbranch-job-'.(int) $notification->field_service_job_id, ['notification_id' => (int) $notification->id]);
+            $results[$state]++;
+        }
+
+        return $results;
+    }
+
+    /** @param Collection<int,int> $recipientIds @return array{sent:int,failed:int,skipped:int} */
+    public function sendTeamMessage(TeamMessage $message, TeamChannel $channel, Collection $recipientIds): array
+    {
+        $config = $this->config();
+        if ($config === null || $recipientIds->isEmpty()) {
+            return ['sent' => 0, 'failed' => 0, 'skipped' => $recipientIds->count()];
+        }
+        $devices = EverbranchMobilePushDevice::query()->whereIn('user_id', $recipientIds->all())
+            ->where('platform', 'ios')->where('notifications_enabled', true)->get();
+        if ($devices->isEmpty()) {
+            return ['sent' => 0, 'failed' => 0, 'skipped' => $recipientIds->count()];
+        }
+        try {
+            $token = $this->bearerToken($config);
+        } catch (Throwable $exception) {
+            Log::warning('Everbranch team APNs token generation failed.', ['exception' => class_basename($exception)]);
+
+            return ['sent' => 0, 'failed' => 0, 'skipped' => $devices->count()];
+        }
+        $payload = [
+            'aps' => ['alert' => ['title' => 'New team message', 'body' => 'Open '.($channel->name ?: 'your conversation').' in Everbranch.'], 'sound' => 'default', 'thread-id' => 'everbranch-team-'.(int) $channel->id],
+            'type' => 'team_message', 'workspace_slug' => (string) Tenant::query()->whereKey($channel->tenant_id)->value('slug'),
+            'team_channel_id' => (int) $channel->id,
+        ];
+        $results = ['sent' => 0, 'failed' => 0, 'skipped' => 0];
+        foreach ($devices as $device) {
+            $state = $this->sendToDevice($device, $config, $token, $payload, '', ['message_id' => (int) $message->id]);
             $results[$state]++;
         }
 
@@ -105,36 +142,49 @@ class EverbranchApnsService
     }
 
     /** @param array<string,mixed> $config @param array<string,mixed> $payload */
-    private function sendToDevice(EverbranchMobilePushDevice $device, array $config, string $token, array $payload, FieldServiceJobNotification $notification): string
+    private function sendToDevice(EverbranchMobilePushDevice $device, array $config, string $token, array $payload, string $collapseId, array $logContext): string
     {
         $deviceToken = trim((string) $device->device_token);
         if ($deviceToken === '') {
             return 'skipped';
         }
-        $host = $config['environment'] === 'production' ? 'https://api.push.apple.com' : 'https://api.sandbox.push.apple.com';
-        try {
-            $response = Http::timeout((int) $config['timeout'])->withHeaders([
-                'authorization' => 'bearer '.$token,
-                'apns-topic' => $config['bundle_id'],
-                'apns-push-type' => 'alert',
-                'apns-priority' => '10',
-                'apns-collapse-id' => 'everbranch-job-'.(int) $notification->field_service_job_id,
-            ])->withBody(json_encode($payload, JSON_THROW_ON_ERROR), 'application/json')->send('POST', $host.'/3/device/'.$deviceToken);
-        } catch (Throwable $exception) {
-            Log::warning('Everbranch APNs request failed.', ['device_id' => (int) $device->id, 'notification_id' => (int) $notification->id, 'exception' => class_basename($exception)]);
+        $hosts = $config['environment'] === 'production'
+            ? ['https://api.push.apple.com', 'https://api.sandbox.push.apple.com']
+            : ['https://api.sandbox.push.apple.com', 'https://api.push.apple.com'];
+        $headers = [
+            'authorization' => 'bearer '.$token,
+            'apns-topic' => $config['bundle_id'],
+            'apns-push-type' => 'alert',
+            'apns-priority' => '10',
+        ];
+        if ($collapseId !== '') {
+            $headers['apns-collapse-id'] = $collapseId;
+        }
+        foreach ($hosts as $index => $host) {
+            try {
+                $response = Http::withOptions(['version' => 2.0])->timeout((int) $config['timeout'])->withHeaders($headers)
+                    ->withBody(json_encode($payload, JSON_THROW_ON_ERROR), 'application/json')->send('POST', $host.'/3/device/'.$deviceToken);
+            } catch (Throwable $exception) {
+                Log::warning('Everbranch APNs request failed.', ['device_id' => (int) $device->id, ...$logContext, 'exception' => class_basename($exception)]);
+
+                return 'failed';
+            }
+            if ($response->successful()) {
+                $device->forceFill(['last_seen_at' => now()])->save();
+
+                return 'sent';
+            }
+            $reason = trim((string) data_get($response->json(), 'reason'));
+            if ($reason === 'BadDeviceToken' && $index === 0) {
+                continue;
+            }
+            if (in_array($reason, ['BadDeviceToken', 'DeviceTokenNotForTopic', 'Unregistered'], true)) {
+                $device->forceFill(['notifications_enabled' => false])->save();
+            }
+            Log::warning('Everbranch APNs push rejected.', ['device_id' => (int) $device->id, ...$logContext, 'status' => $response->status(), 'reason' => $reason ?: null]);
 
             return 'failed';
         }
-        if ($response->successful()) {
-            $device->forceFill(['last_seen_at' => now()])->save();
-
-            return 'sent';
-        }
-        $reason = trim((string) data_get($response->json(), 'reason'));
-        if (in_array($reason, ['BadDeviceToken', 'DeviceTokenNotForTopic', 'Unregistered'], true)) {
-            $device->forceFill(['notifications_enabled' => false])->save();
-        }
-        Log::warning('Everbranch APNs push rejected.', ['device_id' => (int) $device->id, 'notification_id' => (int) $notification->id, 'status' => $response->status(), 'reason' => $reason ?: null]);
 
         return 'failed';
     }
@@ -147,6 +197,7 @@ class EverbranchApnsService
             'type' => 'field_service_job',
             'workspace_slug' => (string) data_get($notification->metadata, 'workspace_slug'),
             'job_id' => (int) $notification->field_service_job_id,
+            'destination_tab' => (string) data_get($notification->metadata, 'destination.tab', ''),
             'notification_id' => (int) $notification->id,
         ];
     }
@@ -166,8 +217,8 @@ class EverbranchApnsService
         $rLength = ord($der[$offset]);
         $r = substr($der, $offset + 1, $rLength);
         $offset += 1 + $rLength + 1;
-        $sLength = ord($der[$offset - 1]);
-        $s = substr($der, $offset, $sLength);
+        $sLength = ord($der[$offset]);
+        $s = substr($der, $offset + 1, $sLength);
 
         return $this->base64Url(str_pad(ltrim($r, "\x00"), $length / 2, "\x00", STR_PAD_LEFT).str_pad(ltrim($s, "\x00"), $length / 2, "\x00", STR_PAD_LEFT));
     }

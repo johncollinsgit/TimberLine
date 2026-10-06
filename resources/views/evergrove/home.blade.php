@@ -27,8 +27,8 @@
 <head>
     @include('partials.head', [
         'app_name' => 'Evergrove Software',
-        'title' => 'Evergrove Software | Everbranch for owner-led teams',
-        'description' => $positioning['summary'] ?? 'Evergrove builds Everbranch and custom software for trades, field teams, retail teams, and owner-led businesses.',
+        'title' => 'Evergrove Software | Custom software, websites, and automation',
+        'description' => $positioning['summary'] ?? 'Evergrove builds custom websites, internal apps, portals, automation, and proven software products for owner-led businesses.',
         'brand_assets' => $brandAssets,
     ])
 </head>
@@ -40,25 +40,25 @@
         <section class="eg-hero eg-hero--product" aria-label="Evergrove Software">
             <div class="eg-hero-copy" data-reveal>
                 <img src="{{ $lockup }}" alt="Evergrove Software" class="eg-hero-logo" />
-                <p class="eg-kicker"><span></span>Everbranch for real-world work</p>
-                <h1>The app that keeps the job moving.</h1>
-                <p class="eg-lede">Evergrove builds clean, custom software for owner-led teams: electricians, service shops, project crews, and product businesses that are tired of running the company from texts and spreadsheets.</p>
+                <p class="eg-kicker"><span></span>Custom software for real-world work</p>
+                <h1>Software built around the way your business actually works.</h1>
+                <p class="eg-lede">Evergrove designs and builds custom websites, internal apps, client portals, and automation for owner-led businesses ready to replace scattered tools with something that fits.</p>
                 <div class="eg-actions">
-                    <a href="#contact" class="eg-button eg-button-primary">Get a workflow audit</a>
-                    <a href="#everbranch" class="eg-button eg-button-secondary">See Everbranch</a>
+                    <a href="#contact" class="eg-button eg-button-primary">Start a project</a>
+                    <a href="#services" class="eg-button eg-button-secondary">What we build</a>
                 </div>
                 <div class="eg-hero-metrics" aria-label="Evergrove focus areas">
                     <div>
-                        <strong>Jobs</strong>
-                        <span>next step visible</span>
+                        <strong>Websites</strong>
+                        <span>built to move business</span>
                     </div>
                     <div>
-                        <strong>Customers</strong>
-                        <span>history in one place</span>
+                        <strong>Custom apps</strong>
+                        <span>built around your team</span>
                     </div>
                     <div>
-                        <strong>Follow-ups</strong>
-                        <span>nothing drifts</span>
+                        <strong>Automation</strong>
+                        <span>less manual work</span>
                     </div>
                 </div>
             </div>
@@ -303,48 +303,48 @@
                     </div>
                 </div>
                 <div class="eg-floating-panel" data-premium-surface>
-                    <strong>Now in one place</strong>
-                    <span>jobs, notes, customers, follow-ups, approvals</span>
+                    <strong>Built by Evergrove</strong>
+                    <span>Everbranch: jobs, notes, customers, follow-ups, approvals</span>
                 </div>
             </div>
         </section>
 
         <section id="problem" class="eg-proof-strip eg-proof-strip--tight" aria-label="Evergrove positioning">
             <div>
-                <span>Built for owners</span>
-                <p>clear enough to trust between calls</p>
+                <span>Built for business</span>
+                <p>clear enough to use every day</p>
             </div>
             <div>
-                <span>Made for crews</span>
-                <p>fast enough to use from the field</p>
+                <span>Built around people</span>
+                <p>not a process someone else invented</p>
             </div>
             <div>
-                <span>Designed to grow</span>
+                <span>Built to last</span>
                 <p>custom where it matters, simple where it should be</p>
             </div>
         </section>
 
         <section id="services" class="eg-section eg-section--compact">
             <div class="eg-section-head" data-reveal>
-                <p class="eg-kicker">What changes</p>
-                <h2>Less hunting. More doing.</h2>
-                <p>Evergrove turns the daily friction into a focused app your team can actually use.</p>
+                <p class="eg-kicker">What we build</p>
+                <h2>Digital tools with a job to do.</h2>
+                <p>Start with the business problem, then build the right website, workflow, or product around it.</p>
             </div>
             <div class="eg-card-grid eg-card-grid-3 eg-outcome-grid">
                 <article class="eg-card" data-premium-surface data-reveal>
                     <span class="eg-card-number">01</span>
-                    <h3>Every job has a next step.</h3>
-                    <p>See the customer, status, notes, materials, quote, and follow-up without digging through messages.</p>
+                    <h3>Websites that create momentum.</h3>
+                    <p>Clear, credible sites and storefronts that make it easier for the right customer to understand, trust, and contact you.</p>
                 </article>
                 <article class="eg-card" data-premium-surface data-reveal>
                     <span class="eg-card-number">02</span>
-                    <h3>The owner gets the real picture.</h3>
-                    <p>Know what is waiting, what changed, who needs a call, and what can move today.</p>
+                    <h3>Operations that stop living in messages.</h3>
+                    <p>Internal apps and client portals that put the customer, work, approvals, and next step where the team can find them.</p>
                 </article>
                 <article class="eg-card" data-premium-surface data-reveal>
                     <span class="eg-card-number">03</span>
-                    <h3>The system fits the business.</h3>
-                    <p>Start with Everbranch, then shape the workflows around how your team already works.</p>
+                    <h3>Systems that talk to each other.</h3>
+                    <p>Useful integrations and focused automation that remove repeated admin without taking people out of the loop.</p>
                 </article>
             </div>
         </section>
@@ -352,13 +352,13 @@
         <section id="everbranch" class="eg-section eg-product-section">
             <div class="eg-product-bridge eg-product-bridge--premium" data-premium-surface data-reveal>
                 <div>
-                    <p class="eg-kicker">Everbranch</p>
-                    <h2>A small-business operating app, built by Evergrove.</h2>
-                    <p>Customers, jobs, requests, notes, approvals, follow-ups, and the work nobody wants to lose. Clean enough for the office, simple enough for the truck.</p>
+                    <p class="eg-kicker">Built by Evergrove: Everbranch</p>
+                    <h2>A real operating app, not a mockup.</h2>
+                    <p>Everbranch is software we built for teams that need customers, jobs, notes, approvals, and follow-ups in one place. It is a fit for some businesses; for others, it shows the kind of focused product work Evergrove can create.</p>
                 </div>
                 <div class="eg-actions">
-                    <a href="{{ $everbranchStartUrl }}" class="eg-button eg-button-primary">Become a launch partner</a>
-                    <a href="{{ $loginUrl }}" class="eg-button eg-button-secondary">Client portal</a>
+                    <a href="{{ $everbranchStartUrl }}" class="eg-button eg-button-primary">Explore Everbranch</a>
+                    <a href="#contact" class="eg-button eg-button-secondary">Build something custom</a>
                 </div>
             </div>
         </section>
@@ -413,7 +413,7 @@
 
         <section id="examples" class="eg-section eg-section--compact">
             <div class="eg-section-head" data-reveal>
-                <p class="eg-kicker">Click the mess</p>
+                <p class="eg-kicker">Where custom work helps</p>
                 <h2>The software starts where the work breaks.</h2>
             </div>
             <div class="eg-industry-showcase eg-fix-showcase" aria-label="Workflow problems Evergrove can fix">
@@ -422,21 +422,21 @@
                         <span>Job notes live in texts</span>
                         <strong>Move field notes, photos, customer context, and decisions into one job timeline.</strong>
                     </summary>
-                    <p>For an electrician, that means the person answering the phone and the person walking into the house can see the same truth.</p>
+                    <p>Give the office and the person doing the work one shared view, without asking either of them to rebuild the same information.</p>
                 </details>
                 <details class="eg-industry-card" data-clickable-details-card data-reveal>
                     <summary>
                         <span>Quotes need babysitting</span>
                         <strong>Track open estimates, customer replies, approvals, and next follow-ups without rebuilding a spreadsheet.</strong>
                     </summary>
-                    <p>Everbranch can surface the quote that needs a call today instead of hoping someone remembers.</p>
+                    <p>A lightweight workflow can surface the estimate that needs attention today instead of hoping someone remembers.</p>
                 </details>
                 <details class="eg-industry-card" data-clickable-details-card data-reveal>
                     <summary>
                         <span>Materials slow the crew down</span>
                         <strong>Keep parts requests, job requirements, and status visible before the truck rolls.</strong>
                     </summary>
-                    <p>The goal is not more admin. It is fewer wasted trips, fewer surprise gaps, and cleaner handoffs.</p>
+                    <p>The goal is not more admin. It is fewer surprise gaps, cleaner handoffs, and a team that can keep work moving.</p>
                 </details>
             </div>
         </section>
@@ -445,8 +445,8 @@
             <div class="eg-split eg-studio-split">
                 <div class="eg-section-head" data-reveal>
                     <p class="eg-kicker">Evergrove Studio</p>
-                    <h2>Product taste plus practical build work.</h2>
-                    <p>Use Everbranch when the product fits. Build custom when your process is the advantage. Either way, the goal is software that feels obvious after the first week.</p>
+                    <h2>From practical website to working product.</h2>
+                    <p>We can start with a focused website, a better handoff, or a full internal tool. Everbranch is our proof that we can take a messy operational need all the way to a usable product.</p>
                 </div>
                 <div class="eg-mini-tools" data-reveal>
                     @foreach($tools as $key => $tool)
@@ -469,9 +469,9 @@
         <section id="contact" class="eg-section eg-section--compact eg-contact-section">
             <div class="eg-contact-layout">
                 <div class="eg-section-head" data-reveal>
-                    <p class="eg-kicker">Workflow audit</p>
+                    <p class="eg-kicker">Start a project</p>
                     <h2>Bring the messy version.</h2>
-                    <p>Tell me what gets missed, repeated, delayed, or retyped. I’ll help decide whether Everbranch, a custom app, or a simpler process is the right next move.</p>
+                    <p>Tell me what gets missed, repeated, delayed, or retyped. We will find the smallest useful place to start, whether that is a website, a custom app, an integration, or Everbranch.</p>
                     <p>Email: <a class="eg-text-link" href="mailto:{{ $contactEmail }}">{{ $contactEmail }}</a></p>
                 </div>
 

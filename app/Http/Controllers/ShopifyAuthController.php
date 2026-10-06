@@ -4,11 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\ShopifyStore;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
+use App\Services\Shopify\ShopifyEmbeddedAppCredentials;
 use App\Services\Shopify\ShopifyHmacVerifier;
 use App\Services\Shopify\ShopifyOAuth;
 use App\Services\Shopify\ShopifyStores;
-use App\Services\Shopify\ShopifyWebPixelConnectionService;
 use App\Services\Shopify\ShopifyWebhookSubscriptionService;
+use App\Services\Shopify\ShopifyWebPixelConnectionService;
 use App\Services\Tenancy\ModernForestryAlphaBootstrapService;
 use App\Support\Tenancy\TenantHostBuilder;
 use Illuminate\Http\Request;
@@ -22,11 +23,13 @@ class ShopifyAuthController extends Controller
     public function auth(string $store, ShopifyOAuth $oauth)
     {
         $config = ShopifyStores::find($store, true);
-        if (!$config || empty($config['client_id'])) {
+        if (! $config || empty($config['client_id'])) {
             abort(404);
         }
 
-        $stateKey = 'shopify_oauth_state_' . $config['key'];
+        $config = $this->oauthRegistration($config, app(ShopifyEmbeddedAppCredentials::class));
+
+        $stateKey = 'shopify_oauth_state_'.$config['key'];
         $state = Str::random(32);
         session()->put($stateKey, $state);
         // Backward-compatible fallback for any in-flight installs started before per-store state keys.
@@ -73,14 +76,15 @@ class ShopifyAuthController extends Controller
         ShopifyWebhookSubscriptionService $webhookSubscriptionService,
         ModernForestryAlphaBootstrapService $alphaBootstrapService,
         ShopifyWebPixelConnectionService $webPixelConnectionService
-    )
-    {
+    ) {
         $config = ShopifyStores::find($store, true);
-        if (!$config) {
+        if (! $config) {
             abort(404);
         }
 
-        $expectedState = (string) session()->pull('shopify_oauth_state_' . $config['key'], '');
+        $config = $this->oauthRegistration($config, app(ShopifyEmbeddedAppCredentials::class));
+
+        $expectedState = (string) session()->pull('shopify_oauth_state_'.$config['key'], '');
         $legacyState = (string) session()->pull('shopify_oauth_state', '');
         $fallbackState = Cache::store('file')->pull("shopify_oauth_state_{$config['key']}");
         $incomingState = (string) $request->query('state');
@@ -95,7 +99,7 @@ class ShopifyAuthController extends Controller
         }
 
         $shopDomain = (string) $request->query('shop');
-        if (!$this->matchesExpectedShop($config, $shopDomain)) {
+        if (! $this->matchesExpectedShop($config, $shopDomain)) {
             return response('Shop domain mismatch.', 403);
         }
 
@@ -119,7 +123,7 @@ class ShopifyAuthController extends Controller
 
         $payload = $tokenResponse->json() ?? [];
         $accessToken = $payload['access_token'] ?? null;
-        if (!$accessToken) {
+        if (! $accessToken) {
             return response('No access token returned.', 502);
         }
 
@@ -192,6 +196,24 @@ class ShopifyAuthController extends Controller
         ]);
 
         return redirect()->route('shopify.app')->with('status', $statusMessage);
+    }
+
+    /**
+     * @param  array<string,mixed>  $store
+     * @return array<string,mixed>
+     */
+    private function oauthRegistration(array $store, ShopifyEmbeddedAppCredentials $credentials): array
+    {
+        $registration = $credentials->credentialsForStore($store)[0] ?? null;
+
+        if (! is_array($registration)) {
+            return $store;
+        }
+
+        return array_replace($store, [
+            'client_id' => $registration['client_id'],
+            'secret' => $registration['secret'],
+        ]);
     }
 
     protected function matchesExpectedShop(array $config, string $shopDomain): bool

@@ -22,6 +22,24 @@ const contextualModules = [
     mountExport: "mountOnboardingGateNow",
   },
   {
+    key: "publicStudio",
+    selectors: ["[data-studio-story]"],
+    load: () => import("./public-studio"),
+    mountExport: "mountPublicStudioNow",
+  },
+  {
+    key: "publicRickrollStory",
+    selectors: ["[data-rickroll-story]"],
+    load: () => import("./public-rickroll-story"),
+    mountExport: "mountRickrollStoryNow",
+  },
+  {
+    key: "publicIndustryDemos",
+    selectors: ["[data-industry-page]"],
+    load: () => import("./public-industry-demos"),
+    mountExport: "mountPublicIndustryDemosNow",
+  },
+  {
     key: "publicTabs",
     selectors: ["[data-public-tabs]"],
     load: () => import("./public-tabs"),
@@ -92,6 +110,24 @@ const contextualModules = [
     selectors: ["[data-workflow-studio-root]"],
     load: () => import("./workflows/studio"),
     mountExport: "mountWorkflowStudioNow",
+  },
+  {
+    key: "managedWebsiteEditor",
+    selectors: ["#managed-website-editor-root"],
+    load: () => import("./managed-website/editor"),
+    mountExport: "mountManagedWebsiteEditorNow",
+  },
+  {
+    key: "marketingCustomersGrid",
+    selectors: ["#marketing-customers-grid"],
+    load: () => import("./marketing/customers-grid"),
+    mountExport: "mountMarketingCustomersGrid",
+  },
+  {
+    key: "fieldServiceAddressAutocomplete",
+    selectors: [".field-service-job-shell input[name='service_address_line_1']"],
+    load: () => import("./field-service/address-autocomplete"),
+    mountExport: "mountFieldServiceAddressAutocompleteNow",
   },
 ];
 

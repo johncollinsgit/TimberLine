@@ -24,6 +24,7 @@ test('shopify embedded page registry resolves canonical routes from legacy alias
     expect($registry->canonicalRouteName('shopify.embedded.rewards.earn'))->toBe('shopify.app.rewards.earn')
         ->and($registry->canonicalRouteName('shopify.embedded.customers'))->toBe('shopify.app.customers.manage')
         ->and($registry->canonicalRouteName('shopify.embedded.settings'))->toBe('shopify.app.settings')
+        ->and($registry->canonicalRouteName('shopify.embedded.product-options'))->toBe('shopify.app.product-options')
         ->and($registry->canonicalRouteName('shopify.app.customers.manage'))->toBe('shopify.app.customers.manage');
 });
 
@@ -68,7 +69,7 @@ test('shopify embedded page registry groups pages by expected navigation groups'
         ->pluck('key')
         ->all();
 
-    expect($primaryKeys)->toBe(['home', 'subscriptions', 'product_options', 'assistant', 'customers', 'reporting', 'messaging', 'rewards', 'edit_app', 'settings'])
+    expect($primaryKeys)->toBe(['home', 'subscriptions', 'product_options', 'assistant', 'customers', 'reporting', 'messaging', 'rewards', 'edit_app', 'fundraising', 'settings'])
         ->and($customersSubnavKeys)->toBe(['customers.all', 'customers.segments', 'customers.activity', 'customers.imports'])
         ->and($dashboardSubnavKeys)->toBe(['home.start', 'home.plans', 'home.store', 'home.integrations'])
         ->and($assistantSubnavKeys)->toBe(['assistant.start', 'assistant.opportunities', 'assistant.drafts', 'assistant.setup', 'assistant.activity'])

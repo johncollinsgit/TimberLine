@@ -9,8 +9,8 @@ use App\Http\Responses\FortifyPasswordResetResponse;
 use App\Http\Responses\FortifyRegisterResponse;
 use App\Http\Responses\FortifyTwoFactorLoginResponse;
 use App\Models\User;
-use App\Support\Tenancy\TenantHostBuilder;
 use App\Support\Auth\PasswordResetUrlFactory;
+use App\Support\Tenancy\TenantHostBuilder;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -60,7 +60,7 @@ class FortifyServiceProvider extends ServiceProvider
             $email = Str::lower((string) $request->input('email'));
             $user = User::query()->where('email', $email)->first();
 
-            if (!$user || !Hash::check((string) $request->input('password'), (string) $user->password)) {
+            if (! $user || ! Hash::check((string) $request->input('password'), (string) $user->password)) {
                 return null;
             }
 
@@ -124,14 +124,14 @@ class FortifyServiceProvider extends ServiceProvider
             $scheme = $hostBuilder->canonicalScheme();
 
             if (! is_string($host) || $host === '') {
-                return URL::temporarySignedRoute('verification.verify', $expiresAt, $parameters);
+                return URL::temporarySignedRoute('verification.confirm', $expiresAt, $parameters);
             }
 
             URL::forceRootUrl($scheme.'://'.$host);
             URL::forceScheme($scheme);
 
             try {
-                return URL::temporarySignedRoute('verification.verify', $expiresAt, $parameters);
+                return URL::temporarySignedRoute('verification.confirm', $expiresAt, $parameters);
             } finally {
                 URL::forceRootUrl(null);
                 URL::forceScheme(null);

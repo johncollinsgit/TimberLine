@@ -200,6 +200,99 @@ class MarketingWishlistService
     }
 
     /**
+     * Create (or return) the unguessable public link for a customer's own list.
+     * The public response deliberately exposes product details only; it never
+     * contains the shopper's profile, email, phone, or guest token.
+     *
+     * @param array<string,mixed> $context
+     * @return array{token:string,list:array<string,mixed>}
+     */
+    public function shareList(?MarketingProfile $profile, ?string $guestToken, array $context = []): array
+    {
+        $product = $this->normalizeProductContext($context);
+        $tenantId = $this->tenantId($profile, $product['tenant_id'] ?? null);
+        $guestToken = $this->nullableString($guestToken);
+
+        if ($profile === null && $guestToken === null) {
+            throw new InvalidArgumentException('A guest token or customer identity is required before sharing a wishlist.');
+        }
+
+        $listId = $this->positiveInt($context['wishlist_list_id'] ?? null);
+        $lists = $this->listsForOwner($profile, $guestToken, $tenantId, $product['store_key']);
+        $list = $listId === null
+            ? $lists->firstWhere('is_default', true) ?? $lists->first()
+            : $lists->firstWhere('id', $listId);
+
+        if (! $list instanceof MarketingWishlistList) {
+            throw new InvalidArgumentException('That wishlist does not belong to this customer.');
+        }
+
+        $itemCount = MarketingProfileWishlistItem::query()
+            ->where('wishlist_list_id', $list->id)
+            ->where('status', MarketingProfileWishlistItem::STATUS_ACTIVE)
+            ->count();
+
+        if ($itemCount < 1) {
+            throw new InvalidArgumentException('Add a product before sharing this wishlist.');
+        }
+
+        $metadata = is_array($list->metadata) ? $list->metadata : [];
+        $token = $this->nullableString($metadata['public_share_token'] ?? null);
+
+        if ($token === null) {
+            do {
+                $token = Str::random(48);
+            } while (MarketingWishlistList::query()->where('metadata->public_share_token', $token)->exists());
+
+            $metadata['public_share_token'] = $token;
+            $metadata['public_share_enabled_at'] = now()->toIso8601String();
+            $list->forceFill(['metadata' => $metadata])->save();
+        }
+
+        return [
+            'token' => $token,
+            'list' => $this->listPayload($list, ['item_count' => $itemCount]),
+        ];
+    }
+
+    /**
+     * @return array{list:array<string,mixed>,items:array<int,array<string,mixed>>}|null
+     */
+    public function publicSharedListPayload(string $token): ?array
+    {
+        $token = $this->nullableString($token);
+        if ($token === null || ! preg_match('/^[A-Za-z0-9]{32,80}$/', $token)) {
+            return null;
+        }
+
+        $list = MarketingWishlistList::query()
+            ->where('status', MarketingWishlistList::STATUS_ACTIVE)
+            ->where('metadata->public_share_token', $token)
+            ->first();
+
+        if (! $list) {
+            return null;
+        }
+
+        $items = MarketingProfileWishlistItem::query()
+            ->where('wishlist_list_id', $list->id)
+            ->where('status', MarketingProfileWishlistItem::STATUS_ACTIVE)
+            ->orderByDesc('last_added_at')
+            ->orderByDesc('id')
+            ->get();
+
+        return [
+            'list' => $this->listPayload($list, ['item_count' => $items->count()]),
+            'items' => $items->map(fn (MarketingProfileWishlistItem $item): array => [
+                'product_handle' => $item->product_handle ? (string) $item->product_handle : null,
+                'product_title' => $item->product_title ? (string) $item->product_title : 'Saved product',
+                'product_url' => $item->product_url ? (string) $item->product_url : null,
+                'product_variant_id' => $item->product_variant_id ? (string) $item->product_variant_id : null,
+            ])->values()->all(),
+        ];
+    }
+
+    /**
      * @param array<string,mixed> $context
      * @return array<string,mixed>
      */

@@ -1,0 +1,57 @@
+<?php
+
+$bool = static fn (string $key, bool $default = false): bool => filter_var(
+    env($key, $default),
+    FILTER_VALIDATE_BOOL,
+    FILTER_NULL_ON_FAILURE
+) ?? $default;
+
+$tenantIds = static function (string $key): array {
+    return collect(explode(',', (string) env($key, '')))
+        ->map(static fn (string $value): int => (int) trim($value))
+        ->filter(static fn (int $id): bool => $id > 0)
+        ->unique()
+        ->values()
+        ->all();
+};
+
+return [
+    // Every gate defaults to false. Empty allowlists never mean "everyone".
+    'commerce_enabled' => $bool('MANAGED_WEBSITE_COMMERCE_ENABLED'),
+    // A tenant-specific catalog/cart preview without live payment checkout.
+    'commerce_preview_tenant_ids' => $tenantIds('MANAGED_WEBSITE_COMMERCE_PREVIEW_TENANT_IDS'),
+    // Native retail operations, shipping, and connected-store imports each have
+    // their own gate and allowlist. Enabling the Website editor or a legacy
+    // Shopify connection can never implicitly enable one of these lanes.
+    'commerce_operations_enabled' => $bool('MANAGED_WEBSITE_COMMERCE_OPERATIONS_ENABLED'),
+    'commerce_operations_tenant_ids' => $tenantIds('MANAGED_WEBSITE_COMMERCE_OPERATIONS_TENANT_IDS'),
+    'commerce_shipping_enabled' => $bool('MANAGED_WEBSITE_COMMERCE_SHIPPING_ENABLED'),
+    'commerce_shipping_tenant_ids' => $tenantIds('MANAGED_WEBSITE_COMMERCE_SHIPPING_TENANT_IDS'),
+    'pirate_ship_bridge_enabled' => $bool('MANAGED_WEBSITE_PIRATE_SHIP_BRIDGE_ENABLED'),
+    'pirate_ship_bridge_tenant_ids' => $tenantIds('MANAGED_WEBSITE_PIRATE_SHIP_BRIDGE_TENANT_IDS'),
+    'commerce_imports_enabled' => $bool('MANAGED_WEBSITE_COMMERCE_IMPORTS_ENABLED'),
+    'commerce_imports_tenant_ids' => $tenantIds('MANAGED_WEBSITE_COMMERCE_IMPORTS_TENANT_IDS'),
+    'easypost_api_key' => env('MANAGED_WEBSITE_EASYPOST_API_KEY'),
+    'easypost_webhook_secret' => env('MANAGED_WEBSITE_EASYPOST_WEBHOOK_SECRET'),
+    'easypost_api_base' => rtrim((string) env('MANAGED_WEBSITE_EASYPOST_API_BASE', 'https://api.easypost.com/v2'), '/'),
+    'editor_enabled' => $bool('MANAGED_WEBSITE_EDITOR_ENABLED'),
+    'publishing_enabled' => $bool('MANAGED_WEBSITE_PUBLISHING_ENABLED'),
+    'public_render_enabled' => $bool('MANAGED_WEBSITE_PUBLIC_RENDER_ENABLED'),
+    'editor_tenant_ids' => $tenantIds('MANAGED_WEBSITE_EDITOR_TENANT_IDS'),
+    // Custom domains are a separate public-host gate. They are deliberately
+    // opt-in per tenant and never turn a DNS record into a live site by itself.
+    'custom_domains_enabled' => $bool('MANAGED_WEBSITE_CUSTOM_DOMAINS_ENABLED'),
+    'custom_domain_activation_enabled' => $bool('MANAGED_WEBSITE_CUSTOM_DOMAIN_ACTIVATION_ENABLED'),
+    'custom_domain_tenant_ids' => $tenantIds('MANAGED_WEBSITE_CUSTOM_DOMAIN_TENANT_IDS'),
+    'custom_domain_target' => trim((string) env('MANAGED_WEBSITE_CUSTOM_DOMAIN_TARGET', '')),
+    // Commerce is a distinct, tenant-owned lane. Its webhooks and checkout
+    // fail closed until the global gate, tenant entitlement, Connect readiness,
+    // tax decision, and dedicated endpoint secret are all present.
+    'stripe_webhook_secret' => env('MANAGED_WEBSITE_STRIPE_WEBHOOK_SECRET'),
+    'allowed_blocks' => ['announcement', 'header', 'hero', 'text', 'image', 'services', 'testimonial', 'faq', 'contact_form', 'cta', 'product_grid', 'footer', 'image_with_text', 'service_cards', 'trust_bar', 'gallery', 'faq_list'],
+    'media_max_bytes' => max(1024 * 1024, (int) env('MANAGED_WEBSITE_MEDIA_MAX_BYTES', 10 * 1024 * 1024)),
+    'screenshot_enabled' => $bool('MANAGED_WEBSITE_SCREENSHOT_ENABLED'),
+    'screenshot_node_binary' => env('MANAGED_WEBSITE_SCREENSHOT_NODE_BINARY', 'node'),
+    'screenshot_timeout_seconds' => max(15, (int) env('MANAGED_WEBSITE_SCREENSHOT_TIMEOUT_SECONDS', 60)),
+    'cache_seconds' => max(60, (int) env('MANAGED_WEBSITE_PUBLIC_CACHE_SECONDS', 300)),
+];

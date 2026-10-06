@@ -128,9 +128,9 @@ test('storefront wholesale application stores the applicant and notifies the rev
         ->and((string) data_get($requestRecord->metadata, 'agreement'))->toBe('1');
 
     $user = User::query()->where('email', 'ops-review@example.com')->first();
-    expect($user)->not->toBeNull()
-        ->and((bool) $user->is_active)->toBeFalse()
-        ->and((string) $user->requested_via)->toBe('customer_production');
+    expect($user)->toBeNull();
+    expect($requestRecord->tenant_id)->toBe(Tenant::where('slug', 'modern-forestry')->value('id'));
+    app(\App\Services\Onboarding\WholesaleApplicationDeliveryService::class)->deliver($requestRecord->id);
 
     $template = FormTemplate::query()->where('key', 'wholesale_application')->first();
     $tenantForm = TenantForm::query()->where('slug', 'wholesale-application')->first();
@@ -152,14 +152,14 @@ test('storefront wholesale application stores the applicant and notifies the rev
         $expectedUrl = app(WholesaleApplicationInboxUrl::class)->detailUrl($requestRecord);
 
         expect($channels)->toContain('mail')
-            ->and($notifiable->routes['mail'] ?? null)->toBe('modernforestryteam@gmail.com')
+            ->and($notifiable->routes['mail'] ?? null)->toBe('info@theforestrystudio.com')
             ->and((string) $mailMessage->actionUrl)->toBe($expectedUrl)
             ->and(implode(' ', $mailMessage->introLines))->toContain('ops-review@example.com');
 
         return true;
     });
 
-    expect($requests)->toHaveCount(2);
+    expect($requests)->toHaveCount(0);
 });
 
 test('storefront wholesale notification points to the embedded wholesale review app', function (): void {

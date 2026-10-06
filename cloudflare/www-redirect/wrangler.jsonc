@@ -1,0 +1,13 @@
+{
+  "$schema": "../../../node_modules/wrangler/config-schema.json",
+  "name": "everbranch-www-redirect",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-02",
+  "workers_dev": false,
+  "routes": [
+    {
+      "pattern": "www.theeverbranch.com/*",
+      "zone_name": "theeverbranch.com"
+    }
+  ]
+}

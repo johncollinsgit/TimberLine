@@ -24,8 +24,7 @@ class TenantExperienceProfileService
         protected AuthenticatedTenantContextResolver $tenantContextResolver,
         protected TenantModuleAccessResolver $moduleAccessResolver,
         protected SchemaCapabilityMap $schemaCapabilities
-    ) {
-    }
+    ) {}
 
     /**
      * @return array<string,mixed>
@@ -52,10 +51,6 @@ class TenantExperienceProfileService
             (string) ($tenantId ?? 0),
             (string) ($user?->id ?? 0),
         ]);
-
-        if (isset($this->cache[$cacheKey])) {
-            return $this->cache[$cacheKey];
-        }
 
         if ($tenantId !== null && ! $tenant instanceof Tenant) {
             $tenant = Tenant::query()
@@ -101,10 +96,17 @@ class TenantExperienceProfileService
             hasOrderSignals: $hasOrderSignals
         );
 
+        $workspaceFocus = $this->workspaceFocusForTenant($tenantId);
         $powerUserMode = $this->powerUserMode($user);
         $workspace = $this->workspacePresentation($channelType, $useCaseProfile, $powerUserMode);
 
+        if ($workspaceFocus === 'website_sales') {
+            $workspace['label'] = 'Website & sales workspace';
+            $workspace['subtitle'] = 'Your website, products, customers, and launch checklist.';
+        }
+
         return $this->cache[$cacheKey] = [
+            'workspace_focus' => $workspaceFocus,
             'tenant_id' => $tenantId,
             'tenant_name' => $tenant instanceof Tenant ? (string) $tenant->name : null,
             'operating_mode' => $operatingMode,
@@ -131,6 +133,16 @@ class TenantExperienceProfileService
                     || $this->moduleEnabled($resolvedModules, 'diagnostics_advanced'),
             ],
         ];
+    }
+
+    public function workspaceFocusForTenant(?int $tenantId): ?string
+    {
+        if (! $tenantId) {
+            return null;
+        }
+        $metadata = \App\Models\TenantAccessProfile::query()->where('tenant_id', $tenantId)->value('metadata');
+
+        return data_get($metadata, 'workspace_focus') === 'website_sales' ? 'website_sales' : null;
     }
 
     protected function hasShopifyConnection(?int $tenantId, ?Tenant $tenant = null): bool

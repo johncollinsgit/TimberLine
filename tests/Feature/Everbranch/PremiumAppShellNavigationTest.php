@@ -2,12 +2,15 @@
 
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
+use App\Models\TenantModuleEntitlement;
 use App\Models\TenantSetupStatus;
 use App\Models\User;
 
 beforeEach(function (): void {
-    config()->set('tenancy.landlord.primary_host', 'localhost');
-    config()->set('tenancy.landlord.hosts', ['localhost']);
+    $landlordHost = parse_url(route('landlord.dashboard'), PHP_URL_HOST) ?: 'localhost';
+
+    config()->set('tenancy.landlord.primary_host', $landlordHost);
+    config()->set('tenancy.landlord.hosts', [$landlordHost]);
     config()->set('tenancy.landlord.operator_roles', ['platform_admin', 'admin']);
     config()->set('tenancy.landlord.operator_emails', []);
     config()->set('tenancy.auth.flagship_tenant_slug', 'modern-forestry');
@@ -52,7 +55,7 @@ test('tenant app shell keeps Home first and renders the cleaned sidebar shell', 
         ->assertSee('data-app-shell-topbar', false)
         ->assertSee('Search or ask what you want to do...', false)
         ->assertSee('data-assistant-entry', false)
-        ->assertSee('href="/assistant"', false)
+        ->assertSee('href="/account-help"', false)
         ->assertSee('data-shell-context="tenant"', false)
         ->assertSee('mf-sidebar-brand-wordmark', false)
         ->assertSeeText('Everbranch')
@@ -77,6 +80,40 @@ test('tenant app shell keeps Home first and renders the cleaned sidebar shell', 
     expect($homePosition)->not->toBeFalse()
         ->and($workPosition)->not->toBeFalse()
         ->and($homePosition)->toBeLessThan($workPosition);
+});
+
+test('entitled Website lives in the compact Branches group near Settings', function (): void {
+    $tenant = pr27ShellTenant('website-client', 'Website Client');
+    $user = User::factory()->tenantAdmin()->create();
+    $user->tenants()->attach((int) $tenant->id, ['role' => 'admin']);
+    TenantModuleEntitlement::query()->create([
+        'tenant_id' => $tenant->id,
+        'module_key' => 'managed_website',
+        'availability_status' => 'available',
+        'enabled_status' => 'enabled',
+        'billing_status' => 'add_on_paid',
+        'entitlement_source' => 'test',
+        'price_source' => 'catalog',
+    ]);
+
+    $html = $this->actingAs($user)
+        ->get('http://website-client.theeverbranch.com/dashboard')
+        ->assertOk()
+        ->assertSee('data-sidebar-key="branches"', false)
+        ->assertSee('data-sidebar-child-key="branch-website"', false)
+        ->getContent();
+
+    preg_match_all('/data-sidebar-key="([^"]+)"/', $html, $matches);
+    $keys = $matches[1];
+    $homeIndex = array_search('home', $keys, true);
+    $branchesIndex = array_search('branches', $keys, true);
+    $settingsIndex = array_search('administration', $keys, true);
+
+    expect($homeIndex)->not->toBeFalse()
+        ->and($branchesIndex)->not->toBeFalse()
+        ->and($settingsIndex)->not->toBeFalse()
+        ->and($homeIndex)->toBeLessThan($branchesIndex)
+        ->and($branchesIndex)->toBeLessThan($settingsIndex);
 });
 
 test('landlord shell keeps Home first and uses Everbranch Admin navigation', function (): void {
@@ -112,12 +149,36 @@ test('landlord shell keeps Home first and uses Everbranch Admin navigation', fun
         ->assertDontSeeText('Forestry Backstage');
 
     $html = $response->getContent();
-    $homePosition = strpos($html, 'data-sidebar-key="home"');
-    $workspacesPosition = strpos($html, 'data-sidebar-key="workspaces"');
+    $expectedOrder = [
+        'home',
+        'workspaces',
+        'access-requests',
+        'setup-reviews',
+        'branches',
+        'features',
+        'custom-requests',
+        'tickets',
+        'plan-billing-readiness',
+        'invoices',
+        'agreements',
+        'shopify-readiness',
+        'system-readiness',
+        'developer',
+        'settings',
+    ];
+    $positions = collect($expectedOrder)->mapWithKeys(
+        fn (string $key): array => [$key => strpos($html, 'data-sidebar-key="'.$key.'"')]
+    );
 
-    expect($homePosition)->not->toBeFalse()
-        ->and($workspacesPosition)->not->toBeFalse()
-        ->and($homePosition)->toBeLessThan($workspacesPosition);
+    foreach ($expectedOrder as $key) {
+        expect($positions->get($key))->not->toBeFalse();
+    }
+
+    $orderedPositions = $positions->values()->all();
+    $sortedPositions = $orderedPositions;
+    sort($sortedPositions);
+
+    expect($orderedPositions)->toBe($sortedPositions);
 });
 
 test('demo and sandbox banners remain visible inside the premium shell', function (string $slug, string $name, string $mode, string $banner): void {

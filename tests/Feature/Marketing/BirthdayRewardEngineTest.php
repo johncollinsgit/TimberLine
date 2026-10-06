@@ -3,6 +3,7 @@
 use App\Models\BirthdayRewardIssuance;
 use App\Models\CandleCashTransaction;
 use App\Models\CustomerBirthdayProfile;
+use App\Models\CustomerExternalProfile;
 use App\Models\MarketingProfile;
 use App\Models\MarketingSetting;
 use App\Models\Tenant;
@@ -194,4 +195,167 @@ test('birthday issuance command requires tenant context and scopes issuance by t
 
     expect($tenantAIssuances)->toBe(1)
         ->and($tenantBIssuances)->toBe(0);
+});
+
+test('birthday issuance scans past ineligible profiles before applying its eligible reward limit', function () {
+    MarketingSetting::query()->updateOrCreate(
+        ['key' => 'birthday_reward_config'],
+        ['value' => [
+            'enabled' => true,
+            'reward_type' => 'discount_code',
+            'reward_name' => 'Birthday Coupon',
+            'reward_value' => 10,
+            'claim_window_days_before' => 0,
+            'claim_window_days_after' => 0,
+        ]]
+    );
+
+    $tenant = Tenant::query()->create([
+        'name' => 'Birthday Coverage Tenant',
+        'slug' => 'birthday-coverage-tenant',
+    ]);
+
+    $profiles = collect(['outside', 'first-eligible', 'second-eligible'])
+        ->map(function (string $name) use ($tenant): MarketingProfile {
+            return MarketingProfile::query()->create([
+                'tenant_id' => $tenant->id,
+                'first_name' => $name,
+                'email' => $name.'@example.com',
+                'normalized_email' => $name.'@example.com',
+                'accepts_email_marketing' => false,
+            ]);
+        });
+
+    foreach ($profiles as $index => $profile) {
+        $birthdayDate = $index === 0 ? now()->addDays(30) : now();
+        CustomerBirthdayProfile::query()->create([
+            'marketing_profile_id' => $profile->id,
+            'birth_month' => (int) $birthdayDate->month,
+            'birth_day' => (int) $birthdayDate->day,
+            'source' => 'test',
+            'source_captured_at' => now(),
+        ]);
+    }
+
+    $this->artisan('marketing:issue-birthday-rewards', [
+        '--tenant-id' => $tenant->id,
+        '--limit' => 1,
+    ])->assertSuccessful();
+
+    expect(BirthdayRewardIssuance::query()->where('marketing_profile_id', $profiles[0]->id)->exists())->toBeFalse()
+        ->and(BirthdayRewardIssuance::query()->where('marketing_profile_id', $profiles[1]->id)->exists())->toBeTrue()
+        ->and(BirthdayRewardIssuance::query()->where('marketing_profile_id', $profiles[2]->id)->exists())->toBeFalse();
+
+    $this->artisan('marketing:issue-birthday-rewards', [
+        '--tenant-id' => $tenant->id,
+        '--limit' => 1,
+    ])->assertSuccessful();
+
+    expect(BirthdayRewardIssuance::query()->where('marketing_profile_id', $profiles[2]->id)->exists())->toBeTrue();
+});
+
+test('birthday coupon catchup previews and issues missed rewards once with a fresh claim window', function () {
+    $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-02 12:00:00'));
+
+    MarketingSetting::query()->updateOrCreate(
+        ['key' => 'birthday_reward_config'],
+        ['value' => [
+            'enabled' => true,
+            'reward_type' => 'discount_code',
+            'reward_name' => 'Birthday Reward Credit',
+            'reward_value' => 10,
+            'claim_window_days_before' => 0,
+            'claim_window_days_after' => 14,
+        ]]
+    );
+
+    $tenant = Tenant::query()->create([
+        'name' => 'Birthday Catchup Tenant',
+        'slug' => 'birthday-catchup-tenant',
+    ]);
+    foreach (['first', 'second', 'unsubscribed'] as $name) {
+        $profile = MarketingProfile::query()->create([
+            'tenant_id' => $tenant->id,
+            'first_name' => $name,
+            'email' => $name.'@example.test',
+            'normalized_email' => $name.'@example.test',
+            'accepts_email_marketing' => $name !== 'unsubscribed',
+        ]);
+        CustomerBirthdayProfile::query()->create([
+            'marketing_profile_id' => $profile->id,
+            'birth_month' => 7,
+            'birth_day' => 20,
+            'source' => 'test',
+            'source_captured_at' => now(),
+        ]);
+    }
+
+    $options = [
+        '--tenant-id' => $tenant->id,
+        '--from' => '2026-07-02',
+        '--through' => '2026-10-02',
+        '--limit' => 1,
+    ];
+
+    $this->artisan('marketing:backfill-birthday-coupons', $options)
+        ->expectsOutputToContain('outstanding=2')
+        ->expectsOutputToContain('email_suppressed_no_consent=1')
+        ->assertSuccessful();
+    expect(BirthdayRewardIssuance::query()->count())->toBe(0);
+
+    $this->artisan('marketing:backfill-birthday-coupons', [...$options, '--execute' => true])
+        ->expectsOutputToContain('issued=1')
+        ->assertSuccessful();
+    expect(BirthdayRewardIssuance::query()->count())->toBe(1);
+
+    $this->artisan('marketing:backfill-birthday-coupons', [...$options, '--execute' => true])
+        ->expectsOutputToContain('issued=1')
+        ->assertSuccessful();
+
+    $issuances = BirthdayRewardIssuance::query()->orderBy('id')->get();
+    expect($issuances)->toHaveCount(2)
+        ->and((string) $issuances[0]->reward_type)->toBe('discount_code')
+        ->and((float) $issuances[0]->reward_value)->toBe(10.0)
+        ->and((string) data_get($issuances[0]->metadata, 'catchup_campaign_key'))->toBe('birthday-catchup-2026')
+        ->and($issuances[0]->expires_at?->toDateString())->toBe('2026-11-01');
+});
+
+test('birthday catchup previews one email for duplicate profiles and prefers the retail linked profile', function () {
+    MarketingSetting::query()->updateOrCreate(
+        ['key' => 'birthday_reward_config'],
+        ['value' => ['enabled' => true, 'reward_type' => 'discount_code', 'reward_value' => 10, 'claim_window_days_before' => 0, 'claim_window_days_after' => 30]]
+    );
+    $tenant = Tenant::query()->create(['name' => 'Birthday Duplicate Tenant', 'slug' => 'birthday-duplicate-tenant']);
+    foreach ([false, true] as $retailLinked) {
+        $profile = MarketingProfile::query()->create([
+            'tenant_id' => $tenant->id,
+            'email' => 'same@example.test',
+            'normalized_email' => 'same@example.test',
+            'accepts_email_marketing' => true,
+        ]);
+        CustomerBirthdayProfile::query()->create([
+            'marketing_profile_id' => $profile->id,
+            'birth_month' => 7,
+            'birth_day' => 20,
+            'source' => 'test',
+        ]);
+        if ($retailLinked) {
+            CustomerExternalProfile::query()->create([
+                'tenant_id' => $tenant->id,
+                'marketing_profile_id' => $profile->id,
+                'provider' => 'shopify',
+                'integration' => 'shopify',
+                'store_key' => 'retail',
+                'external_customer_id' => '12345',
+            ]);
+        }
+    }
+
+    $this->artisan('marketing:backfill-birthday-coupons', [
+        '--tenant-id' => $tenant->id,
+        '--from' => '2026-07-01',
+        '--through' => '2026-10-02',
+    ])->expectsOutputToContain('outstanding=1')
+        ->expectsOutputToContain('duplicate_profiles_skipped=1')
+        ->assertSuccessful();
 });

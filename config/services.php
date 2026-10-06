@@ -40,11 +40,36 @@ $defaultAsanaWorkflowRedirect = $canonicalLandlordHost !== null
 $defaultQuickBooksRedirect = $canonicalLandlordHost !== null
     ? $canonicalScheme.'://'.$canonicalLandlordHost.'/integrations/quickbooks/callback'
     : rtrim((string) env('APP_URL', 'http://localhost'), '/').'/integrations/quickbooks/callback';
+$defaultBouncieRedirect = $canonicalLandlordHost !== null
+    ? $canonicalScheme.'://'.$canonicalLandlordHost.'/integrations/bouncie/callback'
+    : rtrim((string) env('APP_URL', 'http://localhost'), '/').'/integrations/bouncie/callback';
+$defaultInstagramRedirect = $canonicalLandlordHost !== null
+    ? $canonicalScheme.'://'.$canonicalLandlordHost.'/integrations/instagram/callback'
+    : rtrim((string) env('APP_URL', 'http://localhost'), '/').'/integrations/instagram/callback';
 $workflowCommerceRedirect = static fn (string $provider): string => ($canonicalLandlordHost !== null
     ? $canonicalScheme.'://'.$canonicalLandlordHost
     : rtrim((string) env('APP_URL', 'http://localhost'), '/')).'/workflows/connections/'.$provider.'/callback';
 
 return [
+
+    'google_maps' => [
+        'places_api_key' => env('GOOGLE_MAPS_PLACES_API_KEY', env('GOOGLE_PLACES_API_KEY')),
+        'fleet_api_key' => env('GOOGLE_MAPS_FLEET_API_KEY'),
+    ],
+
+    'fleet_tracking' => [
+        // Global kill switch. Tenant module access and legal/policy evidence are
+        // separate gates; all must pass before any point is accepted or shown.
+        'enabled' => env('FLEET_TRACKING_ENABLED', false),
+        'bouncie_webhook_key' => env('BOUNCIE_WEBHOOK_KEY'),
+        'bouncie_client_id' => env('BOUNCIE_CLIENT_ID'),
+        'bouncie_client_secret' => env('BOUNCIE_CLIENT_SECRET'),
+        'bouncie_redirect_uri' => env('BOUNCIE_REDIRECT_URI', $defaultBouncieRedirect),
+        'bouncie_authorization_url' => env('BOUNCIE_AUTHORIZATION_URL', 'https://auth.bouncie.com/dialog/authorize'),
+        'bouncie_token_url' => env('BOUNCIE_TOKEN_URL', 'https://auth.bouncie.com/oauth/token'),
+        'bouncie_api_base' => env('BOUNCIE_API_BASE', 'https://api.bouncie.dev/v1'),
+        'oauth_state_cache_store' => env('BOUNCIE_OAUTH_STATE_CACHE_STORE', env('CACHE_STORE', 'file')),
+    ],
 
     /*
     |--------------------------------------------------------------------------
@@ -163,6 +188,34 @@ return [
         'scopes' => env('QUICKBOOKS_SCOPES', 'com.intuit.quickbooks.accounting'),
         'minor_version' => (int) env('QUICKBOOKS_MINOR_VERSION', 75),
         'oauth_state_cache_store' => env('QUICKBOOKS_OAUTH_STATE_CACHE_STORE', env('CACHE_STORE', 'file')),
+        // BSF mappings were verified against Modern Forestry's connected QBO company.
+        // Production activation is delivered via GitHub; explicit env values remain kill switches.
+        'fundraiser_writes_enabled' => (bool) env('MODERN_FORESTRY_FUNDRAISER_QBO_WRITES_ENABLED', env('APP_ENV') === 'production'),
+        'fundraiser_send_enabled' => (bool) env('MODERN_FORESTRY_FUNDRAISER_QBO_SEND_ENABLED', env('APP_ENV') === 'production'),
+        'fundraiser_customer_id' => env('MODERN_FORESTRY_FUNDRAISER_QBO_CUSTOMER_ID', env('APP_ENV') === 'production' ? '100000001' : null),
+        'fundraiser_item_id' => env('MODERN_FORESTRY_FUNDRAISER_QBO_ITEM_ID', env('APP_ENV') === 'production' ? '58' : null),
+        'fundraiser_shipping_item_id' => env('MODERN_FORESTRY_FUNDRAISER_QBO_SHIPPING_ITEM_ID', env('APP_ENV') === 'production' ? '59' : null),
+        'fundraiser_send_to' => env('MODERN_FORESTRY_FUNDRAISER_QBO_SEND_TO', 'info@theforestrystudio.com'),
+        'fundraiser_connected_by' => env('MODERN_FORESTRY_FUNDRAISER_QBO_CONNECTED_BY', 'johncollinsemail@gmail.com'),
+        'fundraiser_company_name' => env('MODERN_FORESTRY_FUNDRAISER_QBO_COMPANY_NAME', 'Modern Forestry'),
+        'fundraiser_company_email' => env('MODERN_FORESTRY_FUNDRAISER_QBO_COMPANY_EMAIL', 'info@theforestrystudio.com'),
+    ],
+
+    // Instagram API with Instagram Login. Credentials are application-wide while
+    // every authorized professional account is stored as a tenant connection.
+    'instagram' => [
+        'enabled' => env('INSTAGRAM_MESSAGING_ENABLED', false),
+        'client_id' => env('INSTAGRAM_APP_ID'),
+        'client_secret' => env('INSTAGRAM_APP_SECRET'),
+        'redirect_uri' => env('INSTAGRAM_REDIRECT_URI', $defaultInstagramRedirect),
+        'authorization_url' => env('INSTAGRAM_AUTHORIZATION_URL', 'https://www.instagram.com/oauth/authorize'),
+        'token_url' => env('INSTAGRAM_TOKEN_URL', 'https://api.instagram.com/oauth/access_token'),
+        'api_base' => rtrim((string) env('INSTAGRAM_API_BASE', 'https://graph.instagram.com'), '/'),
+        'api_version' => trim((string) env('INSTAGRAM_API_VERSION', 'v24.0'), '/'),
+        'scopes' => env('INSTAGRAM_SCOPES', 'instagram_business_basic,instagram_business_manage_messages'),
+        'oauth_state_cache_store' => env('INSTAGRAM_OAUTH_STATE_CACHE_STORE', env('CACHE_STORE', 'file')),
+        'webhook_verify_token' => env('INSTAGRAM_WEBHOOK_VERIFY_TOKEN'),
+        'reply_window_hours' => max(1, (int) env('INSTAGRAM_REPLY_WINDOW_HOURS', 24)),
     ],
 
     'twilio' => [
@@ -203,8 +256,19 @@ return [
         'timeout' => (int) env('EVERBRANCH_APNS_TIMEOUT', 10),
     ],
 
+    'everbranch_fcm' => [
+        'enabled' => env('EVERBRANCH_FCM_ENABLED', false),
+        'project_id' => env('EVERBRANCH_FCM_PROJECT_ID'),
+        'client_email' => env('EVERBRANCH_FCM_CLIENT_EMAIL'),
+        'private_key' => env('EVERBRANCH_FCM_PRIVATE_KEY'),
+        'private_key_base64' => env('EVERBRANCH_FCM_PRIVATE_KEY_BASE64'),
+        'private_key_path' => env('EVERBRANCH_FCM_PRIVATE_KEY_PATH'),
+        'token_uri' => env('EVERBRANCH_FCM_TOKEN_URI', 'https://oauth2.googleapis.com/token'),
+        'timeout' => (int) env('EVERBRANCH_FCM_TIMEOUT', 10),
+    ],
+
     'modern_forestry' => [
-        'support_alert_phone' => env('MODERN_FORESTRY_SUPPORT_ALERT_PHONE', '+18646165468'),
+        'support_alert_phone' => env('MODERN_FORESTRY_SUPPORT_ALERT_PHONE'),
     ],
 
     'stripe' => [
@@ -252,7 +316,7 @@ return [
 
         'scopes' => env(
             'SHOPIFY_SCOPES',
-            'read_products,write_products,read_orders,read_all_orders,read_reports,read_analytics,read_customers,write_customers,read_customer_merge,write_customer_merge,read_discounts,write_discounts,read_pixels,write_pixels,read_customer_events,read_own_subscription_contracts,write_own_subscription_contracts,read_customer_payment_methods,unauthenticated_read_checkouts,unauthenticated_read_collection_listings,unauthenticated_read_product_listings,unauthenticated_read_selling_plans,unauthenticated_write_checkouts'
+            'read_products,write_products,read_orders,read_all_orders,read_reports,read_analytics,read_customers,write_customers,read_customer_merge,write_customer_merge,read_discounts,write_discounts,read_pixels,write_pixels,read_customer_events,read_validations,write_validations,read_own_subscription_contracts,write_own_subscription_contracts,read_customer_payment_methods,unauthenticated_read_checkouts,unauthenticated_read_collection_listings,unauthenticated_read_product_listings,unauthenticated_read_selling_plans,unauthenticated_write_checkouts'
         ),
         // Stores used by default when commands run without an explicit store argument.
         'active_store_keys' => env('SHOPIFY_ACTIVE_STORE_KEYS', 'retail'),
@@ -305,6 +369,10 @@ return [
         'large_search_threshold' => (int) env('GOOGLE_PLACES_LARGE_SEARCH_THRESHOLD', 40),
     ],
 
+    'google_booking' => [
+        'url' => env('GOOGLE_BOOKING_URL'),
+    ],
+
     'pexels' => [
         'key' => env('PEXELS_API_KEY'),
     ],
@@ -319,6 +387,13 @@ return [
 
     'stock_photos' => [
         'provider_order' => env('STOCK_PHOTO_PROVIDER_ORDER', 'pexels,unsplash,pixabay'),
+    ],
+
+    'openai' => [
+        'api_key' => env('OPENAI_API_KEY', env('EVERBRANCH_BUD_AI_API_KEY')),
+        'field_voice_model' => env('EVERBRANCH_FIELD_VOICE_MODEL', 'gpt-transcribe'),
+        'field_voice_provider_cost_micros_per_minute' => (int) env('EVERBRANCH_FIELD_VOICE_PROVIDER_COST_MICROS_PER_MINUTE', 4500),
+        'field_voice_buyer_rate_micros_per_minute' => (int) env('EVERBRANCH_FIELD_VOICE_BUYER_RATE_MICROS_PER_MINUTE', 4500),
     ],
 
     'modern_forestry_app_review' => [

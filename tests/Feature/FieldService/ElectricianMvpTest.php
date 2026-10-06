@@ -117,6 +117,7 @@ test('electrician field service captures lock box notes calendar and searchable 
 
     $this->actingAs($user)
         ->post(route('field-service.jobs.store', ['tenant' => $tenant->slug]), [
+            'create_customer' => true,
             'customer_name' => 'Pat Electric',
             'customer_email' => 'pat@example.com',
             'customer_phone' => '555-111-2222',
@@ -166,6 +167,47 @@ test('electrician field service captures lock box notes calendar and searchable 
         'limit' => 10,
     ]);
     expect(collect($search['results'])->pluck('type'))->toContain('work');
+});
+
+test('job detail uses the full workspace and exposes recoverable completion and deletion actions', function (): void {
+    [$tenant, $user] = electricianTenantAndUser();
+    $job = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'title' => 'Replace failed disconnect',
+        'status' => 'open',
+        'operational_status' => 'active',
+        'status_source' => 'manual',
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('field-service.jobs.show', ['tenant' => $tenant->slug, 'job' => $job]))
+        ->assertOk()
+        ->assertSee('fb-workflow-shell--wide', false)
+        ->assertSee('field-service-job-shell', false)
+        ->assertSeeText('Complete & archive')
+        ->assertSeeText('Delete job');
+
+    $this->actingAs($user)
+        ->post(route('field-service.jobs.transitions', ['tenant' => $tenant->slug, 'job' => $job]), ['action' => 'complete'])
+        ->assertRedirect();
+
+    expect($job->fresh()->operational_status)->toBe('complete')
+        ->and($job->fresh()->archived_at)->not->toBeNull();
+
+    $deletable = FieldServiceJob::query()->create([
+        'tenant_id' => $tenant->id,
+        'title' => 'Duplicate work order',
+        'status' => 'open',
+        'operational_status' => 'scheduled',
+        'status_source' => 'manual',
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('field-service.jobs.transitions', ['tenant' => $tenant->slug, 'job' => $deletable]), ['action' => 'archive'])
+        ->assertRedirect();
+
+    expect($deletable->fresh()->operational_status)->toBe('history')
+        ->and($deletable->fresh()->archived_at)->not->toBeNull();
 });
 
 test('mobile field service exposes lock box notes and tenant scoped note action', function (): void {

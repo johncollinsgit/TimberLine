@@ -1,0 +1,79 @@
+name: Maintenance Carolina Barrel Launch Demo
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Seed, refresh, or remove only the clearly marked Carolina Barrel demo records
+        required: true
+        default: refresh
+        type: choice
+        options:
+          - seed
+          - refresh
+          - remove
+      confirm_demo_action:
+        description: Type CAROLINA-BARREL-DEMO to confirm this maintenance action
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    name: Carolina Barrel Demo Maintenance
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - name: Validate request and secrets
+        env:
+          MODE: ${{ github.event.inputs.mode }}
+          CONFIRM_DEMO_ACTION: ${{ github.event.inputs.confirm_demo_action }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          for var in DEPLOY_HOST DEPLOY_USER DEPLOY_PORT DEPLOY_PATH DEPLOY_SSH_KEY; do
+            if [ -z "${!var}" ]; then
+              echo "::error::Missing required secret: $var"
+              exit 1
+            fi
+          done
+          if [ "$CONFIRM_DEMO_ACTION" != "CAROLINA-BARREL-DEMO" ]; then
+            echo "::error::Enter CAROLINA-BARREL-DEMO to confirm."
+            exit 1
+          fi
+          if ! printf '%s' "$MODE" | grep -Eq '^(seed|refresh|remove)$'; then
+            echo "::error::Invalid demo action."
+            exit 1
+          fi
+
+      - name: Configure SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Run protected Carolina Barrel demo action
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          MODE: ${{ github.event.inputs.mode }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "set -euo pipefail; cd '$DEPLOY_PATH'; php artisan everbranch:prepare-carolina-barrel-launch-demo carolina-barrel-co --mode='$MODE' --apply --confirm='CAROLINA-BARREL-DEMO' --json"

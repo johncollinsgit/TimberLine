@@ -3,9 +3,10 @@
 use App\Models\MarketingProfile;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
+use App\Models\TenantBudSetting;
 use App\Models\User;
 
-test('unified shell surfaces modules and customer hub for tenant-aware marketing users', function () {
+test('unified shell surfaces Branches and customer hub for tenant-aware marketing users', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Navigation Tenant',
         'slug' => 'navigation-tenant',
@@ -32,7 +33,8 @@ test('unified shell surfaces modules and customer hub for tenant-aware marketing
         ->get(route('dashboard'))
         ->assertOk()
         ->assertSeeText('Marketing')
-        ->assertSeeText('Features')
+        ->assertSeeText('Branches')
+        ->assertSee('data-sidebar-key="branches"', false)
         ->assertDontSee('data-sidebar-key="modules"', false)
         ->assertDontSee('data-sidebar-sortable', false)
         ->assertDontSeeText('Shortcuts')
@@ -52,6 +54,23 @@ test('unified shell keeps modules hidden when there is no tenant context', funct
         ->assertDontSeeText('Wiki Sections');
 });
 
+test('every active tenant member can open Branches from the primary sidebar', function (): void {
+    $tenant = Tenant::query()->create(['name' => 'Branch Access Tenant', 'slug' => 'branch-access-tenant']);
+    TenantAccessProfile::query()->create([
+        'tenant_id' => $tenant->id,
+        'plan_key' => 'starter',
+        'operating_mode' => 'direct',
+        'source' => 'test',
+    ]);
+    $user = User::factory()->create(['role' => 'member']);
+    $user->tenants()->attach($tenant->id, ['role' => 'member']);
+
+    $this->actingAs($user)
+        ->get('http://branch-access-tenant.theeverbranch.com/marketing/modules')
+        ->assertOk()
+        ->assertSee('data-sidebar-key="branches"', false);
+});
+
 test('account help uses a readable light support hero', function () {
     $tenant = Tenant::query()->create(['name' => 'Support Tenant', 'slug' => 'support-tenant']);
     TenantAccessProfile::query()->create([
@@ -62,13 +81,22 @@ test('account help uses a readable light support hero', function () {
     ]);
     $user = User::factory()->create(['role' => 'admin']);
     $user->tenants()->attach($tenant->id, ['role' => 'owner']);
+    TenantBudSetting::query()->create(['tenant_id' => $tenant->id, 'status' => 'disabled']);
 
     $this->actingAs($user)
         ->get(route('account-help.index'))
         ->assertOk()
         ->assertSeeText('What do you need help with?')
+        ->assertSeeText('Included')
+        ->assertSeeText('Ask Bud')
+        ->assertDontSeeText('Request Bud activation')
         ->assertSee('from-blue-50', false)
         ->assertDontSee('from-zinc-950', false);
+
+    $this->actingAs($user)
+        ->post(route('account-help.bud.ask'), ['question' => 'wat needs my attention'])
+        ->assertRedirect()
+        ->assertSessionHas('bud_answer', fn (array $answer): bool => str_contains($answer['reply'], 'Customer Loop'));
 });
 
 test('tenant settings stays immediately above workspace guide', function () {
@@ -104,7 +132,7 @@ test('tenant settings stays immediately above workspace guide', function () {
         ->and($settings)->toBeLessThan($guide);
 });
 
-test('marketing modules route opens marketing hub and only marks Features active', function () {
+test('marketing modules route keeps Marketing available and marks the compact Branches group active', function () {
     $tenant = Tenant::query()->create([
         'name' => 'Navigation Tenant',
         'slug' => 'navigation-tenant',
@@ -125,12 +153,14 @@ test('marketing modules route opens marketing hub and only marks Features active
         ->assertOk()
         ->assertSeeText('Marketing')
         ->assertSee('data-sidebar-key="marketing"', false)
-        ->assertSee('data-sidebar-child-key="modules"', false)
+        ->assertSee('data-sidebar-key="branches"', false)
+        ->assertDontSee('data-sidebar-child-key="modules"', false)
         ->assertDontSee('data-sidebar-key="modules"', false);
 
     $html = $response->getContent();
 
-    expect(preg_match('/data-sidebar-child-key="modules"[^>]*mf-admin-subnav-link-active/', $html))->toBe(1)
+    expect(preg_match('/data-sidebar-key="branches"[\s\S]{0,1200}mf-admin-group-summary is-current-group/', $html))->toBe(1)
+        ->and(preg_match('/data-sidebar-child-key="branches-browse"[^>]*mf-admin-subnav-link-active/', $html))->toBe(1)
         ->and(preg_match('/data-sidebar-child-key="customers"[^>]*mf-admin-subnav-link-active/', $html))->toBe(0);
 });
 

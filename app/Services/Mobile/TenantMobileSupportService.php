@@ -6,8 +6,8 @@ use App\Models\Tenant;
 use App\Models\TenantSupportTicket;
 use App\Models\TenantSupportTicketMessage;
 use App\Models\User;
-use App\Services\Tenancy\LandlordOperatorActionAuditService;
 use App\Services\Operations\OperatorAlertService;
+use App\Services\Tenancy\LandlordOperatorActionAuditService;
 use Illuminate\Support\Facades\DB;
 
 class TenantMobileSupportService
@@ -61,8 +61,13 @@ class TenantMobileSupportService
         $this->alerts->notify('support_ticket.created', sprintf('Everbranch: %s ticket from %s — %s', strtoupper((string) $ticket->priority), $tenant->name, str($ticket->subject)->limit(90)), [
             'dedupe_key' => 'support-ticket:'.$ticket->id,
             'tenant_id' => (int) $tenant->id,
+            'tenant_name' => $tenant->name,
+            'tenant_slug' => $tenant->slug,
             'target_type' => 'tenant_support_ticket',
             'target_id' => (int) $ticket->id,
+            'ticket_priority' => $ticket->priority,
+            'ticket_subject' => $ticket->subject,
+            'ticket_source_type' => $ticket->source_type,
         ]);
 
         return $this->show((int) $tenant->id, (int) $ticket->id);
@@ -126,7 +131,9 @@ class TenantMobileSupportService
     {
         $key = 'bud:'.sha1($tenant->id.'|'.$user->id.'|'.mb_strtolower(trim($question)));
         $existing = TenantSupportTicket::withoutGlobalScopes()->where('dedupe_key', $key)->first();
-        if ($existing) return $this->show((int) $tenant->id, (int) $existing->id);
+        if ($existing) {
+            return $this->show((int) $tenant->id, (int) $existing->id);
+        }
 
         return $this->create($tenant, $user, [
             'subject' => 'Bud needs follow-up: '.str($question)->squish()->limit(82),

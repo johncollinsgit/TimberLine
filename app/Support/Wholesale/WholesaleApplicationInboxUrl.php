@@ -50,6 +50,15 @@ class WholesaleApplicationInboxUrl
 
     protected function absoluteUrlForPath(string $path, ?string $tenantSlug = null): ?string
     {
+        $store = \App\Services\Shopify\ShopifyStores::find('wholesale', true);
+        $shop = (string) ($store['shop'] ?? '');
+        $clientId = $store ? (string) app(\App\Services\Shopify\ShopifyEmbeddedAppCredentials::class)->clientIdForStore($store) : '';
+        if (preg_match('/^([a-z0-9-]+)\.myshopify\.com$/', $shop, $matches) && $clientId !== '') {
+            $relative = strtok($path, '?');
+
+            return 'https://admin.shopify.com/store/'.$matches[1].'/apps/'.rawurlencode($clientId).$relative;
+        }
+
         return $this->hostBuilder->canonicalLandlordUrlForPath($path);
     }
 }

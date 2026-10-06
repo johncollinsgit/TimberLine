@@ -8,8 +8,7 @@ class ShopifySessionTokenVerifier
 {
     public function __construct(
         protected ShopifyEmbeddedAppCredentials $embeddedAppCredentials
-    ) {
-    }
+    ) {}
 
     /**
      * @return array{
@@ -89,7 +88,7 @@ class ShopifySessionTokenVerifier
         foreach ($matchingCredentials as $credential) {
             $computedSignature = $this->base64UrlEncode(hash_hmac(
                 'sha256',
-                $encodedHeader . '.' . $encodedPayload,
+                $encodedHeader.'.'.$encodedPayload,
                 $credential['secret'],
                 true
             ));
@@ -112,6 +111,7 @@ class ShopifySessionTokenVerifier
             'signed_query' => [],
             'auth_source' => 'session_token',
             'store' => $store,
+            'shopify_app_client_id' => $audience,
             'shopify_admin_user_id' => $this->normalizedNullableString($payload['sub'] ?? null),
             'shopify_admin_session_id' => $this->normalizedNullableString($payload['sid'] ?? null),
             'shopify_admin_email' => $this->normalizedNullableEmail($payload['email'] ?? null),
@@ -217,7 +217,7 @@ class ShopifySessionTokenVerifier
         }
 
         if (! str_contains($candidate, '://')) {
-            $candidate = 'https://' . $candidate;
+            $candidate = 'https://'.$candidate;
         }
 
         $host = (string) parse_url($candidate, PHP_URL_HOST);

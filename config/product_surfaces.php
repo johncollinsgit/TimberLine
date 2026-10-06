@@ -60,8 +60,8 @@ return [
         ],
         'preview_flow' => [
             [
-                'title' => 'See Everbranch in action',
-                'description' => 'Look at a guided example of customers, work, notes, and next steps living together.',
+                'title' => 'Meet with Everbranch',
+                'description' => 'Walk through the work your business needs to connect, simplify, or stop losing.',
             ],
             [
                 'title' => 'Share what you need',
@@ -83,8 +83,8 @@ return [
                 'href' => '/shopify/reinstall/retail',
             ],
             'demo' => [
-                'label' => 'See Everbranch in action',
-                'href' => '/platform/demo',
+                'label' => 'Request a walkthrough',
+                'href' => '/platform/contact?intent=walkthrough',
             ],
             'start_client' => [
                 'label' => 'Start as a client',
@@ -107,13 +107,13 @@ return [
         'review_email_by_tenant_slug' => [
             'modern-forestry' => env(
                 'WHOLESALE_APPLICATION_REVIEW_EMAIL_MODERN_FORESTRY_WHOLESALE',
-                env('WHOLESALE_APPLICATION_REVIEW_EMAIL', 'modernforestryteam@gmail.com')
+                'info@theforestrystudio.com'
             ),
             // Legacy alias for applications created before the wholesale
             // storefront was correctly modeled as a store on tenant 1.
             'modern-forestry-wholesale' => env(
                 'WHOLESALE_APPLICATION_REVIEW_EMAIL_MODERN_FORESTRY_WHOLESALE',
-                env('WHOLESALE_APPLICATION_REVIEW_EMAIL', 'modernforestryteam@gmail.com')
+                'info@theforestrystudio.com'
             ),
         ],
         'wholesale_storefront_tenant_slug' => env(
@@ -243,11 +243,11 @@ return [
             ],
             'launch_partner' => [
                 'name' => 'Launch Partner',
-                'price_display' => '$59/mo for 6 months',
-                'summary' => 'Limited first-10-businesses partner offer with discounted onboarding and direct feedback access while Everbranch is shaped in the field.',
+                'price_display' => '$89/mo for 6 months',
+                'summary' => 'Limited first-10-businesses partner offer with guided setup and direct feedback access while Everbranch is shaped in the field.',
                 'highlights' => [
-                    '$299 onboarding',
-                    '$149/mo after the first 6 months',
+                    '$499 one-time setup',
+                    '$199/mo after the first 6 months',
                     'Priority partner support and feedback calls',
                 ],
                 'cta' => [
@@ -301,9 +301,9 @@ return [
                 'summary' => 'A shared customer inbox with 5,000 monthly emails. Additional email is $5 per 1,000.',
             ],
             'order_calendar' => [
-                'name' => 'Order Calendar',
+                'name' => 'Workflow Automations',
                 'price_display' => '+$29/mo',
-                'summary' => 'Configurable Asana and ecommerce events on Google Calendar, with testing, run history, retries, and preserved event links.',
+                'summary' => 'Tested, configurable workflows that move Asana and ecommerce activity into Google Calendar, with run history, retries, and preserved links.',
             ],
             'additional_channels' => [
                 'name' => 'Additional Stores/Channels',
@@ -349,7 +349,7 @@ return [
             'eyebrow' => 'One platform. Everything you need.',
             'title' => 'Launch partner pricing',
             'subtitle' => 'Starter includes everything. Growth gives you more capacity.',
-            'savings_note' => 'Launch partners save over $680 in the first 6 months compared with regular Starter onboarding and monthly pricing.',
+            'savings_note' => 'Launch partners save $360 in the first 6 months compared with regular Starter setup and monthly pricing.',
             'recommended' => 'launch_partner',
             'plans' => [
                 'starter' => [
@@ -362,7 +362,7 @@ return [
                 'launch_partner' => [
                     'label' => 'Launch Partner',
                     'descriptor' => 'First 10 businesses',
-                    'price' => '$59',
+                    'price' => '$89',
                     'cadence' => '/mo',
                     'badge' => 'Limited to 10',
                 ],
@@ -375,10 +375,10 @@ return [
                 ],
             ],
             'features' => [
-                ['label' => 'Onboarding', 'starter' => '$499 one-time', 'launch_partner' => '$299 one-time', 'growth' => '$999 one-time'],
-                ['label' => 'First 6 months', 'starter' => '$149/mo', 'launch_partner' => '$59/mo', 'growth' => '$249/mo'],
-                ['label' => 'After 6 months', 'starter' => '$149/mo', 'launch_partner' => '$149/mo', 'growth' => '$249/mo'],
-                ['label' => '6-month total', 'starter' => '$1,393', 'launch_partner' => '$653', 'growth' => '$2,493'],
+                ['label' => 'Setup', 'starter' => '$499 one-time', 'launch_partner' => '$499 one-time', 'growth' => '$999 one-time'],
+                ['label' => 'First 6 months', 'starter' => '$149/mo', 'launch_partner' => '$89/mo', 'growth' => '$249/mo'],
+                ['label' => 'After 6 months', 'starter' => '$149/mo', 'launch_partner' => '$199/mo', 'growth' => '$249/mo'],
+                ['label' => '6-month total', 'starter' => '$1,393', 'launch_partner' => '$1,033', 'growth' => '$2,493'],
                 ['label' => 'Team members', 'starter' => 'Up to 3 users', 'launch_partner' => 'Up to 3 users', 'growth' => 'Unlimited users'],
                 ['label' => 'Email contacts', 'starter' => 'Up to 2,000 contacts', 'launch_partner' => 'Up to 2,000 contacts', 'growth' => 'Up to 15,000 contacts'],
                 ['label' => 'Automation workflows', 'starter' => 'Basic automations', 'launch_partner' => 'Basic automations', 'growth' => 'Advanced automations'],
@@ -546,7 +546,7 @@ return [
             'workflow_automations' => [
                 'key' => 'workflow_automations',
                 'module_key' => 'workflow_automations',
-                'title' => 'Order Calendar',
+                'title' => 'Workflow Automations',
                 'description' => 'Turn connected work and orders into configurable Google Calendar events with dependable run history.',
                 'category' => 'marketing',
                 'availability' => 'available',

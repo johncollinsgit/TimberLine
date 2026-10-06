@@ -11,6 +11,7 @@ use App\Models\ShopifyImportException;
 use App\Models\WholesaleCustomScent;
 use App\Services\Marketing\MarketingAttributionSourceMetaBuilder;
 use App\Services\Marketing\StorefrontOrderLinkageService;
+use App\Services\Mobile\ModernForestryMobileBagReminderService;
 use App\Services\Shipping\BusinessDayCalculator;
 use App\Support\Shopify\InfiniteOptionsParser;
 use Carbon\CarbonImmutable;
@@ -21,7 +22,8 @@ class ShopifyOrderIngestor
     public function __construct(
         protected BusinessDayCalculator $calculator,
         protected MarketingAttributionSourceMetaBuilder $attributionSourceMetaBuilder,
-        protected StorefrontOrderLinkageService $storefrontOrderLinkageService
+        protected StorefrontOrderLinkageService $storefrontOrderLinkageService,
+        protected ModernForestryMobileBagReminderService $bagReminderService
     ) {}
 
     /**
@@ -134,6 +136,11 @@ class ShopifyOrderIngestor
             $order->billing_name = $orderData['billing_address']['name'] ?? null;
             $order->shipping_company = $orderData['shipping_address']['company'] ?? null;
             $order->shipping_address1 = $orderData['shipping_address']['address1'] ?? null;
+            $order->shipping_city = $orderData['shipping_address']['city'] ?? null;
+            $order->shipping_province = $orderData['shipping_address']['province'] ?? null;
+            $order->shipping_province_code = $orderData['shipping_address']['province_code'] ?? null;
+            $order->shipping_zip = $orderData['shipping_address']['zip'] ?? null;
+            $order->shipping_country_code = $orderData['shipping_address']['country_code'] ?? null;
             $order->billing_company = $orderData['billing_address']['company'] ?? null;
             $order->billing_address1 = $orderData['billing_address']['address1'] ?? null;
             $order->shopify_customer_id = isset($orderData['customer']['id']) && $orderData['customer']['id'] !== null
@@ -242,7 +249,45 @@ class ShopifyOrderIngestor
             )->afterCommit();
         }
 
+        if ($this->isConfirmedPurchase($orderData) && $resolvedTenantId !== null) {
+            $this->bagReminderService->completeBagsForConfirmedPurchase(
+                $resolvedTenantId,
+                $this->customerEmails($orderData),
+                CarbonImmutable::parse($orderData['processed_at'] ?? $orderData['created_at'] ?? now()),
+                $shopifyOrderId
+            );
+        }
+
         return $summary;
+    }
+
+    /** @param array<string,mixed> $orderData */
+    protected function isConfirmedPurchase(array $orderData): bool
+    {
+        if (! empty($orderData['cancelled_at'])) {
+            return false;
+        }
+
+        return in_array(strtolower(trim((string) ($orderData['financial_status'] ?? ''))), [
+            'paid',
+            'partially_paid',
+            'partially_refunded',
+            'refunded',
+        ], true);
+    }
+
+    /**
+     * @param  array<string,mixed>  $orderData
+     * @return array<int,string|null>
+     */
+    protected function customerEmails(array $orderData): array
+    {
+        return [
+            $orderData['email'] ?? null,
+            data_get($orderData, 'customer.email'),
+            data_get($orderData, 'shipping_address.email'),
+            data_get($orderData, 'billing_address.email'),
+        ];
     }
 
     /**
@@ -268,7 +313,7 @@ class ShopifyOrderIngestor
                 continue;
             }
             $isCandleClub = $this->isCandleClubLineItem($line);
-            if ($this->isBundleLineItem($line)) {
+            if ($this->isBundleLineItem($line, $parser)) {
                 $bundleLines = $this->expandBundleLineItem($line, $parser, $scentIndex, $storeKey, $orderData, $tenantId);
                 foreach ($bundleLines as $bundleLine) {
                     $key = implode('|', [
@@ -510,12 +555,16 @@ class ShopifyOrderIngestor
     /**
      * @param  array<string, mixed>  $line
      */
-    protected function isBundleLineItem(array $line): bool
+    protected function isBundleLineItem(array $line, ?InfiniteOptionsParser $parser = null): bool
     {
         $title = strtolower((string) ($line['title'] ?? ''));
         $productType = strtolower((string) ($line['product_type'] ?? ''));
 
-        return str_contains($title, 'bundle') || str_contains($productType, 'bundle');
+        if (str_contains($title, 'bundle') || str_contains($productType, 'bundle')) {
+            return true;
+        }
+
+        return count(($parser ?? new InfiniteOptionsParser)->parseBundleSelections($line)) > 1;
     }
 
     /**
@@ -679,13 +728,22 @@ class ShopifyOrderIngestor
     {
         $title = strtolower((string) ($line['title'] ?? ''));
         $variantTitle = strtolower((string) ($line['variant_title'] ?? ''));
+        $sizeText = trim($title.' '.$variantTitle);
+
+        if (str_contains($sizeText, 'wax melt')) {
+            return 'wax-melts';
+        }
+
+        if (str_contains($sizeText, 'room spray')) {
+            return 'room-sprays';
+        }
 
         $baseSize = null;
-        if (str_contains($title, '16oz') || str_contains($title, '16 oz')) {
+        if (str_contains($sizeText, '16oz') || str_contains($sizeText, '16 oz')) {
             $baseSize = '16oz';
-        } elseif (str_contains($title, '8oz') || str_contains($title, '8 oz')) {
+        } elseif (str_contains($sizeText, '8oz') || str_contains($sizeText, '8 oz')) {
             $baseSize = '8oz';
-        } elseif (str_contains($title, '4oz') || str_contains($title, '4 oz')) {
+        } elseif (str_contains($sizeText, '4oz') || str_contains($sizeText, '4 oz')) {
             $baseSize = '4oz';
         }
 

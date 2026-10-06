@@ -19,11 +19,9 @@
         @endif
         @if (session('proposal_access'))
             <div class="agreement-access-card">
-                <h2 class="font-semibold text-zinc-950">Copy access details now</h2>
+                <h2 class="font-semibold text-zinc-950">Your private agreement link</h2>
                 <p class="mt-2 break-all text-sm"><strong>URL:</strong> {{ session('proposal_access.url') }}</p>
-                <p class="mt-1 break-all text-sm"><strong>Password:</strong> {{ session('proposal_access.password') }}
-                </p>
-                <p class="mt-2 text-xs text-zinc-600">The plaintext password is not stored and will not be shown again.</p>
+                <p class="mt-2 text-xs text-zinc-600">This link opens the agreement directly. Share only with the intended recipients.</p>
             </div>
         @endif
         <section class="agreement-hero">
@@ -31,7 +29,7 @@
                 <div>
                     <p class="agreement-eyebrow">A simple, secure handoff</p>
                     <h2 class="mt-2 text-3xl font-semibold tracking-tight text-zinc-950 sm:text-4xl">Send this agreement beautifully.</h2>
-                    <p class="mt-3 max-w-2xl text-base leading-7 text-zinc-600">Choose email or text. Every recipient gets the same private link and one-time access code.</p>
+                    <p class="mt-3 max-w-2xl text-base leading-7 text-zinc-600">Choose email or text. Every recipient gets the same private link that opens the agreement directly.</p>
                 </div>
                 <div class="agreement-status-orb">
                     <span class="agreement-status-dot"></span>
@@ -58,13 +56,12 @@
                         @csrf
                         <div class="flex items-start gap-3">
                             <span class="agreement-channel-icon">@</span>
-                            <div><h3 class="font-semibold text-zinc-950">Send by email</h3><p class="mt-1 text-sm text-zinc-500">A private invitation with the link and access code.</p></div>
+                            <div><h3 class="font-semibold text-zinc-950">Send by email</h3><p class="mt-1 text-sm text-zinc-500">A private invitation with a link that opens the agreement directly.</p></div>
                         </div>
                         <div class="mt-5 space-y-3">
                             <label class="agreement-field-label" for="agreement-recipient-email">Recipient email</label>
                             <input id="agreement-recipient-email" name="recipient_email" type="email" value="{{ old('recipient_email', $agreement->recipient_email ?: $ownerEmail) }}" required placeholder="owner@example.com" class="agreement-input">
                             <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem]">
-                                <div><label class="agreement-field-label" for="agreement-password">Access code <span>optional</span></label><input id="agreement-password" name="password" placeholder="Create a 10+ character code" class="agreement-input"></div>
                                 <div><label class="agreement-field-label" for="agreement-email-expires">Expires</label><input id="agreement-email-expires" name="expires_in_days" type="number" min="1" max="90" value="14" class="agreement-input"></div>
                             </div>
                             <button class="agreement-primary-button">Send agreement email</button>
@@ -75,7 +72,7 @@
                         @csrf
                         <div class="flex items-start gap-3">
                             <span class="agreement-channel-icon agreement-channel-icon-text">✦</span>
-                            <div><h3 class="font-semibold text-zinc-950">Send by text</h3><p class="mt-1 text-sm text-zinc-500">One private link and code, sent to the people you choose.</p></div>
+                            <div><h3 class="font-semibold text-zinc-950">Send by text</h3><p class="mt-1 text-sm text-zinc-500">One private link, sent to the people you choose.</p></div>
                         </div>
                         <div class="mt-5 space-y-3">
                             <label class="agreement-field-label" for="agreement-recipient-phone">Mobile numbers <span>separate with commas</span></label>
@@ -88,7 +85,7 @@
                             <div class="agreement-message-composer">
                                 <div class="flex items-center justify-between gap-3"><label class="agreement-field-label" for="agreement-message-intro">Text message <span>edit before sending</span></label><span id="agreement-message-count" class="text-xs text-zinc-500"></span></div>
                                 <textarea id="agreement-message-intro" name="message_intro" rows="3" maxlength="240" class="agreement-input agreement-message-input" data-default-message="Hi! {{ $agreement->tenant->name }}: your Everbranch workspace is ready." placeholder="Hi! {{ $agreement->tenant->name }}: your Everbranch workspace is ready.">{{ old('message_intro', $agreement->agreement_sms_message) }}</textarea>
-                                <p class="mt-2 text-xs leading-5 text-zinc-500">Use <code>&#123;&#123;tenant_name&#125;&#125;</code> to insert the workspace name. The secure link and one-time code are always added separately.</p>
+                                <p class="mt-2 text-xs leading-5 text-zinc-500">Use <code>&#123;&#123;tenant_name&#125;&#125;</code> to insert the workspace name. The secure link is added automatically.</p>
                                 <label class="agreement-field-label mt-4" for="agreement-message-image">Optional image <span>sends as MMS</span></label>
                                 <input id="agreement-message-image" name="image_url" type="url" inputmode="url" value="{{ old('image_url', $agreement->agreement_mms_image_url) }}" placeholder="https://…/service-card.jpg" class="agreement-input">
                                 <p class="mt-2 text-xs leading-5 text-zinc-500">Paste a public image URL. You can see it before it is sent; remove the URL to send a normal text only.</p>
@@ -96,10 +93,10 @@
                                     <div class="agreement-phone-preview-bar"><span></span><strong>Message preview</strong><span>•••</span></div>
                                     <img id="agreement-message-image-preview" class="hidden" alt="Selected message image preview">
                                     <div id="agreement-message-preview" class="agreement-message-bubble"></div>
-                                    <p class="agreement-preview-note">The live link and code are inserted only when you send.</p>
+                                    <p class="agreement-preview-note">The live link is inserted when you send.</p>
                                 </div>
                             </div>
-                            <button class="agreement-text-button">Text agreement link + code</button>
+                            <button class="agreement-text-button">Text agreement link</button>
                         </div>
                     </form>
                 </div>
@@ -259,7 +256,7 @@
             const placeholderLink = 'https://evergrovesoftware.com/a/{{ $agreement->id }}/••••••••••••••••';
             const refresh = () => {
                 const intro = (text.value.trim() || text.dataset.defaultMessage).replaceAll(tenantToken, tenant);
-                preview.textContent = intro + ' Open, approve & pay: ' + placeholderLink + ' Code: ••••••••••';
+                preview.textContent = intro + ' Open, approve & pay: ' + placeholderLink;
                 count.textContent = `${intro.length}/240`;
                 const url = image.value.trim();
                 imagePreview.classList.toggle('hidden', !url);

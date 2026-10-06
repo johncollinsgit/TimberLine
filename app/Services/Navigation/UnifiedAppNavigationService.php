@@ -6,6 +6,7 @@ use App\Models\MappingException;
 use App\Models\ShopifyImportRun;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\FieldService\FieldServiceAccessService;
 use App\Services\Tenancy\AuthenticatedTenantContextResolver;
 use App\Services\Tenancy\TenantBrandProfileService;
 use App\Services\Tenancy\TenantExperienceProfileService;
@@ -28,6 +29,7 @@ class UnifiedAppNavigationService
         protected TenantHostBuilder $tenantHostBuilder,
         protected ?TenantFinancialAccess $financialAccess = null,
         protected ?TenantBrandProfileService $brandProfileService = null,
+        protected ?FieldServiceAccessService $fieldServiceAccess = null,
     ) {}
 
     /**
@@ -48,23 +50,32 @@ class UnifiedAppNavigationService
         $tenantId = $tenant ? (int) $tenant->id : null;
         $profile = $this->experienceProfileService->forTenant($tenantId, $user, $tenant);
 
+        if (($profile['workspace_focus'] ?? null) === 'website_sales' && $tenant && $user) {
+            return $this->buildWebsiteSalesShell($request, $tenant, $user, $profile);
+        }
+
         $isAdmin = $user?->isAdmin() ?? true;
         $isManager = $user?->isManager() ?? false;
         $isPouring = $user?->isPouring() ?? false;
-        $canAccessOps = $isAdmin || $isManager;
+        $canAccessOps = $isAdmin || $isManager
+            || ($user instanceof User && $tenant instanceof Tenant && ($this->fieldServiceAccess?->canManageJobs($user, $tenant) ?? false));
         $roleCanAccessMarketing = $user?->canAccessMarketing() ?? false;
 
         $moduleStates = $tenantId !== null
-            ? (array) ($this->moduleAccessResolver->resolveForTenant($tenantId, ['birthdays', 'customers', 'campaigns', 'wishlist', 'reporting', 'rewards', 'reviews', 'field_service', 'class_scheduling', 'plant_inventory', 'messaging', 'email', 'workflow_automations', 'accounting_command_center'])['modules'] ?? [])
+            ? (array) ($this->moduleAccessResolver->resolveForTenant($tenantId, ['birthdays', 'customers', 'campaigns', 'wishlist', 'reporting', 'rewards', 'reviews', 'field_service', 'fleet_tracking', 'class_scheduling', 'plant_inventory', 'messaging', 'email', 'workflow_automations', 'managed_website', 'accounting_command_center'])['modules'] ?? [])
             : [];
         $fieldServiceEnabled = $this->moduleStateEnabled($moduleStates['field_service'] ?? null);
+        $fleetTrackingEnabled = $this->moduleStateEnabled($moduleStates['fleet_tracking'] ?? null);
         $classSchedulingEnabled = $this->moduleStateEnabled($moduleStates['class_scheduling'] ?? null);
         $plantInventoryEnabled = $this->moduleStateEnabled($moduleStates['plant_inventory'] ?? null);
         $customersEnabled = $this->moduleStateEnabled($moduleStates['customers'] ?? null);
         $messagingRelevant = $this->moduleStateRelevant($moduleStates['messaging'] ?? null);
         $emailEnabled = $this->moduleStateEnabled($moduleStates['email'] ?? null);
         $workflowAutomationsEnabled = $this->moduleStateEnabled($moduleStates['workflow_automations'] ?? null);
+        $managedWebsiteEnabled = $this->moduleStateEnabled($moduleStates['managed_website'] ?? null);
         $accountingEnabled = $this->moduleStateEnabled($moduleStates['accounting_command_center'] ?? null);
+        $isCollinsWorkspace = $tenant instanceof Tenant
+            && in_array(strtolower(trim((string) $tenant->slug)), ['collins-electric', 'collins-upstate-electric'], true);
         $marketingHeavyEnabled = collect(['birthdays', 'campaigns', 'wishlist', 'rewards', 'reviews'])
             ->contains(fn (string $key): bool => $this->moduleStateEnabled($moduleStates[$key] ?? null));
         $isFlagshipTenant = $this->isFlagshipTenant($tenant);
@@ -77,17 +88,50 @@ class UnifiedAppNavigationService
         $items = [];
         $items[] = ['key' => 'home', 'icon' => 'home', 'href' => $homeHref, 'label' => 'Home', 'current' => request()->routeIs('dashboard')];
 
+        if ($tenant && $user && ($canAccessOps || $roleCanAccessMarketing)
+            && $user->tenants()->whereKey($tenant->id)->wherePivot('membership_active', true)->exists()
+            && $tenant->clientProjects()->where('metadata->checklist_enabled', true)->exists()) {
+            $items[] = ['key' => 'project-checklist', 'icon' => 'clipboard-document-check',
+                'href' => route('client.projects.checklist', ['tenant' => $tenant->slug]),
+                'label' => 'Launch checklist', 'current' => request()->routeIs('client.projects.checklist*')];
+        }
+
+        // Enabled branches are collected and rendered together near Settings.
+        // Core work remains the first scanning destination in the sidebar.
+        $branchChildren = [];
         if ($emailEnabled && $tenantId !== null && Route::has('mail.index')) {
-            $items[] = ['key' => 'mail', 'icon' => 'envelope', 'href' => route('mail.index'), 'label' => 'Mail', 'current' => request()->routeIs('mail.*')];
+            $branchChildren[] = ['key' => 'branch-mail', 'icon' => 'envelope', 'href' => route('mail.index'), 'label' => 'Mail', 'current' => request()->routeIs('mail.*')];
         } elseif ($tenantId !== null && $isAdmin && Route::has('mail.setup')) {
-            $items[] = ['key' => 'mail-setup', 'icon' => 'envelope', 'href' => route('mail.setup'), 'label' => 'Set up Mail', 'current' => request()->routeIs('mail.setup*')];
+            $branchChildren[] = ['key' => 'branch-mail-setup', 'icon' => 'envelope', 'href' => route('mail.setup'), 'label' => 'Set up Mail', 'current' => request()->routeIs('mail.setup*')];
+        }
+        $websiteCommerceRoute = request()->routeIs(
+            'managed-website.products.*',
+            'managed-website.collections.*',
+            'managed-website.customers.*',
+            'managed-website.orders.*',
+            'managed-website.commerce.*',
+            'managed-website.shipments.*'
+        );
+        if (($canAccessOps || $roleCanAccessMarketing) && $managedWebsiteEnabled && Route::has('managed-website.index')) {
+            $branchChildren[] = [
+                'key' => 'branch-website',
+                'icon' => 'globe-alt',
+                'href' => route('managed-website.index'),
+                'label' => 'Website',
+                'current' => request()->routeIs('managed-website.*') && ! $websiteCommerceRoute,
+            ];
+            if (Route::has('managed-website.products.index')) {
+                foreach (['products' => ['Products', 'shopping-bag'], 'collections' => ['Collections', 'squares-2x2'], 'customers' => ['Customers', 'users'], 'orders' => ['Orders', 'clipboard-document-list']] as $entity => [$label, $icon]) {
+                    $branchChildren[] = ['key' => 'branch-website-'.$entity, 'icon' => $icon, 'href' => route('managed-website.'.$entity.'.index'), 'label' => $label, 'current' => request()->routeIs('managed-website.'.$entity.'.*')];
+                }
+            }
         }
 
         if ($canAccessMarketing) {
             $birthdaysRelevant = $tenantId === null
                 || $this->moduleStateRelevant($moduleStates['birthdays'] ?? null);
 
-            $marketingChildren = $this->marketingNavigationChildren($tenantId !== null, $birthdaysRelevant);
+            $marketingChildren = $this->marketingNavigationChildren($tenantId !== null, $birthdaysRelevant, $tenantId !== null && Route::has('customer-loop.index'));
             $marketingCurrent = collect($marketingChildren)->contains(
                 fn (array $child): bool => (bool) ($child['current'] ?? false)
             );
@@ -100,14 +144,15 @@ class UnifiedAppNavigationService
                 'current' => $marketingCurrent,
                 'children' => $marketingChildren,
             ];
+
         }
 
         if (($canAccessOps || $roleCanAccessMarketing) && $workflowAutomationsEnabled && Route::has('workflows.index')) {
-            $items[] = [
-                'key' => 'workflow-automations',
+            $branchChildren[] = [
+                'key' => 'branch-workflow-automations',
                 'icon' => 'bolt',
                 'href' => route('workflows.index'),
-                'label' => (string) config('module_catalog.modules.workflow_automations.display_name', 'Order Calendar'),
+                'label' => 'Automation studio',
                 'current' => request()->routeIs('workflows.*'),
             ];
         }
@@ -145,6 +190,9 @@ class UnifiedAppNavigationService
                     ['key' => 'field-service-materials', 'icon' => 'archive-box', 'href' => route('field-service.resources').'#inventory', 'label' => 'Inventory', 'current' => false],
                     ['key' => 'field-service-vehicles', 'icon' => 'truck', 'href' => route('field-service.resources').'#vans', 'label' => 'Work vans', 'current' => false],
                 ];
+                if ($fleetTrackingEnabled && Route::has('field-service.fleet-tracking.index')) {
+                    $fieldServiceChildren[] = ['key' => 'field-service-fleet-tracker', 'icon' => 'map-pin', 'href' => route('field-service.fleet-tracking.index'), 'label' => 'Fleet Tracker', 'current' => request()->routeIs('field-service.fleet-tracking.*')];
+                }
 
                 $workItems[] = [
                     'key' => 'field-service',
@@ -166,7 +214,11 @@ class UnifiedAppNavigationService
                 ];
             }
 
-            if ($accountingEnabled && $tenant && $user && $this->financialAccess()->allows($user, $tenant) && Route::has('accounting.index')) {
+            if ($user && config('trajectory.enabled') && app(\App\Services\Trajectory\FinanceAccess::class)->spaces($user)->isNotEmpty()) {
+                $workItems[] = ['key' => 'trajectory', 'icon' => 'chart-bar', 'href' => route('trajectory.index'), 'label' => 'Trajectory', 'current' => request()->routeIs('trajectory.*')];
+            }
+
+            if (! $isCollinsWorkspace && $accountingEnabled && $tenant && $user && $this->financialAccess()->allows($user, $tenant) && Route::has('accounting.index')) {
                 $workItems[] = [
                     'key' => 'accounting-command-center',
                     'icon' => 'chart-bar',
@@ -208,11 +260,31 @@ class UnifiedAppNavigationService
             }
 
             $prioritizeGrowth = in_array($profile['use_case_profile'] ?? 'ops', ['marketing', 'crm', 'hybrid'], true);
+            $primaryItemCount = 1;
             $items = $prioritizeGrowth
                 ? array_merge($items, $opsItems)
-                : array_merge(array_slice($items, 0, 1), $opsItems, array_slice($items, 1));
+                : array_merge(array_slice($items, 0, $primaryItemCount), $opsItems, array_slice($items, $primaryItemCount));
         } elseif ($isPouring) {
             $items[] = ['key' => 'pouring', 'icon' => 'beaker', 'href' => route('pouring.index'), 'label' => 'Pouring', 'current' => request()->routeIs('pouring.*')];
+        }
+
+        if ($tenantId !== null && Route::has('marketing.modules')) {
+            $branchChildren[] = [
+                'key' => 'branches-browse',
+                'icon' => 'squares-plus',
+                'href' => route('marketing.modules'),
+                'label' => 'Browse branches',
+                'current' => request()->routeIs('marketing.modules*'),
+            ];
+            $branchCurrent = collect($branchChildren)->contains(fn (array $item): bool => (bool) ($item['current'] ?? false));
+            $items[] = [
+                'key' => 'branches',
+                'icon' => 'squares-2x2',
+                'href' => route('marketing.modules'),
+                'label' => 'Branches',
+                'current' => $branchCurrent,
+                'children' => $branchChildren,
+            ];
         }
 
         if ($canAccessOps) {
@@ -255,6 +327,47 @@ class UnifiedAppNavigationService
         ];
     }
 
+    protected function buildWebsiteSalesShell(Request $request, Tenant $tenant, User $user, array $profile): array
+    {
+        $items = [];
+        $add = function (string $key, string $label, string $route, string $icon) use (&$items, $tenant, $request): void {
+            $items[] = ['key' => $key, 'label' => $label, 'icon' => $icon,
+                'href' => route($route, ['tenant' => $tenant->slug]), 'current' => $request->routeIs($route)];
+        };
+        $membership = $user->tenants()->whereKey($tenant->id)->wherePivot('membership_active', true)->first();
+        $canWork = $user->is_active && $membership && in_array($membership->pivot->role, ['admin', 'owner', 'tenant_owner', 'manager', 'marketing_manager'], true)
+            && ($user->isAdmin() || $user->isManager() || $user->canAccessMarketing() || \App\Support\Auth\HomeRedirect::isPlatformOperator($user));
+        if ($canWork) {
+            $add('home', 'Home', 'dashboard', 'home');
+            if ($tenant->clientProjects()->where('metadata->checklist_enabled', true)->exists()) {
+                $add('project-checklist', 'Launch checklist', 'client.projects.checklist', 'clipboard-document-check');
+            }
+            if ($this->moduleAccessResolver->canAccess((int) $tenant->id, 'managed_website')) {
+                $add('website', 'Website', 'managed-website.index', 'globe-alt');
+                $add('website-products', 'Products', 'managed-website.products.index', 'shopping-bag');
+                $add('website-collections', 'Collections', 'managed-website.collections.index', 'squares-2x2');
+                $add('website-customers', 'Customers', 'managed-website.customers.index', 'users');
+                $add('website-orders', 'Orders', 'managed-website.orders.index', 'clipboard-document-list');
+                $add('website-leads', 'Inquiries', 'managed-website.leads.index', 'inbox');
+                $add('sales-channels', 'Sales channels', 'sales-channels.index', 'chart-bar');
+            }
+            $add('user-agreements', 'User Agreements', 'agreements.index', 'document-check');
+        }
+        $add('account-help', 'Account Help', 'account-help.index', 'lifebuoy');
+        $quickActions = array_map(fn (array $item): array => [
+            'label' => $item['label'], 'description' => 'Open '.$item['label'].'.', 'href' => $item['href'],
+        ], array_values(array_filter($items, fn (array $item): bool => in_array($item['key'], ['project-checklist', 'website', 'website-products'], true))));
+
+        return [
+            'tenant' => $tenant, 'tenant_id' => $tenant->id, 'experience_profile' => $profile,
+            'items' => $this->normalizeNavigationItems($items), 'admin_sub_items' => [],
+            'marketing_sub_groups' => [], 'birthday_sub_groups' => [], 'wiki_sections' => [],
+            'quick_actions' => $quickActions, 'ops_attention' => ['unresolved_exceptions' => 0, 'latest_run' => null],
+            'current_console' => $this->currentConsolePayload($tenant, $profile),
+            'console_switches' => $this->consoleSwitches($user, $tenant, false), 'shell_context' => 'tenant',
+        ];
+    }
+
     protected function financialAccess(): TenantFinancialAccess
     {
         return $this->financialAccess ??= app(TenantFinancialAccess::class);
@@ -265,8 +378,9 @@ class UnifiedAppNavigationService
      */
     protected function buildLandlordShell(Request $request, ?User $user = null): array
     {
-        $items = [
-            ['key' => 'home', 'icon' => 'home', 'href' => route('landlord.dashboard'), 'label' => 'Home', 'current' => $request->routeIs('landlord.dashboard')],
+        $homeItem = ['key' => 'home', 'icon' => 'home', 'href' => route('landlord.dashboard'), 'label' => 'Home', 'current' => $request->routeIs('landlord.dashboard')];
+
+        $landlordItems = [
             [
                 'key' => 'workspaces',
                 'icon' => 'building-office-2',
@@ -292,6 +406,10 @@ class UnifiedAppNavigationService
             ['key' => 'developer', 'icon' => 'command-line', 'href' => route('landlord.developer'), 'label' => 'Developer', 'current' => $request->routeIs('landlord.developer')],
             ['key' => 'settings', 'icon' => 'cog-6-tooth', 'href' => route('landlord.dashboard'), 'label' => 'Settings', 'current' => false],
         ];
+        // Operator work follows the same scanning order as tenant work:
+        // live work first, branch/configuration tools next, settings last.
+        // Do not alphabetize this list; it makes urgent setup work harder to find.
+        $items = [$homeItem, ...$landlordItems];
 
         return [
             'tenant' => null,
@@ -380,7 +498,10 @@ class UnifiedAppNavigationService
         }
 
         $memberships = $user->tenants()
-            ->with(['setupStatus:id,tenant_id,landlord_review_status'])
+            ->with([
+                'setupStatus:id,tenant_id,landlord_review_status',
+                'managedSite:id,tenant_id,status,public_enabled,subdomain',
+            ])
             ->orderBy('tenants.name')
             ->get(['tenants.id', 'tenants.name', 'tenants.slug']);
 
@@ -391,9 +512,16 @@ class UnifiedAppNavigationService
 
             $tenantPath = $this->tenantConsolePath($tenant);
             $tenantHost = filled($tenant->slug) ? $this->tenantHostBuilder->hostForSlug((string) $tenant->slug) : null;
-            $tenantHref = $tenantHost !== null
-                ? ($this->tenantHostBuilder->urlForHostPath($tenantHost, $tenantPath) ?? $tenantPath)
-                : $tenantPath;
+            $site = $tenant->managedSite;
+            $tenantHostServesWebsite = $site !== null
+                && $site->status === 'published'
+                && $site->public_enabled
+                && (string) $site->subdomain === (string) $tenant->slug;
+            $tenantHref = $tenantHostServesWebsite
+                ? ($this->tenantHostBuilder->canonicalLandlordUrlForPath($tenantPath) ?? $tenantPath)
+                : ($tenantHost !== null
+                    ? ($this->tenantHostBuilder->urlForHostPath($tenantHost, $tenantPath) ?? $tenantPath)
+                    : $tenantPath);
 
             $switches[] = [
                 'key' => 'tenant-'.$tenant->id,
@@ -419,7 +547,7 @@ class UnifiedAppNavigationService
     {
         $tenant->loadMissing('setupStatus');
 
-        $path = (string) ($tenant->setupStatus?->landlord_review_status ?? '') === 'reviewed'
+        $path = ($tenant->setupStatus === null || (string) $tenant->setupStatus->landlord_review_status === 'reviewed')
             ? route('dashboard', absolute: false)
             : route('app.start', absolute: false);
 
@@ -536,6 +664,24 @@ class UnifiedAppNavigationService
             ->all();
     }
 
+    /** @param array<int,array<string,mixed>> $items @return array<int,array<string,mixed>> */
+    protected function pinWebsiteProductsBelowWebsite(array $items): array
+    {
+        $products = collect($items)->first(fn (array $item): bool => (string) ($item['key'] ?? '') === 'website-products');
+        if (! is_array($products)) {
+            return $items;
+        }
+
+        $withoutProducts = collect($items)->reject(fn (array $item): bool => (string) ($item['key'] ?? '') === 'website-products')->values()->all();
+        $websiteIndex = collect($withoutProducts)->search(fn (array $item): bool => (string) ($item['key'] ?? '') === 'managed-website');
+        if ($websiteIndex === false) {
+            return $items;
+        }
+        array_splice($withoutProducts, ((int) $websiteIndex) + 1, 0, [$products]);
+
+        return $withoutProducts;
+    }
+
     protected function normalizeSidebarOrderKey(string $key): string
     {
         $normalized = strtolower(trim($key));
@@ -574,8 +720,8 @@ class UnifiedAppNavigationService
             $items = $isAdmin ? [[
                 'key' => 'users',
                 'label' => 'Team Access',
-                'href' => route('admin.index', ['tab' => 'users']),
-                'current' => $adminActive && $adminTab === 'users',
+                'href' => route('admin.users'),
+                'current' => request()->routeIs('admin.users') || ($adminActive && $adminTab === 'users'),
             ]] : [];
 
             if ($canCustomizeWorkspace && Route::has('tenant.brand.edit')) {
@@ -600,8 +746,8 @@ class UnifiedAppNavigationService
             ...($isAdmin ? [[
                 'key' => 'users',
                 'label' => 'Team Access',
-                'href' => route('admin.index', ['tab' => 'users']),
-                'current' => $adminActive && $adminTab === 'users',
+                'href' => route('admin.users'),
+                'current' => request()->routeIs('admin.users') || ($adminActive && $adminTab === 'users'),
             ]] : []),
             [
                 'key' => 'imports',
@@ -658,18 +804,14 @@ class UnifiedAppNavigationService
     /**
      * @return array<int,array{key:string,label:string,href:string,current:bool}>
      */
-    protected function marketingNavigationChildren(bool $includeFeatures, bool $includeBirthdays): array
+    protected function marketingNavigationChildren(bool $includeFeatures, bool $includeBirthdays, bool $includeCustomerLoop = false): array
     {
         $items = collect(MarketingSectionRegistry::sections())
-            ->reject(fn (array $section, string $key): bool => $key === 'modules' && ! $includeFeatures)
+            ->reject(fn (array $section, string $key): bool => $key === 'modules')
             ->map(function (array $section, string $key): array {
-                $label = $key === 'modules'
-                    ? 'Features'
-                    : (string) $section['label'];
-
                 return [
                     'key' => $key,
-                    'label' => $label,
+                    'label' => (string) $section['label'],
                     'href' => route($section['route']),
                     'current' => request()->routeIs($section['route']) || request()->routeIs($section['route'].'.*'),
                 ];
@@ -685,8 +827,18 @@ class UnifiedAppNavigationService
             ]);
         }
 
+        if ($includeCustomerLoop) {
+            $items->push([
+                'key' => 'customer-loop',
+                'label' => 'Customer Loop',
+                'href' => route('customer-loop.index'),
+                'current' => request()->routeIs('customer-loop.*'),
+            ]);
+        }
+
         $preferredOrder = [
             'overview',
+            'customer-loop',
             'customers',
             'birthdays',
             'modules',
@@ -837,7 +989,7 @@ class UnifiedAppNavigationService
             $actions[] = [
                 'label' => 'Invite your team',
                 'description' => 'Add people who need access to this workspace.',
-                'href' => route('admin.index', ['tab' => 'users']),
+                'href' => route('admin.users'),
             ];
         } elseif ($canAccessOps) {
             $actions[] = [

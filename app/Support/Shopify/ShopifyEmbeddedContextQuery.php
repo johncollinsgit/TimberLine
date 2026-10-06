@@ -16,6 +16,10 @@ class ShopifyEmbeddedContextQuery
         'id_token',
         'locale',
         'session',
+        // Shopify Admin now includes this in the signed embedded-app launch
+        // query. It must be retained for HMAC verification, even though the
+        // application does not otherwise need the presentation preference.
+        'admin_theme',
     ];
 
     /**
@@ -42,6 +46,36 @@ class ShopifyEmbeddedContextQuery
         return $query;
     }
 
+    /**
+     * Return every scalar launch parameter that Shopify may have signed.
+     *
+     * The compact context above is deliberately used for application links so
+     * app-owned parameters such as `full` and `store_key` never invalidate a
+     * previously verified launch. Shopify can add presentation or session
+     * metadata at any time, though, so verification must also consider the
+     * complete scalar query it actually signed.
+     *
+     * @return array<string, mixed>
+     */
+    public static function verificationQuery(Request $request): array
+    {
+        $query = [];
+
+        foreach ($request->query() as $key => $value) {
+            if (! is_string($key) || ! is_scalar($value)) {
+                continue;
+            }
+
+            if (is_string($value) && trim($value) === '') {
+                continue;
+            }
+
+            $query[$key] = is_string($value) ? trim($value) : $value;
+        }
+
+        return $query;
+    }
+
     public static function appendToUrl(string $url, array $context): string
     {
         if ($context === [] || str_starts_with($url, 'http')) {
@@ -62,11 +96,11 @@ class ShopifyEmbeddedContextQuery
         $rebuilt = $path;
 
         if ($query !== []) {
-            $rebuilt .= '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+            $rebuilt .= '?'.http_build_query($query, '', '&', PHP_QUERY_RFC3986);
         }
 
         if (! empty($parts['fragment'])) {
-            $rebuilt .= '#' . $parts['fragment'];
+            $rebuilt .= '#'.$parts['fragment'];
         }
 
         return $rebuilt;

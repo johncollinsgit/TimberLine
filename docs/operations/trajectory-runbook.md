@@ -1,0 +1,404 @@
+# Trajectory pilot and release runbook
+
+Trajectory is an independent, default-disabled Everbranch Branch at `/trajectory`.
+It has private household spaces, business spaces governed by existing owner/admin
+financial access, and explicitly linked views. Public checkout is hard-disabled;
+no price, subscription, bank link, or message is created by deployment.
+
+## Prepare the unbilled pilot
+
+Deploy the additive migration and assets through the normal GitHub test/build,
+MySQL migration safety, and Forge atomic-release process. Do not use a direct
+production push, copy local assets to the live release, or modify existing
+Modern Forestry Shopify connections.
+
+Resolve the existing, verified owner email and the actual Modern Forestry tenant
+slug in the target environment. Then run the operator command with those values:
+
+```sh
+php artisan everbranch:prepare-trajectory --owner=OWNER_EMAIL --business=TENANT_SLUG --plan=both --enable
+```
+
+`--plan=personal` needs no company or QuickBooks workspace. `--plan=business`
+creates no household. Omitting `--enable` prepares disabled spaces. Repeated
+preparation reuses spaces and links; the audit records the zero billing impact.
+Set `TRAJECTORY_ENABLED=true` and refresh configuration through the release
+process only for the pilot. The flag does not enable any other tenant: a space
+must also be enabled and its canonical Trajectory entitlement must allow access.
+
+Partners receive a copyable, expiring invitation URL. They must sign in using the
+invited verified email. Invitations never grant company membership. A business
+link and cross-space allocation require access to both spaces. No personal
+finance records are registered with global search or generic tenant exports.
+
+## Provider onboarding
+
+- Plaid uses `PLAID_ENVIRONMENT` (`sandbox` or `production`), `PLAID_CLIENT_ID`,
+  `PLAID_SECRET`, `PLAID_WEBHOOK_URL`, and optional `PLAID_REDIRECT_URI`. Configure
+  the webhook at `/api/trajectory/webhooks/plaid`. Link requests Transactions
+  history for 730 days and optionally Liabilities. Actual history dates are shown
+  per account. Verify USAA, Chase, and Relay institution/product availability in
+  the provisioned Plaid environment before promising support. Relay uses this
+  adapter, not an invented direct Relay API. Bank login occurs in Plaid Link.
+- Sync is queued, locked, idempotent, and commits its cursor only after a complete
+  pagination pass. Pending-to-posted changes retain corrections. An amended split
+  amount returns to review. Disconnect removes the provider item and local token;
+  it preserves transactions. Missing debt metadata remains manual setup.
+- Available debt metadata is a review suggestion. Mortgage principal/interest
+  must be separated from escrow/fees; a provider mortgage interest rate is not
+  labeled origination APR. Multiple card rate tiers need a reviewed modeling
+  rate. No provider value silently overwrites reviewed terms.
+- QuickBooks is read-only, using exact-period accounting snapshots already
+  available in Everbranch. Square/Shopify summaries describe operational sources
+  and are never added to the QuickBooks ledger. Missing snapshots, fee/refund
+  reconciliation, and missing material costs remain visible coverage gaps.
+- GoldAPI uses `GOLDAPI_KEY` server-side. Quotes share a 60-second cache; an active
+  Wealth view refreshes each minute. Last-known quotes carry source timestamps
+  and stale/market-closed status. No key means no fabricated metal valuation.
+- SMS also requires `TRAJECTORY_SMS_ENABLED`, existing Twilio configuration and
+  delivery gates, verified phone ownership, and explicit opt-in. Configure signed
+  inbound replies at `/api/trajectory/webhooks/sms`. Reply references expire, are
+  sender-bound and single-use; STOP revokes consent. Provider submission does not
+  prove handset delivery. Keep existing Twilio delivery monitoring active.
+
+Provider references checked September 2026: [Plaid Transactions](https://plaid.com/docs/transactions/),
+[Plaid Liabilities](https://plaid.com/docs/api/products/liabilities/),
+[GoldAPI](https://www.goldapi.io/). Production credentials and real institution
+access have not been validated by the local implementation tests.
+
+## Imports and financial semantics
+
+CSV/XLSX imports are previewed before confirmation (20-minute, single-use token,
+5 MB/5,000 rows). Transaction columns are `id,date,merchant,amount,category`;
+amounts are signed dollars, negative for money out. Dates use `YYYY-MM-DD`.
+Maintain stable source IDs across repeat imports. Account balances are separate
+observations; importing a historical statement does not invent today's balance.
+Payroll columns come from `config/trajectory_records.php`: employee, period start
+and end, wages, overtime, employer taxes, benefits, contractor costs, source ID,
+and reviewed flag. Regular wages exclude separately supplied overtime. Monetary payroll columns are integer cents, not dollars;
+missing costs must be supplied or left as missing evidence, never replaced by net
+pay. The browser displays exact required column names before import.
+
+Currency is integer cents; rates use basis points and decimal operations use
+Brick Math. Only USD accounts are imported. Expense/refund allocations total the
+original signed amount exactly. Forecast account movements retain the full source amount even when consumption is allocated. Shared rows expose only their authorized amount,
+not the original account, merchant, or unsplit amount. Explicit merchant rules
+precede provider suggestions; undoing a review also disables the rule it created.
+Broad stores and uncertain money movements require review.
+
+Accounts is the connection surface. It labels each active Plaid feed separately
+from manual/imported account evidence; its Connect action opens Plaid directly. A disconnected Item has no usable provider token, so reconnect starts a new Link session rather than issuing a failing update request.
+The review queue may show bounded bulk suggestions only when at least two
+unreviewed expenses share a consistent reviewed decision or unambiguous title
+context. The user explicitly applies each group, transaction versions are checked
+atomically, and no bulk action creates a future merchant rule. Broad merchants,
+transfers, card payments, deposits, and mixed-purpose titles stay in individual
+review.
+
+The authenticated header exposes Personal, Business, and Both when the signed-in
+user has authorized access to both space types. Both is limited to a
+reconciliation-aware overview and the shared Review transactions queue. It never
+adds household and company flows together before the explicit space link allows
+matched owner transfers to be eliminated. The review queue returns up to 250
+unreviewed imported transactions from the available history, independently of
+the dashboard reporting period; categorization still uses the originating,
+authorized space.
+
+Face Punched affects actual spending but is excluded from repeating baselines.
+Bullshit Spending is a reviewable category profile with purchase exceptions.
+Transfers, card payments, reimbursements, asset movements, and confirmed
+duplicates do not become consumption. Review classifications and transfer pairs
+before relying on totals; equal amounts alone do not prove a transfer.
+
+Forecasts use the latest 90 complete days, per-account history coverage,
+confirmed schedules and reviewed debts. Refunds offset category spending before
+scenario reductions and savings estimates; they are not earned income. Credit purchases accrue on debt until
+payment. Essential-variable bills remain estimates; opt-in seasonal estimates
+require at least a year and 12 matching records. Link debt terms to an existing
+recurring bill to replace it rather than count the payment twice. Savings goals
+reserve cash without reducing net worth; debt goals reduce the chosen loan.
+Monthly amortization is an estimate, not a lender payoff quote. Debt-associated
+escrow and fees stop at payoff; ongoing property taxes/insurance should be
+separate bills. Baselines assume fixed asset prices and no automatic inflation.
+Scenario changes never cancel services, move funds, or modify provider records.
+
+Reliance inputs are reviewed estimates: fixed costs exclude existing owner gross
+compensation, which is included once; owner net pay offsets household targets.
+The retained distribution fraction and business reserves are explicit inputs,
+not inferred tax advice. Company-to-household elimination requires matched pairs.
+Combined net worth excludes equity linked to the included business; unlinked
+business equity blocks the combined figure pending setup.
+
+Metal lots include purchase cost plus acquisition fees. Fine content uses
+31.1034768 grams per troy ounce and entered purity. Partial sales proportionally
+remove basis and retain history. Cash matches must equal the lot's purchase cost
+or sale proceeds and cannot be reused. The pilot supports one purchase statement
+row per lot and one proceeds row per sale; split a multi-lot statement entry
+before matching. A sold lot's acquisition history is immutable. Resale
+adjustments are user-entered; collector premiums are never inferred.
+
+## Verification and monitoring
+
+```sh
+php -d memory_limit=1G vendor/bin/pest tests/Feature/Trajectory --compact
+php -d memory_limit=1G vendor/bin/pest --compact
+npm run build
+node --test tests/e2e/trajectory-money.test.mjs
+php scripts/ci/lint-migrations.php --base=BASE_SHA
+php artisan trajectory:status
+```
+
+Run MySQL recovery tests on an **empty disposable database** and the existing
+migration rehearsal/baseline verification scripts on a database named with a
+`ci`/`test` segment. The twelve-table migration is restartable and registered in
+the recovery manifest. The checked-in schema dump is data-free.
+
+The existing scheduler runs `trajectory:refresh --notify` daily; SMS still needs
+all opt-in/delivery gates. Daily snapshots retain observed balances, completeness,
+next-day forecast, and next-day forecast error. `trajectory:status` reports only
+aggregate source/review/delivery health, without names, amounts, or credentials.
+Review stale sources, failed queue jobs, incomplete snapshots, unreviewed
+transactions and unmatched owner transfers before trusting forecasts.
+
+For local browser QA, use a dedicated SQLite file at
+`/tmp/trajectory-preview.sqlite`, local APP_ENV, generated APP_KEY, and
+TRAJECTORY_ENABLED. Migrate, run `php tests/Support/trajectory-preview.php`, and
+serve at `http://127.0.0.1:8096`. The isolated fictional fixture is
+`owner@trajectory.test` / `Trajectory-local-preview-2026!` (intentionally public
+local test credentials). `node tests/e2e/trajectory-smoke.cjs` exercises the UI
+and writes ignored/local screenshots under `output/trajectory`. It refuses a
+non-local host. Never load this fixture into a live or shared database.
+
+Before actual pilot acceptance, reconcile selected household and company
+statements, QuickBooks reports, debt terms, material costs and payroll evidence.
+Verify representative refunds, mixed-purpose cards, distributions and processor
+payouts, then compare observed cash against forecasts. Local fixtures are not
+proof of real financial reconciliation.
+
+## Public subscriptions and rollback
+
+Personal, Business and Both packages are declared in the canonical module
+catalog. Pilot access uses existing audited entitlement records, not a second
+billing system. Public checkout remains closed until the owner supplies Stripe
+prices, production provider access is verified, and existing Stripe subscription
+fulfillment is extended and tested for package changes, renewal, failure,
+cancellation, grace periods and household/business access. This release does not
+activate public subscriptions or claim those lifecycle acceptance gates passed.
+
+Rollback sets `TRAJECTORY_ENABLED=false` through release configuration and
+refreshes worker configuration. For one pilot, disable its spaces and canonical
+entitlement. Do not drop the new tables or reverse the migration in production;
+retain bank history, corrections, lots and audit records. Feature-off stops
+access, bank synchronization, snapshots and notification processing without
+changing Shopify, Square, QuickBooks, or existing subscriptions.
+
+## Medical sharing: Samaritan Ministries and provider bills
+
+The household-only Medical sharing tab keeps ministry needs, provider invoices,
+provider payments, incoming member shares, and monthly contribution matches in
+encrypted Trajectory records. It does not connect to a Samaritan API or submit
+bills. Members still manage submission and eligibility with the ministry; see
+[Samaritan Ministries](https://samaritanministries.org/). No eligibility percentage,
+sharing guarantee, or medical advice is inferred.
+
+1. Create a need, record its ministry reference, submission date/status, and an
+   optional reviewed sharing target. Do not enter diagnoses in financial labels.
+2. Add each provider invoice once with its original amount, discounts, and
+   payments made before tracking. Do not record an opening payment again as a
+   tracked payment. The provider invoice reference prevents duplicate entry.
+3. Review each invoice's remaining monthly payment and next unpaid date. These
+   plans explicitly assume zero interest and payments from cash. Set the payment
+   to the remaining balance for a planned upfront payment. Use an existing
+   recurring-schedule replacement when applicable; do not also record the same
+   provider balance as a separate debt. Financed lender balances belong in debt
+   records after the provider is paid.
+4. Record provider payments against one invoice, or choose a need/provider to
+   allocate a consolidated payment to its oldest invoices. Explicit invoice
+   matches allocate first. Amounts are integer cents and cannot exceed available
+   invoices. Link the exact unsplit household statement row and posted date.
+5. Record each expected member share, then change that row to received when the
+   payment arrives. Multiple receipts can belong to one need. Link received
+   deposits to bank evidence. Expected shares are excluded from income, assets,
+   and all baseline/scenario cash forecasts; the expected amount remains visible.
+6. Create a separate negative monthly recurring health contribution. Match each
+   actual monthly payment using **Record monthly contribution**, even if the
+   recipient changes. These matches use that schedule without adding a second
+   historical-spending estimate and never pay down a provider invoice.
+
+Received shares never reduce provider balances. By default, the need reserves
+`min(unpaid bills, max(0, received shares - provider payments))` from available
+cash. This reimburses prior upfront payments first and holds excess receipts
+for unpaid bills. The household can disable the reserve per need. Provider
+payments release the reserve as cash leaves, avoiding a double subtraction.
+Provider balances enter net-worth liabilities. Payments stop at payoff, including
+replaced recurring schedules, with final payments capped to the remaining bill.
+Due/overdue confirmed payments are provisionally placed tomorrow and flagged for
+review; unconfirmed plans flag forecast coverage rather than invent payments.
+
+A manual payment/receipt record updates the medical tracker only. It never
+fabricates an observed bank balance or adds a second imported expense. The UI
+flags unmatched actuals; match statement rows and update observed balances.
+Medical payment and contribution flows count once in gross spending, while
+received sharing remains separate from earnings. Medical evidence cannot be
+split into business books, reclassified by SMS, reused for an asset, or reconciled
+as a transfer while linked. Edit/unlink or remove the medical record first;
+unlinking restores its previous classification and preserves audit history.
+Changed/removed bank evidence is flagged and excluded from medical payment
+calculations until reviewed. Dependent references prevent orphaned records.
+
+Acceptance: `tests/Feature/Trajectory/MedicalSharingTest.php` covers upfront
+payments, delayed/expected receipts, reserve release, consolidated invoices,
+monthly contribution recipients, exact import matching, source amendments,
+corrections, duplicate/overpayment rejection, leap-day payoff, recurring
+replacement, and household/business authorization. The local browser smoke
+covers creating needs, bills and expected shares plus accessible chart tables.
+No new migration or production medical data is required to enable this feature.
+
+## Standalone shell and private household imports (2026-09-14)
+
+Marketing lives at `/trajectory/welcome`; authenticated finance remains at `/trajectory` with its own navigation and a return link to Everbranch. No separate identity store or new public checkout is introduced. All API membership and entitlement checks remain server-side.
+
+Concierge import (private files; default is a full validating rollback):
+
+```sh
+php artisan trajectory:import-household --owner=verified-owner@example.com --space=HOUSEHOLD_ID --transactions=/private/monarch.csv --observations=/private/observations.json --chase=/private/chase.csv --chase-account=card-key --balances=/private/monarch-balances.csv
+```
+
+Only add `--apply` after inspecting the validated private payload and verifying the intended household. Accounts require an explicit kind, a dated balance or null, and a source. The manifest supports dated budget targets, strictly validated observed statement transactions, evidence corrections to exact source IDs and amounts, and ordered record references. It does not create users, enable provider access, invite partners, activate billing, or send messages. Corrections replay without overwriting later user reviews. Never import the same account from two aggregators as independent ledgers; reconcile that source identity first.
+
+Monarch CSV preserves its original row and source categories; Chase preserves posted activity with stable occurrence identities for identical legitimate purchases. Cash balance exports only include explicitly typed cash accounts. Unknown/manual liability rows are excluded, and cash observations never fabricate a historical net-worth series. Budget imports retain their source version; the latest dated version is the default comparison, not a sum of old plans. Receipts are evidence until matched to a posted transaction.
+
+Subscriptions show confirmed schedules and unconfirmed receipt/history evidence separately. Expired/canceled evidence never establishes a future renewal. Payment notices add only the verified next payment when no linked schedule/debt already covers it. Missing APRs and future minimums remain coverage gaps, with unknown card purchases affecting debt rather than immediate cash. Recorded interest by account replaces overlapping lender period totals; a YTD total cannot fabricate individual monthly charges. Fine-weight metal lots avoid applying purity twice; gross-weight lots apply purity before troy-ounce valuation.
+
+Validation: run `tests/Feature/Trajectory`, the complete existing suite including Shopify gates, `npm run build`, and `tests/e2e/trajectory-smoke.cjs` against the isolated fictional local fixture. The smoke script checks standalone accounts/history/budget navigation, subscription/payment cards, chart evidence, existing medical sharing, and mobile width. No schema change is required for these encrypted record additions. Run the migration linter anyway; production release remains GitHub test/build plus migration safety gate, then Forge atomic activation. Rollback disables the Branch without deleting records.
+
+### Finance controls and category review (2026-09-19)
+
+Trajectory now offers an explicit business selector. `Both` combines the household
+with the selected business, not all companies; its reporting dates follow the UI.
+Owner wages/distributions are eliminated only against explicitly matched pairs in
+that business. Unmatched owner income remains visible. Each business must already
+have an entitled Everbranch tenant and the user's financial membership.
+
+`WorkspaceService` keeps custom income categories, per-source monthly overrides,
+tax profiles, flexible spending, and debt target settings in the space's encrypted
+settings, with audit events. Pilot income categories are provisioned only into the
+requested household. No global customer categories, prices, or tax elections are
+inferred. An LLC's owner count does not establish a corporate tax election.
+
+A bank login may feed multiple spaces. Account reassignment authorizes both spaces
+and the original connection owner, locks the connection/account/history, preserves
+source identities, and changes allocations with their source records. Split
+allocations, linked plans, medical/asset matches, and reconciled transfers block a
+move until resolved. Plaid refreshes preserve assigned ownership. Assigned spaces
+see only their accounts plus minimal feed status; credential management stays in
+the original connection space. New bank connections require per-account ownership selection before first import.
+Unassigned new accounts are withheld from every space; mapping resets the cursor
+under the sync lock so earlier withheld history imports idempotently. Existing
+connections retain their current ownership for backward compatibility.
+Account reassignment is an intentional disclosure to the destination's financial
+members, and the confirmation names that effect.
+
+Income planning starts from reviewed history, with per-source overrides replacing
+rather than adding to the estimate. Loans, transfers, and asset-sale proceeds are
+excluded. The planning line spreads monthly amounts evenly; the original daily
+forecast remains the timing view. Missing debt terms and history make forecasts
+provisional. Avalanche/snowball comparisons allocate one shared monthly budget,
+roll freed payments forward, and distinguish escrow/fees from debt principal and
+interest. No debt payments are initiated.
+
+Anomaly review separates (1) specific purchase-title fit, (2) this space's reviewed
+merchant pattern with three other examples and 80% agreement, and (3) labeled
+business-practice guidance. It does **not** have empirical peer categorization
+data. No peer percentage or industry consensus is fabricated. Mixed retailers
+are excluded. Conflicting signals require a category choice. Marking normal
+stores an exception tied to transaction version; a later changed transaction can
+return to review. Corrections use the existing audited/undoable classifier.
+
+Tax review measures classification/receipt evidence, not deduction eligibility.
+IRS and South Carolina source links, tax year, entity treatment, and state are
+visible. Other-state guidance stays explicitly unverified. QuickBooks exact-period
+reports remain authoritative for P&L; otherwise the UI labels transaction activity
+provisional and excludes borrowing, draws, and transfers. Owner wages are expenses.
+Bud Core answers from authorized calculated context and opens supporting screens;
+this release does not enable metered generative Bud AI or send finance questions
+to support tickets. Provider activation and metering remain separate dependencies.
+
+Verification: `FinanceControlsTest` covers semantic/pattern conflicts, normal
+exceptions, private categories, expected income, shared debt budgets, persistent
+Plaid account ownership, scope denial, P&L precedence, and combined period bounds.
+No database migration is added. The existing release and migration-safety gates
+remain mandatory. Rollback disables the Branch and preserves all records.
+
+## Dashboard chart presentation (2026-09-19)
+
+The financial outlook shows cash balances and monthly income rates on separate,
+explicitly labeled charts. The income chart uses PlanningService monthly amounts,
+not gross deposits, borrowed cash, or asset-sale proceeds. Historical and expected
+income may coincide; the caption explains the overlap. Missing history stays
+unavailable. Changing an income override changes the monthly plan; it does not
+silently mutate the existing daily cash forecast. Cash scenarios are labeled apart.
+
+The cash chart offers 30/90/365-day horizons, shares its first projection segment
+with the last observed cash balance, and marks the projection boundary. Coincident
+cash/available series collapse into one labeled line. Assumptions remain available
+in an expandable section. HTML legend buttons support keyboard toggles and retain
+focus; data tables and point drilldowns remain accessible with the return path.
+
+Validation: `npm run test:trajectory` includes anchor continuity, missing/zero
+observations, scenario gaps, and monthly-rate fixtures. Run `npm run build` and
+Trajectory feature tests. Visually check desktop/mobile, legend toggles, horizons,
+income editing, evidence navigation, chart tables and tooltips before release.
+
+Design reference: Shopify's Polaris Viz article documents consistent themes and
+accessible contrast (https://shopify.engineering/react-library-consistent-data-visualization).
+The implementation retains Everbranch's Chart.js infrastructure and has no new
+chart-provider dependency or external financial-data transmission.
+
+### Monthly views and unexpected expenses (2026-09-19)
+
+Looking Ahead is the first dashboard panel. Its keyboard-navigable tabs separate
+Trend lines, Month by month, and Actual vs. projected (recorded cash snapshots
+beside future closing estimates). Month by month defaults to Income runway:
+projected income from matching future dates last year, an explicit matching-period
+income reference line, and expected cash-outflow bars. The income-source control
+can instead use the editable income plan or recent reviewed-income baseline.
+Outflows include scheduled bills, debt payments, and estimated cash spending;
+they exclude transfers, asset sales, loan draws, and savings/medical reserves.
+Choosing an income source is a comparison only: it does not silently insert the
+assumption into the daily cash forecast. Cash balance remains an explicit monthly
+mode using projected closing balances and monthly income rates.
+The comparison includes six prior calendar months and the selected forward horizon.
+Current-month actuals are last observed balances; predictions are not added to them.
+These are current forward estimates, not archived forecasts. Missing observations
+stay null, including whole missing months. First/last forecast months can be partial;
+bar drilldowns expose exact observation/projection dates. No balance is summed over days.
+
+Biggest unexpected expenses uses the month containing the report's end date, capped
+at today, and ranks the five largest posted, allocated Face Punched expense/medical
+charges. Its total covers all matching charges, before refunds. Transfers, pending,
+removed records and ordinary unflagged expenses are excluded. View-all and per-row
+links use the existing authorized transaction evidence and back navigation.
+
+Validation adds month-end/leap-day/partial-month, actual-versus-projected, and
+income-runway source/gap JS fixtures, plus backend cash-flow breakdown, matching
+prior-year income evidence, month selection, ranking, import replay, excluded
+flows, and shared-allocation privacy tests. Check all three tabs at desktop/mobile
+widths, source controls, chart tables/bar details, the card's empty state and
+transaction return path.
+
+### Category doughnuts and period tabs
+
+The overview places paired incoming-money and spending doughnuts immediately
+below the summary. Incoming defaults to external cash received with an earned-only
+switch; internal transfers are excluded. Spending uses the existing net category
+amounts; net-refund categories are listed separately because negative amounts
+cannot be represented as doughnut slices. Slice drilldowns use the full scoped
+evidence IDs, and legends show exact amounts and percentages. Today, Week, Month,
+Year, All history and Custom are responsive segmented period controls; Custom
+retains the existing date inputs. No financial calculations or records change.
+The default period is now Year (January 1 through today). The cost explanation
+section uses the same complete scoped ledger as summary/category totals, lists
+the ten largest negative spending records and every positive net spending
+category, and shows refund offsets explicitly. Transfers and debt principal are
+excluded consistently; repayments do not count card purchases twice.

@@ -9,8 +9,6 @@ use Symfony\Component\HttpFoundation\Response;
 
 class EnforceCanonicalRuntimeHost
 {
-    protected ?string $applicationSessionDomain = null;
-
     public function handle(Request $request, Closure $next): Response
     {
         $host = $this->normalizeHost((string) $request->getHost());
@@ -27,14 +25,55 @@ class EnforceCanonicalRuntimeHost
         // *.theeverbranch.com, which browsers will reject on this unrelated
         // host. This runs before StartSession and resets the setting on every
         // request, which matters for long-lived PHP workers.
-        $this->applicationSessionDomain ??= config('session.domain');
-        config(['session.domain' => $this->isEvergroveHost($host) ? null : $this->applicationSessionDomain]);
+        $defaults = config('session.platform_cookie_defaults');
+        config([
+            'session.cookie' => $defaults['cookie'],
+            'session.domain' => $this->isEvergroveHost($host) ? null : $defaults['domain'],
+            'session.same_site' => $defaults['same_site'],
+            'session.partitioned' => $defaults['partitioned'],
+        ]);
+
+        // The field app opens login and password setup in Safari's in-app
+        // browser. These first-party forms need a regular cookie: WebKit may
+        // discard the partitioned cookie used by embedded Shopify surfaces,
+        // leaving the POST without the session that issued its CSRF token.
+        $canonicalBaseDomain = $this->normalizeHost((string) config('tenancy.domains.canonical.base_domain'));
+        $canonicalAuthHost = $canonicalBaseDomain !== null
+            && ($host === $canonicalBaseDomain || str_ends_with($host, '.'.$canonicalBaseDomain));
+        $mobileAuthCookiePresent = $request->cookies->has('everbranch-mobile-auth-session');
+        $mobileAuthRoute = $request->is('mobile/authorize')
+            || $request->is('forgot-password', 'reset-password', 'reset-password/*')
+            || $request->is('email/confirm/*')
+            || ($request->is('login') && $request->boolean('mobile_email'))
+            || ($mobileAuthCookiePresent && $request->is('login', 'logout', 'two-factor-challenge', 'email/verify*', 'email/verification-notification'));
+        if ($canonicalAuthHost && $mobileAuthRoute) {
+            config([
+                'session.cookie' => 'everbranch-mobile-auth-session',
+                'session.domain' => null,
+                'session.same_site' => 'lax',
+                'session.partitioned' => false,
+            ]);
+        }
+        // SessionManager may already have resolved its Store in a worker or
+        // an integration test; StartSession reads the cookie name from Store.
+        app('session')->driver()->setName(config('session.cookie'));
+
+        $context = $request->attributes->get('host_tenant_context');
+        if ($context instanceof HostTenantContext && $context->strategy === 'managed_website_custom_domain') {
+            // A custom customer domain is a public Website host, never an
+            // alternative tenant-app/login origin. It cannot share the
+            // platform cookie domain, and it accepts only public rendering and
+            // the public Website contact form.
+            config(['session.domain' => null]);
+            if (! $this->isManagedWebsitePublicRequest($request)) {
+                abort(404);
+            }
+        }
 
         if ($this->allowLocalDevHost($host) || in_array($host, $this->allowedExactHosts(), true)) {
             return $next($request);
         }
 
-        $context = $request->attributes->get('host_tenant_context');
         if ($context instanceof HostTenantContext && $context->resolved()) {
             return $next($request);
         }
@@ -146,6 +185,29 @@ class EnforceCanonicalRuntimeHost
         }
 
         return str_ends_with($host, '.test') || str_ends_with($host, '.localhost');
+    }
+
+    protected function isManagedWebsitePublicRequest(Request $request): bool
+    {
+        if ($request->isMethod('POST')) {
+            return $request->is('website/forms/*');
+        }
+
+        if (! $request->isMethod('GET') && ! $request->isMethod('HEAD')) {
+            return false;
+        }
+
+        // These are platform/app namespaces and cannot be claimed as a
+        // customer page on an external Website host. Other GET paths are
+        // intentionally left to the published-site resolver, which fails
+        // closed when the page does not exist.
+        return ! $request->is([
+            'login', 'logout', 'register', 'password/*', 'two-factor*',
+            'dashboard', 'website', 'website/*', 'landlord', 'landlord/*',
+            'workspaces', 'workspaces/*', 'workspace/*', 'settings', 'settings/*',
+            'workflows', 'workflows/*', 'shopify', 'shopify/*', 'api', 'api/*',
+            'mobile', 'mobile/*', 'webhooks/*', 'up', 'ready',
+        ]);
     }
 
     protected function normalizeHost(?string $value): ?string

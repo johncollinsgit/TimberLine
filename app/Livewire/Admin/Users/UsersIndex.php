@@ -53,14 +53,23 @@ class UsersIndex extends Component
         $actor = auth()->user();
         abort_unless($actor instanceof User, 403);
 
+        $hostTenantId = request()->attributes->get('host_tenant_id');
+        if (is_numeric($hostTenantId) && (int) $hostTenantId > 0) {
+            abort_unless($actor->tenants()->whereKey((int) $hostTenantId)->exists(), 403);
+            $this->tenantId = (int) $hostTenantId;
+        }
+
         $candidateIds = [
-            app(TenantContext::class)->id(),
             request()->attributes->get('current_tenant_id'),
-            request()->attributes->get('host_tenant_id'),
+            app(TenantContext::class)->id(),
             request()->hasSession() ? request()->session()->get('tenant_id') : null,
         ];
 
         foreach ($candidateIds as $candidateId) {
+            if ($this->tenantId !== null) {
+                break;
+            }
+
             if (! is_numeric($candidateId) || (int) $candidateId <= 0) {
                 continue;
             }

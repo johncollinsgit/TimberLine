@@ -4,12 +4,9 @@ namespace App\Services\Marketing;
 
 use App\Models\MarketingEmailDelivery;
 use App\Models\MarketingProfile;
-use App\Models\MessagingConversation;
+use App\Services\Landlord\LandlordProspectInboundEmailService;
 use App\Support\Marketing\MarketingIdentityNormalizer;
-use Carbon\CarbonImmutable;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 class SendGridInboundEmailService
 {
@@ -17,16 +14,28 @@ class SendGridInboundEmailService
         protected MessagingConversationService $conversationService,
         protected MessagingContactChannelStateService $channelStateService,
         protected MessagingEmailReplyAddressService $replyAddressService,
-        protected MarketingIdentityNormalizer $identityNormalizer
-    ) {
-    }
+        protected MarketingIdentityNormalizer $identityNormalizer,
+        protected LandlordProspectInboundEmailService $landlordProspectInboundEmailService
+    ) {}
 
     /**
-     * @param array<string,mixed> $payload
+     * @param  array<string,mixed>  $payload
      * @return array{ok:bool,matched:bool,status:string,tenant_id:?int,conversation_id:?int,message_type:?string}
      */
     public function handleInbound(array $payload): array
     {
+        $landlordResult = $this->landlordProspectInboundEmailService->capture($payload);
+        if ($landlordResult['handled']) {
+            return [
+                'ok' => true,
+                'matched' => true,
+                'status' => 'landlord_prospect_'.$landlordResult['status'],
+                'tenant_id' => null,
+                'conversation_id' => null,
+                'message_type' => 'normal',
+            ];
+        }
+
         $fromEmail = $this->extractEmailAddress($payload['from'] ?? null);
         $recipientEmails = $this->extractRecipientEmails($payload);
         $subject = $this->nullableString($payload['subject'] ?? null);
@@ -155,7 +164,7 @@ class SendGridInboundEmailService
                         'event' => 'email_unsubscribe',
                         'provider_message_id' => $providerMessageId,
                     ],
-                    'email-unsubscribe-' . ($providerMessageId ?? sha1($fromEmail . ($subject ?? '')))
+                    'email-unsubscribe-'.($providerMessageId ?? sha1($fromEmail.($subject ?? '')))
                 );
                 $status = 'opted_out';
             } elseif (! in_array((string) $conversation->status, ['opted_out', 'archived'], true)) {
@@ -178,7 +187,7 @@ class SendGridInboundEmailService
     }
 
     /**
-     * @param array<string,string> $headers
+     * @param  array<string,string>  $headers
      * @return array{message_type:string,references:array<int,string>}
      */
     protected function classify(?string $subject, string $body, array $headers): array
@@ -216,7 +225,7 @@ class SendGridInboundEmailService
     }
 
     /**
-     * @param array<string,string> $headers
+     * @param  array<string,string>  $headers
      */
     protected function resolveDeliveryFromHeaders(array $headers, ?string $fromEmail): ?MarketingEmailDelivery
     {
@@ -278,6 +287,7 @@ class SendGridInboundEmailService
 
             if (is_array($value)) {
                 $candidates = array_merge($candidates, array_map('strval', $value));
+
                 continue;
             }
 

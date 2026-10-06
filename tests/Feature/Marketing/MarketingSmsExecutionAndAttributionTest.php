@@ -10,6 +10,8 @@ use App\Models\MarketingMessageDelivery;
 use App\Models\MarketingProfile;
 use App\Models\MarketingProfileLink;
 use App\Models\MarketingRecommendation;
+use App\Models\MessagingConversation;
+use App\Models\MessagingConversationMessage;
 use App\Models\Order;
 use App\Models\ShopifyStore;
 use App\Models\SquareOrder;
@@ -497,6 +499,28 @@ test('twilio callbacks update delivery status and are idempotent on duplicates',
 
     $recipient->forceFill(['status' => 'sent', 'sent_at' => now()->subMinute()])->save();
 
+    $conversation = MessagingConversation::query()->create([
+        'tenant_id' => $recipient->campaign->tenant_id,
+        'store_key' => $recipient->campaign->store_key,
+        'channel' => 'sms',
+        'marketing_profile_id' => $recipient->marketing_profile_id,
+        'phone' => '+15552229988',
+        'status' => 'open',
+    ]);
+    $conversationMessage = MessagingConversationMessage::query()->create([
+        'conversation_id' => $conversation->id,
+        'tenant_id' => $recipient->campaign->tenant_id,
+        'store_key' => $recipient->campaign->store_key,
+        'marketing_profile_id' => $recipient->marketing_profile_id,
+        'marketing_message_delivery_id' => $delivery->id,
+        'channel' => 'sms',
+        'direction' => 'outbound',
+        'provider' => 'twilio',
+        'provider_message_id' => 'SM_CALLBACK_1',
+        'body' => 'Test message',
+        'delivery_status' => 'queued',
+    ]);
+
     $payload = [
         'MessageSid' => 'SM_CALLBACK_1',
         'MessageStatus' => 'delivered',
@@ -513,6 +537,7 @@ test('twilio callbacks update delivery status and are idempotent on duplicates',
 
     expect($delivery->fresh()->send_status)->toBe('delivered')
         ->and($recipient->fresh()->status)->toBe('delivered')
+        ->and($conversationMessage->fresh()->delivery_status)->toBe('delivered')
         ->and(MarketingDeliveryEvent::query()
             ->where('marketing_message_delivery_id', $delivery->id)
             ->count())->toBe(2);

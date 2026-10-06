@@ -15,7 +15,7 @@ class TenantBrandProfileService
     /** @return array<string,mixed> */
     public function defaultAttributes(Tenant $tenant): array
     {
-        $isCollins = strtolower(trim((string) $tenant->slug)) === 'collins-electric';
+        $isCollins = in_array(strtolower(trim((string) $tenant->slug)), ['collins-electric', 'collins-upstate-electric'], true);
 
         return [
             'display_name' => $isCollins ? 'Collins Upstate Electric' : (string) $tenant->name,
@@ -28,14 +28,17 @@ class TenantBrandProfileService
                 'dark_logo' => 'bundled',
                 'icon' => 'bundled',
             ] : [],
-            'primary_color' => $isCollins ? '#061D42' : '#123C43',
-            'accent_color' => $isCollins ? '#1464E8' : '#1E5A63',
+            // Collins keeps its business identity and logo kit, while its
+            // signed-in workspace deliberately follows the accessible shared
+            // Everbranch client palette.
+            'primary_color' => '#123C43',
+            'accent_color' => '#1E5A63',
             'surface_color' => '#FFFFFF',
-            'text_color' => $isCollins ? '#0B1B36' : '#0F1C1F',
-            'display_style' => $isCollins ? 'technical' : 'classic',
-            'corner_style' => $isCollins ? 'standard' : 'soft',
-            'decor_preset' => $isCollins ? 'signal' : 'none',
-            'theme_key' => $isCollins ? 'collins-upstate-electric' : 'custom',
+            'text_color' => '#0F1C1F',
+            'display_style' => 'classic',
+            'corner_style' => 'soft',
+            'decor_preset' => 'none',
+            'theme_key' => 'custom',
             'metadata' => $isCollins ? [
                 'package' => 'collins-upstate-electric-starter-kit',
                 'contact_tokens' => ['{{PHONE}}', '{{WEBSITE}}', '{{EMAIL}}'],

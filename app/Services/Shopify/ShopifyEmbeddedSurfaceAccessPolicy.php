@@ -95,7 +95,11 @@ class ShopifyEmbeddedSurfaceAccessPolicy
     public function routeSurface(?string $routeName): ?string
     {
         $routeName = trim((string) $routeName);
-        if ($routeName === 'shopify.app.wholesale' || str_starts_with($routeName, 'shopify.app.wholesale.')) {
+        if (
+            $routeName === 'shopify.app.wholesale'
+            || str_starts_with($routeName, 'shopify.app.wholesale.')
+            || str_starts_with($routeName, 'shopify.app.api.wholesale.')
+        ) {
             return self::SURFACE_WHOLESALE;
         }
 

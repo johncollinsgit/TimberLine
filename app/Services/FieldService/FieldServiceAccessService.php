@@ -42,6 +42,11 @@ class FieldServiceAccessService
             || $user->role === 'platform_admin';
     }
 
+    public function canCreateJobs(User $user, Tenant|int $tenant): bool
+    {
+        return $user->is_active !== false && $this->role($user, $tenant) !== '';
+    }
+
     public function canUpdateProgress(User $user, Tenant $tenant, FieldServiceJob $job): bool
     {
         if ($this->canManageJobs($user, $tenant)) {
@@ -54,6 +59,23 @@ class FieldServiceAccessService
 
         return (int) $job->assigned_user_id === (int) $user->id
             || $job->participants()->whereKey((int) $user->id)->exists();
+    }
+
+    public function scopeAssignedJobs(Builder $query, User $user): Builder
+    {
+        return $query->where(fn (Builder $assigned) => $assigned
+            ->where('assigned_user_id', (int) $user->id)
+            ->orWhereHas('participants', fn (Builder $participants) => $participants->whereKey((int) $user->id))
+            ->orWhereHas('tasks', fn (Builder $tasks) => $tasks
+                ->where('assigned_user_id', (int) $user->id)
+                ->orWhereHas('assignees', fn (Builder $assignees) => $assignees->whereKey((int) $user->id))));
+    }
+
+    public function canClockJob(User $user, Tenant $tenant, FieldServiceJob $job): bool
+    {
+        return (int) $job->tenant_id === (int) $tenant->id
+            && ($this->canManageJobs($user, $tenant)
+                || $this->scopeAssignedJobs(FieldServiceJob::query()->whereKey($job->id), $user)->exists());
     }
 
     public function canCreateTask(User $user, Tenant $tenant, FieldServiceJob $job): bool
@@ -84,7 +106,7 @@ class FieldServiceAccessService
         return [
             'view_all_jobs' => $this->canViewAllJobs($user, $tenant),
             'manage_jobs' => $manage,
-            'create_jobs' => $manage,
+            'create_jobs' => $this->canCreateJobs($user, $tenant),
             'manage_team' => $manage,
             'manage_any_task' => $manage,
             'update_participating_job_progress' => true,

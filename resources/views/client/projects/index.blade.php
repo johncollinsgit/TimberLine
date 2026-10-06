@@ -27,6 +27,9 @@
                 <h1 class="fb-title-xl">{{ $tenantName }} Projects</h1>
                 <p class="fb-subtitle">A clear view of active builds, milestones, status notes, and what is coming next.</p>
                 <div class="mt-4 flex flex-wrap gap-2">
+                    @if($projects->contains(fn ($project) => (bool) data_get($project->metadata, 'checklist_enabled')))
+                        <a href="{{ route('client.projects.checklist', ['tenant' => $tenant->slug]) }}" class="fb-btn fb-btn-primary">Launch checklist</a>
+                    @endif
                     <a href="{{ route('client.projects.requests.index') }}" class="fb-btn fb-btn-secondary">View requests</a>
                 </div>
 

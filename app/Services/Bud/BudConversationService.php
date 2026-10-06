@@ -25,10 +25,11 @@ class BudConversationService
         $type = trim((string) ($context['type'] ?? ''));
         $customer = trim((string) ($context['customer'] ?? ''));
         $topic = $this->topicFromTranscript($transcript) ?: $this->topicFromQuestion($normalized);
+        $workspaceSummary = is_array($context['workspace_summary'] ?? null) ? $context['workspace_summary'] : [];
 
         if ($questionText === '') {
             return $this->reply(
-                "Ask me about Everbranch, the demo workspace, or how a specific business process could live in one place.",
+                'Ask me about Everbranch, the demo workspace, or how a specific business process could live in one place.',
                 confidence: 'low',
                 uncertain: true,
                 followUp: 'Try asking what Bud would do first, or what Everbranch is best at.',
@@ -37,7 +38,7 @@ class BudConversationService
 
         if ($this->isUnclearOrUnknown($normalized)) {
             return $this->reply(
-                "I’m not sure yet, and I don’t want to make that up. I can explain the parts of Everbranch I know, or help narrow it down if you tell me which screen, workflow, or business process you mean.",
+                'I’m not sure yet, and I don’t want to make that up. I can explain the parts of Everbranch I know, or help narrow it down if you tell me which screen, workflow, or business process you mean.',
                 confidence: 'low',
                 uncertain: true,
                 followUp: 'If you want, give me the customer, job, or task and I’ll try again with more context.',
@@ -75,6 +76,33 @@ class BudConversationService
                 'I’d start by naming the places where work disappears: customer questions, job notes, follow-ups, task ownership, and whatever lives only in someone’s head. Then I’d help turn that into a short, obvious path from issue to next step.',
                 confidence: 'high',
                 followUp: 'If you want, I can do that for customers, work, tasks, files, or reporting.',
+            );
+        }
+
+        if ($this->matches($normalized, ['what needs attention', 'what needs my attention', 'need attention', 'what should i do next', 'whats next', 'what is next'])) {
+            $open = (int) ($workspaceSummary['open_customer_loop_actions'] ?? 0);
+            $customerPhrase = $open === 1 ? 'There is 1 open Customer Loop action' : "There are {$open} open Customer Loop actions";
+
+            return $this->reply(
+                "{$customerPhrase} in this workspace. Open Follow-up to see the reason, a prepared draft when available, and the person responsible. Bud will never send or publish anything without the final confirmation button.",
+                confidence: 'high',
+                followUp: 'Ask me to explain a follow-up template or how to build an if/then workflow for it.',
+            );
+        }
+
+        if ($this->matches($normalized, ['customer loop', 'followup loop', 'follow up loop', 'relationship'])) {
+            return $this->reply(
+                'Customer Loop connects a useful business moment to the next human step. It can prepare a follow-up, review request, email, text, or social draft, but a person still reviews before anything leaves Everbranch.',
+                confidence: 'high',
+                followUp: 'Open Follow-up to start with a template, or Workflow Automations to build your own if/then path.',
+            );
+        }
+
+        if ($this->matches($normalized, ['social', 'instagram', 'facebook', 'linkedin', 'post'])) {
+            return $this->reply(
+                'Bud can prepare a social draft from a real business moment today. Direct publishing is intentionally not enabled yet, so your team can review the words, image, and timing before connecting any social account.',
+                confidence: 'high',
+                followUp: 'Tell me what happened and I can point you to the right Customer Loop template.',
             );
         }
 
@@ -255,6 +283,25 @@ class BudConversationService
 
     protected function normalize(string $value): string
     {
-        return trim(mb_strtolower($value));
+        $value = trim(mb_strtolower($value));
+
+        // Bud Core is deterministic, so handle the common human typos for its
+        // highest-value workspace questions instead of pretending it understood.
+        return preg_replace_callback(
+            '/\\b(wat|custmer|custmor|cusotmer|folow|follw|messege|mssage|socal|socail)\\b/u',
+            fn (array $match): string => [
+                'wat' => 'what',
+                'custmer' => 'customer',
+                'custmor' => 'customer',
+                'cusotmer' => 'customer',
+                'folow' => 'follow',
+                'follw' => 'follow',
+                'messege' => 'message',
+                'mssage' => 'message',
+                'socal' => 'social',
+                'socail' => 'social',
+            ][$match[1]],
+            $value,
+        ) ?? $value;
     }
 }

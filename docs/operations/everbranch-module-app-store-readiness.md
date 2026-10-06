@@ -1,6 +1,7 @@
 # Everbranch Module App Store Readiness
 
-Status: PR 25 blueprint-driven display alignment complete.
+Status: blueprint-driven display alignment is complete, and the landlord
+Branches preview is live on `main` as of 2026-07-25.
 
 ## QuickBooks, Documents, And Estimator Readiness (2026-07-13)
 
@@ -24,6 +25,10 @@ Make the module system understandable, safe, and productizable before adding new
 - PR 7 added display-only product metadata helpers to `TenantModuleCatalogService` and renders safe module context on tenant, Shopify embedded, and landlord commercial module surfaces.
 - PR 25 added `TenantBlueprintModuleRecommendationService` so tenant blueprints can drive display-only recommended/requested/planned/future/not-active-yet module guidance.
 - Tenant Module Store, landlord tenant detail, and tenant `/start` now use blueprint-aware module recommendation copy without changing module entitlements or activation behavior.
+- Landlord operators can open `/landlord/branches` to preview the same
+  tenant-scoped Branch catalog payload a selected workspace would see. This is
+  read-only; it does not install modules, start billing, create module access
+  requests, or change entitlements.
 - Pricing labels are display-only until billing activation work happens. Checkout is not active from module cards.
 
 ## Module Definition
@@ -64,6 +69,9 @@ Blueprint module recommendation payloads may also include module families that a
 
 - Tenant App Store and Shopify embedded App Store show only modules that pass `isSafeForSurface()`: explicit surface visibility, `SAFE_TO_MARKET`, and `live` or `beta`.
 - Landlord/commercial views may show internal, hidden, beta, roadmap, and unsafe modules for operator context.
+- Landlord Branches preview uses the tenant-facing safe catalog payload for the
+  selected workspace, so operators see customer-visible labels and availability
+  without bypassing tenant-scoped filtering.
 - Module cards may show pricing impact labels, but those labels do not activate checkout or paid module purchasing.
 - Module interests captured during setup are separate from installed modules, entitlements, and module access requests.
 - Blueprint template recommendations and work-management intent are separate from installed modules, entitlements, and module access requests.
@@ -106,6 +114,8 @@ Blueprint module recommendation payloads may also include module families that a
 - App Store hides internal, roadmap, disabled, placeholder, and unsafe modules.
 - Module access checks use canonical services.
 - Tenant install/request actions are tenant-scoped server-side.
+- Landlord preview actions remain read-only and cannot mutate access, billing,
+  installed state, module interest, or entitlements.
 - New module metadata is added to the catalog or derived through `TenantModuleCatalogService`, not scattered ad hoc.
 - Blueprint-driven recommendation logic is centralized in `TenantBlueprintModuleRecommendationService`, not scattered through Blade views.
 - Pricing and mobile labels are explicitly display-only until billing/mobile activation work is approved.
@@ -114,6 +124,8 @@ Blueprint module recommendation payloads may also include module families that a
 
 - Roadmap or internal modules appear in public or tenant App Store payloads.
 - UI visibility is treated as entitlement.
+- Landlord preview is used as an entitlement, install, billing, or tenant-access
+  mutation path.
 - Blueprint recommendation rows are treated as real module installs, entitlements, billing events, import execution, upload flows, messaging, notifications, or mobile APIs.
 
 ## Recommended Next PR

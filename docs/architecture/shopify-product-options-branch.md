@@ -1,6 +1,20 @@
 # Shopify Product Options Branch
 
-Status: implemented for the Modern Forestry tenant as a Shopify-only Everbranch module.
+Status: implemented as a Shopify-only Everbranch module, initially entitled
+for the Modern Forestry tenant.
+
+## Capability classification
+
+- Classification: reusable Shopify-only Everbranch module.
+- Tenant scope: rulesets, assignments, installed stores, and product metafield
+  writes resolve through the current tenant.
+- Entitlement/billing: the existing `shopify_product_options` entitlement is
+  required; Modern Forestry's current entitlement is included.
+- Canonical contracts: `TenantModuleAccessResolver`, `ShopifyStore`,
+  `ShopifyProductOptionsService`, signed app-proxy resolution, Shopify
+  line-item properties, and Shopify Functions.
+- Non-Forestry use: any entitled Shopify tenant can configure rulesets and
+  assigned product handles without code changes.
 
 ## Purpose
 
@@ -24,13 +38,34 @@ The storefront block writes the selections as Shopify line-item properties. Exis
 ## Storefront surface
 
 - Theme app extension block: `Everbranch scent options`
+- Active theme app embed: automatically mounts the same option UI on assigned
+  product pages, protecting stores where the optional product block was never
+  placed.
 - App proxy request: `/apps/forestry/product-options`
 - Backing route: `/shopify/marketing/v1/product-options`
 - Cart properties: `properties[Scent 1]`, `properties[Scent 2]`, and so on.
 
-Add the app block to the product template after deploying the Shopify app extension. Rulesets with no matching product handle stay hidden on the storefront.
+The optional product block controls exact template placement. If it is absent,
+the active app embed moves the option UI into the visible product form before
+its Add to cart / accelerated checkout controls. Rulesets with no matching
+product handle stay hidden on the storefront.
 
-## Initial Infinite Options migration
+## Checkout enforcement
+
+- `everbranch-bundle-scent-validation` is a Cart and Checkout Validation
+  Shopify Function. Shopify runs it for cart, standard checkout, Shop Pay,
+  PayPal, Google Pay, Apple Pay, and other express checkout paths.
+- Each assigned product stores its tenant-owned rule in the JSON metafield
+  `everbranch.bundle_scent_rule`. Ruleset saves synchronize the selection
+  count, distinct-value requirement, enabled state, and allowed values.
+- The initial migrated handles are also compiled into the Function as a
+  rollout fallback so the known bundles fail closed before their first
+  metafield backfill.
+- Preview/backfill with
+  `php artisan shopify:sync-product-option-validation --tenant-id={id}` and
+  add `--apply` only when the target tenant/store has been verified.
+
+## Reconciled Infinite Options migration (2026-08-13)
 
 The migration seeds the seven visible rulesets from the supplied screenshots:
 
@@ -42,20 +77,53 @@ The migration seeds the seven visible rulesets from the supplied screenshots:
 6. Wax Melt Bundle — 5 selections
 7. Bundles with 3 options — 3 selections
 
-The Room Spray Bundle and 4oz three-candle bundle receive the product handles visible in the screenshots. The remaining rulesets are intentionally marked as needing product assignments; their source URLs were truncated in the screenshots.
+The current legacy option-set URLs were reconciled into Everbranch. The 16oz
+three-candle bundle (`bundle`), the 4oz and 8oz three-candle bundles, the
+three-wax-melt bundle, Buy 2 Get 1 Free, Build Your Own Flight, all bulk
+bundles, Teacher Candles, Room Spray Bundle, and five-wax-melt bundle now have
+one exact Everbranch ruleset assignment. The Apple bundle is explicitly
+unassigned because its three fragrances are fixed.
+
+The storefront resolver fails closed if an active product is assigned to more
+than one ruleset, and saving a ruleset removes matching handles from any other
+ruleset to preserve the one-product/one-ruleset rule.
 
 The initial allowed scent values are the 31 values visible across the supplied Room Spray Bundle dropdown screenshots, including `Room Refresh` and `Violet Spice`. They can be replaced or expanded from the embedded editor without a deployment.
 
 The Modern Forestry mobile product-detail API reads the same assigned ruleset. Existing iOS bundle selectors therefore receive the ruleset count and filtered scents, plus `requireDistinctValues` for rules that require a different scent in every slot.
 
-## Live activation dependency
+## Order normalization
 
-The locally stored `retail` OAuth token belongs to the retired `modernforestry-test.myshopify.com` shop and returns HTTP 404. The live `modernforestry.myshopify.com` store returns HTTP 401 for that token, confirming that the app must be reauthorized against the live store before Admin API product discovery can run.
+`ShopifyOrderIngestor` expands each recognized option-set order line into one
+Everbranch order line per selected scent. The normalized line carries the
+canonical scent and size IDs, multiplied bundle quantity, and a stable
+parent-line/slot external key so re-import is idempotent.
 
-After the web app and Shopify extension are deployed:
+The migrated mappings cover:
 
-1. Open `/shopify/reinstall/retail` and complete OAuth for `modernforestry.myshopify.com`.
-2. Open Everbranch from Shopify Admin and select `Product Options`.
-3. Paste or confirm the product handles for the five unassigned rulesets.
-4. Add the `Everbranch scent options` app block to the relevant product template(s).
-5. Test a bundle add-to-cart and confirm `Scent 1...N` appear on the Shopify cart line and order.
+- 4oz and 8oz three-candle bundles;
+- Teacher Candles in 4oz, 8oz, 16oz, and wax-melt variants;
+- five-wax-melt bundles; and
+- three-room-spray bundles.
+
+Unexpected selection counts, unknown scents, and unresolved sizes create
+Shopify import exceptions instead of silently producing incomplete demand.
+
+## Live activation
+
+Legacy Infinite Options remains unchanged as the read-only comparison baseline.
+Do not alter it without explicit owner approval or enable its selectors
+alongside the Everbranch block on the same product template.
+
+- Shopify app version `modernforestrybackstage-35` is released.
+- The retail installation has approved `read_validations` and
+  `write_validations`.
+- Validation `gid://shopify/Validation/121798915` is enabled with
+  `blockOnFailure: true`.
+- Live Cart AJAX checks block missing selections for active 4oz, 8oz, and
+  Teacher products, block duplicates where configured, and accept complete
+  valid selections.
+- The room-spray product is currently draft and cannot receive a customer-cart
+  smoke test until reactivated.
+- Full external evidence is stored under
+  `docs/operations/evidence/shopify/2026-07-30/`.

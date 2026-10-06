@@ -11,6 +11,8 @@ class ShopifyOAuth
         'read_pixels',
         'write_pixels',
         'read_customer_events',
+        'read_validations',
+        'write_validations',
         'unauthenticated_read_checkouts',
         'unauthenticated_read_collection_listings',
         'unauthenticated_read_product_listings',

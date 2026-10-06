@@ -41,7 +41,7 @@
                 && filled(config('services.google.redirect'));
         @endphp
 
-        @if ($googleLoginEnabled)
+        @if ($googleLoginEnabled && ! request()->boolean('mobile_email'))
             <div class="space-y-3">
                 <a href="{{ route('auth.google.redirect', absolute: false) }}" class="fb-auth-google-btn">
                     <span aria-hidden="true" class="fb-auth-google-mark">G</span>
@@ -57,11 +57,14 @@
 
         <form method="POST" action="{{ route('login.store') }}" class="flex flex-col gap-6">
             @csrf
+            @if (request()->boolean('mobile_email'))
+                <input type="hidden" name="mobile_email" value="1">
+            @endif
 
             <flux:input
                 name="email"
                 :label="__('Email address')"
-                :value="old('email')"
+                :value="old('email', request()->query('email'))"
                 type="email"
                 required
                 autofocus

@@ -1,11 +1,576 @@
+## 2026-10-05 — Field admin tracker shortcut
+
+- The web home screen puts Fleet Tracker directly above Time Clock & Hours for workspace owners, admins, and managers with the Fleet Tracking module enabled. The tracker link opens the existing company vehicle location and route view.
+- The shortcut uses the same tenant, module, global feature, and viewer checks as the tracker route. Employees do not receive it, and location collection settings remain unchanged.
+
+## 2026-10-02 — Public Launch Partner pricing
+
+- Updated the shared Evergrove and Everbranch public pricing cards to $499 setup, $89/month for the first six months, and $199/month afterward. The six-month total is $1,033, and the comparison now states the correct $360 introductory savings against regular Starter.
+- Existing client agreements and billing retain their recorded rates; the Front Yard Foods and Collins Electric client-specific pricing templates were not changed.
+
+## 2026-10-02 — Website workspace console links
+
+- A published tenant website may own its tenant subdomain, as Carolina Barrel Co. does. The Switch Console menu now opens that workspace on `app.theeverbranch.com` with its tenant selected, so the link reaches the authenticated dashboard instead of the public site's 404 page.
+- Other tenant console links retain their existing subdomain routing. Membership checks still resolve the selected tenant on the server.
+
+## 2026-09-23 — Carolina Barrel quote queue
+
+- The Carolina Barrel catalog is presented as made-to-order, with quote requests collecting name, email, phone, and quantity.
+- **Orders → Quotes** gives staff a focused request queue with product, finish, quantity, contact details, reply history, and an explicit email-response action.
+- Exact email-and-phone matches surface the linked Website customer and later Website order without exposing or altering legacy, Shopify, or marketing records.
+
+## 2026-09-16 — Everbranch proposals and sign-in
+
+- Proposal invitations use the official Everbranch mark and a private link with no separate code. Email includes HTML and plain-text versions.
+- The proposal pairs the unchanged agreement with a clear initial-payment summary, acceptance record, and explicit Stripe payment action. Stale forms refresh safely with a retry notice.
+- Main and tenant sign-in pages use a calmer Everbranch layout, clearer spacing, and support access while retaining their authentication and tenant context.
+
+## 2026-09-15 — Wholesale applications
+
+- Buyer application uses a single page and a verified receipt, with retained inputs on failure.
+- Review actions appear first on mobile, remain beside the details on desktop, and display team/buyer delivery state.
+- Review notification links open Shopify Admin directly; Back to applications returns to the inbox.
+- The inbox explains that access is verified when deciding an application; it no longer labels valid Shopify reviewers as read-only before that check.
+
 # UI Changelog
 
-## 2026-10-06 — Tenant mail workspace (staged)
+## 2026-09-06 — Safe first-time Website setup
 
-- Added a Mail navigation item for workspaces with the Email Branch enabled.
-- Added a responsive inbox, sent/draft/trash folders, search, message reader, compose, read/unread and star controls, and admin forms for domains, addresses, and member access.
-- Pending domains and addresses show their setup state and block sending. Direct-server provisioning controls remain unavailable until the server gate is configured.
-- The mail service is not yet activated in production. See `docs/operations/everbranch-mail-service.md` for DNS, transport, testing, and rollout work.
+### What Changed
+
+- An allowlisted workspace with no Website draft now receives a useful setup
+  state instead of a server error.
+- First-time setup lets the operator choose from the approved starter themes;
+  the flow no longer assumes every business is an electrician.
+
+### Guardrails
+
+- Setup creates a private draft only. It does not publish, connect a domain,
+  activate checkout, or create billing.
+
+## 2026-09-06 — Full-width landlord controls
+
+### What Changed
+
+- Landlord and operator screens now use the full workspace canvas beside the
+  navigation rail instead of compressing wide review queues, filters, and
+  commercial controls into the tenant reading column.
+- The existing user wide-layout preference now applies the same full-canvas
+  treatment consistently.
+
+### Guardrails
+
+- Tenant reading surfaces keep their established width unless the user enables
+  wide layout. Permissions, commercial state, billing, and tenant data are not
+  changed by this presentation fix.
+
+## 2026-09-03 — Durable PDF upload and paged preview
+
+### What Changed
+
+- Resumable PDF initialization is safe to retry with a stable UUID key, and 50 MiB uploads retain ordered chunk and whole-file checksums.
+- Every PDF upload path now checks real document structure; production also uses a bounded Ghostscript parse. Compatibility multipart/base64 requests accept one file up to 25 MiB.
+- The app can request a five-minute signed preview URL so iOS loads PDF pages with byte ranges instead of buffering the complete document.
+
+### Guardrails
+
+- Completion, cancellation, and cleanup are serialized; deletion must be verified and recursive cleanup is restricted to the exact tenant staging-path shape.
+- Preview URL issuance reuses normal asset authorization and records one audit event. Signed range requests are tenant/asset-bound and do not create duplicate download events.
+
+## 2026-09-02 — Field Service job updates and document controls
+
+### What Changed
+
+- Added explicit saved job updates on the web job-detail page, with optional photo/PDF attachments.
+- Management can remove an individual update, photo, or PDF after a confirmation prompt; field employees retain the ability to add updates and files.
+
+### Guardrails
+
+- Update attachments and deletion remain tenant-scoped and job-scoped. Server-side Field Service management authorization is enforced for every delete action.
+## 2026-08-31 — Reliable iPhone job-photo uploads
+
+### What Changed
+
+- The mobile job-photo flow now has a protected JSON fallback for iOS WebViews that cannot hand a selected photo to a multipart request. It is limited to phone-sized JPEG, PNG, or WebP images and preserves the same team-visible job-photo record.
+
+## 2026-08-28 — Project manager editing
+
+### What Changed
+
+- The full **Edit job** form always includes optional project-manager name, company, phone, and email fields, so a PM can be added to a job that does not yet have one.
+
+## 2026-08-28 — Job-update photo selection previews
+
+### What Changed
+
+- The job quick-view update composer now displays selected photos as thumbnail previews with an obvious remove control before posting.
+- Non-image uploads remain compact file controls, so photos are easy to distinguish from PDFs and other documents.
+
+## 2026-08-28 — Safer job customer selection and quick-view actions
+
+### What Changed
+
+- Create Job now searches the existing customer directory, prefills the selected customer’s contact and service address, and links the new job to that customer record.
+- Creating a customer is an explicit checkbox, and duplicate email or phone records are stopped before a duplicate customer can be created.
+- The job quick view now offers an Edit job button, opens the detail editor directly, and shows a prominent one-tap project-manager call card.
+
+## 2026-08-28 — Collins field-service controls and workspace presentation
+
+### What Changed
+
+- Administrators can switch the jobs grid into an explicit Edit all mode to make inline changes across multiple job rows, then finish editing when done.
+- The Collins sidebar keeps the navy wordmark visible on its light background, and the workspace top bar provides a reversible, read-only Employee view preview.
+- Collins field-service screens no longer display QuickBooks financial cards, source columns, or QuickBooks-generated job-draft controls; no QuickBooks connection or existing data is deleted.
+
+## 2026-08-25 — Job update text-alert destination
+
+### What Changed
+
+- Field-service managers can save one office phone number for job-update text alerts. Collins Electric is prefilled with +1 (864) 640-6642.
+- Web and field-app job comments, photo updates, and file updates now pass through the same job-notification service. Each text identifies the job, the person who posted it, and the update itself.
+
+### Guardrails
+
+- Saving the number never sends a test or live message. Delivery remains blocked until the existing Everbranch SMS sender is verified and an authorized manager turns alerts on.
+- The notification record keeps only the configured destination's last four digits for audit context.
+
+## 2026-08-24 — Operational customer directory
+
+### What Changed
+
+- Field-service workspaces now use a focused customer directory with service
+  address and linked-job context instead of retail loyalty, Growave, review, or
+  birthday controls.
+- The directory supports checkbox selection with recoverable archive/restore
+  actions. Archived customers leave job and customer history intact.
+- Work → Calendar reserves a compact, read-only company Google Calendar panel
+  alongside scheduled and unscheduled jobs.
+
+### Guardrails
+
+- Retail workspaces keep their established marketing enrichment experience.
+  Field-service workspaces never surface those retail controls.
+- The Google Calendar panel reads only tenant-authorized events and remains
+  unavailable until the existing Google OAuth connection is approved.
+
+## 2026-08-17 - Evergrove custom-development positioning
+
+### What Changed
+
+- Reframed the public Evergrove homepage around custom websites, internal apps, client portals, connected systems, and practical automation.
+- Kept Everbranch visible as a real product built by Evergrove, so it serves as proof of delivery and an option when it fits instead of defining the entire studio.
+- Updated public navigation, calls to action, metadata, and inquiry language to support project-based custom-development conversations.
+
+### Guardrails
+
+- This is a company-owned public marketing presentation change only. It does not change Everbranch functionality, tenant data, entitlements, billing, forms, routing, or authentication behavior.
+- The existing public Evergrove controller, design system, and inquiry workflow remain in place; no client-specific or Forestry-specific behavior was added.
+
+## 2026-08-14 — Everbranch social preview refresh
+
+### What Changed
+
+- Replaced the public link-preview treatment with a minimal, editorial
+  Everbranch card: the leaf mark now sits directly on the composition (without
+  a boxed background), the message is reduced to **Work, in one place.**, and
+  the card uses a warmer, more dimensional botanical surface.
+- Published the asset as `og-image-v2.png`, giving social platforms a new URL
+  instead of relying solely on a query-string cache refresh.
+
+## 2026-08-13 — Email Messenger canvas and asset repair
+
+### What Changed
+
+- Replaced the small iframe preview with a larger centered live email canvas;
+  the block outline remains on the left and the selected block's inspector is
+  now on the right.
+- Every visible editable email block can be clicked or keyboard-selected to
+  focus its matching inspector fields. The locked compliance footer remains
+  distinct and non-editable.
+- Replaced guessed product image URLs with verified current Shopify CDN assets
+  and repair those exact legacy placeholders in saved drafts when reopened.
+
+### Guardrails
+
+- Direct canvas interaction changes draft state only; saving continues through
+  the authenticated tenant/store-scoped backend API.
+- Preview links are represented visually and never navigate a merchant away
+  from the editor.
+
+## 2026-08-11 — Wholesale Email Messenger
+
+### What Changed
+
+- Added **Email Messenger** as the first MF Wholesale Backstage item before
+  Suggestions at `/shopify/app/wholesale/messaging`.
+- Added a calm embedded editor with a sixteen-block draft, desktop/mobile
+  previews, editable candle/product/CTA/location/Instagram content, and an
+  explicit test-email action.
+
+### Guardrails
+
+- Drafts persist server-side by tenant and wholesale store; browser storage is
+  not an authority.
+- The unsubscribe/privacy footer is locked and rendered by the server. This
+  surface has no campaign-send control and never targets prospects.
+
+## 2026-08-10 — Stable landlord outreach composer
+
+- The landlord prospect email composer now keeps its subject and body in the open editor while a template is loaded, so choosing a template no longer submits the page, loses a text selection, or returns the operator to the communication timeline.
+- The composer closes only through its explicit close control or Escape. Text selection, shift-selection, and normal in-editor clicks stay in the compose surface.
+- Templates remain review-first: loading one changes only the open draft. The operator must still explicitly save the draft or confirm Send.
+
+## 2026-08-09 — Everbranch story film
+
+- Replaced the homepage story-dialog placeholder with a polished 90-second,
+  silent-first animated explainer. It opens from **See the Everbranch story**
+  and introduces the founder’s 11 years of small-business experience before
+  moving through connection, customer context, action, performance, and the
+  system end card.
+- The dialog lazy-loads the video, retains native playback controls, and
+  includes an on-page transcript summary. The Remotion source, timing plan,
+  design tokens, and replaceable voiceover are isolated under `remotion/`.
+- Added an unlinked, no-index direct-link surprise page that shows four seconds
+  of self-produced animation before embedding the official Rick Astley video;
+  no third-party video file is hosted in the repository.
+
+## 2026-08-10 — Everbranch story systems + business context
+
+- Rebuilt the opening around the founder’s customer-care premise: retail,
+  wholesale, and field-service photos establish the people and businesses the
+  story serves.
+- Replaced the distracting source pills with an unobstructed systems map:
+  Shopify, QuickBooks, Gmail, Calendar, phone, and text flow to Everbranch at
+  center, while the main message remains clear.
+- Centered the story dialog in the viewport and refreshed the story poster,
+  transcript, source plan, and rights-tracked photo provenance.
+
+## 2026-08-08 — Home channel pulse
+
+- Moved the channel-performance readout to the top of Home in a compact,
+  Shopify-inspired operational strip: time window, sessions, sales, orders,
+  conversion, and live visitors now scan in one line before workspace notices.
+- Sales and order values use the existing read-only tenant sales-channel
+  summary. Sessions and live visitors use only recorded tenant storefront
+  events; workspaces without tracking show a clear unavailable state instead
+  of fabricated activity or a misleading conversion rate.
+- Every metric remains a link to the existing sales-channel view, and the time
+  control is the existing Livewire range filter. The live visitor count refreshes
+  while the strip is visible, with no external write, Shopify request, or
+  cross-tenant query.
+- The metrics are now in-place controls: selecting one keeps the user on Home
+  and replaces the chart below with that measure across the chosen window,
+  compared with the equivalent preceding period. The solid/dashed graph uses
+  the same tenant-scoped read-only sources as the summary values and respects
+  reduced-motion preferences.
+
+## 2026-08-08 — Mobile operational shell and customer administration
+
+- Brought the Everbranch tenant app into the operational UI system with a compact charcoal command bar, clearer tenant context, denser customer rows, and focused create/edit screens.
+- Collins Upstate Electric remains discoverable through the authenticated workspace switcher and explicit membership rather than a client-side tenant shortcut.
+- Added admin-only customer create and edit actions. Safe delete appears only for app-created customers without connected history; Laravel repeats every role, tenant, Branch, and history check and audits successful writes.
+- Corrected the signed-in customer summary so rewards, connected profiles, and missing-contact counts are explicitly scoped to the active tenant. Customer rows were already tenant-scoped; the summary now follows the same contract.
+- No customer mutation is queued offline, and this work does not change the separate Modern Forestry consumer app or Shopify customer records.
+
+## 2026-07-30 — Required bundle scents across Shop Pay
+
+- Assigned Everbranch Product Option rules render through the active storefront
+  app embed even when the optional product-template block was not placed.
+- Bundle scent selectors sit inside the actual product form, and ordinary Add
+  to cart and accelerated checkout controls show the same inline error until
+  every required scent is selected.
+- Shopify checkout validation independently blocks Shop Pay and other express
+  checkout paths when an assigned bundle reaches checkout without its required
+  scent properties.
+
+## 2026-08-07 — Everbranch public-site studio redesign
+
+- Replaced the old tab-heavy Everbranch landing page with a continuous,
+  media-led public product story: customer question, team work, follow-up,
+  industries, modules, and the launch-partner invitation.
+- Added a small public-only interaction layer with dynamically loaded GSAP
+  workflow transitions, responsive/reduced-motion handling, a native accessible
+  story dialog, and a WebM-first hero loop with H.264 fallback and poster.
+- Plans, access requests, contact, and the public Module Explorer now share the
+  studio palette and navigation language while retaining their existing routes,
+  forms, pricing data, and access-request behavior.
+- This change does not touch Shopify apps, embedded surfaces, tenant websites,
+  authenticated workspaces, or Modern Forestry operations.
+
+### Follow-up: field-service hero sequence
+
+- The public hero now crossfades through original HVAC/electrical field scenes
+  and an owner planning work in the office, with a subtle camera drift rather
+  than a static background.
+- Technician polos use a small original lightning-and-airflow trade emblem.
+  The rotating treatment respects reduced-motion preferences and leaves the
+  first still visible if JavaScript is unavailable.
+
+### Follow-up: interactive industry examples
+
+- Each public industry card now opens a fictional website-to-workspace example
+  for retail, field service, projects, and independent studios. The experience
+  begins on a public website, presents a brief cursor handoff, and allows
+  visitors to explore the matching workspace, customer, work, messages, email,
+  and text-marketing views.
+- The examples are client-side demos only. They do not enable Managed Website,
+  publish a site, send a message or campaign, access tenant data, or change
+  Shopify and Modern Forestry surfaces.
+
+### Follow-up: linkable industry systems
+
+- Industry cards now link to dedicated public example pages. The homepage has
+  six disciplines in a two-by-three grid, while each example has a persistent
+  contextual control bar for Back to Everbranch, business type, and Website /
+  Operations workspace views.
+- The homepage now moves the six industry examples directly below the hero and
+  removes the separate manifesto, pricing panel, and hidden duplicate demo.
+- Dedicated examples now label both Website and Operations workspace as
+  fictional, public-only demonstrations, switch immediately, and use a
+  launch-partner access request as their closing CTA.
+
+## 2026-08-02 — Instant Website addresses and simpler custom domains
+
+- Website now shows the automatically reserved `<workspace>.theeverbranch.com` address as a first-class live/reserved status card.
+- Custom-domain setup remains available alongside the included address and presents ownership and routing records together for a single DNS visit.
+- The safe activation gate remains separate: DNS ownership alone never activates a customer host.
+
+## 2026-08-02 — Tenant Website Products workspace
+
+### What Changed
+
+- Added **Products** as a primary left-sidebar destination directly below
+  **Website** for tenants with Managed Website access.
+- Expanded the catalog workspace with retail and optional wholesale pricing,
+  SKU and product-image fields, clearer status and inventory visibility,
+  create/edit controls, history-safe archive actions, and CSV import/export.
+- CSV imports explain handle matching and all-or-nothing validation in context;
+  the table keeps trade pricing visible without hiding retail pricing.
+
+### Guardrails
+
+- This uses the existing Managed Website entitlement and isolated `website_*`
+  records. It does not create a new Branch, price, entitlement, or tenant-specific
+  Carolina Barrel Co. runtime path.
+- Imports are tenant/site-scoped, transactional, and capped at 1,000 rows.
+  Archiving preserves Website order history and never deletes linked records.
+- Shopify, legacy order/customer, provider, marketing, and Modern Forestry data
+  remain out of scope.
+
+## 2026-07-30 - Evergrove Consultation Booking Page
+
+### What Changed
+
+- Added the public Evergrove `/book` page with the existing Evergrove navigation, brand assets, typography, color system, responsive layout, and a compact public footer.
+- Added an accessible `Choose a Time` action that opens the configured Google Calendar appointment schedule in a new tab with safe external-link attributes.
+- Added a graceful email fallback for periods when online scheduling is not configured, plus exact consultation metadata for search and link previews.
+
+### Guardrails
+
+- Google appointment schedules are still created manually in Google Calendar. The website only reads `GOOGLE_BOOKING_URL`.
+- Missing, malformed, or non-HTTPS booking URLs never render as booking links; visitors are directed to `john@evergrovesoftware.com` instead.
+- No billing, calendar API integration, tenant access, module availability, or automated scheduling behavior changed.
+
+## 2026-07-30 — Landlord Trade Prospecting Workflow
+
+### What Changed
+
+- Expanded the landlord launch-partner sheet into an end-to-end prospect workflow with bounded Google Places discovery, website-presence prioritization, deduplication, cost acknowledgement, current search history, stage management, follow-up dates, interaction logging, outreach drafts, and conversion into the existing tenant flow.
+- Added evidence-informed first-touch, no-website, follow-up, and close-the-loop templates that use real Everbranch field-service capabilities and require operator review before sending.
+- Added a trades-focused Unsplash hero image with visible attribution, public Maps evidence, review counts, no-website verification states, workflow cadence guidance, and direct mail-client handoff.
+- Added three manually reviewed Upstate trade prospects whose current Google Maps result cards had public contact/review evidence but no website link.
+
+### Guardrails
+
+- This is landlord-global internal tooling; it does not use Shopify wholesale tables, tenant messaging data, billing, or entitlements.
+- Google Places searches are limited to one request and 20 results, show estimated cost, and never contact a prospect automatically.
+- A missing Places website URL is a research signal. The UI requires a current Maps recheck before outreach, and manual verification is recorded separately from API discovery.
+- Email drafts open in the operator's mail client and are marked sent explicitly. Cold SMS and autonomous outreach remain unavailable.
+
+## 2026-07-27 — Website custom-domain wizard
+
+- The Website overview now has a plain-language address wizard for customers
+  who already own a domain: add domain, copy a one-time DNS TXT proof, check
+  connection, and activate only after the published-site and public-host gates
+  pass.
+- The wizard explains that it never asks for registrar credentials or changes
+  unrelated DNS, email, checkout, customer, order, or provider records. Its
+  disable action is a host-only rollback.
+- Corrected a public-host boundary: `theeverbranch.com` is again reserved for
+  Everbranch’s platform site and cannot display a Modern Forestry or any other
+  tenant Website theme.
+
+## 2026-07-27 — Granular Website canvas editing
+
+- Clicking text, a CTA, an image, a card, an FAQ question/answer, announcement,
+  menu label, or footer copy now opens and focuses that exact control in the
+  inspector.
+- Repeated cards, FAQs, and gallery images use a compact item editor so an
+  operator edits one customer-facing element at a time instead of navigating a
+  section-wide form.
+- The canvas remains edit-only: the more granular selections preserve the
+  private preview boundary and do not activate phone, form, or workspace links.
+
+## 2026-07-27 — Leak-free Website editor preview
+
+- The Website canvas is now explicitly an edit surface: clicking visible
+  content, cards, calls to action, menus, announcement, header, or footer
+  opens the matching inspector controls instead of following a customer link.
+- **Preview site** saves the draft and opens an interactive, private full-site
+  preview in a separate tab. Its toolbar returns to the exact editor page.
+- Draft preview navigation now resolves owned Website pages server-side. Home,
+  menus, footer links, announcements, and CTAs cannot fall through to the
+  Everbranch workspace; unknown internal links fail closed, external links are
+  safely new-tabbed, and form/phone/email actions remain inert.
+
+### Safety posture
+
+- The interactive preview is authenticated, no-store, and unframeable; the
+  embedded edit canvas remains same-origin frame-only. Public rendering has no
+  preview toolbar or editor metadata. No commerce, Modern Forestry, Shopify,
+  customer, order, reward, webhook, or connection behavior changes.
+
+## 2026-07-27 — Website preview repair and section library
+
+- The private Website preview now explicitly permits framing by its own
+  authenticated editor while remaining non-cacheable; it no longer inherits a
+  Shopify-only frame policy that left the editor canvas blank.
+- **Add section** is now one clear row that opens a searchable, categorized
+  section library. It replaces the always-visible pill controls with a more
+  scannable editor pattern while keeping the existing structured, safe section
+  catalog.
+
+### Safety posture
+
+- The preview can be framed only by the same Everbranch origin. Thumbnail
+  source pages remain explicitly unframeable. No public snapshot, published
+  site, customer data, checkout, order, or provider connection behavior
+  changes.
+
+## 2026-07-27 — Rich Website themes, real draft preview, and media library
+
+- Website now has a Shopify-familiar three-pane editor: section outline and
+  add picker, real desktop/mobile draft iframe, and an inspector for text,
+  links, visibility, repeated cards/FAQs, images, menus, announcement, footer,
+  palette, typography, and corners.
+- Theme settings and menus save as a private site-level draft and do not alter
+  a published site until Publish. The overview uses a real framed draft preview
+  and theme cards use original starter imagery.
+- HVAC Service, Collins Upstate Electric, and Outdoor Elements ship with six
+  starter pages, usable menus, banners, service cards, FAQ, CTA, forms, and
+  mobile behavior. Collins stays draft-only.
+
+## 2026-07-27 — Website editor and starter-theme refinement
+
+### What changed
+
+- The dedicated Website editor now supports page switching, keyboard-save,
+  timed draft autosave, section visibility, safe image fields, and responsive
+  desktop/mobile previews.
+- Applying HVAC Service, Collins Upstate Electric, or Outdoor Elements creates
+  materially different structured starting sections instead of a shared
+  generic homepage.
+- Preview-only controls use the same sanitized structured content saved for the
+  public renderer; hidden sections stay hidden when a page is published.
+
+### Safety posture
+
+- The editor, publishing, commerce, and public-render gates remain disabled by
+  default. This changes no existing Shopify, legacy order, customer, reward,
+  checkout, webhook, or provider-connection behavior.
+
+## 2026-07-27 — Website primary navigation
+
+### What changed
+
+- Entitled workspaces now see **Website** immediately below **Home** in the primary sidebar.
+- Operational, marketing, workflow, and settings ordering stays unchanged for workspaces without Website access.
+
+### Safety posture
+
+- Website remains tenant-entitlement and role gated; this is navigation placement only and does not enable publishing, billing, or public rendering.
+
+## 2026-07-27 — Managed Website design contract (not yet enabled)
+
+### Planned customer experience
+
+- The entitled **Website** workspace will provide a calm, Shopify-familiar
+  structured editor for pages, navigation, brand, leads, responsive preview,
+  draft autosave, publish, and rollback—not an unrestricted page builder.
+- V1 templates cover Home, Services, About, Contact, FAQ, and landing pages;
+  sections are limited to approved hero, text/image, services, testimonial,
+  FAQ, form, and external CTA patterns. Keyboard navigation, visible focus,
+  reduced-motion support, and WCAG AA contrast are required.
+- Native Website Commerce uses its own tenant-owned catalog, cart, order, and
+  Stripe Connect checkout lane. It must never call, migrate, or imply use of
+  an existing Shopify or legacy checkout/order system.
+
+### Safety posture
+
+- The Website navigation item appears only after server-resolved, audited
+  entitlement and rollout access. Disabled, frozen, and unavailable states must
+  be explicit and must not expose an editing or publishing control that can act.
+- A publishing freeze preserves the last published site. A public-render
+  incident response affects Managed Website hosts only; it must not alter the
+  existing Everbranch app or Modern Forestry Shopify app/Checkout experience.
+- Forms create tenant-scoped submissions only. The UI must not promise customer
+  creation, messaging, marketing enrollment, workflow execution, checkout, or
+  order management.
+
+## 2026-07-25 — Product Explorer, Search, and Workflow Naming
+
+### What Changed
+
+- Added a public, read-only Module Explorer with compact scanning, filters,
+  dedicated module URLs, canonical pricing, setup expectations, integrations,
+  dependencies, and guided-meeting calls to action.
+- Guided-meeting calls to action now use the contact inquiry path and do not
+  create an inactive demo user or imply immediate demo access.
+- Added a customer **Branches** destination and clearer included/add-on/upgrade/
+  request language on the workspace home and Branch catalog.
+- Rebuilt the shared command-palette interaction with keyboard navigation,
+  focus containment and restoration, debounced/cancellable requests, recent
+  destinations, and explicit loading, empty, and failure states.
+- Split landlord search onto a dedicated backend coordinator for control-plane
+  workspaces, tickets, requests, catalog definitions, and phrase-based actions
+  such as “add a user” and “see requested Branches.”
+- Renamed the customer product from **Order Calendar** to **Workflow
+  Automations**. **Workflow Studio** remains the builder name; internal
+  identifiers remain stable for compatibility.
+
+### Guardrails
+
+- Public exploration reads only `public_site`-safe canonical module
+  definitions and never needs a tenant or customer record.
+- Landlord search does not instantiate tenant customer, order, task, message,
+  file, workflow, or report providers. Ticket message bodies and attachments
+  are excluded.
+- The existing demo workspace was not changed. Public calls to action request a
+  guided meeting.
+- No entitlement, billing, connection, workflow, or customer-data mutation is
+  performed by browsing or searching.
+
+## 2026-07-25 — Landlord Branches Preview and Alert Safety
+
+### What Changed
+
+- Added a landlord-only **Branches** sidebar item that opens
+  `/landlord/branches`.
+- Built the landlord Branches preview as a read-only operator view of the same
+  customer-facing Branch catalog payload for a selected workspace.
+- Sorted Everbranch Admin sidebar links alphabetically after keeping Home
+  pinned first, so operator navigation scans more predictably.
+- Operator SMS alert behavior now matches real site activity: fake/test/demo
+  events are suppressed and logged instead of texting.
+
+### Guardrails
+
+- The Branches preview does not install Branches, mutate billing, create access
+  requests, change setup state, or grant entitlements.
+- Tenant-facing navigation order and tenant Branch availability did not change.
+- Operator alert suppression is server-side and audited through
+  `operator_alert_logs`; the UI must not imply a text was sent unless the alert
+  log status is `sent`.
 
 ## 2026-07-24 — Functional Workflow Studio
 
@@ -99,7 +664,7 @@
 ### What Changed
 - Replaced visible Potential/invoice review language with owner/admin-only Job Drafts and Publish Job, Link to Existing Job, Archive, Archived Drafts, and Restore actions.
 - Added structured job addresses with explicit Apple Maps and Google Maps links, an external Project Manager card with Call/Text/Email, and a clear Send to Office task action.
-- Renamed job Photos to Files and separated team-visible Drawings & PDFs from Photos, including system Files selection, 25 MB validation, authenticated inline preview, and matching Documents upload.
+- Renamed job Photos to Files and separated team-visible Drawings & PDFs from Photos, including system Files selection, 50 MiB validation, authenticated inline preview, and matching Documents upload.
 - Applied canonical Collins Upstate Electric navy/white branding, tagline, color theme, and light/dark lockups to the existing Everbranch mobile Home and header.
 - Enabled all current and past operational jobs for active Collins employees while keeping editing and progress controls assignment-aware.
 
@@ -1895,7 +2460,275 @@
 - Live checkout defaults off and is tenant-allowlisted.
 - Acceptance alone creates no charge, pending ACH is not treated as paid, and implementation-only payments cannot change module access.
 - Tax collection, Relay payout verification, webhook signing, and production credentials remain explicit launch blockers.
-# 2026-10-06 Mail setup
+# 2026-07-27 — Website theme manager, separate live editor, and native commerce
 
-- Workspace admins can record a pending mail address before Email Branch activation, see domain ownership and MX records, and request access through the module catalog.
-- Cloudflare DNS setup accepts a one-use zone-scoped token, adds ownership proof, and adds MX only after transport readiness and an existing-MX check. Other DNS providers use the manual instructions.
+- Replaced the inline Website draft form with an Online Store-style theme
+  overview, active desktop/mobile theme preview, three starter themes, and
+  direct Website data links.
+- Added a separate full-screen live Website editor with section outline,
+  drag reorder, insertion, inspector, autosave, undo/redo, device preview, and
+  publish status.
+- Added clean Website Products, Customers, and Orders management tables plus
+  native public catalog/cart/Stripe checkout paths. These screens use only the
+  isolated `website_*` lane and never display legacy Shopify orders.
+
+## 2026-07-27 — Sales-channel reporting
+
+- Added a clean, read-only Sales channels view and dashboard link for confirmed
+  revenue and order counts by source, including native Everbranch Website sales
+  alongside existing channels.
+- The view deliberately reports aggregates only: it does not merge customers,
+  copy Website orders into legacy Shopify/operations orders, or expose checkout
+  and fulfillment controls across source boundaries.
+
+## 2026-08-04 - Field Service invoice-first job intake
+
+### What changed
+
+- Native job rows now lead with homeowner name and a visible service address.
+- Added a compact owner/admin Invoice desk that is independent of the job
+  list, with direct job-from-invoice intake and an optional invoice picker in
+  manual job creation.
+- Job intake now includes homeowner contact, autocomplete-capable address
+  entry, scope, schedule, lead technician, first task, and invoice linking in
+  one short form.
+- Removed the literal job-start control; clock-in remains a separate time
+  workflow.
+
+### Safety posture
+
+- Financial documents remain server-filtered for owner/admin users.
+- Invoice-to-job links are deliberate and reversible; no imported invoice can
+  create a job by itself.
+
+## 2026-08-04 - Collins mobile current-work refinement
+
+### What changed
+
+- Replaced the Current/Potential/Past control with a focused Jobs view and evenly spaced Calendar, Invoices, New Job, and Refresh actions.
+- Added swipe-to-delete affordance on current jobs. The action archives a job from active work instead of destroying its record.
+- Added an actionable three-line workspace menu, Nate Collins user-management entry, owner-only QuickBooks connection prompt, and compact home action cards.
+- Simplified job actions: removed Block/Complete controls and the field-readiness warning, kept clock-in for field employee/member accounts only, and added native Camera capture alongside photo-library upload.
+- Team messages now list newest activity first, surface unread badges, and provide a New Message chooser with people and job search.
+- Work defaults to All Current Jobs for admins/managers and My Jobs for field employees, with an explicit selector. QuickBooks invoices now appear as draft-job opportunities in both Work and the Invoice Desk, even when a legacy auto-generated invoice job still holds the old link; they never auto-create a job, and existing invoice-created import jobs are excluded immediately from current Jobs, Calendar, and My Day before being safely archived on the next sync. New Job no longer asks for priority; it provides tappable address suggestions and a dedicated lock-box-code field. Job Overview provides an editable lock-box field and Plans upload area for PDFs or plan images.
+
+### Safety posture
+
+- Archiving retains linked invoices, tasks, time, notes, photos, and audit history; it only removes the job from Current Work.
+- Invoice and financial access remain owner/admin-gated. Current production clients require the matching API deployment before the new Invoice Desk endpoint can return data.
+# 2026-08-07 — Customer Loop and Bud Core
+
+- Added the authenticated Customer Loop queue for human-reviewed follow-up,
+  review, email, text, and social drafts, plus simple template creation,
+  prepare, snooze, and complete controls.
+- Added the Workflow Studio action and starter templates that create a
+  review-only Customer Loop draft from a completed job or connected Shopify
+  order. The action never sends or publishes.
+- Added a compact public Customer Loop story section so the public site explains
+  the relationship layer without promising automated delivery.
+- Expanded Bud Core with tenant-scoped next-attention summaries, Customer Loop
+  and social-draft guidance, and common typo handling.
+
+### Safety posture
+
+- Bud AI and speech-to-speech remain disabled-by-default future paid layers;
+  no provider call or usage charge is introduced here.
+- No social connection, message delivery, marketing-consent change, Shopify
+  write, Website Commerce mutation, or Modern Forestry behavior changed.
+
+## 2026-08-08 - Bud Core included-access correction
+
+### What changed
+
+- Removed the stale workspace approval state from the Ask Bud card and showed
+  the included question box immediately for authenticated workspaces.
+- Removed the obsolete Bud Core approval queue from the landlord dashboard.
+- Kept a single global incident switch for temporary Core shutdown while Bud AI
+  remains a separate paid, tenant-approved, capped, and provider-gated tier.
+
+### Safety posture
+
+- Bud Core remains deterministic, tenant-scoped, read-only, and unable to send
+  or publish. This change does not enable Bud AI, voice, provider calls, or
+  automatic delivery.
+
+### Workspace shortcut correction
+
+- The persistent Bud button in authenticated tenant workspaces now opens the
+  included Ask Bud experience directly instead of the legacy Shopify AI module.
+- Shopify's embedded assistant routes remain unchanged for installed stores.
+# 2026-08-08 — Operational UI standardization
+
+- Added the required operational design contract and authenticated-surface
+  audit: compact Inter headers, scan-first tables, restrained state badges,
+  right-rail detail layouts, question-first wizards, and real three-pane
+  builders.
+- Reworked the shared tenant/landlord shell and embedded Backstage chrome into
+  a quieter, denser operational frame. Core work remains first; enabled
+  optional products are grouped under **Branches** near Settings.
+- Moved Customer Loop into Marketing and replaced its hero/form stack with a
+  question-first review-draft launcher. It remains review-only and cannot send
+  email, SMS, social content, consent changes, Shopify writes, or Website
+  Commerce writes.
+- Reworked Website and native Website Commerce screens around operational
+  headers, toolbars, tables, object rails, and focused forms. Added native
+  staff draft orders plus dedicated Website customer create/detail views.
+- A staff draft order is structurally isolated: it creates no Stripe checkout,
+  EasyPost request, inventory reservation, label, customer communication, or
+  legacy/Shopify/Modern Forestry record.
+
+## Follow-up — Shopify-reference shell and Website hierarchy
+
+- Replaced the pale workspace header with a persistent charcoal command bar:
+  Everbranch at left, command search centered, and workspace/Bud controls at
+  right. Tenant and landlord content now starts directly on the application
+  canvas instead of inside a redundant outer card.
+- Tightened the shared sidebar to a neutral, high-contrast rail with unboxed
+  icons, smaller rows, quieter nesting, and only one selected state. Branches
+  remain capability-gated, but no longer render as a second oversized menu.
+- Rebuilt Website around the real website object: compact page actions, a
+  browser-framed draft/live preview, theme status and publish/edit actions in
+  one footer, page rows, collapsed domain management, and a dense theme list.
+  Domain verification, activation, disabling, immutable versions, and the
+  included Everbranch address keep their existing behavior.
+- Added the observed Shopify-to-Everbranch control map to the required UI
+  standard so later authenticated work follows the same placement and
+  interaction grammar instead of making page-local card layouts.
+- Removed Home's duplicate workspace search and rebuilt its routine metrics,
+  recommendations, jobs, and Branches as compact panels and rows. A restrained,
+  reduced-motion-aware branch-network pulse gives the real KPI area a distinct
+  Everbranch moment without fabricating visitors or activity.
+- Reduced the landlord dashboard's ten-way action wall to one primary workspace
+  action, one intake action, and a compact overflow menu. Landlord section links
+  now use a conventional tab row beneath the header.
+
+## 2026-08-13 — Green Shield vehicle-tracking demo
+
+- Added a public, clearly fictional Green Shield Pest Control walkthrough with
+  a self-hosted 30-second vehicle-tracking product tour and isolated demo-login
+  credentials.
+- The tour explains separately labeled company-van and active-timer phone
+  feeds, scheduling/time-clock boundaries, restricted owner/admin access,
+  short retention, and excluded V1 monitoring behavior without exposing any
+  tenant data.
+- Refined the tour’s opening into an attributed OpenStreetMap-based vehicle
+  view with an explicitly fictional route overlay and the title “Keep a
+  bird’s-eye view of every vehicle on your team.” The demo CTA now uses a
+  CSRF-protected, demo-only handoff to enter the isolated fictional account
+  directly and open its Green Shield workspace.
+- Expanded the isolated workspace fixture with fictional team members, vans,
+  20 active/scheduled/quote/completed service jobs, tasks, notes, shifts,
+  clearly labeled income/cost values, and a seven-day home calendar so the
+  product walkthrough opens into a populated field-operations workspace.
+- Added an attributed OpenStreetMap-backed fictional van-route panel to each
+  Green Shield job detail. These route overlays are demo-only and separate
+  from the globally gated Fleet Tracking product surface.
+# 2026-08-20 — Shopify state sales tax reports
+
+- Added the embedded **Sales Tax Reports** reporting entry with two visible
+  presets: a state-level summary and an address-level detail report.
+- The detail view intentionally explains that county and municipality are not
+  inferred, so an operator can verify the delivery address before entering a
+  return.
+# 2026-08-25 — Field Service calendar grid
+
+- Replaced the Field Service Calendar tab's empty upcoming-schedule column with a responsive month grid, including previous/next-month navigation and a return-to-today control.
+- Scheduled jobs now appear on their actual dates with compact status styling, while connected Google Calendar events appear beside them in a distinct read-only treatment.
+- Retained the needs-scheduling rail so unplanned jobs remain actionable without displacing the operational calendar.
+
+### Collins wide-canvas workspace
+
+- Made the Collins Electric authenticated shell use the full available canvas on large screens, retaining only responsive gutters beside the sidebar.
+- The workspace-wide change applies to jobs, customers, reports, and future Collins pages without changing retail or landlord layouts.
+
+### Collins job detail actions
+
+- Expanded the job-detail Updates feed across the full Collins workspace canvas so field updates have room for long notes and team handoffs.
+- Added direct **Complete & archive** and recoverable **Delete job** actions to the job header. Both preserve a searchable job-history record, while destructive intent is confirmed before submission.
+
+### Collins Jobs-grid deletion
+
+- Added a confirmed **Delete** action column to the current Jobs grid, plus the same action in its quick-view panel for managers.
+- Grid deletion uses the same audited, recoverable archive transition as the job detail and immediately refreshes the active-work list.
+- Managers can now select several current jobs with the frozen checkbox column and archive the selected set after one explicit confirmation.
+
+### Collins job-update attachments
+
+- Updates now accept camera/photos and supported documents directly from the composer, attaching each upload to the corresponding job update.
+- Phone and desktop uploads share the same tenant-scoped, audited storage path; update history exposes the attached photo or file for authorized team members.
+- Attached photos now render as prominent, tappable previews in each update and a visual job-photo gallery; files remain clearly labeled downloads.
+- Managers can edit a job’s work description and full service address directly from its web detail page; the mobile job page exposes the same work-description and job-site-address editors.
+
+### Collins customer deletion controls
+
+- Customer selection now uses a high-contrast square checkbox instead of a text checkmark.
+- The recoverable customer bulk archive action is labeled **Delete selected** for clarity, while retaining job history and allowing restore from archived customers.
+
+### Collins Jobs quick-view updates
+
+- Added an Updates composer to the Jobs-grid quick view so crews can post field notes and attach photos or supported files without opening a second page.
+- Update photos appear in a secure in-panel carousel with thumbnail selection, previous/next controls, and a full-size open action.
+# 2026-09-03 — Mobile files and material requests
+
+- Removed the Tasks tab and My Day task feed from the field app, leaving four focused job tabs: Overview, Job notes, Materials, and Pics/Drawings.
+- Added employee material requests inside each job. Admins can mark requests purchased and include a purchase note visible to the crew.
+- Added live per-file deletion counts, immediate removal of confirmed files, bounded concurrent uploads/deletes, and private thumbnail caching so large photo jobs remain responsive.
+- Replaced proxy-sized PDF requests with two-hour resumable upload sessions. The app sends retry-safe 512 KiB chunks and the server verifies offsets, per-chunk and whole-file SHA-256, the exact declared size, and actual PDF content before an idempotent promotion. The default finite file cap is 50 MiB; active-session, tenant staging-reservation, and expiry cleanup limits keep the workflow bounded.
+- Added authenticated single-range PDF streaming for local storage, including correct `206`/`416`, byte-range headers, exact response lengths, inline disposition, and content-sniffing protection so large drawings can seek and page without repeated full downloads.
+
+## 2026-09-03 — Mobile manager hours and request inbox
+
+- Added the server contract for a manager-only Time Clock & Hours view with range presets, headline totals, employee/job/day analytics, and a paginated timer/manual ledger.
+- Added validated, audited editing for completed hour submissions, with server-recomputed durations and immutable raw break punches.
+- Added pending material-request cards to manager Home with an exact total, purchase notes, Materials-tab destinations, and audited manager deletion.
+- Added tenant-scoped vehicle choices for the expanded manager job editor and audited full job changes without exposing lock-box values.
+## 2026-09-06 — Managed Website agreement template
+
+- Added a tenant-named Managed Website launch-partner choice to landlord
+  agreement preparation so operators do not reuse client-specific field-service
+  or commerce contracts.
+- The agreement presents the $299 / $89 / $149 founder schedule, the exact
+  monthly content-service limits, exclusions, photo-use responsibilities, and
+  the Stripe recurring-authorization path before an operator sends it.
+
+## 2026-09-14 — Trajectory pilot dashboard
+
+- Added responsive Overview, Transactions, Bills & Goals, Wealth & Debt, Business,
+  and Connections views within the existing Everbranch shell and visual tokens.
+- Added actual/projected cash charts, scenario comparisons, spending heatmap,
+  category and period charts, debt payoff curves, metal basis/value, net-worth
+  history and household-support revenue targets, with accessible chart tables.
+- Added reviewed import, exact split, classification/undo, plan editing, partner
+  invitation, bank setup and SMS opt-in dialogs. Missing provider data and
+  provisional estimates remain explicit. Local desktop/phone browser checks
+  exercise charts, scenario selection, goals, corrections and saved preferences.
+
+## 2026-09-14 — Trajectory medical sharing
+
+- Added a household Medical sharing tab with provider debt, paid amounts,
+  received shares, reserved cash, and an interactive costs/sharing chart with
+  accessible data tables and need drilldown.
+- Added Samaritan need/submission tracking, Prisma invoice defaults, upfront and
+  consolidated payment recording, expected-to-received share editing, statement
+  matching, and monthly contribution tracking for changing recipients.
+- Expected sharing and unmatched records show coverage clearly. Bank transaction
+  review opens linked medical records for corrections; the forecast drilldown
+  now shows medical reserves beside savings-goal reserves.
+
+## 2026-09-14 — Trajectory full-width workspace
+
+- Removed the shared reading-column limit and Trajectory's own width cap on
+  Trajectory pages. Charts and tables now fill the available width beside the
+  sidebar, with responsive outer gutters and no extra nested horizontal padding.
+
+### 2026-09-15 — Wholesale decision routing
+
+- Approve and Deny now post to their form endpoints; Resend honors its explicit button override. This fixes the embedded Safari CSRF symptom caused by posting back to the detail page.
+
+- Paid proposals include a dedicated confirmation banner. The payment-confirmation email uses provider-confirmed amounts, a reconciled breakdown, and receipt/agreement links without a payment prompt.
+## 2026-10-06 — Tenant mail setup and inbox (staged)
+
+- Added a Mail branch for entitled workspaces and a Set up Mail branch for admins who need to request it.
+- Added tenant-scoped inbox, sent, draft, and trash views; search, compose, read/unread, stars, and admin controls for addresses and member access.
+- Cloudflare setup accepts a one-use zone-scoped token. It adds ownership proof and changes MX only after transport readiness and a conflict check. Other DNS providers can use the manual records.
+- No production mail server or customer domain is activated by this change.

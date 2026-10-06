@@ -1,0 +1,36 @@
+name: Release Failure Alert
+
+on:
+  workflow_run:
+    workflows: [Deploy Production]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    if: github.event.workflow_run.conclusion != 'success'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Notify the configured operations webhook
+        env:
+          RELEASE_ALERT_WEBHOOK_URL: ${{ secrets.RELEASE_ALERT_WEBHOOK_URL }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+          RESULT: ${{ github.event.workflow_run.conclusion }}
+        run: |
+          set -euo pipefail
+          if [ -z "$RELEASE_ALERT_WEBHOOK_URL" ]; then
+            echo "::warning::Release alert skipped: configure RELEASE_ALERT_WEBHOOK_URL in the production environment."
+            exit 0
+          fi
+
+          payload="$(jq -cn --arg text "Everbranch production release ${RESULT}: ${RELEASE_SHA}. Investigate ${RUN_URL}" '{text: $text}')"
+          if ! curl --fail --silent --show-error --max-time 20 --request POST \
+            --header 'Content-Type: application/json' \
+            --data "$payload" \
+            "$RELEASE_ALERT_WEBHOOK_URL"; then
+            echo "::warning::Release alert webhook did not accept the notification. The failed deployment remains visible in GitHub Actions."
+          fi

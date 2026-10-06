@@ -1353,14 +1353,12 @@ GRAPHQL;
             }
         }
 
+        // A bundle name is not an instruction to offer a scent picker. Fixed
+        // bundles (for example the Apple Bundle) deliberately have no Product
+        // Options assignment, and must never fall through to the full active
+        // scent catalogue simply because their title contains "bundle".
         if ($ruleset === null && $bundleDefinition === null) {
-            $isBundle = str_contains($normalized, 'bundle')
-                || str_contains($normalizedHandle, 'bundle')
-                || collect($tags)->contains(fn ($tag): bool => str_contains(strtolower((string) $tag), 'bundle'));
-
-            if (! $isBundle) {
-                return null;
-            }
+            return null;
         }
 
         $requiredCount = (int) ($ruleset['option_count'] ?? $bundleDefinition['required_scent_count'] ?? max(1, $this->bundleCountFromTitle($normalized)));

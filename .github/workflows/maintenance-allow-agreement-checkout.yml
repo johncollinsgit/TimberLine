@@ -1,0 +1,110 @@
+name: Maintenance Allow Agreement Checkout
+
+on:
+  workflow_dispatch:
+    inputs:
+      tenant_slug:
+        description: Tenant slug to add to the production agreement-checkout allowlist
+        required: true
+        default: carolina-barrel-co
+        type: string
+      actor_email:
+        description: Existing operator email used to verify the draft afterward
+        required: true
+        default: johncollinsemail@gmail.com
+        type: string
+      confirm_allowlist:
+        description: Confirm the production Checkout allowlist change
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  allowlist:
+    name: Allow Agreement Checkout
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - name: Checkout maintenance helper
+        uses: actions/checkout@v6
+
+      - name: Validate request and production configuration
+        env:
+          CONFIRM_ALLOWLIST: ${{ github.event.inputs.confirm_allowlist }}
+          TARGET_TENANT: ${{ github.event.inputs.tenant_slug }}
+          ACTOR_EMAIL: ${{ github.event.inputs.actor_email }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          for var in DEPLOY_HOST DEPLOY_USER DEPLOY_PORT DEPLOY_PATH DEPLOY_SSH_KEY; do
+            if [ -z "${!var}" ]; then
+              echo "::error::Missing required production configuration: $var"
+              exit 1
+            fi
+          done
+          if [ "$CONFIRM_ALLOWLIST" != "true" ]; then
+            echo "::error::confirm_allowlist must be true."
+            exit 1
+          fi
+          if ! printf '%s' "$TARGET_TENANT" | grep -Eq '^[a-z0-9]+(-[a-z0-9]+)*$'; then
+            echo "::error::Invalid tenant slug."
+            exit 1
+          fi
+          if ! printf '%s' "$ACTOR_EMAIL" | grep -Eiq '^[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}$'; then
+            echo "::error::Invalid actor email."
+            exit 1
+          fi
+
+      - name: Configure SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Prepare the explicit production allowlist
+        env:
+          TARGET_TENANT: ${{ github.event.inputs.tenant_slug }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          scp -i ~/.ssh/deploy_key -P "$DEPLOY_PORT" \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/.env" \
+            "$RUNNER_TEMP/current.env"
+          php scripts/ci/add-env-allowlist-value.php \
+            "$RUNNER_TEMP/current.env" \
+            "$RUNNER_TEMP/updated.env" \
+            "$TARGET_TENANT"
+          scp -i ~/.ssh/deploy_key -P "$DEPLOY_PORT" \
+            "$RUNNER_TEMP/updated.env" \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/.env.pending-$GITHUB_RUN_ID"
+
+      - name: Refresh configuration and verify agreement readiness
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          TARGET_TENANT: ${{ github.event.inputs.tenant_slug }}
+          ACTOR_EMAIL: ${{ github.event.inputs.actor_email }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "set -euo pipefail; cd '$DEPLOY_PATH'; pending='.env.pending-$GITHUB_RUN_ID'; backup='.env.backup-$GITHUB_RUN_ID'; grep -q '^APP_KEY=' \"\$pending\"; grep -q '^EVERBRANCH_AGREEMENT_CHECKOUT_TENANT_SLUGS=.*$TARGET_TENANT' \"\$pending\"; cp .env \"\$backup\"; mv \"\$pending\" .env; if ! php artisan config:clear || ! php artisan config:cache; then cp \"\$backup\" .env; php artisan config:clear; php artisan config:cache; exit 1; fi; php artisan everbranch:prepare-managed-website-agreement '$TARGET_TENANT' --actor-email='$ACTOR_EMAIL' --json"

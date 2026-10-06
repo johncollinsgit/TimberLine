@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Landlord;
 
 use App\Http\Controllers\Controller;
 use App\Models\TenantBudSetting;
-use App\Models\TenantSupportTicket;
 use App\Models\User;
 use App\Services\Bud\TenantBudService;
 use App\Services\Mobile\TenantMobileSupportService;
@@ -22,7 +21,10 @@ class LandlordSupportTicketController extends Controller
         $payload = $this->support->landlordIndex($status);
         $query = trim((string) $request->query('q', ''));
         $tickets = collect($payload['tickets']);
-        if ($query !== '') $tickets = $tickets->filter(fn (array $ticket): bool => str($ticket['subject'].' '.$ticket['tenant'].' '.$ticket['creator'])->contains($query, true));
+        if ($query !== '') {
+            $tickets = $tickets->filter(fn (array $ticket): bool => str($ticket['subject'].' '.$ticket['tenant'].' '.$ticket['creator'])->contains($query, true));
+        }
+
         return view('landlord.support-tickets.index', ['tickets' => $tickets->values(), 'status' => $status, 'query' => $query]);
     }
 
@@ -36,6 +38,7 @@ class LandlordSupportTicketController extends Controller
         $data = $request->validate(['body' => ['required', 'string', 'max:8000']]);
         $payload = $this->support->landlordShow($ticket);
         $this->support->reply((int) $payload['ticket']['tenant_id'], $ticket, $request->user(), $data['body'], 'landlord');
+
         return back()->with('success', 'Reply sent to the workspace thread.');
     }
 
@@ -43,6 +46,7 @@ class LandlordSupportTicketController extends Controller
     {
         $data = $request->validate(['status' => ['required', 'in:open,in_progress,waiting_on_tenant,resolved,closed'], 'priority' => ['required', 'in:low,normal,high,urgent'], 'assign_to_me' => ['nullable', 'boolean'], 'resolution_summary' => ['nullable', 'string', 'max:8000']]);
         $this->support->triage($ticket, $request->user(), $data);
+
         return back()->with('success', 'Ticket updated.');
     }
 
@@ -50,6 +54,20 @@ class LandlordSupportTicketController extends Controller
     {
         $data = $request->validate(['decision' => ['required', 'in:approve,decline'], 'review_notes' => ['nullable', 'string', 'max:2000']]);
         $this->bud->review($setting, $request->user(), $data['decision'] === 'approve', $data['review_notes'] ?? null);
+
         return back()->with('success', 'Bud access decision saved.');
+    }
+
+    public function reviewBudAi(Request $request, TenantBudSetting $setting): RedirectResponse
+    {
+        $data = $request->validate([
+            'decision' => ['required', 'in:approve,decline'],
+            'monthly_budget' => ['nullable', 'numeric', 'min:0', 'max:1000'],
+            'review_notes' => ['nullable', 'string', 'max:2000'],
+        ]);
+        $budgetCents = (int) round(((float) ($data['monthly_budget'] ?? 0)) * 100);
+        $this->bud->reviewAi($setting, $request->user(), $data['decision'] === 'approve', $budgetCents, $data['review_notes'] ?? null);
+
+        return back()->with('success', 'Bud AI plan decision saved. Provider setup and the workspace cap remain required before any AI usage can occur.');
     }
 }

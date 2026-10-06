@@ -8,6 +8,14 @@
 - Tenant-facing payloads and copy use Branches. Bootstrap returns `branches`; `modules` and `/modules/{key}` remain compatibility aliases through the next app release.
 - Landlord access is independent from workspace membership and exposes audited triage only. Destructive tenant/configuration and live billing changes remain web-only.
 
+## Customer Administration Contract (2026-08-08)
+
+- The Customers Branch list and detail remain available to entitled workspace members. The API returns `permissions.manage` for presentation, but Laravel independently requires `mobile:write`, current tenant membership, the Customers Branch, and owner/admin equivalence on every mutation.
+- Owner/admin users may create and edit tenant-owned customer profiles from the native app. Email and phone identities are normalized and duplicates are rejected inside the current tenant.
+- Hard delete is not general customer management. It is allowed only for an app-created `mobile_manual` profile with no connected provider, work, messaging, consent, delivery, reward, birthday, or group history. Connected profiles return `409` and remain available for editing.
+- Every create, update, and safe delete writes an immutable operator audit record. The mobile app never queues customer mutations offline.
+- Collins Upstate Electric appears through ordinary authenticated workspace membership and the workspace switcher. No Collins slug, user email, or tenant ID is a client authorization rule.
+
 ## Field Service Contract v4 / Work 2.0
 
 - Work 2.0 extends the existing Field Service aggregate. It does not add `WorkOrder`, `Appointment`, or a universal task table.
@@ -17,8 +25,24 @@
 - Bootstrap resolves one server-owned profile (`trades`, `professional`, `retail_production`, `generic`) from tenant blueprint metadata. Entitlement metadata controls `experience_version`; Collins is the first version-2 trades pilot.
 - Contract v4 adds profile labels/capabilities, viewer capabilities, readiness, typed destinations, My Day, guarded transitions, task ownership/completion, notification feed/unread state, and separate photo/document counts.
 - Mobile and web use the same readiness, access, lifecycle, and transition services. Clients display permissions but never grant them.
-- Everbranch APNs uses the `com.everbranch.app` device table and dedicated credentials. Modern Forestry push infrastructure is a separate product boundary.
+- Everbranch push devices share the Everbranch-only device table and are separated by platform. iOS delivery uses the dedicated `com.everbranch.app` APNs credentials; Android delivery uses a dedicated Firebase service account through FCM HTTP v1. Modern Forestry push infrastructure remains a separate product boundary.
+
+Android push delivery stays disabled until `EVERBRANCH_FCM_ENABLED=true` and the project ID, service-account client email, and one private-key source are configured. The sender exchanges a short-lived signed service-account JWT at Google's OAuth token endpoint, requests only the `firebase.messaging` scope, and sends directly to the configured Firebase project. Never commit the service-account JSON or private key. A Firebase `UNREGISTERED` response disables only that device token so a later app registration can replace it.
 - Compatibility routes remain active. Other tenant profiles continue their existing Work surfaces until their renderer is deliberately upgraded and tested.
+
+## Manager Time Clock & Hours Contract (2026-09-03)
+
+- `GET /api/mobile/v1/workspaces/{tenant}/field-service/time-clock-hours` requires `FieldServiceAccessService::canManageJobs` and the enabled `time_tracking` entitlement. Supported presets are `week`, `pay_period`, and `month`; `custom` requires inclusive `start_date` and `end_date` values and is capped at 366 days. The response identifies the tenant timezone, aggregates approved/submitted time by employee, job, and local day, and pages a unified timer/manual ledger at 10–50 rows per page.
+- `edit_options` is limited to 250 active workspace members and 250 relevant jobs, with explicit truncation flags. Every submitted employee/job choice is independently resolved inside the current tenant; the response is presentation metadata, not authorization.
+- `PATCH .../time-clock-hours/{source}/{id}` accepts a nonempty subset of timestamps, break seconds, `submitted|approved|rejected` status, notes, employee, and job. Running and paused timers cannot be corrected. End must follow start, breaks must be shorter than the period, manual entries remain on one local date with whole-minute breaks, and duration is server-recomputed.
+- A timer correction changes `field_service_time_sessions.break_seconds` as the reviewed aggregate while preserving each `field_service_time_breaks` punch. The audit records the before/after aggregate and unchanged raw event count/seconds. Employee reassignment checks the tenant/user/client UUID idempotency key before writing and returns validation failure rather than exposing a database conflict.
+- This surface reports operational timecards only. It does not calculate overtime, wages, payroll, taxes, withholding, filings, remittance, or payments.
+
+## Manager Material Request and Job Edit Contract (2026-09-03)
+
+- Manager My Day returns at most 25 pending `requested_materials` rows and a separate exact `counts.material_requests`. Each row includes job, requester when known, creation time, status, purchase/delete permissions, and a typed destination for the job Materials tab. Existing rows without a requester remain valid with `requester: null`.
+- The manager-only material DELETE route re-resolves tenant, job, and request; it rejects inventory/catalog/provider material and writes an audit snapshot before deletion. Purchasing continues through the existing material update route and may retain an admin note for the crew.
+- The Team response supplies active, tenant-scoped vehicle choices only to job managers. Full job edits independently validate active leads/participants, vehicles, and strict schedule ordering, then audit supported fields and assignment IDs. Lock-box audit state is boolean-only; the secret itself is never recorded.
 
 ## Boundaries
 

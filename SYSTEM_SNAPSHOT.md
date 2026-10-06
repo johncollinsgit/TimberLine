@@ -2,10 +2,695 @@
 
 ## Tenant mailboxes (2026-10-06, implementation staged)
 
-- The Email Branch now has tenant-scoped mail domains, shared mailboxes, explicit member grants, and a three-pane inbox/compose workspace at `/mail`. Mail remains module-gated and pending until domain transport verification; no mailbox is activated merely by creating its address.
-- SendGrid remains the default outbound provider and can feed a strictly token-guarded inbound parse endpoint. A separate, disabled-by-default direct transport can submit via per-mailbox authenticated SMTP and sync inbound messages over JMAP from a dedicated Stalwart host. The management API provisions domains and accounts only after the direct transport gate is enabled.
-- Wren Family Soccer is tenant slug `wren-family-soccer`, with planned address `info@easleyfamilysoccer.com`. The address is not live until server, DNS, credentials, module entitlement, and end-to-end delivery checks complete. The operational plan is `docs/operations/everbranch-mail-service.md`.
-- Stalwart Community does not provide native multi-tenant isolation. Everbranch's per-tenant domain uniqueness, route/module checks, mailbox membership checks, and encrypted account credentials are required boundaries. Mail-server administrators retain cross-tenant privilege.
+- Tenant mail domains, mailboxes, grants, messages, inbox UI, and guided signup are implemented on the email provider reliability branch. Signup creates a pending record and an auditable Email Branch access request; it does not activate delivery.
+- Cloudflare quick setup uses a one-time token scoped to an active matching zone. It adds the ownership TXT and adds MX only after the transport is provisioned and no other MX exists. Other DNS providers use the same displayed records manually.
+- SendGrid inbound parse and a disabled-by-default dedicated Stalwart SMTP/JMAP transport are prepared. Wren's `info@easleyfamilysoccer.com` remains unprovisioned in production. See `docs/operations/everbranch-mail-service.md`.
+
+## Field mobile Job Notes PDF attachments (2026-10-06)
+
+- Mobile job comments accept `attachment_asset_ids` for PDFs already uploaded in guarded chunks to the same job by the same user. The API verifies tenant, job, uploader, team visibility, type, and unused note association, then links the PDF to the new note. Job Notes on iOS, Android, and web return the same attached asset.
+- Deploy this API contract before Everbranch Field 2.3.22/build 36; its Job Notes composer sends these IDs after secure PDF upload.
+
+## Everbranch Android push delivery (development, 2026-10-05)
+
+- Android push delivery is implemented through Firebase Cloud Messaging HTTP v1. It uses the existing Everbranch platform-separated device registration and a dedicated, default-disabled Firebase service-account configuration. Production remains disabled until the credentials are installed through Forge and the release gate completes.
+
+## Field-service job creation for active members (2026-10-05)
+
+- Active members of an entitled field-service workspace can create a job from the browser or mobile app. Member-created jobs are assigned to their creator so they remain visible under assignment-only job visibility. Members cannot assign another user, add other participants, attach vehicles or invoices during creation; existing job management and financial permissions are unchanged.
+
+## Collins material request evidence (2026-10-05)
+
+- The field mobile API accepts comments and camera/library photos on a specific job material request. Comments reuse tenant-scoped job notes with `metadata.field_service_material_id`; photos reuse team-visible workspace assets with the same material reference. The job detail returns `materials[].comments` and `materials[].photos` alongside existing material fields. No separate commerce, inventory, or QuickBooks record is created.
+- Every write resolves the current active workspace, job, and material on the server and requires the existing job progress permission. The material ID must belong to that job and tenant. Each photo request accepts one image so a retry cannot duplicate part of a batch. The iPhone JSON fallback validates the decoded image type, and photo retries use a per-material idempotency key.
+
+## Collins general time and team alerts (2026-10-05)
+
+- Field employees may clock in without a job. A nullable `field_service_time_sessions.field_service_job_id` records general work; job-specific clock-ins retain assignment and shift checks. Time summaries, corrections, history, and audits preserve the null job instead of showing job ID zero.
+- New team messages queue an iOS APNs alert after commit for active members who can access the channel. The sender, muted members, and members who turn off team message alerts are excluded. Alerts carry workspace and channel IDs but no message body. The mobile app registers its device token after permission, opens the channel from the alert, and exposes a Team messages switch under Notifications. APNs delivery still requires the production Everbranch APNs key configuration and device permission.
+
+## Collins employee mobile workspace correction (2026-10-05)
+
+- Andrew, Carlos, and Neal had unintended active Modern Forestry memberships from workspace invitations. Production memberships were corrected and audited: all three now belong only to Collins Electric as members. No account, customer, order, or job records were deleted.
+- The mobile workspace list now returns active memberships only, matching the server gate on every workspace data route. The web teammate invitation form names its target workspace next to the submit action so operators can verify the destination before inviting.
+- Team channel summaries include the latest visible message preview and author for a familiar mobile inbox. Previews are returned only inside a tenant-gated, channel-visible response.
+
+## Private CRM Fleet integration (2026-10-04; pilot disabled)
+
+Everbranch Fleet adds a private HighLevel installation layer at `/crm/fleet`,
+with one new tenant per client location, encrypted provider grants, verified
+CRM administrator bindings, cookie-independent short-lived sessions, native
+HighLevel subscription authority, durable signed lifecycle webhooks, and
+Bouncie device selection limited to 25. Collection remains disabled until
+native billing and the two-client pilot are verified; `config/highlevel.php`
+contains the separate surface, billing, collection and location allowlist gates.
+Standalone Fleet/Bouncie routes remain available. The embedded app exposes
+Fleet, Connection and Settings only. See
+`docs/operations/highlevel-fleet-runbook.md` for onboarding, acceptance, support
+and safe rollback; existing production hosting and CI/Forge deployment are used.
+
+Production release `f53af086` passed GitHub gates and deployed through Forge.
+The developer portal shows private version 1.0.0 live, with no installations.
+Collection/billing verification remain off and the pilot allowlist is empty.
+Nginx limits CRM embedding to `/crm/fleet`; `/shopify/app` retains its Shopify
+frame policies. Queue reservations are 180s for the existing 120s scheduled
+worker. `/crm/fleet/guide` provides setup and disconnect instructions. The additional Bouncie callback and an inactive trip webhook are registered.
+The restricted browser map key, payouts and live pilots remain launch prerequisites. See the runbook for production evidence and config-cache
+release ID preservation.
+
+## Modern Forestry fundraising invoice desk (development, 2026-10-02)
+
+- The October 6 repair gives the Shopify embedded fundraiser POST controls the
+  same session-token authentication path as other embedded actions without an
+  iframe CSRF cookie and the correct Shopify frame response policy. The order list, review queue, and invoice packages show
+  purchased Shopify product titles and quantities. Invoice delivery is
+  controlled to `info@theforestrystudio.com`. Before a QuickBooks invoice
+  write, the connected operator and live company identity must match John
+  Collins's Modern Forestry connection; a Collins Upstate Electric connection
+  fails closed.
+- The Shopify embedded Fundraising tab reads tenant-scoped BSF-tagged imported
+  Shopify orders and displays recent order-month candle proceeds and linked
+  invoice queue/packages. The Shopify order ID is the match key. An hourly
+  detector queues orders from September 1 onward; the already-invoiced August
+  orders are intentionally outside automated backfill.
+- Purchased-label cost is pulled from ShopifyQL by exact order ID, with
+  receipt-backed manual entry when missing. Staff approves each order. It is
+  separate from checkout shipping. Live Shopify amount/tag/refund/label checks block stale
+  approvals and QuickBooks actions. The first-of-month task prepares packages
+  only; staff explicitly creates and sends the QuickBooks invoice behind the
+  default-off production gates. A customer payment link is fetched from the
+  matching Intuit invoice, not constructed from an admin URL.
+- The additive fundraiser encrypted-storage repair must deploy before detector
+  writes. No customer invoice was created or sent by this development change.
+  See `docs/operations/modern-forestry-fundraiser-order-invoicing-runbook.md`.
+
+## Modern Forestry birthday issuance coverage (development, 2026-10-02)
+
+- Production tenant `modern-forestry` now has an audited tenant-specific $10
+  birthday discount-code setting with a birthday-through-day-30 claim window,
+  matching the public Birthday Club offer. The older global fallback still
+  contains a migrated 50 Candle Cash amount; do not remove the tenant override
+  or treat that fallback as the retail offer.
+- Release `454fdcb` fixed the daily issuance task to scan all roughly 2,900
+  birthday profiles and cap eligible rewards at 500. A full dry run had found
+  132 eligible profiles beyond the old first-500 slice.
+- The reviewed catchup campaign for birthdays March 13–October 2, 2026 has
+  1,475 currently email-consented unrewarded profiles, representing at most
+  1,463 distinct deliverable addresses after duplicate and missing-email
+  checks. Its pending operator command uses fresh 30-day claim windows, a
+  dedicated belated-birthday template,
+  and an idempotent email event key. Do not run `--execute` until the owner
+  approves the email preview. Birthday codes will combine with eligible free
+  shipping discounts but not Candle Cash or other product/order discounts.
+  The new Shopify birthday gift page handles the belated cohort; a separate
+  birthday celebration page handles future rewards. Both reveal the $10 code
+  after sign-in and link to candle bundles.
+- Four 50 Candle Cash birthday awards were already posted before this
+  correction. Preserve their ledger history and review any customer balance
+  adjustment separately. The public Birthday Club page still links to the
+  retired `/apps/birthday` path, which returns 404.
+
+## Public launch partner offer (2026-10-02)
+
+- Evergrove and Everbranch share the public Launch Partner offer in `config/product_surfaces.php`: $499 one-time setup, $89/month for the first six billing months, then $199/month. The first six months total $1,033 before taxes or add-ons.
+- This is prospective public pricing. Existing client agreements, subscription authorizations, Stripe subscriptions, and the client-specific Front Yard Foods and Collins Electric agreement templates retain their recorded terms and rates.
+
+## Website Commerce encrypted storage repair (2026-10-02)
+
+Website order, order-event, fulfillment-location, shipping-quote, shipment, and
+shipment-event private array fields now use `LONGTEXT` storage to match their
+encrypted Eloquent casts. The original MySQL JSON columns rejected ciphertext
+and prevented order creation. The additive repair migration is safe to retry
+after a partial MySQL DDL and encrypts any legacy plaintext JSON values. It
+does not alter Website checkout readiness, payment, or shipping gates.
+
+## Everbranch Field App Store repair (development, 2026-10-01)
+
+The Safari in-app reviewer login exposed a production 419 on form POST even though a plain HTTP PKCE probe passed. An isolated, host-only, unpartitioned SameSite=Lax session cookie preserved Shopify embedded cookie behavior but did not clear the simulator 419. The new field build uses native email/password API login, with existing Fortify-style TOTP or recovery-code verification and the same 30-day mobile token as PKCE exchange. Confirm native login and secure token storage on simulator and a physical iPhone before submission.
+
+App Store Connect rejects iOS 2.3.3 build 16 under guideline 4.8 for native Google sign-in without an equivalent privacy-preserving service and guideline 2.1 for reviewer login failure. Earlier guideline 3.2 distribution concern is resolved by Apple's unlisted approval, case 20000141339318. The unlisted link is `https://apps.apple.com/us/app/everbranch-field/id6798258874`; a tenant account and active membership still gate access.
+
+The paired backend/native release based on current `main` offers email/password native sign-in, removes the requested job status and completion/archive controls, keeps job crew hours manager-only, adds daily-first personal hours with weekly/monthly navigation, and exposes visible read/unread controls. The production reviewer credentials passed an HTTP/PKCE login probe on October 1. Real-device smoke, backend release-gated deployment, updated screenshots, and review submission are still required. QuickBooks hours write-back is a separate default-off Collins-only design; the existing connector remains read-only and payroll stays in QuickBooks.
+
+The field app's first-party password request and setup forms on canonical Everbranch app and tenant hosts must use the same host-only, SameSite=Lax, unpartitioned session profile as its Safari login form. Otherwise iPhone WebKit can drop the session between reset-page GET and POST and show a 419 “Page Expired” despite a valid reset token. Keep the partitioned platform cookie profile for unrelated routes and Shopify embedding.
+
+Email verification notifications use a 60-minute signed `/email/confirm/{id}/{hash}` link on `app.theeverbranch.com`. The link confirms the addressed account without requiring the email browser to share a login session; a valid link never changes the signed-in account. The confirmation page uses the first-party mobile auth cookie profile so sign-in from that page can keep its session on iPhone. Existing Fortify `/email/verify` links remain valid under their original signed-in-account rule until they expire.
+
+After confirmation, a signed-in team member lands on entitled Field Service work (or Account Help if Field Service is unavailable) rather than the admin-only dashboard. The same role-aware destination applies when a signed-in member opens `/login`. Only an existing same-host `/mobile/authorize` handoff survives confirmation; stale intended URLs are cleared.
+
+The workspace team invite flow creates an unverified account and emails a password-setup token. After the password broker accepts that emailed token and the password is saved, the account is marked email-verified and emits `Verified`; a failed token or an unrelated password reset does not verify an account. Existing invitees who completed setup before this repair need a fresh signed confirmation link.
+
+Build 17's employee My Hours screen calls `GET /api/mobile/v1/workspaces/{tenant}/field-service/clock/history` with `period=day|week|month` and a nonnegative `offset`. The route returns the signed-in employee's own completed timer sessions and manual entries, grouped by the workspace timezone and clock-in/work date. Submitted and approved entries count toward totals; rejected entries remain visible but do not count. It requires the tenant's `time_tracking` entitlement and returns the latest correction-request status for each timer session. Installable development builds may be paired with the server before this route reaches production, but My Hours requires the backend release.
+
+## Collins employee mobile release (2026-09-30)
+
+The production field API already supports private resumable PDF uploads, photo payload retries, guarded galleries, and manager time review. The employee release adds assignment-scoped My Day and clock-in while preserving Collins' all-operational job browsing, active-teammate direct and group conversations, and owner/admin-only employee role changes. The companion native build exposes assigned upcoming jobs, group composition, password reset, and a guarded full-image gallery fallback. Deploy the backend through the GitHub test/build gate before installing the paired native build; verify `/ready` and the phone smoke in `docs/collins-electric-access-and-quickbooks.md`.
+
+The People directory in Messages lists active tenant teammates with their membership role. Employees can search by name, open a teammate profile, start a private conversation, or select the person for a named group. Inactive accounts and memberships cannot be selected for new direct or group conversations. Conversation search and unread counts are native client controls.
+
+## Modern Forestry operator sales summary (2026-09-30)
+
+- The landlord-authorized mobile bootstrap includes a read-only
+  `modern_forestry_sales` report for the `modern-forestry` workspace. It combines
+  imported Shopify retail and wholesale orders for today, the current week, and
+  the current month, with per-store order counts, gross amounts, recorded refunds,
+  and amounts after recorded refunds.
+- This is operational order evidence from Everbranch, not Shopify payout or
+  accounting income. The response names its source and basis; mixed currencies,
+  a missing workspace, or missing reporting columns fail closed without invented
+  zeroes. Processing fees, taxes, payouts, and accounting net income remain
+  unreconciled and outside this report.
+
+## Jarvis customer-acquisition read rail (2026-09-30)
+
+- The landlord-authorized mobile bootstrap exposes a read-only
+  `customer_acquisition` summary backed by the existing landlord prospect
+  pipeline: stage counts, follow-ups due, and a bounded list of prospects that
+  need attention. It does not expose message bodies, email addresses, or phone
+  numbers in this summary.
+- This rail does not authorize discovery or external action. Google Places
+  discovery requires the existing explicit cost confirmation; outreach sends,
+  meeting bookings, conversion, and tenant onboarding retain their existing
+  Everbranch review, authorization, provider, and audit gates.
+
+## Evergrove landlord revenue rail (2026-10-01)
+
+- The landlord-authorized mobile bootstrap reports Evergrove Software revenue
+  from Stripe-confirmed Everbranch billing receipts. Verified cash subtracts
+  succeeded refunds; recurring and one-time totals come from the recorded
+  pre-tax invoice line classifications.
+- Tenant commerce remains a separate ledger. Catalog MRR is a run rate rather
+  than cash received, and taxes or refunds are not silently allocated across
+  recurring and one-time categories. Mixed currencies and unverifiable Stripe
+  mode fail closed without invented zeroes.
+
+## Shared website catalog administration (2026-09-21)
+
+Products, Collections, Customers, and Orders have separate workspace destinations
+for every tenant with Managed Website access. Products use dedicated editors with
+photo uploads/previews, variants, cents-based pricing, inventory and organization.
+Collections use tenant-owned `website_collections` and membership records. Active
+catalog edits are independent of static-page drafts and publishing. Carolina's
+connected renderer consumes these records; publishing pages never reimports or
+resurrects catalog products. Customer detail editing requires editor access but
+not checkout activation. Payment/fulfillment gates remain in force. See
+`docs/operations/website-catalog-admin.md` for release and rollback.
+
+
+## Carolina Barrel connected website (2026-09-21)
+
+Carolina Barrel's existing Cloudflare site now has an opt-in Everbranch content
+editor, versioned draft/preview/publish/restore controls, an independently editable quote-product catalog,
+and workspace inquiry capture. Its existing renderer and public domain remain in
+place. Other sites retain the generic editor. No accounts, payments, or entitlements
+are activated by this integration; quote emails are explicit staff responses. See
+`docs/operations/connected-carolina-website.md` for release, gates and rollback.
+
+## Carolina Barrel quote workflow (2026-09-23)
+
+All public Carolina Barrel catalog products are quote-only; the anonymous catalog
+response omits retail and variant price values. The request form requires name,
+email, phone, and quantity. **Orders → Quotes** is the tenant-owned
+queue for those requests; an authorized staff member may send and record a reply.
+Quote attribution requires an exact normalized email-and-phone match to a Website
+customer and may link a later native Website order. This remains wholly inside the
+`website_*` / tenant form-submission lane and never touches legacy, Shopify, or
+marketing customer/order data.
+
+
+
+## Website client workspace focus (2026-09-21)
+
+- Access-profile metadata `workspace_focus: website_sales` opts a tenant into
+  the same website/sales menu for its client and operator. Navigation, dashboard,
+  branch discovery, and search follow this focus; personal finance, legacy
+  shipping, production, marketing administration, and unrelated branch prompts
+  are omitted. Existing module and role authorization still applies.
+- This is a presentation setting, not impersonation or a billing/entitlement
+  change. Other workspaces and standalone Trajectory access stay unchanged.
+  See `docs/operations/website-client-workspace.md`.
+
+## Client project launch checklists (2026-09-21)
+
+- Tenant logins now expose a two-owner launch checklist at
+  `/client/projects/checklist` when a client project opts in through metadata.
+  It reuses client-project tickets/tasks, enforces active membership and
+  ownership, and audits completion/reopen without activating business services.
+- Import reviewed tenant content with `client-projects:import-checklist`;
+  preview is default and replay preserves existing progress. See
+  `docs/operations/client-project-checklists.md`. Imports send no notifications.
+
+
+## Trajectory financial outlook charts (2026-09-19)
+
+The main dashboard now pairs the daily cash outlook with monthly expected-income,
+income-needed, and reviewed-history lines. `outlook.js` consumes existing scoped
+forecast and planning payloads; the monthly income plan remains distinct from daily
+bill timing. `chart-theme.js` provides shared accessible HTML legends, light tooltips,
+and compact currency axes. `chart-series.js` joins projection paths to the last
+observed cash point without adding observed records. Currency remains integer cents.
+Looking Ahead leads the dashboard. Separate Trend lines, Month by month, and
+Actual vs. projected tabs preserve distinct balance and income-rate semantics.
+The dashboard opens on the Month by month Income runway comparison: projected income
+using the same future dates last year, an explicit last-year reference line, and
+expected cash-outflow bars. Users can switch projected income to their current
+income plan or recent reviewed income, while Cash balance remains available as a
+separate monthly mode. The comparison never silently changes the daily cash
+forecast. Monthly cash bars use closing observations/estimates, never sums of
+balances; missing observations stay null. The monthly unexpected-expense card
+ranks scoped, posted Face Punched charges and links to their evidence.
+See `docs/operations/trajectory-runbook.md` for chart validation.
+
+## Fleet map Bouncie recovery (2026-09-16)
+
+- Mobile crew-map reads now refresh the connected tenant's mapped company-vehicle positions from Bouncie at most every 30 seconds, with a tenant lock and safe connection-health metadata. Existing positions survive provider outages, subject to the configured retention window. Snapshots retain the provider timestamp and are identified as last-known positions, never a new GPS fix.
+- Bouncie `tripData` webhooks ingest each `data[].gps` sample using its own timestamp; overlapping deliveries deduplicate by device, timestamp, and coordinates. Invalid, future, expired, unmapped, ambiguous, inactive, and unapproved points are ignored. No provider payload, speed, token, or coordinates enter diagnostic logs.
+- The iPhone map improvements are shipped from `everbranch-mobile` separately. See `docs/operations/field-operations-location-tracking-runbook.md`.
+
+## Wholesale application reliability (2026-09-15)
+
+Wholesale applications now commit a tenant-owned request, form mirror, and durable
+review-notification state before returning a receipt. The minute scheduler retries
+failed review/decision emails and the detail page shows delivery status. Review
+email defaults to info@theforestrystudio.com; links launch the wholesale Shopify
+Admin app. Approval requires a successful Shopify wholesale tag sync and never
+activates an internal user or grants tenant membership. Buyer emails use Shopify
+account activation/login, not Everbranch password setup. See
+`docs/operations/wholesale-application-reliability.md`.
+## Trajectory standalone experience and evidence imports (2026-09-14)
+
+Trajectory has its own public `/trajectory/welcome` page and full-width authenticated `/trajectory` navigation. It reuses Everbranch login, finance spaces, financial permissions, and entitlements; the Back to Everbranch link does not change financial access. Personal-only use remains independent of company books. Checkout remains disabled until configured prices and lifecycle readiness pass.
+
+The dashboard includes subscription evidence, upcoming loan payments, account cash history, historical month comparison, dated budget versions, receipts, and interest by account. Imported cash history is not net-worth history. Unknown card terms leave purchases on the card liability and do not invent cash payments or APRs. Monthly and actual/365 biweekly debt calculations retain decimal rates; separate mortgage withdrawals expose the suspense/allocation assumption.
+
+Trajectory now opens with Personal, Business, and, when both authorized spaces exist, Both controls. Both is a reconciliation-aware overview and a cross-space transaction-review queue; it does not combine income or spending until the spaces are linked. The Review transactions destination surfaces up to 250 outstanding imported items across history so users can categorize them without changing the reporting period. Detailed planning remains scoped to Personal or Business.
+
+`trajectory:import-household` imports private Monarch history, optional Chase CSV and Monarch balance history, dated account observations, budgets, receipts, and reviewed financial records. It requires an existing verified household owner and entitlement. The default executes validation inside a rolled-back transaction; `--apply` commits atomically. Import identities, audited evidence corrections, and record replay markers preserve subsequent user corrections. Keep every real input, receipt, screenshot, database, and financial export outside git and public fixtures. See `docs/operations/trajectory-runbook.md`.
+
+
+## Level Foundations private transcription bridge (2026-09-07)
+
+- Everbranch has a default-disabled, rate-limited server-to-server transcription bridge for the separately hosted Level Foundations editor. It validates an integration bearer token and a 25 MB audio upload, makes one provider request with Everbranch's configured AI credential, and returns text only. It creates no Everbranch tenant/user records and retains or logs neither audio nor transcript content.
+- Activation requires the dedicated `LEVEL_FOUNDATIONS_TRANSCRIPTION_ENABLED` and `LEVEL_FOUNDATIONS_TRANSCRIPTION_TOKEN` runtime values plus the existing Bud provider credential. The Level Foundations runtime receives only its own endpoint URL and shared integration token. See `docs/operations/level-foundations-transcription-runbook.md`.
+
+## Managed Website first-time setup (2026-09-06)
+
+- An entitled, allowlisted tenant may open Website before a site record exists,
+  choose an approved starter theme, and create a private draft. The setup screen
+  remains fail-closed for publishing, domains, checkout, and billing.
+
+## Full-width landlord workspace (2026-09-06)
+
+- Everbranch Admin pages use the full available canvas beside the navigation
+  rail. Wide intake queues, tenant-management tables, filters, and commercial
+  controls no longer inherit the tenant reading-column cap; tenant surfaces
+  keep their existing width unless the user's wide-layout preference is on.
+
+## Collins QuickBooks generator history (2026-09-03)
+
+- Read-only QuickBooks invoice syncs now promote only clear whole-generator installation evidence into tenant-scoped equipment, retain generator-related connection/transfer work for review, and attach unambiguous annual generator service invoices to the matching equipment history. The equipment board keeps the last service and schedules the next annual due date; the daily scanner creates one-month-out work and guarded alerts. The source audit is `docs/operations/collins-generator-invoice-history-2026-09-03.md`.
+
+## Mobile manager hours and material-request inbox (2026-09-03)
+
+- Field Service owners/admins/managers with the `time_tracking` entitlement have a tenant-scoped mobile Time Clock & Hours contract. It provides bounded week, pay-period, month, or custom reporting; approved/submitted totals; employee, job, and day rollups; and a paginated ledger combining timer sessions with manual entries.
+- Managers may correct only completed timer sessions or manual entries. The server validates active workspace employees, tenant jobs, timestamps, breaks, and review status; recomputes duration; rejects idempotency collisions; and records before/after audit evidence. Raw timer break punches remain immutable when a manager corrects the reviewed break aggregate. This remains timecard reporting, not payroll or overtime calculation.
+- The manager My Day response includes up to 25 pending material-request cards plus an exact uncapped pending count. Cards identify the job and requester and deep-link to the Materials tab; purchase notes and manager-only deletion remain tenant-scoped and deletion records an audit snapshot.
+- Manager team metadata exposes active tenant vehicle choices for the full job editor. Job changes validate tenant employees/vehicles and schedule ordering and are audited without storing lock-box values.
+
+## Mobile field files and material requests (2026-09-03)
+
+- The native job surface uses Overview, Job notes, Materials, and Pics/Drawings; the Tasks tab and My Day task feed are no longer part of the mobile experience.
+- Assigned employees can create job-scoped material requests. Owners/admins/managers are notified, can mark a request purchased, and can attach a purchase note that remains visible to the crew.
+- Authenticated image thumbnails are generated at upload or on first legacy read, cached privately for seven days, and do not create full-download audit noise. Mobile photo uploads and deletes use bounded concurrency with per-file progress and retry-safe deletion.
+
+## Field Service address search (2026-09-02)
+
+- Admins and managers can search a Service address while editing a job. A selected Google Places result fills the street, city, state, postal code, and country fields through tenant-authorized Everbranch endpoints; the Places key remains server-side. Without a configured key or a provider response, the form quietly remains available for manual entry.
+
+## Operational customer directory and calendar context (2026-08-24)
+
+- Field-service workspaces use a focused customer directory backed by canonical
+  `marketing_profiles`. It omits retail-only Growave, loyalty, review, and
+  birthday controls, supports recoverable archival, and preserves linked jobs
+  and history. Retail marketing presentation remains separate.
+- The Field Service calendar can display read-only upcoming events from the
+  existing tenant-owned Google Calendar connection. It does not create, change,
+  or delete Google events; OAuth and workflow-automation entitlement gates
+  remain required.
+
+## Shopify State Sales Tax Reporting (2026-08-20)
+
+- Modern Forestry Backstage now exposes a tenant-scoped, read-only **Sales Tax
+  Reports** workspace with two presets: **State Sales Tax Summary** and
+  **State Sales Tax Detail**. It reads imported Shopify retail orders only for
+  the signed embedded store, displays imported sales/refund/tax data by
+  delivery state, and keeps delivery-address detail visible for jurisdiction
+  verification.
+- This is reconciliation support, never a tax engine: it does not infer a
+  county or municipality, decide taxability, calculate a filing liability,
+  submit a return, make a payment, or change Shopify/Square/QuickBooks data.
+  See `docs/operations/shopify-state-sales-tax-reporting-runbook.md`.
+
+## Modern Forestry fundraiser invoice preparation (2026-08-19)
+
+- Modern Forestry's verified retail Shopify Settings surface now includes a
+  tenant-scoped **Fundraiser Order Invoicing** configuration card. It records
+  the fundraiser company, payer contact, internal notification address
+  (`info@theforestrystudio.com` by default), planned invoice cadence, payment
+  terms, and shipping/tax handling posture.
+- A token-protected Zapier endpoint accepts one fundraiser order at a time into
+  the dedicated `modern_forestry_fundraiser_orders` queue. It encrypts the
+  recipient and shipping address, requires item/quantity/cents detail, retains
+  only source-supplied shipping/tax amounts, and rejects conflicting replays by
+  external order ID. It is never a Shopify, Website Commerce, or legacy-order
+  record.
+- Operators manually approve each source amount before they can prepare an
+  immutable CSV accounting-review package. On the first day of each month, the
+  monthly cadence packages the prior calendar month's approved orders into
+  deterministic `BSF-MMM-YYYY` packages. Separate production-enabled environment
+  gates can create and send the reviewed invoice through the tenant-owned
+  QuickBooks OAuth connection. Exact customer/item mappings are mandatory,
+  taxed packages fail closed, and persisted provider IDs make retries safe. See
+  `docs/operations/modern-forestry-fundraiser-order-invoicing-runbook.md`.
+
+## Modern Forestry embedded app-base compatibility (2026-08-19)
+
+- The live Modern Forestry Backstage App URL is the Everbranch root. Shopify
+  therefore loads Admin deep links such as `/settings` and
+  `/product-options` directly at that root, not beneath `/shopify/app`.
+- Root `settings` now resolves the same Shopify-verified settings controller as
+  `/shopify/app/settings`; root `product-options` resolves the same
+  retail-surface-protected Product Options controller as
+  `/shopify/app/product-options`. Keep their canonical internal routes and
+  their root compatibility entries aligned. `shopify.app.toml` reflects the
+  root App URL; a Shopify app-version deployment is required to alter the
+  Partner-side configuration.
+
+## Everbranch social-preview refresh (2026-08-14)
+
+- Public share metadata now uses `public/og-image-v2.png`: a minimal,
+  high-contrast Everbranch card with the mark directly on the artwork and the
+  concise message **Work, in one place.** The new filename provides a clean
+  social-cache boundary; its brand-asset cache tag remains derived by
+  `config/everbranch.php`.
+
+## Modern Forestry Product Options and Bag-Reminder Safety (2026-08-13)
+
+- `ShopifyProductOptionsService` is the Everbranch authority for Modern
+  Forestry bundle scent selectors. Each product handle may belong to one active
+  ruleset only; collisions fail closed. The mapping includes the reported-good
+  16oz `bundle` and excludes the fixed-scent Apple bundle.
+- The mobile catalog must never infer a scent selector solely from a product
+  title or tag containing “bundle.” Unassigned fixed bundles return no selector,
+  and mobile checkout rejects stale `Scent N` attributes for them.
+- Legacy Infinite Options remains unchanged as the read-only comparison
+  baseline. Do not alter it without explicit owner approval or enable it
+  alongside the Everbranch block on the same product template.
+- A paid, non-cancelled Shopify order completes matching Modern Forestry mobile
+  bag snapshots by customer email. Completed snapshots are excluded from
+  reminder sends and stale cart sync cannot reactivate them.
+
+## Wholesale Email Messenger (2026-08-11)
+
+- MF Wholesale Backstage now exposes **Email Messenger** before Suggestions at
+  `/shopify/app/wholesale/messaging`. Its Shopify-authenticated, tenant/store
+  scoped draft is stored in `wholesale_email_messenger_drafts` and begins as
+  **Bring Modern Forestry to your store** with sixteen editable blocks.
+- The editor may send only explicitly entered test emails through the existing
+  provider path; it has no campaign or prospect send control. The compliance
+  footer stays server-locked, and any future campaign delivery must retain the
+  existing consent, unsubscribe, bounce, and suppression enforcement. See
+  `docs/operations/wholesale-email-messenger-runbook.md`.
+
+## Shopify bundle scent checkout enforcement (2026-07-30)
+
+- Everbranch Product Options remains a Shopify-only, tenant-scoped module.
+  Assigned option sets render through the active storefront app embed as well
+  as the optional product block, so a missing block placement cannot leave a
+  configured bundle without selectors.
+- The everbranch-bundle-scent-validation Shopify Function is the
+  non-bypassable checkout gate for Shop Pay and other express checkout paths.
+  It reads Everbranch rule JSON from each assigned product's bundle scent rule
+  metafield, with migration fallbacks for the initially assigned Modern
+  Forestry bundle handles.
+- Product Option actions synchronize those product metafields through the
+  tenant-owned installed Shopify store. The product-option-validation command
+  previews the initial/backfill sync and requires explicit apply for writes.
+
+## Everbranch public-site studio redesign (2026-08-07)
+
+- The canonical public Everbranch marketing surface (`/`, Plans, access/demo,
+  Contact, and the Module Explorer) now uses a shared warm product-studio
+  design system. The redesign is public-only: it does not alter authenticated
+  workspaces, tenant websites, Shopify integrations or embedded apps, pricing
+  logic, or the `platform.access-request` conversion path.
+- The homepage uses approved/public-safe editorial media and fictional product
+  data. Its hero crossfades between three lightweight still scenes, including
+  field technicians and a business owner planning work in the office. The
+  movement is disabled for reduced-motion users; public-only GSAP motion is
+  dynamically loaded for the product story. See
+  `docs/operations/public-site-media-runbook.md` for media provenance,
+  caption/transcript, derivative, and release requirements.
+- Six industry cards link to public-only, fictional website-to-workspace pages
+  for retail, field service, project work, independent studios, professional
+  practices, and community teams. Each page has a contextual return/type/view
+  control bar and switches Website / Operations workspace views immediately.
+  The website, workspace, messaging, email, and text-marketing examples are
+  client-side presentation only and never enable Managed Website, Shopify, or
+  delivery lanes.
+- Visual checks live in `tests/e2e/public` and run with
+  `npm run test:visual`; `npm run test:lighthouse:public` enforces the public
+  accessibility, layout-stability, and performance budgets. Focused server
+  checks protect primary navigation and launch-partner links. Production
+  remains gated by the existing Forge/GitHub release process.
+- The homepage’s **See the Everbranch story** control now opens a lazy-loaded,
+  silent-first 90-second Remotion explainer. Its controlled, public-safe
+  visuals show retail, wholesale, and field-service contexts, then connect
+  familiar business systems to Everbranch around one customer. It never reads
+  tenant or customer data; source, narration, timing, and photo provenance live
+  under `remotion/` and `docs/operations/everbranch-story-photo-sources.md`.
+  The centered story dialog keeps the video as the visual focus. An intentionally
+  unlinked, `noindex` surprise route may be
+  shared directly; it switches after four seconds to the official YouTube embed
+  and does not host third-party music-video content.
+
+## Modern Forestry customer and Shopify production guard (audit updated 2026-08-06)
+
+- Production `/ready` reports the active release and both Modern Forestry
+  Shopify storefronts respond. The per-store read-only import-health check
+  confirmed fresh successful retail and wholesale imports. This is the
+  production evidence baseline, not authorization to run an import or mutate
+  Shopify outside the normal scheduler and release process. It does **not**
+  prove staff embedded access: the audit found retail rejecting Shopify's
+  signed `admin_theme` launch parameter and wholesale using a stale production
+  client secret. Both were corrected in release `2de2ed7d`; future signed
+  scalar Shopify metadata is verified without expanding the navigation
+  context, and both store smoke launches passed.
+- Candle Cash legacy conversion is reconciled: the production validation found
+  all legacy candidates tagged, no rows needing correction, and zero
+  balance-table/ledger mismatches. The compatibility observation remains
+  intentionally active, so old points columns must not yet be removed.
+- Birthday history is preserved in tenant-scoped profiles, imported rewards,
+  and redemption history. The feature supports old birthday CSV state, Shopify
+  discount issuance/reconciliation, and customer reward status without a data
+  re-import or reset.
+- Candle Club is **not a live Shopify subscription-mutation lane**. The July 2
+  subscriptions foundation deliberately entitles Modern Forestry for its
+  mirror/workspace while leaving setup incomplete, no migration batch approved,
+  and the billing scheduler disabled. The current active contract is visible,
+  but no active poll or monthly scent schedule is configured. Staff/customer
+  pause, cancel, swap, address, and billing-change actions remain auditable
+  intents until a separately authorized Shopify/Recharge cutover.
+- Future development must run `composer test:modern-forestry` when it affects
+  Modern Forestry commerce surfaces. The full CI/Forge gate runs all Pest
+  tests; `ShopifyEmbeddedSurfaceIsolationTest` prevents retail/wholesale
+  cross-surface search or mutation access. Managed Website work remains a hard
+  exclusion from Modern Forestry Shopify, checkout, customer, rewards, imports,
+  connections, and webhooks.
+
+## Tenant Website product workspace (2026-08-02)
+
+- Every tenant with the existing Managed Website entitlement now receives a
+  dedicated **Products** item immediately below **Website** in the application
+  sidebar. It is a shared Managed Website capability, not a Carolina Barrel Co.
+  special case and not a separate billable module.
+- Products remain isolated by both `tenant_id` and `tenant_site_id` in the
+  existing `website_*` data lane. Operators can create, read, update, safely
+  archive, CSV-export, and transactional CSV-import catalog items, including an
+  optional wholesale price and product image URL. Archival preserves order
+  history and makes product variants unavailable instead of deleting records.
+- CSV imports match by normalized handle, accept no more than 1,000 rows, and
+  roll the entire file back when a row is invalid. They never read or write
+  legacy orders, Shopify catalogs, provider records, or another tenant's site.
+
+## Evergrove Public Booking Page (2026-07-30)
+
+- `https://evergrovesoftware.com/book` is the branded public consultation page for Evergrove Software. It links to John Collins's externally created Google Calendar appointment schedule only when `GOOGLE_BOOKING_URL` contains a valid HTTPS URL.
+- When scheduling is not configured, the page fails safely to a direct email option at `john@evergrovesoftware.com`; it never renders an empty or unsafe booking link.
+- Google Calendar appointment schedules remain operator-created in the Google Calendar interface. The application only presents the configured public booking URL.
+
+## Managed Website domain isolation and platform-home correction (2026-07-27)
+
+- `theeverbranch.com` is a platform-only public host. A prior Managed Website
+  public fallback could treat it as the flagship Modern Forestry tenant and
+  render a tenant theme there. The renderer now explicitly excludes the
+  canonical public host at `/` and fallback paths; a regression test protects
+  that boundary. Tenant sites remain limited to their approved subdomain or
+  an explicit active custom-domain record.
+- `tenant_site_domains` is additive and tenant-owned. The Website workspace
+  exposes a guided domain flow: normalize the customer-owned domain, create a
+  unique encrypted TXT proof, verify authoritative DNS, then activate only
+  when the published-site, global custom-domain, tenant allowlist, and
+  independent activation gate all pass. No registrar credentials are stored;
+  verification does not modify DNS or enable a hostname by itself.
+- Custom domain rollback is host-local: disabling the domain stops that public
+  host without deleting Website snapshots, forms, customer records, orders,
+  provider connections, workflows, or unrelated Everbranch services.
+- Active external Website hosts are public-render/form-only and use a
+  host-local session cookie. App/login, landlord, API, Shopify, webhook, and
+  workspace namespaces return 404 there rather than becoming alternate app
+  origins.
+- Published child pages on an active custom domain use Laravel's final
+  fallback only after all explicit routes have precedence. It renders GET/HEAD
+  only, requires `managed_website_custom_domain` host context, and resolves an
+  exact immutable tenant page; unknown paths and JSON requests return 404,
+  while a real route with the wrong method retains 405. This avoids the former
+  global GET catch-all, which could shadow later application routes and turn
+  unrelated POSTs into 405s.
+
+## Managed Website Safety Contract (approved, not enabled) (2026-07-27)
+
+- **Everbranch Managed Website** is the planned default-disabled,
+  tenant-scoped Website add-on ($99/month plus $499 setup). It is not a live
+  entitlement until verified/audited commercial fulfilment, rollout allowlist,
+  host-isolation, publishing, and rollback-drill gates pass.
+- V1 uses additive tenant site/page/draft/immutable-version/section/navigation/
+  media/redirect/publish-event records. Public sites read only immutable
+  snapshots on `<workspace>.theeverbranch.com`; unknown or unverified hosts
+  fail closed and existing routes take precedence.
+- Modern Forestry's separate Shopify app and Shopify Checkout are explicitly
+  excluded. Managed Website must not change or call their routes, UI,
+  credentials, checkout, customer account, webhooks, orders, customers,
+  rewards, imports, connections, or workflow cursors; Modern Forestry is not a
+  pilot.
+- Four audited, independent fail-closed controls are required: global
+  availability, tenant rollout allowlist, editor/publishing freeze, and public
+  rendering disablement for Managed Website hosts. Normal rollback keeps the
+  last good public snapshot; security/isolation rollback disables only website
+  hosts. See `docs/operations/managed-website-rollback-runbook.md`.
+- Website forms remain normal tenant-scoped submissions. They do not create
+  customers, send messages, modify marketing audiences, trigger workflows, or
+  process commerce. Shopify/Square/Stripe/booking CTAs link to external systems
+  of record.
+
+## Rich Website themes and draft preview (2026-07-27)
+
+- Site-wide Website draft/published state is immutable and separate from page
+  versions: `tenant_site_versions` owns theme settings, navigation, footer,
+  announcement, SEO defaults, source manifests, and optional thumbnail paths.
+  A publish moves only the site-local published pointer after copying the
+  current draft snapshot. Public rendering therefore cannot pick up unpublished
+  menu or styling edits.
+- `tenant_site_media` is an additive tenant-owned, public-site-only image
+  library. It accepts approved image types only and is resolved server-side;
+  private field-service, customer, and workspace files are out of scope.
+- The Website editor's desktop/mobile iframe is an authenticated, `no-store`
+  edit canvas rendered by the public-site renderer. Canvas clicks select and
+  focus the matching individual text, CTA, image, card/FAQ item, or navigation
+  control rather than following customer links. A separate
+  authenticated, no-store full-site draft preview resolves internal links only
+  to owned preview pages and includes a private toolbar back to the exact
+  editor page; neither preview can fall through to the Everbranch workspace.
+- HVAC Service, Collins Upstate Electric, and Outdoor Elements are complete
+  six-page starter packs with structured menus, announcements, banners, FAQs,
+  forms, service cards, and original generated starter imagery. Collins content
+  remains a draft prepared only by explicit operator action; it is not published.
+
+## Sawyer Naturals Website demo and Pirate Ship spreadsheet bridge (2026-10-01)
+
+- The isolated `feature/sawyer-naturals-demo-2026-10-01` branch prepares a Sawyer Naturals tenant, the requested John admin membership, a sourced retail catalog and bundled imagery, branded public pages/storefront, a site-scoped shopper email-link account and order history, and a default-off tenant-allowlisted Pirate Ship CSV bridge. Sawyer's own user waits for his email.
+- Pirate Ship has no public API. The bridge exports paid shipping orders for Pirate Ship spreadsheet upload and imports verified tracking into tenant-owned `website_*` fulfillment/shipment records. Native EasyPost shipping remains a separate option. Shop Pay appears only as a disabled feasibility preview pending merchant Shopify configuration; no live payment, gift card redemption, or unverified apparel variant can be implied.
+- `MANAGED_WEBSITE_COMMERCE_PREVIEW_TENANT_IDS` admits an exact tenant to catalog/cart interaction while the global commerce checkout gate remains off. Checkout readiness explicitly fails while `MANAGED_WEBSITE_COMMERCE_ENABLED=false`; do not open global commerce just to demonstrate a bag.
+- Live activation follows the existing Managed Website gates, GitHub/Forge release path, merchant content/rights review, verified host, Stripe/tax/webhook/shipping readiness. See `docs/operations/sawyer-naturals-demo-and-pirate-ship.md`.
+
+## Website Commerce and live editor (default-disabled) (2026-07-27)
+
+- Website now has a dedicated full-screen editor route with a Shopify-inspired
+  section outline, live desktop/mobile canvas, inspector, drag reorder,
+  autosave, page switcher, safe imagery, section visibility, and publish
+  controls. HVAC, Collins, and Outdoor Elements start with distinct structured
+  page content. It retains Everbranch names/assets and the
+  immutable Managed Website version and rollback contract.
+- `website_*` records own native Website products, variants, inventory
+  movements/reservations, carts, shoppers, orders, payments, fulfillments, and
+  signed Stripe event receipts. They are deliberately separate from legacy
+  orders, Shopify records, Modern Forestry customer data, rewards, and
+  provider connections.
+- Merchant checkout is fail-closed: the Website commercial gate, entitlement,
+  tenant allowlist, Stripe Connect account, verified webhook policy, and tax
+  decision must pass. Physical orders support pickup/manual local delivery.
+  Native US-domestic shipping is a separate default-disabled,
+  tenant-allowlisted EasyPost pilot: the tenant must own its connection,
+  location, and package setup. It is isolated from Modern Forestry shipping
+  and legacy orders.
+- The separate default-disabled, tenant-allowlisted connected-commerce lane
+  supports Shopify, WooCommerce, Squarespace, and Wix mapping reports.
+  Provider-specific adapters normalize IDs into encrypted source snapshots;
+  they never write native Website, Shopify/Modern Forestry, legacy-order, or
+  marketing-eligibility data.
+- Sales-channel reporting exposes a tenant-scoped, read-only summary of
+  confirmed sources, including native Website payments alongside existing
+  provider sales. It never copies Website records into legacy `orders`, merges
+  shoppers, or changes Modern Forestry's Shopify checkout/source-of-truth.
+
+## Modern Forestry App Store Customer Login Recovery (2026-07-25)
+
+- Modern Forestry's Headless Customer Account integration is a public
+  authorization-code/PKCE client. Production requires its existing
+  `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID`; `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET`
+  remains optional and is used only when an intentionally confidential client
+  is configured.
+- Shopify discovery may advertise `client_secret_basic` support globally. That
+  capability does not make the public Headless client confidential and must not
+  make `/auth/config` report `configured=false`.
+- Production `/ready` and `config:doctor --env=production` now fail closed when
+  the public Customer Account client ID is missing, preventing another
+  successful-looking release with App Store customer login disabled.
+- Login configuration reads and readiness probes do not mutate customer
+  identity, Candle Cash balances or transactions, birthdays, rewards, Shopify
+  customers, or customer profile links.
+
+## Operator Alerts and Landlord Branches Preview (2026-07-25)
+
+- `/landlord/branches` is the landlord-only Branch catalog preview. It lets an
+  operator select a workspace and inspect the same customer-facing Branch
+  catalog payload without mutating billing, module access, or entitlements.
+  The route is host-locked to the landlord app, protected by
+  `landlord.operator`, and appears as **Branches** in the Everbranch Admin
+  sidebar.
+- Landlord navigation keeps **Home** pinned first, then sorts the remaining
+  Everbranch Admin links alphabetically for scannable operator use. Tenant
+  navigation ordering is unchanged.
+- `OperatorAlertService` is the single SMS alert gate for agreement acceptance,
+  support-ticket, Bud-request, and weekly-snapshot operator texts. It reserves
+  an `operator_alert_logs` row before any send, records sent/failed/suppressed
+  status, and returns without texting if the reservation/dedupe layer is
+  unavailable.
+- Operator SMS delivery has no hardcoded destination. Production must set
+  `EVERBRANCH_OPERATOR_ALERT_PHONE`; `EVERBRANCH_OPERATOR_ALERT_SMS_ENABLED`
+  defaults to enabled only when a phone is explicitly configured and can be set
+  false to keep logging without texting.
+- The legacy Modern Forestry mobile support-alert phone also has no code
+  fallback. It must come from `MODERN_FORESTRY_SUPPORT_ALERT_PHONE` or a
+  tenant-saved support-alert setting.
+- Alerts must represent real site activity. Sandbox-validation agreements,
+  “TEST MODE ONLY” agreements, known fixture tenants, demo/sandbox/test account
+  modes, `.test` or localhost request hosts, and test signer email domains are
+  suppressed and logged with reasons instead of texting. Repeated identical
+  same-tenant/event/message alerts are coalesced for
+  `EVERBRANCH_OPERATOR_ALERT_SMS_REPEAT_WINDOW_MINUTES` minutes, default 360.
+- Operating details and incident checks live in
+  `docs/operations/operator-alert-sms-runbook.md`.
 
 ## Canonical Customer Alias Identity Rule (2026-07-24)
 
@@ -20,6 +705,27 @@
 - Merge aliases do not own a separate customer balance after consolidation.
   Existing ledgers and balances remain authoritative; this identity rule does
   not authorize a Growave re-import, balance recalculation, or data migration.
+
+## Customer Loop and Bud foundation (2026-08-07)
+
+- Customer Loop is the tenant-scoped, review-first queue for a useful next
+  follow-up, review request, email, text, or social draft. Its activities and
+  actions are additive Everbranch records; they do not write back to Shopify,
+  Modern Forestry, Website Commerce, or marketing-delivery lanes.
+- The simple path is template-based. The advanced path is the existing
+  drag-and-drop Workflow Studio, which can create an idempotent,
+  review-only Customer Loop draft from a supported trigger. No Customer Loop
+  action sends or publishes anything.
+- Bud Core remains deterministic, included without tenant/operator approval,
+  and can read only safe, tenant-scoped workspace summaries and registered
+  capabilities. Only the global incident switch can make Core unavailable.
+  `BudCapabilityRegistry` is the required handoff point for every new
+  user-facing capability.
+- Bud AI and speech-to-speech are planned paid tiers, not live external-model
+  features: both flags default off, and neither has a provider call, voice
+  stream, or bill until its tenant/budget/confirmation contract is released.
+- Full architecture and future-tool constraints:
+  `docs/architecture/customer-loop-and-bud.md`.
 
 ## Workflow Studio v2 (2026-07-24)
 
@@ -115,12 +821,27 @@
 - Mobile Field Service contract v7 and My Day v5 expose canonical `assignees[]`, an assigned-to-me cursor feed, role-filtered mutations, and idempotent Send to Office handoffs to active owner/admin/manager recipients.
 - QuickBooks financial documents remain immutable owner-only evidence. Owner/admin Job Drafts provide edit, archive/restore, publish, and link-to-existing workflows with structured customer/address/schedule/crew/external-PM data, while omitting source numbers, private notes, amounts, and balances from the mobile contract.
 - Reusable `member_job_visibility=all_operational` is enabled for Collins. Every active Collins employee can browse current and past operational jobs, PM contacts, updates, tasks, and team files; edits, progress, and task completion retain assignment-based authorization.
-- PDF drawings upload from Files or Documents with a 25 MB limit into authenticated tenant/job-scoped storage. They default to team visibility, remain audited, and preview inline; QuickBooks attachments remain owner-only unless deliberately reclassified.
+- PDF drawings upload from Files or Documents with a configurable 50 MiB resumable limit into authenticated tenant/job-scoped storage. The production local-disk path uses two-hour sessions, UUID-keyed idempotent initialization, and ordered 512 KiB JSON chunks that remain below the reverse-proxy body limit. Per-chunk and final SHA-256, exact size, common header/object/xref/startxref/EOF validation on every PDF ingress, bounded safe Ghostscript parsing where configured, a non-cancelable completion lease, job-mutation authorization, bounded active-session/staging quotas, deterministic crash recovery, verified storage cleanup, and scheduled expiry protect durability. Legacy mobile multipart/base64 requests accept one PDF up to 25 MiB. Completed drawings default to team visibility and remain audited; authorized viewers receive a five-minute tenant/asset-bound signed URL so iOS can use byte ranges without buffering the full local PDF. QuickBooks attachments remain owner-only unless deliberately reclassified.
 - Job payloads include structured addresses and external PM contacts. Mobile and responsive web offer PM Call/Text, Apple Maps, Google Maps, and Files sections separating Drawings & PDFs from Photos.
 - Owner Home and the web Work surface expose Today, Monday-to-now This Week, and calendar-month cash-basis QuickBooks Money In/Money Spent plus Finished Jobs. Snapshots refresh on the queue and disconnected/stale states remain quiet. Financial values never enter employee payloads.
 - Onboarding uses explicit `baseline_auto`, `template_recommended`, `integration_required`, `operator_only`, and `internal_only` activation policies. Electrician templates recommend Field Service, Time Tracking, Team Communication, Field Inventory, Fleet, Documents, and QuickBooks; only included baseline modules activate automatically.
 - Mobile module bootstrap can enforce role declarations and `min_app_version` when the client reports `X-Everbranch-App-Version`. Everbranch 2.3.0 build 11 is the first client for Field Service contract v7 and consumes canonical `TenantBrandProfile` light/dark branding.
 - `php artisan everbranch:prepare-app-review-workspace --password=...` idempotently prepares the fictional, tenant-isolated Apple review workspace. Production execution additionally requires `--force-production`; the password is never printed or committed.
+
+## Independent invoices and job intake (2026-08-04)
+
+- Field Service now treats imported financial documents as a separate,
+  owner/admin-only invoice desk. Invoices remain tenant-owned QuickBooks
+  records whether linked to a job or not; a manager may create a fully manual
+  job, attach selected invoices during intake, or create a job from an invoice
+  with customer context prefilled. The import never creates a job solely from
+  an invoice link.
+- Field job rows lead with homeowner and visible service address. Field Service
+  customer lists show customers with a paid invoice in the prior twelve months
+  while retaining older records for authorized history; no financial or
+  customer history is deleted. Native address suggestions use Google Places
+  only when a server-side Places key is configured and otherwise fail quietly
+  to normal address entry.
 
 ## Operator Structure and Atomic Release Snapshot (2026-07-21)
 
@@ -170,12 +891,40 @@
   commit `c272464230f4c83366f8d57a635ac4c38876c5c8`; `/ready` returned HTTP
   200 with that commit as the active release ID. Routine SSH deployment is
   retired to an explicitly approved emergency-only recovery path.
+- **Migration-resume guard:** the dedicated MySQL 8.4 Migration Safety Gate is
+  mandatory for pull requests, direct/unverifiable production releases, every
+  schema-related release, and the emergency path. A verified non-schema merge
+  may reuse the passed PR gate only when its final tree exactly matches the
+  reviewed PR tree and the named PR checks passed.
+  It rejects edits to released migrations except exact checksum-pinned
+  clean-install compatibility repairs, unguarded table creation, generated or
+  explicit identifiers over MySQL's 64-character limit, and multi-step
+  migrations without a registered durable-partial-state recovery test. It then
+  rebuilds the prior commit's schema and rehearses the current upgrade twice.
+  The historical marketing import, message-group, Candle Cash override, and
+  billing-refund identifiers plus the external-profile composite key are
+  pinned to explicit safe definitions with MySQL restart tests; any other edit
+  to those migration files fails the checksum. Composite `utf8mb4` keys are
+  also linted against MySQL's 3072-byte InnoDB limit.
+  No operator may delete production tables to force a retry. The full contract
+  lives in `docs/operations/migration-safety-gate.md`.
+- **Forge observability:** an optional failure-only diagnostic uses Forge's
+  current API to retrieve `latestDeployment` after exact-SHA `/ready`
+  verification fails. Its code performs one GET and emits only allowlisted
+  commit/status/timestamp fields. It cannot deploy, retry, reset, or edit Forge,
+  and `/ready` remains the activation proof. Token creation and minimum read
+  scope selection are still an explicit operator configuration step.
+- **Default delivery:** completed scoped features merge to `main` and deploy
+  through the protected GitHub/Forge path unless John requests review-only
+  handling, a release gate fails, or a customer-data/isolation concern requires
+  an explicit hold. This never permits a direct or gate-bypassing release.
 - **Optimized CI posture:** pull requests run changed-file Pint plus one cached,
   parallel PHP 8.4 build/test gate, and superseded runs cancel automatically.
   PHP 8.5 compatibility runs nightly and whenever dependency/runtime inputs
-  change. The `main` push skips duplicate PR workflows, but the production
-  workflow still rebuilds and runs the full parallel suite against the exact
-  merge commit before it can call the protected Forge hook.
+  change. A `main` deploy proves merge provenance and exact tree identity before
+  reusing those named checks; otherwise it rebuilds and reruns the full suite.
+  This removes duplicate work without allowing an unreviewed or different tree
+  to reach Forge.
 - Normal release rules: additive/backward-compatible migrations only; build
   before activation; never use in-place `git reset`, `git clean`, cache clears,
   or public asset replacement as a standard deploy; use an audited emergency
@@ -194,7 +943,7 @@
 
 ## Agreements and Provider-Neutral Billing Authorization (2026-07-16)
 
-- Everbranch now has tenant-scoped agreements, immutable versions/content hashes, password-protected Evergrove proposal links, electronic acceptance evidence, permanent HTML snapshots, subscription authorizations, append-only events, termination/export tracking, and provider-confirmed receipt mirrors.
+- Everbranch now has tenant-scoped agreements, immutable versions/content hashes, expiring private Evergrove proposal links (no separate password), electronic acceptance evidence, permanent HTML snapshots, subscription authorizations, append-only events, termination/export tracking, and provider-confirmed receipt mirrors.
 - `/landlord/agreements` is the canonical landlord management surface. Tenant owners/admins receive read-only `/agreements` “User Agreements” without operator notes, raw IP addresses, user agents, password material, or internal references. Public proposals only resolve on configured Evergrove hosts and fail closed when expired or revoked.
 - Front Yard Foods is a client implementation project with no selected Everbranch collection provider. Its agreement separates Shopify store expenses, third-party apps/services, Everbranch one-time setup and monthly service, and Evergrove implementation work. Shopify Basic is $39 month-to-month or $29/month effective annually; Everbranch setup is $299; Launch Partner service is $59 for six cycles; ongoing service is $149 beginning cycle seven; implementation is configurable; out-of-scope work is $50/hour after written approval.
 - The Front Yard Foods implementation is phased through discovery/access, Shopify migration, Square/inventory workflow, classes/consultations/bookings, validation/training/launch, and post-launch handoff. Existing Shopify and Stripe rails remain disabled options until an explicit later billing-lane decision; this agreement does not choose one.
@@ -232,6 +981,8 @@
 - Collins Field Service usability pass (2026-07-13): Field Service is now the one canonical Work surface for field-service tenants; duplicate `work_core` discovery is hidden and legacy links remain aliases. QuickBooks evidence derives Quote, Active, Needs details, Complete, or History without changing source records or overwriting manual status. Activity older than one year is excluded from current counts/default lists but remains searchable in History. Calendar opens first and includes unscheduled work. Members receive only assigned, participating, task-linked, followed, or mentioned jobs; owner/admin users receive all Collins operations plus separately guarded financial detail. Jobs support participants, tasks, comments, mentions, notification eligibility, authenticated photo/document copies, and compact mobile detail. `collinselectric91@gmail.com` is provisioned as Collins owner; John remains admin with his other workspaces intact. Collins has Estimator enabled in owner-only draft mode with no QuickBooks write-back.
 - Everbranch Work 2.0 Collins pilot (2026-07-14): Field Service contract v4 adds computed field readiness, priorities, schedule end/start/cancel/block state, richer task ownership/completion fields, guarded lifecycle transitions, role-aware My Day, in-app unread updates, and dedicated Everbranch APNs delivery. Collins receives the complete `trades` renderer through `field_service` entitlement metadata `experience_version=2`; other tenants stay on their existing Work renderer until separately enabled. Mobile 2.0.0 keeps Home/Work/Search/Account/Branches, opens Collins Work to Calendar, and uses compact Overview/Tasks/Updates/Files job tabs. Web Calendar and job detail consume the same lifecycle/readiness/access services. No parallel WorkOrder, Appointment, universal task, QuickBooks write-back, GPS tracking, unattended iCloud crawl, or live SMS capability was introduced in that release.
 - Collins Field Operations v3 reusable upgrade (2026-07-21): additive tenant-scoped records now cover QuickBooks work candidates, job vehicles, timer sessions/breaks, employee invitations, company/job/direct channels and messages, material catalog/load state, and signed asset-upload intents. Mobile bootstrap v3 is server-navigated by role and entitled capability; Field Service contract v5 exposes Current/Potential/Past work, cursor pagination, arbitrary supported sorts, hours, vehicles, materials, clock actions, communication, and candidate review. The web Work grid and native clients share authorization, serializers, and mutation services. Private `WORKSPACE_ASSET_DISK` storage produces durable optimized copies/thumbnails with local-disk fallback during migration. Collins naming is limited to provisioning; runtime messages, assets, exports, and module behavior are tenant branded and reusable.
+- Field Operations workforce and tracking foundation (updated 2026-09-05): `time_tracking` supports tenant-scoped assigned shifts, optional enforced clock windows, employee timer-correction requests, manager resolution, audit evidence, and the existing approved-hours CSV handoff only (never payroll/tax calculation or payment). `fleet_tracking` is a separate default-disabled internal add-on with tenant-specific Bouncie OAuth connections, an authorized company-vehicle picker, separate Bouncie van and active-timer phone map pins, 30-day maximum raw retention, owner/admin-only access, policy/counsel/acknowledgement gates, idempotent signed webhook ingestion, and a global kill switch. See `docs/operations/field-operations-location-tracking-runbook.md`; no personal/off-duty tracking, speed scoring, geofence alerts, or automated employment decisions are in V1.
+- Green Shield Pest Control demo (2026-08-13): `everbranch:prepare-pest-control-demo` creates an idempotent, tenant-isolated fictional field-operations workspace with an explicitly public demo account, four fictional team members, two fictional vans, 20 varied service jobs, tasks, notes, shifts, fictional job-level income/cost records, a Bouncie-mapped fictional van, and separate fictional location points. Work opens with a seven-day calendar and each job can show an attributed OpenStreetMap-backed fictional route overlay. `/platform/demos/green-shield-pest-control` hosts the matching 30-second self-hosted Remotion tour; its CSRF-protected demo-only POST handoff signs into the isolated fictional account and opens that workspace directly. The fixture is not production evidence and the actual Fleet Tracking page remains behind the global rollout switch and all normal policy gates.
 - Work setup and archive refinement (2026-07-23): native Field Service job rows support manager-only swipe-to-reveal Archive, backed by the existing `history` lifecycle state and reversible Reopen action. Computed readiness is presented as neutral, field-specific setup actions instead of a warning. QuickBooks job addresses prefer a usable Ship To address, preserve an existing confirmed job site, and otherwise fall back to transaction billing or imported customer address without changing evidence classification. Uploaded tenant brand marks are served by the application rather than relying on a public-storage symlink, and the workspace-brand hero uses an opaque mark surface.
 - Shared dashboard range pass (2026-07-13): tenant dashboard and mobile bootstrap statistics use one range contract (`1d`, `1w`, `1m`, `30d`, `ytd`) with the current calendar month (`1m`) as default. Range filtering applies server-side to the tenant's operational metrics. QuickBooks P&L audit periods remain explicit YTD values and are not silently reinterpreted through the dashboard selector.
 - Tenant importer and Workspace Guide isolation pass (2026-07-13): Shopify import runs, mapping exceptions, bundle exceptions, and normalizations now carry direct tenant ownership with legacy backfill from orders/stores. Import banners, history, exception actions, dashboard import metrics, and search use the active tenant rather than the acting user's email or a global count. `/wiki` now requires tenant resolution: Modern Forestry keeps its operating wiki, while Collins and other non-flagship workspaces receive an Everbranch field-work guide and tenant-specific override storage. Multi-workspace switching is covered by cross-tenant regression tests.
@@ -485,6 +1236,15 @@ Historically, third-party systems like Growave used API/OAuth-style access, but 
 - Core service: `MarketingWishlistService`
 - CSV importer command: `marketing:import-wishlist-csv`
 - Wishlist data is now first-party and canonical
+
+### Rewards + wishlist operational summary
+- Tenant-scoped builder: `TenantRewardsWishlistWeeklySummaryService`
+- Command: `marketing:send-weekly-rewards-wishlist-summary`
+- Modern Forestry schedule: Monday at 08:30 `America/New_York`, delivered to `info@theforestrystudio.com`
+- The report reads canonical Candle Cash transactions/redemptions, wishlist items, and storefront telemetry. It contains aggregate operational metrics only and does not mutate customer or Shopify state.
+- `Working`, `Needs attention`, and neutral `No activity observed` labels prevent a quiet week from being misreported as an outage.
+- Storefront `reward_status_fallback_rendered` telemetry is accepted by the existing rewards-event endpoint so widget fallback usage appears in the report.
+- Operator runbook: `docs/operations/rewards-wishlist-weekly-summary.md`
 
 ### Analytics / segmentation
 - Analytics: `MarketingProfileAnalyticsService`
@@ -743,6 +1503,9 @@ Do not skip upward on this ladder without documenting why the simpler level was 
 - Tenant context services:
   - `app/Services/Tenancy/TenantResolver.php`
   - `app/Services/Tenancy/AuthenticatedTenantContextResolver.php`
+  - Tenant-scoped Team Access screens treat a resolved tenant hostname as
+    authoritative over a stale shared-session workspace selection; they must
+    never render one workspace's data inside another workspace's branded shell.
 - Tenant middleware + registration:
   - `app/Http/Middleware/EnsureTenantAccess.php`
   - `bootstrap/app.php` middleware aliases for `tenant.access` and `marketing.storefront.verify`
@@ -1269,3 +2032,102 @@ Scope guard:
 - The concierge export path remains `php artisan field-service:import-quickbooks FILE --tenant=collins-electric`. API identities use provider/type/external ID, and repeated live syncs must prove stable row counts with no duplicates.
 - This is read/import only. It does not write back to QuickBooks, enable payments/billing, schedule recurring sync, activate Estimator/payroll, or activate SMS/reminder sending.
 - Owner evidence may justify cards for quote backlog, quoted versus invoiced, receivables, completed-work value, supplies/vendor spend, contract labor, wages/payroll percentage, common job templates, and sync health. Do not activate those cards solely from assumptions; use the production audit.
+
+## Collins mobile field workflow refinement (2026-08-04)
+
+- Mobile Current Work hides archived jobs but preserves the underlying job record and its associated operational/accounting evidence. The mobile DELETE route is an archive action, restricted to job managers.
+- Work navigation opens to All Current Jobs for admins/managers and My Jobs for field employees, with an explicit switch between the two. QuickBooks invoices never auto-create jobs; they appear as draft-job opportunities in the admin Work screen and at the top of the Invoice Desk, including invoices attached only to a legacy auto-generated invoice job. Existing invoice-created import jobs are excluded immediately from current job, calendar, and My Day responses, then archived by the next sync, preserving history while cleaning Current Jobs. Every job has a dedicated lock-box-code field and plan-document upload area.
+- Job clock-in is employee/member-only. Photo capture uses the native camera path. Team channels are newest-first and include server-derived unread counts for the current viewer.
+## Managed Website launch-partner agreement (2026-09-06)
+
+- Landlord agreement preparation now includes a tenant-named Managed Website
+  template instead of reusing another client's contract. The default schedule
+  is $299 onboarding, $89/month for six cycles, and $149/month from cycle seven.
+- The immutable agreement spells out the monthly limits: one hosted website and
+  address, up to six launch pages, up to three named users, ten client-supplied
+  photo/catalog additions or replacements, two consolidated update requests,
+  and one reasonable revision round per request. Unused allowances do not roll
+  over and excluded work requires separate written approval.
+- The pricing explanation positions the offer as a managed, bespoke service:
+  the setup fee funds the launch foundation, while monthly service covers the
+  licensed platform, hosting/upkeep, hands-on bounded content work, and eligible
+  standard platform and AI-assisted improvements. It makes no promise of a
+  particular future feature, unlimited AI use, or unbounded custom programming.
+- Acceptance authorizes the existing tenant-linked Stripe Checkout subscription
+  and six-cycle promotional schedule. It does not charge or activate service
+  before the client accepts the exact version and completes provider Checkout.
+- `everbranch:prepare-managed-website-agreement` idempotently prepares the
+  unsigned tenant draft at those fixed defaults and emits a production-safe
+  billing-readiness summary. Its production maintenance workflow requires an
+  explicit confirmation input and never sends, accepts, or charges the draft.
+- The production Checkout allowlist has a separate confirmation-gated
+  maintenance workflow. It preserves and backs up the complete production
+  environment, refuses wildcard rollout, adds only one validated tenant slug,
+  refreshes cached configuration with rollback on failure, and re-runs the safe
+  agreement-readiness report.
+
+## Trajectory private financial planning Branch (2026-09-14)
+
+- `/trajectory` adds isolated household/business spaces, explicit partner sharing
+  and links, exact transaction allocations, reviewed imports and reconciliation,
+  bill schedules, goals, scenarios, debt estimates, reliance targets, and asset/
+  metals tracking. Trajectory is independent of Accounting Command Center.
+- Default-disabled pilot access uses the canonical module catalog/entitlements;
+  household membership never grants business financial access. Public checkout
+  remains closed and pilot preparation creates no charges or provider links.
+- Plaid bank synchronization, GoldAPI quotes and existing Twilio delivery are
+  adapters requiring provisioned provider access. QuickBooks snapshots remain
+  accounting truth; native sales/material evidence is read-only and non-additive.
+- The additive twelve-table schema and its MySQL recovery fixture preserve
+  records on rollback. Runbook: `docs/operations/trajectory-runbook.md`.
+- Real household/Modern Forestry statement reconciliation, production provider
+  acceptance and Stripe subscription lifecycle activation remain release gates;
+  local fictional data does not establish production readiness.
+- Accounts is the single account-management surface: it presents connected bank
+  feeds, connection state, manual/imported evidence, and direct Plaid linking.
+  Review transactions starts with bounded, user-confirmed bulk suggestions drawn
+  from consistent past reviews or unambiguous merchant-title context; ambiguous
+  merchants and money movements remain individual review work.
+
+### Trajectory medical sharing (2026-09-14)
+
+- The private household Medical sharing tab tracks ministry needs, provider
+  invoices, upfront/installment payments, expected/received shares, and monthly
+  contribution matches. Samaritan Ministries and Prisma Health are editable
+  form defaults; there is no direct ministry API or automatic submission.
+- `MedicalSharingService` uses encrypted records, exact statement matching,
+  allocation of consolidated provider payments, reversible classifications, and
+  dependency/household guards. Medical costs remain separate from owner income.
+- Interest-free provider plans contribute liabilities and stop at payoff;
+  received-share reserves reduce available cash and release with payments.
+  Expected shares never fund baseline forecasts or increase net worth.
+
+Wholesale application reviewers may use the tenant membership role `wholesale_reviewer`. It authorizes only wholesale application decisions for that tenant and requires active membership; it does not grant a global admin role or platform-access approval. See the wholesale application reliability runbook.
+
+Wholesale reviewer decisions resolve missing Shopify staff emails through verified online token exchange. Match the returned staff ID and verified email before looking up existing tenant reviewer membership; do not trust the store contact email as the acting staff identity.
+
+### Trajectory review reminders (2026-09-17)
+
+Opt-in daily/weekly private email digests now reuse Laravel transactional mail and queues. Accounts exposes recipient-specific controls; digest links select the authorized finance space and review queue. Encrypted audit events hold preferences and serialized delivery claims without a schema migration. See `docs/operations/trajectory-review-email.md` for pilot activation, diagnostics, and rollback.
+
+### Trajectory source coverage (2026-09-18)
+
+Trajectory keeps imported Monarch history only before matching live Plaid coverage. Overlap is excluded from forecasts, totals, and review queues without deleting evidence; reversible encrypted audit events record each account-level operation. The service runs after future Monarch imports and is available through the owner-scoped preview/apply/restore console command.
+
+## Trajectory finance controls — 2026-09-19
+
+- Space-scoped income plans, company selection/account ownership, debt strategy
+  comparison, anomaly review, tax evidence readiness, and P&L are implemented by
+  `WorkspaceService`, `PlanningService`, `DebtStrategyService`, `AnomalyService`,
+  and `TaxReviewService`; UI lives in `resources/js/trajectory/planning.js`.
+- Purchase context, reviewed merchant patterns, and business practice are separate
+  anomaly signals. Peer statistics are unavailable and never invented.
+- Shared Plaid account ownership survives sync; moves require source/destination
+  access and connection ownership, and block linked or split records.
+- Bud's finance endpoint is scoped deterministic Bud Core. Generative Bud AI and
+  empirical category benchmarking are not activated by this release.
+- See `docs/operations/trajectory-runbook.md` for setup, limits, and rollback.
+
+## Team message files (2026-10-05)
+
+Mobile conversations support up to five private photos/PDFs per message, 50 MB per file, through bounded 512 KiB chunk uploads. `team_message_attachments` owns these files on the private local disk. Channel access, current workspace membership, uploader ownership, exact checksums and detected MIME are checked server-side. Files become readable only after attachment to a visible message; workspace assets and Modern Forestry commerce are not involved.

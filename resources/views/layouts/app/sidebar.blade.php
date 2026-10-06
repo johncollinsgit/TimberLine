@@ -31,9 +31,24 @@
   $latestRun = $opsAttention['latest_run'] ?? null;
   $shellContext = (string) ($navigationShell['shell_context'] ?? 'tenant');
   $isLandlordShell = $shellContext === 'landlord';
+  $employeePreview = ! $isLandlordShell && $isAdmin && request()->boolean('employee_view');
+  $employeePreviewHref = request()->fullUrlWithQuery(['employee_view' => $employeePreview ? null : 1]);
+  if ($employeePreview) {
+      $orderedSidebarItems = $orderedSidebarItems->reject(
+          fn (array $item): bool => (string) ($item['key'] ?? '') === 'administration'
+      )->values();
+  }
+  $commandSearchEndpoint = $isLandlordShell ? route('landlord.search') : route('app.search');
+  $commandSearchDescription = $isLandlordShell
+      ? 'Search workspaces, setup, plans, modules, requests, and Everbranch Admin destinations.'
+      : 'Search authorized records, modules, actions, and destinations in this workspace.';
   $isNeutralTenantSurface = request()->routeIs('proposals.*', 'billing.*', 'payments.*', 'invoices.*')
       || request()->is('proposals*', 'billing*', 'payments*', 'invoices*');
   $activeTenant = $navigationShell['tenant'] ?? null;
+  $isCollinsWorkspace = ! $isLandlordShell
+      && ! $isNeutralTenantSurface
+      && $activeTenant instanceof \App\Models\Tenant
+      && in_array(strtolower(trim((string) $activeTenant->slug)), ['collins-electric', 'collins-upstate-electric'], true);
   $tenantBrand = app(\App\Services\Tenancy\TenantBrandProfileService::class)->presentationFor(
       ($isLandlordShell || $isNeutralTenantSurface) ? null : ($activeTenant instanceof \App\Models\Tenant ? $activeTenant : null)
   );
@@ -56,7 +71,9 @@
   $brandDarkLogoSrc = (string) $tenantBrand['dark_logo_url'];
   $brandHasFullLogo = ! $isLandlordShell && ! $isNeutralTenantSurface && (bool) ($tenantBrand['has_light_logo'] ?? false);
   $brandWordmark = trim((string) $tenantBrand['display_name']);
-  $assistantHref = route('shopify.embedded.assistant', absolute: false);
+  $assistantHref = $isLandlordShell
+      ? route('shopify.embedded.assistant', absolute: false)
+      : route('account-help.index', absolute: false);
   $footerUserName = trim((string) ($user?->name ?? '')) !== ''
       ? trim((string) $user?->name)
       : trim((string) ($user?->email ?? 'User'));
@@ -96,10 +113,54 @@
   data-tenant-display="{{ ($isLandlordShell || $isNeutralTenantSurface) ? 'classic' : $tenantBrand['display_style'] }}"
   data-tenant-corners="{{ ($isLandlordShell || $isNeutralTenantSurface) ? 'soft' : $tenantBrand['corner_style'] }}"
   style="{{ ($isLandlordShell || $isNeutralTenantSurface) ? '' : $tenantThemeStyle }}"
-  class="min-h-screen antialiased mf-app-shell {{ $wideLayout ? 'mf-wide' : '' }} {{ $compactTables ? 'mf-compact' : '' }} {{ (! $isLandlordShell && ! $isNeutralTenantSurface) ? 'mf-tenant-themed' : '' }}"
+  class="min-h-screen antialiased mf-app-shell {{ $wideLayout ? 'mf-wide' : '' }} {{ $compactTables ? 'mf-compact' : '' }} {{ $isLandlordShell ? 'mf-landlord-shell' : '' }} {{ (! $isLandlordShell && ! $isNeutralTenantSurface) ? 'mf-tenant-themed' : '' }} {{ $isCollinsWorkspace ? 'mf-collins-full-canvas' : '' }}"
 >
 
-<div class="min-h-screen flex">
+<header class="mf-global-bar" data-app-shell-topbar>
+  <div class="mf-global-brand">
+    <flux:sidebar.toggle class="lg:hidden mf-global-sidebar-toggle" icon="bars-2" />
+    <a href="{{ $hrefDashboard }}" wire:navigate class="mf-global-brand-link" aria-label="Open Everbranch home">
+      <span class="mf-global-brand-mark" aria-hidden="true"><img src="{{ asset('brand/everbranch-mark.svg') }}" alt="" /></span>
+      <span>Everbranch</span>
+    </a>
+  </div>
+
+  <button
+    type="button"
+    data-command-trigger
+    class="mf-global-search"
+    aria-label="Search or ask what you want to do..."
+  >
+    <flux:icon.magnifying-glass class="size-4" aria-hidden="true" />
+    <span class="mf-global-search-placeholder">Search</span>
+    <span class="mf-global-search-shortcut">⌘ K</span>
+  </button>
+
+  <div class="mf-global-actions">
+    @foreach($topbarContextPills as $pill)
+      <span class="mf-global-context">{{ $pill }}</span>
+    @endforeach
+    @if(! $isLandlordShell && $isAdmin)
+      <a href="{{ $employeePreviewHref }}" wire:navigate class="mf-global-employee-preview" title="{{ $employeePreview ? 'Return to the administrator workspace' : 'Preview the employee workspace' }}">
+        <flux:icon :icon="$employeePreview ? 'arrow-uturn-left' : 'eye'" class="size-4" aria-hidden="true" />
+        <span>{{ $employeePreview ? 'Exit employee view' : 'Employee view' }}</span>
+      </a>
+    @endif
+    <a
+      href="{{ $assistantHref }}"
+      wire:navigate
+      class="mf-global-bud"
+      data-assistant-entry
+      aria-label="Open Bud assistant"
+      title="Open Bud assistant"
+    >
+      <img src="{{ $brandMarkSrc }}" alt="" aria-hidden="true" />
+      <span>Bud</span>
+    </a>
+  </div>
+</header>
+
+<div class="mf-global-layout flex">
 
   {{-- Sidebar --}}
   <flux:sidebar
@@ -261,52 +322,8 @@
   {{-- Right side --}}
   <div class="flex-1 min-w-0 flex flex-col">
 
-    {{-- Mobile Header --}}
-    <flux:header class="lg:hidden mf-fade-in">
-      <flux:sidebar.toggle class="lg:hidden mf-transition" icon="bars-2" inset="left" />
-      <flux:spacer />
-      {{-- keep your auth dropdown --}}
-    </flux:header>
-
     {{-- Main content --}}
     <main id="app-main" class="mf-app-main flex-1 min-w-0 overflow-y-auto">
-      <div class="mf-shell-topbar" data-app-shell-topbar>
-        <div class="mf-shell-location">
-          <span class="mf-shell-location-eyebrow">{{ $isLandlordShell ? 'Everbranch Admin' : 'Everbranch Workspace' }}</span>
-          <span class="mf-shell-location-title">{{ $workspaceLabel }}</span>
-        </div>
-
-        <button
-          type="button"
-          data-command-trigger
-          class="mf-shell-search"
-          aria-label="Search or ask what you want to do..."
-        >
-          <span class="mf-shell-search-icon" aria-hidden="true">
-            <x-brand.leaf-icon />
-          </span>
-          <span class="mf-shell-search-placeholder">Search or ask what you want to do...</span>
-          <span class="mf-shell-search-shortcut">Cmd K</span>
-        </button>
-
-        <div class="mf-shell-actions">
-          @foreach($topbarContextPills as $pill)
-            <span class="mf-shell-context-pill">{{ $pill }}</span>
-          @endforeach
-          <a
-            href="{{ $assistantHref }}"
-            wire:navigate
-            class="mf-bud-entry"
-            data-assistant-entry
-            aria-label="Open Bud assistant"
-            title="Open Bud assistant"
-          >
-            <img src="{{ $brandMarkSrc }}" alt="" aria-hidden="true" />
-            <span>Bud</span>
-          </a>
-        </div>
-      </div>
-
       @if(is_array($accessLaneBanner))
         <div
           class="mx-auto mb-4 max-w-[1180px] rounded-2xl border px-4 py-3 text-sm {{ $accessLaneBanner['classes'] }}"
@@ -314,6 +331,13 @@
         >
           <div class="font-semibold">{{ $accessLaneBanner['label'] }}</div>
           <div class="mt-1 text-xs opacity-80">{{ $accessLaneBanner['copy'] }}</div>
+        </div>
+      @endif
+
+      @if($employeePreview)
+        <div class="mx-auto mb-4 max-w-[1180px] rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+          <div class="font-semibold">Employee view</div>
+          <div class="mt-1 text-xs">This is a read-only visual preview. Your administrator permissions and the workspace data have not changed.</div>
         </div>
       @endif
 
@@ -352,9 +376,10 @@
 
 <div id="mf-toast" role="status" aria-live="polite" class="pointer-events-none fixed left-1/2 top-5 z-50 hidden w-[min(92vw,48rem)] -translate-x-1/2 rounded-2xl border border-zinc-200 bg-white/95 px-5 py-4 text-base font-semibold text-zinc-950 shadow-2xl"></div>
 <x-app-command-palette
-  :search-endpoint="route('app.search')"
+  :search-endpoint="$commandSearchEndpoint"
   :placeholder="$commandPlaceholder"
   :context-label="$workspaceLabel"
+  :description="$commandSearchDescription"
 />
 <script>
   (function () {

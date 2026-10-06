@@ -68,7 +68,7 @@ test('non flagship tenant gets safe generic auth presentation', function (): voi
 
     $response->assertOk();
     $response->assertSee('Acme Candle Co', false);
-    $response->assertSee('Tenant Console', false);
+    $response->assertSee('Everbranch by Evergrove Software', false);
 });
 
 test('landlord host login uses Everbranch platform branding instead of flagship tenant branding', function (): void {
@@ -95,9 +95,9 @@ test('landlord host login uses Everbranch platform branding instead of flagship 
 
 test('login submit path is rejected when host is not canonical', function (): void {
     $this->post('http://unknown.local/login', [
-            'email' => 'nobody@example.com',
-            'password' => 'not-the-right-password',
-        ])
+        'email' => 'nobody@example.com',
+        'password' => 'not-the-right-password',
+    ])
         ->assertNotFound();
 });
 
@@ -116,9 +116,9 @@ test('guest auth submit path logs tenant resolution diagnostics', function (): v
         });
 
     $this->post('http://acme.theeverbranch.com/login', [
-            'email' => 'nobody@example.com',
-            'password' => 'not-the-right-password',
-        ])
+        'email' => 'nobody@example.com',
+        'password' => 'not-the-right-password',
+    ])
         ->assertSessionHasErrors('email');
 
 });

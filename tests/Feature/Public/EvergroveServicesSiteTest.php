@@ -1,7 +1,9 @@
 <?php
 
+use App\Models\OperatorAlertLog;
 use App\Models\ServiceInquiry;
 use App\Models\User;
+use App\Services\Marketing\TwilioSmsService;
 
 beforeEach(function (): void {
     $this->withoutVite();
@@ -14,10 +16,9 @@ test('evergrove public host renders the services site', function (): void {
         ->assertOk()
         ->assertSeeText('Evergrove')
         ->assertSee('brand/evergrove-logo.png?v=eg3', false)
-        ->assertSeeText('Sign Up')
-        ->assertSeeText('The app that keeps the job moving.')
-        ->assertSeeText('Get a workflow audit')
-        ->assertSeeText('See Everbranch')
+        ->assertSeeText('Start a Project')
+        ->assertSeeText('Software built around the way your business actually works.')
+        ->assertSeeText('What we build')
         ->assertSee('data-public-phone-demo', false)
         ->assertSee('data-phone-tab="work"', false)
         ->assertSee('data-phone-tab="branches"', false)
@@ -31,15 +32,18 @@ test('evergrove public host renders the services site', function (): void {
         ->assertSeeText('28% of gross revenue')
         ->assertSeeText('Contract signed')
         ->assertSeeText('Launch Partner')
-        ->assertSeeText('What Changes')
-        ->assertSeeText('Less hunting. More doing.')
-        ->assertSeeText('A small-business operating app, built by Evergrove.')
+        ->assertSeeText('What We Build')
+        ->assertSeeText('Digital tools with a job to do.')
+        ->assertSeeText('A real operating app, not a mockup.')
         ->assertSeeText('Launch partner pricing')
-        ->assertSeeText('$59')
-        ->assertSeeText('Click the mess')
+        ->assertSeeText('$499 one-time')
+        ->assertSeeText('$89/mo')
+        ->assertSeeText('$199/mo')
+        ->assertSeeText('$1,033')
+        ->assertSeeText('Where custom work helps')
         ->assertSeeText('Evergrove Studio')
         ->assertSeeText('Contact')
-        ->assertSeeText('Product taste plus practical build work.')
+        ->assertSeeText('From practical website to working product.')
         ->assertSee('data-clickable-details-card', false)
         ->assertSeeText('Job notes live in texts')
         ->assertSeeText('Quotes need babysitting')
@@ -50,39 +54,28 @@ test('evergrove public host renders the services site', function (): void {
 test('everbranch public host keeps the everbranch product surface', function (): void {
     $this->get('http://theeverbranch.com/')
         ->assertOk()
-        ->assertSeeText('Less Problems. More peace. The one place to run your business.')
-        ->assertSeeText('Everbranch helps small businesses organize customers, tasks, messages, files, and workflows in one simple system')
-        ->assertSeeText('Home')
-        ->assertSeeText('See it work')
+        ->assertSee('class="fb-public-body eb-studio-body"', false)
+        ->assertSeeText('Your business has a rhythm.')
+        ->assertSeeText('Everbranch helps you keep it.')
+        ->assertSeeText('Become a launch partner')
         ->assertSeeText('Who it helps')
         ->assertSeeText('Contact')
-        ->assertDontSee('data-problem-garden', false)
-        ->assertSee('data-public-phone-demo', false)
-        ->assertSee('data-phone-tab="work"', false)
-        ->assertSee('data-phone-tab="branches"', false)
-        ->assertSee('data-phone-tab="account"', false)
-        ->assertSeeText('Marketing lift')
-        ->assertSeeText('$4,280')
-        ->assertSeeText('Completed work')
-        ->assertSeeText('$18,640')
-        ->assertSeeText('Message customer')
-        ->assertSeeText('Job complete')
-        ->assertSeeText('Supplies used this month')
-        ->assertSeeText('Contract signed')
-        ->assertSee('id="solution-phone-home"', false)
-        ->assertSeeText('New launch tiers')
-        ->assertSeeText('Launch Partner')
-        ->assertSeeText('$59/mo for 6 months')
-        ->assertSee('data-public-product-demo', false)
-        ->assertSeeText('Problem')
-        ->assertSeeText('The solution')
-        ->assertSeeText('one place for your brain to focus')
-        ->assertSeeText('Built for the messy middle of small business.')
+        ->assertSee('data-studio-story', false)
+        ->assertSee('data-studio-film', false)
+        ->assertDontSee('data-industry-demo', false)
+        ->assertSee('data-industry-option="retail"', false)
+        ->assertSee('data-industry-option="field"', false)
+        ->assertSee('data-industry-option="projects"', false)
+        ->assertSee('data-industry-option="studio"', false)
+        ->assertSee('everbranch-hvac-electrical-hero.jpg', false)
+        ->assertSee('everbranch-hvac-electrical-field.jpg', false)
+        ->assertSee('everbranch-field-owner-office.jpg', false)
+        ->assertSee('data-studio-hero-slide', false)
         ->assertSeeText('Retail & product brands')
-        ->assertSeeText('Electrical & plumbing')
-        ->assertSeeText('Everbranch does not replace the way your business works. It gives that work a home.')
-        ->assertSeeText('Tell us what keeps getting lost.')
-        ->assertDontSeeText('We build the software small businesses wish already existed.');
+        ->assertSeeText('Field & service teams')
+        ->assertSee(route('platform.plans'), false)
+        ->assertSee(route('platform.start'), false)
+        ->assertDontSee('data-public-tabs', false);
 });
 
 test('everbranch contact page stores messages in the landlord queue', function (): void {
@@ -110,6 +103,44 @@ test('everbranch contact page stores messages in the landlord queue', function (
         ->and($inquiry->pain_point)->toBe('Customer follow-ups disappear.');
 });
 
+test('everbranch walkthrough requests send one production safe operator text without creating demo access', function (): void {
+    config()->set('everbranch.operator_alert_sms_enabled', true);
+    config()->set('everbranch.operator_alert_phone', '+1 (555) 010-0101');
+
+    $twilio = \Mockery::mock(TwilioSmsService::class);
+    $twilio->shouldReceive('sendSms')
+        ->once()
+        ->with(
+            '15550100101',
+            'Everbranch: New meeting request from Ridge Workshop.',
+            \Mockery::on(fn (array $options): bool => ($options['source_type'] ?? null) === 'operator_alert')
+        )
+        ->andReturn(['success' => true, 'provider' => 'twilio', 'error_code' => null]);
+    app()->instance(TwilioSmsService::class, $twilio);
+
+    $this->get('http://theeverbranch.com/platform/contact?intent=walkthrough')
+        ->assertOk()
+        ->assertSeeText('Book a working session with Everbranch.')
+        ->assertSee('name="source_page" value="everbranch_walkthrough"', false)
+        ->assertSeeText('Request a meeting');
+
+    $this->from('http://theeverbranch.com/platform/contact?intent=walkthrough')
+        ->post('http://theeverbranch.com/services/inquiries', [
+            'name' => 'Riley Morgan',
+            'email' => 'owner@ridgeworkshop.co',
+            'company' => 'Ridge Workshop',
+            'pain_point' => 'We want to connect store orders to the team calendar.',
+            'source_page' => 'everbranch_walkthrough',
+        ])
+        ->assertRedirect('http://theeverbranch.com/platform/contact?intent=walkthrough');
+
+    expect(ServiceInquiry::query()->where('source_page', 'everbranch_walkthrough')->count())->toBe(1)
+        ->and(User::query()->where('email', 'owner@ridgeworkshop.co')->exists())->toBeFalse()
+        ->and(OperatorAlertLog::query()
+            ->where('event_key', 'service_inquiry.created')
+            ->value('status'))->toBe('sent');
+});
+
 test('authenticated users still see evergrove surface on evergrove public host', function (): void {
     config()->set('evergrove.hosts', ['evergrovesoftware.com', 'www.evergrovesoftware.com']);
 
@@ -122,7 +153,7 @@ test('authenticated users still see evergrove surface on evergrove public host',
         ->get('http://evergrovesoftware.com/')
         ->assertOk()
         ->assertSee('brand/evergrove-logo.png?v=eg3', false)
-        ->assertSeeText('The app that keeps the job moving.')
+        ->assertSeeText('Software built around the way your business actually works.')
         ->assertDontSeeText('Less Problems. More peace. The one place to run your business.');
 });
 

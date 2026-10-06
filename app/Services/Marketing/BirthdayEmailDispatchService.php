@@ -18,7 +18,8 @@ class BirthdayEmailDispatchService
         protected TenantEmailSettingsService $emailSettingsService,
         protected MarketingTemplateRenderer $templateRenderer,
         protected MarketingEmailReadiness $emailReadiness,
-        protected TenantMarketingSettingsResolver $marketingSettingsResolver
+        protected TenantMarketingSettingsResolver $marketingSettingsResolver,
+        protected BirthdayEmailComposerService $birthdayEmailComposer,
     ) {}
 
     /**
@@ -73,10 +74,13 @@ class BirthdayEmailDispatchService
         $selectedProvider = $selectedProvider !== '' ? strtolower($selectedProvider) : 'sendgrid';
 
         $config = $this->campaignConfig($tenantId);
-        $subjectTemplate = $this->nullableString($config['birthday_email_subject'] ?? null)
-            ?: 'Happy Birthday from The Forestry Studio';
-        $bodyTemplate = $this->nullableString($config['birthday_email_body'] ?? null)
-            ?: 'Activate your birthday reward and use it on your next order.';
+        $isFollowup = $templateKey === 'birthday_email_followup';
+        $subjectTemplate = $this->nullableString($options['subject_template'] ?? null)
+            ?: $this->nullableString($config[$isFollowup ? 'followup_email_subject' : 'birthday_email_subject'] ?? null)
+            ?: ($isFollowup ? 'Your birthday reward is still waiting' : 'Happy Birthday from The Forestry Studio');
+        $bodyTemplate = $this->nullableString($options['body_template'] ?? null)
+            ?: $this->nullableString($config[$isFollowup ? 'followup_email_body' : 'birthday_email_body'] ?? null)
+            ?: ($isFollowup ? 'Your birthday reward is still available if you want to use it.' : 'Activate your birthday reward and use it on your next order.');
 
         $couponCode = $this->nullableString($issuance->reward_code);
         $birthdayDate = $birthdayProfile
@@ -121,7 +125,13 @@ class BirthdayEmailDispatchService
             if ($textBody === '') {
                 $textBody = 'Your birthday reward is ready.';
             }
-            $htmlBody = $this->htmlFromText($textBody);
+            $htmlBody = $this->birthdayEmailComposer->renderForDelivery(
+                $subject,
+                $config,
+                $profile,
+                $this->templateExtra($metadata, $issuance, $applyUrl),
+                $templateKey,
+            )['html'];
         }
 
         if (! $failure && trim($toEmail) === '') {
@@ -296,16 +306,54 @@ class BirthdayEmailDispatchService
      */
     protected function templateExtra(array $metadata, BirthdayRewardIssuance $issuance, ?string $applyUrl): array
     {
+        $rewardType = $this->nullableString($issuance->reward_type) ?? '';
+        $rewardValue = $this->displayRewardValue($issuance);
+        $isCandleCash = $rewardType === 'candle_cash';
+        $isUsableCode = ! $isCandleCash && $issuance->isUsable();
+        $rewardApplyUrl = $isCandleCash
+            ? $this->storefrontUrl('/account')
+            : $this->storefrontUrl(
+                ($metadata['template_key'] ?? '') === 'birthday_email_catchup_2026'
+                    ? '/pages/birthday-gift'
+                    : '/pages/birthday-celebration'
+            );
+
         return [
             'coupon_code' => $metadata['coupon_code'] ?? '',
             'reward_code' => $metadata['coupon_code'] ?? '',
             'reward_name' => $this->nullableString($issuance->reward_name) ?? '',
-            'reward_value' => $this->nullableString($issuance->reward_value) ?? '',
-            'reward_type' => $this->nullableString($issuance->reward_type) ?? '',
+            'reward_value' => $rewardValue,
+            'reward_type' => $rewardType,
+            'expiry_date' => $issuance->expires_at?->format(($metadata['template_key'] ?? '') === 'birthday_email_catchup_2026' ? 'F j Y' : 'F j, Y') ?? '',
             'birthday_date' => $this->nullableString($metadata['birthday_date'] ?? null) ?? '',
             'cohort_date' => $this->nullableString($metadata['cohort_date'] ?? null) ?? '',
-            'reward_apply_url' => $applyUrl ?? '',
+            'reward_apply_url' => $rewardApplyUrl,
+            'birthday_cta_label' => $isCandleCash
+                ? 'View your Candle Cash'
+                : ($isUsableCode ? 'Use your birthday gift' : 'Claim your birthday coupon'),
+            'birthday_reward_message' => $isCandleCash
+                ? 'Your birthday gift of <strong>'.$rewardValue.' in Candle Cash</strong> has been added to your account. Candle Cash applies in $10 increments at checkout.'
+                : ($isUsableCode
+                    ? 'Use code <strong>'.e((string) ($metadata['coupon_code'] ?? '')).'</strong> for <strong>'.$rewardValue.' off</strong> your next order.'
+                    : 'Your <strong>'.$rewardValue.' birthday coupon</strong> is ready. Sign in on your birthday gift page to claim it.'),
         ];
+    }
+
+    protected function displayRewardValue(BirthdayRewardIssuance $issuance): string
+    {
+        $value = $issuance->reward_value;
+        if ($value === null && $issuance->candle_cash_awarded !== null) {
+            $value = $issuance->candle_cash_awarded;
+        }
+
+        if (! is_numeric($value)) {
+            return '';
+        }
+
+        $formatted = number_format((float) $value, 2, '.', '');
+        $formatted = rtrim(rtrim($formatted, '0'), '.');
+
+        return '$'.$formatted;
     }
 
     /**

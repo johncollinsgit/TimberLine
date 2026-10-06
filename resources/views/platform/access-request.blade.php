@@ -50,10 +50,11 @@
 <head>
     @include('partials.head', ['title' => ($content['headline'] ?? 'Request access')])
 </head>
-<body class="fb-public-body" data-premium-motion="public">
+<body class="fb-public-body eb-studio-support-body" data-premium-motion="public">
     @include('platform.partials.premium-motion')
+    @include('platform.partials.studio-support-nav')
 
-    <main class="fb-public-shell fb-contact-shell fb-start-shell">
+    <main class="fb-public-shell fb-contact-shell fb-start-shell eb-studio-support-shell">
         <a href="{{ route('platform.promo') }}" class="fb-btn fb-btn-secondary fb-contact-back">Back to homepage</a>
 
         <section class="fb-card fb-contact-overview fb-start-hero" aria-label="Request overview" data-reveal data-premium-surface>
