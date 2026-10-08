@@ -162,3 +162,50 @@ test('catalog edits and new products survive page publishing and become browsabl
     $data['variantId'] = $existing->variants->first()->id;
     $this->postJson('/api/connected-website/carolina-barrel/inquiries', $data)->assertUnprocessable();
 });
+
+test('theme selection preserves the previous complete design and stays private until publish', function () {
+    $beforeProducts = WebsiteProduct::query()->get()->toArray();
+    $beforePublished = $this->site->published_site_version_id;
+    $beforeContent = $this->service->content($this->site, $this->site->draft_site_version_id);
+    $draft = $this->service->applyTheme($this->site, 'heritage', $this->actor, $this->site->draft_site_version_id);
+    $saved = $this->service->savedThemes($this->site)->sole();
+    expect($this->service->content($this->site, $saved->id))->toBe($beforeContent)
+        ->and($this->service->theme($this->site, $saved->id))->toBe('original')
+        ->and($this->service->theme($this->site, $draft->id))->toBe('heritage')
+        ->and($this->site->fresh()->published_site_version_id)->toBe($beforePublished)
+        ->and(WebsiteProduct::query()->get()->toArray())->toBe($beforeProducts);
+    $this->getJson('/api/connected-website/carolina-barrel/content')->assertOk()->assertJsonPath('theme', 'original');
+    $this->site->refresh();
+    parse_str(parse_url($this->service->previewUrl($this->site, $this->actor), PHP_URL_QUERY), $query);
+    $this->getJson('/api/connected-website/carolina-barrel/content?preview='.urlencode($query['__preview']))->assertOk()->assertJsonPath('theme', 'heritage')->assertJsonPath('content.home_001', '/images/heritage-lift-barrel.webp');
+    $this->service->publish($this->site, $this->actor, $draft->id);
+    $this->getJson('/api/connected-website/carolina-barrel/content')->assertOk()->assertJsonPath('theme', 'heritage');
+    $restored = $this->service->applyTheme($this->site->fresh(), 'saved-'.$saved->id, $this->actor, $draft->id);
+    expect($this->service->content($this->site, $restored->id))->toBe($beforeContent)
+        ->and($this->service->theme($this->site, $restored->id))->toBe('original')
+        ->and($this->service->content($this->site, $saved->id))->toBe($beforeContent);
+});
+
+test('theme selector rejects stale saves outsiders and another sites saved designs', function () {
+    $old = $this->site->draft_site_version_id;
+    $draft = $this->service->applyTheme($this->site, 'heritage', $this->actor, $old);
+    expect(fn () => $this->service->applyTheme($this->site, 'original', $this->actor, $old))->toThrow(HttpException::class);
+    $outsider = User::factory()->tenantAdmin()->create(['is_active' => true]);
+    expect(fn () => $this->service->applyTheme($this->site->fresh(), 'original', $outsider, $draft->id))->toThrow(HttpException::class);
+    $other = Tenant::query()->create(['name' => 'Other theme owner', 'slug' => 'other-theme-owner']);
+    $otherSite = TenantSite::query()->create(['tenant_id' => $other->id, 'subdomain' => 'other-theme-owner', 'status' => 'draft']);
+    $otherTheme = $otherSite->siteVersions()->create(['tenant_id' => $other->id, 'version_number' => 1, 'status' => 'saved_theme', 'settings' => ['connected_renderer' => ConnectedWebsiteService::RENDERER, 'connected_content' => $this->service->manifest()['defaults']]]);
+    expect(fn () => $this->service->applyTheme($this->site->fresh(), 'saved-'.$otherTheme->id, $this->actor, $draft->id))->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+    $this->actingAs($this->actor)->get('https://carolina-barrel-co.theeverbranch.com/website/connected')->assertOk()->assertSeeText('Website theme')->assertSeeText('Carolina Heritage')->assertSee('label="Saved designs"', false);
+});
+
+test('heritage preparation dry run preserves live data and apply is replay safe', function () {
+    $versions = $this->site->siteVersions()->count();
+    $published = $this->site->published_site_version_id;
+    $this->artisan('website:prepare-carolina-heritage', ['--actor' => $this->actor->id])->assertSuccessful();
+    expect($this->site->siteVersions()->count())->toBe($versions)->and($this->site->fresh()->published_site_version_id)->toBe($published);
+    $this->artisan('website:prepare-carolina-heritage', ['--actor' => $this->actor->id, '--apply' => true])->assertSuccessful();
+    $versions = $this->site->siteVersions()->count();
+    $this->artisan('website:prepare-carolina-heritage', ['--actor' => $this->actor->id, '--apply' => true])->assertSuccessful();
+    expect($this->site->siteVersions()->count())->toBe($versions)->and($this->site->fresh()->published_site_version_id)->toBe($published);
+});
