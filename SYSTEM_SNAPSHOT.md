@@ -42,6 +42,20 @@
 - The mobile workspace list now returns active memberships only, matching the server gate on every workspace data route. The web teammate invitation form names its target workspace next to the submit action so operators can verify the destination before inviting.
 - Team channel summaries include the latest visible message preview and author for a familiar mobile inbox. Previews are returned only inside a tenant-gated, channel-visible response.
 
+## Free CRM Fleet preview (2026-10-07; collection still gated)
+
+Everbranch Fleet is temporarily free, with 100 selected vehicles per client.
+`HIGHLEVEL_FLEET_SUBSCRIPTION_REQUIRED=false` is now the default; Marketplace
+pricing must also be Free. Installed accounts can authorize Bouncie, choose
+vehicles and save their policy without a payment event or pilot activation.
+Collection still requires the existing global tracking gate, collection switch,
+location allowlist, tenant entitlement and approved policy. No pilot is enabled
+by this release. Uninstall still revokes sessions and stops collection.
+The prior paid plan and payment history remain available for a future pricing
+change. To restore subscriptions, configure/publish the paid Marketplace plan,
+verify billing, and explicitly set the subscription requirement to true.
+See `docs/operations/highlevel-fleet-runbook.md` for details.
+
 ## Private CRM Fleet integration (2026-10-04; pilot disabled)
 
 Everbranch Fleet adds a private HighLevel installation layer at `/crm/fleet`,

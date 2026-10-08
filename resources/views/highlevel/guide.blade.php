@@ -15,20 +15,20 @@
 <main>
     <strong>Everbranch Fleet</strong>
     <h1>Your company vehicles, inside your CRM</h1>
-    <p>Each installed client account receives its own workspace. Fleet supports one connected Bouncie account and up to 25 selected company vehicles.</p>
+    <p>Each installed client account receives its own workspace. Fleet supports one connected Bouncie account and up to {{ config('highlevel.vehicle_limit') }} selected company vehicles.</p>
     <aside>During the pilot, an Everbranch operator must activate your workspace before location collection begins. Contact support if setup shows that activation is pending.</aside>
     <h2>Set up your workspace</h2>
     <ol>
         <li><strong>Open Everbranch.</strong> An agency administrator installs the app for your client account. Open Everbranch in that account's navigation. Fleet v1 requires current administrator access.</li>
         <li><strong>Approve company vehicle tracking.</strong> In Settings, enter your tracking policy version, policy text and owner approval reference. Confirm authorization, choose a retention period of 1–30 days, and enable company vehicle collection. Keep your approved policy document for your records.</li>
         <li><strong>Connect Bouncie.</strong> In Connection, authorize your own Bouncie account in the popup. Allow popups for app.theeverbranch.com. Return to the CRM when authorization finishes; third-party cookies are not required.</li>
-        <li><strong>Select vehicles.</strong> Choose up to 25 devices from your connected account and save. To add another vehicle at the limit, remove an existing selection first. A device cannot be active in two workspaces.</li>
+        <li><strong>Select vehicles.</strong> Choose up to {{ config('highlevel.vehicle_limit') }} devices from your connected account and save. To add another vehicle at the limit, remove an existing selection first. A device cannot be active in two workspaces.</li>
         <li><strong>Check Fleet.</strong> Search the vehicle list, choose a vehicle, and check its latest location and provider last reported timestamp. The visible page refreshes every 60 seconds. An older reading may mean a vehicle is parked; it does not automatically mean the device is offline.</li>
     </ol>
     <h2>Connection and access</h2>
     <p>If Bouncie requires fresh authorization, reconnect from Connection. Saved readings remain available during a provider outage within your retention period. If administrator access changes, an authorized administrator must reopen Everbranch.</p>
     <h2>Disconnect or uninstall</h2>
-    <p>Disconnect Bouncie in Connection to stop its collection and remove the saved authorization. An agency administrator must uninstall Everbranch Fleet in the CRM to end the app subscription. Uninstalling Everbranch does not cancel your separate Bouncie subscription.</p>
+    <p>Disconnect Bouncie in Connection to stop its collection and remove the saved authorization. An agency administrator can uninstall Everbranch Fleet in the CRM to end app access.@if(config('highlevel.subscription_required')) Uninstall in the CRM to end the app subscription.@else Everbranch Fleet is free for now; no Everbranch app subscription is required.@endif Uninstalling Everbranch does not cancel your separate Bouncie subscription.</p>
     <p>Support: <a href="mailto:{{ config('everbranch.support_email') }}">{{ config('everbranch.support_email') }}</a></p>
 </main>
 </body>

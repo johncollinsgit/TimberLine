@@ -28,7 +28,7 @@ use Illuminate\Validation\ValidationException;
 
 beforeEach(function () {
     config(['highlevel.enabled' => true, 'highlevel.collection_enabled' => true, 'highlevel.billing_verified' => true,
-        'highlevel.app_id' => 'fleet-app', 'highlevel.plan_id' => 'fleet-monthly', 'highlevel.shared_secret' => 'test-shared-secret',
+        'highlevel.subscription_required' => true, 'highlevel.app_id' => 'fleet-app', 'highlevel.plan_id' => 'fleet-monthly', 'highlevel.shared_secret' => 'test-shared-secret',
         'highlevel.pilot_locations' => ['location-one', 'location-two'], 'services.fleet_tracking.enabled' => true,
         'highlevel.parent_origins' => ['https://app.gohighlevel.com', 'https://app.bridgecitymarketing.agency']]);
     Http::preventStrayRequests();
@@ -128,16 +128,18 @@ test('each client receives only mapped tenant vehicles and the newest provider r
         ->assertJsonPath('vehicles.0.location.latitude', 34)->assertJsonPath('vehicles.0.location.older_reading', true)->assertDontSee('Client two van');
 });
 
-test('selection is replay safe, rejects the twenty-sixth vehicle and conflicting device ownership', function () {
+test('selection is replay safe, rejects the hundred-and-first vehicle and conflicting device ownership', function () {
     [$one, , $actor] = highlevelWorkspace();
     [$two, , $otherActor] = highlevelWorkspace('location-two');
-    $available = array_map(fn ($i) => ['imei' => 'imei-'.$i, 'nickName' => 'Van '.$i], range(1, 26));
+    $available = array_map(fn ($i) => ['imei' => 'imei-'.$i, 'nickName' => 'Van '.$i], range(1, 101));
     Http::fake(['https://api.bouncie.dev/v1/vehicles*' => Http::response($available)]);
     $fleet = app(FleetService::class);
     $fleet->select($one, ['imei-1'], $actor->id);
     $fleet->select($one, ['imei-1'], $actor->id);
     expect(FleetTrackingDevice::count())->toBe(1)->and(FieldServiceVehicle::count())->toBe(1);
     expect(fn () => $fleet->select($two, ['imei-1'], $otherActor->id))->toThrow(ValidationException::class);
+    $fleet->select($one, array_column(array_slice($available, 0, 100), 'imei'), $actor->id);
+    expect(FleetTrackingDevice::where('status', 'active')->count())->toBe(100);
     expect(fn () => $fleet->select($one, array_column($available, 'imei'), $actor->id))->toThrow(ValidationException::class);
     $fleet->select($one, [], $actor->id);
     $fleet->select($two, ['imei-1'], $otherActor->id);
@@ -344,4 +346,42 @@ test('bulk reconciliation reuses completed workspaces and remains disabled befor
     config(['highlevel.enabled' => false]);
     $this->artisan('highlevel:fleet-reconcile')->assertSuccessful();
     Http::assertSentCount(1);
+});
+
+test('free installed accounts can set up one hundred vehicles while collection remains gated', function () {
+    config(['highlevel.subscription_required' => false, 'highlevel.billing_verified' => false,
+        'highlevel.collection_enabled' => false, 'highlevel.pilot_locations' => [], 'highlevel.plan_id' => null]);
+    [$install, $tenant, $user] = highlevelWorkspace();
+    $install->update(['plan_id' => null, 'payment_status' => 'PENDING']);
+    $available = array_map(fn ($i) => ['imei' => 'free-'.$i, 'nickName' => 'Free van '.$i], range(1, 101));
+    Http::fake(['*/users/crm-admin' => Http::response(highlevelHttpUser()),
+        'https://api.bouncie.dev/v1/vehicles*' => Http::response($available)]);
+    $token = highlevelSession($install, $user);
+    $headers = ['Authorization' => 'Bearer '.$token, 'X-Everbranch-Parent-Origin' => 'https://app.bridgecitymarketing.agency'];
+    $this->withHeaders($headers)->getJson('/crm/fleet/api/bootstrap')->assertOk()
+        ->assertJsonPath('subscription.required', false)->assertJsonPath('subscription.has_access', true)
+        ->assertJsonPath('subscription.setup_allowed', true)->assertJsonPath('subscription.collection_active', false)
+        ->assertJsonPath('settings.vehicle_limit', 100);
+    $this->withHeaders($headers)->getJson('/crm/fleet/api/devices')->assertOk()->assertJsonPath('limit', 100);
+    $this->withHeaders($headers)->putJson('/crm/fleet/api/devices', ['devices' => array_column($available, 'imei')])
+        ->assertUnprocessable()->assertJsonValidationErrors('devices');
+    $this->withHeaders($headers)->putJson('/crm/fleet/api/devices', ['devices' => array_column(array_slice($available, 0, 100), 'imei')])->assertOk();
+    $this->withHeaders($headers)->getJson('/crm/fleet/api/bootstrap')->assertOk()->assertJsonCount(100, 'vehicles');
+    $this->withHeaders($headers)->putJson('/crm/fleet/api/settings', ['retention_days' => 14, 'tracking_enabled' => true,
+        'policy_version' => 'free-v1', 'policy_sha256' => hash('sha256', 'approved policy'),
+        'approval_confirmed' => true, 'approval_reference' => 'owner-free-pilot'])->assertOk();
+    config(['services.fleet_tracking.bouncie_client_id' => 'test-client', 'services.fleet_tracking.bouncie_client_secret' => 'test-secret']);
+    $this->withHeaders($headers)->postJson('/crm/fleet/api/bouncie/connect')->assertOk();
+    app(BouncieWebhookService::class)->process(['imei' => 'free-1', 'gps' => ['lat' => 34.5, 'lon' => -82], 'timestamp' => now()->subMinute()->toIso8601String()]);
+    expect(FleetLocationPoint::count())->toBe(0)->and($install->collectionAllowed())->toBeFalse();
+    config(['highlevel.collection_enabled' => true]);
+    expect($install->collectionAllowed())->toBeFalse();
+    config(['highlevel.pilot_locations' => ['location-one']]);
+    expect($install->collectionAllowed())->toBeTrue();
+    config(['highlevel.subscription_required' => true]);
+    expect($install->hasSubscriptionAccess())->toBeFalse()->and($install->setupAllowed())->toBeFalse();
+    config(['highlevel.subscription_required' => false]);
+    app(InstallationService::class)->uninstall($install);
+    expect($install->refresh()->hasSubscriptionAccess())->toBeFalse()->and($install->collectionAllowed())->toBeFalse();
+    $this->withHeaders($headers)->getJson('/crm/fleet/api/bootstrap')->assertUnauthorized();
 });

@@ -1,5 +1,36 @@
 # Everbranch Fleet private CRM app
 
+## Current operating mode — 2026-10-07
+
+The owner requested temporary removal of the Everbranch subscription and a
+100-vehicle limit per client. `HIGHLEVEL_FLEET_SUBSCRIPTION_REQUIRED=false`
+is the default for this release. Set Marketplace pricing to **Free** as well;
+a backend access switch does not cancel a provider subscription. Preserve the
+previous monthly plan ID and historical payment events for a later restoration.
+
+Free installed accounts have access regardless of plan ID/payment status.
+Bouncie authorization, device selection and policy settings use `setupAllowed()`
+and work before collection activation. Collection remains separately gated by
+`HIGHLEVEL_FLEET_COLLECTION_ENABLED`, `HIGHLEVEL_FLEET_PILOT_LOCATIONS`, existing
+Fleet entitlement/global tracking and approved policy. No collection or pilot
+allowlist is activated by this release. The Bouncie subscription remains separate.
+In free mode, billing verification is not a collection prerequisite. An
+uninstalled account has no access in either mode and receives no new locations.
+
+The backend configured vehicle limit is authoritative for validation, selection,
+bootstrap and UI counts; it is now 100. Check selection of 100 and rejection of
+101, both browser engines, client isolation and real provider load before expanding
+live pilots. Earlier 25-vehicle test evidence below is historical.
+
+To restore billing: configure and publish the intended paid Marketplace plan,
+verify plan/payout readiness, then explicitly set
+`HIGHLEVEL_FLEET_SUBSCRIPTION_REQUIRED=true` and rebuild config through the normal
+release process. Existing payment records are preserved; review pending/failed
+accounts before re-enabling the requirement. Do not fabricate COMPLETE events.
+
+The original paid-launch reference and historical production evidence follow;
+its billing prerequisites apply when subscriptions are required.
+
 ## Product and release boundary
 
 Everbranch Fleet is a private, agency-admin-installed subaccount app. The app
@@ -12,7 +43,7 @@ An hourly `highlevel:fleet-reconcile` task recovers incomplete bulk installs fro
 This file is an operator reference, not a CLI manifest. No provider secrets
 belong in source control.
 
-Native HighLevel billing is authoritative: $99 USD/month per account, 25 active
+Native HighLevel billing is authoritative: $99 USD/month per account, 100 active
 vehicles, no setup fee or trial. Bouncie is a separate client subscription.
 Bridge City controls resale markup in its agency settings. Everbranch does not
 create a Stripe subscription. Payout verification and a real paid private-app
@@ -82,6 +113,7 @@ Start with:
 HIGHLEVEL_FLEET_ENABLED=false
 HIGHLEVEL_FLEET_COLLECTION_ENABLED=false
 HIGHLEVEL_FLEET_BILLING_VERIFIED=false
+HIGHLEVEL_FLEET_SUBSCRIPTION_REQUIRED=false
 HIGHLEVEL_FLEET_PILOT_LOCATIONS=
 ```
 
@@ -128,7 +160,7 @@ the deployment script, export `RELEASE_ID` from the current release's
 Do not pin an old release ID in `.env`. Verify `/ready` still reports that
 exact SHA, then broadcast `queue:restart` after relevant queue/config changes.
 
-After native billing has been verified, use exactly the two pilot location IDs
+After the pilot is approved (and native billing verified if subscriptions are required), use exactly the two pilot location IDs
 in `HIGHLEVEL_FLEET_PILOT_LOCATIONS`. Keep existing `FLEET_TRACKING_ENABLED`,
 tenant module entitlements and approved policy checks in force. Enable collection
 only for this allowlist; adding a client requires an explicit allowlist change.
@@ -136,8 +168,8 @@ No unconfigured installation collects locations by default.
 
 ## Agency onboarding guide
 
-1. Agency owner/admin installs the private paid app to the two selected client
-   accounts, choosing the monthly plan and confirming agency resale settings.
+1. Agency owner/admin installs the private app to the selected client accounts.
+   Pricing is Free during this preview; confirm native pricing before installation.
 2. Each account opens **Everbranch** in its CRM navigation. Current administrator
    membership is checked server-side. Ordinary users have no Fleet v1 access.
 3. Settings: record the company vehicle tracking policy version, approved policy
@@ -146,7 +178,7 @@ No unconfigured installation collects locations by default.
    fingerprint of the policy text is stored; retain the policy document separately.
 4. Connection: authorize that client's Bouncie account in a top-level popup.
    Allow popups for the Everbranch app. Third-party cookies need not be enabled.
-5. Choose up to 25 devices. Devices must come from that authorized account and
+5. Choose up to 100 devices. Devices must come from that authorized account and
    cannot already be actively owned by another workspace. The 26th selection
    is rejected by the server. Save, then open Fleet.
 6. Check vehicle name, location and **provider last reported** timestamp. An old
@@ -170,10 +202,10 @@ Live acceptance is incomplete until all of these are recorded:
 - Token renewal, Bouncie reconnect and account replacement, removed/restricted
   administrator access, revoked sessions and OAuth reinstall.
 - Invalid signatures, malformed events, duplicate trips, out-of-order samples,
-  provider outage, 25-device selection, 26th rejection, retention pruning.
+  provider outage, 100-device selection, 101st rejection, retention pruning.
 - Chrome and Safari embedding at desktop/mobile sizes with third-party cookies
   blocked, popup authorization, page visibility refresh and session renewal.
-- At 25 vehicles/client, record queue age, job runtime, DB growth, map usage,
+- At 100 vehicles/client, record queue age, job runtime, DB growth, map usage,
   CPU/RAM and `/ready`. Share one map per page; inspect map billing before
   expanding. Existing production hosting capacity has not been load-proven
   solely by local mocked tests.
