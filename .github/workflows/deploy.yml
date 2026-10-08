@@ -99,7 +99,7 @@ jobs:
           if [ "$verification_mode" = "verified_pr_tree" ]; then
             if [ -n "$PUSH_BEFORE" ] && ! printf '%s' "$PUSH_BEFORE" | grep -q '^0\{40\}$'; then
               if changed_files="$(gh api --paginate "repos/${REPOSITORY}/compare/${PUSH_BEFORE}...${RELEASE_SHA}" --jq '.files[].filename' 2>/dev/null)"; then
-                if ! printf '%s\n' "$changed_files" | grep -Eq '^(database/(migrations|schema)/|scripts/ci/(lint-migrations|rehearse-migrations|verify-mysql-schema-baseline|legacy-migration)|tests/Integration/(WorkflowStudioMySqlMigrationRecoveryTest\.php|HighLevelFleetMySqlMigrationRecoveryTest\.php|TenantMailMySqlMigrationRecoveryTest\.php|migration-recovery-manifest\.php)|composer\.(json|lock)$|config/database\.php$)'; then
+                if ! printf '%s\n' "$changed_files" | grep -Eq '^(database/(migrations|schema)/|scripts/ci/(lint-migrations|rehearse-migrations|verify-mysql-schema-baseline|legacy-migration)|tests/Integration/(WorkflowStudioMySqlMigrationRecoveryTest\.php|HighLevelFleetMySqlMigrationRecoveryTest\.php|TenantMailMySqlMigrationRecoveryTest\.php|FleetOperationsMySqlMigrationRecoveryTest\.php|migration-recovery-manifest\.php)|composer\.(json|lock)$|config/database\.php$)'; then
                   run_migration_safety=false
                 fi
               fi
@@ -271,7 +271,7 @@ jobs:
         run: php scripts/ci/lint-migrations.php --base="${{ steps.migration-base.outputs.sha }}"
 
       - name: Verify interrupted migration recovery
-        run: php ./vendor/bin/pest tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php tests/Integration/HighLevelFleetMySqlMigrationRecoveryTest.php tests/Integration/TenantMailMySqlMigrationRecoveryTest.php --compact
+        run: php ./vendor/bin/pest tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php tests/Integration/HighLevelFleetMySqlMigrationRecoveryTest.php tests/Integration/TenantMailMySqlMigrationRecoveryTest.php tests/Integration/FleetOperationsMySqlMigrationRecoveryTest.php --compact
 
       - name: Rehearse prior production schema upgrade
         run: scripts/ci/rehearse-migrations.sh "${{ steps.migration-base.outputs.sha }}"

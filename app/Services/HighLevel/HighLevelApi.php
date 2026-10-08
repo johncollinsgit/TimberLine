@@ -23,9 +23,9 @@ class HighLevelApi
         $response = Http::asForm()->acceptJson()->connectTimeout(5)->timeout(15)
             ->post($this->url('/oauth/token'), [...$payload,
                 'client_id' => config('highlevel.client_id'), 'client_secret' => config('highlevel.client_secret')]);
-        abort_unless($response->successful(), 503, 'HighLevel authorization is temporarily unavailable.');
+        abort_unless($response->successful(), 503, 'CRM authorization is temporarily unavailable.');
         $data = $response->json();
-        abort_unless(is_array($data) && filled($data['access_token'] ?? null), 503, 'HighLevel authorization did not complete.');
+        abort_unless(is_array($data) && filled($data['access_token'] ?? null), 503, 'CRM authorization did not complete.');
 
         return $data;
     }
@@ -42,9 +42,9 @@ class HighLevelApi
     {
         return Cache::lock('hl:token:'.$record->getTable().':'.$record->id, 45)->block(5, function () use ($record): string {
             $record->refresh();
-            abort_unless(filled($record->access_token), 403, 'This HighLevel installation must be reauthorized.');
+            abort_unless(filled($record->access_token), 403, 'This CRM installation must be reauthorized.');
             if (! $record->expires_at || $record->expires_at->lte(now()->addMinute())) {
-                abort_unless(filled($record->refresh_token), 403, 'This HighLevel installation must be reauthorized.');
+                abort_unless(filled($record->refresh_token), 403, 'This CRM installation must be reauthorized.');
                 $observedRefresh = $record->refresh_token;
                 $observedAccess = $record->access_token;
                 $observedStatus = $record->status;
@@ -55,7 +55,7 @@ class HighLevelApi
                 DB::transaction(function () use ($record, $tokens, $observedRefresh, $observedAccess, $observedStatus): void {
                     $current = $record->newQuery()->whereKey($record->id)->lockForUpdate()->firstOrFail();
                     abort_unless($current->status === $observedStatus && $current->refresh_token === $observedRefresh
-                        && $current->access_token === $observedAccess, 403, 'HighLevel authorization changed. Reopen the app.');
+                        && $current->access_token === $observedAccess, 403, 'CRM authorization changed. Reopen the app.');
                     $this->saveTokens($current, $tokens);
                     $record->refresh();
                 });
@@ -70,8 +70,8 @@ class HighLevelApi
         $response = Http::withToken($this->accessToken($record))->acceptJson()
             ->withHeaders(['Version' => config('highlevel.api_version')])->connectTimeout(5)->timeout(15)
             ->get($this->url($path), $query);
-        abort_if(in_array($response->status(), [401, 403, 404], true), 403, 'HighLevel access could not be verified.');
-        abort_unless($response->successful(), 503, 'HighLevel is temporarily unavailable. Try again shortly.');
+        abort_if(in_array($response->status(), [401, 403, 404], true), 403, 'CRM access could not be verified.');
+        abort_unless($response->successful(), 503, 'CRM is temporarily unavailable. Try again shortly.');
         $data = $response->json();
         abort_unless(is_array($data), 503);
 
@@ -83,7 +83,7 @@ class HighLevelApi
         $response = Http::withToken($this->accessToken($agency))->asForm()->acceptJson()
             ->withHeaders(['Version' => config('highlevel.api_version')])->connectTimeout(5)->timeout(15)
             ->post($this->url('/oauth/locationToken'), ['companyId' => $agency->company_id, 'locationId' => $locationId]);
-        abort_unless($response->successful(), 503, 'HighLevel location authorization could not be completed.');
+        abort_unless($response->successful(), 503, 'CRM location authorization could not be completed.');
         $data = $response->json();
         abort_unless(is_array($data) && ($data['locationId'] ?? null) === $locationId
             && (! isset($data['appId']) || $data['appId'] === config('highlevel.app_id')), 403);
@@ -104,7 +104,7 @@ class HighLevelApi
                 return $locations;
             }
         }
-        abort(503, 'HighLevel installation pagination could not complete.');
+        abort(503, 'CRM installation pagination could not complete.');
     }
 
     public function verifiedAdmin(Installation|Authorization $record, string $userId, ?string $locationId = null): array
@@ -115,7 +115,7 @@ class HighLevelApi
         $isAgency = ($roles['type'] ?? null) === 'agency';
         // Agency users are fetched with that agency's authorization, never a
         // location token that cannot independently prove their agency membership.
-        abort_unless(($user['id'] ?? null) === $userId && ($roles['role'] ?? null) === 'admin', 403, 'A current HighLevel administrator is required.');
+        abort_unless(($user['id'] ?? null) === $userId && ($roles['role'] ?? null) === 'admin', 403, 'A current CRM administrator is required.');
         if ($isAgency) {
             abort_unless($record instanceof Authorization, 403);
             $members = $this->get($record, '/users/search', ['companyId' => $record->company_id, 'ids' => $userId, 'limit' => 1]);

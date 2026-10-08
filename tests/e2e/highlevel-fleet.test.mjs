@@ -99,3 +99,55 @@ for (const browserType of [chromium, webkit]) {
     }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
   });
 }
+
+for (const browserType of [chromium, webkit]) {
+  test(`${browserType.name()} shows the complete isolated demo and keeps changes off real APIs`, async()=>{
+    let calls=0;const server=createServer((req,res)=>{
+      if(req.url==='/demo'){
+        res.setHeader('Content-Type','text/html');return res.end(`<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><div id="fleet-app"></div><script id="fleet-config" type="application/json">{"demo":true,"parentOrigins":[]}</script>${(entry.css||[]).map(css=>`<link rel="stylesheet" href="/build/${css}">`).join('')}<script type="module" src="/build/${entry.file}"></script>`);
+      }
+      if(req.url.startsWith('/build/')){res.setHeader('Content-Type',req.url.endsWith('.css')?'text/css':'application/javascript');return res.end(readFileSync(`public${req.url}`));}
+      calls++;res.statusCode=404;res.end('{}');
+    });await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+    const browser=await browserType.launch();
+    try{
+      const page=await browser.newPage({viewport:{width:1440,height:1000}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+      await page.goto(`http://127.0.0.1:${server.address().port}/demo`);
+      await page.getByText('DEMO · Fictional fleet data',{exact:true}).waitFor();
+      assert.equal(await page.locator('.vehicle-row').count(),6);
+      assert.equal(await page.locator('.leaflet-container').count(),1);
+      assert.match(await page.locator('#vehicle-details').innerText(),/Alex \+ Jordan|North Main/);
+      await page.getByRole('button',{name:'Connection health',exact:true}).click();
+      assert.match(await page.locator('#content').innerText(),/disconnected|Older than 15 minutes|2 devices not selected/);
+      await page.getByRole('button',{name:'Trips & routes',exact:true}).click();
+      assert.match(await page.locator('#content').innerText(),/31\.8 miles|Route review|Several scheduled jobs could match/);
+      await page.locator('.ops-item summary').first().click();
+      await page.getByRole('button',{name:'View reported path'}).first().click();
+      assert.equal(await page.locator('.trip-map.leaflet-container').count(),1);
+      await page.getByRole('button',{name:'Maintenance',exact:true}).click();
+      assert.match(await page.locator('#content').innerText(),/Mileage threshold reached|Oil and filter change|Completed service/);
+      await page.getByRole('button',{name:'Health alerts',exact:true}).click();
+      await page.locator('.ops-item summary').first().click();
+      await page.getByLabel('Assigned person').first().fill('Demo manager');
+      await page.getByRole('button',{name:'Save alert review'}).first().click();
+      await page.getByText('Saved.',{exact:true}).waitFor();
+      await page.getByRole('button',{name:'Jobs & dispatch',exact:true}).click();
+      await page.locator('.ops-item summary').filter({hasText:'Lighting repair'}).click();
+      const job=page.locator('details').filter({hasText:'Lighting repair'});
+      await job.getByRole('button',{name:'Suggest crews'}).click();
+      await job.getByRole('button',{name:'Choose this crew'}).first().click();
+      assert.equal(await job.locator('select[name="device_id"]').inputValue(),'6');
+      if(process.env.HIGHLEVEL_SCREENSHOT_DIR && browserType.name()==='chromium'){
+        mkdirSync(process.env.HIGHLEVEL_SCREENSHOT_DIR,{recursive:true});
+        for(const [label,file] of [['Fleet','demo-fleet'],['Trips & routes','demo-routes'],['Maintenance','demo-maintenance'],['Health alerts','demo-alerts'],['Jobs & dispatch','demo-dispatch']]){
+          await page.getByRole('button',{name:label,exact:true}).click();
+          if(label==='Trips & routes')await page.locator('.ops-item summary').first().click();
+          await page.screenshot({path:`${process.env.HIGHLEVEL_SCREENSHOT_DIR}/${file}.png`,fullPage:true});
+        }
+      }
+      await page.setViewportSize({width:390,height:844});
+      assert.equal(await page.locator('.shell').evaluate(el=>el.scrollWidth<=el.clientWidth),true);
+      assert.deepEqual(errors,[]);assert.equal(calls,0);
+    }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
+  });
+}

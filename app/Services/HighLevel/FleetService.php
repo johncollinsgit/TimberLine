@@ -124,6 +124,8 @@ class FleetService
             'subscription' => ['status' => $install->payment_status, 'grace_ends_at' => $install->grace_ends_at?->toIso8601String(),
                 'required' => (bool) config('highlevel.subscription_required'), 'setup_allowed' => $install->setupAllowed(),
                 'has_access' => $install->hasSubscriptionAccess(), 'collection_active' => $install->collectionAllowed(), 'billing_authority' => 'highlevel'],
+            'operations' => app(FleetOperationsService::class)->bootstrap($install, $vehicles),
+            'map_tiles' => ['url' => config('highlevel.map_tile_url'), 'attribution' => config('highlevel.map_tile_attribution')],
             'map_key' => config('services.google_maps.fleet_api_key'), 'support_email' => config('everbranch.support_email')];
     }
 

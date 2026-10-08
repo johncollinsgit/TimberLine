@@ -40,10 +40,13 @@ class BouncieLocationRefreshService
                 return $cached;
             }
             $count = 0;
+            $unmapped = 0;
+            $selected = \App\Models\FleetTrackingDevice::forTenantId($tenant->id)->where('provider', 'bouncie')->where('status', 'active')->where('integration_connection_id', $connection->id)->pluck('external_device_id')->all();
             foreach ($this->connector->client($connection)->vehicles() as $vehicle) {
+                $unmapped += (int) (! in_array($vehicle['imei'] ?? '', $selected, true));
                 $count += (int) $this->ingestion->recordBouncieSnapshot($tenant, $vehicle);
             }
-            $result = ['status' => 'connected', 'checked_at' => now()->toIso8601String(), 'located_vehicles' => $count];
+            $result = ['status' => 'connected', 'checked_at' => now()->toIso8601String(), 'located_vehicles' => $count, 'unmapped_devices' => $unmapped];
         } catch (\Throwable) {
             // Never send/log provider exceptions: they can contain tokens or raw GPS.
             $result = ['status' => 'unavailable', 'message' => 'Bouncie could not be refreshed. Saved positions remain visible; reconnect Bouncie if this continues.'];

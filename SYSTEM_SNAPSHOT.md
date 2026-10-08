@@ -1,5 +1,20 @@
 # SYSTEM SNAPSHOT
 
+## Fleet operations and demo (2026-10-08)
+
+CRM Fleet adds crew/job context, connection health, trips and route-distance
+review, maintenance plans/tasks/history, vehicle health alerts and dispatcher
+suggestions. HighLevel calendar or pipeline references supply work; Everbranch
+owns fleet planning and never requires or creates an Everbranch job. Source
+reads are optional and require three additional read scopes. Encrypted operation
+records and retained GPS stay tenant-scoped and obey collection/policy gates.
+`/crm/fleet/demo` and Explore demo provide fictional browser-only examples of
+all features. Google Maps uses the restricted fleet key when configured;
+Leaflet/OpenStreetMap supplies a street-map fallback. No pilot collection is
+activated. See `docs/operations/highlevel-fleet-runbook.md` for precise baselines,
+manual confirmations, retention, dispatch criteria and provider prerequisites.
+
+
 ## Everbranch Field shared jobs and Collins access (2026-10-06)
 
 - Active field-service members can view, create, edit, photograph, comment on, and clock time against every current job in their tenant. Job assignment no longer grants access. Team members selected on a job are followers, and legacy lead assignments remain historical data only. The mobile dispatch assignment route is retired.

@@ -119,4 +119,8 @@ return [
         'test' => 'tests/Integration/HighLevelFleetMySqlMigrationRecoveryTest.php',
         'scenarios' => ['authorization table retained before installation tables', 'device connection column retained before its index'],
     ],
+    '2026_10_08_000000_create_fleet_operation_records.php' => [
+        'test' => 'tests/Integration/FleetOperationsMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['operation table retained before Laravel records the migration batch'],
+    ],
 ];

@@ -95,7 +95,7 @@ class FleetLocationIngestionService
         // transaction ID identifies the entire trip, not an individual point.
         $samples = ($event['eventType'] ?? null) === 'tripData' && isset($event['data']) && is_array($event['data'])
             ? $event['data'] : [$event];
-        $accepted = false;
+        $accepted = app(\App\Services\HighLevel\FleetTelemetryService::class)->event($device, $event);
         foreach ($samples as $sample) {
             if (! is_array($sample)) {
                 continue;
@@ -124,6 +124,7 @@ class FleetLocationIngestionService
         if ($devices->count() !== 1 || (int) $devices->first()->tenant_id !== (int) $tenant->id) {
             return false;
         }
+        app(\App\Services\HighLevel\FleetTelemetryService::class)->snapshot($devices->first(), $vehicle);
         $location = data_get($vehicle, 'stats.location');
 
         return is_array($location) && $this->recordBounciePoint($tenant, $devices->first(), $location,

@@ -24,8 +24,10 @@ return [
     'session_minutes' => 15,
     'failed_payment_grace_days' => 30,
     'vehicle_limit' => 100,
+    'map_tile_url' => env('HIGHLEVEL_MAP_TILE_URL', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
+    'map_tile_attribution' => env('HIGHLEVEL_MAP_TILE_ATTRIBUTION', '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'),
     'monthly_price_cents' => 9900,
     'currency' => 'USD',
-    'scopes' => ['locations.readonly', 'users.readonly', 'oauth.readonly', 'oauth.write', 'marketplace-installer-details.readonly'],
+    'scopes' => ['locations.readonly', 'users.readonly', 'oauth.readonly', 'oauth.write', 'marketplace-installer-details.readonly', 'calendars.readonly', 'calendars/events.readonly', 'opportunities.readonly'],
     'webhook_public_key' => 'i2HR1srL4o18O8BRa7gVJY7G7bupbN3H9AwJrHCDiOg=',
 ];

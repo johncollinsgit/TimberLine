@@ -385,3 +385,163 @@ test('free installed accounts can set up one hundred vehicles while collection r
     expect($install->refresh()->hasSubscriptionAccess())->toBeFalse()->and($install->collectionAllowed())->toBeFalse();
     $this->withHeaders($headers)->getJson('/crm/fleet/api/bootstrap')->assertUnauthorized();
 });
+
+function highlevelOperationsDevice(array $workspace, string $imei = 'ops-van'): FleetTrackingDevice
+{
+    [$install, $tenant, , $connection] = $workspace;
+    $vehicle = FieldServiceVehicle::create(['tenant_id' => $tenant->id, 'name' => 'Operations van', 'status' => 'active']);
+
+    return FleetTrackingDevice::create(['tenant_id' => $tenant->id, 'field_service_vehicle_id' => $vehicle->id,
+        'integration_connection_id' => $connection->id, 'provider' => 'bouncie', 'external_device_id' => $imei, 'status' => 'active']);
+}
+
+test('trip telemetry merges out of order events, deduplicates metrics and preserves review through replay', function () {
+    $w = highlevelWorkspace();
+    $device = highlevelOperationsDevice($w);
+    $ingest = app(\App\Services\FleetTracking\FleetLocationIngestionService::class);
+    $start = now()->subHour()->toIso8601String();
+    $end = now()->subMinutes(20)->toIso8601String();
+    $metrics = ['eventType' => 'tripMetrics', 'imei' => $device->external_device_id, 'transactionId' => 't1',
+        'metrics' => ['timestamp' => $end, 'tripDistance' => 40, 'tripTime' => 2400, 'totalIdlingTime' => 300]];
+    expect($ingest->ingestBouncieEvent($metrics))->toBeTrue();
+    $ingest->ingestBouncieEvent(['eventType' => 'tripEnd', 'imei' => $device->external_device_id, 'transactionId' => 't1', 'end' => ['timestamp' => $end, 'odometer' => 10040]]);
+    $ingest->ingestBouncieEvent(['eventType' => 'tripStart', 'imei' => $device->external_device_id, 'transactionId' => 't1', 'start' => ['timestamp' => $start, 'odometer' => 10000]]);
+    $record = \App\Models\HighLevel\FleetOperationRecord::where('kind', 'trip')->sole();
+    $ops = app(\App\Services\HighLevel\FleetOperationsService::class);
+    $ops->save($w[0], 'trip', ['expected_miles' => 20, 'baseline_reference' => 'Approved route', 'review_status' => 'approved_detour', 'review_note' => 'Road closure'], record: $record);
+    $ingest->ingestBouncieEvent($metrics);
+    $payload = $ops->bootstrap($w[0], [['id' => $device->id]]);
+    expect($payload['trips'])->toHaveCount(1)->and($payload['trips'][0]['details']['distance_miles'])->toEqual(40)
+        ->and($payload['trips'][0]['drive_seconds'])->toEqual(2100)->and($payload['trips'][0]['route_review'])->toBe('review')
+        ->and($payload['trips'][0]['details']['review_status'])->toBe('approved_detour');
+    expect(DB::table('fleet_operation_records')->where('id', $record->id)->value('payload'))->not->toContain('Road closure');
+});
+
+test('telemetry respects collection policy, mapping, retention and newest field timestamps', function () {
+    $w = highlevelWorkspace();
+    $device = highlevelOperationsDevice($w);
+    $service = app(\App\Services\HighLevel\FleetTelemetryService::class);
+    $now = now()->subMinute()->toIso8601String();
+    $old = now()->subHour()->toIso8601String();
+    $service->snapshot($device, ['stats' => ['lastUpdated' => $now, 'odometer' => 12000, 'mil' => ['milOn' => true, 'lastUpdated' => $now, 'battery' => ['status' => 'low', 'lastUpdated' => $now]]]]);
+    $service->snapshot($device, ['stats' => ['lastUpdated' => $old, 'odometer' => 11000]]);
+    $service->snapshot($device, ['stats' => ['lastUpdated' => $now, 'odometer' => 12000, 'mil' => ['milOn' => true, 'lastUpdated' => $now, 'battery' => ['status' => 'low', 'lastUpdated' => $now]]]]);
+    expect(\App\Models\HighLevel\FleetOperationRecord::where('kind', 'telemetry')->sole()->payload['odometer'])->toEqual(12000)
+        ->and(\App\Models\HighLevel\FleetOperationRecord::where('kind', 'alert')->count())->toBe(2);
+    config(['highlevel.collection_enabled' => false]);
+    expect($service->event($device, ['eventType' => 'battery', 'battery' => ['timestamp' => $now, 'value' => 'critical']]))->toBeFalse();
+    config(['highlevel.collection_enabled' => true]);
+    expect($service->event($device, ['eventType' => 'battery', 'battery' => ['timestamp' => now()->subDays(31)->toIso8601String(), 'value' => 'critical']]))->toBeFalse();
+    TenantFleetTrackingSetting::where('tenant_id', $w[1]->id)->update(['approved_at' => null]);
+    expect($service->event($device, ['eventType' => 'battery', 'battery' => ['timestamp' => $now, 'value' => 'critical']]))->toBeFalse()
+        ->and(app(\App\Services\HighLevel\FleetOperationsService::class)->bootstrap($w[0], [['id' => $device->id]])['telemetry'])->toBe([]);
+});
+
+test('due service creates one task, completion records history and advances recurring plan once', function () {
+    $w = highlevelWorkspace();
+    $device = highlevelOperationsDevice($w);
+    $ops = app(\App\Services\HighLevel\FleetOperationsService::class);
+    $plan = $ops->save($w[0], 'service_plan', ['title' => 'Oil change', 'due_date' => now()->subDay()->toDateString(), 'interval_miles' => 5000, 'interval_days' => 180, 'assignee' => 'Fleet manager'], $device->id);
+    $ops->maintenance($w[0]);
+    $ops->maintenance($w[0]);
+    expect(\App\Models\HighLevel\FleetOperationRecord::where('kind', 'maintenance_task')->count())->toBe(1);
+    $completion = ['plan_id' => $plan->id, 'odometer' => 20000, 'serviced_at' => now()->toDateString(), 'notes' => 'Invoice 12'];
+    $ops->completeService($w[0], $completion);
+    expect(\App\Models\HighLevel\FleetOperationRecord::where('kind', 'service_log')->count())->toBe(1)
+        ->and(\App\Models\HighLevel\FleetOperationRecord::where('kind', 'maintenance_task')->sole()->status)->toBe('resolved')
+        ->and(\App\Models\HighLevel\FleetOperationRecord::where('kind', 'service_plan')->where('status', 'open')->sole()->payload['due_miles'])->toEqual(25000);
+    expect(fn () => $ops->completeService($w[0], $completion))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+});
+
+test('fleet operation APIs enforce client ownership and confirmation for alert and route decisions', function () {
+    $w = highlevelWorkspace();
+    $other = highlevelWorkspace('location-two');
+    $device = highlevelOperationsDevice($w);
+    $foreign = highlevelOperationsDevice($other, 'foreign');
+    $ops = app(\App\Services\HighLevel\FleetOperationsService::class);
+    $alert = $ops->save($w[0], 'alert', ['type' => 'battery'], $device->id);
+    $trip = $ops->save($w[0], 'trip', ['distance_miles' => 10], $device->id);
+    Http::fake(['*/users/crm-admin' => Http::response(highlevelHttpUser())]);
+    $this->withHeaders(['Authorization' => 'Bearer '.highlevelSession($w[0], $w[2]), 'X-Everbranch-Parent-Origin' => 'https://app.bridgecitymarketing.agency']);
+    $profile = ['crew' => 'Team A', 'available' => true, 'skills' => [], 'materials' => []];
+    $this->putJson('/crm/fleet/api/operations/profiles/'.$foreign->id, $profile)->assertNotFound();
+    $this->putJson('/crm/fleet/api/operations/profiles/'.$device->id, $profile)->assertOk();
+    $this->putJson('/crm/fleet/api/operations/alerts/'.$alert->id, ['status' => 'resolved', 'assignee' => 'Manager'])->assertUnprocessable();
+    $this->putJson('/crm/fleet/api/operations/alerts/'.$alert->id, ['status' => 'resolved', 'assignee' => 'Manager', 'resolution' => 'Battery replaced'])->assertOk();
+    $this->putJson('/crm/fleet/api/operations/trips/'.$trip->id, ['expected_miles' => 5, 'extra_miles' => 5, 'extra_percent' => 30, 'review_status' => 'pending'])->assertUnprocessable();
+    $this->putJson('/crm/fleet/api/operations/trips/'.$trip->id, ['job_id' => 9999, 'extra_miles' => 5, 'extra_percent' => 30, 'review_status' => 'pending'])->assertNotFound();
+    $w[0]->update(['status' => 'uninstalled', 'uninstalled_at' => now()]);
+    $this->putJson('/crm/fleet/api/operations/profiles/'.$device->id, $profile)->assertForbidden();
+});
+
+test('dispatch excludes stale, busy and unqualified crews and leaves assignment for dispatcher', function () {
+    $w = highlevelWorkspace();
+    $device = highlevelOperationsDevice($w);
+    $ops = app(\App\Services\HighLevel\FleetOperationsService::class);
+    $ops->save($w[0], 'profile', ['crew' => 'Crew A', 'available' => true, 'skills' => ['electrical'], 'materials' => ['wire' => 100]], $device->id);
+    $job = $ops->save($w[0], 'job', ['title' => 'HighLevel work', 'latitude' => 34.6, 'longitude' => -82,
+        'skills' => ['electrical'], 'materials' => ['wire' => 80], 'scheduled_start' => now()->toIso8601String(), 'scheduled_end' => now()->addHour()->toIso8601String()]);
+    $job->update(['status' => 'active']);
+    $vehicles = [['id' => $device->id, 'name' => 'Van', 'location' => ['latitude' => 34.5, 'longitude' => -82, 'older_reading' => false, 'reported_at' => now()->toIso8601String()]]];
+    expect($ops->dispatch($w[0], $job, $vehicles)['suggestions'])->toHaveCount(1)
+        ->and($job->refresh()->payload)->not->toHaveKey('device_id');
+    $vehicles[0]['location']['older_reading'] = true;
+    expect($ops->dispatch($w[0], $job, $vehicles)['suggestions'])->toBe([]);
+    $vehicles[0]['location']['older_reading'] = false;
+    $ops->save($w[0], 'profile', ['skills' => [], 'materials' => []], $device->id);
+    expect($ops->dispatch($w[0], $job, $vehicles)['suggestions'])->toBe([]);
+    $ops->save($w[0], 'profile', ['skills' => ['electrical'], 'materials' => ['wire' => 100]], $device->id);
+    $busy = $ops->save($w[0], 'job', ['device_id' => $device->id, 'scheduled_start' => now()->subHour()->toIso8601String(), 'scheduled_end' => now()->addHour()->toIso8601String()]);
+    $busy->update(['status' => 'active']);
+    expect($ops->dispatch($w[0], $job, $vehicles)['suggestions'])->toBe([]);
+});
+
+test('HighLevel source sync uses installed location, excludes cancelled stops and creates no Everbranch jobs', function () {
+    [$install, $tenant] = highlevelWorkspace();
+    Http::fake(['*/calendars/?*' => Http::response(['calendars' => [['id' => 'calendar-one', 'name' => 'Work', 'locationId' => 'location-one'], ['id' => 'foreign-calendar', 'locationId' => 'location-two']]]),
+        '*/opportunities/pipelines*' => Http::response(['pipelines' => []]),
+        '*/calendars/events?*' => Http::response(['events' => [['id' => 'event-one', 'calendarId' => 'calendar-one', 'title' => 'Service stop', 'appointmentStatus' => 'confirmed', 'startTime' => now()->toIso8601String()], ['id' => 'cancelled', 'calendarId' => 'calendar-one', 'title' => 'Cancelled', 'appointmentStatus' => 'cancelled']]])]);
+    $service = app(\App\Services\HighLevel\FleetJobSourceService::class);
+    expect($service->sources($install)['calendars'])->toHaveCount(1);
+    $service->sync($install, 'calendar', 'calendar-one');
+    expect(\App\Models\HighLevel\FleetOperationRecord::forTenantId($tenant->id)->where('kind', 'job')->where('status', 'active')->count())->toBe(1)
+        ->and(\App\Models\FieldServiceJob::forTenantId($tenant->id)->count())->toBe(0);
+    Http::assertSent(fn ($request) => str_contains($request->url(), '/calendars/events?') && $request['locationId'] === 'location-one' && $request['calendarId'] === 'calendar-one');
+    expect(fn () => $service->sync($install, 'calendar', 'foreign-calendar'))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+});
+
+test('fleet operations retention removes private trip and job data but preserves service history', function () {
+    $w = highlevelWorkspace();
+    $device = highlevelOperationsDevice($w);
+    $ops = app(\App\Services\HighLevel\FleetOperationsService::class);
+    foreach (['trip', 'job', 'telemetry', 'service_log'] as $kind) {
+        $record = $ops->save($w[0], $kind, ['notes' => 'old'], $device->id);
+        $record->update(['event_at' => now()->subDays(10)]);
+    }
+    TenantFleetTrackingSetting::where('tenant_id', $w[1]->id)->update(['retention_days' => 7]);
+    $this->artisan('highlevel:fleet-maintain')->assertSuccessful();
+    expect(\App\Models\HighLevel\FleetOperationRecord::count())->toBe(1)
+        ->and(\App\Models\HighLevel\FleetOperationRecord::sole()->kind)->toBe('service_log');
+});
+
+test('standalone demo exposes only fictional mode and a separate testing map key', function () {
+    config(['services.google_maps.fleet_demo_api_key' => 'demo-map-key', 'services.google_maps.fleet_api_key' => 'production-map-key']);
+    $this->get('/crm/fleet/demo')->assertOk()->assertSee('"demo":true', false)->assertSee('demo-map-key')->assertDontSee('production-map-key');
+    expect(EmbeddedSession::count())->toBe(0)->and(\App\Models\HighLevel\FleetOperationRecord::count())->toBe(0);
+});
+
+test('trip paths use precise time bounds, device ownership and configured retention', function () {
+    $w = highlevelWorkspace();
+    $device = highlevelOperationsDevice($w);
+    $ops = app(\App\Services\HighLevel\FleetOperationsService::class);
+    $trip = $ops->save($w[0], 'trip', ['started_at' => now()->subDays(10)->toIso8601String(), 'ended_at' => now()->toIso8601String()], $device->id);
+    foreach ([now()->subDays(8), now()->subHour(), now()->addHour()] as $i => $at) {
+        FleetLocationPoint::create(['tenant_id' => $w[1]->id, 'fleet_tracking_device_id' => $device->id, 'field_service_vehicle_id' => $device->field_service_vehicle_id,
+            'source' => 'bouncie', 'event_key' => hash('sha256', 'path'.$i), 'latitude' => 34 + $i, 'longitude' => -82, 'recorded_at' => $at, 'received_at' => now()]);
+    }
+    TenantFleetTrackingSetting::where('tenant_id', $w[1]->id)->update(['retention_days' => 7]);
+    expect($ops->path($w[0], $trip)['points'])->toHaveCount(1)
+        ->and($ops->path($w[0], $trip)['points'][0]['lat'])->toBe(35.0);
+    $other = highlevelWorkspace('location-two');
+    expect(fn () => $ops->path($other[0], $trip))->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+});

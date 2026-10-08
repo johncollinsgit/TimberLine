@@ -1,5 +1,14 @@
 ## 2026-10-07 — CRM Fleet free preview and 100 vehicles
 
+## 2026-10-08 — Fleet operations and demo
+
+- Added HighLevel job/crew context, connection health, trip mileage and route
+  review, recurring maintenance, assigned vehicle alerts and dispatch suggestions.
+- Added an interactive street map with distinct vehicle/stop markers and
+  timestamps, plus an isolated fictional demo of all requested features.
+- HighLevel work source is configurable; no Everbranch jobs are required.
+
+
 - Counts and device selection use the backend vehicle limit, now 100 per client.
 - Free mode hides subscription/payment prompts and explains that app access is free for now; Bouncie remains separately billed.
 - Bouncie connection and policy setup work while collection awaits pilot activation. Uninstall and live collection gates remain enforced.

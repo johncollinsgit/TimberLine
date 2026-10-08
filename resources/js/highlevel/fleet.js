@@ -1,8 +1,12 @@
 import './fleet.css';
+import {createDemo, demoRequest} from './demo.js';
+import {operationsView, bindOperations, jobContext, drawFallbackMap, panFallback} from './operations.js';
 
 const config = JSON.parse(document.getElementById('fleet-config').textContent);
 const root = document.getElementById('fleet-app');
+let demo = Boolean(config.demo), demoData=null;
 let token = null, expiresAt = 0, parentOrigin = null, data = null, page = 'fleet', selected = null, search = '', devices = null, busy = false;
+const labels = {fleet:'Fleet', health:'Connection health', jobs:'Jobs & dispatch', trips:'Trips & routes', maintenance:'Maintenance', alerts:'Health alerts', connection:'Connection', settings:'Settings'};
 let mapPromise = null, map = null, markers = [], popup = null, authPromise = null;
 const escape = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const vehicleLimit = () => Number(data.settings.vehicle_limit);
@@ -39,6 +43,7 @@ async function authorize() {
     try { await authPromise; } finally { authPromise = null; }
 }
 async function api(path, method = 'GET', body = null) {
+    if(demo)return demoRequest(demoData,path,method,body);
     if (!token || expiresAt < Date.now() + 60000) await authorize();
     const response = await fetch(`/crm/fleet/api/${path}`, {method,credentials:'omit',headers:{Accept:'application/json','Content-Type':'application/json',Authorization:`Bearer ${token}`,'X-Everbranch-Parent-Origin':parentOrigin},...(body !== null ? {body:JSON.stringify(body)} : {})});
     const result = await response.json();
@@ -50,7 +55,7 @@ async function api(path, method = 'GET', body = null) {
 }
 function statusBanner() {
     if (!data.subscription.has_access && !data.subscription.required) return '<div class="banner error"><strong>Fleet access unavailable</strong><p>An agency administrator must reinstall the app to restore access.</p></div>';
-    if (!data.subscription.has_access) return '<div class="banner error"><strong>Subscription requires attention</strong><p>An agency administrator can review the app subscription in your CRM. Fleet access resumes after HighLevel confirms payment.</p></div>';
+    if (!data.subscription.has_access) return '<div class="banner error"><strong>Subscription requires attention</strong><p>An agency administrator can review the app subscription in your CRM. Fleet access resumes after CRM confirms payment.</p></div>';
     if (!data.subscription.collection_active) return '<div class="banner"><strong>Activation pending</strong><p>Your installation is connected. Location collection is awaiting pilot activation. You can connect Bouncie, select vehicles, and save your settings now.</p></div>';
     if (data.subscription.required && data.subscription.status === 'FAILED') return `<div class="banner"><strong>Payment requires attention</strong><p>Fleet remains available during the payment grace period, ending ${escape(when(data.subscription.grace_ends_at))}. Review billing with your agency administrator.</p></div>`;
     if (!data.settings.policy_approved || !data.settings.tracking_enabled) return '<div class="banner"><strong>Setup required</strong><p>Approve your company vehicle policy and enable collection in Settings.</p></div>';
@@ -60,30 +65,33 @@ function statusBanner() {
 }
 function render() {
     if (!data) return;
-    root.innerHTML = `<main class="shell"><header class="topbar"><div class="brand">Everbranch <span>Fleet</span></div><div class="account">${escape(data.workspace.name)}</div></header>
-        <div class="heading"><div><h1>${page === 'fleet' ? 'Your fleet, in view' : page === 'connection' ? 'Bouncie connection' : 'Fleet settings'}</h1><p>${page === 'fleet' ? 'The latest reported locations of your company vehicles.' : page === 'connection' ? 'One Bouncie account. A separate workspace for this client.' : 'Control company vehicle collection and location retention.'}</p></div><span id="vehicle-total" class="pill">${data.vehicles.length} / ${vehicleLimit()} vehicles</span></div>
-        <nav class="tabs" aria-label="Fleet navigation">${['fleet','connection','settings'].map(tab => `<button data-page="${tab}" class="${page===tab?'active':''}" ${page===tab?'aria-current="page"':''}>${tab[0].toUpperCase()+tab.slice(1)}</button>`).join('')}</nav>
-        <div id="status-banner">${statusBanner()}</div><div id="notice" role="status"></div><section id="content">${page === 'fleet' ? fleetView() : page === 'connection' ? connectionView() : settingsView()}</section>
+    root.innerHTML = `<main class="shell"><header class="topbar"><div class="brand">Everbranch <span>Fleet</span></div><div class="account">${escape(data.workspace.name)} <button id="toggle-demo">${demo?'Exit demo':'Explore demo'}</button></div></header>
+        <div class="heading"><div><h1>${page === 'fleet' ? 'Your fleet, in view' : page === 'connection' ? 'Bouncie connection' : labels[page]}</h1><p>${page === 'fleet' ? 'The latest reported locations of your company vehicles.' : page === 'connection' ? 'One Bouncie account. A separate workspace for this client.' : page==='settings' ? 'Control company vehicle collection and location retention.' : 'Manage your fleet using CRM work and provider readings.'}</p></div><span id="vehicle-total" class="pill">${data.vehicles.length} / ${vehicleLimit()} vehicles</span></div>
+        <nav class="tabs" aria-label="Fleet navigation">${Object.keys(labels).map(tab => `<button data-page="${tab}" class="${page===tab?'active':''}" ${page===tab?'aria-current="page"':''}>${labels[tab]}</button>`).join('')}</nav>
+        ${demo?'<div class="banner demo-banner"><strong>DEMO · Fictional fleet data</strong><p>Explore every feature. Changes stay in this browser and do not affect a client account or connect Bouncie.</p></div>':''}<div id="status-banner">${demo?'':statusBanner()}</div><div id="notice" role="status"></div><section id="content">${page === 'fleet' ? fleetView() : page === 'connection' ? connectionView() : page === 'settings' ? settingsView() : operationsView(page,data)}</section>
         <footer class="footer"><span>Only company vehicles · Up to 30 days of location history</span><a href="mailto:${escape(data.support_email)}">Contact support</a></footer></main>`;
     bind();
     if (page === 'fleet' && data.vehicles.length) { updateList(); drawMap().catch(() => { const el=document.getElementById('map'); if(el) el.innerHTML='<p>The map could not load. Reported locations remain available in vehicle details.</p>'; }); }
 }
 function fleetView() {
     if (!data.vehicles.length) return `<div class="card empty"><span class="pill">No vehicles selected</span><h2>Your fleet starts here</h2><p>Connect Bouncie, then choose up to ${vehicleLimit()} vehicles for this workspace.</p><button data-page="connection" class="primary">Set up connection</button></div>`;
-    return '<div class="fleet-layout"><aside class="card fleet-list"><label class="sr-only" for="search">Search vehicles</label><input id="search" type="search" placeholder="Search vehicles" autocomplete="off"><div id="vehicle-list"></div></aside><div class="card map-card"><div class="map-toolbar"><h2>Fleet map</h2><small>Refreshes every 60 seconds</small></div><div id="map" class="map"><p>Loading map…</p></div><div id="vehicle-details" class="details"></div></div></div>';
+    return '<div class="fleet-layout"><aside class="card fleet-list"><label class="sr-only" for="search">Search vehicles</label><input id="search" type="search" placeholder="Search vehicles" autocomplete="off"><div id="vehicle-list"></div></aside><div class="card map-card"><div class="map-toolbar"><h2>Fleet map</h2><small>Refreshes every 60 seconds</small></div><div class="map-legend"><span class="legend-dot green"></span> Vehicles <span class="legend-dot amber"></span> Older reading <span class="legend-dot blue"></span> CRM job stops</div><div id="map" class="map"><p>Loading map…</p></div><div id="vehicle-details" class="details"></div></div></div>';
 }
 function updateList() {
     const vehicle = data.vehicles.find(v => v.id === selected) || data.vehicles[0];
     selected = vehicle.id;
+    const ctx=jobContext(data,vehicle.id);
     const visible = data.vehicles.filter(v => `${v.name} ${v.device_id}`.toLowerCase().includes(search.toLowerCase()));
-    document.getElementById('vehicle-list').innerHTML = visible.map(v => `<button class="vehicle-row ${selected===v.id?'selected':''}" data-vehicle="${v.id}"><strong>${escape(v.name)}</strong><small>${v.location ? (v.location.older_reading?'Older location reading':'Latest reported location') : 'Awaiting first location'}</small><small>${escape(when(v.location?.reported_at))}</small></button>`).join('') || '<p>No matching vehicles.</p>';
-    document.getElementById('vehicle-details').innerHTML = `<div><h3>${escape(vehicle.name)}</h3><p>${vehicle.location ? `${vehicle.location.latitude.toFixed(5)}, ${vehicle.location.longitude.toFixed(5)}` : 'No valid location received yet.'}</p></div><div><strong>Provider last reported</strong><p>${escape(when(vehicle.location?.reported_at))}</p>${vehicle.location?.older_reading ? '<p>An older reading can mean the vehicle is parked.</p>' : ''}</div>`;
+    document.getElementById('vehicle-list').innerHTML = visible.map(v => `<button class="vehicle-row ${selected===v.id?'selected':''}" data-vehicle="${v.id}"><strong>${escape(v.name)}</strong><small>${v.location ? (v.location.older_reading?'Older location reading':'Latest reported location') : 'Awaiting first location'}</small><small>${escape(when(v.location?.reported_at))}</small><small>${escape(jobContext(data,v.id).crew)}</small></button>`).join('') || '<p>No matching vehicles.</p>';
+    document.getElementById('vehicle-details').innerHTML = `<div><h3>${escape(vehicle.name)}</h3><p>${vehicle.location ? `${vehicle.location.latitude.toFixed(5)}, ${vehicle.location.longitude.toFixed(5)}` : 'No valid location received yet.'}</p></div><div><strong>${escape(ctx.crew)}</strong><p>Current: ${escape(ctx.current?.details.title || 'No scheduled job')}</p><p>Next: ${escape(ctx.next?.details.title || 'No scheduled stop')}</p></div><div><strong>Provider last reported</strong><p>${escape(when(vehicle.location?.reported_at))}</p>${vehicle.location?.older_reading ? '<p>An older reading can mean the vehicle is parked.</p>' : ''}</div>`;
 }
 function connectionView() {
+    if(demo)return '<div class="card"><h2>Demo Bouncie connection</h2><p>Six fictional vehicles show what the fleet will look like after activation. Connection controls are available in your real workspace.</p></div>';
     return `<div class="card"><h2>${data.connection.status==='connected' ? 'Bouncie connected' : 'Connect your Bouncie account'}</h2><p>${escape(data.connection.label || 'Authorize the Bouncie account that owns this client’s devices.')}</p><span class="pill ${data.connection.health.status==='unavailable'?'error':''}">${escape(data.connection.health.status)}</span><div class="actions"><button id="connect" class="primary" ${!data.subscription.setup_allowed?'disabled':''}>${data.connection.status==='connected'?'Reconnect Bouncie':'Connect Bouncie'}</button>${data.connection.status==='connected'?'<button id="load-devices">Choose vehicles</button><button id="disconnect" class="danger">Disconnect Bouncie</button>':''}</div><p class="notice">Disconnecting or uninstalling Everbranch does not cancel your Bouncie subscription.</p></div>
     ${devices ? `<div class="card"><h2>Choose up to ${vehicleLimit()} vehicles</h2><p>Each selected device belongs only to this workspace.</p><form id="device-form"><div class="device-grid">${devices.map(v => `<label class="device"><input type="checkbox" name="devices" value="${escape(v.id)}" ${v.selected?'checked':''}><span>${escape(v.name)}<small>${escape(v.id)}</small></span></label>`).join('')}</div><div class="actions"><button class="primary" type="submit">Save vehicle selection</button><span id="selected-count"></span></div></form></div>` : ''}`;
 }
 function settingsView() {
+    if(demo)return '<div class="card"><h2>Demo fleet settings</h2><p>100 vehicles per client · 30-day example retention · Free app access. Real policy approval and Bouncie authorization happen in the client workspace.</p></div>';
     return `<div class="card"><h2>Company vehicle policy</h2><p>Confirm your approved tracking policy before collection starts. Employee phone location sharing is excluded from this product.</p><form id="settings-form"><div class="form-grid">
     <label>Retention period<select name="retention_days">${[1,7,14,30].map(n=>`<option value="${n}" ${n===data.settings.retention_days?'selected':''}>${n} days</option>`).join('')}</select></label>
     <label>Policy version<input name="policy_version" required maxlength="80" value="${escape(data.settings.policy_version || new Date().toISOString().slice(0,10))}"></label>
@@ -95,9 +103,11 @@ function settingsView() {
 }
 async function run(action) { if(busy)return; busy=true; try{await action();}catch(error){notice(error.message,true);}finally{busy=false;} }
 function bind() {
+    const toggle=document.getElementById('toggle-demo');if(toggle)toggle.onclick=()=>{if(config.demo){window.location.href='/crm/fleet/guide';return;}window.open('/crm/fleet/demo','_blank','noopener');};
+    bindOperations(root,data,api,run,refresh,notice);
     root.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>{page=b.dataset.page; render();});
     const searchInput=document.getElementById('search');
-    if(searchInput){searchInput.value=search;searchInput.oninput=()=>{search=searchInput.value;updateList();};document.getElementById('vehicle-list').onclick=e=>{const b=e.target.closest('[data-vehicle]');if(!b)return;selected=Number(b.dataset.vehicle);updateList();const v=data.vehicles.find(v=>v.id===selected);if(map&&v?.location){map.panTo({lat:v.location.latitude,lng:v.location.longitude});}};}
+    if(searchInput){searchInput.value=search;searchInput.oninput=()=>{search=searchInput.value;updateList();};document.getElementById('vehicle-list').onclick=e=>{const b=e.target.closest('[data-vehicle]');if(!b)return;selected=Number(b.dataset.vehicle);updateList();const v=data.vehicles.find(v=>v.id===selected);if(map&&v?.location){map.panTo({lat:v.location.latitude,lng:v.location.longitude});}else if(v?.location){panFallback(v.location);}};}
     const connect=document.getElementById('connect');
     if(connect)connect.onclick=()=>{
         popup=window.open('about:blank','everbranch-bouncie','width=600,height=760');
@@ -112,21 +122,23 @@ function bind() {
 }
 async function drawMap() {
     const target=document.getElementById('map');if(!target)return;
-    if(!data.map_key){target.innerHTML='<p>The map is awaiting configuration. Select a vehicle to see its latest reported coordinates and timestamp.</p>';return;}
-    if(!mapPromise)mapPromise=new Promise((resolve,reject)=>{window.everbranchFleetMapReady=resolve;const s=document.createElement('script');s.src=`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(data.map_key)}&callback=everbranchFleetMapReady&loading=async`;s.async=true;s.onerror=reject;document.head.appendChild(s);});
+    if(!data.map_key){drawFallbackMap(target,data,id=>{selected=id;updateList();});return;}
+    if(!mapPromise)mapPromise=new Promise((resolve,reject)=>{window.everbranchFleetMapReady=resolve;const s=document.createElement('script');s.src=`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(data.map_key)}&callback=everbranchFleetMapReady&loading=async&libraries=marker`;s.async=true;s.referrerPolicy='origin';s.onerror=reject;document.head.appendChild(s);});
     await mapPromise;if(page!=='fleet'||!target.isConnected)return;
     let newMap=false;
-    if(!map||map.getDiv()!==target){newMap=true;map=new window.google.maps.Map(target,{center:{lat:39,lng:-98},zoom:4,mapTypeControl:false,streetViewControl:false});markers=[];}
-    markers.forEach(m=>m.setMap(null));markers=[];
+    if(!map||map.getDiv()!==target){newMap=true;map=new window.google.maps.Map(target,{center:{lat:39,lng:-98},zoom:4,mapTypeControl:false,streetViewControl:false,...(demo?{mapId:'DEMO_MAP_ID'}:{})});markers=[];}
+    markers.forEach(m=>{if(demo)m.map=null;else m.setMap(null);});markers=[];
     const bounds=new window.google.maps.LatLngBounds();
-    data.vehicles.filter(v=>v.location).forEach(v=>{const position={lat:v.location.latitude,lng:v.location.longitude};bounds.extend(position);const marker=new window.google.maps.Marker({map,position,title:v.name});marker.addListener('click',()=>{selected=v.id;updateList();});markers.push(marker);});
-    if(newMap&&markers.length===1){map.setCenter(bounds.getCenter());map.setZoom(14);}else if(newMap&&markers.length>1){map.fitBounds(bounds,45);}
+    data.vehicles.filter(v=>v.location).forEach(v=>{const position={lat:v.location.latitude,lng:v.location.longitude};bounds.extend(position);const pin=demo?new window.google.maps.marker.PinElement({background:v.location.older_reading?'#b98538':'#386b52',borderColor:'#fff',glyphColor:'#fff',glyphText:String(v.id)}):null;const marker=demo?new window.google.maps.marker.AdvancedMarkerElement({map,position,title:v.name,content:pin}):new window.google.maps.Marker({map,position,title:v.name});marker.addListener('click',()=>{selected=v.id;updateList();});markers.push(marker);});
+    const vehicleMarkerCount=markers.length;
+    (data.operations?.jobs||[]).forEach(j=>{const p=j.details;if(p.latitude==null||p.longitude==null)return;const position={lat:Number(p.latitude),lng:Number(p.longitude)},title=`CRM stop: ${p.title}`;markers.push(demo?new window.google.maps.marker.AdvancedMarkerElement({map,position,title,content:new window.google.maps.marker.PinElement({background:'#5278a8',borderColor:'#fff',glyphColor:'#fff',glyphText:'J',scale:.8})}):new window.google.maps.Marker({map,position,title,icon:{path:window.google.maps.SymbolPath.CIRCLE,scale:5,fillColor:'#5278a8',fillOpacity:1,strokeWeight:1}}));});
+    if(newMap&&vehicleMarkerCount===1){map.setCenter(bounds.getCenter());map.setZoom(14);}else if(newMap&&vehicleMarkerCount>1){map.fitBounds(bounds,45);}
 }
 async function refresh() {
     data=await api('bootstrap');
-    if(page==='fleet' && document.getElementById('map') && data.vehicles.length){document.getElementById('status-banner').innerHTML=statusBanner();document.getElementById('vehicle-total').textContent=`${data.vehicles.length} / ${vehicleLimit()} vehicles`;updateList();await drawMap();}else{render();}
+    if(page==='fleet' && document.getElementById('map') && data.vehicles.length){document.getElementById('status-banner').innerHTML=demo?'':statusBanner();document.getElementById('vehicle-total').textContent=`${data.vehicles.length} / ${vehicleLimit()} vehicles`;updateList();await drawMap();}else{render();}
 }
 window.addEventListener('message',event=>{if(event.origin===window.location.origin&&event.source===popup&&event.data?.message==='EVERBRANCH_BOUNCIE_CONNECTED'){popup.close();devices=null;run(async()=>{await refresh();notice('Bouncie connected. Choose your vehicles.');});}});
-setInterval(()=>{if(!document.hidden&&!busy&&data&&page!=='settings'&&(page!=='connection'||!devices))run(refresh);},60000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&data&&!busy&&page!=='settings'&&(page!=='connection'||!devices))run(refresh);});
-authorize().then(refresh).catch(error=>{root.innerHTML=`<div class="launch-card"><div class="brand">Everbranch <span>Fleet</span></div><h1>Unable to open Fleet</h1><p>${escape(error.message)}</p><button id="retry">Try again</button></div>`;document.getElementById('retry').onclick=()=>window.location.reload();});
+setInterval(()=>{if(!document.hidden&&!busy&&data&&!['settings','jobs','trips','maintenance','alerts'].includes(page)&&(page!=='connection'||!devices))run(refresh);},60000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&data&&!busy&&!['settings','jobs','trips','maintenance','alerts'].includes(page)&&(page!=='connection'||!devices))run(refresh);});
+(demo ? (demoData=createDemo(),demoData.map_key=config.demoMapKey||null,Promise.resolve()) : authorize()).then(refresh).catch(error=>{root.innerHTML=`<div class="launch-card"><div class="brand">Everbranch <span>Fleet</span></div><h1>Unable to open Fleet</h1><p>${escape(error.message)}</p><button id="retry">Try again</button></div>`;document.getElementById('retry').onclick=()=>window.location.reload();});

@@ -331,3 +331,75 @@ key and subscribes only to tripStart, tripData, tripEnd and tripMetrics. It is
 active. Activate the Fleet webhook only after native billing, collection gates
 and the two pilot locations are ready. No Bouncie account has been connected
 to a CRM workspace during this setup.
+
+## Fleet operations and isolated demo (2026-10-08)
+
+Everbranch owns the software, hosting, fleet settings and planning. HighLevel
+remains the work source. No `FieldServiceJob` is required or created. Managers
+choose a calendar or an open-opportunity pipeline, then sync a bounded source
+snapshot. Only title, reference, status, assignee and supplied schedule are kept,
+with encrypted fleet coordinates/schedule/skills/stock overlays. Configure the
+source after learning where the client keeps work; do not infer jobs from contacts.
+The additional read scopes are `calendars.readonly`, `calendars/events.readonly`
+and `opportunities.readonly`. Existing installations may need agency approval
+or reauthorization before source reads work. There are no CRM writes.
+
+- Fleet map: latest provider location, manually assigned crew, scheduled current
+  job and next stop; HighLevel stops appear as separate map markers.
+- Connection health: provider refresh time, 15-minute older-reading labels,
+  explicit provider connect/disconnect signals and count of unselected devices.
+  A parked/stale vehicle is not automatically declared disconnected.
+- Maintenance: provider odometer, date/mileage service plans, automatic deduped
+  due tasks, service history and recurring intervals advanced after confirmed
+  completion. Tasks run during bootstrap and five-minute maintenance. Odometer
+  and due tasks depend on received provider data; history remains after GPS expiry.
+- Trips: trip start/end plus Bouncie tripMetrics miles, total seconds and idle
+  seconds. Drive time is total minus idle only when both metrics exist. GPS path
+  is retained reported samples, not a reconstructed or verified road trace.
+  Matching schedule references are suggestions; confirmation is always manual.
+- Route review: manager supplies an approved road-distance baseline and its
+  reference, extra-mile allowance (default 5), and extra-percent allowance
+  (default 30). Review is flagged above baseline plus the larger allowance.
+  Missing baselines remain explicitly unassessed. Approved detours keep the
+  numerical flag and a separate recorded decision. No misconduct inference,
+  automatic penalty or straight-line-as-road comparison is made.
+- Health alerts: check-engine and low/critical battery provider events, assigned
+  person, open/in-progress/resolved status and required resolution notes.
+  Manual resolution does not clear a hardware fault. Snapshot polling can
+  supply MIL/battery events; enable Bouncie `battery`, `mil`, `connect`, and
+  `disconnect` subscriptions alongside tripStart/Data/End/Metrics at activation.
+- Dispatch: recent located, explicitly available crews are ranked by straight-line
+  distance after schedule conflict, skills and stocked-quantity checks. Unknown
+  schedules on existing assignments block recommendations. The dispatcher chooses
+  a suggestion in the fleet form and explicitly saves; no automatic CRM assignment.
+
+Storage: `fleet_operation_records` is tenant-scoped and encrypts all payloads.
+Provider deliveries dedupe by device/trip or event timestamp and preserve newer
+field values and manager reviews. Trips, telemetry and work snapshots follow
+1–30-day tenant retention; maintenance history and non-GPS alert decisions remain.
+All provider ingestion retains collection, entitlement, connection, mapping and
+policy gates. No account has been activated by this feature release.
+
+`/crm/fleet/demo` is a public synthetic preview; the embedded app also offers
+Explore demo. No embedded session or provider request is made in standalone demo.
+Every change is browser-memory only and resets on reload. Never seed demo data into
+client tables. The sample company, people, appointments, routes and readings are
+fictional. The demo includes all requested feature sets and an ambiguous trip match.
+
+Maps: a restricted `GOOGLE_MAPS_FLEET_API_KEY` selects Google Maps JavaScript in
+the real fleet map. Without it, bundled Leaflet 1.9.4 provides an interactive
+OpenStreetMap street map, with visible attribution, origin-only tile referrer,
+normal browser caching and no prefetch/offline download. The tile service is
+best-effort; switch `HIGHLEVEL_MAP_TILE_URL` and attribution to a suitable provider
+if deployment volume grows. Tile service sees the requested map viewport.
+
+Validation covers two-client isolation, signed admin session, uninstall denial,
+replay/out-of-order telemetry, gates, encrypted payloads, task recurrence,
+schedule/skills/stock dispatch exclusions, source scoping and private-data expiry.
+Chromium and WebKit verify 100 vehicles, responsive layout, all demo feature
+screens and browser-only demo mutations. The schema is built/verified only in a
+disposable MySQL 8.4 database, with a retained-table recovery scenario.
+
+The fictional preview at `/crm/fleet/demo` may use `GOOGLE_MAPS_FLEET_DEMO_API_KEY` from a no-cost Google Maps Demo Project (currently `gmp-demo-project-344944647`). It is strictly for evaluation with fictional data, never live tracking. Production fleet maps use the separate `GOOGLE_MAPS_FLEET_API_KEY`; without it, the app displays the interactive OSM street map. Explore demo opens a separate tab so testing SDK credentials cannot carry into real account rendering. Google demo quotas may pause the testing map. Activate and restrict a billing-enabled production key before using Google Maps for real clients.
+
+For the Bridge City pilot/demo, keep distribution private and use the fictional preview through an agency-managed Custom Menu Link or direct demo link. User-facing white-label screens use “CRM” and avoid HighLevel branding, endorsement claims and logos. The preview is explicitly fictional and requires no installation, CRM context, provider authorization or real records. Private app distribution is limited to five agencies (sub-accounts do not count toward that cap); broader distribution requires the applicable public/security review path. Do not treat a demo as approval for production collection.

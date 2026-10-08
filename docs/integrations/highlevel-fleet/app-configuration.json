@@ -17,7 +17,10 @@
     "users.readonly",
     "oauth.readonly",
     "oauth.write",
-    "marketplace-installer-details.readonly"
+    "marketplace-installer-details.readonly",
+    "calendars.readonly",
+    "calendars/events.readonly",
+    "opportunities.readonly"
   ],
   "webhookUrl": "https://app.theeverbranch.com/crm/fleet/webhooks/lifecycle",
   "webhookEvents": [

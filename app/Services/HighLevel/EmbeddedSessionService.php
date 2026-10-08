@@ -42,7 +42,7 @@ class EmbeddedSessionService
             $nonce->update(['consumed_at' => now()]);
             $binding = UserBinding::where('installation_id', $install->id)->where('provider_user_id', $userId)->first();
             if (! $binding) {
-                $actor = app(InstallationService::class)->shadowUser((string) ($user['name'] ?? 'HighLevel administrator'));
+                $actor = app(InstallationService::class)->shadowUser((string) ($user['name'] ?? 'CRM administrator'));
                 $install->tenant->users()->attach($actor->id, ['role' => 'admin', 'membership_active' => true]);
                 $binding = UserBinding::create(['installation_id' => $install->id, 'provider_user_id' => $userId,
                     'user_id' => $actor->id, 'role' => 'admin', 'verified_at' => now()]);
