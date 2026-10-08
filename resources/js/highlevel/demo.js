@@ -27,7 +27,18 @@ export function demoRequest(d,path,method,body){
     if(path==='operations/sync')return {saved:true,count:d.operations.jobs.length};
     if(path.endsWith('/path'))return {message:'Synthetic demo GPS samples. Connecting lines illustrate reported samples, not verified road segments.',points:[[34.885,-82.393],[34.873,-82.393],[34.864,-82.394],[34.86,-82.395],[34.856,-82.398],[34.852,-82.397],[34.848,-82.391],[34.843,-82.373],[34.845,-82.368],[34.86,-82.364],[34.874,-82.366],[34.885,-82.381],[34.885,-82.393]].map(([lat,lng],i)=>({lat,lng,at:iso(-130+i*4)})),truncated:false};
     const id=Number(path.split('/')[2]);
-    if(path.endsWith('/dispatch'))return {basis:'Demo suggestions use confirmed skills and stock, schedule availability, and recent locations. Miles are straight-line, not ETA.',suggestions:[{device_id:6,name:d.vehicles[5].name,crew:d.operations.profiles[5].details.crew,straight_line_miles:2.1,reported_at:iso(-3)},{device_id:1,name:d.vehicles[0].name,crew:d.operations.profiles[0].details.crew,straight_line_miles:3.4,reported_at:iso(-3)}]};
+    if(path.endsWith('/dispatch')){
+        const job=d.operations.jobs.find(j=>j.id===id),j=job?.details,start=Date.parse(j?.scheduled_start||j?.crm_start),end=Date.parse(j?.scheduled_end||j?.crm_end);
+        if(!j||j.latitude==null||j.longitude==null||!Number.isFinite(start)||!Number.isFinite(end)||end<=start)throw new Error('Confirm job coordinates and start/end times before requesting suggestions.');
+        const suggestions=d.vehicles.flatMap(v=>{
+            const p=d.operations.profiles.find(p=>p.device_id===v.id)?.details||{};
+            if(!p.available||!p.crew||!v.location||v.location.older_reading||(j.skills||[]).some(s=>!(p.skills||[]).includes(s))||Object.entries(j.materials||{}).some(([name,qty])=>(p.materials?.[name]||0)<qty))return [];
+            if(d.operations.jobs.some(other=>{const o=other.details;if(other.id===id||Number(o.device_id)!==v.id)return false;const a=Date.parse(o.scheduled_start||o.crm_start),b=Date.parse(o.scheduled_end||o.crm_end);return !Number.isFinite(a)||!Number.isFinite(b)||(a<end&&b>start);}))return [];
+            const rad=n=>n*Math.PI/180,a=v.location.latitude,b=j.latitude,h=Math.sin(rad(b-a)/2)**2+Math.cos(rad(a))*Math.cos(rad(b))*Math.sin(rad(j.longitude-v.location.longitude)/2)**2;
+            return [{device_id:v.id,name:v.name,crew:p.crew,straight_line_miles:Math.round(3958.8*2*Math.asin(Math.sqrt(Math.min(1,h)))*10)/10,reported_at:v.location.reported_at}];
+        }).sort((a,b)=>a.straight_line_miles-b.straight_line_miles);
+        return {basis:'Demo suggestions use confirmed skills and stock, schedule availability, and recent locations. Miles are straight-line, not ETA.',suggestions};
+    }
     const lists={profiles:'profiles',jobs:'jobs',alerts:'alerts',trips:'trips'};
     const resource=path.split('/')[1];
     if(lists[resource]){
@@ -40,7 +51,7 @@ export function demoRequest(d,path,method,body){
     if(resource==='plans') {d.operations.service_plans.push({id:Date.now(),device_id:body.device_id,details:body,status:'open',event_at:iso()});return {saved:true};}
     if(resource==='service'){
         const plan=d.operations.service_plans.find(p=>p.id===body.plan_id);if(!plan||plan.status!=='open')throw new Error('This demo service is already recorded.');
-        plan.status='completed';d.operations.service_logs.unshift({id:Date.now(),device_id:plan.device_id,details:{...body,title:plan.details.title},status:'completed',event_at:iso()});d.operations.maintenance_tasks=d.operations.maintenance_tasks.filter(t=>t.details.plan_id!==body.plan_id);return {saved:true};
+        const old=plan.details;if(old.interval_miles||old.interval_days){const next={...old,due_miles:old.interval_miles?body.odometer+old.interval_miles:null,due_date:old.interval_days?new Date(Date.parse(body.serviced_at)+old.interval_days*86400000).toISOString().slice(0,10):null};d.operations.service_plans.push({id:Date.now()+1,device_id:plan.device_id,details:next,status:'open',event_at:iso()});}plan.status='completed';d.operations.service_logs.unshift({id:Date.now(),device_id:plan.device_id,details:{...body,title:plan.details.title},status:'completed',event_at:iso()});d.operations.maintenance_tasks=d.operations.maintenance_tasks.filter(t=>t.details.plan_id!==body.plan_id);return {saved:true};
     }
     throw new Error('Connection and policy setup use your real account. Exit the demo to configure them.');
 }
