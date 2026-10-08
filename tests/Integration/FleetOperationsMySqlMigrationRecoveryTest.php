@@ -19,12 +19,13 @@ it('retains fleet operations when MySQL completed table DDL before migration boo
     $migration->up();
     // MySQL retains this table and its data even if migration bookkeeping was
     // interrupted after CREATE TABLE. Retrying must not recreate or erase it.
+    $sourceKey = hash('sha256', random_bytes(20));
     DB::table('fleet_operation_records')->insert(['tenant_id' => DB::table('tenants')->insertGetId([]), 'kind' => 'service_log',
-        'source_key' => str_repeat('a', 64), 'payload' => 'recovery-sentinel', 'created_at' => now(), 'updated_at' => now()]);
+        'source_key' => $sourceKey, 'payload' => 'recovery-sentinel', 'created_at' => now(), 'updated_at' => now()]);
     $migration->up();
     $migration->up();
     expect(Schema::hasIndex('fleet_operation_records', 'fleet_ops_source_unique'))->toBeTrue()
         ->and(Schema::hasIndex('fleet_operation_records', 'fleet_ops_time_index'))->toBeTrue()
         ->and(Schema::getColumnType('fleet_operation_records', 'payload'))->toBe('longtext')
-        ->and(DB::table('fleet_operation_records')->where('source_key', str_repeat('a', 64))->value('payload'))->toBe('recovery-sentinel');
+        ->and(DB::table('fleet_operation_records')->where('source_key', $sourceKey)->value('payload'))->toBe('recovery-sentinel');
 });
