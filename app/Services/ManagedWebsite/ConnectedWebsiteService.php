@@ -95,13 +95,81 @@ class ConnectedWebsiteService
         return $content;
     }
 
-    private function version(TenantSite $site, array $content, User $actor, string $status): TenantSiteVersion
+    public function theme(TenantSite $site, int $versionId): string
+    {
+        $version = $site->siteVersions()->where('tenant_id', $site->tenant_id)->findOrFail($versionId);
+        abort_unless(data_get($version->settings, 'connected_renderer') === self::RENDERER, 404);
+
+        return data_get($version->settings, 'connected_theme') === 'heritage' ? 'heritage' : 'original';
+    }
+
+    public function savedThemes(TenantSite $site)
+    {
+        return $site->siteVersions()->where('tenant_id', $site->tenant_id)->where('status', 'saved_theme')->orderByDesc('id')->get();
+    }
+
+    public function heritageContent(array $content): array
+    {
+        return array_replace($content, [
+            'home_001' => '/images/heritage-lift-barrel.webp', 'home_002' => 'Carolina Barrel Co. · A family business',
+            'shared_038' => 'A second life.', 'shared_039' => 'A beautiful purpose.',
+            'home_003' => 'Wine barrels with a story, transformed into furniture worth gathering around. Discover handcrafted bars, storage, and pieces for your home.',
+            'home_004' => '/products', 'home_005' => 'Explore our pieces',
+            'home_006' => '/images/heritage-sink.webp', 'home_007' => 'Oak, copper & craftsmanship',
+            'shared_040' => 'Character in', 'shared_041' => 'every detail.',
+            'home_008' => 'Warm oak, original barrel hoops, and a copper basin. Thoughtful pieces that give familiar spaces a little more soul.',
+            'home_009' => '/products/barrel-sink-vanity', 'home_010' => 'Discover the sink barrel',
+            'home_011' => '/images/heritage-arcade.webp', 'home_012' => 'Made for good company',
+            'shared_042' => 'Stay a little.', 'shared_043' => 'Play a little.',
+            'home_013' => 'A wine barrel with a playful second act. Explore our cocktail arcade table and find a new reason to spend time together.',
+            'home_014' => '/products/barrel-cocktail-arcade-table', 'home_015' => 'Explore the arcade table',
+            'shared_015' => 'A family business transforming wine barrels into distinctive furniture and features for your home.',
+            'shared_037' => 'A new chapter for every barrel.',
+            'home_032' => 'Find your piece', 'home_033' => 'Made to be lived with.',
+            'home_034' => 'From a quiet corner to a room full of friends, find a piece with character, craft, and a purpose of its own.',
+        ]);
+    }
+
+    /** Preserve the complete current draft before changing its presentation. */
+    public function applyTheme(TenantSite $site, string $key, User $actor, int $expected): TenantSiteVersion
+    {
+        $this->assertEditor($site, $actor);
+
+        return DB::transaction(function () use ($site, $key, $actor, $expected) {
+            $site = TenantSite::query()->lockForUpdate()->findOrFail($site->id);
+            abort_unless($site->draft_site_version_id === $expected, 409, 'The draft changed. Reload before selecting a theme.');
+            $content = $this->content($site, $expected);
+            $style = $this->theme($site, $expected);
+            $target = null;
+            if (preg_match('/^saved-(\d+)$/D', $key, $match)) {
+                $target = $site->siteVersions()->where('tenant_id', $site->tenant_id)->where('status', 'saved_theme')->findOrFail((int) $match[1]);
+                $targetContent = $this->content($site, $target->id);
+                $targetStyle = $this->theme($site, $target->id);
+            } else {
+                abort_unless(in_array($key, ['original', 'heritage'], true), 422, 'Choose an available website theme.');
+                $targetContent = $key === 'heritage' ? $this->heritageContent($content) : $content;
+                $targetStyle = $key;
+            }
+            if (! $this->savedThemes($site)->contains(fn ($saved) => $this->theme($site, $saved->id) === $style && $this->content($site, $saved->id) === $content)) {
+                $saved = $this->version($site, $content, $actor, 'saved_theme', $style);
+                $saved->update(['settings' => $saved->settings + ['theme_name' => ($style === 'heritage' ? 'Carolina Heritage' : 'Carolina Original').' · '.now()->format('M j, Y g:i A')]]);
+                app(ManagedWebsiteService::class)->recordEvent($site, null, $actor, 'connected.theme_saved', ['version_id' => $saved->id, 'source_version_id' => $expected]);
+            }
+            $version = $this->version($site, $targetContent, $actor, 'draft', $targetStyle);
+            $site->update(['draft_site_version_id' => $version->id, 'updated_by_user_id' => $actor->id]);
+            app(ManagedWebsiteService::class)->recordEvent($site, null, $actor, 'connected.theme_applied', ['theme' => $targetStyle, 'saved_version_id' => $target?->id, 'previous_version_id' => $expected, 'version_id' => $version->id]);
+
+            return $version;
+        });
+    }
+
+    private function version(TenantSite $site, array $content, User $actor, string $status, string $style = 'original'): TenantSiteVersion
     {
         return $site->siteVersions()->create([
             'tenant_id' => $site->tenant_id,
             'version_number' => ((int) $site->siteVersions()->max('version_number')) + 1,
             'status' => $status,
-            'settings' => ['connected_renderer' => self::RENDERER, 'connected_content' => $content],
+            'settings' => ['connected_renderer' => self::RENDERER, 'connected_content' => $content, 'connected_theme' => $style],
             'navigation' => [], 'seo' => [],
             'source_manifest' => ['renderer' => self::RENDERER, 'origin' => self::ORIGIN],
             'created_by_user_id' => $actor->id,
@@ -117,7 +185,7 @@ class ConnectedWebsiteService
         return DB::transaction(function () use ($site, $content, $actor, $expected) {
             $site = TenantSite::query()->lockForUpdate()->findOrFail($site->id);
             abort_unless($site->draft_site_version_id === $expected, 409, 'Someone saved a newer draft. Reload before saving.');
-            $version = $this->version($site, $content, $actor, 'draft');
+            $version = $this->version($site, $content, $actor, 'draft', $this->theme($site, $expected));
             $site->update(['draft_site_version_id' => $version->id, 'updated_by_user_id' => $actor->id]);
             app(ManagedWebsiteService::class)->recordEvent($site, null, $actor, 'connected.draft_saved', ['previous_version_id' => $expected, 'version_id' => $version->id]);
 
@@ -133,7 +201,7 @@ class ConnectedWebsiteService
             $site = TenantSite::query()->lockForUpdate()->findOrFail($site->id);
             abort_unless($site->draft_site_version_id === $expected, 409, 'The draft changed. Reload and review it before publishing.');
             $content = $this->content($site, $expected);
-            $version = $this->version($site, $content, $actor, 'published');
+            $version = $this->version($site, $content, $actor, 'published', $this->theme($site, $expected));
             $before = $site->published_site_version_id;
             $site->update(['published_site_version_id' => $version->id, 'status' => 'published', 'public_enabled' => true, 'published_at' => now(), 'updated_by_user_id' => $actor->id]);
             app(ManagedWebsiteService::class)->recordEvent($site, null, $actor, 'connected.published', ['previous_version_id' => $before, 'version_id' => $version->id, 'draft_version_id' => $expected]);
@@ -152,6 +220,11 @@ class ConnectedWebsiteService
 
     public function previewContent(TenantSite $site, string $token): array
     {
+        return $this->content($site, $this->previewVersionId($site, $token));
+    }
+
+    public function previewVersionId(TenantSite $site, string $token): int
+    {
         try {
             $claims = json_decode(Crypt::decryptString($token), true, 512, JSON_THROW_ON_ERROR);
         } catch (\Throwable) {
@@ -160,7 +233,10 @@ class ConnectedWebsiteService
         abort_unless(($claims['site'] ?? null) === $site->id && ($claims['tenant'] ?? null) === $site->tenant_id && ($claims['expires'] ?? 0) > now()->timestamp, 403, 'This preview link expired. Open a new preview from Website.');
         $this->assertEditor($site, User::query()->find($claims['actor'] ?? 0));
 
-        return $this->content($site, (int) ($claims['version'] ?? 0));
+        $versionId = (int) ($claims['version'] ?? 0);
+        $this->content($site, $versionId);
+
+        return $versionId;
     }
 
     /** Import the currently live baseline once; preserves all previous native snapshots. */

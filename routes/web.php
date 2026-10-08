@@ -780,6 +780,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->group(function (): void {
             Route::get('/', [ManagedWebsiteController::class, 'index'])->name('index');
             Route::get('/connected', [\App\Http\Controllers\ConnectedWebsiteController::class, 'index'])->name('connected.index');
+            Route::post('/connected/theme', [\App\Http\Controllers\ConnectedWebsiteController::class, 'applyTheme'])->name('connected.theme');
             Route::post('/connected/draft', [\App\Http\Controllers\ConnectedWebsiteController::class, 'save'])->name('connected.save');
             Route::post('/connected/publish', [\App\Http\Controllers\ConnectedWebsiteController::class, 'publish'])->name('connected.publish');
             Route::post('/connected/restore', [\App\Http\Controllers\ConnectedWebsiteController::class, 'restore'])->name('connected.restore');

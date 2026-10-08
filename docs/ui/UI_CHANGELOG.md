@@ -1,5 +1,22 @@
 ## 2026-10-07 — CRM Fleet free preview and 100 vehicles
 
+## 2026-10-08 — Carolina Heritage theme (development)
+
+- Carolina Barrel's connected Website editor has a theme selector with Carolina
+  Original, Carolina Heritage (Wine & Oak), and tenant-owned saved designs.
+  Applying a style saves the complete previous draft; preparation also saves the
+  previous published design. Switching and restoring remain draft-only until
+  publication, with stale-write, membership, tenant, and publish gates intact.
+- Theme identity is versioned with connected content and returned for both public
+  snapshots and signed private previews. Existing snapshots default to Original.
+  Product/catalog/order data and commerce activation are independent of themes.
+- The separate renderer retains wholesale and affiliate applications, adds a
+  wine-and-oak presentation with maker photography, an accessible rotating hero,
+  mobile navigation, and session referral propagation to quote requests.
+- Automated commissions, affiliate payouts, wholesale customer login, and LTL
+  checkout remain subject to their existing readiness; a style does not activate them.
+
+
 ## 2026-10-08 — Fleet operations and demo
 
 - Added HighLevel job/crew context, connection health, trip mileage and route

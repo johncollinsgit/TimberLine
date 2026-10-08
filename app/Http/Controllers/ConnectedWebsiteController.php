@@ -33,6 +33,8 @@ class ConnectedWebsiteController extends Controller
             'content' => $service->content($site, $site->draft_site_version_id),
             'previewUrl' => $service->previewUrl($site, $request->user()),
             'publicUrl' => ConnectedWebsiteService::ORIGIN,
+            'selectedTheme' => $service->theme($site, $site->draft_site_version_id),
+            'savedThemes' => $service->savedThemes($site),
             'canPublish' => app(ManagedWebsiteAccessService::class)->canPublish($site->tenant, $request->user()) && app(ManagedWebsiteService::class)->publishingEnabled(),
             'history' => $site->siteVersions()->where('status', 'published')->latest('id')->limit(20)->get()->filter(fn ($version) => data_get($version->settings, 'connected_renderer') === ConnectedWebsiteService::RENDERER),
         ])->header('Cache-Control', 'private, no-store')->header('Referrer-Policy', 'no-referrer');
@@ -56,13 +58,25 @@ class ConnectedWebsiteController extends Controller
         return back()->with('status', 'Published to your live website.');
     }
 
+    public function applyTheme(Request $request, ConnectedWebsiteService $service)
+    {
+        $site = $this->site($request);
+        $data = $request->validate(['version' => ['required', 'integer'], 'theme' => ['required', 'string', 'max:80']]);
+        $service->applyTheme($site, $data['theme'], $request->user(), $data['version']);
+
+        return back()->with('status', 'Theme added to your draft. Your previous design is saved in the theme selector.');
+    }
+
     public function restore(Request $request, ConnectedWebsiteService $service)
     {
         $site = $this->site($request);
         $service->assertEditor($site, $request->user());
         $data = $request->validate(['version' => ['required', 'integer'], 'restore_version' => ['required', 'integer']]);
         $content = $service->content($site, $data['restore_version']);
-        $service->save($site, $content, $request->user(), $data['version']);
+        DB::transaction(function () use ($site, $content, $request, $service, $data) {
+            $draft = $service->save($site, $content, $request->user(), $data['version']);
+            $draft->update(['settings' => array_replace($draft->settings, ['connected_theme' => $service->theme($site, $data['restore_version'])])]);
+        });
 
         return back()->with('status', 'Version restored as a draft. Preview and publish when ready.');
     }
@@ -79,14 +93,15 @@ class ConnectedWebsiteController extends Controller
         $site = $this->publicSite();
         if ($request->has('preview')) {
             $token = $request->validate(['preview' => ['required', 'string', 'max:4096']])['preview'];
-            $content = $service->previewContent($site, $token);
+            $versionId = $service->previewVersionId($site, $token);
+            $content = $service->content($site, $versionId);
 
-            return response()->json(['renderer' => ConnectedWebsiteService::RENDERER, 'content' => $content, 'preview' => true, 'catalog' => app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->publicCatalog($site), 'collections' => app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->publicCollections($site)])
+            return response()->json(['renderer' => ConnectedWebsiteService::RENDERER, 'theme' => $service->theme($site, $versionId), 'content' => $content, 'preview' => true, 'catalog' => app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->publicCatalog($site), 'collections' => app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->publicCollections($site)])
                 ->header('Cache-Control', 'private, no-store')->header('X-Robots-Tag', 'noindex, nofollow')->header('Referrer-Policy', 'no-referrer');
         }
         $service->assertAvailable($site);
 
-        return response()->json(['renderer' => ConnectedWebsiteService::RENDERER, 'content' => $service->content($site, $site->published_site_version_id), 'version' => $site->published_site_version_id, 'catalog' => app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->publicCatalog($site), 'collections' => app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->publicCollections($site)])
+        return response()->json(['renderer' => ConnectedWebsiteService::RENDERER, 'theme' => $service->theme($site, $site->published_site_version_id), 'content' => $service->content($site, $site->published_site_version_id), 'version' => $site->published_site_version_id, 'catalog' => app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->publicCatalog($site), 'collections' => app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->publicCollections($site)])
             ->header('Cache-Control', 'no-store');
     }
 

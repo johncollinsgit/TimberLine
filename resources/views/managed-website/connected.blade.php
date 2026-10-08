@@ -14,6 +14,20 @@
             </header>
             @if(session('status'))<p role="status" class="rounded-lg bg-emerald-50 p-4 text-emerald-900">{{ session('status') }}</p>@endif
             @if($errors->any())<div role="alert" class="rounded-lg bg-red-50 p-4 text-red-800">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif
+            <section class="border-y bg-white px-5 py-4" aria-labelledby="theme-selector-heading">
+                <div class="flex flex-wrap items-center justify-between gap-4">
+                    <div><h2 id="theme-selector-heading" class="text-base font-semibold">Website theme</h2><p class="mt-1 text-sm text-zinc-600">Choose a style for your saved draft. The live site changes when you publish.</p></div>
+                    <form method="POST" action="{{ route('managed-website.connected.theme') }}" class="flex flex-wrap items-center gap-3">
+                        @csrf<input type="hidden" name="version" value="{{ $site->draft_site_version_id }}">
+                        <label for="website-theme" class="sr-only">Choose website theme</label>
+                        <select id="website-theme" name="theme" class="rounded-lg border-zinc-300 text-sm">
+                            <optgroup label="Styles"><option value="heritage" @selected($selectedTheme === 'heritage')>Carolina Heritage · Wine &amp; Oak</option><option value="original" @selected($selectedTheme === 'original')>Carolina Original</option></optgroup>
+                            @if($savedThemes->isNotEmpty())<optgroup label="Saved designs">@foreach($savedThemes as $saved)<option value="saved-{{ $saved->id }}">{{ data_get($saved->settings, 'theme_name', 'Saved design') }}</option>@endforeach</optgroup>@endif
+                        </select>
+                        <button class="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold">Use theme</button>
+                    </form>
+                </div>
+            </section>
             <section class="overflow-hidden rounded-xl border bg-white">
                 <div class="flex items-center justify-between border-b px-5 py-3"><p class="text-sm font-semibold">Live website</p><span class="text-xs text-emerald-800">Published {{ $site->published_at?->format('M j, g:i A') }}</span></div>
                 <iframe src="{{ $publicUrl }}" title="Carolina Barrel live website" style="width:100%;height:620px;border:0" loading="lazy" referrerpolicy="no-referrer"></iframe>

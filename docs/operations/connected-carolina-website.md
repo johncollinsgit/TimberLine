@@ -79,3 +79,30 @@ and submissions. Never replace published content with the old generic template.
 Validation: `ConnectedWebsiteTest`, existing Managed Website safety/commerce tests,
 full backend suite/build, and the renderer's typecheck, lint, build, content-isolation
 and inquiry-proxy tests. Confirm the deployed readiness release before activation.
+
+## Carolina Heritage theme selector (2026-10-08)
+
+The connected editor's Website theme selector lists Original, Heritage (Wine & Oak),
+and saved designs. A selection preserves the complete previous draft in an
+immutable `tenant_site_versions` row with `status=saved_theme`; selecting a saved
+row creates a new draft, never edits that row or the public pointer. Saved rows
+are scoped to the same tenant/site. `connected_theme` is cloned through Save,
+Publish and Restore, and the content API returns the style for the exact public
+or signed preview version. Historical rows without the key use Original.
+
+Release the backend through the GitHub/Forge gate and deploy the compatible
+Carolina renderer before activating Heritage. Then use the existing authorized
+operator with `php artisan website:prepare-carolina-heritage --actor=<id>` for a
+transactional dry run and add `--apply` to prepare a draft. Preparation saves both
+the prior live design and any distinct draft, uses the prepared maker photos,
+and never modifies catalog, checkout, wholesale pricing, or payouts. Replays
+with an existing Heritage draft do nothing. Review the private preview and
+publish through the normal editor/service; `--apply --publish` supports the
+initial authorized one-step activation after renderer verification.
+
+To roll back, select the saved previous live design, preview, and publish. Retain
+both renderer layouts; never revert the backend's field/preview contract. The
+renderer keeps referral codes on internal navigation and quote requests for the
+browser session. Wholesale/affiliate applications still save as inquiries;
+automated commissions/payouts and a private wholesale customer login have not
+been activated by this theme work.
