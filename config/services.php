@@ -55,6 +55,8 @@ return [
     'google_maps' => [
         'places_api_key' => env('GOOGLE_MAPS_PLACES_API_KEY', env('GOOGLE_PLACES_API_KEY')),
         'fleet_api_key' => env('GOOGLE_MAPS_FLEET_API_KEY'),
+        // Testing key must never render real fleet locations.
+        'fleet_demo_api_key' => env('GOOGLE_MAPS_FLEET_DEMO_API_KEY'),
     ],
 
     'fleet_tracking' => [

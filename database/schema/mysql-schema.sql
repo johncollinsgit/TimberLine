@@ -3234,6 +3234,28 @@ CREATE TABLE `fleet_location_points` (
   CONSTRAINT `ft_point_vehicle_fk` FOREIGN KEY (`field_service_vehicle_id`) REFERENCES `field_service_vehicles` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `fleet_operation_records`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `fleet_operation_records` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `device_id` bigint unsigned DEFAULT NULL,
+  `kind` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `source_key` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'open',
+  `event_at` timestamp NULL DEFAULT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `fleet_ops_source_unique` (`tenant_id`,`kind`,`source_key`),
+  KEY `fleet_ops_time_index` (`tenant_id`,`kind`,`event_at`),
+  KEY `fleet_ops_device_index` (`device_id`,`kind`),
+  CONSTRAINT `fleet_ops_device_fk` FOREIGN KEY (`device_id`) REFERENCES `fleet_tracking_devices` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fleet_ops_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `fleet_provider_device_claims`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -8511,10 +8533,10 @@ DROP TABLE IF EXISTS `tenant_mail_domains`;
 CREATE TABLE `tenant_mail_domains` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `tenant_id` bigint unsigned NOT NULL,
-  `domain` varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `transport` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'sendgrid',
-  `status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending_dns',
-  `provider_domain_id` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `domain` varchar(253) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `transport` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'sendgrid',
+  `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending_dns',
+  `provider_domain_id` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `dns_records` json DEFAULT NULL,
   `verified_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
@@ -8532,15 +8554,15 @@ CREATE TABLE `tenant_mail_messages` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `tenant_id` bigint unsigned NOT NULL,
   `tenant_mailbox_id` bigint unsigned NOT NULL,
-  `folder` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'inbox',
-  `direction` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `from_address` varchar(320) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `to_address` varchar(320) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `subject` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
-  `text_body` mediumtext COLLATE utf8mb4_unicode_ci,
-  `provider_message_id` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `thread_key` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `delivery_status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'received',
+  `folder` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'inbox',
+  `direction` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `from_address` varchar(320) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `to_address` varchar(320) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `subject` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `text_body` mediumtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `provider_message_id` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `thread_key` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `delivery_status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'received',
   `read_at` timestamp NULL DEFAULT NULL,
   `starred_at` timestamp NULL DEFAULT NULL,
   `occurred_at` timestamp NOT NULL,
@@ -8562,7 +8584,7 @@ CREATE TABLE `tenant_mailbox_users` (
   `tenant_id` bigint unsigned NOT NULL,
   `tenant_mailbox_id` bigint unsigned NOT NULL,
   `user_id` bigint unsigned NOT NULL,
-  `permission` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'read_write',
+  `permission` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'read_write',
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -8581,11 +8603,11 @@ CREATE TABLE `tenant_mailboxes` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `tenant_id` bigint unsigned NOT NULL,
   `tenant_mail_domain_id` bigint unsigned NOT NULL,
-  `address` varchar(320) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `display_name` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending_domain',
-  `provider_account_id` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `provider_credentials` text COLLATE utf8mb4_unicode_ci,
+  `address` varchar(320) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `display_name` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending_domain',
+  `provider_account_id` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `provider_credentials` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `last_synced_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -11035,3 +11057,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (272,'2026_10_05_19
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (273,'2026_10_05_191000_add_team_message_notification_preference',18);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (274,'2026_10_05_200000_create_team_message_attachments',19);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (275,'2026_10_06_170000_create_tenant_mailboxes',20);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (276,'2026_10_08_000000_create_fleet_operation_records',21);

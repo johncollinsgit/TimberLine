@@ -26,6 +26,12 @@ class MaintainHighLevelFleet extends Command
         OAuthState::where('expires_at', '<', now()->subDay())->delete();
         // Keep session rows until their OAuth tickets have expired and been pruned.
         EmbeddedSession::where('expires_at', '<', now()->subDays(2))->whereNotIn('id', OAuthState::whereNotNull('session_id')->select('session_id'))->delete();
+        \App\Models\HighLevel\Installation::where('status', 'installed')->each(function ($install): void {
+            $days = max(1, min(30, (int) app(\App\Services\FleetTracking\FleetTrackingAccessService::class)->settings($install->tenant)->retention_days));
+            \App\Models\HighLevel\FleetOperationRecord::forTenantId($install->tenant_id)->whereIn('kind', ['trip', 'telemetry', 'job', 'job_source'])->where('event_at', '<', now()->subDays($days))->delete();
+            app(\App\Services\HighLevel\FleetOperationsService::class)->maintenance($install);
+        });
+        \App\Models\HighLevel\FleetOperationRecord::whereIn('kind', ['trip', 'telemetry', 'job', 'job_source'])->where('event_at', '<', now()->subDays(30))->delete();
         $this->info('HighLevel Fleet maintenance completed.');
 
         return self::SUCCESS;

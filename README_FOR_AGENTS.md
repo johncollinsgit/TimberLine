@@ -1,5 +1,20 @@
 # START HERE
 
+## Fleet operations and demo (2026-10-08)
+
+CRM Fleet adds crew/job context, connection health, trips and route-distance
+review, maintenance plans/tasks/history, vehicle health alerts and dispatcher
+suggestions. HighLevel calendar or pipeline references supply work; Everbranch
+owns fleet planning and never requires or creates an Everbranch job. Source
+reads are optional and require three additional read scopes. Encrypted operation
+records and retained GPS stay tenant-scoped and obey collection/policy gates.
+`/crm/fleet/demo` and Explore demo provide fictional browser-only examples of
+all features. Google Maps uses the restricted fleet key when configured;
+Leaflet/OpenStreetMap supplies a street-map fallback. No pilot collection is
+activated. See `docs/operations/highlevel-fleet-runbook.md` for precise baselines,
+manual confirmations, retention, dispatch criteria and provider prerequisites.
+
+
 For the paired Everbranch Field 2.3.23/build 37 release, current tenant members can access and edit every current job and clock job time without a lead assignment. Customer fields remain restricted to managers, and on `collins-electric` only the verified active `collinselectric91@gmail.com` account may access the client list or edit customer fields. Team members can move jobs to an admin recycle bin; only managers can list and restore them. Job Notes mentions send a direct team message with a job reference. Team reporting contains week/month/year job counts and no financial amounts. These rules supersede the older assignment-scoped notes below.
 
 ## Tenant mailbox rollout (2026-10-06)
