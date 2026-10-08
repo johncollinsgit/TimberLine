@@ -16,15 +16,19 @@
     <strong>Everbranch Fleet</strong>
     <h1>Your company vehicles, inside your CRM</h1>
     <p>Each installed client account receives its own workspace. Fleet supports one connected Bouncie account and up to {{ config('highlevel.vehicle_limit') }} selected company vehicles.</p>
+    <p><a href="/crm/fleet/demo"><strong>Explore the interactive fleet demo</strong></a> — fictional vehicles and HighLevel work show the map, connection health, trips, maintenance, alerts and dispatch before Bouncie is active.</p>
     <aside>During the pilot, an Everbranch operator must activate your workspace before location collection begins. Contact support if setup shows that activation is pending.</aside>
     <h2>Set up your workspace</h2>
     <ol>
-        <li><strong>Open Everbranch.</strong> An agency administrator installs the app for your client account. Open Everbranch in that account's navigation. Fleet v1 requires current administrator access.</li>
+        <li><strong>Open Everbranch.</strong> An agency administrator installs the app for your client account. Open Everbranch in that account's navigation. Fleet requires current administrator access.</li>
         <li><strong>Approve company vehicle tracking.</strong> In Settings, enter your tracking policy version, policy text and owner approval reference. Confirm authorization, choose a retention period of 1–30 days, and enable company vehicle collection. Keep your approved policy document for your records.</li>
         <li><strong>Connect Bouncie.</strong> In Connection, authorize your own Bouncie account in the popup. Allow popups for app.theeverbranch.com. Return to the CRM when authorization finishes; third-party cookies are not required.</li>
         <li><strong>Select vehicles.</strong> Choose up to {{ config('highlevel.vehicle_limit') }} devices from your connected account and save. To add another vehicle at the limit, remove an existing selection first. A device cannot be active in two workspaces.</li>
         <li><strong>Check Fleet.</strong> Search the vehicle list, choose a vehicle, and check its latest location and provider last reported timestamp. The visible page refreshes every 60 seconds. An older reading may mean a vehicle is parked; it does not automatically mean the device is offline.</li>
     </ol>
+    <h2>Connect HighLevel work to your fleet</h2>
+    <p>In Jobs &amp; dispatch, choose the HighLevel calendar or pipeline used for work and sync its references. Existing installs must upgrade to version 2.0.0 and approve the new read-only permissions. Add crew availability, skills and stock, then confirm vehicle assignments, stop coordinates and schedules. Dispatch suggestions remain your choice.</p>
+    <p>Trips &amp; routes shows provider distance and drive time. Confirm the correct job and expected road distance with an allowance to flag excess mileage for review. Maintenance creates due tasks from service dates or odometer readings; Health alerts lets you assign and resolve reported vehicle issues.</p>
     <h2>Connection and access</h2>
     <p>If Bouncie requires fresh authorization, reconnect from Connection. Saved readings remain available during a provider outage within your retention period. If administrator access changes, an authorized administrator must reopen Everbranch.</p>
     <h2>Disconnect or uninstall</h2>
