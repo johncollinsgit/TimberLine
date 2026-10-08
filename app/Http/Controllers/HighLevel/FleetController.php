@@ -34,17 +34,17 @@ class FleetController extends Controller
     public function devices(Request $request, FleetService $fleet)
     {
         $install = $this->installation($request);
-        abort_unless($install->collectionAllowed(), 403, 'Fleet has not been activated for this account.');
+        abort_unless($install->setupAllowed(), 403, 'Fleet setup is not available for this account.');
         $selected = \App\Models\FleetTrackingDevice::forTenantId($install->tenant_id)->where('provider', 'bouncie')->where('status', 'active')->pluck('external_device_id');
         $vehicles = collect($fleet->available($install))->filter(fn ($v) => is_string($v['imei'] ?? null))->map(fn ($v) => [
             'id' => $v['imei'], 'name' => (string) ($v['nickName'] ?? $v['name'] ?? 'Vehicle '.$v['imei']), 'selected' => $selected->contains($v['imei'])])->values();
 
-        return response()->json(['devices' => $vehicles, 'limit' => 25]);
+        return response()->json(['devices' => $vehicles, 'limit' => (int) config('highlevel.vehicle_limit')]);
     }
 
     public function select(Request $request, FleetService $fleet)
     {
-        $data = $request->validate(['devices' => 'present|array|max:25', 'devices.*' => 'required|string|max:100|distinct']);
+        $data = $request->validate(['devices' => 'present|array|max:'.(int) config('highlevel.vehicle_limit'), 'devices.*' => 'required|string|max:100|distinct']);
         $fleet->select($this->installation($request), $data['devices'], $request->user()->id);
 
         return response()->json(['saved' => true]);
@@ -53,13 +53,13 @@ class FleetController extends Controller
     public function settings(Request $request, FleetTrackingAccessService $access, LandlordOperatorActionAuditService $audit)
     {
         $install = $this->installation($request);
-        abort_unless($install->collectionAllowed(), 403, 'Fleet collection is awaiting activation.');
+        abort_unless($install->setupAllowed(), 403, 'Fleet setup is not available for this account.');
         $data = $request->validate(['retention_days' => 'required|integer|min:1|max:30', 'tracking_enabled' => 'required|boolean',
             'policy_version' => 'required|string|max:80', 'policy_sha256' => 'required|string|regex:/^[a-f0-9]{64}$/',
             'approval_confirmed' => 'accepted', 'approval_reference' => 'required|string|max:255']);
         DB::transaction(function () use ($install, $data, $request, $access, $audit): void {
             Installation::whereKey($install->id)->lockForUpdate()->firstOrFail();
-            abort_unless($install->refresh()->collectionAllowed(), 403);
+            abort_unless($install->refresh()->setupAllowed(), 403);
             $settings = $access->settings($install->tenant);
             $before = $settings->only(['retention_days', 'bouncie_tracking_enabled', 'policy_version']);
             $settings->update(['retention_days' => $data['retention_days'], 'bouncie_tracking_enabled' => $data['tracking_enabled'],
@@ -77,7 +77,7 @@ class FleetController extends Controller
     public function connect(Request $request, OAuthStateService $states)
     {
         $install = $this->installation($request);
-        abort_unless($install->collectionAllowed(), 403, 'Fleet collection is awaiting activation.');
+        abort_unless($install->setupAllowed(), 403, 'Fleet setup is not available for this account.');
         abort_unless(filled(config('services.fleet_tracking.bouncie_client_id')) && filled(config('services.fleet_tracking.bouncie_client_secret')), 503, 'Bouncie developer configuration is pending.');
         $session = $request->attributes->get('highlevel_session');
         $ticket = $states->issue('bouncie_launch', [], $session);
@@ -89,7 +89,7 @@ class FleetController extends Controller
     {
         $ticket = $states->consume('bouncie_launch', (string) $request->query('ticket'));
         $session = EmbeddedSession::findOrFail($ticket->session_id);
-        abort_unless(! $session->revoked_at && $session->expires_at->isFuture() && $session->installation->collectionAllowed(), 403);
+        abort_unless(! $session->revoked_at && $session->expires_at->isFuture() && $session->installation->setupAllowed(), 403);
         $sessions->verify($session->installation, $session->binding->provider_user_id);
         $verifier = Str::random(96);
         $state = $states->issue('bouncie', ['verifier' => $verifier], $session);
@@ -106,7 +106,7 @@ class FleetController extends Controller
         $session = EmbeddedSession::findOrFail($state->session_id);
         abort_unless(! $session->revoked_at && $session->expires_at->isFuture() && ! $session->binding->revoked_at, 403);
         $install = $session->installation;
-        abort_unless($install->collectionAllowed(), 403);
+        abort_unless($install->setupAllowed(), 403);
         $sessions->verify($install, $session->binding->provider_user_id);
         abort_if($request->filled('error'), 422, 'Bouncie authorization was cancelled.');
         $request->attributes->set('bouncie_code_verifier', $state->payload['verifier'] ?? '');
@@ -114,7 +114,7 @@ class FleetController extends Controller
         Cache::lock('hl:bouncie:'.$install->id, 90)->block(5, function () use ($connector, $install, $request, $fleet, $session, $audit): void {
             DB::transaction(function () use ($connector, $install, $request, $fleet, $session, $audit): void {
                 Installation::whereKey($install->id)->lockForUpdate()->firstOrFail();
-                abort_unless($install->refresh()->collectionAllowed(), 403);
+                abort_unless($install->refresh()->setupAllowed(), 403);
                 $old = $fleet->connection($install)?->external_account_id;
                 try {
                     $connection = $connector->handleCallback($install->tenant, $request);

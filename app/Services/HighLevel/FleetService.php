@@ -38,10 +38,11 @@ class FleetService
 
     public function select(Installation $install, array $ids, int $actorId): void
     {
-        abort_unless($install->collectionAllowed(), 403, 'Fleet collection is not active for this client account.');
+        abort_unless($install->setupAllowed(), 403, 'Fleet setup is not available for this client account.');
         $ids = array_values(array_unique($ids));
-        if (count($ids) > 25) {
-            throw ValidationException::withMessages(['devices' => 'You can select up to 25 vehicles. Remove a selection before adding another.']);
+        $limit = (int) config('highlevel.vehicle_limit');
+        if (count($ids) > $limit) {
+            throw ValidationException::withMessages(['devices' => "You can select up to {$limit} vehicles. Remove a selection before adding another."]);
         }
         $accountId = $this->connection($install)?->external_account_id;
         $vehicles = collect($this->available($install))->filter(fn ($v) => is_string($v['imei'] ?? null))->keyBy('imei');
@@ -54,7 +55,7 @@ class FleetService
             // Serialize allowance checks and connection changes within a workspace.
             Installation::whereKey($install->id)->lockForUpdate()->firstOrFail();
             $install->refresh();
-            abort_unless($install->collectionAllowed(), 403);
+            abort_unless($install->setupAllowed(), 403);
             $connection = $this->connection($install);
             abort_unless($connection && $connection->status === IntegrationConnection::STATUS_CONNECTED
                 && $connection->external_account_id === $accountId, 409, 'The Bouncie account changed. Refresh the device list.');
@@ -105,7 +106,7 @@ class FleetService
         }
         $showLocations = $install->hasSubscriptionAccess() && $this->access->enabledFor($tenant) && $this->access->isPolicyApproved($settings);
         $vehicles = FleetTrackingDevice::forTenantId($tenant->id)->where('provider', 'bouncie')->where('status', 'active')
-            ->where('integration_connection_id', $connection?->id ?? 0)->with('vehicle')->limit(25)->get()->map(function ($device) use ($tenant, $settings, $showLocations): array {
+            ->where('integration_connection_id', $connection?->id ?? 0)->with('vehicle')->limit((int) config('highlevel.vehicle_limit'))->get()->map(function ($device) use ($tenant, $settings, $showLocations): array {
                 // Always select by provider recorded time, never by insertion order.
                 $point = $showLocations ? FleetLocationPoint::forTenantId($tenant->id)->where('fleet_tracking_device_id', $device->id)->where('source', 'bouncie')
                     ->where('recorded_at', '>=', now()->subDays(max(1, min(30, $settings->retention_days))))->orderByDesc('recorded_at')->orderByDesc('id')->first() : null;
@@ -119,8 +120,9 @@ class FleetService
             'connection' => ['status' => $connection?->status ?? 'disconnected', 'label' => $connection?->external_account_label, 'health' => $health],
             'settings' => ['retention_days' => min(30, $settings->retention_days), 'policy_approved' => $this->access->isPolicyApproved($settings),
                 'policy_version' => $settings->policy_version, 'policy_sha256' => $settings->policy_sha256,
-                'tracking_enabled' => $settings->bouncie_tracking_enabled, 'vehicle_limit' => 25],
+                'tracking_enabled' => $settings->bouncie_tracking_enabled, 'vehicle_limit' => (int) config('highlevel.vehicle_limit')],
             'subscription' => ['status' => $install->payment_status, 'grace_ends_at' => $install->grace_ends_at?->toIso8601String(),
+                'required' => (bool) config('highlevel.subscription_required'), 'setup_allowed' => $install->setupAllowed(),
                 'has_access' => $install->hasSubscriptionAccess(), 'collection_active' => $install->collectionAllowed(), 'billing_authority' => 'highlevel'],
             'map_key' => config('services.google_maps.fleet_api_key'), 'support_email' => config('everbranch.support_email')];
     }

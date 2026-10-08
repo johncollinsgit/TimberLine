@@ -30,11 +30,13 @@
     "authority": "highlevel",
     "interval": "monthly",
     "currency": "USD",
-    "price": 99,
-    "vehicleLimit": 25,
+    "price": 0,
+    "vehicleLimit": 100,
     "trialDays": 0,
     "setupCharge": 0,
-    "planId": "6ac309e6efe2cd1f9e8defc1"
+    "mode": "free",
+    "subscriptionRequired": false,
+    "previousPaidPlanId": "6ac309e6efe2cd1f9e8defc1"
   },
   "bouncieRedirect": "https://app.theeverbranch.com/crm/fleet/bouncie/callback",
   "bouncieWebhookUrl": "https://app.theeverbranch.com/crm/fleet/webhooks/bouncie",

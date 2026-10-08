@@ -1,3 +1,9 @@
+## 2026-10-07 — CRM Fleet free preview and 100 vehicles
+
+- Counts and device selection use the backend vehicle limit, now 100 per client.
+- Free mode hides subscription/payment prompts and explains that app access is free for now; Bouncie remains separately billed.
+- Bouncie connection and policy setup work while collection awaits pilot activation. Uninstall and live collection gates remain enforced.
+
 ## 2026-10-05 — Field admin tracker shortcut
 
 - The web home screen puts Fleet Tracker directly above Time Clock & Hours for workspace owners, admins, and managers with the Fleet Tracking module enabled. The tracker link opens the existing company vehicle location and route view.

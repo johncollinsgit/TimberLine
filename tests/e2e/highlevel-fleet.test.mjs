@@ -7,14 +7,14 @@ import { chromium, webkit } from '@playwright/test';
 const manifest = JSON.parse(readFileSync('public/build/manifest.json', 'utf8'));
 const entry = manifest['resources/js/highlevel/fleet.js'];
 const fixture = {
-  workspace:{name:'Pilot fleet'}, vehicles:Array.from({length:25}, (_,i)=>({id:i+1,device_id:`imei-${i+1}`,name:`Van ${i+1}`,location:{latitude:34.5+i/1000,longitude:-82,reported_at:new Date(Date.now()-3600000).toISOString(),older_reading:true}})),
+  workspace:{name:'Pilot fleet'}, vehicles:Array.from({length:100}, (_,i)=>({id:i+1,device_id:`imei-${i+1}`,name:`Van ${i+1}`,location:{latitude:34.5+i/1000,longitude:-82,reported_at:new Date(Date.now()-3600000).toISOString(),older_reading:true}})),
   connection:{status:'connected',label:'Pilot Bouncie',health:{status:'connected'}},
-  settings:{retention_days:30,policy_approved:true,policy_version:'v1',policy_sha256:'a'.repeat(64),tracking_enabled:true,vehicle_limit:25},
-  subscription:{status:'COMPLETE',has_access:true,collection_active:true,billing_authority:'highlevel'},
+  settings:{retention_days:30,policy_approved:true,policy_version:'v1',policy_sha256:'a'.repeat(64),tracking_enabled:true,vehicle_limit:100},
+  subscription:{status:'FAILED',required:false,setup_allowed:true,has_access:true,collection_active:false,billing_authority:'highlevel'},
   map_key:null,support_email:'support@example.test',
 };
 for (const browserType of [chromium, webkit]) {
-  test(`${browserType.name()} embeds 25 vehicles without cookies, searches and caps selection at responsive sizes`, async()=>{
+  test(`${browserType.name()} embeds 100 free vehicles without cookies, searches and caps selection at responsive sizes`, async()=>{
     let origin, parentOrigin, exchanges=0, apiCalls=0, bodyData;
     const server=createServer(async(req,res)=>{
       res.setHeader('Content-Type','application/json');
@@ -41,7 +41,7 @@ for (const browserType of [chromium, webkit]) {
         assert.equal(req.headers.authorization,`Bearer ${'t'.repeat(80)}`);
         assert.equal(req.headers['x-everbranch-parent-origin'],parentOrigin);apiCalls++;
         if(req.url.endsWith('/bootstrap'))return res.end(JSON.stringify(fixture));
-        if(req.url.endsWith('/devices')&&req.method==='GET')return res.end(JSON.stringify({devices:Array.from({length:26},(_,i)=>({id:`imei-${i+1}`,name:`Van ${i+1}`,selected:i<25})),limit:25}));
+        if(req.url.endsWith('/devices')&&req.method==='GET')return res.end(JSON.stringify({devices:Array.from({length:101},(_,i)=>({id:`imei-${i+1}`,name:`Van ${i+1}`,selected:i<100})),limit:100}));
         let body='';for await(const chunk of req)body+=chunk;
         bodyData=JSON.parse(body);return res.end(JSON.stringify({saved:true}));
       }
@@ -67,22 +67,29 @@ for (const browserType of [chromium, webkit]) {
         await frame.getByRole('button',{name:'Fleet',exact:true}).click();
         await page.setViewportSize({width:1200,height:900});
       }
-      assert.equal(await frame.locator('.vehicle-row').count(),25);
-      await frame.getByRole('searchbox').fill('Van 25');
+      assert.equal(await frame.locator('.vehicle-row').count(),100);
+      assert.equal(await frame.locator('#vehicle-total').innerText(),'100 / 100 vehicles');
+      assert.doesNotMatch(await frame.locator('#status-banner').innerText(),/Subscription requires attention|Payment requires attention/);
+      await frame.getByRole('button',{name:'Settings',exact:true}).click();
+      assert.equal(await frame.getByRole('button',{name:'Save settings'}).isEnabled(),true);
+      assert.match(await frame.locator('#content').innerText(),/Everbranch Fleet is free for now/);
+      await frame.getByRole('button',{name:'Fleet',exact:true}).click();
+      await frame.getByRole('searchbox').fill('Van 100');
       assert.equal(await frame.locator('.vehicle-row').count(),1);
       await frame.locator('.vehicle-row').click();
       assert.match(await frame.locator('#vehicle-details').innerText(),/older reading can mean the vehicle is parked/);
       await frame.getByRole('button',{name:'Connection',exact:true}).click();
+      assert.equal(await frame.getByRole('button',{name:'Reconnect Bouncie'}).isEnabled(),true);
       await frame.getByRole('button',{name:'Choose vehicles'}).click();
       await frame.locator('#device-form').waitFor();
-      await frame.locator('input[value="imei-26"]').check();
+      await frame.locator('input[value="imei-101"]').check();
       assert.equal(await frame.getByRole('button',{name:'Save vehicle selection'}).isDisabled(),true);
       await frame.locator('input[value="imei-1"]').uncheck();
       await frame.getByRole('button',{name:'Save vehicle selection'}).click();
       await frame.getByRole('heading',{name:'Your fleet, in view'}).waitFor();
-      assert.equal(bodyData.devices.length,25);
+      assert.equal(bodyData.devices.length,100);
       assert.equal(bodyData.devices.includes('imei-1'),false);
-      assert.equal(bodyData.devices.includes('imei-26'),true);
+      assert.equal(bodyData.devices.includes('imei-101'),true);
       await page.setViewportSize({width:390,height:844});
       assert.equal(await frame.locator('.shell').evaluate(el=>el.scrollWidth<=el.clientWidth),true);
       assert.equal(exchanges,1);assert.ok(apiCalls>=4);

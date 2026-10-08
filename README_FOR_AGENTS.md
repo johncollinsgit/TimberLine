@@ -16,6 +16,20 @@ General field time does not require a job. Keep `field_service_job_id` nullable 
 
 For mobile team access, list only active `tenant_user` memberships. Every workspace data route must keep the `mobile.tenant` membership gate. The web teammate invitation form must identify the destination workspace because administrators may belong to several tenants.
 
+## Free CRM Fleet preview (2026-10-07; collection still gated)
+
+Everbranch Fleet is temporarily free, with 100 selected vehicles per client.
+`HIGHLEVEL_FLEET_SUBSCRIPTION_REQUIRED=false` is now the default; Marketplace
+pricing must also be Free. Installed accounts can authorize Bouncie, choose
+vehicles and save their policy without a payment event or pilot activation.
+Collection still requires the existing global tracking gate, collection switch,
+location allowlist, tenant entitlement and approved policy. No pilot is enabled
+by this release. Uninstall still revokes sessions and stops collection.
+The prior paid plan and payment history remain available for a future pricing
+change. To restore subscriptions, configure/publish the paid Marketplace plan,
+verify billing, and explicitly set the subscription requirement to true.
+See `docs/operations/highlevel-fleet-runbook.md` for details.
+
 ## Private CRM Fleet integration (2026-10-04; pilot disabled)
 
 Everbranch Fleet adds a private HighLevel installation layer at `/crm/fleet`,

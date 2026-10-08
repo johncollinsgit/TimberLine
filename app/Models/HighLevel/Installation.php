@@ -21,16 +21,29 @@ class Installation extends Model
 
     public function hasSubscriptionAccess(): bool
     {
-        return $this->status === 'installed'
-            && filled(config('highlevel.plan_id'))
+        if ($this->status !== 'installed' || $this->uninstalled_at) {
+            return false;
+        }
+
+        if (! config('highlevel.subscription_required')) {
+            return true;
+        }
+
+        return filled(config('highlevel.plan_id'))
             && $this->plan_id === config('highlevel.plan_id')
             && ($this->payment_status === 'COMPLETE'
                 || ($this->payment_status === 'FAILED' && $this->grace_ends_at?->isFuture()));
     }
 
+    public function setupAllowed(): bool
+    {
+        return config('highlevel.enabled') && $this->hasSubscriptionAccess();
+    }
+
     public function collectionAllowed(): bool
     {
-        return config('highlevel.enabled') && config('highlevel.billing_verified')
+        return $this->setupAllowed()
+            && (! config('highlevel.subscription_required') || config('highlevel.billing_verified'))
             && config('highlevel.collection_enabled')
             && in_array($this->location_id, config('highlevel.pilot_locations', []), true)
             && $this->hasSubscriptionAccess();

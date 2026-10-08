@@ -5,6 +5,8 @@ return [
     'enabled' => (bool) env('HIGHLEVEL_FLEET_ENABLED', false),
     'collection_enabled' => (bool) env('HIGHLEVEL_FLEET_COLLECTION_ENABLED', false),
     'billing_verified' => (bool) env('HIGHLEVEL_FLEET_BILLING_VERIFIED', false),
+    // Temporarily free. Restore only after the Marketplace paid plan is ready.
+    'subscription_required' => (bool) env('HIGHLEVEL_FLEET_SUBSCRIPTION_REQUIRED', false),
     'pilot_locations' => array_values(array_filter(array_map('trim', explode(',', (string) env('HIGHLEVEL_FLEET_PILOT_LOCATIONS', ''))))),
     'app_id' => env('HIGHLEVEL_APP_ID'),
     'plan_id' => env('HIGHLEVEL_FLEET_PLAN_ID'),
@@ -21,7 +23,7 @@ return [
     'queue' => env('HIGHLEVEL_QUEUE', 'default'),
     'session_minutes' => 15,
     'failed_payment_grace_days' => 30,
-    'vehicle_limit' => 25,
+    'vehicle_limit' => 100,
     'monthly_price_cents' => 9900,
     'currency' => 'USD',
     'scopes' => ['locations.readonly', 'users.readonly', 'oauth.readonly', 'oauth.write', 'marketplace-installer-details.readonly'],
