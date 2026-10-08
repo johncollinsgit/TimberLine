@@ -48,7 +48,7 @@ class HighLevelController extends Controller
         if ($request->filled('state')) {
             $states->consume('highlevel', (string) $request->query('state'));
         }
-        abort_if($request->filled('error'), 422, 'HighLevel authorization was cancelled.');
+        abort_if($request->filled('error'), 422, 'CRM authorization was cancelled.');
         $code = (string) $request->query('code');
         abort_if($code === '' || strlen($code) > 4096, 422);
         $installed = $installs->authorize($api->exchange($code));
@@ -86,6 +86,6 @@ class HighLevelController extends Controller
         $install = $request->attributes->get('highlevel_session')->installation;
         $installs->uninstall($install);
 
-        return response()->json(['message' => 'Everbranch access and collection stopped. An agency administrator must also uninstall the app in HighLevel to end app billing. Your Bouncie subscription is separate.']);
+        return response()->json(['message' => 'Everbranch access and collection stopped. An agency administrator must also uninstall the app in CRM to end app billing. Your Bouncie subscription is separate.']);
     }
 }

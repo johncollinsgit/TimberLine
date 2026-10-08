@@ -25,7 +25,7 @@ class FleetJobSourceService
     {
         abort_unless($install->setupAllowed(), 403);
         $sources = $this->sources($install);
-        abort_unless(collect($sources[$type === 'calendar' ? 'calendars' : 'pipelines'])->contains('id', $sourceId), 422, 'Choose a source from this HighLevel account.');
+        abort_unless(collect($sources[$type === 'calendar' ? 'calendars' : 'pipelines'])->contains('id', $sourceId), 422, 'Choose a source from this CRM account.');
         if ($type === 'calendar') {
             $response = $this->api->get($install, '/calendars/events', ['locationId' => $install->location_id, 'calendarId' => $sourceId,
                 'startTime' => (string) now()->subDays(7)->getTimestampMs(), 'endTime' => (string) now()->addDays(14)->getTimestampMs()]);
@@ -60,7 +60,7 @@ class FleetJobSourceService
             }
             $key = hash('sha256', $type.'|'.$row['id']);
             $safe[$key] = ['source' => $type, 'source_id' => $sourceId, 'reference' => $row['id'],
-                'title' => substr((string) ($row['title'] ?? $row['name'] ?? 'HighLevel job'), 0, 180),
+                'title' => substr((string) ($row['title'] ?? $row['name'] ?? 'CRM job'), 0, 180),
                 'crm_status' => substr((string) ($row['appointmentStatus'] ?? $row['status'] ?? ''), 0, 50),
                 'assigned_user' => substr((string) ($row['assignedUserId'] ?? $row['assignedTo'] ?? ''), 0, 100),
                 'crm_start' => $this->date($row['startTime'] ?? null), 'crm_end' => $this->date($row['endTime'] ?? null), 'synced_at' => now()->toIso8601String()];

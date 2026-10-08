@@ -41,7 +41,7 @@ class FleetOperationsController extends Controller
     {
         $install = $this->install($request);
         $record = $ops->record($install, $job, 'job');
-        abort_unless($record->status === 'active', 422, 'Sync the current HighLevel source first.');
+        abort_unless($record->status === 'active', 422, 'Sync the current CRM source first.');
         $p = $request->validate(['device_id' => 'nullable|integer|min:1', 'latitude' => 'nullable|numeric|between:-90,90|required_with:longitude',
             'longitude' => 'nullable|numeric|between:-180,180|required_with:latitude', 'scheduled_start' => 'nullable|date',
             'scheduled_end' => 'nullable|date|after:scheduled_start|required_with:scheduled_start',
