@@ -1,5 +1,25 @@
 # SYSTEM SNAPSHOT
 
+## Everbranch Team phase-one preservation (local, 2026-10-11)
+
+- Local foundations under `scripts/everbranch-team/` provide source-file hash
+  manifests and frozen-snapshot verification, a GET-only injected Asana reader
+  with tenant/connection/workspace/actor bindings and capture-before-checkpoint
+  ordering, review-only note suggestions preserving originals and passage
+  references, and a read-only Windows private-ACL check.
+- Tool verification uses synthetic fixtures. The reader is not integrated into
+  Laravel routes, queues, OAuth refresh or destination imports. There is no Team
+  schema, daily UI, completed migrated project or production deployment.
+- Coordinator source capture and final outside-Git sealing/restore are separate
+  evidence work. Current tools do not establish a complete source backup or
+  copied attachment bytes; inaccessible objects, history, grants and endpoint
+  coverage remain explicit gaps until reconciled.
+- Preserve existing auth, entitlements, billing and tenant domains. Team imports
+  must use a reviewed tenant-owned grant, never legacy global Asana token
+  fallbacks. Pricing, live AI, invitations and cutover remain gated by their
+  applicable owner decisions. Follow the
+  [phase-one runbook](docs/operations/everbranch-team-phase-one-runbook.md).
+
 ## 2026-10-08 — Carolina Heritage theme (development)
 
 - Carolina Barrel's connected Website editor has a theme selector with Carolina

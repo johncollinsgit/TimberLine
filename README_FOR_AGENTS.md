@@ -1,5 +1,26 @@
 # START HERE
 
+## Everbranch Team phase-one preservation (local, 2026-10-11)
+
+- Read the [phase-one runbook](docs/operations/everbranch-team-phase-one-runbook.md)
+  before continuing Team discovery. `scripts/everbranch-team/` contains local
+  source-manifest/integrity tools, a GET-only injected preservation client,
+  immutable-original note review previews and a read-only Windows ACL verifier.
+- Verification is synthetic tool coverage only. No Team schema, native daily UI,
+  destination import, complete migrated vertical slice or production deployment
+  exists from this work. The reader has no Laravel route/queue integration,
+  persistent sink, OAuth refresh adapter or attachment-byte copier.
+- Coordinator capture and final restricted outside-Git seal/restore have their
+  own private evidence. Do not call these foundations a complete source backup,
+  assume attachment bytes were copied, or turn nested observations/reference IDs
+  into complete source-family coverage. Preserve visible omissions and failures.
+- Reuse canonical tenant/auth/module/billing rails and require active verified
+  tenant/object permissions. Resolve only the selected tenant-owned Asana grant;
+  legacy global PAT/access/refresh fallback is forbidden for self-service import.
+  Keep shared/schema/deployment changes coordinator-controlled and obtain the
+  applicable owner decisions before expanded authorization, invitations, live
+  charges, production AI or cutover.
+
 ## 2026-10-08 — Carolina Heritage theme (development)
 
 - Carolina Barrel's connected Website editor has a theme selector with Carolina
