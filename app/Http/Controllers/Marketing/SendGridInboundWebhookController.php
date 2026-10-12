@@ -14,7 +14,15 @@ class SendGridInboundWebhookController extends Controller
         $configuredToken = trim((string) config('marketing.messaging.responses.sendgrid_inbound_token', ''));
         $requestToken = trim((string) ($request->query('token', $request->input('token', ''))));
 
-        if ($configuredToken !== '' && ! hash_equals($configuredToken, $requestToken)) {
+        if ($configuredToken === '') {
+            // Preserve the existing landlord-only reply capture. Marketing
+            // consent processing still requires an authenticated provider request.
+            $result = $inboundEmailService->handleInbound($request->all(), allowMarketing: false);
+
+            return response()->json($result, $result['ok'] ? 200 : 503);
+        }
+
+        if (! hash_equals($configuredToken, $requestToken)) {
             return response()->json([
                 'ok' => false,
                 'status' => 'invalid_token',

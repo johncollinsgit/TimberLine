@@ -288,6 +288,7 @@ class MarketingEmailExecutionService
             'source_id' => $delivery->id,
             'store_context' => $storeContext,
             'store_key' => $storeKey,
+            'is_marketing' => true,
             'campaign_type' => trim((string) ($campaign->objective ?: 'campaign')) ?: 'campaign',
             'template_key' => $recipient->variant?->variant_key,
             'customer_id' => $profile->id,

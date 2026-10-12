@@ -169,7 +169,7 @@ test('weekly summary command sends the tenant report to the requested inbox', fu
             && data_get($mail->report, 'tenant.slug') === 'modern-forestry'
             && data_get($mail->report, 'health.status') === 'no_activity'
             && str_contains($html, 'No activity observed')
-            && str_contains($html, 'No customer names');
+            && str_contains($html, 'Everbranch');
     });
 });
 
@@ -183,7 +183,7 @@ test('weekly summary is scheduled for modern forestry on Monday morning', functi
     expect($event)->not->toBeNull()
         ->and((string) $event->command)->toContain("--tenant='modern-forestry'")
         ->and((string) $event->command)->toContain("--email='info@theforestrystudio.com'")
-        ->and($event->expression)->toBe('30 8 * * 1')
+        ->and($event->expression)->toBe('0 8 * * 1')
         ->and($event->timezone)->toBe('America/New_York')
         ->and($event->runInBackground)->toBeTrue()
         ->and($event->withoutOverlapping)->toBeTrue();
@@ -222,4 +222,53 @@ test('reward fallback telemetry is accepted and stored as an error', function ()
     expect($event->status)->toBe('error')
         ->and($event->issue_type)->toBe('timeout')
         ->and(data_get($event->meta, 'fallback_access_mode'))->toBe('pending_status');
+});
+
+test('calendar recap deduplicates customers and optouts and separates issued and redeemed rewards across a DST week', function (): void {
+    $tenant = Tenant::create(['name' => 'Modern Forestry', 'slug' => 'recap-calendar']);
+    $other = Tenant::create(['name' => 'Another Shop', 'slug' => 'recap-calendar-other']);
+    $start = \Carbon\Carbon::parse('2026-10-26 00:00:00', 'America/New_York')->utc();
+    $end = \Carbon\Carbon::parse('2026-11-02 00:00:00', 'America/New_York')->utc();
+    $profile = MarketingProfile::factory()->create(['tenant_id' => $tenant->id, 'email' => 'weekly@example.com', 'normalized_email' => 'weekly@example.com', 'accepts_email_marketing' => true]);
+    $profile->forceFill(['created_at' => $start->copy()->addHour()])->save();
+    $duplicate = MarketingProfile::factory()->create(['tenant_id' => $tenant->id, 'email' => $profile->email, 'normalized_email' => $profile->email, 'accepts_email_marketing' => true]);
+    $duplicate->forceFill(['created_at' => $start->copy()->addHours(2)])->save();
+    $boundary = MarketingProfile::factory()->create(['tenant_id' => $tenant->id]);
+    $boundary->forceFill(['created_at' => $end])->save();
+    $unrelated = MarketingProfile::factory()->create(['tenant_id' => $other->id, 'email' => $profile->email]);
+    $unrelated->forceFill(['created_at' => $start])->save();
+    app(\App\Services\Marketing\MessagingContactChannelStateService::class)->markEmailStatus($tenant->id, $profile, $profile->email, 'unsubscribed', 'unsubscribe_link', 'everbranch_unsubscribe', [], $end->copy()->subMinute());
+    $birthday = \App\Models\CustomerBirthdayProfile::create(['tenant_id' => $tenant->id, 'marketing_profile_id' => $profile->id, 'birth_month' => 10, 'birth_day' => 28]);
+    \App\Models\BirthdayRewardIssuance::create(['customer_birthday_profile_id' => $birthday->id, 'marketing_profile_id' => $profile->id, 'cycle_year' => 2026, 'reward_type' => 'discount_code', 'status' => 'redeemed', 'reward_value' => 10, 'issued_at' => $start, 'redeemed_at' => $end->copy()->subMinute()]);
+    $report = app(TenantRewardsWishlistWeeklySummaryService::class)->reportSnapshot($tenant, $end->copy()->addHours(8), 7, true);
+    expect(data_get($report, 'window.started_at'))->toBe('2026-10-26T04:00:00+00:00')
+        ->and(data_get($report, 'window.ended_at'))->toBe('2026-11-02T05:00:00+00:00')
+        ->and(data_get($report, 'recap.customers_added'))->toBe(1)
+        ->and(data_get($report, 'recap.unsubscribed_count'))->toBe(1)
+        ->and(data_get($report, 'recap.birthday_issued'))->toBe(1)
+        ->and(data_get($report, 'recap.birthday_redeemed'))->toBe(1);
+});
+
+test('scheduled recap records delivery and replay does not send a second copy', function (): void {
+    Mail::fake();
+    Tenant::create(['name' => 'Modern Forestry', 'slug' => 'modern-forestry']);
+    $this->travelTo(\Carbon\Carbon::parse('2026-10-19 08:00:00', 'America/New_York'));
+    for ($i = 0; $i < 2; $i++) {
+        $this->artisan('marketing:send-weekly-rewards-wishlist-summary', ['--calendar-week' => true])->assertSuccessful();
+        \App\Models\MarketingEmailDelivery::where('campaign_type', 'operator_recap')->update(['status' => 'delivered']);
+    }
+    Mail::assertSentCount(1);
+    expect(\App\Models\MarketingEmailDelivery::where('campaign_type', 'operator_recap')->whereNotNull('sent_at')->count())->toBe(1);
+});
+
+test('recap includes address optouts without a current customer profile and repeats stay in their original week', function (): void {
+    $tenant = Tenant::create(['name' => 'Shop', 'slug' => 'orphan-optout-recap']);
+    $this->travelTo(\Carbon\Carbon::parse('2026-10-10 12:00:00', 'America/New_York'));
+    $states = app(\App\Services\Marketing\MessagingContactChannelStateService::class);
+    $states->markEmailStatus($tenant->id, null, 'old-address@example.com', 'unsubscribed', 'unsubscribe_link');
+    $this->travel(8)->days();
+    $states->markEmailStatus($tenant->id, null, 'old-address@example.com', 'unsubscribed', 'unsubscribe_link');
+    $service = app(TenantRewardsWishlistWeeklySummaryService::class);
+    expect(data_get($service->reportSnapshot($tenant, \Carbon\Carbon::parse('2026-10-12 08:00:00', 'America/New_York'), 7, true), 'recap.unsubscribed_count'))->toBe(1)
+        ->and(data_get($service->reportSnapshot($tenant, \Carbon\Carbon::parse('2026-10-19 08:00:00', 'America/New_York'), 7, true), 'recap.unsubscribed_count'))->toBe(0);
 });

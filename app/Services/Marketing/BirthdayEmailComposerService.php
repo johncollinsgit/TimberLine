@@ -64,6 +64,9 @@ class BirthdayEmailComposerService
      */
     public function renderForDelivery(string $subject, array $config, MarketingProfile $profile, array $extra, string $templateKey = 'birthday_email_primary'): array
     {
+        $extra['unsubscribe_url'] = (int) $profile->tenant_id > 0 && filled($profile->email)
+            ? app(MarketingEmailUnsubscribeService::class)->url((int) $profile->tenant_id, $profile->email)
+            : '#unsubscribe-preview';
         $isCatchup = $templateKey === 'birthday_email_catchup_2026';
         if ($isCatchup) {
             return ['html' => $this->renderCatchupHtml($profile, $extra), 'sections' => self::catchupSections()];
@@ -81,7 +84,7 @@ class BirthdayEmailComposerService
         $composed = $this->composer->compose($subject, '', 'sections', $rendered, null);
 
         return [
-            'html' => str_replace('</body>', $this->lockedComplianceFooter().'</body>', (string) $composed['html']),
+            'html' => str_replace('</body>', $this->lockedComplianceFooter($extra['unsubscribe_url']).'</body>', (string) $composed['html']),
             'sections' => $rendered,
         ];
     }
@@ -91,7 +94,7 @@ class BirthdayEmailComposerService
      */
     public function sectionsForTestSend(array $sections): array
     {
-        return [...$sections, ['id' => 'locked_compliance_footer', 'type' => 'text', 'html' => 'You are receiving this email because you opted in to Modern Forestry marketing. <a href="mailto:info@theforestrystudio.com?subject=Unsubscribe">Unsubscribe</a> · <a href="https://theforestrystudio.com/pages/privacy-policy">Privacy</a>']];
+        return [...$sections, ['id' => 'locked_compliance_footer', 'type' => 'text', 'html' => 'You are receiving this email because you opted in to Modern Forestry marketing. <a href="#unsubscribe-preview">Unsubscribe</a> · <a href="https://theforestrystudio.com/pages/privacy-policy">Privacy</a>']];
     }
 
     /** @return array<int,array<string,mixed>> */
@@ -167,7 +170,7 @@ class BirthdayEmailComposerService
             .'<p style="margin:0 0 23px;text-align:center;color:#5c6b5e;font-size:13px;line-height:1.6;">Your coupon can be used with eligible free shipping offers. It cannot be combined with Candle Cash or other discounts.</p>'
             .'<hr style="border:0;border-top:1px solid #e5e0d5;margin:28px 0 23px;">'
             .'<p style="margin:0;color:#25362d;font-size:16px;line-height:1.6;">Thank you for being here.<br>With gratitude<br><strong>The Modern Forestry team</strong></p>'
-            .$this->lockedComplianceFooter()
+            .$this->lockedComplianceFooter($extra['unsubscribe_url'] ?? null)
             .'</td></tr></table></td></tr></table></body></html>';
     }
 
@@ -215,8 +218,8 @@ class BirthdayEmailComposerService
         return trim(collect($sections)->map(fn ($section) => strip_tags((string) ($section['text'] ?? $section['html'] ?? $section['label'] ?? '')))->filter()->implode("\n\n"));
     }
 
-    protected function lockedComplianceFooter(): string
+    protected function lockedComplianceFooter(?string $url = null): string
     {
-        return '<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td style="padding:22px 0 0;font-family:Arial,sans-serif;font-size:11px;line-height:1.5;color:#64748b;text-align:center;border-top:1px solid #e2e8f0;">You are receiving this email because you opted in to Modern Forestry marketing. <a href="mailto:info@theforestrystudio.com?subject=Unsubscribe" style="color:#475569;">Unsubscribe</a> · <a href="https://theforestrystudio.com/pages/privacy-policy" style="color:#475569;">Privacy</a></td></tr></table>';
+        return '<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td style="padding:22px 0 0;font-family:Arial,sans-serif;font-size:11px;line-height:1.5;color:#64748b;text-align:center;border-top:1px solid #e2e8f0;">You are receiving this email because you opted in to Modern Forestry marketing. <a clicktracking="off" href="'.e($url ?? '#unsubscribe-preview').'" style="color:#475569;">Unsubscribe</a> · <a href="https://theforestrystudio.com/pages/privacy-policy" style="color:#475569;">Privacy</a></td></tr></table>';
     }
 }
