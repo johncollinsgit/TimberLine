@@ -31,6 +31,7 @@ test('email failure handling distinguishes recipient problems from temporary and
     'package limit' => [['event' => 'dropped', 'reason' => 'Recipient List over Package Quota'], null, 'sender_or_provider'],
     'rate limit' => [['event' => 'send_failure', 'error_code' => 'rate_limited', 'error_message' => 'Rate limit reached'], null, 'temporary'],
     'unknown failure' => [['event' => 'dropped'], null, 'needs_review'],
+    'no email consent' => [['event' => 'send_failure', 'error_code' => 'email_not_consented'], null, 'consent_required'],
 ]);
 
 test('signed event ingestion stops hard bounced duplicate addresses without changing another tenant or SMS', function (): void {
@@ -93,4 +94,20 @@ test('event callbacks require a valid signature and a matching recipient before 
     openssl_sign($timestamp.$body, $signature, $key, OPENSSL_ALGO_SHA256);
     $this->call('POST', route('marketing.webhooks.sendgrid-events'), [], [], [], ['CONTENT_TYPE' => 'application/json', 'HTTP_X_TWILIO_EMAIL_EVENT_WEBHOOK_SIGNATURE' => base64_encode($signature), 'HTTP_X_TWILIO_EMAIL_EVENT_WEBHOOK_TIMESTAMP' => $timestamp], $body)->assertOk()->assertJson(['matched' => 1]);
     expect($profile->fresh()->accepts_email_marketing)->toBeFalse();
+});
+
+test('a failed suppression write does not retain the callback hash and a retry still stops sends', function (): void {
+    $tenant = Tenant::create(['name' => 'Replay', 'slug' => 'failure-replay']);
+    $profile = MarketingProfile::factory()->create(['tenant_id' => $tenant->id, 'accepts_email_marketing' => true]);
+    $delivery = MarketingEmailDelivery::create(['tenant_id' => $tenant->id, 'marketing_profile_id' => $profile->id, 'email' => $profile->email, 'status' => 'sent']);
+    $event = ['event' => 'bounce', 'type' => 'bounce', 'email' => $profile->email, 'marketing_email_delivery_id' => (string) $delivery->id, 'timestamp' => now()->timestamp];
+    $real = app(\App\Services\Marketing\MessagingContactChannelStateService::class);
+    $broken = Mockery::mock(\App\Services\Marketing\MessagingContactChannelStateService::class);
+    $broken->shouldReceive('markEmailStatus')->once()->andThrow(new RuntimeException('Simulated database outage'));
+    app()->instance(\App\Services\Marketing\MessagingContactChannelStateService::class, $broken);
+    expect(fn () => app(\App\Services\Marketing\MarketingEmailDeliveryTrackingService::class)->handleSendGridEvents([$event]))->toThrow(RuntimeException::class);
+    expect(data_get($delivery->fresh()->raw_payload, 'received_event_hashes', []))->toBe([]);
+    app()->instance(\App\Services\Marketing\MessagingContactChannelStateService::class, $real);
+    expect(app(\App\Services\Marketing\MarketingEmailDeliveryTrackingService::class)->handleSendGridEvents([$event])['updated'])->toBe(1)
+        ->and($profile->fresh()->accepts_email_marketing)->toBeFalse();
 });

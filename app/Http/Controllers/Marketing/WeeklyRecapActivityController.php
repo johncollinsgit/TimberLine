@@ -103,7 +103,7 @@ class WeeklyRecapActivityController extends Controller
                     'bounced' => 'Permanent address failure',
                     'suppressed' => $state->email_status_reason === 'spam_complaint' ? 'Spam complaint' : 'Address suppressed',
                     default => 'Customer opted out',
-                }) : 'Address remains eligible',
+                }) : (($decision['category'] === 'consent_required' || ($profile && ! $profile->accepts_email_marketing)) ? 'Awaiting email marketing consent' : 'Address remains eligible'),
                 'action' => $decision['category'] === 'none' ? null : $decision['action'],
                 'events' => collect((array) data_get($record->raw_payload, 'events', []))->map(fn ($event) => [
                     'event' => $event['event'] ?? 'unknown', 'at' => $event['at'] ?? null,

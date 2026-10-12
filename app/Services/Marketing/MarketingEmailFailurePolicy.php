@@ -21,6 +21,12 @@ class MarketingEmailFailurePolicy
             'smtp_status' => $status, 'action' => $action, 'suppress' => $state !== null,
         ];
 
+        if (($event['error_code'] ?? null) === 'email_not_consented') {
+            return $decision(null, 'consent_required', 'Do not send marketing emails until the customer gives email consent.');
+        }
+        if (($event['error_code'] ?? null) === 'email_unsubscribed') {
+            return $decision('unsubscribed', 'unsubscribe', 'Stop future marketing emails; customer opted out.');
+        }
         if (in_array($kind, ['unsubscribe', 'group_unsubscribe'], true) || $text === 'unsubscribed address') {
             return $decision('unsubscribed', 'unsubscribe', 'Stop future marketing emails; customer unsubscribed.');
         }
@@ -88,7 +94,7 @@ class MarketingEmailFailurePolicy
         $event = [...$result, 'event' => 'send_failure'];
         $decision = $this->classify($event);
         $existing = \App\Models\MessagingContactChannelState::query()->forTenantId($tenantId)->where('email', strtolower(trim($email)))->first();
-        if ($decision['suppress'] && ! ($existing?->email_status === 'unsubscribed' && $decision['email_status'] !== 'unsubscribed')) {
+        if ($decision['suppress'] && ! (($existing?->email_status === 'unsubscribed' && $decision['email_status'] !== 'unsubscribed') || ($existing?->email_status === 'suppressed' && $decision['email_status'] === 'bounced'))) {
             app(MessagingContactChannelStateService::class)->markEmailStatus(
                 tenantId: $tenantId, profile: null, email: $email, status: $decision['email_status'],
                 reason: $decision['category'], providerSource: (string) ($result['provider'] ?? 'email_provider'),
