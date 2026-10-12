@@ -122,6 +122,8 @@ class TenantMessagingGateway
                 }
             }
 
+            $result = app(\App\Services\Marketing\MarketingEmailFailurePolicy::class)->applySendResult($tenantId, $to, $result, $options);
+
             return [...$result, 'tenant_id' => $tenantId, 'reply_mode' => $sender['reply_mode']];
         } catch (\Throwable $exception) {
             return $this->emailFailure($tenantId, $exception->getMessage());

@@ -54,6 +54,51 @@ emails. Log/array mailers do not count as production delivery.
 php artisan marketing:send-weekly-rewards-wishlist-summary --tenant=modern-forestry --email=info@theforestrystudio.com --calendar-week --dry-run
 ```
 
+## Recap drilldowns and failure handling (October 12 follow-up)
+
+Every metric label and value, plus storefront health, links to an authenticated
+Everbranch activity screen at `/marketing/weekly-recap/{metric}`. Links preserve
+the exact UTC interval and exclusive calendar-week boundary. The existing tenant
+membership and marketing role gates protect all activity; links contain no login
+credentials. Lists paginate at 50 and show customers, codes, values, redemption
+orders, timestamps and status. Email records also show subject, provider receipt,
+failure reason, delivery history and whether future marketing sends are stopped.
+Sent means provider accepted; it does not guarantee mailbox delivery. A later
+provider failure can appear in both sent and failed activity for the same week.
+Counts reflect recorded activity and can update after late provider callbacks.
+
+`MarketingEmailFailurePolicy` makes suppression depend on recipient evidence:
+
+| Event or reason | Address handling |
+| --- | --- |
+| Unsubscribe / Unsubscribed Address | Unsubscribed immediately |
+| Spam complaint / Spam Reporting Address | Suppressed immediately |
+| Invalid address, unknown recipient, disabled mailbox, permanent `type=bounce`, prior Bounced Address | Bounced; future marketing sends stop |
+| Deferred, 4xx, mailbox full (including 5.2.2), rate limit, timeout | Eligible; temporary failure can retry |
+| Sender verification, authentication, quota, SMTPAPI, reputation / content / 5.7.x | Eligible; sender/provider problem needs correction |
+| Unexplained bounce/drop/block | Eligible pending review; do not infer bad recipient |
+
+Suppression fans out to matching email profiles in the sending tenant and leaves
+SMS untouched. Imports cannot restore a suppressed address. Unsubscribe or spam
+state cannot be downgraded by a later bounce, and a stale bounce cannot override
+explicit later reconsent. Both sending gateways handle explicit invalid-recipient
+API results; dry runs never alter consent. Event ingestion supports SendGrid's
+actual top-level custom arguments, rejects recipient mismatches, retains failure
+reason/type/status and an audited handling decision, and deduplicates callbacks.
+A later delivery receipt can recover delivery status without restoring consent.
+
+Production must have a signed SendGrid webhook to
+`https://app.theeverbranch.com/webhooks/sendgrid/events`. Configure delivered,
+processed, open, click, bounce, dropped, deferred, unsubscribe, group_unsubscribe
+and spam_report events. Create it disabled, enable signing, install its public
+key as `SENDGRID_EVENT_WEBHOOK_PUBLIC_KEY` and set
+`SENDGRID_VERIFY_EVENT_WEBHOOK_SIGNATURE=true` in the shared environment, then
+refresh the configuration cache and enable events after the gated release.
+Never disable signature verification to get a test through. Verify unsigned
+requests return 403 and SendGrid's signed test notification is accepted. SMTP
+recaps carry the retained delivery ID and tenant ID as X-SMTPAPI unique args so
+actual delivery/failure receipts update the corresponding report record.
+
 ## Historical email requests
 
 Already delivered October 2 messages retain their original mailto links. The
@@ -93,3 +138,6 @@ inbound domain or Gmail forwarding and is the primary route for new messages.
 
 - [RFC 8058 one-click unsubscribe](https://www.rfc-editor.org/rfc/rfc8058.html)
 - [SendGrid suppression groups](https://www.twilio.com/docs/sendgrid/for-developers/sending-email/suppressions)
+
+- [SendGrid event types and permanent/temporary bounces](https://www.twilio.com/docs/sendgrid/for-developers/tracking-events/event)
+- [SendGrid signed webhook setup](https://www.twilio.com/docs/sendgrid/api-reference/webhooks/toggle-signature-verification-for-an-event-webhook)

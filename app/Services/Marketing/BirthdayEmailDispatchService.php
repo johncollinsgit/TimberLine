@@ -147,6 +147,7 @@ class BirthdayEmailDispatchService
             'tenant_id' => $tenantId,
             'provider' => $selectedProvider,
             'campaign_type' => $campaignType,
+            'message_subject' => $subject,
             'template_key' => $templateKey,
             'email' => $toEmail,
             'status' => 'sending',

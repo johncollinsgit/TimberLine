@@ -63,7 +63,11 @@ class TenantEmailDispatchService
         $message = $this->messagePayload($toEmail, $subject, $textBody, $settings, $options, $tenantId);
         $result = $provider->sendEmail($message, $this->providerConfig($settings, $options));
 
-        return $this->normalizedResult($result, $provider->key(), $tenantId);
+        $result = $this->normalizedResult($result, $provider->key(), $tenantId);
+
+        return $tenantId !== null
+            ? app(\App\Services\Marketing\MarketingEmailFailurePolicy::class)->applySendResult($tenantId, $toEmail, $result, $options)
+            : $result;
     }
 
     /**
