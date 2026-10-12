@@ -18,6 +18,7 @@ use App\Services\Billing\StripeHostedBillingService;
 use App\Services\Bud\TenantBudService;
 use App\Services\Dashboard\UnifiedDashboardService;
 use App\Services\FieldService\CollinsClientAccessService;
+use App\Services\FieldService\FieldServiceAccessService;
 use App\Services\FieldService\FieldServiceWorkProfileService;
 use App\Services\FieldService\WorkspaceAssetService;
 use App\Services\Mobile\MobileLandlordAccessService;
@@ -90,7 +91,7 @@ class EverbranchMobileController extends Controller
             'branding' => $this->brandingPayload($tenant, $role),
             'experience_profile' => $experienceProfiles->forTenant((int) $tenant->id, $user, $tenant),
             'work_profile' => $workProfiles->forTenant($tenant),
-            'primary_navigation' => $this->primaryNavigation($role, $fieldOperations, app(CollinsClientAccessService::class)->allows($user, $tenant)),
+            'primary_navigation' => $this->primaryNavigation($role, $fieldOperations, $this->canViewClients($user, $tenant)),
             'dashboard' => $dashboard->forRequest($request, $user),
             'workspace_insights' => $this->workspaceInsights($tenant, count($manifest)),
             'branches' => $manifest,
@@ -103,8 +104,8 @@ class EverbranchMobileController extends Controller
             'permissions' => [
                 'manage_billing' => $this->canManageBilling($user, $tenant),
                 'request_modules' => in_array($this->tenantRole($user, $tenant), ['admin', 'manager', 'marketing_manager'], true),
-                'manage_customers' => $role === 'admin' && app(CollinsClientAccessService::class)->allows($user, $tenant),
-                'view_customers' => app(CollinsClientAccessService::class)->allows($user, $tenant),
+                'manage_customers' => $role === 'admin' && $this->canViewClients($user, $tenant),
+                'view_customers' => $this->canViewClients($user, $tenant),
             ],
         ])->setEtag(hash('sha256', (string) $user->id.'|'.$tenant->id.'|'.now()->format('Y-m-d-H-i')));
     }
@@ -112,6 +113,9 @@ class EverbranchMobileController extends Controller
     public function moduleScreen(Request $request, string $tenant, string $moduleKey, TenantMobileModuleRegistry $registry): JsonResponse
     {
         $tenantModel = $this->tenant($request);
+        if (in_array($moduleKey, ['customers', 'clients'], true)) {
+            $this->requireCollinsClientAccess($request, $tenantModel);
+        }
         $range = $request->validate(['range' => ['nullable', 'in:1d,1w,1m,30d,ytd,week,month,year']])['range'] ?? null;
 
         return response()->json($registry->screen((int) $tenantModel->id, $moduleKey, $this->user($request), $range));
@@ -224,7 +228,7 @@ class EverbranchMobileController extends Controller
         $tenant = $this->tenant($request);
         $this->requireWorkBranch($registry, (int) $tenant->id);
         abort_if($resources->workKind($tenant, $this->user($request)) === 'clients'
-            && ! app(CollinsClientAccessService::class)->allows($this->user($request), $tenant), 403);
+            && ! $this->canViewClients($this->user($request), $tenant), 403);
         $validated = $request->validate(['q' => ['nullable', 'string', 'max:160'], 'limit' => ['nullable', 'integer', 'min:10', 'max:50']]);
 
         return response()->json($resources->work($tenant, $this->user($request), (string) ($validated['q'] ?? ''), (int) ($validated['limit'] ?? 30)));
@@ -235,7 +239,7 @@ class EverbranchMobileController extends Controller
         $tenantModel = $this->tenant($request);
         $this->requireWorkBranch($registry, (int) $tenantModel->id);
         abort_if($kind === 'clients'
-            && ! app(CollinsClientAccessService::class)->allows($this->user($request), $tenantModel), 403);
+            && ! $this->canViewClients($this->user($request), $tenantModel), 403);
 
         return response()->json($resources->workDetail($tenantModel, $this->user($request), $kind, $resource));
     }
@@ -563,13 +567,13 @@ class EverbranchMobileController extends Controller
             };
 
             return $destination ? [...$result, 'mobile_destination' => $destination] : $result;
-        })->when(! app(CollinsClientAccessService::class)->allows($this->user($request), $tenant),
+        })->when(! $this->canViewClients($this->user($request), $tenant),
             fn ($items) => $items->reject(fn (array $item): bool => in_array((string) ($item['type'] ?? ''), ['customer', 'client'], true)
                 || in_array((string) ($item['mobile_destination']['kind'] ?? ''), ['customer', 'clients'], true)
                 || preg_match('~/(customers|clients)(/|$)~i', (string) ($item['url'] ?? '')) === 1));
         $work = $resources->work($tenant, $this->user($request), $query, 8);
         if (($work['kind'] ?? null) !== 'orders'
-            && (($work['kind'] ?? null) !== 'clients' || app(CollinsClientAccessService::class)->allows($this->user($request), $tenant))) {
+            && (($work['kind'] ?? null) !== 'clients' || $this->canViewClients($this->user($request), $tenant))) {
             $results = $results->concat(collect($work['items'] ?? [])->map(fn (array $item): array => [
                 'type' => rtrim((string) $work['kind'], 's'),
                 'title' => $item['title'],
@@ -582,7 +586,7 @@ class EverbranchMobileController extends Controller
         $payload['total'] = count($payload['results']);
         $payload['groups'] = collect($payload['results'])->groupBy(fn (array $item): string => (string) ($item['type'] ?? 'other'))
             ->map(fn ($items): array => $items->values()->all())->all();
-        if ($payload['total'] === 0 && ! app(CollinsClientAccessService::class)->allows($this->user($request), $tenant)) {
+        if ($payload['total'] === 0 && ! $this->canViewClients($this->user($request), $tenant)) {
             $payload['empty_state'] = ['title' => 'No matches', 'subtitle' => 'Try a job, module, or team destination.'];
         }
 
@@ -719,9 +723,20 @@ class EverbranchMobileController extends Controller
         );
     }
 
+    protected function canViewClients(User $user, Tenant $tenant): bool
+    {
+        if (! app(CollinsClientAccessService::class)->allows($user, $tenant)) {
+            return false;
+        }
+        $states = app(TenantModuleAccessResolver::class)->resolveForTenant((int) $tenant->id, ['field_service']);
+
+        return ! (bool) data_get($states, 'modules.field_service.enabled', false)
+            || app(FieldServiceAccessService::class)->canViewCustomerContact($user, $tenant);
+    }
+
     protected function requireCollinsClientAccess(Request $request, Tenant $tenant): void
     {
-        abort_unless(app(CollinsClientAccessService::class)->allows($this->user($request), $tenant), 403, 'The client list is restricted.');
+        abort_unless($this->canViewClients($this->user($request), $tenant), 403, 'The client list is restricted.');
     }
 
     /** @return array<string,string|null> */

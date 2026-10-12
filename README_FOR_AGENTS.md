@@ -1,5 +1,10 @@
 # START HERE
 
+Field mobile job detail must redact customer phone/email unless
+`FieldServiceAccessService::canViewCustomerContact` allows the active viewer.
+The iOS and Android apps share this API. Keep authorization on the server;
+employee preview masking alone cannot protect contact data.
+
 ## 2026-10-12 — Automatic marketing opt-out and weekly Everbranch recap
 
 - Recipient-specific HTTPS unsubscribe links and mail-client one-click POSTs
