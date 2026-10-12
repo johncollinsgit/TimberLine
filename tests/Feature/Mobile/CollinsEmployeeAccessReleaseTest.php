@@ -91,6 +91,8 @@ test('an employee sees and can work on all current jobs', function (): void {
     $unassigned = FieldServiceJob::query()->create(['tenant_id' => $tenant->id, 'title' => 'Another crew tomorrow', 'status' => 'open', 'operational_status' => 'scheduled', 'scheduled_for' => now()->addDay()]);
     Sanctum::actingAs($employee, ['mobile:read', 'mobile:write']);
     $base = '/api/mobile/v1/workspaces/crew-schedule/field-service';
+    $this->getJson('/api/mobile/v1/workspaces/crew-schedule/customers')->assertForbidden();
+    $this->getJson('/api/mobile/v1/workspaces/crew-schedule/bootstrap')->assertOk()->assertJsonPath('permissions.view_customers', false);
     $this->getJson($base.'/my-day')->assertOk()->assertJsonPath('upcoming_jobs.0.id', $assigned->id)
         ->assertJsonCount(2, 'upcoming_jobs')->assertJsonPath('owner_metrics', null);
     $this->getJson($base.'?view=list&filter=active&bucket=current')->assertOk()->assertSee('Another crew tomorrow');
@@ -155,20 +157,24 @@ test('Collins client access belongs only to Nate while team reporting contains j
     foreach ([[$nate, 'owner'], [$otherAdmin, 'admin'], [$member, 'member']] as [$user, $role]) {
         $user->tenants()->attach($tenant->id, ['role' => $role, 'membership_active' => true]);
     }
-    $job = FieldServiceJob::query()->create(['tenant_id' => $tenant->id, 'title' => 'Open panel', 'status' => 'open', 'operational_status' => 'active']);
+    $job = FieldServiceJob::query()->create(['tenant_id' => $tenant->id, 'title' => 'Open panel', 'status' => 'open', 'operational_status' => 'active', 'customer_email' => 'private@example.com', 'customer_phone' => '8645550100']);
     MarketingProfile::query()->create(['tenant_id' => $tenant->id, 'first_name' => 'Private', 'last_name' => 'Customer', 'email' => 'private@example.com']);
     $base = '/api/mobile/v1/workspaces/collins-electric';
     Sanctum::actingAs($member, ['mobile:read', 'mobile:write']);
     $this->getJson($base.'/customers')->assertForbidden();
     $this->getJson($base.'/bootstrap')->assertOk()->assertJsonPath('permissions.view_customers', false);
-    $this->getJson($base.'/field-service/jobs/'.$job->id)->assertOk()->assertJsonPath('job.can_edit', true)->assertJsonPath('job.can_edit_customer', false);
+    $this->getJson($base.'/field-service/jobs/'.$job->id)->assertOk()->assertJsonPath('job.can_edit', true)->assertJsonPath('job.can_edit_customer', false)
+        ->assertJsonPath('job.can_view_customer_contact', false)->assertJsonPath('job.customer_email', null)->assertJsonPath('job.customer_phone', null);
     $this->patchJson($base.'/field-service/jobs/'.$job->id, ['customer_name' => 'Blocked'])->assertForbidden();
     $report = app(\App\Services\Mobile\TenantMobileModuleRegistry::class)->screen((int) $tenant->id, 'reporting', $member, 'week');
     expect(json_encode($report))->not->toContain('$')->and(data_get($report, 'screen.range.options'))->toHaveKeys(['week', 'month', 'year']);
     Sanctum::actingAs($otherAdmin, ['mobile:read', 'mobile:write']);
     $this->getJson($base.'/customers')->assertForbidden();
+    $this->getJson($base.'/field-service/jobs/'.$job->id)->assertOk()
+        ->assertJsonPath('job.customer_email', null)->assertJsonPath('job.customer_phone', null);
     $this->getJson($base.'/search?q=Private')->assertOk()->assertDontSee('private@example.com');
     Sanctum::actingAs($nate, ['mobile:read', 'mobile:write']);
     $this->getJson($base.'/customers')->assertOk();
-    $this->getJson($base.'/field-service/jobs/'.$job->id)->assertOk()->assertJsonPath('job.can_edit_customer', true);
+    $this->getJson($base.'/field-service/jobs/'.$job->id)->assertOk()->assertJsonPath('job.can_edit_customer', true)
+        ->assertJsonPath('job.can_view_customer_contact', true)->assertJsonPath('job.customer_email', 'private@example.com')->assertJsonPath('job.customer_phone', '8645550100');
 });

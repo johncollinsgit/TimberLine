@@ -40,6 +40,13 @@ class FieldServiceAccessService
         return $user->is_active !== false && $this->role($user, $tenant) !== '';
     }
 
+    public function canViewCustomerContact(User $user, Tenant $tenant): bool
+    {
+        return $user->is_active !== false
+            && $this->canManageJobs($user, $tenant)
+            && app(CollinsClientAccessService::class)->allows($user, $tenant);
+    }
+
     public function canUpdateProgress(User $user, Tenant $tenant, FieldServiceJob $job): bool
     {
         if ($this->canManageJobs($user, $tenant)) {
@@ -94,6 +101,7 @@ class FieldServiceAccessService
             'delete_jobs' => $this->canCreateJobs($user, $tenant),
             'restore_jobs' => $manage,
             'edit_customer' => $manage && app(CollinsClientAccessService::class)->allows($user, $tenant),
+            'view_customer_contact' => $this->canViewCustomerContact($user, $tenant),
             'manage_team' => $manage,
             'manage_any_task' => $manage,
             'update_participating_job_progress' => true,

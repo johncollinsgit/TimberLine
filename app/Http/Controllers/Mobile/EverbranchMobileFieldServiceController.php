@@ -197,8 +197,9 @@ class EverbranchMobileFieldServiceController extends Controller
         return response()->json(['job' => [
             ...$this->summary($job, $readiness, $owner, $access->canManageJobs($user, $tenantModel)),
             'description' => $job->description,
-            'customer_email' => $job->customer_email,
-            'customer_phone' => $job->customer_phone,
+            'customer_email' => $access->canViewCustomerContact($user, $tenantModel) ? $job->customer_email : null,
+            'customer_phone' => $access->canViewCustomerContact($user, $tenantModel) ? $job->customer_phone : null,
+            'can_view_customer_contact' => $access->canViewCustomerContact($user, $tenantModel),
             'lock_box_code' => $job->lock_box_code,
             'address' => $this->addressPayload($job),
             'project_manager' => $this->projectManagerPayload($job),

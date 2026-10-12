@@ -1,5 +1,16 @@
 # SYSTEM SNAPSHOT
 
+## 2026-10-12 — Field mobile customer contact restriction (staged)
+
+- Job detail APIs redact homeowner phone and email for ordinary team members.
+  `can_view_customer_contact` and the viewer capability describe the same
+  server-side manager and Collins identity rule used by customer editing.
+- Field workspace customer pages, messages, module screens and search use the
+  same restriction; non-Field workspaces retain existing customer behavior.
+- This protects both native platforms, including older installed builds. Job
+  names, work-site addresses and project-manager contact remain operational data.
+- See `docs/operations/field-mobile-team-contact.md` for checks and rollout.
+
 ## 2026-10-12 — Automatic marketing opt-out and weekly Everbranch recap
 
 - Recipient-specific HTTPS unsubscribe links and mail-client one-click POSTs
