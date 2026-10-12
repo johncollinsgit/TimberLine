@@ -30,11 +30,12 @@ class MessagingContactChannelStateService
 
     public function resolveEmailStatus(int $tenantId, ?MarketingProfile $profile = null, ?string $email = null): string
     {
-        if (filled($email ?? $profile?->email) && app(MarketingEmailUnsubscribeService::class)->suppressed($tenantId, (string) ($email ?? $profile?->email))) {
+        $email = $this->identityNormalizer->normalizeEmail($email ?? $profile?->email);
+        if ($email !== null && app(MarketingEmailUnsubscribeService::class)->suppressed($tenantId, $email)) {
             return 'unsubscribed';
         }
-        $state = $this->findState($tenantId, $profile, null, $email);
-        if ($state instanceof MessagingContactChannelState && $this->nullableString($state->email_status) !== null) {
+        $state = $email !== null ? MessagingContactChannelState::query()->forTenantId($tenantId)->where('email', $email)->first() : null;
+        if ($state instanceof MessagingContactChannelState && filled($state->email_status) && $state->email_status !== 'unknown') {
             return (string) $state->email_status;
         }
 
@@ -142,9 +143,6 @@ class MessagingContactChannelStateService
         if ($email === null) {
             throw new \InvalidArgumentException('Email consent requires a valid address.');
         }
-        if ($profile && $this->identityNormalizer->normalizeEmail($profile->email) !== $email) {
-            throw new \InvalidArgumentException('Email consent address does not match the profile.');
-        }
 
         return \Illuminate\Support\Facades\DB::transaction(function () use ($tenantId, $profile, $email, $status, $reason, $providerSource, $metadata, $occurredAt): MessagingContactChannelState {
             $timestamp = $this->asDate($occurredAt) ?? now();
@@ -153,13 +151,19 @@ class MessagingContactChannelStateService
                 ->where(function ($query) use ($email): void {
                     $query->where('normalized_email', $email)->orWhereRaw('LOWER(TRIM(email)) = ?', [$email]);
                 })->lockForUpdate()->get();
-            $anchor = $profile ?? $profiles->first();
-            $previousStatus = $this->findState($tenantId, $anchor, null, $email)?->email_status;
-            $state = $this->upsertState($tenantId, $anchor, null, $email, [
+            $anchor = $profile && $this->identityNormalizer->normalizeEmail($profile->email) === $email ? $profile : $profiles->first();
+            // This is the existing unique (tenant_id, email) address ledger. Do not
+            // overwrite an old address by looking up a profile whose email changed.
+            $state = MessagingContactChannelState::query()->firstOrCreate(
+                ['tenant_id' => $tenantId, 'email' => $email],
+                ['marketing_profile_id' => $anchor?->id],
+            );
+            $previousStatus = $state->email_status;
+            $state->fill([
                 'email_status' => $normalizedStatus, 'email_status_reason' => $reason,
-                'email_status_changed_at' => $timestamp, 'provider_source' => $providerSource,
-                'metadata' => [...$metadata, 'email' => $email],
-            ]);
+                'email_status_changed_at' => $previousStatus === $normalizedStatus ? ($state->email_status_changed_at ?? $timestamp) : $timestamp, 'provider_source' => $providerSource,
+                'metadata' => [...(array) $state->metadata, ...$metadata, 'email' => $email],
+            ])->save();
             MessagingContactChannelState::query()->forTenantId($tenantId)->where('email', $email)->whereKeyNot($state->id)->update([
                 'email_status' => $normalizedStatus, 'email_status_reason' => $reason,
                 'email_status_changed_at' => $timestamp,

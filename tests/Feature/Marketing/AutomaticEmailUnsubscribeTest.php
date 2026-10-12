@@ -85,3 +85,18 @@ test('inbound webhook fails closed without its secret and quoted unsubscribe foo
     expect($classifier->invoke($service, 'Re: Birthday gift', "Thanks for the gift!\nOn Monday, Modern Forestry wrote:\nUnsubscribe", [])['message_type'])->toBe('normal')
         ->and($classifier->invoke($service, 'Unsubscribe', '', [])['message_type'])->toBe('unsubscribe');
 });
+
+test('old email optout survives address changes without suppressing the new address or changing SMS', function (): void {
+    $this->duplicate->delete();
+    $states = app(MessagingContactChannelStateService::class);
+    $states->markEmailStatus($this->tenant->id, $this->profile, $this->profile->email, 'subscribed', 'test');
+    $states->markSmsSubscribed($this->tenant->id, $this->profile, '+15555550101', 'test');
+    $this->profile->update(['email' => 'new@example.com', 'normalized_email' => 'new@example.com']);
+    $states->markEmailStatus($this->tenant->id, $this->profile, 'subscriber@example.com', 'unsubscribed', 'old_message');
+    expect($this->profile->fresh()->accepts_email_marketing)->toBeTrue()
+        ->and($states->resolveEmailStatus($this->tenant->id, $this->profile, 'new@example.com'))->toBe('subscribed')
+        ->and($states->resolveSmsStatus($this->tenant->id, $this->profile, '+15555550101'))->toBe('subscribed');
+    $states->markEmailStatus($this->tenant->id, $this->profile, 'new@example.com', 'subscribed', 'new_consent');
+    expect(app(MarketingEmailUnsubscribeService::class)->suppressed($this->tenant->id, 'subscriber@example.com'))->toBeTrue()
+        ->and(app(MarketingEmailUnsubscribeService::class)->suppressed($this->tenant->id, 'new@example.com'))->toBeFalse();
+});

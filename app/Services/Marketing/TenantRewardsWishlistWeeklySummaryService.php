@@ -232,6 +232,16 @@ class TenantRewardsWishlistWeeklySummaryService
                 'name' => trim((string) $event->profile?->first_name.' '.(string) $event->profile?->last_name),
                 'at' => $event->occurred_at->setTimezone('America/New_York')->format('M j, g:i a T'),
             ])->filter(fn (array $row): bool => $row['email'] !== '')->unique('email')->values();
+        // Retain notifications even if the recipient's profile was deleted or its
+        // email changed after the original message. Repeated POSTs do not reset this timestamp.
+        $addressOptouts = \App\Models\MessagingContactChannelState::query()->forTenantId($tenantId)
+            ->where('email_status', 'unsubscribed')->where('email_status_changed_at', '>=', $start)->where('email_status_changed_at', '<', $end)
+            ->with('profile')->get()->map(fn ($state): array => [
+                'email' => (string) $state->email,
+                'name' => trim((string) $state->profile?->first_name.' '.(string) $state->profile?->last_name),
+                'at' => $state->email_status_changed_at->setTimezone('America/New_York')->format('M j, g:i a T'),
+            ]);
+        $unsubscribes = $unsubscribes->merge($addressOptouts)->unique('email')->values();
         $birthdays = \App\Models\BirthdayRewardIssuance::query()->whereHas('marketingProfile', fn ($query) => $query->where('tenant_id', $tenantId));
         $issued = (clone $birthdays)->where('issued_at', '>=', $start)->where('issued_at', '<', $end);
         $redeemed = (clone $birthdays)->where('redeemed_at', '>=', $start)->where('redeemed_at', '<', $end);

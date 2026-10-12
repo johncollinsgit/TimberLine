@@ -259,3 +259,15 @@ test('scheduled recap records delivery and replay does not send a second copy', 
     Mail::assertSentCount(1);
     expect(\App\Models\MarketingEmailDelivery::where('campaign_type', 'operator_recap')->where('status', 'sent')->count())->toBe(1);
 });
+
+test('recap includes address optouts without a current customer profile and repeats stay in their original week', function (): void {
+    $tenant = Tenant::create(['name' => 'Shop', 'slug' => 'orphan-optout-recap']);
+    $this->travelTo(\Carbon\Carbon::parse('2026-10-10 12:00:00', 'America/New_York'));
+    $states = app(\App\Services\Marketing\MessagingContactChannelStateService::class);
+    $states->markEmailStatus($tenant->id, null, 'old-address@example.com', 'unsubscribed', 'unsubscribe_link');
+    $this->travel(8)->days();
+    $states->markEmailStatus($tenant->id, null, 'old-address@example.com', 'unsubscribed', 'unsubscribe_link');
+    $service = app(TenantRewardsWishlistWeeklySummaryService::class);
+    expect(data_get($service->reportSnapshot($tenant, \Carbon\Carbon::parse('2026-10-12 08:00:00', 'America/New_York'), 7, true), 'recap.unsubscribed_count'))->toBe(1)
+        ->and(data_get($service->reportSnapshot($tenant, \Carbon\Carbon::parse('2026-10-19 08:00:00', 'America/New_York'), 7, true), 'recap.unsubscribed_count'))->toBe(0);
+});
