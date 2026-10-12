@@ -226,7 +226,7 @@ class TenantRewardsWishlistWeeklySummaryService
         $unsubscribes = \App\Models\MarketingConsentEvent::query()->forTenantId($tenantId)
             ->where('channel', 'email')->whereIn('event_type', ['unsubscribed', 'revoked'])
             ->where('occurred_at', '>=', $start)->where('occurred_at', '<', $end)
-            ->with('profile')->orderBy('occurred_at')->get()
+            ->with('profile')->orderBy('occurred_at')->get()->toBase()
             ->map(fn ($event): array => [
                 'email' => strtolower(trim((string) (data_get($event->details, 'metadata.email') ?: $event->profile?->email))),
                 'name' => trim((string) $event->profile?->first_name.' '.(string) $event->profile?->last_name),
@@ -236,7 +236,7 @@ class TenantRewardsWishlistWeeklySummaryService
         // email changed after the original message. Repeated POSTs do not reset this timestamp.
         $addressOptouts = \App\Models\MessagingContactChannelState::query()->forTenantId($tenantId)
             ->where('email_status', 'unsubscribed')->where('email_status_changed_at', '>=', $start)->where('email_status_changed_at', '<', $end)
-            ->with('profile')->get()->map(fn ($state): array => [
+            ->with('profile')->get()->toBase()->map(fn ($state): array => [
                 'email' => (string) $state->email,
                 'name' => trim((string) $state->profile?->first_name.' '.(string) $state->profile?->last_name),
                 'at' => $state->email_status_changed_at->setTimezone('America/New_York')->format('M j, g:i a T'),
