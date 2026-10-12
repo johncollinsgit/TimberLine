@@ -10,7 +10,7 @@
                 <a href="{{ $link }}" @if($key === $metric) aria-current="page" @endif class="rounded-lg border px-3 py-2 text-sm {{ $key === $metric ? 'bg-emerald-800 text-white' : 'border-zinc-300' }}">{{ \App\Services\Marketing\WeeklyRecapActivityService::METRICS[$key] }}</a>
             @endforeach
         </nav>
-        <p class="text-sm">{{ number_format($rows->total()) }} {{ $metric === 'unsubscribed' || $metric === 'customers_added' ? 'customers' : 'records' }} in this reporting window.</p>
+        <p class="text-sm">{{ number_format($rows->total()) }} {{ $metric === 'unsubscribed' || $metric === 'customers_added' ? ($rows->total() === 1 ? 'customer' : 'customers') : ($rows->total() === 1 ? 'record' : 'records') }} in this reporting window.</p>
         @if($amount !== null)<p class="text-sm font-semibold">{{ str_starts_with($metric, 'birthday_') ? 'Discount face value' : 'Candle Cash amount' }}: ${{ number_format($amount, 2) }}</p>@endif
         @if(in_array($metric, ['emails_sent', 'emails_failed']))
             <p class="text-sm text-zinc-500">Sent means accepted by the email provider. Delivery, opens, clicks and failures appear below as they are reported. Permanent address failures, spam complaints and unsubscribes stop future marketing sends. Temporary or sender problems preserve eligibility.</p>

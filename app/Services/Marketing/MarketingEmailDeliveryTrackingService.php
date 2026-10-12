@@ -111,6 +111,10 @@ class MarketingEmailDeliveryTrackingService
                 $metadata['failure_policy'] = [...$failurePolicy, 'occurred_at' => $occurredAt->toIso8601String()];
             }
 
+            // Suppression must succeed before the event hash is retained; a database
+            // failure must remain retryable when SendGrid replays the callback.
+            $this->syncChannelStateFromEvent($delivery, (string) ($event['event'] ?? ''), $occurredAt, $event);
+
             $delivery->forceFill([
                 'provider_message_id' => $delivery->provider_message_id ?: $normalizedProviderMessageId,
                 'sendgrid_message_id' => str_contains(strtolower((string) $delivery->provider), 'sendgrid')
@@ -151,8 +155,6 @@ class MarketingEmailDeliveryTrackingService
             if ($delivery->recipient && $shouldApplyState) {
                 $this->updateRecipientFromDelivery($delivery->recipient, (string) ($mapped['recipient_status'] ?? ''));
             }
-
-            $this->syncChannelStateFromEvent($delivery, (string) ($event['event'] ?? ''), $occurredAt, $event);
 
             $this->syncBirthdayMessageEvent($delivery, $event, $occurredAt);
 

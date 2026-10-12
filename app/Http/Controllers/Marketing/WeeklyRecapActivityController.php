@@ -98,7 +98,12 @@ class WeeklyRecapActivityController extends Controller
                 'provider' => $record->provider, 'provider_message_id' => $record->provider_message_id,
                 'failure_reason' => $decision['reason'] ?: ($result['error_message'] ?? data_get($record->metadata, 'delivery_reconciliation.reason')),
                 'failure_category' => $decision['category'] ?? null,
-                'future_sends' => $blocked ? 'Stopped · '.($state?->email_status_reason ?: $state?->email_status ?: 'Email opt-out') : 'Address remains eligible',
+                'future_sends' => $blocked ? 'Stopped · '.(match ($state?->email_status) {
+                    'unsubscribed' => 'Customer unsubscribed',
+                    'bounced' => 'Permanent address failure',
+                    'suppressed' => $state->email_status_reason === 'spam_complaint' ? 'Spam complaint' : 'Address suppressed',
+                    default => 'Customer opted out',
+                }) : 'Address remains eligible',
                 'action' => $decision['category'] === 'none' ? null : $decision['action'],
                 'events' => collect((array) data_get($record->raw_payload, 'events', []))->map(fn ($event) => [
                     'event' => $event['event'] ?? 'unknown', 'at' => $event['at'] ?? null,
