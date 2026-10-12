@@ -1,5 +1,14 @@
 # SYSTEM SNAPSHOT
 
+## 2026-10-12 - Jarvis public branding pages (draft)
+
+- `/jarvis`, `/jarvis/privacy`, and `/jarvis/terms` describe the separate local
+  Jarvis assistant on configured Evergrove public hosts only. Existing site
+  policies, tenant surfaces, and Google integration behavior remain unchanged.
+- Existing installed Jarvis J favicon is reused. Disclosure evidence, owner
+  review gaps, and the gated release path are in
+  `docs/operations/jarvis-oauth-branding.md`. Publication is pending review.
+
 ## 2026-10-12 — Field mobile customer contact restriction (staged)
 
 - Job detail APIs redact homeowner phone and email for ordinary team members.
