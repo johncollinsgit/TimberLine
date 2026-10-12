@@ -49,6 +49,7 @@
             <a href="/jarvis/privacy">Privacy</a>
             <a href="/jarvis/terms">Terms</a>
             <a href="mailto:johncollinsemail@gmail.com">Jarvis support</a>
+            <a href="tel:+18646165468">(864) 616-5468</a>
         </nav>
     </footer>
 </body>

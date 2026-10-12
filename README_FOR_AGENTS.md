@@ -3,8 +3,9 @@
 Jarvis public branding pages at `/jarvis`, `/jarvis/privacy`, and `/jarvis/terms`
 are limited to `evergrove.hosts`. They describe the separate desktop app and
 must not be substituted for existing Everbranch or tenant policies. Follow
-`docs/operations/jarvis-oauth-branding.md`; the draft requires owner review and
-the existing GitHub/Forge release gate before production Branding links are used.
+`docs/operations/jarvis-oauth-branding.md`; PR383 was owner-reviewed and published
+through GitHub/Forge. Keep disclosures grounded and verify live release evidence
+before production Branding links are used.
 
 Field mobile job detail must redact customer phone/email unless
 `FieldServiceAccessService::canViewCustomerContact` allows the active viewer.

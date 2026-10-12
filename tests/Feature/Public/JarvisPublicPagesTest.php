@@ -12,6 +12,8 @@ test('jarvis pages are public on evergrove hosts and link their own policies', f
                 ->assertSee('href="/jarvis/terms"', false)
                 ->assertSee('brand/jarvis-mark.svg', false)
                 ->assertSee('johncollinsemail@gmail.com')
+                ->assertSee('href="tel:+18646165468"', false)
+                ->assertSeeText('(864) 616-5468')
                 ->assertDontSee('noindex, nofollow', false);
         }
     }

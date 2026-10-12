@@ -1,4 +1,14 @@
-# Jarvis OAuth branding pages (draft release)
+# Jarvis OAuth branding pages
+
+PR383 was explicitly reviewed and approved by the owner, then merged and
+published as `6dd2fb96dbfc86f14e9477ed3289ae2226569846`. All PR checks passed;
+production workflow 38298808878 verified the activated Forge release. At
+2026-10-12 19:39 UTC the public readiness endpoint reported that exact commit,
+all three Jarvis pages returned 200, the logo hashes matched, and app/platform
+hosts returned 404 for `/jarvis`. The owner subsequently supplied public support
+phone `(864) 616-5468`, linked as `tel:+18646165468`; no address was inferred.
+The evidence boundaries below remain factual limitations, not an additional
+approval requirement for the already reviewed version.
 
 Prepared on 2026-10-12 for Google project `jarvis-pc-20261012`, number
 `381166840141`. These pages describe the separate local Jarvis application;
@@ -68,9 +78,10 @@ The PNGs are raster exports of this asset using an isolated headless browser's
 sans-serif rendering, not new logos. Trademark origin and licensing were not established;
 these pages make no brand-license claim.
 
-## Owner review before merge/publication
+## Disclosure evidence boundaries
 
-This is a draft release, not a completed OAuth verification statement. Confirm:
+These pages are not a completed OAuth verification statement. The initial
+owner review covered these explicit boundaries:
 
 1. Public operator identity and support contact. The verified developer email
    is used; no unverified company legal name, postal address or jurisdiction is
