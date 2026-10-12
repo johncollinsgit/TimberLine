@@ -6,11 +6,10 @@ class TenantEmailDispatchService
 {
     public function __construct(
         protected TenantEmailProviderResolver $providerResolver,
-    ) {
-    }
+    ) {}
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array{
      *   success:bool,
      *   provider:string,
@@ -31,6 +30,13 @@ class TenantEmailDispatchService
         $settings = $resolution['settings'];
         $tenantId = $resolution['tenant_id'];
 
+        $unsubscribe = app(\App\Services\Marketing\MarketingEmailUnsubscribeService::class);
+        if ($tenantId !== null && $unsubscribe->isMarketing($options)) {
+            if ($unsubscribe->suppressed($tenantId, $toEmail)) {
+                return $unsubscribe->blockedResult($tenantId);
+            }
+            [$textBody, $options] = $unsubscribe->prepare($tenantId, $toEmail, $textBody, $options);
+        }
         $dryRun = (bool) ($options['dry_run'] ?? false);
         if (! (bool) ($settings['email_enabled'] ?? false) && ! $dryRun) {
             return $this->failure(
@@ -61,7 +67,7 @@ class TenantEmailDispatchService
     }
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array{
      *   success:bool,
      *   provider:string,
@@ -87,7 +93,7 @@ class TenantEmailDispatchService
             $this->providerConfig($settings, $options),
             [
                 'tenant_id' => $tenantId,
-                'tenant_label' => (string) ($options['tenant_label'] ?? ('Tenant #' . ($tenantId ?? 'unknown'))),
+                'tenant_label' => (string) ($options['tenant_label'] ?? ('Tenant #'.($tenantId ?? 'unknown'))),
                 'subject' => $this->nullableString($options['subject'] ?? null),
                 'dry_run' => (bool) ($options['dry_run'] ?? false),
             ]
@@ -97,7 +103,7 @@ class TenantEmailDispatchService
     }
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array{provider:string,tenant_id:?int,valid:bool,status:string,issues:array<int,string>,details:array<string,mixed>}
      */
     public function validateConfiguration(array $options = []): array
@@ -123,7 +129,7 @@ class TenantEmailDispatchService
     }
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array{provider:string,tenant_id:?int,status:string,message:string,details:array<string,mixed>}
      */
     public function healthStatus(array $options = []): array
@@ -148,7 +154,7 @@ class TenantEmailDispatchService
     }
 
     /**
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $options
      * @return array{tenant_id:?int,provider:EmailProvider,settings:array<string,mixed>,configuration_issues:array<int,string>}
      */
     protected function providerResolution(array $options): array
@@ -175,8 +181,8 @@ class TenantEmailDispatchService
     }
 
     /**
-     * @param array<string,mixed> $settings
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $settings
+     * @param  array<string,mixed>  $options
      * @return array<string,mixed>
      */
     protected function providerConfig(array $settings, array $options): array
@@ -274,7 +280,7 @@ class TenantEmailDispatchService
             return $this->failure(
                 provider: 'sendgrid',
                 code: 'sender_not_verified',
-                message: 'The tenant sender identity is not verified yet. ' . $guidance,
+                message: 'The tenant sender identity is not verified yet. '.$guidance,
                 retryable: false,
                 payload: [
                     'tenant_id' => $tenantId,
@@ -291,8 +297,8 @@ class TenantEmailDispatchService
     }
 
     /**
-     * @param array<string,mixed> $settings
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $settings
+     * @param  array<string,mixed>  $options
      * @return array{
      *   to_email:string,
      *   subject:string,
@@ -349,7 +355,7 @@ class TenantEmailDispatchService
     }
 
     /**
-     * @param array<string,mixed> $result
+     * @param  array<string,mixed>  $result
      * @return array{
      *   success:bool,
      *   provider:string,
@@ -380,7 +386,7 @@ class TenantEmailDispatchService
     }
 
     /**
-     * @param array<string,mixed> $payload
+     * @param  array<string,mixed>  $payload
      * @return array{
      *   success:false,
      *   provider:string,

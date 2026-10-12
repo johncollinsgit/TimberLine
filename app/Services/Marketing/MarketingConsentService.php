@@ -9,8 +9,8 @@ use Carbon\CarbonImmutable;
 class MarketingConsentService
 {
     /**
-     * @param array<string,mixed> $incoming
-     * @param array<string,mixed> $context
+     * @param  array<string,mixed>  $incoming
+     * @param  array<string,mixed>  $context
      */
     public function applyToProfile(MarketingProfile $profile, array $incoming, array $context = []): bool
     {
@@ -20,6 +20,11 @@ class MarketingConsentService
         $emailOptIn = $this->nullableBool($incoming['accepts_email_marketing'] ?? null);
         $smsOptIn = $this->nullableBool($incoming['accepts_sms_marketing'] ?? null);
         $emailOptOutAt = $this->asNullableDate($incoming['email_opted_out_at'] ?? null);
+        if ((int) $profile->tenant_id > 0 && filled($profile->email)
+            && app(MarketingEmailUnsubscribeService::class)->suppressed((int) $profile->tenant_id, (string) $profile->email)) {
+            $emailOptIn = false;
+            $emailOptOutAt ??= CarbonImmutable::now();
+        }
         $smsOptOutAt = $this->asNullableDate($incoming['sms_opted_out_at'] ?? null);
 
         $before = [
@@ -84,7 +89,7 @@ class MarketingConsentService
     /**
      * Explicit/manual consent updates that can supersede prior imported values.
      *
-     * @param array<string,mixed> $context
+     * @param  array<string,mixed>  $context
      */
     public function setSmsConsent(MarketingProfile $profile, bool $consented, array $context = []): bool
     {
@@ -129,10 +134,22 @@ class MarketingConsentService
     }
 
     /**
-     * @param array<string,mixed> $context
+     * @param  array<string,mixed>  $context
      */
     public function setEmailConsent(MarketingProfile $profile, bool $consented, array $context = []): bool
     {
+        if ((int) $profile->tenant_id > 0 && filled($profile->email)) {
+            $before = (bool) $profile->accepts_email_marketing;
+            $hadOptout = $profile->email_opted_out_at !== null;
+            app(MessagingContactChannelStateService::class)->markEmailStatus(
+                (int) $profile->tenant_id, $profile, $profile->email,
+                $consented ? 'subscribed' : 'unsubscribed', 'explicit_consent',
+                (string) ($context['source_type'] ?? 'manual'), (array) ($context['details'] ?? []),
+            );
+            $profile->refresh();
+
+            return $before !== $consented || ($consented && $hadOptout);
+        }
         $changed = false;
         $before = (bool) $profile->accepts_email_marketing;
 
@@ -174,8 +191,8 @@ class MarketingConsentService
     }
 
     /**
-     * @param array<string,mixed> $before
-     * @param array<string,mixed> $context
+     * @param  array<string,mixed>  $before
+     * @param  array<string,mixed>  $context
      */
     protected function recordChangeEvents(MarketingProfile $profile, array $before, array $context): void
     {
@@ -216,7 +233,7 @@ class MarketingConsentService
     }
 
     /**
-     * @param array<string,mixed> $context
+     * @param  array<string,mixed>  $context
      */
     protected function eventTypeForTransition(bool $current, array $context): string
     {
@@ -233,7 +250,7 @@ class MarketingConsentService
     }
 
     /**
-     * @param array<string,mixed> $context
+     * @param  array<string,mixed>  $context
      */
     protected function recordConsentEvent(
         MarketingProfile $profile,
@@ -316,7 +333,7 @@ class MarketingConsentService
     }
 
     /**
-     * @param array<string,mixed> $context
+     * @param  array<string,mixed>  $context
      */
     protected function isLegacyImportReconciliation(array $context): bool
     {

@@ -20,12 +20,10 @@ class TenantRewardsWishlistWeeklySummaryMail extends Mailable
 
     public function build(): self
     {
-        return $this->subject(sprintf(
-            '%s rewards + wishlist: %s',
-            (string) data_get($this->report, 'tenant.name', 'Storefront'),
-            (string) data_get($this->report, 'health.label', 'Weekly summary')
-        ))
+        return $this->from((string) config('mail.from.address'), 'Everbranch')
+            ->subject('Everbranch weekly recap · '.(string) data_get($this->report, 'tenant.name', 'Storefront').' · '.(string) data_get($this->report, 'window.label', 'Past week'))
             ->view('emails.marketing.tenant-rewards-wishlist-weekly-summary')
+            ->text('emails.marketing.tenant-rewards-wishlist-weekly-summary-text')
             ->with(['report' => $this->report]);
     }
 }

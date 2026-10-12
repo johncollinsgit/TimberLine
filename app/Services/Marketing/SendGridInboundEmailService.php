@@ -67,6 +67,9 @@ class SendGridInboundEmailService
             $matchedDelivery = $this->resolveDeliveryFromHeaders($headers, $fromEmail);
         }
 
+        if ($matchedDelivery instanceof MarketingEmailDelivery && strtolower(trim((string) $matchedDelivery->email)) !== $fromEmail) {
+            $matchedDelivery = null;
+        }
         if ($matchedDelivery instanceof MarketingEmailDelivery) {
             $tenantId = (int) $matchedDelivery->tenant_id;
             $storeKey = $this->nullableString($matchedDelivery->store_key);
@@ -193,7 +196,9 @@ class SendGridInboundEmailService
     protected function classify(?string $subject, string $body, array $headers): array
     {
         $normalizedSubject = strtolower(trim((string) $subject));
-        $normalizedBody = strtolower(trim($body));
+        $newBody = preg_split('/(?:\r?\n)(?:On .+wrote:|From:|[- ]*Original Message[- ]*)/i', $body, 2)[0] ?? '';
+        $newBody = implode("\n", array_filter(explode("\n", $newBody), fn (string $line): bool => ! str_starts_with(ltrim($line), '>')));
+        $normalizedBody = strtolower(trim($newBody));
         $autoSubmitted = strtolower(trim((string) ($headers['Auto-Submitted'] ?? '')));
         $precedence = strtolower(trim((string) ($headers['Precedence'] ?? '')));
         $references = array_values(array_filter(array_unique(array_merge(

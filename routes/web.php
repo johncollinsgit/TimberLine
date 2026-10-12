@@ -2491,3 +2491,9 @@ Route::any('/{managedWebsiteFallbackPath}', function (Request $request, ManagedW
 })->where('managedWebsiteFallbackPath', '.*')
     ->fallback()
     ->name('managed-website.public.fallback');
+
+// Opaque recipient tokens authorize only marketing opt-out; no session or login required.
+Route::get('/email/unsubscribe', [\App\Http\Controllers\Marketing\MarketingEmailUnsubscribeController::class, 'show'])->name('marketing.email.unsubscribe');
+Route::post('/email/unsubscribe', [\App\Http\Controllers\Marketing\MarketingEmailUnsubscribeController::class, 'store'])
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class, \Illuminate\Session\Middleware\StartSession::class, \Illuminate\View\Middleware\ShareErrorsFromSession::class])
+    ->name('marketing.email.unsubscribe.store');

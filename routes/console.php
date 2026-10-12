@@ -165,8 +165,9 @@ Schedule::command('marketing:send-weekly-rewards-wishlist-summary', [
     '--tenant' => 'modern-forestry',
     '--email' => 'info@theforestrystudio.com',
     '--days' => 7,
+    '--calendar-week' => true,
 ])
-    ->weeklyOn(1, '08:30')
+    ->weeklyOn(1, '08:00')
     ->timezone('America/New_York')
     ->withoutOverlapping(120)
     ->runInBackground();

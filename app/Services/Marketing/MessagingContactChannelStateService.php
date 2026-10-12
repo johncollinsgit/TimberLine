@@ -12,8 +12,7 @@ class MessagingContactChannelStateService
 {
     public function __construct(
         protected MarketingIdentityNormalizer $identityNormalizer
-    ) {
-    }
+    ) {}
 
     public function resolveSmsStatus(int $tenantId, ?MarketingProfile $profile = null, ?string $phone = null): string
     {
@@ -31,6 +30,9 @@ class MessagingContactChannelStateService
 
     public function resolveEmailStatus(int $tenantId, ?MarketingProfile $profile = null, ?string $email = null): string
     {
+        if (filled($email ?? $profile?->email) && app(MarketingEmailUnsubscribeService::class)->suppressed($tenantId, (string) ($email ?? $profile?->email))) {
+            return 'unsubscribed';
+        }
         $state = $this->findState($tenantId, $profile, null, $email);
         if ($state instanceof MessagingContactChannelState && $this->nullableString($state->email_status) !== null) {
             return (string) $state->email_status;
@@ -44,7 +46,7 @@ class MessagingContactChannelStateService
     }
 
     /**
-     * @param array<string,mixed> $metadata
+     * @param  array<string,mixed>  $metadata
      */
     public function markSmsUnsubscribed(
         int $tenantId,
@@ -83,7 +85,7 @@ class MessagingContactChannelStateService
     }
 
     /**
-     * @param array<string,mixed> $metadata
+     * @param  array<string,mixed>  $metadata
      */
     public function markSmsSubscribed(
         int $tenantId,
@@ -121,7 +123,7 @@ class MessagingContactChannelStateService
     }
 
     /**
-     * @param array<string,mixed> $metadata
+     * @param  array<string,mixed>  $metadata
      */
     public function markEmailStatus(
         int $tenantId,
@@ -133,46 +135,60 @@ class MessagingContactChannelStateService
         array $metadata = [],
         mixed $occurredAt = null
     ): MessagingContactChannelState {
-        $timestamp = $this->asDate($occurredAt) ?? now();
-        $normalizedStatus = in_array($status, ['subscribed', 'unsubscribed', 'bounced', 'suppressed', 'unknown'], true)
-            ? $status
-            : 'unknown';
-
-        $state = $this->upsertState(
-            tenantId: $tenantId,
-            profile: $profile,
-            phone: null,
-            email: $email,
-            attributes: [
-                'email_status' => $normalizedStatus,
-                'email_status_reason' => $reason,
-                'email_status_changed_at' => $timestamp,
-                'provider_source' => $providerSource,
-                'metadata' => $metadata,
-            ]
-        );
-
-        if ($profile instanceof MarketingProfile) {
-            $profileAttributes = [];
-            if (in_array($normalizedStatus, ['unsubscribed', 'suppressed', 'bounced'], true)) {
-                $profileAttributes['accepts_email_marketing'] = false;
-                if ($normalizedStatus === 'unsubscribed') {
-                    $profileAttributes['email_opted_out_at'] = $profile->email_opted_out_at ?? $timestamp;
-                }
-            } elseif ($normalizedStatus === 'subscribed') {
-                $profileAttributes['accepts_email_marketing'] = true;
-            }
-
-            if ($profileAttributes !== []) {
-                $profile->forceFill($profileAttributes)->save();
-            }
-
-            if (in_array($normalizedStatus, ['subscribed', 'unsubscribed'], true)) {
-                $this->recordConsentEvent($tenantId, $profile, 'email', $normalizedStatus, $reason, $providerSource, $metadata, $timestamp);
-            }
+        if ($profile && (int) $profile->tenant_id !== $tenantId) {
+            throw new \InvalidArgumentException('Email consent profile belongs to another tenant.');
+        }
+        $email = $this->identityNormalizer->normalizeEmail($email ?? $profile?->email);
+        if ($email === null) {
+            throw new \InvalidArgumentException('Email consent requires a valid address.');
+        }
+        if ($profile && $this->identityNormalizer->normalizeEmail($profile->email) !== $email) {
+            throw new \InvalidArgumentException('Email consent address does not match the profile.');
         }
 
-        return $state;
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($tenantId, $profile, $email, $status, $reason, $providerSource, $metadata, $occurredAt): MessagingContactChannelState {
+            $timestamp = $this->asDate($occurredAt) ?? now();
+            $normalizedStatus = in_array($status, ['subscribed', 'unsubscribed', 'bounced', 'suppressed', 'unknown'], true) ? $status : 'unknown';
+            $profiles = MarketingProfile::query()->forTenantId($tenantId)
+                ->where(function ($query) use ($email): void {
+                    $query->where('normalized_email', $email)->orWhereRaw('LOWER(TRIM(email)) = ?', [$email]);
+                })->lockForUpdate()->get();
+            $anchor = $profile ?? $profiles->first();
+            $previousStatus = $this->findState($tenantId, $anchor, null, $email)?->email_status;
+            $state = $this->upsertState($tenantId, $anchor, null, $email, [
+                'email_status' => $normalizedStatus, 'email_status_reason' => $reason,
+                'email_status_changed_at' => $timestamp, 'provider_source' => $providerSource,
+                'metadata' => [...$metadata, 'email' => $email],
+            ]);
+            MessagingContactChannelState::query()->forTenantId($tenantId)->where('email', $email)->whereKeyNot($state->id)->update([
+                'email_status' => $normalizedStatus, 'email_status_reason' => $reason,
+                'email_status_changed_at' => $timestamp,
+            ]);
+            foreach ($profiles as $affected) {
+                $attributes = [];
+                if (in_array($normalizedStatus, ['unsubscribed', 'suppressed', 'bounced'], true)) {
+                    $attributes['accepts_email_marketing'] = false;
+                    if ($normalizedStatus === 'unsubscribed') {
+                        $attributes['email_opted_out_at'] = $affected->email_opted_out_at ?? $timestamp;
+                    }
+                } elseif ($normalizedStatus === 'subscribed') {
+                    $attributes = ['accepts_email_marketing' => true, 'email_opted_out_at' => null];
+                }
+                $affected->fill($attributes);
+                $changed = $affected->isDirty();
+                if ($changed) {
+                    $affected->save();
+                }
+                if ($profile?->id === $affected->id) {
+                    $profile->setRawAttributes($affected->getAttributes(), true);
+                }
+                if (in_array($normalizedStatus, ['subscribed', 'unsubscribed'], true) && ($changed || ($previousStatus !== $normalizedStatus && $anchor?->id === $affected->id))) {
+                    $this->recordConsentEvent($tenantId, $affected, 'email', $normalizedStatus, $reason, $providerSource, [...$metadata, 'email' => $email], $timestamp);
+                }
+            }
+
+            return $state;
+        });
     }
 
     protected function findState(
@@ -213,7 +229,7 @@ class MessagingContactChannelStateService
     }
 
     /**
-     * @param array<string,mixed> $attributes
+     * @param  array<string,mixed>  $attributes
      */
     protected function upsertState(
         int $tenantId,
@@ -251,7 +267,7 @@ class MessagingContactChannelStateService
     }
 
     /**
-     * @param array<string,mixed> $metadata
+     * @param  array<string,mixed>  $metadata
      */
     protected function recordConsentEvent(
         int $tenantId,

@@ -1,5 +1,22 @@
 # SYSTEM SNAPSHOT
 
+## 2026-10-12 — Automatic marketing opt-out and weekly Everbranch recap
+
+- Recipient-specific HTTPS unsubscribe links and mail-client one-click POSTs
+  update every matching email profile inside the sending tenant. Both marketing
+  provider paths recheck address suppression; imports preserve opt-outs. SMS
+  consent remains independent. The existing consent timeline is the audit source.
+- The Modern Forestry weekly rewards report becomes an Everbranch recap to
+  `info@theforestrystudio.com`, Monday 08:00 America/New_York, for the previous
+  Monday through Sunday. It includes customers added, opt-out identities, birthday
+  and Candle Cash issuance/redemption, email delivery and storefront activity.
+  A retained delivery record prevents duplicate reports on replay.
+- Already sent mailto emails need legacy inbox request reconciliation; the new
+  links work without SendGrid inbound domain configuration. See
+  `docs/operations/automatic-email-unsubscribe-and-weekly-recap.md` for validation,
+  historical request handling and the release contract.
+
+
 ## 2026-10-08 — Carolina Heritage theme (development)
 
 - Carolina Barrel's connected Website editor has a theme selector with Carolina

@@ -7,10 +7,10 @@ use App\Services\Marketing\Email\Providers\SendGridEmailProvider;
 use App\Services\Marketing\Email\Providers\SesTenantEmailProvider;
 use App\Services\Marketing\Email\TenantEmailDispatchService;
 use App\Services\Marketing\SmsMessageSafetyService;
-use App\Services\Marketing\TwilioSenderConfigService;
 use App\Services\Marketing\TwilioProviderClient;
-use Illuminate\Support\Str;
+use App\Services\Marketing\TwilioSenderConfigService;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class TenantMessagingGateway
 {
@@ -24,12 +24,18 @@ class TenantMessagingGateway
         protected TwilioProviderClient $legacySms,
         protected TwilioSenderConfigService $twilioSenderConfig,
         protected SmsMessageSafetyService $smsSafety,
-    ) {
-    }
+    ) {}
 
     /** @param array<string,mixed> $options */
     public function sendEmail(int $tenantId, string $to, string $subject, ?string $textBody, array $options = []): array
     {
+        $unsubscribe = app(\App\Services\Marketing\MarketingEmailUnsubscribeService::class);
+        if ($unsubscribe->isMarketing($options)) {
+            if ($unsubscribe->suppressed($tenantId, $to)) {
+                return $unsubscribe->blockedResult($tenantId);
+            }
+            [$textBody, $options] = $unsubscribe->prepare($tenantId, $to, $textBody, $options);
+        }
         try {
             $resolution = $this->accountResolver->resolve($tenantId, 'email');
             if ($resolution['mode'] === 'legacy') {

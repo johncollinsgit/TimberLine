@@ -56,6 +56,7 @@ class SesTenantEmailProvider implements EmailProvider
             'Content' => ['Simple' => [
                 'Subject' => ['Data' => $subject, 'Charset' => 'UTF-8'],
                 'Body' => $body,
+                'Headers' => collect((array) ($message['headers'] ?? []))->map(fn ($value, $name): array => ['Name' => $name, 'Value' => $value])->values()->all(),
             ]],
             'ConfigurationSetName' => $this->nullableString($config['configuration_set'] ?? null),
             'TenantName' => $this->nullableString($config['tenant_name'] ?? null),

@@ -14,7 +14,11 @@ class SendGridInboundWebhookController extends Controller
         $configuredToken = trim((string) config('marketing.messaging.responses.sendgrid_inbound_token', ''));
         $requestToken = trim((string) ($request->query('token', $request->input('token', ''))));
 
-        if ($configuredToken !== '' && ! hash_equals($configuredToken, $requestToken)) {
+        if ($configuredToken === '') {
+            return response()->json(['ok' => false, 'status' => 'inbound_not_configured'], 503);
+        }
+
+        if (! hash_equals($configuredToken, $requestToken)) {
             return response()->json([
                 'ok' => false,
                 'status' => 'invalid_token',

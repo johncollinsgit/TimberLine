@@ -22,18 +22,27 @@ class TenantRewardsWishlistWeeklySummaryService
      *
      * @return array<string,mixed>
      */
-    public function reportSnapshot(Tenant|int $tenant, ?CarbonInterface $asOf = null, int $days = 7): array
+    public function reportSnapshot(Tenant|int $tenant, ?CarbonInterface $asOf = null, int $days = 7, bool $calendarWeek = false): array
     {
         $tenantModel = $tenant instanceof Tenant
             ? $tenant
             : Tenant::query()->findOrFail((int) $tenant);
         $resolvedDays = max(1, min(90, $days));
         $windowEnd = $asOf ? Carbon::instance($asOf) : now();
+        if ($calendarWeek) {
+            $windowEnd = $windowEnd->setTimezone('America/New_York')->startOfWeek(CarbonInterface::MONDAY)->startOfDay();
+            $resolvedDays = 7;
+        }
         $windowStart = $windowEnd->copy()->subDays($resolvedDays);
+        $windowLabel = $windowStart->copy()->setTimezone('America/New_York')->format('M j').' – '.$windowEnd->copy()->setTimezone('America/New_York')->subSecond()->format('M j, Y');
+        $windowStart = $windowStart->setTimezone('UTC');
+        $windowEnd = $windowEnd->setTimezone('UTC');
+        $windowOperator = $calendarWeek ? '<' : '<=';
+        $recap = $this->recap((int) $tenantModel->id, $windowStart, $windowEnd);
 
         $events = MarketingStorefrontEvent::query()
             ->where('tenant_id', $tenantModel->id)
-            ->whereBetween('occurred_at', [$windowStart, $windowEnd]);
+            ->where('occurred_at', '>=', $windowStart)->where('occurred_at', $windowOperator, $windowEnd);
 
         $rewardEvents = (clone $events)->where(function (Builder $query): void {
             $query->where('event_type', 'like', 'reward_%')
@@ -51,9 +60,9 @@ class TenantRewardsWishlistWeeklySummaryService
         $candleCashApplySuccesses = $this->eventCountForRewardKind($rewardEvents, 'reward_apply_success', 'candle_cash');
 
         $issuedRedemptions = $this->redemptionsForTenant((int) $tenantModel->id)
-            ->whereBetween('issued_at', [$windowStart, $windowEnd]);
+            ->where('issued_at', '>=', $windowStart)->where('issued_at', $windowOperator, $windowEnd);
         $redeemedRedemptions = $this->redemptionsForTenant((int) $tenantModel->id)
-            ->whereBetween('redeemed_at', [$windowStart, $windowEnd]);
+            ->where('redeemed_at', '>=', $windowStart)->where('redeemed_at', $windowOperator, $windowEnd);
         $activeRedemptions = $this->redemptionsForTenant((int) $tenantModel->id)
             ->where('status', 'issued')
             ->where(function (Builder $query) use ($windowEnd): void {
@@ -62,7 +71,7 @@ class TenantRewardsWishlistWeeklySummaryService
 
         $earnedTransactions = $this->transactionsForTenant((int) $tenantModel->id)
             ->where('candle_cash_delta', '>', 0)
-            ->whereBetween('created_at', [$windowStart, $windowEnd]);
+            ->where('created_at', '>=', $windowStart)->where('created_at', $windowOperator, $windowEnd);
 
         $wishlistEvents = (clone $events)
             ->whereIn('event_type', [
@@ -127,12 +136,15 @@ class TenantRewardsWishlistWeeklySummaryService
         [$healthStatus, $healthLabel, $healthSummary] = $this->healthSummary($totalIssueCount, $activityCount);
 
         return [
+            'recap' => $recap,
             'tenant' => [
                 'id' => (int) $tenantModel->id,
                 'name' => (string) $tenantModel->name,
                 'slug' => (string) $tenantModel->slug,
             ],
             'window' => [
+                'label' => $windowLabel,
+                'timezone' => 'America/New_York',
                 'days' => $resolvedDays,
                 'started_at' => $windowStart->toIso8601String(),
                 'ended_at' => $windowEnd->toIso8601String(),
@@ -195,6 +207,46 @@ class TenantRewardsWishlistWeeklySummaryService
                 'top_saved_products' => $topSavedProducts,
                 'last_storefront_activity_at' => (clone $wishlistEvents)->max('occurred_at'),
             ],
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    protected function recap(int $tenantId, Carbon $start, Carbon $end): array
+    {
+        $newProfiles = \App\Models\MarketingProfile::query()->forTenantId($tenantId)
+            ->where('created_at', '>=', $start)->where('created_at', '<', $end)
+            ->get(['id', 'normalized_email', 'email']);
+        $added = $newProfiles->unique(fn ($profile): string => strtolower(trim((string) ($profile->normalized_email ?: $profile->email))) ?: 'profile:'.$profile->id)
+            ->filter(function ($profile) use ($tenantId, $start): bool {
+                $email = strtolower(trim((string) ($profile->normalized_email ?: $profile->email)));
+
+                return $email === '' || ! \App\Models\MarketingProfile::query()->forTenantId($tenantId)->where('created_at', '<', $start)
+                    ->where(fn ($query) => $query->where('normalized_email', $email)->orWhereRaw('LOWER(TRIM(email)) = ?', [$email]))->exists();
+            })->count();
+        $unsubscribes = \App\Models\MarketingConsentEvent::query()->forTenantId($tenantId)
+            ->where('channel', 'email')->whereIn('event_type', ['unsubscribed', 'revoked'])
+            ->where('occurred_at', '>=', $start)->where('occurred_at', '<', $end)
+            ->with('profile')->orderBy('occurred_at')->get()
+            ->map(fn ($event): array => [
+                'email' => strtolower(trim((string) (data_get($event->details, 'metadata.email') ?: $event->profile?->email))),
+                'name' => trim((string) $event->profile?->first_name.' '.(string) $event->profile?->last_name),
+                'at' => $event->occurred_at->setTimezone('America/New_York')->format('M j, g:i a T'),
+            ])->filter(fn (array $row): bool => $row['email'] !== '')->unique('email')->values();
+        $birthdays = \App\Models\BirthdayRewardIssuance::query()->whereHas('marketingProfile', fn ($query) => $query->where('tenant_id', $tenantId));
+        $issued = (clone $birthdays)->where('issued_at', '>=', $start)->where('issued_at', '<', $end);
+        $redeemed = (clone $birthdays)->where('redeemed_at', '>=', $start)->where('redeemed_at', '<', $end);
+        $deliveries = \App\Models\MarketingEmailDelivery::query()->forTenantId($tenantId)
+            ->where('campaign_type', '!=', 'operator_recap');
+
+        return [
+            'customers_added' => $added, 'unsubscribed_count' => $unsubscribes->count(),
+            'unsubscribed_customers' => $unsubscribes->take(100)->all(),
+            'unsubscribed_list_truncated' => $unsubscribes->count() > 100,
+            'birthday_issued' => $issued->count(), 'birthday_redeemed' => $redeemed->count(),
+            'birthday_discount_issued_amount' => round((float) (clone $issued)->where('reward_type', 'discount_code')->sum('reward_value'), 2),
+            'birthday_discount_redeemed_amount' => round((float) (clone $redeemed)->where('reward_type', 'discount_code')->sum('reward_value'), 2),
+            'emails_sent' => (clone $deliveries)->where('sent_at', '>=', $start)->where('sent_at', '<', $end)->count(),
+            'emails_failed' => (clone $deliveries)->where('failed_at', '>=', $start)->where('failed_at', '<', $end)->count(),
         ];
     }
 
