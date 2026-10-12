@@ -22,7 +22,7 @@ class SendGridInboundEmailService
      * @param  array<string,mixed>  $payload
      * @return array{ok:bool,matched:bool,status:string,tenant_id:?int,conversation_id:?int,message_type:?string}
      */
-    public function handleInbound(array $payload): array
+    public function handleInbound(array $payload, bool $allowMarketing = true): array
     {
         $landlordResult = $this->landlordProspectInboundEmailService->capture($payload);
         if ($landlordResult['handled']) {
@@ -34,6 +34,11 @@ class SendGridInboundEmailService
                 'conversation_id' => null,
                 'message_type' => 'normal',
             ];
+        }
+
+        if (! $allowMarketing) {
+            return ['ok' => false, 'matched' => false, 'status' => 'inbound_not_configured',
+                'tenant_id' => null, 'conversation_id' => null, 'message_type' => null];
         }
 
         $fromEmail = $this->extractEmailAddress($payload['from'] ?? null);

@@ -65,8 +65,9 @@ subscribed duplicate is the confirmed repair target.
 
 Email replies can only be processed automatically if the legacy inbox is routed
 into authenticated SendGrid inbound parsing. This deployment does not reroute
-Gmail or modify MX records. The inbound endpoint now fails closed with HTTP 503
-when its secret is missing. A normal reply quoting an unsubscribe footer must
+Gmail or modify MX records. Marketing inbound processing fails closed with HTTP 503
+when its secret is missing; the existing landlord-only prospect reply capture
+continues through its original path. A normal reply quoting an unsubscribe footer must
 not be classified as an opt-out. The new HTTPS unsubscribe flow requires no
 inbound domain or Gmail forwarding and is the primary route for new messages.
 
