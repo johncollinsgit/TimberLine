@@ -28,6 +28,7 @@ use App\Http\Controllers\Integrations\BouncieConnectionController;
 use App\Http\Controllers\Integrations\InstagramConnectionController;
 use App\Http\Controllers\Integrations\InstagramWebhookController;
 use App\Http\Controllers\Integrations\QuickBooksConnectionController;
+use App\Http\Controllers\JarvisPublicPagesController;
 use App\Http\Controllers\Landlord\LandlordAgreementController;
 use App\Http\Controllers\Landlord\LandlordBranchPreviewController;
 use App\Http\Controllers\Landlord\LandlordClientProjectTicketController;
@@ -254,6 +255,11 @@ Route::get('/', function (
 Route::get('/privacy', [PublicLegalController::class, 'privacy'])->name('legal.privacy');
 Route::get('/terms', [PublicLegalController::class, 'terms'])->name('legal.terms');
 Route::get('/support', [PublicLegalController::class, 'support'])->name('legal.support');
+Route::prefix('jarvis')->name('evergrove.jarvis.')->group(function (): void {
+    Route::get('/', [JarvisPublicPagesController::class, 'home'])->name('home');
+    Route::get('/privacy', [JarvisPublicPagesController::class, 'privacy'])->name('privacy');
+    Route::get('/terms', [JarvisPublicPagesController::class, 'terms'])->name('terms');
+});
 Route::get('/ready', ProductionReadinessController::class)->name('production.ready');
 Route::get('/integrations/quickbooks/disconnected', [QuickBooksConnectionController::class, 'disconnected'])
     ->name('integrations.quickbooks.disconnected');

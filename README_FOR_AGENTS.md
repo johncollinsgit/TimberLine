@@ -1,5 +1,11 @@
 # START HERE
 
+Jarvis public branding pages at `/jarvis`, `/jarvis/privacy`, and `/jarvis/terms`
+are limited to `evergrove.hosts`. They describe the separate desktop app and
+must not be substituted for existing Everbranch or tenant policies. Follow
+`docs/operations/jarvis-oauth-branding.md`; the draft requires owner review and
+the existing GitHub/Forge release gate before production Branding links are used.
+
 Field mobile job detail must redact customer phone/email unless
 `FieldServiceAccessService::canViewCustomerContact` allows the active viewer.
 The iOS and Android apps share this API. Keep authorization on the server;
