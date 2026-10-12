@@ -48,7 +48,9 @@ The Jarvis source coordinator supplied bounded facts from installed source
 - Dedicated consent requests `gmail.compose`, `calendar.events.owned`,
   `calendar.calendarlist.readonly`, `openid`, `email`/`userinfo.email`.
 - Separate older Gmail read grant uses `gmail.readonly` plus identity. Its
-  reader retrieves bounded plain text without attachments or HTML; in-memory
+  selected-thread request uses `format=full`, which can return HTML and other
+  MIME parts. `plainBody` extracts bounded `text/plain` content; the reader does
+  not display HTML or call the separate attachment-download API. In-memory
   cache is at most 20 entries, at most five minutes. Selective monitoring can
   persist excerpts (up to 4000 characters), findings, evidence, checkpoints and
   notifications. Chat/tasks/calendar records also persist.

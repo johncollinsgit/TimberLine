@@ -37,6 +37,8 @@ test('jarvis privacy distinguishes provider permission from installed behavior a
         ->assertSeeText('including deleting drafts')
         ->assertSeeText('changing, and deleting events')
         ->assertSeeText('Not every database record is encrypted.')
+        ->assertSeeText('Google can return full message content, including HTML')
+        ->assertDontSeeText('It does not fetch attachments or HTML bodies.')
         ->assertSeeText('does not automatically delete previously saved local records')
         ->assertSeeText('locally hosted or remote providers')
         ->assertSee('https://myaccount.google.com/connections', false);
