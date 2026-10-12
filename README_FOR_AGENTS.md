@@ -11,6 +11,10 @@
   Monday through Sunday. It includes customers added, opt-out identities, birthday
   and Candle Cash issuance/redemption, email delivery and storefront activity.
   A retained delivery record prevents duplicate reports on replay.
+- Every recap metric opens a tenant-gated activity list for the exact reporting
+  interval. Email details include failure reasons and future-send eligibility.
+  Verified SendGrid events suppress permanent recipient failures, complaints
+  and opt-outs; temporary and sender failures preserve address eligibility.
 - Already sent mailto emails need legacy inbox request reconciliation; the new
   links work without SendGrid inbound domain configuration. See
   `docs/operations/automatic-email-unsubscribe-and-weekly-recap.md` for validation,

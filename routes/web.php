@@ -1375,6 +1375,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::get('/results', [MarketingResultsController::class, 'show'])
                     ->middleware('module:reporting')
                     ->name('results');
+                Route::get('/weekly-recap/{metric}', [\App\Http\Controllers\Marketing\WeeklyRecapActivityController::class, 'show'])->name('weekly-recap.activity');
                 Route::get('/customers', [MarketingCustomersController::class, 'index'])->name('customers');
                 Route::get('/customers/data', [MarketingCustomersController::class, 'data'])->name('customers.data');
                 Route::post('/customers/bulk-archive', [MarketingCustomersController::class, 'bulkArchive'])->name('customers.bulk-archive');

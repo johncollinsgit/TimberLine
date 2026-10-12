@@ -14,7 +14,8 @@ use Illuminate\Support\Carbon;
 class TenantRewardsWishlistWeeklySummaryService
 {
     public function __construct(
-        protected CandleCashService $candleCashService
+        protected CandleCashService $candleCashService,
+        protected WeeklyRecapActivityService $activityService
     ) {}
 
     /**
@@ -137,6 +138,7 @@ class TenantRewardsWishlistWeeklySummaryService
 
         return [
             'recap' => $recap,
+            'links' => $this->activityService->links((int) $tenantModel->id, $windowStart, $windowEnd, $calendarWeek),
             'tenant' => [
                 'id' => (int) $tenantModel->id,
                 'name' => (string) $tenantModel->name,
@@ -146,6 +148,7 @@ class TenantRewardsWishlistWeeklySummaryService
                 'label' => $windowLabel,
                 'timezone' => 'America/New_York',
                 'days' => $resolvedDays,
+                'exclusive_end' => $calendarWeek,
                 'started_at' => $windowStart->toIso8601String(),
                 'ended_at' => $windowEnd->toIso8601String(),
             ],
@@ -213,35 +216,8 @@ class TenantRewardsWishlistWeeklySummaryService
     /** @return array<string,mixed> */
     protected function recap(int $tenantId, Carbon $start, Carbon $end): array
     {
-        $newProfiles = \App\Models\MarketingProfile::query()->forTenantId($tenantId)
-            ->where('created_at', '>=', $start)->where('created_at', '<', $end)
-            ->get(['id', 'normalized_email', 'email']);
-        $added = $newProfiles->unique(fn ($profile): string => strtolower(trim((string) ($profile->normalized_email ?: $profile->email))) ?: 'profile:'.$profile->id)
-            ->filter(function ($profile) use ($tenantId, $start): bool {
-                $email = strtolower(trim((string) ($profile->normalized_email ?: $profile->email)));
-
-                return $email === '' || ! \App\Models\MarketingProfile::query()->forTenantId($tenantId)->where('created_at', '<', $start)
-                    ->where(fn ($query) => $query->where('normalized_email', $email)->orWhereRaw('LOWER(TRIM(email)) = ?', [$email]))->exists();
-            })->count();
-        $unsubscribes = \App\Models\MarketingConsentEvent::query()->forTenantId($tenantId)
-            ->where('channel', 'email')->whereIn('event_type', ['unsubscribed', 'revoked'])
-            ->where('occurred_at', '>=', $start)->where('occurred_at', '<', $end)
-            ->with('profile')->orderBy('occurred_at')->get()->toBase()
-            ->map(fn ($event): array => [
-                'email' => strtolower(trim((string) (data_get($event->details, 'metadata.email') ?: $event->profile?->email))),
-                'name' => trim((string) $event->profile?->first_name.' '.(string) $event->profile?->last_name),
-                'at' => $event->occurred_at->setTimezone('America/New_York')->format('M j, g:i a T'),
-            ])->filter(fn (array $row): bool => $row['email'] !== '')->unique('email')->values();
-        // Retain notifications even if the recipient's profile was deleted or its
-        // email changed after the original message. Repeated POSTs do not reset this timestamp.
-        $addressOptouts = \App\Models\MessagingContactChannelState::query()->forTenantId($tenantId)
-            ->where('email_status', 'unsubscribed')->where('email_status_changed_at', '>=', $start)->where('email_status_changed_at', '<', $end)
-            ->with('profile')->get()->toBase()->map(fn ($state): array => [
-                'email' => (string) $state->email,
-                'name' => trim((string) $state->profile?->first_name.' '.(string) $state->profile?->last_name),
-                'at' => $state->email_status_changed_at->setTimezone('America/New_York')->format('M j, g:i a T'),
-            ]);
-        $unsubscribes = $unsubscribes->merge($addressOptouts)->unique('email')->values();
+        $added = $this->activityService->newCustomers($tenantId, $start, $end)->count();
+        $unsubscribes = $this->activityService->unsubscribes($tenantId, $start, $end);
         $birthdays = \App\Models\BirthdayRewardIssuance::query()->whereHas('marketingProfile', fn ($query) => $query->where('tenant_id', $tenantId));
         $issued = (clone $birthdays)->where('issued_at', '>=', $start)->where('issued_at', '<', $end);
         $redeemed = (clone $birthdays)->where('redeemed_at', '>=', $start)->where('redeemed_at', '<', $end);

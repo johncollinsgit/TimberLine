@@ -71,11 +71,14 @@ class MarketingSendWeeklyRewardsWishlistSummary extends Command
                 'tenant_id' => $tenant->id, 'email' => $email, 'batch_id' => $key,
                 'campaign_type' => 'operator_recap', 'template_key' => 'everbranch_weekly_recap',
                 'provider' => config('mail.default'), 'status' => 'sending',
+                'message_subject' => 'Everbranch weekly recap · '.$tenant->name.' · '.data_get($report, 'window.label'),
                 'metadata' => ['window' => $report['window']],
             ]);
             try {
-                Mail::to($email)->send(new TenantRewardsWishlistWeeklySummaryMail($report));
-                $delivery->update(['status' => 'sent', 'sent_at' => now()]);
+                Mail::to($email)->send(new TenantRewardsWishlistWeeklySummaryMail($report, (int) $delivery->id));
+                // A fast receipt may arrive while SMTP is returning; do not downgrade it.
+                $delivery->refresh();
+                $delivery->update(['status' => $delivery->status === 'sending' ? 'sent' : $delivery->status, 'sent_at' => $delivery->sent_at ?: now()]);
             } catch (\Throwable $exception) {
                 // Keep sending state: the provider may have accepted before the connection failed.
                 report($exception);
