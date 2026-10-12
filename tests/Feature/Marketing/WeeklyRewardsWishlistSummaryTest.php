@@ -255,9 +255,10 @@ test('scheduled recap records delivery and replay does not send a second copy', 
     $this->travelTo(\Carbon\Carbon::parse('2026-10-19 08:00:00', 'America/New_York'));
     for ($i = 0; $i < 2; $i++) {
         $this->artisan('marketing:send-weekly-rewards-wishlist-summary', ['--calendar-week' => true])->assertSuccessful();
+        \App\Models\MarketingEmailDelivery::where('campaign_type', 'operator_recap')->update(['status' => 'delivered']);
     }
     Mail::assertSentCount(1);
-    expect(\App\Models\MarketingEmailDelivery::where('campaign_type', 'operator_recap')->where('status', 'sent')->count())->toBe(1);
+    expect(\App\Models\MarketingEmailDelivery::where('campaign_type', 'operator_recap')->whereNotNull('sent_at')->count())->toBe(1);
 });
 
 test('recap includes address optouts without a current customer profile and repeats stay in their original week', function (): void {

@@ -62,7 +62,7 @@ class MarketingSendWeeklyRewardsWishlistSummary extends Command
             return self::SUCCESS;
         }
         try {
-            if (\App\Models\MarketingEmailDelivery::query()->forTenantId((int) $tenant->id)->where('batch_id', $key)->whereIn('status', ['sending', 'sent'])->exists()) {
+            if (\App\Models\MarketingEmailDelivery::query()->forTenantId((int) $tenant->id)->where('batch_id', $key)->where(fn ($query) => $query->whereNotNull('sent_at')->orWhere('status', 'sending'))->exists()) {
                 $this->info('Recap was already sent or is awaiting delivery reconciliation.');
 
                 return self::SUCCESS;
