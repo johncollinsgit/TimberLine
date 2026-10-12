@@ -33,7 +33,7 @@
     <section id="connections" class="jarvis-connection-section" aria-labelledby="connections-title">
         <div><p class="jarvis-kicker">Connect with intention</p><h2 id="connections-title">Your Google account.<br>Your decision.</h2><p>Each account authorizes Jarvis separately through Google. Review the permissions on the consent screen before continuing.</p><a class="jarvis-text-link" href="/jarvis/privacy#google-access">Read the Google data disclosures →</a></div>
         <div class="jarvis-connection-list">
-            <article><h3>Gmail reading</h3><p>A separate read-only grant permits message search and reading. The reviewed reader handles plain text and does not fetch message attachments or HTML bodies.</p></article>
+            <article><h3>Gmail reading</h3><p>A separate read-only grant permits message search and reading. Jarvis extracts bounded plain-text content from selected thread responses. Google’s full thread response can include other message parts; Jarvis does not display HTML and does not use Google’s attachment-download API.</p></article>
             <article><h3>Compose and owned calendars</h3><p>The dedicated connection requests Gmail compose and owned-calendar event permissions, calendar-list reading, and account identity. Google’s granted permissions include managing drafts, sending email, and changing or deleting owned events; granting permission does not mean every action is enabled in Jarvis.</p></article>
             <article><h3>Disconnect when you choose</h3><p>Remove Jarvis access in your Google Account connections. Revoking access does not automatically erase records already saved on your computer.</p></article>
         </div>
