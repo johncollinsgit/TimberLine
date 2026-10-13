@@ -848,3 +848,15 @@
     margin-left: -20px;
   }
 }
+
+/* Start booking immediately, before supporting content. */
+.eg-booking-first { align-items: start; gap: 40px; grid-template-columns: .85fr 1.15fr; padding-top: 40px; padding-bottom: 40px; }
+.eg-booking-first .eg-consultation-copy h1 { font-size: clamp(36px, 4.1vw, 54px); margin: 16px 0 20px; }
+.eg-booking-first .eg-consultation-copy .eg-consultation-lede { font-size: 17px; line-height: 1.6; }
+.eg-booking-first .eg-availability-link { margin-left: 0; }
+.eg-consultation-support { align-items: center; display: grid; gap: 60px; grid-template-columns: 1fr 1fr; margin: 56px auto; max-width: 1184px; padding: 0 28px; }
+.eg-consultation-support h2 { font-size: clamp(32px, 4vw, 48px); letter-spacing: -.04em; line-height: 1.15; margin: 16px 0; }
+.eg-consultation-support > div > p { color: var(--eg-muted); line-height: 1.7; }
+@media (max-width: 900px) { .eg-booking-first { grid-template-columns: 1fr; gap: 24px; padding-top: 28px; }.eg-consultation-support { grid-template-columns: 1fr; gap: 28px; } }
+@media (max-width: 600px) { .eg-booking-first { padding: 24px 20px 32px; gap: 20px; }.eg-booking-first .eg-consultation-copy h1 { font-size: 33px; margin: 10px 0 12px; }.eg-booking-first .eg-consultation-copy .eg-consultation-lede { font-size: 15px; line-height: 1.5; }.eg-booking-first .eg-consultation-meta { margin-top: 12px; font-size: 12px; }.eg-booking-first .eg-availability-link { margin-top: 10px; }.eg-booking-first .eg-brief-form { padding-top: 20px; }.eg-booking-first .eg-fieldset-note { margin-bottom: 16px; }.eg-booking-first .eg-form-progress { margin-bottom: 20px; }.eg-consultation-support { padding: 0 20px; margin: 40px auto; } }
+.eg-booking-first fieldset:first-of-type legend { margin-bottom: 16px; }

@@ -16,42 +16,23 @@
 <body class="eg-public-body eg-public-body--launch eg-consultation">
     @include('evergrove.partials.nav')
     <main id="main-content" class="eg-consultation-main">
-        <section class="eg-consultation-hero" aria-labelledby="booking-title">
+        <section id="business-brief" class="eg-consultation-hero eg-booking-first" aria-labelledby="booking-title">
             <div class="eg-consultation-copy">
-                <p class="eg-kicker">A better way to run your business</p>
+                <p class="eg-kicker">Book your 1-hour video consultation</p>
                 <h1 id="booking-title">I help business owners run their business <em>better.</em></h1>
-                <p class="eg-consultation-lede">Spend less time working around your tools and more time doing what you do best.</p>
-                <p>I’m John Collins of Evergrove Software. Let’s talk about what’s slowing you down, what you want to improve, and how websites, software, automation, or AI could help.</p>
-                <a class="eg-button eg-button-primary" href="{{ $briefSaved ? '#choose-time' : '#business-brief' }}">Book your 1-hour video consultation <span aria-hidden="true">↗</span></a>
-                @if($bookingUrl)<a class="eg-availability-link" href="#choose-time">See available dates &amp; times ↓</a>@endif
+                <p class="eg-consultation-lede">Tell me about your business and what you’d like to improve, then choose a time for your video consultation.</p>
                 <p class="eg-consultation-meta">60 minutes <span aria-hidden="true">·</span> Google Meet <span aria-hidden="true">·</span> No obligation</p>
+                @if($bookingUrl)<a class="eg-availability-link" href="#choose-time">See available dates &amp; times ↓</a>@endif
+                @if($briefSaved)<p>Your brief is saved. Choose your appointment time below to finish booking.</p>@endif
             </div>
-            <div class="eg-work-map" aria-hidden="true">
-                <div class="eg-map-label">MAKE THE PIECES WORK TOGETHER</div>
-                <svg viewBox="0 0 520 400" fill="none" class="eg-map-lines"><path d="M105 95C260 95 130 205 260 205M415 95C260 95 390 205 260 205M105 305C260 305 130 205 260 205M415 305C260 305 390 205 260 205" stroke="currentColor" stroke-width="2"/><circle r="5" fill="#c7ff69"><animateMotion dur="5s" repeatCount="indefinite" path="M105 95C260 95 130 205 260 205"/></circle><circle r="5" fill="#c7ff69"><animateMotion dur="5s" begin="2s" repeatCount="indefinite" path="M415 305C260 305 390 205 260 205"/></circle></svg>
-                <div class="eg-map-node eg-map-node--one"><span>↗</span>Your customers<small>A clearer next step</small></div>
-                <div class="eg-map-node eg-map-node--two"><span>◎</span>Your team<small>Work in sync</small></div>
-                <div class="eg-map-center"><img src="{{ $mark }}" alt=""><strong>Your business</strong><small>Connected. Clear. Moving.</small></div>
-                <div class="eg-map-node eg-map-node--three"><span>⌁</span>Your tools<small>Less double entry</small></div>
-                <div class="eg-map-node eg-map-node--four"><span>✓</span>Your time<small>More room to grow</small></div>
-                <p class="eg-map-caption">Good technology should make your day easier.</p>
-            </div>
-        </section>
-        <section class="eg-consultation-agenda" aria-label="What we will cover">
-            <div><span>01 / UNDERSTAND</span><h2>Start with your business.</h2><p>How you work today, where you’re headed, and what keeps getting in the way.</p></div>
-            <div><span>02 / FIND THE OPPORTUNITY</span><h2>Focus on what matters.</h2><p>Look for practical ways to save time, serve customers, and connect your work.</p></div>
-            <div><span>03 / NEXT STEPS</span><h2>Leave with a direction.</h2><p>Discuss the options, priorities, and whether Evergrove is the right fit.</p></div>
-        </section>
-        @if (! $briefSaved)
-        <section id="business-brief" class="eg-brief-layout" aria-labelledby="brief-title">
-            <div class="eg-brief-intro"><p class="eg-kicker">Book a Consultation</p><h2 id="brief-title">Let’s make this hour <em>useful.</em></h2><p>A few details help me understand your business before we meet. Plain language is perfect.</p><ol><li>Tell me about your business.</li><li>Share what you want to improve.</li><li>Choose your time with Google.</li></ol><p class="eg-brief-note">Your answers come directly to Evergrove. Use the same email when booking so we can match your brief to your meeting.</p></div>
-            <form method="POST" action="{{ route('evergrove.book.brief') }}" class="eg-brief-form" data-consultation-form>
+            @if (! $briefSaved)
+            <form method="POST" action="{{ route('evergrove.book.brief') }}" class="eg-brief-form" data-consultation-form aria-label="Business consultation brief">
                 @csrf
                 <input type="hidden" name="submission_token" value="{{ $submissionToken }}">
                 <div class="eg-form-trap" aria-hidden="true"><label>Leave this blank<input name="contact_fax" autocomplete="off" tabindex="-1"></label></div>
                 @if ($errors->getBag('default')->any())<div class="eg-form-errors" role="alert" tabindex="-1"><strong>Please check these answers.</strong><ul>@foreach ($errors->getBag('default')->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
                 <div class="eg-form-progress" data-form-progress hidden><span data-step-label aria-live="polite">1 of 3 · Your business</span><div><i data-progress-fill></i></div></div>
-                <fieldset data-brief-step><legend>Your business</legend><p class="eg-fieldset-note">Start with the people and business behind the idea.</p>
+                <fieldset data-brief-step><legend>Your business</legend>
                     <div class="eg-field-pair"><label>Your name <input name="name" value="{{ old('name') }}" autocomplete="name" maxlength="190" required></label><label>Email address <input type="email" name="email" value="{{ old('email') }}" autocomplete="email" maxlength="190" required></label></div>
                     <label>Business name <input name="company" value="{{ old('company') }}" autocomplete="organization" maxlength="190" required></label>
                     <label>What type of business do you run? <input name="business_type" value="{{ old('business_type') }}" placeholder="For example: electrical contractor, shop, nonprofit, consulting" maxlength="190" required></label>
@@ -72,8 +53,8 @@
                 <div class="eg-form-actions"><button type="button" class="eg-form-back" data-step-back hidden>← Back</button><button type="button" class="eg-button eg-button-primary" data-step-next hidden>Continue <span aria-hidden="true">→</span></button><button type="submit" class="eg-button eg-button-primary" data-brief-submit>{{ $bookingUrl ? 'Save my brief & choose a time' : 'Request my 1-hour video consultation' }} <span aria-hidden="true">→</span></button></div>
                 <p class="eg-brief-note">{{ $bookingUrl ? 'Next: choose your appointment in Google Calendar. Your meeting is confirmed only after you finish booking there.' : 'Online scheduling is being finalized. Send your brief and we’ll follow up to arrange your 1-hour video consultation.' }}</p>
             </form>
+            @endif
         </section>
-        @endif
         @if($bookingUrl || $briefSaved)
         <section id="choose-time" class="eg-schedule-section" aria-labelledby="schedule-title"><p class="eg-kicker">{{ $briefSaved ? 'Your brief is saved' : 'Live Google Calendar availability' }}</p>
             @if ($bookingUrl)
@@ -100,6 +81,24 @@
                 <div class="eg-form-actions"><button type="submit" class="eg-button eg-button-primary">Let’s talk about my business <span aria-hidden="true">→</span></button></div>
                 <p class="eg-brief-note">This sends your note to Evergrove so I can respond by email. It does not book an appointment. <a href="/privacy">Privacy policy</a></p>
             </form>@endif
+        </section>
+        <section class="eg-consultation-agenda" aria-label="What we will cover">
+            <div><span>01 / UNDERSTAND</span><h2>Start with your business.</h2><p>How you work today, where you’re headed, and what keeps getting in the way.</p></div>
+            <div><span>02 / FIND THE OPPORTUNITY</span><h2>Focus on what matters.</h2><p>Look for practical ways to save time, serve customers, and connect your work.</p></div>
+            <div><span>03 / NEXT STEPS</span><h2>Leave with a direction.</h2><p>Discuss the options, priorities, and whether Evergrove is the right fit.</p></div>
+        </section>
+        <section class="eg-consultation-support" aria-label="How connected tools help your business">
+            <div><p class="eg-kicker">A practical first conversation</p><h2>Let’s make your work <em>flow.</em></h2><p>I’m John Collins of Evergrove Software. We’ll talk about what’s slowing you down and how websites, software, automation, or AI could make your day easier.</p></div>
+            <div class="eg-work-map" aria-hidden="true">
+                <div class="eg-map-label">MAKE THE PIECES WORK TOGETHER</div>
+                <svg viewBox="0 0 520 400" fill="none" class="eg-map-lines"><path d="M105 95C260 95 130 205 260 205M415 95C260 95 390 205 260 205M105 305C260 305 130 205 260 205M415 305C260 305 390 205 260 205" stroke="currentColor" stroke-width="2"/><circle r="5" fill="#c7ff69"><animateMotion dur="5s" repeatCount="indefinite" path="M105 95C260 95 130 205 260 205"/></circle><circle r="5" fill="#c7ff69"><animateMotion dur="5s" begin="2s" repeatCount="indefinite" path="M415 305C260 305 390 205 260 205"/></circle></svg>
+                <div class="eg-map-node eg-map-node--one"><span>↗</span>Your customers<small>A clearer next step</small></div>
+                <div class="eg-map-node eg-map-node--two"><span>◎</span>Your team<small>Work in sync</small></div>
+                <div class="eg-map-center"><img src="{{ $mark }}" alt=""><strong>Your business</strong><small>Connected. Clear. Moving.</small></div>
+                <div class="eg-map-node eg-map-node--three"><span>⌁</span>Your tools<small>Less double entry</small></div>
+                <div class="eg-map-node eg-map-node--four"><span>✓</span>Your time<small>More room to grow</small></div>
+                <p class="eg-map-caption">Good technology should make your day easier.</p>
+            </div>
         </section>
         <section class="eg-consultation-close"><p>You don’t need to have it all figured out.</p><h2>Start with the business.<br>We’ll work through the technology.</h2></section>
     </main>
