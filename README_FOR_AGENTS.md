@@ -144,9 +144,9 @@ release ID preservation.
   before the hourly detector writes fundraiser queue records. See the
   fundraiser order invoicing runbook for the full safety contract.
 
-## Public launch partner pricing (2026-10-02)
+## Public launch partner pricing (2026-10-13)
 
-- The Evergrove/Everbranch public offer is $499 setup, $89/month for six months, then $199/month. It applies to future offers only. Preserve earlier client-specific agreement versions and subscription rates, including Collins Electric and Front Yard Foods; do not reprice their drafts to apply this public change.
+- The Evergrove/Everbranch public offer is $499 setup, $89/month for six months, then $149/month. It applies to future offers only. The first year totals $1,927 before taxes or add-ons. Preserve earlier client-specific agreement versions and subscription rates, including Collins Electric and Front Yard Foods; do not reprice their drafts to apply this public change. See `docs/operations/everbranch-billing-readiness-audit.md` for the public-pricing release scope.
 
 ## Collins employee install release (2026-09-30)
 

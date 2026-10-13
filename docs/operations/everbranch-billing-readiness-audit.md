@@ -1,5 +1,12 @@
 # Everbranch Billing / Stripe Readiness Audit
 
+## 2026-10-13 Public Launch Partner Renewal Price
+
+- Future public Launch Partner offers use $499 one-time setup, $89/month for six months, then $149/month. This matches the regular Starter ongoing monthly price. The first six months total $1,033 and the first year totals $1,927 before taxes and add-ons.
+- `config/product_surfaces.php` supplies the shared Evergrove home page, Everbranch plans page, and start-as-a-client comparison. Starter, Growth, add-on prices, and custom development quotes are outside this change.
+- Existing agreements, accepted versions, subscription authorizations, and provider subscriptions retain their recorded terms. Generic agreement templates already default to $149/month after the introductory period and require no change. No billing, checkout, entitlement, or provider activation is part of this release.
+- Release through the existing GitHub test/build gate and Forge atomic deployment. Verify `/ready` and the public home, plans, and signup pages after deployment.
+
 ## 2026-07-17 Direct Invoice Production-Ready Pending Live Gates
 
 - Landlord-created direct Stripe invoices have moved from implementation-ready to **production-ready pending live gates**.
