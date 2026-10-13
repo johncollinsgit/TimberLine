@@ -4,8 +4,8 @@
   hamburger right, with an animated dropdown and keyboard/Escape support.
 - Removed Contact, Our Work, Use Cases, and Login from public top navigation.
 - Retained What We Build, Everbranch, Book, and Start a Project on all sizes.
-- Moved the booking explanation and business brief into the first section of
-  `/book`; the calendar follows, with supporting graphics and details below.
+- `/book` begins with Quick Note, then the live calendar, followed by the full
+  consultation explanation/business brief and supporting graphics/details.
 
 ## 2026-10-13 — Evergrove consultation and business-hurdle intake
 

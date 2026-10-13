@@ -5,8 +5,9 @@ a responsive three-step business brief, and a separate short contact form for th
 visitor's main business hurdle. Both forms save to existing `service_inquiries`,
 visible to authorized operators in Landlord Messages. No schema changes are needed.
 
-The booking explanation and first form step sit in the initial page section;
-the live schedule follows them. Supporting graphics and agenda appear below.
+Quick Note and its short contact form appear first, then the live schedule.
+The full booking explanation and business brief appear below the calendar.
+Supporting graphics and agenda follow.
 The shared public header uses a native hamburger dropdown below 980 px, with
 the logo left and menu right. Its links are What We Build, Everbranch, Book,
 and Start a Project. Contact, Our Work, Use Cases, and Login are removed from
