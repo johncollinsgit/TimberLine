@@ -43,7 +43,7 @@ test('evergrove public host renders the services site', function (): void {
         ->assertSeeText('$1,033')
         ->assertSeeText('Where custom work helps')
         ->assertSeeText('Evergrove Studio')
-        ->assertSeeText('Contact')
+        ->assertSeeText('Start a Project')
         ->assertSeeText('From practical website to working product.')
         ->assertSee('data-clickable-details-card', false)
         ->assertSeeText('Job notes live in texts')

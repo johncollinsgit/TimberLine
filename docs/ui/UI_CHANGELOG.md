@@ -1,3 +1,12 @@
+## 2026-10-13 — Evergrove mobile navigation
+
+- Mobile and tablet headers show the Evergrove logo left and a touch-sized
+  hamburger right, with an animated dropdown and keyboard/Escape support.
+- Removed Contact, Our Work, Use Cases, and Login from public top navigation.
+- Retained What We Build, Everbranch, Book, and Start a Project on all sizes.
+- `/book` begins with Quick Note, then the live calendar, followed by the full
+  consultation explanation/business brief and supporting graphics/details.
+
 ## 2026-10-13 — Evergrove consultation and business-hurdle intake
 
 - `/book` leads with “I help business owners run their business better.”
