@@ -1,3 +1,12 @@
+## 2026-10-13 — Residential exterior electrical photos
+
+- Corrected the first Everbranch banner photo and the Field & service teams
+  card photo: residential meters and closed weatherproof disconnects replace
+  the open indoor-style breaker panels shown outside.
+- Preserved the technicians, existing scenes, text, slideshow, and card layout.
+  New asset filenames prevent cached versions from retaining the old panels;
+  the field-service example reuses the corrected card photo.
+
 ## 2026-10-13 — Evergrove mobile navigation
 
 - Mobile and tablet headers show the Evergrove logo left and a touch-sized

@@ -12,7 +12,7 @@ const examples = {
         },
     },
     field: {
-        title: "Field & service teams in motion.", image: "/images/public-site/everbranch-industry-field-service.jpg", fifth: "Schedule",
+        title: "Field & service teams in motion.", image: "/images/public-site/everbranch-industry-field-service-exterior.jpg", fifth: "Schedule",
         site: ["Current & Air", "Electrical and HVAC service", "Clear help for the systems your day depends on.", "A practical service website that makes it easy to request work and hear back quickly.", "Request service", "A focused service site that turns a new request into shared office and field context."],
         modules: {
             inbox: ["Service inbox", "A homeowner request lands with the right context already attached.", "NEW REQUEST", "Panel inspection and cooling check", "Monroe Avenue", "NEXT STEP", "Confirm preferred window", "Office review today", "The request has a customer, an address, and a clean next step from the first click.", "Draft a response"],
