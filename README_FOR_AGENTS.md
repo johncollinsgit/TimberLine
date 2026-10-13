@@ -1,5 +1,10 @@
 # START HERE
 
+Evergrove `/book` has consultation briefs and a short business-hurdle form using
+`service_inquiries` and the existing Landlord Messages inbox. Google scheduling
+uses the owner's verified one-hour Google Meet appointment schedule, embedded
+directly on the page. Follow `docs/operations/evergrove-consultation-booking.md`.
+
 Jarvis public branding pages at `/jarvis`, `/jarvis/privacy`, and `/jarvis/terms`
 are limited to `evergrove.hosts`. They describe the separate desktop app and
 must not be substituted for existing Everbranch or tenant policies. Follow

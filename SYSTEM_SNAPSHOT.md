@@ -1,5 +1,14 @@
 # SYSTEM SNAPSHOT
 
+## 2026-10-13 - Evergrove consultation intake
+
+`/book` adds a mobile business brief, a short business-hurdle contact form,
+and an embedded live Google appointment schedule with available dates/times.
+Both forms use existing Landlord Messages inquiry records. The owner's supplied
+schedule was verified as 60-minute appointments with Google Meet. Missing/unsafe
+configuration clearly presents a consultation request.
+See `docs/operations/evergrove-consultation-booking.md` for validation and rollout.
+
 ## 2026-10-12 - Jarvis public branding pages
 
 - `/jarvis`, `/jarvis/privacy`, and `/jarvis/terms` describe the separate local
