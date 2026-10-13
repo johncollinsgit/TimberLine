@@ -205,9 +205,9 @@ release ID preservation.
   adjustment separately. The public Birthday Club page still links to the
   retired `/apps/birthday` path, which returns 404.
 
-## Public launch partner offer (2026-10-02)
+## Public launch partner offer (2026-10-13)
 
-- Evergrove and Everbranch share the public Launch Partner offer in `config/product_surfaces.php`: $499 one-time setup, $89/month for the first six billing months, then $199/month. The first six months total $1,033 before taxes or add-ons.
+- Evergrove and Everbranch share the public Launch Partner offer in `config/product_surfaces.php`: $499 one-time setup, $89/month for the first six billing months, then $149/month. The first six months total $1,033 and the first year totals $1,927 before taxes or add-ons. Starter and Growth public prices are unchanged.
 - This is prospective public pricing. Existing client agreements, subscription authorizations, Stripe subscriptions, and the client-specific Front Yard Foods and Collins Electric agreement templates retain their recorded terms and rates.
 
 ## Website Commerce encrypted storage repair (2026-10-02)
