@@ -1,3 +1,12 @@
+## 2026-10-13 — Evergrove consultation and business-hurdle intake
+
+- `/book` leads with “I help business owners run their business better.”
+- Added a responsive three-step consultation brief and a separate short contact
+  form, an animated connected-business graphic, and reduced-motion support.
+- Saved briefs proceed to Google scheduling when configured; the page clearly
+  distinguishes inquiry submission from a confirmed appointment.
+- Both forms use the existing authorized Landlord Messages inbox and server validation.
+
 ## 2026-10-07 — CRM Fleet free preview and 100 vehicles
 
 ## 2026-10-08 — Carolina Heritage theme (development)

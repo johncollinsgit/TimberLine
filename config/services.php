@@ -372,7 +372,7 @@ return [
     ],
 
     'google_booking' => [
-        'url' => env('GOOGLE_BOOKING_URL'),
+        'url' => env('GOOGLE_BOOKING_URL') ?: 'https://calendar.google.com/calendar/u/0/appointments/schedules/AcZssZ3Oj4ptqrCIm0a2aVd1ud7GtVJszMBUYKIqCYME5NP7YnoUr16UtKpslsPJNs2b117OnQqce7X0',
     ],
 
     'pexels' => [

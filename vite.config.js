@@ -10,6 +10,8 @@ export default defineConfig(() => ({
       input: [
         'resources/css/app.css',
         'resources/js/app.js',
+        'resources/css/evergrove-booking.css',
+        'resources/js/evergrove-booking.js',
         'resources/js/highlevel/fleet.js',
         'resources/js/trajectory/app.js',
         'resources/js/admin/master-data-grid.tsx',

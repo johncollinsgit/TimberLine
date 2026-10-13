@@ -548,6 +548,12 @@ Route::get('/lander', [EvergroveServicesController::class, 'lander'])->name('eve
 Route::get('/book', [EvergroveServicesController::class, 'book'])
     ->middleware(EnsureEvergroveProposalHost::class)
     ->name('evergrove.book');
+Route::post('/book/brief', [EvergroveServicesController::class, 'submitBrief'])
+    ->middleware([EnsureEvergroveProposalHost::class, 'throttle:6,1'])
+    ->name('evergrove.book.brief');
+Route::post('/book/hurdle', [EvergroveServicesController::class, 'submitHurdle'])
+    ->middleware([EnsureEvergroveProposalHost::class, 'throttle:6,1'])
+    ->name('evergrove.book.hurdle');
 Route::get('/tools/project-estimate', [EvergroveServicesController::class, 'projectEstimate'])->name('evergrove.tools.project-estimate');
 Route::get('/tools/ai-roi', [EvergroveServicesController::class, 'aiRoi'])->name('evergrove.tools.ai-roi');
 Route::get('/tools/automation-savings', [EvergroveServicesController::class, 'automationSavings'])->name('evergrove.tools.automation-savings');
