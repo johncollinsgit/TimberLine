@@ -1522,6 +1522,14 @@ $catalog = [
             'capabilities' => ['workflow.automations'],
             'readiness_gates' => ['oauth_registration', 'redirect_uris', 'scheduler_heartbeat', 'queue_execution', 'encryption_key', 'database_schema', 'staging_smoke'],
         ],
+        'soccer' => [
+            'display_name' => 'Soccer operations', 'description' => 'Families, players, coaches, teams, and season registration.',
+            'status' => 'beta', 'market_state' => 'INTERNAL_ONLY', 'channels' => ['both'],
+            'classification' => 'shared-core', 'included_in_plans' => [], 'default_enabled' => false,
+            'default_setup_status' => 'not_started', 'activation_policy' => 'operator_only', 'dependencies' => [],
+            'billing_mode' => 'included', 'visibility' => ['public_site' => false, 'app_store' => false, 'mobile_store' => false],
+            'cta_routing' => 'none', 'capabilities' => [],
+        ],
         'managed_website' => [
             'display_name' => 'Everbranch Managed Website',
             'description' => 'Launch a clear, quote-first business website with safe publishing history and a tenant-owned leads inbox.',

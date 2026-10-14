@@ -60,6 +60,9 @@ class UnifiedDashboardService
             : ($user ? $this->tenantContextResolver->resolveForRequest($request, $user) : null);
         $tenantId = $tenant ? (int) $tenant->id : null;
         $profile = $this->experienceProfileService->forTenant($tenantId, $user, $tenant);
+        if (($profile['workspace_focus'] ?? null) === 'soccer' && $tenant && $user && app(\App\Services\Soccer\SoccerAccess::class)->enabled($tenant)) {
+            return $this->soccerDashboard($request, $tenant, $user, $profile, $rangeKey);
+        }
         if (($profile['workspace_focus'] ?? null) === 'website_sales' && $tenant && $user) {
             return $this->websiteSalesDashboard($request, $tenant, $user, $profile, $rangeKey);
         }
@@ -120,6 +123,28 @@ class UnifiedDashboardService
             'next_actions' => $this->nextActions($tenantId, $profile, $catalog, $canAccessMarketing, $canAccessOps, $clientFacingFieldService),
             'pinned_modules' => $canAccessMarketing ? $this->pinnedModules($catalog) : [],
         ];
+    }
+
+    protected function soccerDashboard(Request $request, Tenant $tenant, User $user, array $profile, ?string $rangeKey): array
+    {
+        $access = app(\App\Services\Soccer\SoccerAccess::class);
+        $admin = $access->admin($tenant, $user);
+        $coach = $access->coach($tenant, $user);
+        abort_unless($admin || $coach, 403);
+        $store = app(\App\Services\Soccer\SoccerStore::class);
+        $season = $store->query('seasons', $tenant->id)->where('season_key', 'spring-2027')->first();
+        $rows = $season ? $store->query('registrations', $tenant->id)->where('season_id', $season->id)->when(! $admin, fn ($q) => $q->whereIn('team_key', json_decode($coach->team_keys, true)))->get() : collect();
+        $range = $this->dateRanges->resolve($rangeKey ?? $request->query('range'));
+        $href = route('soccer.workspace', ['section' => 'players', 'tenant' => $tenant->slug]);
+        $cards = [];
+        foreach (['registered' => 'Registered players', 'offered' => 'Reserved places', 'waitlisted' => 'Waitlisted players'] as $status => $label) {
+            $cards[] = ['label' => $label, 'value' => (string) $rows->where('status', $status)->count(), 'detail' => $season?->name ?? 'Spring 2027', 'href' => $href];
+        }
+
+        return ['tenant_id' => $tenant->id, 'tenant_slug' => $tenant->slug, 'experience_profile' => $profile,
+            'date_range' => ['key' => $range['key'], 'label' => $range['label'], 'short_label' => $range['short_label'], 'starts_at' => $range['starts_at']->toIso8601String(), 'ends_at' => $range['ends_at']->toIso8601String(), 'options' => $range['options']],
+            'hero' => ['label' => $season?->name ?? 'Spring 2027', 'value' => $season?->registration_open ? 'Open' : 'Preparing', 'supporting' => 'Family registration, teams, and soccer messages.', 'href' => $href, 'tone' => 'emerald'],
+            'summary_cards' => $cards, 'next_actions' => [], 'channel_pulse' => null, 'upcoming_jobs' => [], 'class_calendar' => null, 'front_yard_launch' => null, 'workflow_automation_health' => null, 'owner_reporting' => null, 'pinned_modules' => []];
     }
 
     protected function websiteSalesDashboard(Request $request, Tenant $tenant, User $user, array $profile, ?string $rangeKey): array

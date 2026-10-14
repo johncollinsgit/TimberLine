@@ -57,6 +57,13 @@ class EnsureTenantAccess
         app(\App\Support\Tenancy\TenantContext::class)->set((int) $tenant->id);
         View::share('currentTenant', $tenant);
 
+        if (app(\App\Services\Soccer\SoccerAccess::class)->enabled($tenant) && ! $request->routeIs('soccer.*', 'tenant.brand.*', 'profile.*', 'account-help.*', 'admin.users', 'admin.users.*', 'tenant.switch*', 'search.*')) {
+            if ($request->isMethod('GET')) {
+                return redirect()->route('soccer.workspace', ['tenant' => $tenant->slug]);
+            }
+            abort(403, 'Use the soccer workspace for Wren operations.');
+        }
+
         return $next($request);
     }
 
@@ -107,6 +114,10 @@ class EnsureTenantAccess
     protected function shouldRedirectForIncompleteOnboarding(Request $request, Tenant $tenant, mixed $user): bool
     {
         if ($user instanceof \App\Models\User && HomeRedirect::isPlatformOperator($user)) {
+            return false;
+        }
+
+        if (app(\App\Services\Soccer\SoccerAccess::class)->enabled($tenant)) {
             return false;
         }
 

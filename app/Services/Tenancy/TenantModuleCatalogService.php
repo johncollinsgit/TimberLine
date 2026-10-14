@@ -31,6 +31,10 @@ class TenantModuleCatalogService
         };
         $moduleDefinitions = $this->storeVisibleModuleDefinitions($visibilityKey);
         $websiteSales = app(TenantExperienceProfileService::class)->workspaceFocusForTenant($tenantId) === 'website_sales';
+        $soccerFocus = app(TenantExperienceProfileService::class)->workspaceFocusForTenant($tenantId) === 'soccer';
+        if ($soccerFocus) {
+            $moduleDefinitions = [];
+        }
         if ($websiteSales) {
             $moduleDefinitions = array_intersect_key($moduleDefinitions, ['managed_website' => true]);
         }
@@ -99,6 +103,10 @@ class TenantModuleCatalogService
         }
 
         $blueprintRecommendations = $this->blueprintRecommendations->forTenant($tenantId, $modules);
+        if ($soccerFocus) {
+            $blueprintRecommendations['rows'] = [];
+            $blueprintRecommendations['sections'] = [];
+        }
         if ($websiteSales) {
             $blueprintRecommendations['rows'] = array_values(array_filter($blueprintRecommendations['rows'] ?? [], fn (array $row): bool => ($row['catalog_module_key'] ?? null) === 'managed_website'));
             foreach ($blueprintRecommendations['sections'] ?? [] as $key => $rows) {

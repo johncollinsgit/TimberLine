@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_13_220000_create_soccer_workspace.php' => [
+        'test' => 'tests/Integration/SoccerMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['family and season tables retained before remaining soccer tables'],
+    ],
     '2026_10_06_170000_create_tenant_mailboxes.php' => [
         'test' => 'tests/Integration/TenantMailMySqlMigrationRecoveryTest.php',
         'scenarios' => ['domain, mailbox, and grant tables retained before message table creation'],

@@ -2510,3 +2510,5 @@ Route::get('/email/unsubscribe', [\App\Http\Controllers\Marketing\MarketingEmail
 Route::post('/email/unsubscribe', [\App\Http\Controllers\Marketing\MarketingEmailUnsubscribeController::class, 'store'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class, \Illuminate\Session\Middleware\StartSession::class, \Illuminate\View\Middleware\ShareErrorsFromSession::class])
     ->name('marketing.email.unsubscribe.store');
+
+require __DIR__.'/soccer.php';
