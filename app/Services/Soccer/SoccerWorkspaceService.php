@@ -41,6 +41,29 @@ class SoccerWorkspaceService
             }
         }
 
-        return ['query' => $q, 'total' => count($results), 'results' => $results, 'groups' => ['navigation' => $results], 'empty_state' => $results ? null : ['title' => 'No soccer destination found', 'subtitle' => 'Search Parents, Players, Coaches, Teams, or Messages.']];
+        if ($t && $u && strlen($q) >= 2 && app(SoccerAccess::class)->enabled($t)) {
+            $access = app(SoccerAccess::class);
+            $admin = $access->admin($t, $u);
+            $coach = $access->coach($t, $u);
+            if ($admin || $coach) {
+                $store = app(SoccerStore::class);
+                $players = $store->query('players', $t->id)->where('name', 'like', '%'.$q.'%')->when(! $admin, fn ($query) => $query->whereIn('id', $store->query('registrations', $t->id)->whereIn('team_key', json_decode($coach->team_keys, true))->select('player_id')))->limit(10)->get();
+                foreach ($players as $player) {
+                    $url = route('soccer.workspace', ['section' => 'players', 'tenant' => $t->slug]).'#'.($admin ? 'profile-' : 'player-').$player->id;
+                    $results[] = ['id' => $player->id, 'type' => 'player', 'title' => $player->name, 'label' => $player->name, 'subtitle' => 'Soccer player', 'url' => $url, 'score' => 90];
+                }
+                if ($admin) {
+                    foreach ($store->query('families', $t->id)->get() as $family) {
+                        $name = $store->decrypt($family->profile)['parentName'] ?? $family->email ?? '';
+                        if (str_contains(strtolower($name.' '.($family->email ?? '')), strtolower($q))) {
+                            $results[] = ['id' => $family->id, 'type' => 'parent', 'title' => $name, 'label' => $name, 'subtitle' => 'Soccer family', 'url' => route('soccer.workspace', ['section' => 'parents', 'tenant' => $t->slug]).'#family-'.$family->id, 'score' => 90];
+                        }
+                    }
+                }
+            }
+        }
+        $results = array_slice($results, 0, 20);
+
+        return ['query' => $q, 'total' => count($results), 'results' => $results, 'groups' => ['soccer' => $results], 'empty_state' => $results ? null : ['title' => 'No soccer destination found', 'subtitle' => 'Search Parents, Players, Coaches, Teams, or Messages.']];
     }
 }

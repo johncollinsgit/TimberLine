@@ -76,7 +76,7 @@ it('rejects unsigned bridge requests and replayed nonces', function () {
 it('blocks registration opening until provider readiness and human smoke evidence both pass', function () {
     $this->store->saveSettings($this->tenant->id, ['launch_verified' => true, 'groupme_groups' => ['soccer' => '1', 'head_coaches' => '2', 'all_coaches' => '3']]);
     $teams = array_map(fn ($t) => ['public' => $t['public'], 'reserved' => $t['reserved']], config('soccer.teams'));
-    $this->actingAs($this->admin)->post('/soccer/actions/season?tenant=wren-family-soccer', ['id' => $this->season, 'starts_on' => '2027-03-01', 'offer_hours' => 48, 'registration_open' => true, 'teams' => $teams])->assertStatus(422);
+    $this->actingAs($this->admin)->post('/soccer/actions/season?tenant=wren-family-soccer', ['id' => $this->season, 'starts_on' => '2027-03-01', 'offer_hours' => 48, 'registration_open' => true, 'teams' => $teams])->assertRedirect()->assertSessionHasErrors('soccer');
     expect((bool) $this->store->row('seasons', $this->tenant->id, $this->season)->registration_open)->toBeFalse();
 });
 it('publishes and restores tenant website snapshots while rejecting stale saves', function () {
@@ -155,4 +155,37 @@ it('renders populated family, refund, import-review, and coaching screens', func
     foreach (['parents', 'players', 'coaches', 'settings', 'messages'] as $section) {
         $this->actingAs($this->admin)->get('/soccer/'.$section.'?tenant=wren-family-soccer')->assertOk();
     }
+});
+it('focuses an explicit Wren login without capturing unrelated multi-workspace home redirects', function () {
+    expect(\App\Support\Auth\HomeRedirect::pathFor($this->admin, $this->tenant))->toContain('/soccer');
+    $other = Tenant::create(['name' => 'Other business', 'slug' => 'other-business']);
+    $this->admin->tenants()->attach($other, ['role' => 'admin', 'membership_active' => true]);
+    expect(\App\Support\Auth\HomeRedirect::pathFor($this->admin))->not->toContain('/soccer');
+});
+it('combines Sarah and family texts when their recipient phone is the same', function () {
+    $family = $this->store->insert('families', $this->tenant->id, ['email' => 'sarah-fixture@example.com', 'profile' => $this->store->encrypt(['phone' => config('soccer.sms_recipient')]), 'sms_consent_at' => now()]);
+    app(\App\Services\Soccer\SoccerEvents::class)->record($this->tenant->id, $this->season, $family, 'waitlist_offer', ['summary' => 'One child offered.'], waitlist: true, familyText: 'Your family offer is ready.');
+    expect($this->store->query('deliveries', $this->tenant->id)->count())->toBe(1);
+    $payload = $this->store->decrypt($this->store->query('deliveries', $this->tenant->id)->first()->payload);
+    expect($payload['body'])->toContain('One child offered.')->toContain('Your family offer is ready.');
+});
+it('searches only assigned children for coaches and exposes family search to admins', function () {
+    $coach = User::factory()->create(['role' => 'member', 'is_active' => true]);
+    $coach->tenants()->attach($this->tenant, ['role' => 'member', 'membership_active' => true]);
+    $this->store->insert('coaches', $this->tenant->id, ['user_id' => $coach->id, 'name' => 'Coach', 'team_keys' => json_encode(['green-bears'])]);
+    $family = $this->store->insert('families', $this->tenant->id, ['email' => 'parent@example.com', 'profile' => $this->store->encrypt(['parentName' => 'Example Parent'])]);
+    $private = $this->store->insert('players', $this->tenant->id, ['family_id' => $family, 'name' => 'Private Falcon', 'birthday' => '2018-01-01', 'profile' => $this->store->encrypt([])]);
+    $this->store->insert('registrations', $this->tenant->id, ['season_id' => $this->season, 'family_id' => $family, 'player_id' => $private, 'team_key' => 'red-falcons', 'status' => 'registered', 'seat_kind' => 'public', 'needs_jersey' => false, 'amount_cents' => 3000, 'queued_at' => now()]);
+    $svc = app(\App\Services\Soccer\SoccerWorkspaceService::class);
+    expect($svc->search('Private', ['tenant_id' => $this->tenant->id, 'user' => $coach])['total'])->toBe(0)->and($svc->search('Example Parent', ['tenant_id' => $this->tenant->id, 'user' => $this->admin])['total'])->toBe(1);
+});
+
+it('exports signed releases through the canonical backend regardless of the workspace host', function () {
+    $family = $this->store->insert('families', $this->tenant->id, ['email' => 'pdf@example.com', 'profile' => $this->store->encrypt([])]);
+    $release = $this->store->insert('releases', $this->tenant->id, ['family_id' => $family, 'season_key' => 'fall-2026', 'source_key' => 'pdf-fixture', 'form_version' => 'test', 'answers' => $this->store->encrypt(['child1Name' => 'Fictional Child']), 'sha256' => str_repeat('a', 64), 'signed_at' => now()]);
+    $response = $this->actingAs($this->admin)->get('https://wren-family-soccer.theeverbranch.com/soccer/release/'.$release.'?tenant=wren-family-soccer')->assertRedirect();
+    parse_str(parse_url($response->headers->get('Location'), PHP_URL_QUERY), $query);
+    expect(parse_url($query['source'], PHP_URL_HOST))->toBe('app.theeverbranch.com');
+    $this->getJson($query['source'])->assertOk()->assertJsonPath('playerName', 'Fictional Child');
+    $this->getJson(str_replace('actor='.$this->admin->id, 'actor=999999', $query['source']))->assertForbidden();
 });

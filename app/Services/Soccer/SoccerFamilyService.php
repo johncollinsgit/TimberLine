@@ -93,6 +93,10 @@ class SoccerFamilyService
     public function saveProfile(int $tenant, object $family, array $data): void
     {
         $profile = $this->store->decrypt($family->profile);
+        $normalizer = app(\App\Support\Marketing\MarketingIdentityNormalizer::class);
+        if (! $normalizer->toE164($data['phone'] ?? '') || ! $normalizer->toE164($data['emergencyPhone'] ?? '') || empty($data['emergencyContact'])) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['phone' => 'Enter valid primary and emergency phone numbers and an emergency contact.']);
+        }
         unset($data['email']);
         $consent = $data['sms_consent'] ?? false;
         unset($data['sms_consent']);

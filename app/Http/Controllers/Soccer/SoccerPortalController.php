@@ -41,7 +41,9 @@ class SoccerPortalController extends Controller
             $release = $this->store->row('releases', $tenant, $d['release_id']);
             abort_unless($release->family_id === $f->id, 403);
 
-            return response()->json(['playerName' => $this->store->row('players', $tenant, $release->player_id)->name, 'answers' => $this->store->decrypt($release->answers), 'season_key' => $release->season_key, 'signed_at' => $release->signed_at]);
+            $player = $release->player_id ? $this->store->row('players', $tenant, $release->player_id) : null;
+
+            return response()->json(['playerName' => $player?->name ?? ($this->store->decrypt($release->answers)['child1Name'] ?? 'Player'), 'answers' => $this->store->decrypt($release->answers), 'season_key' => $release->season_key, 'signed_at' => $release->signed_at]);
         }
         if ($action === 'draft') {
             $d = $r->validate(['draft' => 'required|array']);

@@ -51,6 +51,18 @@ class SoccerWorkspaceController extends Controller
 
     public function action(Request $r, string $action)
     {
+        try {
+            return $this->performAction($r, $action);
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $error) {
+            if (in_array($error->getStatusCode(), [409, 422, 423, 502], true)) {
+                return back()->withErrors(['soccer' => $error->getMessage() ?: 'This action could not be completed. Reload and try again.']);
+            }
+            throw $error;
+        }
+    }
+
+    private function performAction(Request $r, string $action)
+    {
         $t = $this->access->tenant($r, ! in_array($action, ['groupme-connect', 'groupme-send', 'coach-size'], true));
         $id = $t->id;
         $actor = $r->user()->id;

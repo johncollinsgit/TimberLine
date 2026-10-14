@@ -235,4 +235,4 @@ Route::post('/connected-website/carolina-barrel/inquiries', [\App\Http\Controlle
     $player = $release->player_id ? $store->row('players', $t->id, $release->player_id) : null;
 
     return response()->json(['playerName' => $player?->name ?? ($store->decrypt($release->answers)['child1Name'] ?? 'Player'), 'answers' => $store->decrypt($release->answers), 'season_key' => $release->season_key, 'signed_at' => $release->signed_at])->header('Cache-Control', 'private, no-store')->header('Referrer-Policy', 'no-referrer');
-})->middleware('signed')->name('soccer.release-data');
+})->middleware('signed:relative')->name('soccer.release-data');

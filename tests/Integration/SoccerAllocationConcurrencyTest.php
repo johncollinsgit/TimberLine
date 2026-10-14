@@ -21,7 +21,7 @@ it('serializes concurrent family requests against the final public seat on MySQL
     $processes = [];
     try {
         foreach ([1, 2] as $n) {
-            $family = $store->insert('families', $tenant, ['email' => 'concurrent'.$n.'@example.com', 'profile' => $store->encrypt([])]);
+            $family = $store->insert('families', $tenant, ['email' => 'concurrent'.$n.'@example.com', 'profile' => $store->encrypt(['parentName' => 'Fictional Parent', 'phone' => '+12025550100', 'emergencyContact' => 'Fictional Contact', 'emergencyPhone' => '+12025550101'])]);
             $player = $store->insert('players', $tenant, ['family_id' => $family, 'name' => 'Fictional player', 'birthday' => '2023-01-01', 'profile' => $store->encrypt([])]);
             $store->insert('releases', $tenant, ['family_id' => $family, 'player_id' => $player, 'season_key' => 'spring-2027', 'source_key' => 'fixture-'.$n, 'form_version' => 'test', 'answers' => $store->encrypt([]), 'sha256' => str_repeat('a', 64), 'signed_at' => now()]);
             $requests[] = ['tenant' => $tenant, 'family' => $family, 'input' => ['season_id' => $season, 'volunteer' => false, 'children' => [['player_id' => $player, 'needs_jersey' => false]]], 'barrier' => $dir.'/go'];

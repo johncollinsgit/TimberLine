@@ -48,7 +48,7 @@
 @endif
 
 @if($section==='parents')<section class="section"><h2>{{ $families->count() }} families</h2>
-@forelse($families as $f)<details><summary>{{ $f['profile']['parentName']??$f['email'] }} <small class="muted">{{ $f['email'] }}</small></summary><div class="form-grid"><div><p>{{ $f['profile']['phone']??'Phone missing' }}</p><p class="muted">{{ $f['profile']['address']??'' }}</p></div><div>
+@forelse($families as $f)<details id="family-{{ $f['id'] }}"><summary>{{ $f['profile']['parentName']??$f['email'] }} <small class="muted">{{ $f['email'] }}</small></summary><div class="form-grid"><div><p>{{ $f['profile']['phone']??'Phone missing' }}</p><p class="muted">{{ $f['profile']['address']??'' }}</p></div><div>
 @foreach($players->where('family_id',$f['id']) as $p)<p>{{ $p['name'] }} <small class="muted">{{ $p['birthday'] }}</small></p>
 @endforeach</div></div><p class="muted">{{ $f['verified_at']?'Email verified':'Awaiting account claim' }} · {{ $f['sms_consent_at']?'Soccer SMS consent recorded':'SMS consent not recorded' }}</p><form method="post" action="{{ $actionUrl('guardian') }}" class="form-grid">
 @csrf<input type="hidden" name="family_id" value="{{ $f['id'] }}"><label>Verified additional / changed guardian email<input required type="email" name="email"></label><label>Evidence for household access<input name="reason" required></label><button>Link guardian email</button></form></details>
@@ -65,7 +65,7 @@
 @if($admin)<th>Fee</th><th>Actions</th>
 @endif</tr></thead><tbody>
 @foreach($registrations as $reg)
-@continue(request('team') && request('team')!==$reg->team_key)<tr><td><strong>{{ $players[$reg->player_id]['name']??'Player' }}</strong><p class="muted">{{ $families[$reg->family_id]['profile']['parentName']??'' }}</p><small>{{ $families[$reg->family_id]['profile']['phone']??'' }} · {{ $families[$reg->family_id]['email']??'' }}</small>
+@continue(request('team') && request('team')!==$reg->team_key)<tr id="player-{{ $reg->player_id }}"><td><strong>{{ $players[$reg->player_id]['name']??'Player' }}</strong><p class="muted">{{ $families[$reg->family_id]['profile']['parentName']??'' }}</p><small>{{ $families[$reg->family_id]['profile']['phone']??'' }} · {{ $families[$reg->family_id]['email']??'' }}</small>
 <details><summary>Contacts & player care</summary><p>Emergency: {{ $families[$reg->family_id]['profile']['emergencyContact']??'' }} · {{ $families[$reg->family_id]['profile']['emergencyPhone']??'' }}</p>
 @foreach(['allergies'=>'Allergies','allergenList'=>'Allergen details','epipen'=>'EpiPen','conditions'=>'Conditions','restrictions'=>'Restrictions','comments'=>'Notes','medical_note'=>'Historical notes'] as $field=>$label)
 @if($players[$reg->player_id]['profile'][$field]??false)<p><strong>{{ $label }}:</strong> {{ $players[$reg->player_id]['profile'][$field] }}</p>
@@ -75,7 +75,7 @@
 @endif</td><td>{{ $reg->needs_jersey?($reg->jersey_size??'Size needed'):'Reusing jersey' }}</td>
 @if($admin)<td>
 @if($reg->release_id)<a class="btn ghost" href="{{ route('soccer.release-export',['id'=>$reg->release_id,'tenant'=>$tenant->slug]) }}">Release PDF</a>
-@endif{{ $reg->waived?'Waived':'$'.number_format($reg->amount_cents/100,2) }}<p class="muted">{{ $reg->payment_status }}</p></td><td>
+@endif{{ $reg->status==='historical'?'Historical fee unverified':($reg->waived?'Waived':'$'.number_format($reg->amount_cents/100,2)) }}<p class="muted">{{ $reg->payment_status }}</p></td><td>
 @if($reg->status==='waitlisted')<form method="post" action="{{ $actionUrl('offer') }}">
 @csrf<input type="hidden" name="season_id" value="{{ $reg->season_id }}"><input type="hidden" name="family_id" value="{{ $reg->family_id }}"><input type="hidden" name="assignments[0][id]" value="{{ $reg->id }}"><select name="assignments[0][seat_kind]" aria-label="Seat pool"><option value="public">Public seat</option><option value="reserved">Reserved seat</option></select><button>Offer & invoice</button></form>
 @if(!$reg->auto_eligible)<form method="post" action="{{ $actionUrl('reactivate') }}">
@@ -94,7 +94,7 @@
 @endif</section>
 
 @if($admin && $section==='players')<section class="section"><h2>Returning player directory</h2><p class="muted">Historical profiles stay available without enrolling anyone in Spring 2027.</p>
-@foreach($players as $p)<details><summary>{{ $p['name'] }} · {{ $p['birthday']??'Birthday needs review' }}</summary><p>{{ $families[$p['family_id']]['profile']['parentName']??'' }} · {{ $families[$p['family_id']]['email']??'' }}</p>
+@foreach($players as $p)<details id="profile-{{ $p['id'] }}"><summary>{{ $p['name'] }} · {{ $p['birthday']??'Birthday needs review' }}</summary><p>{{ $families[$p['family_id']]['profile']['parentName']??'' }} · {{ $families[$p['family_id']]['email']??'' }}</p>
 @foreach($releases->where('player_id',$p['id']) as $release)<p><a href="{{ route('soccer.release-export',['id'=>$release->id,'tenant'=>$tenant->slug]) }}">{{ $release->season_key }} · signed {{ $release->signed_at }} · release PDF</a></p>
 @endforeach</details>
 @endforeach</section>
@@ -125,7 +125,7 @@
 @if($section==='coaches')<section class="section"><h2>{{ $admin?'Coaching team':'Your jersey size' }}</h2>
 @foreach($coaches as $c)<div class="row"><div><strong>{{ $c->name }}</strong><p class="muted">{{ ucfirst($c->role) }} coach · {{ implode(', ',array_map(fn($k)=>config('soccer.teams.'.$k.'.name'),json_decode($c->team_keys,true))) }}</p><p>Jersey: {{ $c->jersey_size??'Size needed' }}</p></div>
 @if($c->user_id===auth()->id())<form action="{{ $actionUrl('coach-size') }}" method="post" class="actions">
-@csrf<label>Adult jersey size<select required name="jersey_size">
+@csrf<label>Adult jersey size<select required name="jersey_size"><option value="">Choose your size</option>
 @foreach(['XS','S','M','L','XL','2XL','3XL'] as $size)<option
 @selected($c->jersey_size===$size)>{{ $size }}</option>
 @endforeach</select></label><button>Save size</button></form>
@@ -160,7 +160,7 @@
 @foreach($events as $e)<div class="message"><strong>{{ ucwords(str_replace('_',' ',$e['action'])) }}</strong><p>{{ $e['data']['summary']??'' }}</p><small>{{ $e['created_at'] }}</small></div>
 @endforeach</section>
 @endif
-<script>document.querySelectorAll('[data-group]').forEach(button=>button.addEventListener('click',async()=>{const target=document.getElementById('groupme-messages');target.textContent='Loading…';try{const response=await fetch({!! json_encode(route('soccer.group-messages',['tenant'=>$tenant->slug])) !!}+'&group_id='+encodeURIComponent(button.dataset.group),{headers:{Accept:'application/json'}});const rows=await response.json();if(!response.ok)throw Error(rows.message||'GroupMe unavailable.');target.replaceChildren();rows.reverse().forEach(row=>{const card=document.createElement('article');card.className='message';const name=document.createElement('strong');name.textContent=row.name;const body=document.createElement('p');body.textContent=row.text||'Attachment';card.append(name,body);target.append(card)});document.getElementById('selected-group').value=button.dataset.group;document.getElementById('groupme-compose').hidden=false;}catch(error){target.textContent=error.message;}}));</script>
+<script>document.querySelectorAll('[data-group]').forEach(button=>button.addEventListener('click',async()=>{const target=document.getElementById('groupme-messages');document.getElementById('groupme-compose').hidden=true;document.getElementById('selected-group').value='';target.textContent='Loading '+button.textContent+'…';try{const response=await fetch({!! json_encode(route('soccer.group-messages',['tenant'=>$tenant->slug])) !!}+'&group_id='+encodeURIComponent(button.dataset.group),{headers:{Accept:'application/json'}});const rows=await response.json();if(!response.ok)throw Error(rows.message||'GroupMe unavailable.');target.replaceChildren();rows.reverse().forEach(row=>{const card=document.createElement('article');card.className='message';const name=document.createElement('strong');name.textContent=row.name;const body=document.createElement('p');body.textContent=row.text||'Attachment';card.append(name,body);target.append(card)});document.getElementById('selected-group').value=button.dataset.group;document.getElementById('groupme-compose').hidden=false;}catch(error){target.textContent=error.message;}}));</script>
 
 @endif
 

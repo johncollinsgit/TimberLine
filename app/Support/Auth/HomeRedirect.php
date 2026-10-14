@@ -15,6 +15,13 @@ class HomeRedirect
             return route('login', absolute: false);
         }
 
+        $activeTenants = $tenant ? null : $user->tenants()->wherePivot('membership_active', true)->get();
+        $soccerTenant = $tenant ?? ($activeTenants?->count() === 1 ? $activeTenants->first() : null);
+        $soccerAccess = app(\App\Services\Soccer\SoccerAccess::class);
+        if ($soccerTenant && $soccerAccess->enabled($soccerTenant) && ($soccerAccess->admin($soccerTenant, $user) || $soccerAccess->coach($soccerTenant, $user))) {
+            return route('soccer.workspace', ['tenant' => $soccerTenant->slug], absolute: false);
+        }
+
         if (self::isPlatformOperator($user)) {
             return route('landlord.dashboard', absolute: false);
         }
@@ -40,11 +47,6 @@ class HomeRedirect
         $requestedVia = strtolower(trim((string) ($user->requested_via ?? '')));
         if (! $tenant instanceof Tenant && self::isProductionCustomerUser($user)) {
             return route('app.start', absolute: false);
-        }
-
-        $soccerTenant = $tenant ?? $user->tenants()->wherePivot('membership_active', true)->where('slug', config('soccer.tenant_slug'))->first();
-        if ($soccerTenant && app(\App\Services\Soccer\SoccerAccess::class)->enabled($soccerTenant)) {
-            return route('soccer.workspace', ['tenant' => $soccerTenant->slug], absolute: false);
         }
 
         $role = (string) ($user->role ?? '');

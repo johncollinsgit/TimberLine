@@ -4,6 +4,7 @@ return [
     'enabled' => (bool) env('SOCCER_ENABLED', false),
     'tenant_slug' => 'wren-family-soccer',
     'origin' => 'https://easleyfamilysoccer.com',
+    'backend_origin' => 'https://app.theeverbranch.com',
     'bridge_secret' => env('WREN_SOCCER_BRIDGE_SECRET'),
     'stripe_webhook_secret' => env('WREN_SOCCER_STRIPE_WEBHOOK_SECRET'),
     'sms_enabled' => (bool) env('WREN_SOCCER_SMS_ENABLED', false),

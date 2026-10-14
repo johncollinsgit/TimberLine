@@ -46,6 +46,9 @@ class SoccerRegistrationService
             $season = $this->store->lockSeason($tenant, $input['season_id']);
             abort_unless($season->registration_open && $season->starts_on, 422, 'Registration is not open.');
             $family = $this->store->row('families', $tenant, $familyId);
+            $contact = $this->store->decrypt($family->profile);
+            $normalizer = app(\App\Support\Marketing\MarketingIdentityNormalizer::class);
+            abort_unless(! empty($contact['parentName']) && $normalizer->toE164($contact['phone'] ?? '') && ! empty($contact['emergencyContact']) && $normalizer->toE164($contact['emergencyPhone'] ?? ''), 422, 'Review your family and emergency contact details before registering.');
             $selected = $input['children'];
             $ids = array_column($selected, 'player_id');
             if (count($ids) !== count(array_unique($ids))) {

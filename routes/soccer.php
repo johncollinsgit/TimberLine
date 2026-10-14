@@ -7,7 +7,7 @@ Route::middleware(['auth', 'verified', 'tenant.access'])->prefix('soccer')->name
     Route::get('/release/{id}', function (\Illuminate\Http\Request $r, string $id) {
         $t = app(\App\Services\Soccer\SoccerAccess::class)->tenant($r, true);
         app(\App\Services\Soccer\SoccerStore::class)->row('releases', $t->id, $id);
-        $source = \Illuminate\Support\Facades\URL::temporarySignedRoute('soccer.release-data', now()->addMinutes(5), ['id' => $id, 'actor' => $r->user()->id]);
+        $source = rtrim(config('soccer.backend_origin'), '/').\Illuminate\Support\Facades\URL::temporarySignedRoute('soccer.release-data', now()->addMinutes(5), ['id' => $id, 'actor' => $r->user()->id], absolute: false);
 
         return redirect()->away(config('soccer.origin').'/api/portal/admin-pdf?source='.urlencode($source))->header('Referrer-Policy', 'no-referrer');
     })->name('release-export');

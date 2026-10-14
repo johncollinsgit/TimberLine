@@ -15,7 +15,7 @@ beforeEach(function () {
 });
 function soccerFamily($test, array $birthdays): array
 {
-    $f = $test->store->insert('families', $test->t->id, ['email' => \Illuminate\Support\Str::uuid().'@example.com', 'profile' => $test->store->encrypt(['parentName' => 'Parent', 'phone' => '8645550100']), 'verified_at' => now(), 'sms_consent_at' => now()]);
+    $f = $test->store->insert('families', $test->t->id, ['email' => \Illuminate\Support\Str::uuid().'@example.com', 'profile' => $test->store->encrypt(['parentName' => 'Parent', 'phone' => '8645550100', 'emergencyContact' => 'Emergency Contact', 'emergencyPhone' => '8645550101']), 'verified_at' => now(), 'sms_consent_at' => now()]);
     $children = [];
     foreach ($birthdays as $n => $dob) {
         $p = $test->store->insert('players', $test->t->id, ['family_id' => $f, 'name' => 'Player '.$n, 'birthday' => $dob, 'profile' => $test->store->encrypt([])]);

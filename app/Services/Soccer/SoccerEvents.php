@@ -38,6 +38,14 @@ class SoccerEvents
         if (! $phone) {
             return;
         }
+        $existing = $this->store->query('deliveries', $tenant)->where('event_id', $event)->where('recipient_key', hash('sha256', $phone))->first();
+        if ($existing) {
+            $payload = $this->store->decrypt($existing->payload);
+            $payload['body'] .= "\n".$body;
+            $this->store->query('deliveries', $tenant)->where('id', $existing->id)->update(['payload' => $this->store->encrypt($payload), 'updated_at' => now()]);
+
+            return;
+        }
         $this->store->insert('deliveries', $tenant, ['event_id' => $event, 'recipient_key' => hash('sha256', $phone), 'payload' => $this->store->encrypt(['phone' => $phone, 'body' => $body])]);
     }
 }
