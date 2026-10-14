@@ -34,7 +34,7 @@ class SoccerWorkspaceController extends Controller
         if (! $admin) {
             $regs = $regs->map(fn ($row) => (object) collect((array) $row)->except(['amount_cents', 'payment_status', 'waived', 'offer_group'])->all());
         }
-        $data = ['tenant' => $t, 'admin' => $admin, 'coach' => $coach, 'section' => $section, 'seasons' => $seasons, 'season' => $selected, 'registrations' => $regs, 'players' => $players, 'families' => $families, 'capacity' => $selected ? app(SoccerRegistrationService::class)->capacities($selected) : [], 'coaches' => $admin ? $this->store->query('coaches', $t->id)->get() : collect([$coach]), 'payments' => $admin ? $this->store->query('payments', $t->id)->latest('created_at')->get() : collect(), 'refunds' => $admin ? $this->store->query('refunds', $t->id)->latest('created_at')->get()->map(fn ($refund) => [...(array) $refund, 'evidence' => $this->store->decrypt($refund->evidence)]) : collect(), 'invoices' => $admin ? $this->store->query('invoices', $t->id)->latest('created_at')->get() : collect(), 'imports' => $admin ? $this->store->query('import_rows', $t->id)->where('status', 'review')->get()->map(fn ($i) => [...(array) $i, 'evidence' => $this->store->decrypt($i->evidence)]) : collect(), 'events' => $admin ? $this->store->query('events', $t->id)->latest('created_at')->limit(50)->get()->map(fn ($e) => [...(array) $e, 'data' => $this->store->decrypt($e->data)]) : collect(), 'cardAccount' => $admin ? $t->paymentAccount()->first() : null, 'settings' => $admin ? $this->store->settings($t->id) : [], 'smsThreads' => $admin ? \App\Models\MessagingConversation::query()->forTenantId($t->id)->where('source_type', 'soccer_waitlist')->with('messages')->latest('last_message_at')->limit(50)->get() : collect(), 'blockers' => $admin ? app(\App\Services\Soccer\SoccerLaunchReadiness::class)->blockers($t) : [], 'releases' => $admin ? $this->store->query('releases', $t->id)->get() : collect(), 'groups' => app(SoccerGroupMeService::class)->allowed($t->id, $r->user(), $coach, $admin)];
+        $data = ['tenant' => $t, 'admin' => $admin, 'coach' => $coach, 'section' => $section, 'seasons' => $seasons, 'season' => $selected, 'registrations' => $regs, 'players' => $players, 'families' => $families, 'capacity' => $selected ? app(SoccerRegistrationService::class)->capacities($selected) : [], 'coaches' => $admin ? $this->store->query('coaches', $t->id)->get() : collect([$coach]), 'payments' => $admin ? $this->store->query('payments', $t->id)->latest('created_at')->get() : collect(), 'refunds' => $admin ? $this->store->query('refunds', $t->id)->latest('created_at')->get()->map(fn ($refund) => [...(array) $refund, 'evidence' => $this->store->decrypt($refund->evidence)]) : collect(), 'invoices' => $admin ? $this->store->query('invoices', $t->id)->latest('created_at')->get() : collect(), 'imports' => $admin ? $this->store->query('import_rows', $t->id)->where('status', 'review')->get()->map(fn ($i) => [...(array) $i, 'evidence' => $this->store->decrypt($i->evidence)]) : collect(), 'events' => $admin ? $this->store->query('events', $t->id)->latest('created_at')->limit(50)->get()->map(fn ($e) => [...(array) $e, 'data' => $this->store->decrypt($e->data)]) : collect(), 'cardAccount' => $admin ? $t->paymentAccount()->first() : null, 'smsAccount' => $admin ? \App\Models\TenantMessagingAccount::query()->forAllTenants()->where('tenant_id', $t->id)->where('channel', 'sms')->first() : null, 'settings' => $admin ? $this->store->settings($t->id) : [], 'smsThreads' => $admin ? \App\Models\MessagingConversation::query()->forTenantId($t->id)->where('source_type', 'soccer_waitlist')->with('messages')->latest('last_message_at')->limit(50)->get() : collect(), 'blockers' => $admin ? app(\App\Services\Soccer\SoccerLaunchReadiness::class)->blockers($t) : [], 'releases' => $admin ? $this->store->query('releases', $t->id)->get() : collect(), 'groups' => app(SoccerGroupMeService::class)->allowed($t->id, $r->user(), $coach, $admin)];
         if ($section === 'website') {
             $svc = app(SoccerWebsiteService::class);
             $svc->editor($t, $r->user());
@@ -53,6 +53,12 @@ class SoccerWorkspaceController extends Controller
     {
         try {
             return $this->performAction($r, $action);
+        } catch (\Illuminate\Validation\ValidationException $error) {
+            if ($r->expectsJson()) {
+                throw $error;
+            }
+
+            return back()->withErrors($error->validator)->withInput($r->except(['token', 'ein']));
         } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $error) {
             if (in_array($error->getStatusCode(), [409, 422, 423, 502], true)) {
                 return back()->withErrors(['soccer' => $error->getMessage() ?: 'This action could not be completed. Reload and try again.']);
@@ -67,7 +73,27 @@ class SoccerWorkspaceController extends Controller
         $id = $t->id;
         $actor = $r->user()->id;
         $svc = app(SoccerRegistrationService::class);
-        if ($action === 'card-connect') {
+        if ($action === 'sms-prepare') {
+            try {
+                $account = DB::transaction(function () use ($t) {
+                    $t->newQuery()->whereKey($t->id)->lockForUpdate()->firstOrFail();
+
+                    return app(\App\Services\Marketing\Messaging\TenantMessagingProvisioningService::class)->provisionSms($t);
+                });
+            } catch (\RuntimeException $error) {
+                abort(502, 'Texting account setup is unavailable. Check the approved sender rollout and provider configuration.');
+            }
+            app(\App\Services\Soccer\SoccerEvents::class)->record($id, null, null, 'sms_account_prepared', ['summary' => 'Wren texting account prepared; sender registration and approval are still required.', 'account_id' => $account->id], $actor);
+        } elseif ($action === 'sms-profile') {
+            $d = $r->validate(['operator_type' => 'required|in:registered,individual', 'legal_name' => 'required|string|max:160', 'contact_name' => 'required|string|max:160', 'contact_email' => 'required|email|max:254', 'contact_phone' => 'required|string|max:40', 'address' => 'required|string|max:500', 'city' => 'required|string|max:100', 'state' => 'required|string|size:2', 'postal_code' => 'required|string|max:10', 'ein' => 'nullable|regex:/^[0-9]{2}-?[0-9]{7}$/']);
+            abort_unless(app(\App\Support\Marketing\MarketingIdentityNormalizer::class)->toE164($d['contact_phone']), 422, 'Enter a valid contact phone for sender registration.');
+            $settings = $this->store->settings($id);
+            $prior = $settings['sms_business_profile'] ?? [];
+            $d['ein'] = $d['operator_type'] === 'registered' ? (preg_replace('/[^0-9]/', '', $d['ein'] ?? '') ?: ($prior['ein'] ?? '')) : null;
+            abort_unless($d['operator_type'] !== 'registered' || strlen($d['ein']) === 9, 422, 'The registered organization needs its EIN. Enter it only in this secure form.');
+            $this->store->saveSettings($id, [...$settings, 'sms_business_profile' => [...$d, 'country' => 'US', 'submitted_by' => $actor, 'submitted_at' => now()->toIso8601String()]]);
+            app(\App\Services\Soccer\SoccerEvents::class)->record($id, null, null, 'sms_business_profile_saved', ['summary' => 'Sender operator details saved securely for provider registration.'], $actor);
+        } elseif ($action === 'card-connect') {
             $d = $r->validate(['email' => 'required|email|max:254']);
 
             return redirect()->away(app(\App\Services\Soccer\SoccerOnboardingService::class)->start($t, $r->user(), $d['email']));

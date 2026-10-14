@@ -33,7 +33,7 @@ class TenantMessagingProvisioningService
 
     public function provisionSms(Tenant $tenant): TenantMessagingAccount
     {
-        $this->assertProvisioningEnabled();
+        $this->assertProvisioningEnabled($tenant->id);
         $parentSid = trim((string) config('services.twilio.account_sid'));
         $parentToken = trim((string) config('services.twilio.auth_token'));
         if ($parentSid === '' || $parentToken === '') {
@@ -79,7 +79,7 @@ class TenantMessagingProvisioningService
     /** @param array<string,mixed> $resources */
     public function completeTwilioRegistration(int $tenantId, array $resources): TenantMessagingAccount
     {
-        $this->assertProvisioningEnabled();
+        $this->assertProvisioningEnabled($tenantId);
         foreach (['secondary_customer_profile_sid', 'brand_sid', 'campaign_sid', 'messaging_service_sid', 'phone_number'] as $key) {
             if (trim((string) ($resources[$key] ?? '')) === '') {
                 throw new RuntimeException("Twilio registration is missing {$key}.");
@@ -329,9 +329,10 @@ class TenantMessagingProvisioningService
         return Http::acceptJson()->asJson()->withToken($apiKey)->timeout(30);
     }
 
-    protected function assertProvisioningEnabled(): void
+    protected function assertProvisioningEnabled(?int $tenantId = null): void
     {
-        if (! (bool) config('features.tenant_messaging_provisioning')) {
+        $scopedSms = $tenantId && in_array($tenantId, (array) config('features.tenant_sms_provisioning_tenant_ids', []), true);
+        if (! (bool) config('features.tenant_messaging_provisioning') && ! $scopedSms) {
             throw new RuntimeException('Tenant messaging provisioning is disabled.');
         }
     }

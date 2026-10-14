@@ -189,3 +189,30 @@ it('exports signed releases through the canonical backend regardless of the work
     $this->getJson($query['source'])->assertOk()->assertJsonPath('playerName', 'Fictional Child');
     $this->getJson(str_replace('actor='.$this->admin->id, 'actor=999999', $query['source']))->assertForbidden();
 });
+
+it('prepares SMS only for approved tenants while leaving the sender unverified', function () {
+    config(['features.tenant_messaging_provisioning' => false, 'features.tenant_sms_provisioning_tenant_ids' => [$this->tenant->id], 'services.twilio.account_sid' => 'AC'.str_repeat('1', 32), 'services.twilio.auth_token' => 'fictional-provider-token']);
+    Http::fake(['api.twilio.com/*' => Http::response(['sid' => 'AC'.str_repeat('2', 32), 'auth_token' => 'fictional-subaccount-token'], 201)]);
+    $this->actingAs($this->admin)->post('/soccer/actions/sms-prepare?tenant=wren-family-soccer')->assertRedirect();
+    $account = \App\Models\TenantMessagingAccount::query()->forAllTenants()->where('tenant_id', $this->tenant->id)->where('channel', 'sms')->sole();
+    expect($account->status)->toBe('awaiting_business_profile')->and($account->isReady())->toBeFalse();
+    $other = Tenant::create(['name' => 'Other fixture', 'slug' => 'other-sms-fixture']);
+    $provisioner = app(\App\Services\Marketing\Messaging\TenantMessagingProvisioningService::class);
+    expect(fn () => $provisioner->provisionSms($other))->toThrow(RuntimeException::class);
+    expect(fn () => $provisioner->provisionEmail($this->tenant, 'example.com'))->toThrow(RuntimeException::class);
+    $this->post('/soccer/actions/sms-prepare?tenant=wren-family-soccer')->assertRedirect();
+    Http::assertSentCount(1);
+});
+
+it('stores sender details encrypted without rendering or flashing tax identifiers or GroupMe tokens', function () {
+    $input = ['operator_type' => 'registered', 'legal_name' => 'Fictional Organization', 'contact_name' => 'Fictional Contact', 'contact_email' => 'fixture@example.com', 'contact_phone' => '+12025550100', 'address' => '123 Fictional Street', 'city' => 'Example', 'state' => 'SC', 'postal_code' => '29642', 'ein' => '12-3456789'];
+    $this->actingAs($this->admin)->post('/soccer/actions/sms-profile?tenant=wren-family-soccer', $input)->assertRedirect();
+    expect($this->store->settings($this->tenant->id)['sms_business_profile']['ein'])->toBe('123456789');
+    expect((string) $this->store->query('settings', $this->tenant->id)->value('data'))->not->toContain('123456789');
+    $this->get('/soccer/settings?tenant=wren-family-soccer')->assertOk()->assertSeeText('Texting sender setup')->assertDontSee('123456789')->assertDontSee('12-3456789');
+    $this->post('/soccer/actions/sms-profile?tenant=wren-family-soccer', [...$input, 'operator_type' => 'invalid', 'token' => 'fictional-sensitive-token'])->assertRedirect()->assertSessionHasErrors('operator_type')->assertSessionMissing('_old_input.ein')->assertSessionMissing('_old_input.token');
+    $coach = User::factory()->create(['role' => 'member', 'is_active' => true, 'email_verified_at' => now()]);
+    $coach->tenants()->attach($this->tenant, ['role' => 'member', 'membership_active' => true]);
+    $this->store->insert('coaches', $this->tenant->id, ['user_id' => $coach->id, 'name' => 'Fixture coach', 'role' => 'assistant', 'team_keys' => json_encode(['green-bears'])]);
+    $this->actingAs($coach)->post('/soccer/actions/sms-profile?tenant=wren-family-soccer', $input)->assertForbidden();
+});

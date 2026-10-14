@@ -47,6 +47,9 @@ waitlist offers require each waiting sibling to head its team queue.
   events. Confirm duplicate handling and a real controlled payment/refund before
   marking platform Connect webhooks verified. Never enable unrelated tenants.
 - Provision Wren SMS with the existing tenant messaging provisioning service.
+  `FEATURE_TENANT_SMS_PROVISIONING_TENANT_IDS=13` approves Wren only without
+  enabling global provisioning. Settings prepares the subaccount and stores the
+  legal operator details encrypted; EINs never populate forms or flash input.
   Complete its required business profile, brand, campaign, service, and number.
   Point signed inbound/status callbacks to `/api/soccer/sms`; enable
   `WREN_SOCCER_SMS_ENABLED` only once the sender is ready.

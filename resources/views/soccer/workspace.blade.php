@@ -183,7 +183,14 @@
 @endif
 @endif
 
-@if($section==='settings' && $admin)<section class="section"><h2>Card account</h2><p class="muted">Wren owns its Stripe account. Complete identity and payout details in Stripe.</p><form method="post" action="{{ $actionUrl('card-connect') }}" class="form-grid">
+@if($section==='settings' && $admin)<section class="section"><h2>Texting sender setup</h2><p class="muted">Wren needs its own approved sender for Sarah's waitlist alerts and family offers. Saving details does not activate texting or enroll players.</p>
+@if($smsAccount)<p>Status: {{ ucwords(str_replace('_',' ',$smsAccount->status)) }}{{ $smsAccount->sender_identifier?' · '.$smsAccount->sender_identifier:'' }}</p>
+@else<form method="post" action="{{ $actionUrl('sms-prepare') }}">@csrf<button>Prepare Wren texting account</button></form>@endif
+@php($smsProfile=$settings['sms_business_profile']??[])
+<details style="margin-top:20px"><summary>Secure sender registration details</summary><form method="post" action="{{ $actionUrl('sms-profile') }}" class="form-grid">@csrf
+<label>Legal operator<select required name="operator_type"><option value="">Choose operator type</option><option value="registered" @selected(($smsProfile['operator_type']??'')==='registered')>Registered business or nonprofit</option><option value="individual" @selected(($smsProfile['operator_type']??'')==='individual')>Individual community program</option></select></label>
+@foreach(['legal_name'=>'Legal organization or operator name','contact_name'=>'Authorized contact name','contact_email'=>'Contact email','contact_phone'=>'Contact mobile phone','address'=>'Mailing street address','city'=>'City','state'=>'State (two letters)','postal_code'=>'ZIP code'] as $key=>$label)<label>{{ $label }}<input required type="{{ $key==='contact_email'?'email':'text' }}" name="{{ $key }}" value="{{ $smsProfile[$key]??'' }}" {{ $key==='state'?'maxlength=2':'' }}></label>@endforeach
+<label>EIN · registered organizations only<input type="password" name="ein" autocomplete="off" placeholder="{{ !empty($smsProfile['ein'])?'Saved securely; leave blank to keep':'Enter only in this secure form' }}"></label><p class="muted">Use the real legal operator and contact details. Provider approval, a texting number, and messaging credit are required before alerts can be sent.</p><button>Save sender details securely</button></form></details></section><section class="section"><h2>Card account</h2><p class="muted">Wren owns its Stripe account. Complete identity and payout details in Stripe.</p><form method="post" action="{{ $actionUrl('card-connect') }}" class="form-grid">
 @csrf<label>Account owner email<input type="email" name="email" required value="{{ auth()->user()->email }}"></label><button>Continue Stripe onboarding</button></form>
 @if($cardAccount)<p>Status: {{ $cardAccount->status }}</p><form method="post" action="{{ $actionUrl('card-refresh') }}">
 @csrf<button class="ghost">Check Stripe verification</button></form>
