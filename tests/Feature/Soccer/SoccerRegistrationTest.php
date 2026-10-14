@@ -172,3 +172,21 @@ it('refunds a recorded late payment without enrolling its waitlisted child', fun
     $payments->refund($this->t->id, $invoice->id, 3000, 'Late transfer refunded', 1, true, $payment->id);
     expect($this->store->query('registrations', $this->t->id)->value('status'))->toBe('waitlisted');
 });
+it('authenticates Stripe callbacks and deduplicates by the underlying payment intent', function () {
+    config()->set('soccer.stripe_webhook_secret', 'whsec_fictional_test_secret');
+    [$family,$input] = soccerFamily($this, ['2023-01-01']);
+    $this->svc->register($this->t->id, $family, $input);
+    $invoice = $this->store->query('invoices', $this->t->id)->first();
+    $this->store->query('invoices', $this->t->id)->where('id', $invoice->id)->update(['checkout_id' => 'cs_fixture']);
+    $event = ['id' => 'evt_fixture_1', 'type' => 'checkout.session.completed', 'data' => ['object' => ['id' => 'cs_fixture', 'payment_status' => 'paid', 'currency' => 'usd', 'amount_total' => 3000, 'payment_intent' => 'pi_fixture', 'metadata' => ['soccer_invoice_id' => $invoice->id]]]];
+    $json = json_encode($event);
+    $this->call('POST', '/api/soccer/stripe', [], [], [], ['CONTENT_TYPE' => 'application/json'], $json)->assertStatus(400);
+    foreach (['evt_fixture_1', 'evt_fixture_2'] as $id) {
+        $event['id'] = $id;
+        $json = json_encode($event);
+        $timestamp = time();
+        $signature = hash_hmac('sha256', $timestamp.'.'.$json, 'whsec_fictional_test_secret');
+        $this->call('POST', '/api/soccer/stripe', [], [], [], ['CONTENT_TYPE' => 'application/json', 'HTTP_STRIPE_SIGNATURE' => 't='.$timestamp.',v1='.$signature], $json)->assertOk();
+    }
+    expect($this->store->query('payments', $this->t->id)->count())->toBe(1)->and($this->store->query('registrations', $this->t->id)->value('status'))->toBe('registered');
+});

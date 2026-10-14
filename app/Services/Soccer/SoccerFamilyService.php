@@ -129,6 +129,8 @@ class SoccerFamilyService
             $a['child1Age'] = (string) (int) \Carbon\CarbonImmutable::parse($p->birthday)->diffInYears(\Carbon\CarbonImmutable::parse($s->age_as_of ?? $s->starts_on));
         }
         $a = [...$a, 'child1Name' => $p->name, 'child1Birthday' => $p->birthday, 'parentEmail' => $family->email, 'season' => $s->name, 'seasonStart' => $s->starts_on ?? ''];
+        $a['motherName'] = ! empty($a['motherName']) ? $a['motherName'] : ($a['guardianName'] ?? $a['parentName'] ?? '');
+        $a['motherPhone'] = ! empty($a['motherPhone']) ? $a['motherPhone'] : ($a['phone'] ?? '');
         $json = json_encode($a, JSON_THROW_ON_ERROR);
         $source = 'portal:'.$data['request_id'];
         $existing = $this->store->query('releases', $tenant)->where('source_key', $source)->first();

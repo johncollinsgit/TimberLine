@@ -172,9 +172,8 @@ class SoccerRegistrationService
         }
         $invoice = $this->store->insert('invoices', $season->tenant_id, ['season_id' => $season->id, 'family_id' => $family, 'offer_group' => $group, 'registration_ids' => json_encode($ids), 'amount_cents' => $amount, 'status' => $amount === 0 ? 'waived' : 'unpaid', 'expires_at' => $expires, 'paid_at' => $amount === 0 ? now() : null]);
         $text = $amount === 0 ? 'Wren Soccer: your children have places; your registration fees are waived.' : 'Wren Soccer: places are reserved for your children. Pay $'.number_format($amount / 100, 2).' by '.$expires->timezone('America/New_York')->format('M j, g:i A T').'. Sign in: '.config('soccer.origin').'/spring';
-        if ($action !== 'initial_registration') {
-            $this->events->record($season->tenant_id, $season->id, $family, $action, ['summary' => $rows->count().' children offered places.', 'invoice_id' => $invoice], $actor, waitlist: true, familyText: $text);
-        }
+
+        $this->events->record($season->tenant_id, $season->id, $family, $action, ['summary' => $rows->count().' children offered places.', 'invoice_id' => $invoice], $actor, waitlist: $action !== 'initial_registration', familyText: $text);
 
         return $invoice;
     }
