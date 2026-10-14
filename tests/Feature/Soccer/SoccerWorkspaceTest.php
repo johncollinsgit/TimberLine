@@ -87,7 +87,7 @@ it('publishes and restores tenant website snapshots while rejecting stale saves'
     $draft = $site->draft_site_version_id;
     $content = $siteService->defaults();
     $content['hero_title'] = 'A fictional new season';
-    $siteService->save($this->tenant, $this->admin, $content, $draft);
+    $siteService->save($this->tenant, $this->admin, array_reverse($content, true), $draft);
     $current = $site->fresh()->draft_site_version_id;
     expect(fn () => $siteService->save($this->tenant, $this->admin, $content, $draft))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
     $siteService->save($this->tenant, $this->admin, [], $current, true);

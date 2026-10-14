@@ -78,7 +78,7 @@ class SoccerWebsiteService
             } elseif ($restore) {
                 $content = $this->content($site, $restore);
             }
-            abort_unless(array_keys($content) === array_keys($this->fields()), 422, 'Website field list changed.');
+            abort_unless(count($content) === count($this->fields()) && ! array_diff_key($content, $this->fields()), 422, 'Website field list changed.');
             foreach ($content as $key => $v) {
                 abort_unless(is_string($v) && strlen($v) <= 8000, 422);
                 if (str_ends_with($key, '_color')) {
