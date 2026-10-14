@@ -27,7 +27,7 @@
 <div class="cards">
 @foreach($capacity as $key=>$team)
 @if($admin || in_array($key,json_decode($coach->team_keys,true)))
-<a href="{{ $pageUrl('teams',['team'=>$key]) }}" class="card"><div class="team-name"><span class="dot" style="background:{{ $team['color'] }}"></span><h2>{{ $team['name'] }}</h2></div><p class="muted">Ages {{ $team['min_age'] }}{{ $team['max_age']?'–'.$team['max_age']:'+' }}</p><span class="number">{{ $team['public_used']+$team['reserved_used'] }}<small class="muted" style="font-size:18px;letter-spacing:0"> / {{ $team['public']+$team['reserved'] }}</small></span><div class="rail"><i style="width:{{ min(100,100*($team['public_used']+$team['reserved_used'])/max(1,$team['public']+$team['reserved'])) }}%;background:{{ $team['color'] }}"></i></div><p class="muted">{{ $team['public_free'] }} public spots available 
+<a href="{{ $pageUrl('teams',['team'=>$key]) }}" class="card"><div class="team-name"><span class="dot" style="background:{{ $team['color'] }}"></span><h2>{{ $team['name'] }}</h2></div><p class="muted">Ages {{ $team['min_age'] }}{{ $team['max_age']?'–'.$team['max_age']:'+' }}</p><span class="number">{{ $team['public_used']+$team['reserved_used'] }}<small class="muted" style="font-size:18px;letter-spacing:0"> / {{ $team['public']+$team['reserved'] }}</small></span><div class="rail"><i style="width:{{ min(100,100*($team['public_used']+$team['reserved_used'])/max(1,$team['public']+$team['reserved'])) }}%;background:{{ $team['color'] }}"></i></div><p class="muted">{{ $team['public_free'] }} public spots available
 @if($admin)· {{ $team['reserved_free'] }} held in reserve
 @endif</p></a>
 
@@ -58,7 +58,7 @@
 
 @if(in_array($section,['players','teams']))
 <section class="section"><div class="header"><h2>{{ $section==='teams' && request('team')?config('soccer.teams.'.request('team').'.name'):'Season players' }}</h2><form method="get"><input type="hidden" name="tenant" value="{{ $tenant->slug }}"><label>Season<select name="season" onchange="this.form.submit()">
-@foreach($seasons as $s)<option value="{{ $s->id }}" 
+@foreach($seasons as $s)<option value="{{ $s->id }}"
 @selected($season?->id===$s->id)>{{ $s->name }}</option>
 @endforeach</select></label></form></div>
 <div class="table-scroll"><table><thead><tr><th>Player</th><th>Team</th><th>Status</th><th>Jersey</th>
@@ -81,7 +81,7 @@
 @if(!$reg->auto_eligible)<form method="post" action="{{ $actionUrl('reactivate') }}">
 @csrf<input type="hidden" name="id" value="{{ $reg->id }}"><button class="ghost">Reactivate</button></form>
 @endif
-@endif 
+@endif
 @if(in_array($reg->status,['registered','waitlisted']))<details><summary>Override team</summary><form method="post" action="{{ $actionUrl('override-team') }}">
 @csrf<input type="hidden" name="id" value="{{ $reg->id }}"><select name="team_key" aria-label="Destination team">
 @foreach(config('soccer.teams') as $key=>$team)<option value="{{ $key }}">{{ $team['name'] }}</option>
@@ -104,7 +104,7 @@
 @if($i->status==='unpaid')<form method="post" action="{{ $actionUrl('withdraw-offer') }}" class="form-grid">
 @csrf<input type="hidden" name="invoice_id" value="{{ $i->id }}"><label>Reason for withdrawing offer<input required name="reason"></label><button class="ghost">Withdraw unpaid family offer</button></form><form method="post" action="{{ $actionUrl('venmo') }}" class="form-grid">
 @csrf<input type="hidden" name="invoice_id" value="{{ $i->id }}"><label>Verified Venmo transfer reference<input required name="reference"></label><label>Received amount in cents<input required type="number" name="amount_cents" value="{{ $i->amount_cents }}"></label><button>Confirm Venmo received</button></form>
-@endif 
+@endif
 @foreach($payments->where('invoice_id',$i->id) as $payment)
 @php($refundable = $payment->amount_cents - $refunds->where('invoice_id',$i->id)->filter(fn($refund)=>($refund['evidence']['payment_id']??null)===$payment->id && in_array($refund['status'],['pending','uncertain','succeeded']))->sum('amount_cents'))
 <p><strong>{{ ucfirst($payment->provider) }} payment: ${{ number_format($payment->amount_cents/100,2) }}</strong> · refundable ${{ number_format($refundable/100,2) }}</p>
@@ -126,7 +126,7 @@
 @foreach($coaches as $c)<div class="row"><div><strong>{{ $c->name }}</strong><p class="muted">{{ ucfirst($c->role) }} coach · {{ implode(', ',array_map(fn($k)=>config('soccer.teams.'.$k.'.name'),json_decode($c->team_keys,true))) }}</p><p>Jersey: {{ $c->jersey_size??'Size needed' }}</p></div>
 @if($c->user_id===auth()->id())<form action="{{ $actionUrl('coach-size') }}" method="post" class="actions">
 @csrf<label>Adult jersey size<select required name="jersey_size">
-@foreach(['XS','S','M','L','XL','2XL','3XL'] as $size)<option 
+@foreach(['XS','S','M','L','XL','2XL','3XL'] as $size)<option
 @selected($c->jersey_size===$size)>{{ $size }}</option>
 @endforeach</select></label><button>Save size</button></form>
 @endif</div>
@@ -191,12 +191,12 @@
 @if($season)<form method="post" action="{{ $actionUrl('season') }}">
 @csrf<input type="hidden" name="id" value="{{ $season->id }}"><div class="form-grid"><label>First practice date<input type="date" name="starts_on" value="{{ $season->starts_on }}"></label><label>Age cutoff date<input type="date" name="age_as_of" value="{{ $season->age_as_of??$season->starts_on }}"></label><label>Scheduled opening · Eastern time<input type="datetime-local" name="registration_opens_at" value="{{ $season->registration_opens_at?\Carbon\CarbonImmutable::parse($season->registration_opens_at)->timezone('America/New_York')->format('Y-m-d\\TH:i'):'' }}"></label><label>Offer deadline (hours)<input type="number" name="offer_hours" min="1" max="336" value="{{ $season->offer_hours }}"></label></div>
 @foreach($capacity as $k=>$tm)<div class="row"><strong>{{ $tm['name'] }}</strong><div class="actions"><label>Public spots<input type="number" name="teams[{{ $k }}][public]" value="{{ $tm['public'] }}" min="{{ $tm['public_used'] }}"></label><label>Admin reserve<input type="number" name="teams[{{ $k }}][reserved]" value="{{ $tm['reserved'] }}" min="{{ $tm['reserved_used'] }}"></label></div></div>
-@endforeach<label style="margin:20px 0"><span><input type="checkbox" name="registration_open" value="1" 
+@endforeach<label style="margin:20px 0"><span><input type="checkbox" name="registration_open" value="1"
 @checked($season->registration_open)> Open registration after setup verification</span></label><button>Save season</button></form>
 @endif</section><section class="section"><h2>GroupMe connections</h2><form method="post" action="{{ $actionUrl('settings') }}">
 @csrf<div class="form-grid">
 @foreach(['soccer'=>'Soccer','head_coaches'=>'Head Coaches','all_coaches'=>'All Coaches'] as $key=>$label)<label>{{ $label }} group ID<input name="{{ $key }}_group" value="{{ $settings['groupme_groups'][$key]??'' }}"></label>
-@endforeach<label>Soccer group join link<input type="url" name="soccer_group_url" value="{{ $settings['soccer_group_url']??'' }}"></label></div><label><span><input type="checkbox" name="launch_verified" value="1" 
+@endforeach<label>Soccer group join link<input type="url" name="soccer_group_url" value="{{ $settings['soccer_group_url']??'' }}"></label></div><label><span><input type="checkbox" name="launch_verified" value="1"
 @checked($settings['launch_verified']??false)> I verified sign-in email, card payment/refund, Sarah/family SMS delivery, and the three GroupMe groups</span></label><button style="margin-top:20px">Save verified connections</button></form></section><section class="section"><h2>Import review · {{ $imports->count() }} unresolved rows</h2><p class="muted">Missing or conflicting identity data requires review before linking to a family.</p>
 @foreach($imports as $i)<details><summary>{{ $i['source'] }} · row {{ $i['row_number'] }} · {{ $i['season_key'] }}</summary><dl>
 @foreach($i['evidence']['row']??[] as $label=>$value)
