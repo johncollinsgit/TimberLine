@@ -7,7 +7,9 @@ Wren has an isolated, default-disabled soccer lane and an authenticated bridge
 to easleyfamilysoccer.com. Parents use public verified-email family sessions;
 coaches receive assigned-team backend access. Historical evidence is immutable,
 imports are replayable, and Spring 2027 stays closed behind season/provider
-readiness. Follow `docs/operations/wren-soccer.md` for release, setup, and rollback.
+readiness. Wren-only SMS provisioning uses an explicit tenant-ID allowlist;
+Settings collects encrypted operator details without activating an unapproved sender.
+Follow `docs/operations/wren-soccer.md` for release, setup, and rollback.
 
 Evergrove `/book` has consultation briefs and a short business-hurdle form using
 `service_inquiries` and the existing Landlord Messages inbox. Google scheduling
