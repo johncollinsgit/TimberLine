@@ -1,5 +1,14 @@
 # START HERE
 
+
+## 2026-10-13 - Wren family soccer workspace
+
+Wren has an isolated, default-disabled soccer lane and an authenticated bridge
+to easleyfamilysoccer.com. Parents use public verified-email family sessions;
+coaches receive assigned-team backend access. Historical evidence is immutable,
+imports are replayable, and Spring 2027 stays closed behind season/provider
+readiness. Follow `docs/operations/wren-soccer.md` for release, setup, and rollback.
+
 Evergrove `/book` has consultation briefs and a short business-hurdle form using
 `service_inquiries` and the existing Landlord Messages inbox. Google scheduling
 uses the owner's verified one-hour Google Meet appointment schedule, embedded

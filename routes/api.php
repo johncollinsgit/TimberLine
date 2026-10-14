@@ -219,3 +219,20 @@ Route::post('/trajectory/webhooks/sms', [\App\Http\Controllers\Trajectory\Webhoo
 // Pinned public content and inquiry endpoints; no client-selected tenant or site.
 Route::get('/connected-website/carolina-barrel/content', [\App\Http\Controllers\ConnectedWebsiteController::class, 'content']);
 Route::post('/connected-website/carolina-barrel/inquiries', [\App\Http\Controllers\ConnectedWebsiteController::class, 'inquire'])->middleware('throttle:20,1');
+
+// Public renderer uses a server-only HMAC bridge; families never get tenant membership.
+\Illuminate\Support\Facades\Route::match(['get', 'post'], '/soccer/portal/{action}', [\App\Http\Controllers\Soccer\SoccerPortalController::class, 'handle'])->middleware([\App\Http\Middleware\Soccer\VerifySoccerBridge::class, 'throttle:600,1']);
+\Illuminate\Support\Facades\Route::get('/soccer/content', fn (\Illuminate\Http\Request $r) => response()->json(app(\App\Services\Soccer\SoccerWebsiteService::class)->publicContent($r->query('preview')))->header('Cache-Control', 'private, no-store'));
+\Illuminate\Support\Facades\Route::post('/soccer/stripe', [\App\Http\Controllers\Soccer\SoccerWebhookController::class, 'stripe']);
+\Illuminate\Support\Facades\Route::post('/soccer/sms', [\App\Http\Controllers\Soccer\SoccerWebhookController::class, 'sms']);
+
+\Illuminate\Support\Facades\Route::get('/soccer/release-data/{id}', function (\Illuminate\Http\Request $r, string $id) {
+    $t = \App\Models\Tenant::where('slug', config('soccer.tenant_slug'))->firstOrFail();
+    $u = \App\Models\User::findOrFail($r->query('actor'));
+    abort_unless(app(\App\Services\Soccer\SoccerAccess::class)->admin($t, $u), 403);
+    $store = app(\App\Services\Soccer\SoccerStore::class);
+    $release = $store->row('releases', $t->id, $id);
+    $player = $release->player_id ? $store->row('players', $t->id, $release->player_id) : null;
+
+    return response()->json(['playerName' => $player?->name ?? ($store->decrypt($release->answers)['child1Name'] ?? 'Player'), 'answers' => $store->decrypt($release->answers), 'season_key' => $release->season_key, 'signed_at' => $release->signed_at])->header('Cache-Control', 'private, no-store')->header('Referrer-Policy', 'no-referrer');
+})->middleware('signed')->name('soccer.release-data');

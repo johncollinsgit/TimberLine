@@ -50,6 +50,10 @@ class UnifiedAppNavigationService
         $tenantId = $tenant ? (int) $tenant->id : null;
         $profile = $this->experienceProfileService->forTenant($tenantId, $user, $tenant);
 
+        if (($profile['workspace_focus'] ?? null) === 'soccer' && $tenant && $user && app(\App\Services\Soccer\SoccerAccess::class)->enabled($tenant)) {
+            return app(\App\Services\Soccer\SoccerWorkspaceService::class)->navigation($request, $tenant, $user, $profile);
+        }
+
         if (($profile['workspace_focus'] ?? null) === 'website_sales' && $tenant && $user) {
             return $this->buildWebsiteSalesShell($request, $tenant, $user, $profile);
         }

@@ -42,6 +42,11 @@ class HomeRedirect
             return route('app.start', absolute: false);
         }
 
+        $soccerTenant = $tenant ?? $user->tenants()->wherePivot('membership_active', true)->where('slug', config('soccer.tenant_slug'))->first();
+        if ($soccerTenant && app(\App\Services\Soccer\SoccerAccess::class)->enabled($soccerTenant)) {
+            return route('soccer.workspace', ['tenant' => $soccerTenant->slug], absolute: false);
+        }
+
         $role = (string) ($user->role ?? '');
 
         if ($role === 'pouring') {

@@ -142,7 +142,7 @@ class TenantExperienceProfileService
         }
         $metadata = \App\Models\TenantAccessProfile::query()->where('tenant_id', $tenantId)->value('metadata');
 
-        return data_get($metadata, 'workspace_focus') === 'website_sales' ? 'website_sales' : null;
+        return in_array(data_get($metadata, 'workspace_focus'), ['website_sales', 'soccer'], true) ? data_get($metadata, 'workspace_focus') : null;
     }
 
     protected function hasShopifyConnection(?int $tenantId, ?Tenant $tenant = null): bool
