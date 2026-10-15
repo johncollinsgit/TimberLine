@@ -75,3 +75,13 @@ The mapping migration uses short named keys, restarts after a bare-table MySQL
 interruption, and retains identity/provenance on code rollback. Its required MySQL
 recovery case is registered in the existing release-gate suite. Generate and review
 the combined disposable MySQL schema baseline before production deployment.
+
+## Combined release verification
+
+Disposable baseline run `38815948663` generated and blank-import verified the
+combined Phase 4 outbox and catalog mapping schema: 404 tables, canonical hash
+`a4555a6bd2c82afd4e5819b261e182827fab3de502d05aff45f1040ffd4eb1e5`.
+Review against repaired production adds only the two native tables and migration
+bookkeeping; three existing varchar definitions gain redundant explicit utf8mb4
+formatting. No merchant data is in the SQL artifact. Local combined Website
+regression passed 265 tests / 1,446 assertions; final release CI remains required.

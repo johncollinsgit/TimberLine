@@ -1600,7 +1600,7 @@ DROP TABLE IF EXISTS `collections`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `collections` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -2072,7 +2072,7 @@ CREATE TABLE `development_change_logs` (
   `tenant_id` bigint unsigned DEFAULT NULL,
   `title` varchar(180) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `summary` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `area` varchar(180) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `area` varchar(180) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_by` bigint unsigned DEFAULT NULL,
   `shopify_admin_user_id` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `shopify_admin_email` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -6963,7 +6963,7 @@ DROP TABLE IF EXISTS `seasonal_scents`;
 CREATE TABLE `seasonal_scents` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `scent_id` bigint unsigned NOT NULL,
-  `season` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `season` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -10161,6 +10161,41 @@ CREATE TABLE `website_carts` (
   CONSTRAINT `website_carts_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `website_catalog_source_mappings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `website_catalog_source_mappings` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `tenant_site_id` bigint unsigned NOT NULL,
+  `provider` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `source_shop` varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `source_type` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `source_gid` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `website_product_id` bigint unsigned DEFAULT NULL,
+  `website_product_variant_id` bigint unsigned DEFAULT NULL,
+  `website_collection_id` bigint unsigned DEFAULT NULL,
+  `source_fingerprint` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `target_fingerprint` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provenance` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `wcs_source_uq` (`tenant_id`,`tenant_site_id`,`provider`,`source_shop`,`source_type`,`source_gid`),
+  KEY `wcs_site_fk` (`tenant_site_id`),
+  KEY `wcs_product_fk` (`website_product_id`),
+  KEY `wcs_variant_fk` (`website_product_variant_id`),
+  KEY `wcs_collection_fk` (`website_collection_id`),
+  KEY `wcs_product_idx` (`tenant_id`,`website_product_id`),
+  KEY `wcs_variant_idx` (`tenant_id`,`website_product_variant_id`),
+  KEY `wcs_collection_idx` (`tenant_id`,`website_collection_id`),
+  CONSTRAINT `wcs_collection_fk` FOREIGN KEY (`website_collection_id`) REFERENCES `website_collections` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `wcs_product_fk` FOREIGN KEY (`website_product_id`) REFERENCES `website_products` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `wcs_site_fk` FOREIGN KEY (`tenant_site_id`) REFERENCES `tenant_sites` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `wcs_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `wcs_variant_fk` FOREIGN KEY (`website_product_variant_id`) REFERENCES `website_product_variants` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `website_collection_products`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -10404,6 +10439,39 @@ CREATE TABLE `website_order_lines` (
   CONSTRAINT `website_lines_order_fk` FOREIGN KEY (`website_order_id`) REFERENCES `website_orders` (`id`) ON DELETE CASCADE,
   CONSTRAINT `website_lines_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
   CONSTRAINT `website_lines_variant_fk` FOREIGN KEY (`website_product_variant_id`) REFERENCES `website_product_variants` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `website_order_notifications`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `website_order_notifications` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `website_order_id` bigint unsigned NOT NULL,
+  `website_shipment_id` bigint unsigned DEFAULT NULL,
+  `transition_key` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `kind` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `snapshot` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `attempts` smallint unsigned NOT NULL DEFAULT '0',
+  `next_attempt_at` timestamp NULL DEFAULT NULL,
+  `lease_token` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `lease_expires_at` timestamp NULL DEFAULT NULL,
+  `accepted_at` timestamp NULL DEFAULT NULL,
+  `provider_message_id` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `failure_code` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `won_transition_uq` (`tenant_id`,`transition_key`),
+  KEY `won_order_fk` (`website_order_id`),
+  KEY `won_shipment_fk` (`website_shipment_id`),
+  KEY `won_due_idx` (`status`,`next_attempt_at`,`id`),
+  KEY `won_lease_idx` (`status`,`lease_expires_at`,`id`),
+  KEY `won_order_status_idx` (`tenant_id`,`website_order_id`,`status`),
+  CONSTRAINT `won_order_fk` FOREIGN KEY (`website_order_id`) REFERENCES `website_orders` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `won_shipment_fk` FOREIGN KEY (`website_shipment_id`) REFERENCES `website_shipments` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `won_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `website_orders`;
@@ -11402,3 +11470,5 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (275,'2026_10_06_17
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (276,'2026_10_08_000000_create_fleet_operation_records',21);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (277,'2026_10_13_220000_create_soccer_workspace',22);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (278,'2026_10_15_220000_reconcile_reviewed_schema_drift',23);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (279,'2026_10_15_210000_create_website_order_notifications',24);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (280,'2026_10_15_230000_create_website_catalog_source_mappings',24);
