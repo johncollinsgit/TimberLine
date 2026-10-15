@@ -764,6 +764,8 @@ Route::post('/account/profile', [WebsiteShopperAccountController::class, 'update
 Route::get('/account/orders/{number}', [WebsiteShopperAccountController::class, 'order'])->name('managed-website.store.account.orders.show');
 Route::post('/cart/items/{variant}', [WebsiteCommerceController::class, 'addCartItem'])->middleware('throttle:30,1')->name('managed-website.store.cart.items.store');
 Route::post('/cart/lines/{item}', [WebsiteCommerceController::class, 'updateCartItem'])->middleware('throttle:30,1')->name('managed-website.store.cart.lines.update');
+Route::post('/checkout/website/resume', [WebsiteCommerceController::class, 'resumeCheckout'])->middleware('throttle:10,1')->name('managed-website.store.checkout.resume');
+Route::post('/checkout/website/cancel', [WebsiteCommerceController::class, 'cancelCheckout'])->middleware('throttle:10,1')->name('managed-website.store.checkout.cancel');
 Route::post('/checkout/website', [WebsiteCommerceController::class, 'checkout'])->middleware('throttle:10,1')->name('managed-website.store.checkout');
 Route::post('/cart/shipping-rates', [WebsiteCommerceController::class, 'shippingRates'])->middleware('throttle:10,1')->name('managed-website.store.shipping-rates');
 Route::get('/checkout/website/success', [WebsiteCommerceController::class, 'success'])->name('managed-website.store.success');

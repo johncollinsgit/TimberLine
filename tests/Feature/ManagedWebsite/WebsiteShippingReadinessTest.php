@@ -19,8 +19,10 @@ use App\Services\ManagedWebsite\WebsiteShippingReadinessService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
+use Tests\Support\WebsiteStripeFixture;
 
 beforeEach(function (): void {
+    config()->set('managed_website.stripe_webhook_secret', 'whsec_website_fixture');
     $this->withoutVite();
     $this->tenant = Tenant::query()->create(['name' => 'Retail weights', 'slug' => 'retail-weights']);
     $this->actor = User::factory()->tenantAdmin()->create(['is_active' => true, 'email_verified_at' => now(), 'approved_at' => now()]);
@@ -208,7 +210,7 @@ test('missing weights stop carrier requests and shipping checkout but do not sto
     IntegrationConnection::query()->create(['tenant_id' => $this->tenant->id, 'provider' => 'easypost', 'status' => 'connected', 'access_token' => 'EZTK_test_weights']);
     $product = weightProduct($this->site, $this->actor, 'soap');
     $cart = $this->commerce->addToCart($this->commerce->cartFor($this->site, null), $product->variants->first(), 1);
-    Http::fake(['https://api.stripe.com/v1/checkout/sessions' => Http::response(['id' => 'cs_weights', 'url' => 'https://checkout.example.test/weights'])]);
+    Http::fake([...WebsiteStripeFixture::support(), 'https://api.stripe.com/v1/checkout/sessions' => Http::response(['id' => 'cs_weights', 'url' => 'https://checkout.stripe.com/weights'])]);
     expect(fn () => app(WebsiteCommerceShippingService::class)->quote($cart, []))->toThrow(ValidationException::class);
     Http::assertNothingSent();
     $location = WebsiteFulfillmentLocation::query()->create(['tenant_id' => $this->tenant->id, 'tenant_site_id' => $this->site->id, 'name' => 'Warehouse', 'address' => []]);
@@ -217,6 +219,7 @@ test('missing weights stop carrier requests and shipping checkout but do not sto
     expect(fn () => $this->commerce->beginCheckout($cart, $buyer, 'https://example.test/success', 'https://example.test/cart'))->toThrow(ValidationException::class);
     expect(WebsiteOrder::query()->count())->toBe(0);
     Http::assertNothingSent();
+    WebsiteStripeFixture::origin($this->site);
     $buyer['fulfillment_method'] = 'pickup';
     $result = $this->commerce->beginCheckout($cart, $buyer, 'https://example.test/success', 'https://example.test/cart');
     expect($result['order']->fulfillment_method)->toBe('pickup')->and($product->fresh()->status)->toBe('active');

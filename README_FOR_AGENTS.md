@@ -1,3 +1,26 @@
+## Retail shipping Phase 3 (2026-10-15)
+
+- Continue from the phased retail shipping plan. Phase 3 is isolated on
+  `codex/retail-shipping-phase-3`, stacked on Phase 2 (draft PR #395).
+- Native checkout attempts use `WebsitePayment.metadata.checkout_version = 1`.
+  Never release their active reservations merely because `expires_at` passed;
+  reconcile canonical provider state first. Pre-versioned pending attempts
+  require manual provider review. Do not retrofit legacy or Shopify payments.
+- Frozen Stripe requests/URLs/tax address are encrypted in
+  `WebsiteOrder.service_request.checkout`. Keep PII and hosted payment URLs out
+  of plain payment metadata and webhook evidence. Native provider calls use
+  the pinned contract via `WebsiteStripeService` and the original platform-key
+  fingerprint; key/account changes require deliberate reconciliation.
+- New checkout requires existing entitlement/rollout/Connect/tax readiness and
+  its signed webhook secret. Recovery/refunds deliberately service previously
+  authorized native attempts while checkout is paused. The five-minute
+  `website:reconcile-payments` command uses provider GETs, reports failures,
+  rotates at most 100 attempts by default, and never enables commerce.
+- Refund callers must retain their request UUID on retries. Pending/unknown
+  operations reserve balance. Never auto-restock on refund. Fulfillment remains
+  blocked for `payment_review` and `paid_review`. Real tax, fee/transfer/payout,
+  label, notification, and physical-delivery evidence remain launch gates.
+
 ## Retail shipping Phase 2 (2026-10-15)
 
 - Continue from `docs/operations/retail-shipping-launch-plan.md`. Phase 1 is

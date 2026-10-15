@@ -111,6 +111,7 @@ class WebsiteCommerceShippingService
         return DB::transaction(function () use ($order, $quote, $actor, $tenant): WebsiteShipment {
             $order = WebsiteOrder::query()->lockForUpdate()->with('lines', 'fulfillments.lines')->findOrFail($order->id);
             abort_unless($order->payment_status === 'paid' && $order->fulfillment_method === 'ship', 422, 'Only paid shipping orders can receive labels.');
+            app(WebsitePaymentService::class)->assertFulfillable($order);
             $quote = app(WebsiteShippingPlanService::class)->quoteForOrder($order, $quote->id);
             app(WebsiteShippingPlanService::class)->assertOrderQuote($order, $quote);
             $fulfillment = WebsiteFulfillment::query()->create([

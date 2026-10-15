@@ -3,7 +3,7 @@
     $shippingSubtotal = $cart->items->sum(fn ($item) => $item->variant->price_cents * $item->quantity);
 @endphp
 <fieldset id="website-shipping-fields" style="border:0;padding:0;margin:18px 0" data-rates-url="{{ route('managed-website.store.shipping-rates') }}" data-checkout-ready="{{ $checkoutReady ? 1 : 0 }}" data-threshold="{{ $shippingThreshold }}" data-subtotal="{{ $shippingSubtotal }}">
-    <legend style="font-weight:700;margin-bottom:12px">Shipping address</legend>
+    <legend style="font-weight:700;margin-bottom:12px">Delivery address</legend>
     <input type="hidden" name="shipping_address[name]">
     @foreach(['street1' => ['Street address', 'address-line1'], 'street2' => ['Apartment / suite', 'address-line2'], 'city' => ['City', 'address-level2'], 'state' => ['State', 'address-level1'], 'zip' => ['ZIP code', 'postal-code']] as $key => [$label, $autocomplete])
         <label style="display:block;margin:10px 0">{{ $label }}<input @required($key !== 'street2') name="shipping_address[{{ $key }}]" autocomplete="{{ $autocomplete }}" @if($key === 'state') maxlength="2" @endif style="display:block;width:100%;margin-top:5px;padding:10px;border:1px solid #b7c3b7;border-radius:5px"></label>
@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const form = fields.closest('form'), method = form.querySelector('[name="fulfillment_method"]'), finder = fields.querySelector('[data-find-rates]'), results = fields.querySelector('[data-shipping-rates]'), pay = form.querySelector('button[type="submit"]'), name = form.querySelector('[name="name"]');
     let revision = 0, controller;
     const ships = () => method.value === 'ship';
+    const delivers = () => ['ship', 'local_delivery'].includes(method.value);
     const money = cents => new Intl.NumberFormat('en-US', {style:'currency', currency:'USD'}).format(cents / 100);
     function reset() {
         revision++; controller?.abort(); finder.disabled = false;
@@ -27,7 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('[data-estimated-total]').forEach(e => e.textContent = money(Number(fields.dataset.subtotal)));
     }
     function toggle() {
-        reset(); fields.hidden = !ships(); fields.disabled = !ships();
+        reset(); fields.hidden = !delivers(); fields.disabled = !delivers(); finder.hidden = !ships();
     }
     method.addEventListener('change', toggle);
     fields.addEventListener('input', event => { if (event.target.name?.startsWith('shipping_address[')) reset(); });

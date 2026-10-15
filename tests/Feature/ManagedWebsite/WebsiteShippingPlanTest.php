@@ -21,8 +21,10 @@ use App\Services\ManagedWebsite\WebsiteShippingSetupService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
+use Tests\Support\WebsiteStripeFixture;
 
 beforeEach(function (): void {
+    config()->set('managed_website.stripe_webhook_secret', 'whsec_website_fixture');
     $this->withoutVite();
     $this->tenant = Tenant::query()->create(['name' => 'Shipping pilot', 'slug' => 'shipping-pilot']);
     $this->actor = User::factory()->tenantAdmin()->create(['is_active' => true, 'email_verified_at' => now(), 'approved_at' => now()]);
@@ -56,7 +58,7 @@ beforeEach(function (): void {
     $this->carrierResponse = shippingPlanResponse();
     $this->afterRateRequest = null;
     Http::preventStrayRequests();
-    Http::fake([
+    Http::fake([...WebsiteStripeFixture::support(),
         'https://api.easypost.com/v2/shipments' => function () {
             if ($this->afterRateRequest) {
                 ($this->afterRateRequest)();
@@ -64,7 +66,7 @@ beforeEach(function (): void {
 
             return Http::response($this->carrierResponse);
         },
-        'https://api.stripe.com/v1/checkout/sessions' => Http::response(['id' => 'cs_pilot', 'url' => 'https://checkout.stripe.test/pilot']),
+        'https://api.stripe.com/v1/checkout/sessions' => Http::response(['id' => 'cs_pilot', 'url' => 'https://checkout.stripe.com/pilot']),
         'https://api.easypost.com/v2/shipments/shp_pilot/buy' => Http::response(['id' => 'shp_pilot', 'tracking_code' => 'TEST9400', 'selected_rate' => ['carrier' => 'USPS', 'service' => 'GroundAdvantage', 'rate' => '5.25', 'currency' => 'USD'], 'postage_label' => ['label_url' => 'https://labels.test/pilot']]),
     ]);
 });
@@ -161,12 +163,14 @@ test('checkout rejects a changed destination and saves the accepted address and 
         ->and($result['order']->shipping_cents)->toBe(525);
 });
 
-test('cart edits preserve order shipping evidence and a paid order can still use its original plan', function (): void {
+test('paid carts are frozen and an expired quote still supplies the original label plan', function (): void {
     $quote = $this->shipping->quote($this->cart, $this->destination)[0];
     $order = $this->commerce->beginCheckout($this->cart, $this->buyer + ['shipping_rate_quote_id' => $quote->id], 'https://pilot.test/success', 'https://pilot.test/cart')['order'];
     $snapshot = $order->shipping_rate_snapshot;
-    $order->update(['payment_status' => 'paid']);
-    $this->commerce->setCartQuantity($this->cart, $this->cart->items->first()->id, 2);
+    $this->commerce->processStripeEvent(WebsiteStripeFixture::event($order));
+    $order->refresh();
+    expect(fn () => $this->commerce->setCartQuantity($this->cart, $this->cart->items->first()->id, 2))->toThrow(HttpException::class);
+    $quote->update(['expires_at' => now()->subSecond()]);
     expect($quote->fresh()->expires_at->isPast())->toBeTrue()->and(WebsiteShippingRateQuote::query()->whereKey($quote->id)->exists())->toBeTrue();
     $this->variant->update(['shipping_weight_ounces' => 20]);
     $shipment = $this->shipping->purchaseLabel($order, $quote->fresh(), $this->actor);
@@ -176,7 +180,8 @@ test('cart edits preserve order shipping evidence and a paid order can still use
 test('a label cannot use another carts quote even within the same merchant', function (): void {
     $quote = $this->shipping->quote($this->cart, $this->destination)[0];
     $order = $this->commerce->beginCheckout($this->cart, $this->buyer + ['shipping_rate_quote_id' => $quote->id], 'https://pilot.test/success', 'https://pilot.test/cart')['order'];
-    $order->update(['payment_status' => 'paid']);
+    $this->commerce->processStripeEvent(WebsiteStripeFixture::event($order));
+    $order->refresh();
     $other = $this->commerce->addToCart($this->commerce->cartFor($this->site, null), $this->variant, 1);
     $otherQuote = $this->shipping->quote($other, $this->destination)[0];
     expect(fn () => $this->shipping->purchaseLabel($order, $otherQuote, $this->actor))->toThrow(HttpException::class);
@@ -207,7 +212,8 @@ test('package setup rejects foreign variants and missing tested capacity confirm
 test('an immutable order plan remains usable after the cart and quote are deleted', function (): void {
     $quote = $this->shipping->quote($this->cart, $this->destination)[0];
     $order = $this->commerce->beginCheckout($this->cart, $this->buyer + ['shipping_rate_quote_id' => $quote->id], 'https://pilot.test/success', 'https://pilot.test/cart')['order'];
-    $order->update(['payment_status' => 'paid']);
+    $this->commerce->processStripeEvent(WebsiteStripeFixture::event($order));
+    $order->refresh();
     $this->cart->delete();
     expect(WebsiteShippingRateQuote::query()->whereKey($quote->id)->exists())->toBeFalse();
     $snapshotQuote = $this->plans->quoteForOrder($order, $quote->id);
@@ -288,6 +294,8 @@ test('JSON object key reordering does not invalidate carrier or order evidence',
     $quote = $this->shipping->quote($this->cart, $this->destination)[0];
     $quote->update(['parcel' => $reorder($quote->parcel)]);
     $order = $this->commerce->beginCheckout($this->cart, $this->buyer + ['shipping_rate_quote_id' => $quote->id], 'https://pilot.test/success', 'https://pilot.test/cart')['order'];
-    $order->update(['shipping_rate_snapshot' => $reorder($order->shipping_rate_snapshot), 'payment_status' => 'paid']);
+    $this->commerce->processStripeEvent(WebsiteStripeFixture::event($order));
+    $order->refresh();
+    $order->update(['shipping_rate_snapshot' => $reorder($order->shipping_rate_snapshot)]);
     expect($this->shipping->purchaseLabel($order, $quote->fresh(), $this->actor)->tracking_number)->toBe('TEST9400');
 });

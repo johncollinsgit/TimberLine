@@ -17,8 +17,10 @@ use App\Services\ManagedWebsite\ManagedWebsiteService;
 use App\Services\ManagedWebsite\WebsiteCommerceService;
 use App\Services\ManagedWebsite\WebsiteCommerceShippingService;
 use Illuminate\Support\Facades\Http;
+use Tests\Support\WebsiteStripeFixture;
 
 beforeEach(function (): void {
+    config()->set('managed_website.stripe_webhook_secret', 'whsec_website_fixture');
     config()->set('managed_website.commerce_enabled', true);
     config()->set('managed_website.editor_enabled', true);
     config()->set('managed_website.publishing_enabled', true);
@@ -182,9 +184,9 @@ test('native US shipping quotes, purchases labels, voids safely, and leaves lega
     $commerce = app(WebsiteCommerceService::class);
     $product = $commerce->saveProduct($site, ['title' => 'Field notebook', 'product_type' => 'physical', 'status' => 'active', 'price' => '20.00', 'track_inventory' => true, 'inventory_quantity' => 3, 'shipping_weight_ounces' => 12, 'shipping_length_inches' => 5, 'shipping_width_inches' => 4, 'shipping_height_inches' => 1, 'is_available' => true]);
     $cart = $commerce->addToCart($commerce->cartFor($site, null), $product->variants->firstOrFail(), 1);
-    Http::fake([
+    Http::fake([...WebsiteStripeFixture::support(),
         'https://api.easypost.com/v2/shipments' => Http::response(['id' => 'shp_rate_1', 'mode' => 'test', 'rates' => [['id' => 'rate_1', 'carrier' => 'USPS', 'service' => 'GroundAdvantage', 'rate' => '5.25', 'currency' => 'USD', 'delivery_days' => 3]]]),
-        'https://api.stripe.com/v1/checkout/sessions' => Http::response(['id' => 'cs_shipping_1', 'url' => 'https://checkout.stripe.test/shipping']),
+        'https://api.stripe.com/v1/checkout/sessions' => Http::response(['id' => 'cs_shipping_1', 'url' => 'https://checkout.stripe.com/shipping']),
         'https://api.easypost.com/v2/shipments/shp_rate_1/buy' => Http::response(['id' => 'shp_bought_1', 'tracking_code' => '9400TEST', 'tracker' => ['public_url' => 'https://track.test/9400TEST'], 'selected_rate' => ['carrier' => 'USPS', 'service' => 'GroundAdvantage', 'rate' => '5.25', 'currency' => 'USD'], 'postage_label' => ['label_url' => 'https://label.test/9400TEST']]),
         'https://api.easypost.com/v2/shipments/shp_bought_1/refund' => Http::response(['id' => 'shp_bought_1']),
     ]);
@@ -192,7 +194,7 @@ test('native US shipping quotes, purchases labels, voids safely, and leaves lega
     $quote = $shipping->quote($cart, ['name' => 'Buyer', 'street1' => '10 Market St', 'city' => 'Austin', 'state' => 'TX', 'zip' => '78702', 'country' => 'US'])[0];
     $result = $commerce->beginCheckout($cart, ['name' => 'Buyer', 'email' => 'buyer@example.test', 'fulfillment_method' => 'ship', 'shipping_rate_quote_id' => $quote->id, 'shipping_address' => $quote->destination], 'https://pilot.test/success', 'https://pilot.test/cart');
     $order = $result['order'];
-    $commerce->processStripeEvent(['id' => 'evt_shipping_paid', 'type' => 'checkout.session.completed', 'data' => ['object' => ['payment_status' => 'paid', 'payment_intent' => 'pi_shipping_1', 'amount_total' => 2525, 'total_details' => ['amount_tax' => 0], 'metadata' => ['website_order_id' => (string) $order->id]]]]);
+    $commerce->processStripeEvent(WebsiteStripeFixture::event($order, 'evt_shipping_paid'));
     $shipment = $shipping->purchaseLabel($order->fresh(), $quote, $actor);
     expect($order->fresh()->total_cents)->toBe(2525)
         ->and($shipment->tracking_number)->toBe('9400TEST')

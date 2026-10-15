@@ -1,5 +1,25 @@
 # SYSTEM SNAPSHOT
 
+## Native retail shipping Phase 3 (2026-10-15; review branch)
+
+- `WebsiteCheckoutService` saves durable attempts/holds before provider calls;
+  frozen requests and hosted URLs stay in encrypted order data. Both retail
+  carts expose scoped resume/cancel controls and freeze open checkout contents.
+- `WebsitePaymentService` verifies canonical Stripe Session/Intent/account/tax
+  and financial state before once-only inventory commitment. Uncertain payments
+  and stock conflicts block fulfillment; confirmed provider expiry releases
+  holds. Refund requests reserve balance, reverse destination transfers and
+  application fees, and reconcile final provider status without restocking.
+- `WebsiteStripeService` pins the native contract to `2025-06-30.basil`. The
+  native webhook secret is required for checkout; v1 signature rotation works.
+  `website:reconcile-payments` runs every five minutes with bounded native-only
+  recovery, including after new commerce is paused. No provider Session is
+  created by the reconciliation command.
+- No migration, deployment, rollout activation, real payment/refund, or postage
+  purchase is included. Phase 4 remains labels/tracking/recovery/customer
+  updates; Phase 5 proves merchant tax, settlement, and physical delivery.
+  See `docs/operations/retail-shipping-launch-plan.md` and the rollback runbook.
+
 ## Native retail shipping Phase 2 (2026-10-15; review branch)
 
 - Phase 1 is draft PR #394. Phase 2 adds reviewed package capacity, explicit USPS

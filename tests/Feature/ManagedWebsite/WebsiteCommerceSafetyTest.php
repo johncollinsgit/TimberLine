@@ -14,8 +14,10 @@ use App\Services\ManagedWebsite\WebsiteCommerceService;
 use App\Services\ManagedWebsite\WebsiteProductCsvService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Tests\Support\WebsiteStripeFixture;
 
 beforeEach(function (): void {
+    config()->set('managed_website.stripe_webhook_secret', 'whsec_website_fixture');
     config()->set('managed_website.commerce_enabled', true);
     config()->set('managed_website.editor_enabled', true);
     config()->set('managed_website.publishing_enabled', true);
@@ -61,17 +63,18 @@ test('checkout is server-priced and Stripe delivery is idempotent', function ():
     $website = app(ManagedWebsiteService::class);
     $site = $website->createSite($tenant, $actor);
     $commerce = app(WebsiteCommerceService::class);
+    WebsiteStripeFixture::origin($site);
     $product = $commerce->saveProduct($site, ['title' => 'Outdoor fire bowl', 'product_type' => 'physical', 'description' => 'A product.', 'status' => 'active', 'price' => '300.00', 'track_inventory' => true, 'inventory_quantity' => 3, 'is_available' => true]);
     $variant = $product->variants->firstOrFail();
     $cart = $commerce->cartFor($site, null);
     $cart = $commerce->addToCart($cart, $variant, 2);
-    Http::fake(['https://api.stripe.com/v1/checkout/sessions' => Http::response(['id' => 'cs_website_1', 'url' => 'https://checkout.stripe.test/cs_website_1'], 200)]);
+    Http::fake([...WebsiteStripeFixture::support(), 'https://api.stripe.com/v1/checkout/sessions' => Http::response(['id' => 'cs_website_1', 'url' => 'https://checkout.stripe.com/cs_website_1'], 200)]);
     $result = $commerce->beginCheckout($cart, ['name' => 'Buyer Name', 'email' => 'buyer@example.test', 'phone' => '555-0100', 'fulfillment_method' => 'pickup'], 'https://pilot.test/success', 'https://pilot.test/cart');
     $order = $result['order'];
     expect($order->total_cents)->toBe(60000)->and(WebsiteOrder::query()->count())->toBe(1);
-    Http::assertSentCount(1);
+    Http::assertSentCount(2);
 
-    $event = ['id' => 'evt_website_paid', 'type' => 'checkout.session.completed', 'data' => ['object' => ['payment_status' => 'paid', 'payment_intent' => 'pi_website_1', 'amount_total' => 60000, 'customer_details' => ['email' => 'buyer@example.test'], 'total_details' => ['amount_tax' => 0], 'metadata' => ['website_order_id' => (string) $order->id]]]];
+    $event = WebsiteStripeFixture::event($order, 'evt_website_paid');
     $commerce->processStripeEvent($event);
     $commerce->processStripeEvent($event);
     expect($order->fresh()->payment_status)->toBe('paid')

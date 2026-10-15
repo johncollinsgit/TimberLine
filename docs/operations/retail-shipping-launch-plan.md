@@ -91,15 +91,72 @@ separate verification gates; no real postage was purchased during implementation
 
 ## Phase 3 Payment and inventory reliability
 
-Use one reusable checkout attempt per cart revision. Align inventory holds with
-session expiry and define late/asynchronous payment handling. Verify event
-signature, merchant/account, mode, session, currency, and financial components.
-Keep payment transitions idempotent and ordered. Validate shipping/billing tax
-context, payout accounting, and customer refunds with the merchant's setup.
+Implemented on `codex/retail-shipping-phase-3`, stacked on Phase 2. No migration
+or production activation is included.
 
-Acceptance: duplicate submissions create one purchase; the last stock unit
-cannot be sold twice; mismatched events cannot mark an order paid; payment,
-shipping, tax, inventory, refunds, and settlement reconcile.
+- Create the order, inventory reservations, and a versioned payment attempt in
+  one transaction before calling Stripe. Site/cart locks serialize submissions;
+  durable provider idempotency keys recover a lost response against that same
+  attempt. Freeze provider requests and checkout URLs in encrypted order data.
+  Payment JSON contains identities, accounting, and operation state only.
+- Freeze cart/buyer details while an attempt is open. Both storefront themes
+  expose resume/cancel actions resolved from the verified host and session cart.
+  Only confirmed provider expiry releases stock. Local timestamps never discard
+  a still-active hold, and staff cancellation reconciles a payment that wins the
+  expiry race. Pending pre-versioned checkouts require manual provider review.
+- Use card payments for the initial pilot, explicit 35-minute sessions, and a
+  further five-minute recovery buffer. Persist the attempt-specific Stripe
+  Customer before the Session request. Recovery lists that customer's Sessions;
+  an unresolved provider outage retains holds and reports an actionable failure.
+- Pin the native Stripe contract to `2025-06-30.basil`. Use destination charges,
+  the connected merchant as settlement merchant and tax-liable account, and the
+  configured application fee on the pre-tax products/shipping amount. Shipping
+  is a native fixed shipping option, including free shipping, rather than a
+  taxable product pretending to be freight.
+- Freeze the accepted shipping/local-delivery destination as the attempt's
+  saved Stripe Customer shipping address. Physical pickup requires a complete
+  active US pickup origin for tax context. Billing is collected separately;
+  pure services use the collected billing address. Actual merchant tax settings
+  and registrations still require verification during the controlled launch.
+- Require the dedicated webhook secret before checkout. Validate timestamp and
+  every v1 signature candidate, reject bad JSON, and store PII-free event
+  evidence. Bind events to the saved attempt, tenant, session, mode, and nonce;
+  retrieve canonical platform-owned Session/PaymentIntent/Customer state rather
+  than trusting event totals or arrival order. Validate the currency, product,
+  shipping, discount, tax/total equation, tax liability, customer/address,
+  destination, on-behalf-of account, and application fee before fulfillment.
+- Commit tracked inventory once from the checkout snapshot under row locks.
+  Missing/reduced stock or a previously cancelled order produces `paid_review`;
+  mismatched provider details produce `payment_review`. Both block fulfillment.
+  Late failures/expiry and replayed paid events cannot downgrade confirmed
+  payment or decrement inventory after refunds. Capture available charge,
+  transfer, balance-transaction, fee, and net references for settlement review.
+- Reserve refund balances under the payment lock with per-request UUIDs and
+  stable provider idempotency keys. Pending/unknown refunds consume available
+  refund balance, but only canonical succeeded refunds increase refunded cents.
+  Reverse the merchant transfer and proportionally return the application fee.
+  Scheduled reconciliation and refund webhooks repair lost responses. Never
+  restock automatically; product returns are a separate operator decision.
+- Run `website:reconcile-payments --limit=100` every five minutes through the
+  existing scheduler. It rotates bounded native attempts, recovers missed
+  events with provider GETs, reconciles refunds, retains uncertain holds, and
+  exits unsuccessfully when attempts need another retry. It does not enable
+  commerce or start new provider checkout Sessions. Existing payments/refunds
+  can be serviced while new checkout is disabled.
+
+Acceptance: HTTP-faked tests cover duplicate submission, lost responses, early
+webhooks, last-unit holds, mismatches, event reordering, expiry, cancellation
+races, pending/replayed refunds, paused checkout servicing, signature rotation,
+and host/session scoping. The local verification includes 159 Website and Shopify
+surface-isolation tests, a production asset build, and four browser screens at
+desktop/mobile sizes. These tests do not establish a real merchant's tax,
+provider fees, transfer/payout settlement, or physical USPS delivery; retain those
+evidence requirements for Phase 5. See the rollback runbook for hold recovery.
+
+Provider references: [Checkout creation](https://docs.stripe.com/api/checkout/sessions/create),
+[Checkout tax address priority](https://docs.stripe.com/tax/checkout/page),
+[destination charges](https://docs.stripe.com/connect/destination-charges), and
+[refund transfer/application-fee behavior](https://docs.stripe.com/api/refunds/create).
 
 ## Phase 4 Labels tracking and customer updates
 
