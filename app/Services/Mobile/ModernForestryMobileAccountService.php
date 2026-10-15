@@ -126,7 +126,7 @@ class ModernForestryMobileAccountService
             section: 'candleClub',
             profile: $profile,
             tenantId: $tenantId,
-            resolver: fn (): array => $this->subscriptions->customerCandleClubPayload($profile),
+            resolver: fn (): array => $this->subscriptions->customerCandleClubPayload($profile, ($session->identity['source_type'] ?? '') === 'app_review_demo'),
             fallback: [
                 'status' => 'unknown',
                 'subscription' => null,
@@ -159,7 +159,7 @@ class ModernForestryMobileAccountService
      */
     public function candleClub(ModernForestryMobileCustomerSession $session): array
     {
-        return $this->subscriptions->customerCandleClubPayload($session->profile);
+        return $this->subscriptions->customerCandleClubPayload($session->profile, ($session->identity['source_type'] ?? '') === 'app_review_demo');
     }
 
     /**
@@ -171,7 +171,8 @@ class ModernForestryMobileAccountService
         return $this->subscriptions->recordCustomerCandleClubAction(
             $session->profile,
             (string) ($payload['action'] ?? ''),
-            $payload
+            $payload,
+            ($session->identity['source_type'] ?? '') === 'app_review_demo'
         );
     }
 
@@ -181,6 +182,11 @@ class ModernForestryMobileAccountService
      */
     public function candleClubScentFeedback(ModernForestryMobileCustomerSession $session, int $monthlyScentId, array $payload): array
     {
+        app(\App\Services\Subscriptions\SubscriptionAccessService::class)->assertEntitled((int) $session->profile->tenant_id);
+        if (($session->identity['source_type'] ?? '') === 'app_review_demo') {
+            return ['ok' => true, 'status' => 'preview_recorded', 'message' => 'Demo feedback only. No live review was saved.'];
+        }
+
         return $this->subscriptions->submitCandleClubScentFeedback($session->profile, $monthlyScentId, $payload);
     }
 

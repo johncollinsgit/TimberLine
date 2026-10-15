@@ -188,13 +188,15 @@ class ShopifyWebhookController extends Controller
             return response('Tenant context unresolved.', 202);
         }
 
-        app(SubscriptionModuleService::class)->recordShopifyWebhook(
+        $accepted = app(SubscriptionModuleService::class)->recordShopifyWebhook(
             $tenantId,
             $topic,
-            (array) $resolved['data']
+            (array) $resolved['data'],
+            $store,
+            (string) $request->header('X-Shopify-Webhook-Id', '')
         );
 
-        return response('ok', 200);
+        return response($accepted ? 'Evidence received; processing disabled.' : 'Subscription evidence not accepted; setup required.', $accepted ? 200 : 202);
     }
 
     /**

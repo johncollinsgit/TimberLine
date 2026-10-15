@@ -54,6 +54,18 @@ class SubscriptionsImportCandleClubRecipes extends Command
             return self::FAILURE;
         }
 
+        $access = app(\App\Services\Subscriptions\SubscriptionAccessService::class);
+        if ($apply && ! $access->entitled($tenantId)) {
+            $this->error('The Subscriptions add-on is not enabled for this workspace.');
+
+            return self::FAILURE;
+        }
+        if ($syncShopify) {
+            $this->error('Subscription provider execution is disabled. No Shopify lookup or product write was attempted.');
+
+            return self::FAILURE;
+        }
+
         if (! $this->requiredTablesExist()) {
             $this->error('Subscription and scent tables are not migrated yet.');
 
@@ -598,6 +610,7 @@ GRAPHQL;
     protected function photoFor(array $row): ?array
     {
         $query = $this->photoQuery($row);
+
         return app(FreeStockPhotoService::class)->firstMatch($query);
     }
 

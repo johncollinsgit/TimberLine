@@ -1754,7 +1754,7 @@ $catalog = [
         ],
         'subscriptions' => [
             'display_name' => 'Subscriptions',
-            'description' => 'Shopify-native recurring subscriptions with migration, billing operations, plan rules, and verified voting.',
+            'description' => 'Subscription setup, local requests for review, and Candle Club voting. Provider changes and payment retries remain disabled.',
             'status' => 'beta',
             'market_state' => 'SAFE_TO_MARKET',
             'channels' => ['shopify'],
@@ -1765,10 +1765,12 @@ $catalog = [
             'default_setup_status' => 'not_started',
             'dependencies' => ['customers', 'shopify'],
             'billing_mode' => 'add_on',
+            'confirmed_billing_statuses' => ['add_on_paid', 'add_on_comped', 'included_in_plan', 'custom_contract', 'trial'],
+            'confirmed_addon_sources' => ['stripe_fulfillment'],
             'visibility' => ['public_site' => true, 'app_store' => true, 'mobile_store' => true],
             'cta_routing' => 'add_module',
             'buyer_setup' => [
-                'outcome' => 'Run recurring subscriptions with migration support, billing operations, customer actions, and voting when needed.',
+                'outcome' => 'Prepare subscription rules and review local requests before verified Shopify operations are enabled.',
                 'best_for' => 'Shopify businesses that need recurring orders without leaving subscription operations scattered across tools.',
                 'what_you_need' => [
                     'Shopify access for the store that will own subscription contracts.',
@@ -2082,6 +2084,9 @@ $catalog = [
             'display_name' => 'Subscriptions',
             'label' => 'Subscriptions',
             'purchase_key' => 'addon.subscriptions',
+            'purchase_enabled' => false,
+            'pricing' => ['currency' => 'USD', 'recurring_price_cents' => 9900, 'setup_price_cents' => 0],
+            'stripe' => ['product_lookup_key' => 'addon_subscriptions', 'recurring_price_lookup_key' => 'addon_subscriptions_monthly'],
             'modules' => ['subscriptions'],
             'legacy_grants' => ['subscriptions'],
             'billing_mode' => 'add_on',

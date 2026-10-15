@@ -91,20 +91,28 @@ class SubscriptionStorefrontController extends Controller
     protected function tenantId(Request $request, TenantResolver $tenantResolver): ?int
     {
         $storeKey = $this->nullableString($request->input('store_key') ?? $request->input('store') ?? $request->query('store_key') ?? $request->query('store'));
-        $shop = $this->nullableString($request->input('shop') ?? $request->query('shop') ?? $request->header('X-Shopify-Shop-Domain'));
-
-        $store = $storeKey !== null ? ShopifyStores::find($storeKey, true) : null;
-        if (! is_array($store) && $shop !== null) {
-            $store = ShopifyStores::findByShopDomain($shop);
+        // Both shared verification modes sign the query. The legacy HMAC verifier
+        // accepts empty-body compatibility signatures, so a POST body/header can
+        // never supply or replace this subscription lane's store identity.
+        $shop = $this->nullableString($request->query('shop'));
+        if ($request->request->has('shop') && $request->request->get('shop') !== $request->query('shop')) {
+            return null;
         }
 
-        if (is_array($store)) {
-            return $tenantResolver->resolveTenantIdForStoreContext($store);
+        if ($shop === null) {
+            return null;
         }
+        $store = ShopifyStores::findByShopDomain($shop);
+        if (! is_array($store) || ($storeKey !== null && $storeKey !== (string) $store['key'])) {
+            return null;
+        }
+        $tenantId = $tenantResolver->resolveTenantIdForStoreContext($store);
+        if ($tenantId === null) {
+            return null;
+        }
+        app(\App\Services\Subscriptions\SubscriptionAccessService::class)->storeIdentity($tenantId, $store);
 
-        return $storeKey !== null
-            ? $tenantResolver->resolveTenantIdForStoreKey($storeKey)
-            : null;
+        return $tenantId;
     }
 
     protected function missingContext(string $scope): JsonResponse

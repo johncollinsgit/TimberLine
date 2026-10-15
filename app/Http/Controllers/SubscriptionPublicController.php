@@ -19,8 +19,11 @@ class SubscriptionPublicController extends Controller
 
         abort_if(! $pollRow, 404);
 
+        $payload = $subscriptions->pollPayload((int) $pollRow->id);
+        abort_if($payload === null, 404);
+
         return response()->view('subscriptions.public-poll', [
-            'poll' => $subscriptions->pollPayload((int) $pollRow->id),
+            'poll' => $payload,
             'tenantId' => (int) $pollRow->tenant_id,
             'shareToken' => (string) $pollRow->share_token,
         ]);

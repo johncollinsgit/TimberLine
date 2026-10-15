@@ -4,38 +4,90 @@ namespace App\Services\Subscriptions;
 
 use App\Models\MarketingProfile;
 use App\Models\MarketingReviewHistory;
-use App\Models\Tenant;
+use App\Models\User;
 use App\Services\Media\FreeStockPhotoService;
 use Carbon\CarbonImmutable;
-use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
-use InvalidArgumentException;
 
 class SubscriptionModuleService
 {
     public const MODULE_KEY = 'subscriptions';
+
     public const CANDLE_CLUB_TYPE = 'candle_club_scent';
+
+    public function __construct(protected SubscriptionAccessService $access, protected SubscriptionIntentValidator $intents) {}
+
+    protected function encryptedPayload(array $payload): string
+    {
+        return json_encode(['version' => 1, 'encrypted' => Crypt::encryptString(json_encode($payload, JSON_THROW_ON_ERROR))], JSON_THROW_ON_ERROR);
+    }
+
+    protected function assertManager(int $tenantId, ?int $actorId): void
+    {
+        $this->access->assertManager($tenantId, $actorId ? User::find($actorId) : auth()->user());
+    }
+
+    protected function operationalContracts(int $tenantId)
+    {
+        return DB::table('subscription_contracts')->where('tenant_id', $tenantId)
+            ->where('shopify_subscription_contract_gid', 'like', 'gid://shopify/SubscriptionContract/%')
+            ->where(function ($query): void {
+                $query->whereNull('metadata->app_review_demo')->orWhere('metadata->app_review_demo', false);
+            });
+    }
+
+    protected function operationalVotes(int $tenantId)
+    {
+        return DB::table('subscription_votes')->where('subscription_votes.tenant_id', $tenantId)
+            ->whereExists($this->operationalContracts($tenantId)
+                ->whereColumn('subscription_contracts.id', 'subscription_votes.subscription_contract_id')
+                ->whereColumn('subscription_contracts.shopify_subscription_contract_gid', 'subscription_votes.shopify_subscription_contract_gid')
+                ->selectRaw('1'))
+            ->whereIn('subscription_votes.subscription_poll_id', $this->operationalPolls($tenantId)->select('id'));
+    }
+
+    protected function operationalPolls(int $tenantId)
+    {
+        return DB::table('subscription_polls')->where('tenant_id', $tenantId)
+            ->where(function ($query): void {
+                $query->whereNull('metadata->app_review_demo')->orWhere('metadata->app_review_demo', false);
+            })
+            ->where(function ($query): void {
+                $query->whereNull('description')->orWhere('description', '<>', 'App Review demo ballot for Candle Club scent voting.');
+            });
+    }
+
+    protected function isDemoPoll(object $poll): bool
+    {
+        return (bool) ($this->decodeJson($poll->metadata ?? null)['app_review_demo'] ?? false)
+            || ($poll->description ?? '') === 'App Review demo ballot for Candle Club scent voting.';
+    }
 
     /**
      * @return array<string,mixed>
      */
     public function adminPayload(int $tenantId): array
     {
+        $this->assertManager($tenantId, null);
         $settings = $this->moduleSettings($tenantId);
         $candleClub = $this->candleClubSettings($tenantId);
-        $contracts = DB::table('subscription_contracts')->where('tenant_id', $tenantId);
+        $contracts = $this->operationalContracts($tenantId);
         $attempts = DB::table('subscription_billing_attempts')->where('tenant_id', $tenantId);
         $latestBatch = DB::table('subscription_migration_batches')
             ->where('tenant_id', $tenantId)
             ->orderByDesc('id')
             ->first();
 
+        $this->access->assertEntitled($tenantId);
         $poll = $this->activePoll($tenantId);
 
         return [
             'module' => $settings,
+            'readiness' => $this->access->readiness($tenantId),
             'candle_club' => $candleClub,
             'metrics' => [
                 'active_subscribers' => (clone $contracts)->where('status', 'active')->count(),
@@ -46,6 +98,7 @@ class SubscriptionModuleService
                 'upcoming_orders' => (clone $contracts)
                     ->where('status', 'active')
                     ->whereNotNull('next_billing_date')
+                    ->whereDate('next_billing_date', '>=', now()->toDateString())
                     ->whereDate('next_billing_date', '<=', now()->addDays(31)->toDateString())
                     ->count(),
             ],
@@ -80,8 +133,7 @@ class SubscriptionModuleService
             ] : null,
             'active_poll' => $poll,
             'recent_votes' => $poll
-                ? DB::table('subscription_votes')
-                    ->where('tenant_id', $tenantId)
+                ? $this->operationalVotes($tenantId)
                     ->where('subscription_poll_id', (int) $poll['id'])
                     ->count()
                 : 0,
@@ -94,8 +146,28 @@ class SubscriptionModuleService
      * @param  array<string,mixed>  $payload
      * @return array<string,mixed>
      */
-    public function saveCandleClubSettings(int $tenantId, array $payload): array
+    public function saveCandleClubSettings(int $tenantId, array $payload, ?int $actorId = null): array
     {
+        $this->assertManager($tenantId, $actorId);
+        Validator::make(['payload' => $payload], ['payload' => ['array:commitment_months,allowed_pauses_per_commitment,pause_duration_options,renewal_reward_months,first_gift_product_variant_gid,first_gift_label,renewal_gift_product_variant_gid,renewal_gift_label,cancellation_prompt,voting_reward_candle_cash,poll_defaults']])->validate();
+        Validator::make($payload, [
+            'commitment_months' => ['sometimes', 'integer', 'min:1', 'max:60'],
+            'allowed_pauses_per_commitment' => ['sometimes', 'integer', 'min:0', 'max:24'],
+            'pause_duration_options' => ['sometimes', 'array', 'min:1', 'max:12'],
+            'pause_duration_options.*' => ['integer', 'min:1', 'max:12', 'distinct'],
+            'renewal_reward_months' => ['sometimes', 'integer', 'min:1', 'max:60'],
+            'first_gift_product_variant_gid' => ['nullable', 'string', 'max:190', 'regex:/^gid:\/\/shopify\/ProductVariant\/[0-9]+$/D'],
+            'renewal_gift_product_variant_gid' => ['nullable', 'string', 'max:190', 'regex:/^gid:\/\/shopify\/ProductVariant\/[0-9]+$/D'],
+            'first_gift_label' => ['nullable', 'string', 'max:190'],
+            'renewal_gift_label' => ['nullable', 'string', 'max:190'],
+            'cancellation_prompt' => ['nullable', 'string', 'max:2000'],
+            'voting_reward_candle_cash' => ['sometimes', 'integer', 'min:0', 'max:1000'],
+            'poll_defaults' => ['sometimes', 'array:source_surfaces'],
+            'poll_defaults.source_surfaces' => ['sometimes', 'array', 'max:3'],
+            'poll_defaults.source_surfaces.*' => ['in:app,storefront,facebook', 'distinct'],
+        ])->validate();
+        $before = $this->candleClubSettings($tenantId);
+        $payload = [...$before, ...$payload];
         $data = [
             'commitment_months' => max(1, (int) ($payload['commitment_months'] ?? 6)),
             'allowed_pauses_per_commitment' => max(0, (int) ($payload['allowed_pauses_per_commitment'] ?? 2)),
@@ -114,10 +186,13 @@ class SubscriptionModuleService
             'updated_at' => now(),
         ];
 
-        DB::table('subscription_candle_club_settings')->updateOrInsert(
-            ['tenant_id' => $tenantId],
-            ['created_at' => now(), ...$data]
-        );
+        DB::table('subscription_candle_club_settings')->where('tenant_id', $tenantId)->update($data);
+        DB::table('subscription_lifecycle_events')->insert([
+            'tenant_id' => $tenantId, 'actor_user_id' => $actorId ?: auth()->id(),
+            'event_type' => 'local_settings_updated', 'source' => 'everbranch_setup', 'status' => 'local_setup',
+            'before_payload' => $this->encryptedPayload($before), 'after_payload' => $this->encryptedPayload($this->candleClubSettings($tenantId)),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
 
         return $this->candleClubSettings($tenantId);
     }
@@ -128,6 +203,9 @@ class SubscriptionModuleService
      */
     public function createMigrationDryRun(int $tenantId, ?int $actorId, array $rows = []): array
     {
+        $actorId ??= auth()->id();
+        $this->assertManager($tenantId, $actorId);
+        Validator::make(['rows' => $rows], ['rows' => ['array', 'max:500'], 'rows.*' => ['array']])->validate();
         $summary = [
             'source_rows' => count($rows),
             'valid_rows' => 0,
@@ -170,7 +248,7 @@ class SubscriptionModuleService
                 'shopify_subscription_contract_gid' => $normalized['shopify_subscription_contract_gid'],
                 'recharge_customer_id' => $normalized['recharge_customer_id'],
                 'recharge_subscription_id' => $normalized['recharge_subscription_id'],
-                'mapped_payload' => json_encode($normalized, JSON_THROW_ON_ERROR),
+                'mapped_payload' => $this->encryptedPayload($normalized),
                 'errors' => $errors === [] ? null : json_encode($errors, JSON_THROW_ON_ERROR),
                 'metadata' => json_encode(['row_index' => $index], JSON_THROW_ON_ERROR),
                 'created_at' => now(),
@@ -178,7 +256,7 @@ class SubscriptionModuleService
             ]);
         }
 
-        $finalStatus = $summary['error_rows'] > 0 ? 'needs_review' : 'ready_for_cutover';
+        $finalStatus = $summary['error_rows'] > 0 || $rows === [] ? 'needs_review' : 'ready_for_review';
         DB::table('subscription_migration_batches')
             ->where('id', $batchId)
             ->update([
@@ -199,6 +277,8 @@ class SubscriptionModuleService
      */
     public function approveCutover(int $tenantId, int $batchId, ?int $actorId, bool $rechargeBillingPaused): array
     {
+        $actorId ??= auth()->id();
+        $this->assertManager($tenantId, $actorId);
         $batch = DB::table('subscription_migration_batches')
             ->where('tenant_id', $tenantId)
             ->where('id', $batchId)
@@ -212,32 +292,26 @@ class SubscriptionModuleService
             return ['ok' => false, 'status' => 'recharge_billing_not_paused', 'message' => 'Confirm Recharge billing is paused before cutover.'];
         }
 
-        if (! in_array((string) $batch->status, ['ready_for_cutover', 'approved'], true)) {
+        if (! in_array((string) $batch->status, ['ready_for_review', 'ready_for_cutover', 'cutover_review_requested'], true)) {
             return ['ok' => false, 'status' => 'batch_not_ready', 'message' => 'Migration batch must be ready before cutover.'];
         }
 
         DB::table('subscription_migration_batches')
             ->where('id', $batchId)
             ->update([
-                'status' => 'approved',
+                'status' => 'cutover_review_requested',
                 'approved_by_user_id' => $actorId,
                 'approved_at' => now(),
                 'recharge_billing_paused_confirmed' => true,
                 'updated_at' => now(),
             ]);
 
-        DB::table('subscription_module_settings')->updateOrInsert(
-            ['tenant_id' => $tenantId, 'module_key' => self::MODULE_KEY],
-            [
-                'status' => 'cutover_approved',
-                'billing_scheduler_enabled' => false,
-                'metadata' => json_encode(['approved_batch_id' => $batchId], JSON_THROW_ON_ERROR),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]
-        );
+        // A checkbox is planning evidence only; it cannot authorize charging or replace a binding.
+        DB::table('subscription_module_settings')->where('tenant_id', $tenantId)->where('module_key', self::MODULE_KEY)->update([
+            'billing_scheduler_enabled' => false, 'updated_at' => now(),
+        ]);
 
-        return ['ok' => true, 'status' => 'approved', 'message' => 'Cutover approved. Billing scheduler remains off until explicitly enabled.'];
+        return ['ok' => true, 'status' => 'cutover_review_requested', 'message' => 'Cutover review requested. No migration, Shopify change or billing activation was performed.'];
     }
 
     /**
@@ -246,7 +320,10 @@ class SubscriptionModuleService
      */
     public function recordAdminAction(int $tenantId, int $contractId, string $action, ?int $actorId, array $payload = []): array
     {
-        $contract = DB::table('subscription_contracts')
+        $actorId ??= auth()->id();
+        $this->assertManager($tenantId, $actorId);
+        $binding = $this->access->assertBinding($tenantId);
+        $contract = $this->operationalContracts($tenantId)
             ->where('tenant_id', $tenantId)
             ->where('id', $contractId)
             ->first();
@@ -261,6 +338,7 @@ class SubscriptionModuleService
             return ['ok' => false, 'status' => 'unsupported_action', 'message' => 'This subscription action is not supported.'];
         }
 
+        $payload = $this->intents->validate($normalizedAction, $payload);
         DB::table('subscription_lifecycle_events')->insert([
             'tenant_id' => $tenantId,
             'subscription_contract_id' => (int) $contract->id,
@@ -268,24 +346,26 @@ class SubscriptionModuleService
             'event_type' => $normalizedAction,
             'source' => 'shopify_embedded_admin',
             'status' => 'intent_recorded',
-            'before_payload' => json_encode($this->contractSummary($contract), JSON_THROW_ON_ERROR),
-            'after_payload' => json_encode($payload, JSON_THROW_ON_ERROR),
+            'before_payload' => $this->encryptedPayload($this->contractSummary($contract)),
+            'after_payload' => $this->encryptedPayload($payload),
             'metadata' => json_encode([
                 'shopify_source_of_truth' => true,
-                'live_shopify_mutation_deferred_until_cutover' => true,
+                'provider_execution_enabled' => false,
+                'provider_binding' => $binding,
+                'contract_ownership_verified' => false,
             ], JSON_THROW_ON_ERROR),
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
-        return ['ok' => true, 'status' => 'intent_recorded', 'message' => 'Action recorded for Shopify-sourced processing.'];
+        return ['ok' => true, 'status' => 'intent_recorded', 'message' => 'Request saved for review. No Shopify change, payment email or charge was sent.'];
     }
 
     /**
      * @param  array<string,mixed>  $payload
      * @return array<string,mixed>
      */
-    public function recordCustomerCandleClubAction(MarketingProfile $profile, string $action, array $payload = []): array
+    public function recordCustomerCandleClubAction(MarketingProfile $profile, string $action, array $payload = [], bool $demo = false): array
     {
         $tenantId = (int) $profile->tenant_id;
         $normalizedAction = $this->normalizeCustomerCandleClubAction($action);
@@ -294,13 +374,12 @@ class SubscriptionModuleService
             return ['ok' => false, 'status' => 'unsupported_action', 'message' => 'This Candle Club action is not supported yet.'];
         }
 
+        $this->access->assertEntitled($tenantId);
+        if ($demo) {
+            return ['ok' => true, 'status' => 'preview_recorded', 'action' => $normalizedAction, 'message' => 'Demo request only. No subscription, vote, email or charge was changed.', 'candle_club' => $this->customerCandleClubPayload($profile, true)];
+        }
         $contract = $this->activeCandleClubContractForProfile($profile);
         $isPreview = false;
-        if (! $contract && $this->isCandleClubPreviewProfile($profile)) {
-            $contract = $this->previewCandleClubContract();
-            $isPreview = true;
-        }
-
         if (! $contract) {
             return [
                 'ok' => false,
@@ -310,9 +389,10 @@ class SubscriptionModuleService
             ];
         }
 
+        $binding = $this->access->assertBinding($tenantId);
+        $payload = $this->intents->validate($normalizedAction, $payload);
         $settings = $this->candleClubSettings($tenantId);
         $contractSummary = $this->contractSummary($contract);
-        $shopifyMutation = $this->shopifyMutationForCustomerAction($normalizedAction);
         $validatedPayload = $this->validatedCustomerActionPayload($normalizedAction, $payload, $contract, $settings);
         if (! (bool) ($validatedPayload['ok'] ?? false)) {
             return [
@@ -334,14 +414,15 @@ class SubscriptionModuleService
             'event_type' => $normalizedAction,
             'source' => 'mobile_app',
             'status' => $isPreview ? 'shopify_preview_recorded' : 'intent_recorded',
-            'before_payload' => json_encode($contractSummary, JSON_THROW_ON_ERROR),
-            'after_payload' => json_encode((array) $validatedPayload['payload'], JSON_THROW_ON_ERROR),
+            'before_payload' => $this->encryptedPayload($contractSummary),
+            'after_payload' => $this->encryptedPayload((array) $validatedPayload['payload']),
             'metadata' => json_encode([
                 'shopify_source_of_truth' => true,
-                'shopify_mode' => $isPreview ? 'preview_no_live_mutation' : 'mutation_deferred_until_shopify_cutover',
-                'shopify_mutation' => $shopifyMutation,
+                'shopify_mode' => $isPreview ? 'preview_no_live_mutation' : 'local_request_only',
                 'requires_shopify_subscription_contract_gid' => $contractSummary['shopify_subscription_contract_gid'] === '',
-                'mobile_customer_email' => Str::lower(trim((string) ($profile->normalized_email ?: $profile->email))),
+                'marketing_profile_id' => (int) $profile->id,
+                'provider_binding' => $binding,
+                'provider_execution_enabled' => false,
             ], JSON_THROW_ON_ERROR),
             'created_at' => now(),
             'updated_at' => now(),
@@ -352,8 +433,8 @@ class SubscriptionModuleService
             'status' => $isPreview ? 'preview_recorded' : 'intent_recorded',
             'action' => $normalizedAction,
             'message' => $this->customerActionMessage($normalizedAction, $isPreview),
-            'shopify_mode' => $isPreview ? 'preview_no_live_mutation' : 'mutation_deferred_until_shopify_cutover',
-            'shopify_mutation' => $shopifyMutation,
+            'shopify_mode' => $isPreview ? 'preview_no_live_mutation' : 'local_request_only',
+            'provider_execution_enabled' => false,
             'candle_club' => $this->customerCandleClubPayload($profile),
         ];
     }
@@ -361,18 +442,24 @@ class SubscriptionModuleService
     /**
      * @return array<string,mixed>
      */
-    public function customerCandleClubPayload(MarketingProfile $profile): array
+    public function customerCandleClubPayload(MarketingProfile $profile, bool $demo = false): array
     {
         $tenantId = (int) $profile->tenant_id;
+        if (! $this->access->entitled($tenantId)) {
+            return ['eligible' => false, 'status' => 'module_locked', 'message' => 'Subscriptions is not enabled for this workspace.', 'contract' => null, 'active_poll' => null, 'actions' => [], 'readiness' => $this->access->readiness($tenantId)];
+        }
+        if ($demo) {
+            return $this->previewCandleClubPayload($profile, null);
+        }
         $contract = $this->activeCandleClubContractForProfile($profile);
         $poll = $this->activePoll($tenantId);
         $settings = $this->candleClubSettings($tenantId);
-
-        if (! $contract && $this->isCandleClubPreviewProfile($profile)) {
-            return $this->previewCandleClubPayload($profile, $poll);
-        }
+        $readiness = $this->access->readiness($tenantId);
+        $canRequest = $contract !== null && $readiness['store_bound'];
 
         return [
+            'readiness' => $readiness,
+            'action_mode' => 'request_for_review',
             'eligible' => $contract !== null,
             'status' => $contract ? 'active' : 'not_active',
             'message' => $contract ? null : 'Candle Club voting is available for active Candle Club members.',
@@ -381,12 +468,12 @@ class SubscriptionModuleService
             'vote_history' => $contract ? $this->voteHistory($tenantId, (string) $contract->shopify_subscription_contract_gid) : [],
             'previous_chosen_scents' => $this->previousChosenScents($tenantId),
             'actions' => [
-                'can_vote' => $contract !== null && $poll !== null,
-                'can_pause' => $contract !== null,
-                'can_cancel' => $contract !== null,
-                'can_update_address' => $contract !== null,
-                'can_update_card' => $contract !== null,
-                'can_swap_to_active_16oz_scent' => $contract !== null,
+                'can_vote' => $canRequest && $poll !== null,
+                'can_pause' => $canRequest,
+                'can_cancel' => $canRequest,
+                'can_update_address' => $canRequest,
+                'can_update_card' => $canRequest,
+                'can_swap_to_active_16oz_scent' => $canRequest,
             ],
             'commitment' => $contract ? $this->commitmentSummary($contract, $settings) : null,
             'payment_method' => $contract ? $this->paymentMethodSummary($tenantId, $contract) : null,
@@ -409,31 +496,15 @@ class SubscriptionModuleService
         $tenantId = (int) $profile->tenant_id;
         $contract = $this->previewCandleClubContract();
 
-        $previousScents = $this->previousChosenScents($tenantId);
-        if ($previousScents === []) {
-            $previousScents = [
-                [
-                    'title' => 'Coffeehouse',
-                    'body' => 'Rich espresso, vanilla cream, and warm woods.',
-                    'published_at' => CarbonImmutable::now()->subMonth()->toDateString(),
-                ],
-                [
-                    'title' => 'Walking on Sunshine',
-                    'body' => 'Bright citrus, agave, and clean summer air.',
-                    'published_at' => CarbonImmutable::now()->subMonths(2)->toDateString(),
-                ],
-                [
-                    'title' => 'Cabin Morning',
-                    'body' => 'Cedar, soft spice, and a quiet first cup.',
-                    'published_at' => CarbonImmutable::now()->subMonths(3)->toDateString(),
-                ],
-            ];
-        }
+        $previousScents = [
+            ['title' => 'Coffeehouse', 'body' => 'Demo scent: espresso and vanilla.', 'published_at' => now()->subMonth()->toDateString()],
+            ['title' => 'Cabin Morning', 'body' => 'Demo scent: cedar and spice.', 'published_at' => now()->subMonths(2)->toDateString()],
+        ];
 
         return [
             'eligible' => true,
             'status' => 'active',
-            'message' => 'Preview mode is unlocked for this account so the Candle Club menus can be tested before cutover.',
+            'message' => 'Fictional demo. Requests do not change a subscription, vote, review, email or payment.',
             'contract' => $this->contractSummary($contract),
             'active_poll' => $poll
                 ? $this->pollPayload((int) $poll['id'], $contract)
@@ -454,7 +525,7 @@ class SubscriptionModuleService
                 'can_update_card' => true,
                 'can_swap_to_active_16oz_scent' => true,
             ],
-            'commitment' => $this->commitmentSummary($contract, $this->candleClubSettings($tenantId)),
+            'commitment' => $this->commitmentSummary($contract, ['commitment_months' => 6, 'allowed_pauses_per_commitment' => 2]),
             'payment_method' => [
                 'status' => 'active',
                 'brand' => 'Visa',
@@ -464,8 +535,8 @@ class SubscriptionModuleService
                 'last_update_email_sent_at' => null,
             ],
             'shipping_address' => [
-                'firstName' => 'John',
-                'lastName' => 'Collins',
+                'firstName' => 'App',
+                'lastName' => 'Reviewer',
                 'address1' => '123 Forest Lane',
                 'city' => 'Asheville',
                 'province' => 'North Carolina',
@@ -479,7 +550,7 @@ class SubscriptionModuleService
                 'pause_duration_options' => [1, 2],
             ],
             'monthly_scents' => $this->previewMonthlyScents($previousScents),
-            'cancel_prompt' => $this->candleClubSettings($tenantId)['cancellation_prompt'],
+            'cancel_prompt' => $this->defaultCancellationPrompt(),
             'preview' => true,
         ];
     }
@@ -521,30 +592,18 @@ class SubscriptionModuleService
         ][$normalized] ?? null;
     }
 
-    protected function shopifyMutationForCustomerAction(string $action): string
-    {
-        return [
-            'pause' => 'subscriptionContractUpdate/subscriptionDraftUpdate/subscriptionDraftCommit',
-            'cancel' => 'subscriptionContractUpdate/subscriptionDraftUpdate/subscriptionDraftCommit',
-            'swap_product' => 'subscriptionContractUpdate/subscriptionDraftLineUpdate/subscriptionDraftCommit',
-            'update_shipping_address' => 'subscriptionContractUpdate/subscriptionDraftUpdate/subscriptionDraftCommit',
-            'send_payment_update_email' => 'customerPaymentMethodSendUpdateEmail',
-            'vote' => 'none_vote_recorded_in_evergrove',
-        ][$action] ?? 'manual_review';
-    }
-
     protected function customerActionMessage(string $action, bool $isPreview): string
     {
         $suffix = $isPreview
             ? ' Preview recorded without changing a live Shopify contract.'
-            : ' Recorded for Shopify subscription processing.';
+            : ' Saved for review only. No Shopify change, email or charge has been sent.';
 
         return match ($action) {
             'pause' => 'Pause request received.'.$suffix,
             'cancel' => 'Cancellation request received.'.$suffix,
             'swap_product' => 'Scent swap request received.'.$suffix,
             'update_shipping_address' => 'Shipping address update request received.'.$suffix,
-            'send_payment_update_email' => 'Secure Shopify payment update email queued.'.$suffix,
+            'send_payment_update_email' => 'Payment update request saved for review. No email has been sent.'.$suffix,
             'vote' => 'Your Candle Club vote has been recorded.',
             default => 'Candle Club request received.'.$suffix,
         };
@@ -659,6 +718,7 @@ class SubscriptionModuleService
      */
     public function storefrontPollPayload(int $tenantId): array
     {
+        $this->access->assertEntitled($tenantId);
         $poll = $this->activePoll($tenantId);
 
         return [
@@ -677,8 +737,11 @@ class SubscriptionModuleService
      */
     public function requestVoteCode(int $tenantId, int $pollId, string $identifier, string $source = 'facebook'): array
     {
-        $poll = DB::table('subscription_polls')
-            ->where('tenant_id', $tenantId)
+        $this->access->assertEntitled($tenantId);
+        if (! app()->environment(['local', 'testing'])) {
+            return ['ok' => false, 'status' => 'verification_delivery_unavailable', 'message' => 'Voting code delivery is not configured. No code has been sent.'];
+        }
+        $poll = $this->operationalPolls($tenantId)
             ->where('id', $pollId)
             ->first();
         if (! $this->pollIsOpen($poll)) {
@@ -713,10 +776,10 @@ class SubscriptionModuleService
 
         $payload = [
             'ok' => true,
-            'status' => 'code_sent',
+            'status' => 'test_code_created',
             'verification_token_id' => $tokenId,
             'delivery_channel' => $normalized['type'] === 'email' ? 'email' : 'sms',
-            'message' => 'We sent a one-time code.',
+            'message' => 'Test code created locally. No email or text has been sent.',
         ];
 
         if (app()->environment(['local', 'testing'])) {
@@ -731,6 +794,10 @@ class SubscriptionModuleService
      */
     public function castVoteWithCode(int $tenantId, int $pollId, int $optionId, int $tokenId, string $code, string $source = 'facebook'): array
     {
+        $this->access->assertEntitled($tenantId);
+        if (! $this->pollIsOpen($this->operationalPolls($tenantId)->where('id', $pollId)->first())) {
+            return ['ok' => false, 'status' => 'poll_not_open', 'message' => 'Voting is not open.'];
+        }
         $token = DB::table('subscription_voter_verification_tokens')
             ->where('tenant_id', $tenantId)
             ->where('subscription_poll_id', $pollId)
@@ -749,8 +816,7 @@ class SubscriptionModuleService
             return ['ok' => false, 'status' => 'invalid_code', 'message' => 'The voting code does not match.'];
         }
 
-        $contract = DB::table('subscription_contracts')
-            ->where('tenant_id', $tenantId)
+        $contract = $this->operationalContracts($tenantId)
             ->where('id', (int) $token->subscription_contract_id)
             ->where('status', 'active')
             ->where('is_candle_club', true)
@@ -813,17 +879,24 @@ class SubscriptionModuleService
     public function pollPayload(int $pollId, object|array|null $contract = null): ?array
     {
         $poll = DB::table('subscription_polls')->where('id', $pollId)->first();
+        if ($poll && $this->isDemoPoll($poll)) {
+            return null;
+        }
+        if ($poll) {
+            $this->access->assertEntitled((int) $poll->tenant_id);
+        }
         if (! $poll) {
             return null;
         }
 
         $options = DB::table('subscription_poll_options')
+            ->where('tenant_id', (int) $poll->tenant_id)
             ->where('subscription_poll_id', $pollId)
             ->orderBy('position')
             ->orderBy('id')
             ->get()
             ->map(function (object $option): array {
-                $votes = DB::table('subscription_votes')
+                $votes = $this->operationalVotes((int) $option->tenant_id)
                     ->where('subscription_poll_option_id', (int) $option->id)
                     ->count();
 
@@ -840,6 +913,7 @@ class SubscriptionModuleService
             : (string) data_get($contract, 'shopify_subscription_contract_gid', '');
 
         $alreadyVoted = $contractGid !== '' && DB::table('subscription_votes')
+            ->where('tenant_id', (int) $poll->tenant_id)
             ->where('subscription_poll_id', $pollId)
             ->where('shopify_subscription_contract_gid', $contractGid)
             ->exists();
@@ -857,18 +931,40 @@ class SubscriptionModuleService
         ];
     }
 
-    public function recordShopifyWebhook(int $tenantId, string $topic, array $payload): void
+    /** Evidence only. No contract projection, email, provider mutation or billing job is dispatched. */
+    public function recordShopifyWebhook(int $tenantId, string $topic, array $payload, array $store = [], string $webhookId = ''): bool
     {
-        DB::table('subscription_lifecycle_events')->insert([
-            'tenant_id' => $tenantId,
-            'event_type' => Str::of($topic)->replace('/', '_')->toString(),
-            'source' => 'shopify_webhook',
-            'status' => 'received',
-            'after_payload' => json_encode($payload, JSON_THROW_ON_ERROR),
-            'metadata' => json_encode(['topic' => $topic], JSON_THROW_ON_ERROR),
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        $topics = ['subscription_contracts/create', 'subscription_contracts/update', 'subscription_billing_attempts/success', 'subscription_billing_attempts/failure', 'customer_payment_methods/create', 'customer_payment_methods/update', 'customer_payment_methods/revoke'];
+        if (! $this->access->entitled($tenantId) || ! in_array($topic, $topics, true)
+            || ! preg_match('/^[a-zA-Z0-9-]{1,100}$/D', $webhookId)
+            || strlen(json_encode($payload, JSON_THROW_ON_ERROR)) > 262144) {
+            return false;
+        }
+        try {
+            $binding = $this->access->assertBinding($tenantId, $store);
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException) {
+            return false;
+        }
+        $identity = hash('sha256', $binding['shop_domain'].'|'.$binding['app_client_id'].'|'.$webhookId);
+
+        return DB::transaction(function () use ($tenantId, $topic, $payload, $binding, $identity): bool {
+            // Serialize this evidence-only lane; Phase 2 requires an indexed unique inbox
+            // before a worker may project contracts or perform financial operations.
+            DB::table('subscription_module_settings')->where('tenant_id', $tenantId)->where('module_key', self::MODULE_KEY)->lockForUpdate()->first();
+            if (DB::table('subscription_lifecycle_events')->where('tenant_id', $tenantId)
+                ->where('source', 'shopify_webhook')->where('metadata->webhook_identity', $identity)->exists()) {
+                return true;
+            }
+            DB::table('subscription_lifecycle_events')->insert([
+                'tenant_id' => $tenantId, 'event_type' => str_replace('/', '_', $topic),
+                'source' => 'shopify_webhook', 'status' => 'received_unprocessed',
+                'after_payload' => $this->encryptedPayload($payload),
+                'metadata' => json_encode(['topic' => $topic, 'webhook_identity' => $identity, 'provider_binding' => $binding, 'provider_execution_enabled' => false], JSON_THROW_ON_ERROR),
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+
+            return true;
+        });
     }
 
     /**
@@ -877,15 +973,14 @@ class SubscriptionModuleService
      */
     public function submitCandleClubScentFeedback(MarketingProfile $profile, int $monthlyScentId, array $payload): array
     {
+        $this->access->assertEntitled((int) $profile->tenant_id);
         if (! Schema::hasTable('subscription_candle_club_scent_feedback')) {
             return ['ok' => false, 'status' => 'feedback_not_ready', 'message' => 'Candle Club scent feedback is not ready yet.'];
         }
 
         $tenantId = (int) $profile->tenant_id;
+        $this->access->assertEntitled($tenantId);
         $contract = $this->activeCandleClubContractForProfile($profile);
-        if (! $contract && $this->isCandleClubPreviewProfile($profile)) {
-            $contract = $this->previewCandleClubContract();
-        }
 
         if (! $contract) {
             return ['ok' => false, 'status' => 'not_eligible', 'message' => 'Only active Candle Club members can review monthly Candle Club scents.'];
@@ -931,6 +1026,8 @@ class SubscriptionModuleService
      */
     public function exportCandleClubScentFeedback(int $tenantId, int $feedbackId, ?int $actorId = null): array
     {
+        $actorId ??= auth()->id();
+        $this->assertManager($tenantId, $actorId);
         if (! Schema::hasTable('subscription_candle_club_scent_feedback')) {
             return ['ok' => false, 'status' => 'feedback_not_ready', 'message' => 'Candle Club scent feedback is not ready yet.'];
         }
@@ -1000,7 +1097,7 @@ class SubscriptionModuleService
      */
     protected function moduleSettings(int $tenantId): array
     {
-        $row = DB::table('subscription_module_settings')->where('tenant_id', $tenantId)->first();
+        $row = DB::table('subscription_module_settings')->where('tenant_id', $tenantId)->where('module_key', self::MODULE_KEY)->first();
         if (! $row) {
             DB::table('subscription_module_settings')->insert([
                 'tenant_id' => $tenantId,
@@ -1011,7 +1108,7 @@ class SubscriptionModuleService
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
-            $row = DB::table('subscription_module_settings')->where('tenant_id', $tenantId)->first();
+            $row = DB::table('subscription_module_settings')->where('tenant_id', $tenantId)->where('module_key', self::MODULE_KEY)->first();
         }
 
         return [
@@ -1058,8 +1155,7 @@ class SubscriptionModuleService
 
     protected function activePoll(int $tenantId): ?array
     {
-        $poll = DB::table('subscription_polls')
-            ->where('tenant_id', $tenantId)
+        $poll = $this->operationalPolls($tenantId)
             ->where('poll_type', self::CANDLE_CLUB_TYPE)
             ->where('status', 'open')
             ->orderByDesc('id')
@@ -1081,24 +1177,12 @@ class SubscriptionModuleService
 
     protected function activeCandleClubContractForProfile(MarketingProfile $profile): ?object
     {
-        return DB::table('subscription_contracts')
-            ->where('tenant_id', (int) $profile->tenant_id)
+        return $this->operationalContracts((int) $profile->tenant_id)
             ->where('marketing_profile_id', (int) $profile->id)
             ->where('status', 'active')
             ->where('is_candle_club', true)
             ->orderByDesc('id')
             ->first();
-    }
-
-    protected function isCandleClubPreviewProfile(MarketingProfile $profile): bool
-    {
-        if ((int) $profile->tenant_id !== 1) {
-            return false;
-        }
-
-        $email = Str::lower(trim((string) ($profile->normalized_email ?: $profile->email)));
-
-        return in_array($email, ['johncollinsemail@gmail.com', 'johncollinesmail@gmail.com'], true);
     }
 
     protected function activeCandleClubContractForIdentifier(int $tenantId, string $type, string $identifier): ?object
@@ -1114,8 +1198,7 @@ class SubscriptionModuleService
 
         $customerIds = $customerQuery->pluck('id')->all();
 
-        return DB::table('subscription_contracts')
-            ->where('tenant_id', $tenantId)
+        return $this->operationalContracts($tenantId)
             ->where('status', 'active')
             ->where('is_candle_club', true)
             ->where(function ($query) use ($customerIds, $type, $identifier): void {
@@ -1231,7 +1314,7 @@ class SubscriptionModuleService
 
     protected function voteHistory(int $tenantId, string $contractGid): array
     {
-        return DB::table('subscription_votes')
+        return $this->operationalVotes($tenantId)
             ->join('subscription_polls', 'subscription_polls.id', '=', 'subscription_votes.subscription_poll_id')
             ->join('subscription_poll_options', 'subscription_poll_options.id', '=', 'subscription_votes.subscription_poll_option_id')
             ->where('subscription_votes.tenant_id', $tenantId)
@@ -1272,9 +1355,17 @@ class SubscriptionModuleService
         $settings = $this->candleClubSettings($tenantId);
 
         return DB::table('subscription_contracts')
-            ->leftJoin('subscription_customers', 'subscription_customers.id', '=', 'subscription_contracts.subscription_customer_id')
-            ->leftJoin('marketing_profiles', 'marketing_profiles.id', '=', 'subscription_contracts.marketing_profile_id')
+            ->leftJoin('subscription_customers', function ($join): void {
+                $join->on('subscription_customers.id', '=', 'subscription_contracts.subscription_customer_id')->on('subscription_customers.tenant_id', '=', 'subscription_contracts.tenant_id');
+            })
+            ->leftJoin('marketing_profiles', function ($join): void {
+                $join->on('marketing_profiles.id', '=', 'subscription_contracts.marketing_profile_id')->on('marketing_profiles.tenant_id', '=', 'subscription_contracts.tenant_id');
+            })
             ->where('subscription_contracts.tenant_id', $tenantId)
+            ->where('subscription_contracts.shopify_subscription_contract_gid', 'like', 'gid://shopify/SubscriptionContract/%')
+            ->where(function ($query): void {
+                $query->whereNull('subscription_contracts.metadata->app_review_demo')->orWhere('subscription_contracts.metadata->app_review_demo', false);
+            })
             ->where('subscription_contracts.status', 'active')
             ->where('subscription_contracts.is_candle_club', true)
             ->orderBy('subscription_contracts.next_billing_date')
@@ -1399,7 +1490,7 @@ class SubscriptionModuleService
             ->map(fn (object $row): array => [
                 'id' => (string) $row->shopify_product_variant_gid,
                 'title' => trim((string) (($row->product_title ?: '16oz Candle').' '.($row->variant_title ? ' / '.$row->variant_title : ''))),
-                'body' => 'Active Shopify 16oz candle option.',
+                'body' => 'Locally recorded 16oz variant. Shopify availability needs verification.',
                 'product_variant_gid' => (string) $row->shopify_product_variant_gid,
                 'source' => 'active_16oz',
             ])

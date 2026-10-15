@@ -51,6 +51,14 @@ class StripeHostedBillingService
             (array) ($billingInterest['addons_interest'] ?? [])
         ), static fn (string $value): bool => $value !== ''));
 
+        foreach ($addonsInterest as $interest) {
+            $candidate = str_starts_with($interest, 'addon.') ? substr($interest, 6) : $interest;
+            if (is_array(config('module_catalog.addons.'.$candidate))
+                && ! \App\Support\Tenancy\CatalogPurchasePolicy::addonEnabled($candidate)) {
+                return ['ok' => false, 'url' => null, 'session_id' => null, 'message' => 'Purchasing this add-on is paused until servicing and billing are ready.'];
+            }
+        }
+
         $eligibleAddons = $this->eligibleAddonsForPlan($preferredPlanKey);
         $addonsInterest = array_values(array_filter(
             $addonsInterest,
@@ -213,6 +221,9 @@ class StripeHostedBillingService
             : [];
         if ($addon === [] || strtolower(trim((string) ($addon['billing_mode'] ?? ''))) !== 'add_on') {
             return ['ok' => false, 'url' => null, 'session_id' => null, 'message' => 'This add-on is not available for self-serve checkout.'];
+        }
+        if (! \App\Support\Tenancy\CatalogPurchasePolicy::addonEnabled($addonKey)) {
+            return ['ok' => false, 'url' => null, 'session_id' => null, 'message' => 'Purchasing this add-on is paused until servicing and billing are ready.'];
         }
 
         $planKey = strtolower(trim((string) TenantAccessProfile::query()

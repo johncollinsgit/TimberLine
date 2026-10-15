@@ -451,6 +451,11 @@ test('mobile auth session can create and validate a customer account token ident
 });
 
 test('mobile app review demo login issues a token with candle club access', function (): void {
+    \App\Models\TenantModuleEntitlement::query()->create([
+        'tenant_id' => 1, 'module_key' => 'subscriptions', 'availability_status' => 'available',
+        'enabled_status' => 'enabled', 'billing_status' => 'add_on_comped',
+        'entitlement_source' => 'modern_forestry_subscription_bootstrap', 'price_source' => 'test',
+    ]);
     config()->set('services.modern_forestry_app_review.email', 'reviewer@example.com');
     config()->set('services.modern_forestry_app_review.password_hash', Hash::make('review-password'));
     config()->set('services.modern_forestry_app_review.password', null);
@@ -476,7 +481,11 @@ test('mobile app review demo login issues a token with candle club access', func
         ->assertOk()
         ->assertJsonPath('data.eligible', true)
         ->assertJsonPath('data.status', 'active')
-        ->assertJsonPath('data.actions.can_vote', true);
+        ->assertJsonPath('data.actions.can_vote', true)
+        ->assertJsonPath('data.preview', true);
+
+    expect(\Illuminate\Support\Facades\DB::table('subscription_contracts')->count())->toBe(0)
+        ->and(\Illuminate\Support\Facades\DB::table('subscription_polls')->count())->toBe(0);
 });
 
 test('mobile customer auth config exposes only public oauth fields', function (): void {
