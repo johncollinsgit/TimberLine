@@ -1,3 +1,18 @@
+## Reviewed schema reconciliation (2026-10-15)
+
+- Keep platform drift repair separate from shipping Phase 4. Preserve historical
+  tables, unresolved ownership and original orphan-profile evidence. Never
+  guess tenants, delete conflicting rows, resend messages or adopt a drifted
+  live fingerprint merely to pass the release gate.
+- Compatibility accepts exact historical aliases and column-order equivalence
+  on four declared tables only. Canonical fingerprints now include FK actions;
+  raw hashes remain available to pin historical fixtures. Missing/duplicate
+  constraints still fail. Helper/manifest changes force the MySQL release gate.
+- Prove fresh and captured observed paths in disposable MySQL, generate the
+  reviewed baseline through its workflow, deploy/retest disabled, then prepare
+  Modern Forestry's native pilot with its existing Shopify operations intact.
+  Follow `docs/operations/schema-drift-reconciliation-2026-10-15.md`.
+
 ## Retail shipping Phase 3 (2026-10-15)
 
 - Continue from the phased retail shipping plan. Phase 3 is isolated on

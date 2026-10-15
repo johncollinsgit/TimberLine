@@ -1,0 +1,726 @@
+{
+  "version": 1,
+  "reviewed_at": "2026-10-15",
+  "approved_baseline_commit": "88bda81a3736a0b24de27f1f96bb61bb76295261",
+  "observed_raw_fingerprint": "0aa3562df3cca1d362cd49211982ebb47bf02b97526ffe55251cfa95574d76ee",
+  "column_order_tables": [
+    "customer_external_profiles",
+    "development_notes",
+    "development_change_logs",
+    "tenant_onboarding_blueprint_provisionings"
+  ],
+  "indexes": [
+    {
+      "table": "customer_access_requests",
+      "alias": "customer_access_requests_activation_email_sent_at_index",
+      "canonical_name": "car_act_email_sent_idx",
+      "unique": false,
+      "columns": [
+        {
+          "name": "activation_email_sent_at",
+          "prefix_length": null
+        }
+      ]
+    },
+    {
+      "table": "customer_access_requests",
+      "alias": "customer_access_requests_rejected_at_index",
+      "canonical_name": "car_rejected_at_idx",
+      "unique": false,
+      "columns": [
+        {
+          "name": "rejected_at",
+          "prefix_length": null
+        }
+      ]
+    },
+    {
+      "table": "customer_access_requests",
+      "alias": "customer_access_requests_rejected_by_index",
+      "canonical_name": "car_rejected_by_idx",
+      "unique": false,
+      "columns": [
+        {
+          "name": "rejected_by",
+          "prefix_length": null
+        }
+      ]
+    },
+    {
+      "table": "customer_loop_activities",
+      "alias": "customer_loop_activities_tenant_id_occurred_at_index",
+      "canonical_name": "cl_activity_tenant_occurred_idx",
+      "unique": false,
+      "columns": [
+        {
+          "name": "tenant_id",
+          "prefix_length": null
+        },
+        {
+          "name": "occurred_at",
+          "prefix_length": null
+        }
+      ]
+    },
+    {
+      "table": "field_service_job_note_mentions",
+      "alias": "field_service_job_note_mentions_tenant_id_foreign",
+      "canonical_name": "fs_note_mention_tenant_fk",
+      "unique": false,
+      "columns": [
+        {
+          "name": "tenant_id",
+          "prefix_length": null
+        }
+      ]
+    },
+    {
+      "table": "field_service_job_participants",
+      "alias": "field_service_job_participants_user_id_foreign",
+      "canonical_name": "fs_job_part_user_fk",
+      "unique": false,
+      "columns": [
+        {
+          "name": "user_id",
+          "prefix_length": null
+        }
+      ]
+    },
+    {
+      "table": "google_business_profile_connections",
+      "alias": "google_business_profile_connections_connection_status_index",
+      "canonical_name": "gbp_connections_status_idx",
+      "unique": false,
+      "columns": [
+        {
+          "name": "connection_status",
+          "prefix_length": null
+        }
+      ]
+    },
+    {
+      "table": "google_business_profile_connections",
+      "alias": "google_business_profile_connections_expires_at_index",
+      "canonical_name": "gbp_connections_expires_idx",
+      "unique": false,
+      "columns": [
+        {
+          "name": "expires_at",
+          "prefix_length": null
+        }
+      ]
+    },
+    {
+      "table": "google_business_profile_connections",
+      "alias": "google_business_profile_connections_google_subject_index",
+      "canonical_name": "gbp_connections_subject_idx",
+      "unique": false,
+      "columns": [
+        {
+          "name": "google_subject",
+          "prefix_length": null
+        }
+      ]
+    },
+    {
+      "table": "google_business_profile_connections",
+      "alias": "google_business_profile_connections_linked_account_id_index",
+      "canonical_name": "gbp_connections_account_idx",
+      "unique": false,
+      "columns": [
+        {
+          "name": "linked_account_id",
+          "prefix_length": null
+        }
+      ]
+    },
+    {
+      "table": "google_business_profile_connections",
+      "alias": "google_business_profile_connections_linked_location_id_index",
+      "canonical_name": "gbp_connections_location_idx",
+      "unique": false,
+      "columns": [
+        {
+          "name": "linked_location_id",
+          "prefix_length": null
+        }
+      ]
+    },
+    {
+      "table": "marketing_message_order_attributions",
+      "alias": "marketing_message_order_attributions_order_id_foreign",
+      "canonical_name": "mm_ord_attr_order_fk",
+      "unique": false,
+      "columns": [
+        {
+          "name": "order_id",
+          "prefix_length": null
+        }
+      ]
+    },
+    {
+      "table": "tenant_onboarding_blueprint_provisionings",
+      "alias": "tenant_onboarding_blueprint_provisionings_tenant_id_foreign",
+      "canonical_name": "onb_bp_prov_tenant_fk",
+      "unique": false,
+      "columns": [
+        {
+          "name": "tenant_id",
+          "prefix_length": null
+        }
+      ]
+    },
+    {
+      "table": "website_cart_items",
+      "alias": "website_cart_items_tenant_id_foreign",
+      "canonical_name": "website_cart_items_tenant_fk",
+      "unique": false,
+      "columns": [
+        {
+          "name": "tenant_id",
+          "prefix_length": null
+        }
+      ]
+    },
+    {
+      "table": "website_cart_items",
+      "alias": "website_cart_items_website_product_variant_id_foreign",
+      "canonical_name": "website_cart_items_variant_fk",
+      "unique": false,
+      "columns": [
+        {
+          "name": "website_product_variant_id",
+          "prefix_length": null
+        }
+      ]
+    },
+    {
+      "table": "website_carts",
+      "alias": "website_carts_tenant_site_id_foreign",
+      "canonical_name": "website_carts_site_fk",
+      "unique": false,
+      "columns": [
+        {
+          "name": "tenant_site_id",
+          "prefix_length": null
+        }
+      ]
+    },
+    {
+      "table": "website_carts",
+      "alias": "website_carts_website_customer_id_foreign",
+      "canonical_name": "website_carts_customer_fk",
+      "unique": false,
+      "columns": [
+        {
+          "name": "website_customer_id",
+          "prefix_length": null
+        }
+      ]
+    },
+    {
+      "table": "website_customer_addresses",
+      "alias": "website_customer_addresses_website_customer_id_foreign",
+      "canonical_name": "website_addresses_customer_fk",
+      "unique": false,
+      "columns": [
+        {
+          "name": "website_customer_id",
+          "prefix_length": null
+        }
+      ]
+    },
+    {
+      "table": "website_inventory_movements",
+      "alias": "website_inventory_movements_actor_user_id_foreign",
+      "canonical_name": "website_movements_actor_fk",
+      "unique": false,
+      "columns": [
+        {
+          "name": "actor_user_id",
+          "prefix_length": null
+        }
+      ]
+    },
+    {
+      "table": "website_inventory_movements",
+      "alias": "website_inventory_movements_website_product_variant_id_foreign",
+      "canonical_name": "website_movements_variant_fk",
+      "unique": false,
+      "columns": [
+        {
+          "name": "website_product_variant_id",
+          "prefix_length": null
+        }
+      ]
+    },
+    {
+      "table": "website_order_lines",
+      "alias": "website_order_lines_website_order_id_foreign",
+      "canonical_name": "website_lines_order_fk",
+      "unique": false,
+      "columns": [
+        {
+          "name": "website_order_id",
+          "prefix_length": null
+        }
+      ]
+    },
+    {
+      "table": "website_order_lines",
+      "alias": "website_order_lines_website_product_variant_id_foreign",
+      "canonical_name": "website_lines_variant_fk",
+      "unique": false,
+      "columns": [
+        {
+          "name": "website_product_variant_id",
+          "prefix_length": null
+        }
+      ]
+    },
+    {
+      "table": "website_orders",
+      "alias": "website_orders_tenant_site_id_foreign",
+      "canonical_name": "website_orders_site_fk",
+      "unique": false,
+      "columns": [
+        {
+          "name": "tenant_site_id",
+          "prefix_length": null
+        }
+      ]
+    },
+    {
+      "table": "website_orders",
+      "alias": "website_orders_website_customer_id_foreign",
+      "canonical_name": "website_orders_customer_fk",
+      "unique": false,
+      "columns": [
+        {
+          "name": "website_customer_id",
+          "prefix_length": null
+        }
+      ]
+    },
+    {
+      "table": "website_shipping_rate_quotes",
+      "alias": "website_rate_quotes_expires_idx",
+      "canonical_name": "website_shipping_rate_quotes_expires_at_index",
+      "unique": false,
+      "columns": [
+        {
+          "name": "expires_at",
+          "prefix_length": null
+        }
+      ]
+    }
+  ],
+  "foreign_keys": [
+    {
+      "table": "field_service_job_note_mentions",
+      "alias": "field_service_job_note_mentions_tenant_id_foreign",
+      "canonical_name": "fs_note_mention_tenant_fk",
+      "references": [
+        {
+          "column": "tenant_id",
+          "table": "tenants",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "cascade",
+      "on_update": "no action"
+    },
+    {
+      "table": "field_service_job_participants",
+      "alias": "field_service_job_participants_field_service_job_id_foreign",
+      "canonical_name": "fs_job_part_job_fk",
+      "references": [
+        {
+          "column": "field_service_job_id",
+          "table": "field_service_jobs",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "cascade",
+      "on_update": "no action"
+    },
+    {
+      "table": "field_service_job_participants",
+      "alias": "field_service_job_participants_tenant_id_foreign",
+      "canonical_name": "fs_job_part_tenant_fk",
+      "references": [
+        {
+          "column": "tenant_id",
+          "table": "tenants",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "cascade",
+      "on_update": "no action"
+    },
+    {
+      "table": "field_service_job_participants",
+      "alias": "field_service_job_participants_user_id_foreign",
+      "canonical_name": "fs_job_part_user_fk",
+      "references": [
+        {
+          "column": "user_id",
+          "table": "users",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "cascade",
+      "on_update": "no action"
+    },
+    {
+      "table": "marketing_message_order_attributions",
+      "alias": "marketing_message_order_attributions_order_id_foreign",
+      "canonical_name": "mm_ord_attr_order_fk",
+      "references": [
+        {
+          "column": "order_id",
+          "table": "orders",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "set null",
+      "on_update": "no action"
+    },
+    {
+      "table": "tenant_onboarding_blueprint_provisionings",
+      "alias": "tenant_onboarding_blueprint_provisionings_tenant_id_foreign",
+      "canonical_name": "onb_bp_prov_tenant_fk",
+      "references": [
+        {
+          "column": "tenant_id",
+          "table": "tenants",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "cascade",
+      "on_update": "no action"
+    },
+    {
+      "table": "website_cart_items",
+      "alias": "website_cart_items_tenant_id_foreign",
+      "canonical_name": "website_cart_items_tenant_fk",
+      "references": [
+        {
+          "column": "tenant_id",
+          "table": "tenants",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "cascade",
+      "on_update": "no action"
+    },
+    {
+      "table": "website_cart_items",
+      "alias": "website_cart_items_website_cart_id_foreign",
+      "canonical_name": "website_cart_items_cart_fk",
+      "references": [
+        {
+          "column": "website_cart_id",
+          "table": "website_carts",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "cascade",
+      "on_update": "no action"
+    },
+    {
+      "table": "website_cart_items",
+      "alias": "website_cart_items_website_product_variant_id_foreign",
+      "canonical_name": "website_cart_items_variant_fk",
+      "references": [
+        {
+          "column": "website_product_variant_id",
+          "table": "website_product_variants",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "cascade",
+      "on_update": "no action"
+    },
+    {
+      "table": "website_carts",
+      "alias": "website_carts_tenant_id_foreign",
+      "canonical_name": "website_carts_tenant_fk",
+      "references": [
+        {
+          "column": "tenant_id",
+          "table": "tenants",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "cascade",
+      "on_update": "no action"
+    },
+    {
+      "table": "website_carts",
+      "alias": "website_carts_tenant_site_id_foreign",
+      "canonical_name": "website_carts_site_fk",
+      "references": [
+        {
+          "column": "tenant_site_id",
+          "table": "tenant_sites",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "cascade",
+      "on_update": "no action"
+    },
+    {
+      "table": "website_carts",
+      "alias": "website_carts_website_customer_id_foreign",
+      "canonical_name": "website_carts_customer_fk",
+      "references": [
+        {
+          "column": "website_customer_id",
+          "table": "website_customers",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "set null",
+      "on_update": "no action"
+    },
+    {
+      "table": "website_customer_addresses",
+      "alias": "website_customer_addresses_tenant_id_foreign",
+      "canonical_name": "website_addresses_tenant_fk",
+      "references": [
+        {
+          "column": "tenant_id",
+          "table": "tenants",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "cascade",
+      "on_update": "no action"
+    },
+    {
+      "table": "website_customer_addresses",
+      "alias": "website_customer_addresses_website_customer_id_foreign",
+      "canonical_name": "website_addresses_customer_fk",
+      "references": [
+        {
+          "column": "website_customer_id",
+          "table": "website_customers",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "cascade",
+      "on_update": "no action"
+    },
+    {
+      "table": "website_customers",
+      "alias": "website_customers_tenant_id_foreign",
+      "canonical_name": "website_customers_tenant_fk",
+      "references": [
+        {
+          "column": "tenant_id",
+          "table": "tenants",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "cascade",
+      "on_update": "no action"
+    },
+    {
+      "table": "website_inventory_movements",
+      "alias": "website_inventory_movements_actor_user_id_foreign",
+      "canonical_name": "website_movements_actor_fk",
+      "references": [
+        {
+          "column": "actor_user_id",
+          "table": "users",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "set null",
+      "on_update": "no action"
+    },
+    {
+      "table": "website_inventory_movements",
+      "alias": "website_inventory_movements_tenant_id_foreign",
+      "canonical_name": "website_movements_tenant_fk",
+      "references": [
+        {
+          "column": "tenant_id",
+          "table": "tenants",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "cascade",
+      "on_update": "no action"
+    },
+    {
+      "table": "website_inventory_movements",
+      "alias": "website_inventory_movements_website_product_variant_id_foreign",
+      "canonical_name": "website_movements_variant_fk",
+      "references": [
+        {
+          "column": "website_product_variant_id",
+          "table": "website_product_variants",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "cascade",
+      "on_update": "no action"
+    },
+    {
+      "table": "website_inventory_reservations",
+      "alias": "website_inventory_reservations_tenant_id_foreign",
+      "canonical_name": "website_reservations_tenant_fk",
+      "references": [
+        {
+          "column": "tenant_id",
+          "table": "tenants",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "cascade",
+      "on_update": "no action"
+    },
+    {
+      "table": "website_order_lines",
+      "alias": "website_order_lines_tenant_id_foreign",
+      "canonical_name": "website_lines_tenant_fk",
+      "references": [
+        {
+          "column": "tenant_id",
+          "table": "tenants",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "cascade",
+      "on_update": "no action"
+    },
+    {
+      "table": "website_order_lines",
+      "alias": "website_order_lines_website_order_id_foreign",
+      "canonical_name": "website_lines_order_fk",
+      "references": [
+        {
+          "column": "website_order_id",
+          "table": "website_orders",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "cascade",
+      "on_update": "no action"
+    },
+    {
+      "table": "website_order_lines",
+      "alias": "website_order_lines_website_product_variant_id_foreign",
+      "canonical_name": "website_lines_variant_fk",
+      "references": [
+        {
+          "column": "website_product_variant_id",
+          "table": "website_product_variants",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "set null",
+      "on_update": "no action"
+    },
+    {
+      "table": "website_orders",
+      "alias": "website_orders_tenant_id_foreign",
+      "canonical_name": "website_orders_tenant_fk",
+      "references": [
+        {
+          "column": "tenant_id",
+          "table": "tenants",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "cascade",
+      "on_update": "no action"
+    },
+    {
+      "table": "website_orders",
+      "alias": "website_orders_tenant_site_id_foreign",
+      "canonical_name": "website_orders_site_fk",
+      "references": [
+        {
+          "column": "tenant_site_id",
+          "table": "tenant_sites",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "cascade",
+      "on_update": "no action"
+    },
+    {
+      "table": "website_orders",
+      "alias": "website_orders_website_customer_id_foreign",
+      "canonical_name": "website_orders_customer_fk",
+      "references": [
+        {
+          "column": "website_customer_id",
+          "table": "website_customers",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "set null",
+      "on_update": "no action"
+    },
+    {
+      "table": "website_product_variants",
+      "alias": "website_product_variants_tenant_id_foreign",
+      "canonical_name": "website_variants_tenant_fk",
+      "references": [
+        {
+          "column": "tenant_id",
+          "table": "tenants",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "cascade",
+      "on_update": "no action"
+    },
+    {
+      "table": "website_product_variants",
+      "alias": "website_product_variants_website_product_id_foreign",
+      "canonical_name": "website_variants_product_fk",
+      "references": [
+        {
+          "column": "website_product_id",
+          "table": "website_products",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "cascade",
+      "on_update": "no action"
+    },
+    {
+      "table": "website_products",
+      "alias": "website_products_tenant_id_foreign",
+      "canonical_name": "website_products_tenant_fk",
+      "references": [
+        {
+          "column": "tenant_id",
+          "table": "tenants",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "cascade",
+      "on_update": "no action"
+    },
+    {
+      "table": "website_products",
+      "alias": "website_products_tenant_site_id_foreign",
+      "canonical_name": "website_products_site_fk",
+      "references": [
+        {
+          "column": "tenant_site_id",
+          "table": "tenant_sites",
+          "referenced_column": "id"
+        }
+      ],
+      "on_delete": "cascade",
+      "on_update": "no action"
+    }
+  ]
+}

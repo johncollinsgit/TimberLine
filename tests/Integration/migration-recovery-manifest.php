@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_15_220000_reconcile_reviewed_schema_drift.php' => [
+        'test' => 'tests/Integration/ReviewedSchemaDriftRecoveryTest.php',
+        'scenarios' => ['exact observed production DDL with historical rows and unowned development notes', 'earlier repairs retained before missing unique and foreign key repair', 'archival column retained after an atomic delivery-reference copy rolls back', 'conflicting evidence and unrelated duplicate/orphan conflicts stop before DDL', 'clean and observed schemas converge without production name or column-order rewrites'],
+    ],
     '2026_10_13_220000_create_soccer_workspace.php' => [
         'test' => 'tests/Integration/SoccerMySqlMigrationRecoveryTest.php',
         'scenarios' => ['family and season tables retained before remaining soccer tables'],
