@@ -45,6 +45,20 @@ test('unconfigured owner and inactive owner cannot edit templates', function ():
     expect($service->canEdit($owner))->toBeFalse();
 });
 
+test('the configured owner keeps their existing authorized landlord admin role', function (): void {
+    config(['tenancy.landlord.operator_roles' => ['admin', 'platform_admin']]);
+    $owner = User::factory()->create(['email' => 'owner@example.invalid', 'role' => 'admin', 'is_active' => true]);
+    $tenant = Tenant::create(['name' => 'Existing Client', 'slug' => 'existing-client']);
+    TenantAccessProfile::create(['tenant_id' => $tenant->id, 'plan_key' => 'base', 'operating_mode' => 'direct']);
+
+    $this->actingAs($owner)->put(route('landlord.tenants.presentation.update', $tenant), ['template' => 'care'])->assertRedirect();
+    expect($tenant->accessProfile->fresh()->metadata['workspace_presentation']['template'])->toBe('care');
+
+    config(['tenancy.landlord.operator_emails' => ['another@example.invalid']]);
+    expect(app(WorkspacePresentationService::class)->canEdit($owner))->toBeFalse();
+    $this->actingAs($owner)->put(route('landlord.tenants.presentation.update', $tenant), ['template' => 'studio'])->assertForbidden();
+});
+
 test('template selection rejects unknown keys and preserves the flagship contract', function (): void {
     $owner = User::factory()->platformAdmin()->create(['email' => 'owner@example.invalid']);
     $tenant = Tenant::create(['name' => 'Example Client', 'slug' => 'example-client']);

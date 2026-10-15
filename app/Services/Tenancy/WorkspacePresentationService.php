@@ -16,7 +16,6 @@ class WorkspacePresentationService
         $owner = Str::lower(trim((string) config('workspace_presentation.owner_email')));
 
         return $owner !== '' && $user instanceof User
-            && $user->role === 'platform_admin'
             && Str::lower((string) $user->email) === $owner
             && Gate::forUser($user)->allows('manage-landlord-commercial');
     }

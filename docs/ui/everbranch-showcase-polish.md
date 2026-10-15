@@ -51,7 +51,7 @@ the cost coverage number is explicitly an estimate from the incomplete ledger.
 
 Workspace presentation is stored in existing access-profile metadata. The owner
 can select General, Field, Care, Studio, Nonprofit, or Retail and edit introductory
-copy from the client Settings page. Only an active `platform_admin` matching
+copy from the client Settings page. Only an active landlord operator matching
 `EVERBRANCH_WORKSPACE_TEMPLATE_OWNER_EMAIL` and the existing landlord commercial
 gate can write. Blank configuration disables editing. Configure that email for
 the requested owner account through the normal release process; the local
