@@ -1,5 +1,10 @@
 # START HERE
 
+The standalone Fleet map/history uses per-user selected vans and recorded
+Bouncie trip paths. Read `docs/operations/collins-fleet-selected-routes.md` before
+continuing it. Release through the protected GitHub/Forge gates, use isolated
+fixtures, and preserve existing fleet/policy/provider configuration.
+
 Field mobile job detail must redact customer phone/email unless
 `FieldServiceAccessService::canViewCustomerContact` allows the active viewer.
 The iOS and Android apps share this API. Keep authorization on the server;

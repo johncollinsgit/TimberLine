@@ -96,6 +96,7 @@ class FleetLocationIngestionService
         $samples = ($event['eventType'] ?? null) === 'tripData' && isset($event['data']) && is_array($event['data'])
             ? $event['data'] : [$event];
         $accepted = app(\App\Services\HighLevel\FleetTelemetryService::class)->event($device, $event);
+        $accepted = app(FleetDeviceHealthService::class)->observe($tenant, $device, $event) || $accepted;
         foreach ($samples as $sample) {
             if (! is_array($sample)) {
                 continue;
@@ -106,7 +107,8 @@ class FleetLocationIngestionService
             }
             $accepted = $this->recordBounciePoint($tenant, $device, $location,
                 $sample['timestamp'] ?? $sample['time'] ?? data_get($sample, 'location.timestamp'),
-                (string) ($event['eventType'] ?? $event['type'] ?? 'location')) || $accepted;
+                (string) ($event['eventType'] ?? $event['type'] ?? 'location'),
+                is_numeric($sample['speed'] ?? null) && is_finite((float) $sample['speed']) && $sample['speed'] >= 0 ? ['speed' => (float) $sample['speed']] : []) || $accepted;
         }
 
         return $accepted;
@@ -131,7 +133,7 @@ class FleetLocationIngestionService
             data_get($vehicle, 'stats.lastUpdated'), 'vehicleSnapshot');
     }
 
-    private function recordBounciePoint(Tenant $tenant, FleetTrackingDevice $device, array $location, mixed $timestamp, string $eventType): bool
+    private function recordBounciePoint(Tenant $tenant, FleetTrackingDevice $device, array $location, mixed $timestamp, string $eventType, array $safe = []): bool
     {
         $installation = \App\Models\HighLevel\Installation::where('tenant_id', $tenant->id)->first();
         if ($installation && (! $installation->collectionAllowed()
@@ -165,7 +167,7 @@ class FleetLocationIngestionService
             ['tenant_id' => (int) $tenant->id, 'source' => 'bouncie', 'event_key' => $eventKey],
             ['fleet_tracking_device_id' => (int) $device->id, 'field_service_vehicle_id' => (int) $device->field_service_vehicle_id,
                 'event_type' => substr($eventType, 0, 80), 'latitude' => (float) $lat, 'longitude' => (float) $lng,
-                'recorded_at' => $recordedAt, 'received_at' => now(), 'safe_payload' => []]
+                'recorded_at' => $recordedAt, 'received_at' => now(), 'safe_payload' => $safe]
         );
 
         return true;

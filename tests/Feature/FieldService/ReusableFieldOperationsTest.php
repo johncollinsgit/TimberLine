@@ -401,7 +401,7 @@ test('Bouncie trip samples deduplicate overlaps and ignore invalid or expired GP
     expect($deliver([$a, $b, $sample('bad-date'), $sample(now()->subDays(8)->toISOString()), $sample(now()->addHour()->toISOString()), $sample(now()->toISOString(), 95)]))->toBe(['accepted' => 1, 'ignored' => 0]);
     $deliver([$b, $a]);
     expect(FleetLocationPoint::query()->forTenantId($tenant->id)->count())->toBe(2)
-        ->and(FleetLocationPoint::query()->forTenantId($tenant->id)->first()->safe_payload)->toBe([]);
+        ->and(FleetLocationPoint::query()->forTenantId($tenant->id)->first()->safe_payload)->toBe(['speed' => 45]);
     expect(fn () => $deliver([$a], 'wrong-key'))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
     $settings->update(['bouncie_tracking_enabled' => false]);
     expect($deliver([$sample(now()->toISOString())]))->toBe(['accepted' => 0, 'ignored' => 1]);

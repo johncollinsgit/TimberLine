@@ -1073,6 +1073,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/payroll-hours-export', [FieldServiceController::class, 'exportTimeEntries'])->name('payroll-hours.export');
             Route::middleware('module:fleet_tracking')->prefix('fleet-tracking')->name('fleet-tracking.')->group(function (): void {
                 Route::get('/', [FleetTrackingController::class, 'index'])->name('index');
+                Route::get('/map', [FleetTrackingController::class, 'mapData'])->middleware('throttle:30,1')->name('map');
+                Route::get('/map/vehicles/{vehicleId}/history', [FleetTrackingController::class, 'history'])->whereNumber('vehicleId')->middleware('throttle:240,1')->name('history');
                 Route::post('/settings', [FleetTrackingController::class, 'updateSettings'])->name('settings.update');
                 Route::post('/devices', [FleetTrackingController::class, 'storeDevice'])->name('devices.store');
                 Route::post('/bouncie/sync-vehicles', [FleetTrackingController::class, 'syncBouncieVehicles'])->name('bouncie.sync-vehicles');

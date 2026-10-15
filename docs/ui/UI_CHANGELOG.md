@@ -1,3 +1,17 @@
+## 2026-10-15 — Selected company vans and recorded trip paths
+
+- The standalone Location Tracker starts with all configured vans selected and
+  keeps per-user, per-workspace selections through refreshes. Checkboxes,
+  Select All, Clear All, named markers and shared history keep the view aligned.
+- Bouncie trip geometry supplies clean paths with redundant samples simplified,
+  meaningful gaps preserved, and trips kept separate. Today, Yesterday and custom
+  ranges use the account timezone and existing retention window.
+- Van/trip highlighting, provider distance and duration, explicit freshness,
+  missing/disconnected tracking and partial failures help dispatch interpret
+  the available evidence. Refreshes preserve the map position.
+- Existing account gates, Bouncie configuration and vehicle assignments remain
+  unchanged. See `docs/operations/collins-fleet-selected-routes.md`.
+
 ## 2026-10-07 — CRM Fleet free preview and 100 vehicles
 
 ## 2026-10-08 — Carolina Heritage theme (development)

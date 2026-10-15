@@ -11,6 +11,7 @@ export default defineConfig(() => ({
         'resources/css/app.css',
         'resources/js/app.js',
         'resources/js/highlevel/fleet.js',
+        'resources/js/field-service/fleet-map.js',
         'resources/js/trajectory/app.js',
         'resources/js/admin/master-data-grid.tsx',
         'resources/js/marketing/customers-grid.tsx',
