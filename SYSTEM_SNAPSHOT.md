@@ -1,5 +1,20 @@
 # SYSTEM SNAPSHOT
 
+## 2026-10-15 - Retail shipping weight readiness
+
+- Native Website Products identifies available physical variants missing weights
+  with a product count, filter, row warnings, and a paginated bulk weight editor.
+  Merchants can enter ounces, pounds, or grams; existing whole-ounce storage
+  rounds converted measurements upward.
+- Ordinary product edits and older CSV files preserve omitted measurements.
+  Catalog CSV export includes every variant and its stable ID, name, weight, and
+  dimensions. Import validates ownership and preserves blank measurement cells.
+- Missing weights block carrier quoting and shipping checkout, while browsing
+  and pickup remain available. No account, entitlement, rollout, payment,
+  provider activation, or schema change is included.
+- Follow docs/operations/retail-shipping-launch-plan.md for the five phases
+  and docs/operations/website-commerce-shipping-operations.md for operation.
+
 ## 2026-10-15 — Everbranch Showcase workspace and landlord presentation
 
 - Shared Everbranch web workspaces adopt the approved Showcase palette, readable

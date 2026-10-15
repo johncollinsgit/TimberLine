@@ -1,5 +1,6 @@
 @extends('managed-website.store-layout')
 @section('store-content')
+@include('managed-website.shipping-readiness-notice')
 @if(data_get($site->settings, 'theme_key') === 'sawyer-naturals')
 @include('managed-website.sawyer.cart')
 @else

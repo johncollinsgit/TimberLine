@@ -399,6 +399,7 @@ class WebsiteCommerceController extends Controller
         return view('managed-website.cart', compact('site', 'cart') + [
             'shippingEnabled' => $shipping->enabledFor($tenant),
             'checkoutReady' => $commerce->checkoutReadiness($tenant)['ready'],
+            'missingShippingWeights' => app(\App\Services\ManagedWebsite\WebsiteShippingReadinessService::class)->missingCartWeights($cart),
         ]);
     }
 

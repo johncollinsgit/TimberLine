@@ -838,6 +838,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/commerce/shipping/packages', [WebsiteCommerceController::class, 'saveShippingPackage'])->name('commerce.shipping.packages.store');
             Route::get('/products/export', [WebsiteCommerceController::class, 'exportProducts'])->name('products.export');
             Route::post('/products/import', [WebsiteCommerceController::class, 'importProducts'])->name('products.import');
+            Route::get('/products/shipping-weights', [\App\Http\Controllers\WebsiteCatalogController::class, 'shippingWeights'])->name('products.shipping-weights');
+            Route::post('/products/shipping-weights', [\App\Http\Controllers\WebsiteCatalogController::class, 'saveShippingWeights'])->name('products.shipping-weights.save');
             Route::post('/products', [\App\Http\Controllers\WebsiteCatalogController::class, 'store'])->name('products.store');
             Route::put('/products/{product}', [\App\Http\Controllers\WebsiteCatalogController::class, 'update'])->name('products.update');
             Route::delete('/products/{product}', [\App\Http\Controllers\WebsiteCatalogController::class, 'archive'])->name('products.destroy');

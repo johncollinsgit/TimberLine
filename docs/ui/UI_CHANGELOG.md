@@ -1,3 +1,13 @@
+## 2026-10-15 - Retail shipping weight readiness
+
+- Products shows missing-weight product counts, a filter, and row warnings.
+  Add weights opens a paginated bulk variant editor with ounces, pounds, and
+  grams; product editing includes the same units and a missing-weight notice.
+- Shopper carts identify items unavailable for shipping while keeping catalog
+  access and other configured delivery options. Missing measurements are
+  merchant setup tasks and do not open checkout or carrier rollout gates.
+- CSV/edit preservation and transactional tenant-scoped weight updates accompany
+  the UI. See docs/operations/retail-shipping-launch-plan.md.
 
 ## 2026-10-15 — Everbranch Showcase workspace and landlord presentation
 

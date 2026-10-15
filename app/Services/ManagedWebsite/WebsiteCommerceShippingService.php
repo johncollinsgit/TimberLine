@@ -44,6 +44,7 @@ class WebsiteCommerceShippingService
     {
         $tenant = Tenant::query()->findOrFail($cart->tenant_id);
         abort_unless($this->enabledFor($tenant), 423, 'Native shipping is not enabled for this website.');
+        app(WebsiteShippingReadinessService::class)->assertCartCanShip($cart);
         $destination = $this->address($destination, 'shipping_address');
         $location = WebsiteFulfillmentLocation::query()->forTenant($tenant)->where('tenant_site_id', $cart->tenant_site_id)->where('active', true)->orderByDesc('is_default')->first();
         $package = WebsiteShippingPackage::query()->forTenant($tenant)->where('tenant_site_id', $cart->tenant_site_id)->where('active', true)->orderByDesc('is_default')->first();
@@ -241,7 +242,7 @@ class WebsiteCommerceShippingService
                 continue;
             }
             $physical = true;
-            $weight += max(1, (int) ($variant->shipping_weight_ounces ?: $package->weight_ounces)) * $item->quantity;
+            $weight += (int) $variant->shipping_weight_ounces * $item->quantity;
         }
 
         return [[

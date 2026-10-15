@@ -80,28 +80,33 @@ class WebsiteCommerceService
             'status' => $data['status'],
             'track_inventory' => (bool) ($data['track_inventory'] ?? false),
             'media' => $this->safeMedia((array) ($data['media'] ?? [])),
-            'service_details' => $this->safeServiceDetails((array) ($data['service_details'] ?? [])),
-            'seo' => ['title' => trim((string) ($data['seo_title'] ?? '')), 'description' => trim((string) ($data['seo_description'] ?? ''))],
+            'service_details' => array_merge((array) $product->service_details, $this->safeServiceDetails((array) ($data['service_details'] ?? [])), ['catalog_revision' => (int) data_get($product->service_details, 'catalog_revision', 0) + 1]),
+            'seo' => ['title' => trim((string) ($data['seo_title'] ?? data_get($product->seo, 'title', ''))), 'description' => trim((string) ($data['seo_description'] ?? data_get($product->seo, 'description', '')))],
         ]);
         $product->save();
 
-        $variant = $product->variants()->first() ?? new WebsiteProductVariant([
-            'tenant_id' => $site->tenant_id,
-            'website_product_id' => $product->id,
-        ]);
+        $variant = (isset($data['variant_id'])
+            ? $product->variants()->forTenantId($site->tenant_id)->findOrFail((int) $data['variant_id'])
+            : (empty($data['new_variant']) ? $product->variants()->first() : null)) ?? new WebsiteProductVariant([
+                'tenant_id' => $site->tenant_id,
+                'website_product_id' => $product->id,
+            ]);
         $variant->fill([
-            'title' => trim((string) ($data['variant_title'] ?? 'Default')) ?: 'Default',
+            'title' => trim((string) ($data['variant_title'] ?? $variant->title ?? 'Default')) ?: 'Default',
             'sku' => trim((string) ($data['sku'] ?? '')) ?: null,
             'price_cents' => $this->dollarsToCents((string) $data['price']),
             'wholesale_price_cents' => ($data['wholesale_price'] ?? null) !== null && $data['wholesale_price'] !== '' ? $this->dollarsToCents((string) $data['wholesale_price']) : null,
-            'compare_at_price_cents' => ($data['compare_at_price'] ?? null) !== null && $data['compare_at_price'] !== '' ? $this->dollarsToCents((string) $data['compare_at_price']) : null,
+            'compare_at_price_cents' => array_key_exists('compare_at_price', $data)
+                ? (filled($data['compare_at_price']) ? $this->dollarsToCents((string) $data['compare_at_price']) : null)
+                : $variant->compare_at_price_cents,
             'inventory_quantity' => $product->track_inventory ? max(0, (int) ($data['inventory_quantity'] ?? 0)) : null,
-            'shipping_weight_ounces' => $product->product_type === 'physical' && filled($data['shipping_weight_ounces'] ?? null) ? max(1, (int) $data['shipping_weight_ounces']) : null,
-            'shipping_length_inches' => $product->product_type === 'physical' && filled($data['shipping_length_inches'] ?? null) ? max(1, (int) $data['shipping_length_inches']) : null,
-            'shipping_width_inches' => $product->product_type === 'physical' && filled($data['shipping_width_inches'] ?? null) ? max(1, (int) $data['shipping_width_inches']) : null,
-            'shipping_height_inches' => $product->product_type === 'physical' && filled($data['shipping_height_inches'] ?? null) ? max(1, (int) $data['shipping_height_inches']) : null,
             'is_available' => $product->status === 'archived' ? false : (bool) ($data['is_available'] ?? true),
         ]);
+        foreach (['shipping_weight_ounces', 'shipping_length_inches', 'shipping_width_inches', 'shipping_height_inches'] as $field) {
+            if (array_key_exists($field, $data)) {
+                $variant->{$field} = $product->product_type === 'physical' && filled($data[$field]) ? max(1, (int) $data[$field]) : null;
+            }
+        }
         $wasNew = ! $variant->exists;
         $before = $variant->inventory_quantity;
         $variant->save();
@@ -300,6 +305,9 @@ class WebsiteCommerceService
                 $variant = WebsiteProductVariant::query()->lockForUpdate()->with('product')->findOrFail($item->website_product_variant_id);
                 abort_unless($variant->is_available && $variant->product?->status === 'active', 422, 'An item is no longer available.');
                 abort_if($variant->product?->product_type === 'quote', 422, 'Quote-only services cannot be paid through checkout.');
+                if ($fulfillmentMethod === 'ship') {
+                    app(WebsiteShippingReadinessService::class)->assertVariantCanShip($variant);
+                }
                 if ($variant->product?->track_inventory && $variant->inventory_quantity !== null) {
                     $reserved = (int) WebsiteInventoryReservation::query()->where('website_product_variant_id', $variant->id)->where('status', 'active')->where('expires_at', '>', now())->sum('quantity');
                     if ($item->quantity > ($variant->inventory_quantity - $reserved)) {

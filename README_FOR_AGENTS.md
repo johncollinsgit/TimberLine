@@ -1,5 +1,20 @@
 # START HERE
 
+## 2026-10-15 - Retail shipping weight readiness
+
+Native Website shipping weights are catalog readiness, not a vendor launch
+failure. Products shows missing-weight counts and filters; the product editor
+and /website/products/shipping-weights accept ounces, pounds, or grams with
+upward whole-ounce storage. Blank bulk fields and omitted CSV/edit fields
+preserve existing measurements; the product editor can explicitly clear a
+weight. CSV exports include all variants with scoped stable IDs. Keep revision,
+membership, active-product publishing, tenant, and site guards.
+
+Missing physical-item weights block carrier quotes and shipping checkout only;
+never use package tare as an item weight. Browsing and configured pickup remain
+available. No commerce or shipping gate is enabled by this change. The five-phase
+implementation sequence is docs/operations/retail-shipping-launch-plan.md.
+
 ## 2026-10-15 — Everbranch Showcase workspace and landlord presentation
 
 - Shared Everbranch web workspaces adopt the approved Showcase palette, readable
