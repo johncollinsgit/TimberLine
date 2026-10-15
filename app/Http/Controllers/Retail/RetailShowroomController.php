@@ -44,6 +44,20 @@ class RetailShowroomController extends Controller
         return response()->view('retail.showroom')->header('Cache-Control', 'private, no-store')->header('X-Robots-Tag', 'noindex, nofollow');
     }
 
+    public function outreach(Request $r)
+    {
+        $this->owner($r);
+        $campaign = json_decode(file_get_contents(resource_path('data/retail-outreach-drafts.json')), true, 512, JSON_THROW_ON_ERROR);
+        $recipients = json_decode(file_get_contents(resource_path('data/retail-instagram-recipients.json')), true, 512, JSON_THROW_ON_ERROR);
+        $deliveryPath = storage_path('app/private/retail-outreach-delivery.json');
+        $deliveries = app()->environment('local') && is_file($deliveryPath)
+            ? collect(json_decode(file_get_contents($deliveryPath), true, 512, JSON_THROW_ON_ERROR)['deliveries'] ?? [])->where('status', 'sent')->groupBy('slug')
+            : collect();
+        $campaign['sent_count'] = $deliveries->flatten(1)->count();
+
+        return response()->view('retail.outreach', ['campaign' => $campaign, 'recipients' => collect($recipients['recipients'])->keyBy('slug'), 'deliveries' => $deliveries])->header('Cache-Control', 'private, no-store')->header('X-Robots-Tag', 'noindex, nofollow');
+    }
+
     public function concept(Request $r, string $slug)
     {
         $this->preview($r, $slug);

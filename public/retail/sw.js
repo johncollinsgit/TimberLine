@@ -1,6 +1,6 @@
-const VERSION='everbranch-retail-v2';
-const CORE=['/retail/offline.html','/retail/app.mjs','/retail/commerce.mjs','/retail/app.css','/retail/manifest.webmanifest','/retail/assets/icon.svg'];
-self.addEventListener('install',e=>e.waitUntil(caches.open(VERSION).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting())));
+const VERSION='everbranch-retail-v3';
+const CORE=['/retail/offline.html','/retail/app.mjs','/retail/commerce.mjs','/retail/app.css','/retail/manifest.webmanifest','/retail/assets/icon.svg','/retail/assets/icon.svg?v=4','/retail/assets/icon-192.png?v=4','/retail/assets/icon-512.png?v=4','/retail/assets/icon-maskable-192.png?v=4','/retail/assets/icon-maskable-512.png?v=4'];
+self.addEventListener('install',e=>e.waitUntil(caches.open(VERSION).then(c=>c.addAll(CORE.map(url=>new Request(url,{cache:'reload',credentials:'omit'})))).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(Promise.all([caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('everbranch-retail-')&&k!==VERSION).map(k=>caches.delete(k)))),self.clients.claim()])));
 self.addEventListener('message',e=>{if(e.data?.type==='PRELOAD')e.waitUntil(caches.open(VERSION).then(c=>c.addAll(e.data.assets.filter(p=>/^\/retail\/assets\/[a-z0-9.-]+$/.test(p)))));});
 self.addEventListener('fetch',e=>{const u=new URL(e.request.url);if(u.origin!==location.origin||e.request.method!=='GET'||u.pathname.includes('/api/')||u.pathname.includes('/preview/'))return;

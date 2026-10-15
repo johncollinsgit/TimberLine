@@ -77,7 +77,9 @@ class RetailShowroomService
         return DB::transaction(function () use ($owner) {
             $result = [];
             $walkingOrder = ['old-beech-mountain-farms' => 1, 'joy-fudge-company' => 2, '4-pelicans-woodworking' => 3, 'leather-link-studio' => 4, 'mountain-momma-organics' => 5, 'highland-croft-candle-company' => 6, 'mcneills-pottery' => 7];
-            foreach ($this->definitions()['vendors'] as $merchant) {
+            $researchPath = resource_path('data/retail-additional-vendor-research.json');
+            $research = is_file($researchPath) ? collect(json_decode(file_get_contents($researchPath), true, 512, JSON_THROW_ON_ERROR)['vendors'] ?? [])->keyBy('slug') : collect();
+            foreach ($this->definitions()['vendors'] as $index => $merchant) {
                 $tenant = Tenant::firstOrCreate(['slug' => 'ww-demo-'.$merchant['slug']], ['name' => 'Demo · '.$merchant['name']]);
                 $profile = TenantAccessProfile::firstOrCreate(['tenant_id' => $tenant->id], ['plan_key' => 'base', 'operating_mode' => 'direct', 'source' => 'woolly-worm-2026', 'metadata' => ['account_mode' => 'demo', 'merchant_active' => false, 'retail_demo' => true]]);
                 abort_unless(data_get($profile->metadata, 'retail_demo') === true, 409, 'This workspace is not a showroom sandbox.');
@@ -109,9 +111,12 @@ class RetailShowroomService
                 $prospect ??= LandlordProspect::create(['business_name' => $merchant['name'], 'source' => 'woolly-worm-2026', ...['status' => 'draft_ready', 'website' => $merchant['website'] ?? $merchant['primary_public_profile'] ?? $merchant['facebook'] ?? null, 'trade' => 'Retail', 'county' => 'Research pending', 'city' => $merchant['city'] ?? null, 'notes' => 'Private unofficial concept; merchant activation not approved.', 'created_by_user_id' => $owner->id, 'source_snapshot' => ['research' => $merchant, 'showroom' => ['tenant_id' => $tenant->id, 'site_id' => $site->id, 'slug' => $merchant['slug']], 'festival' => ['stage' => 'Research', 'shown' => false]], 'last_verified_at' => now()]]);
                 $snapshot = $prospect->source_snapshot ?? [];
                 $snapshot['research'] ??= $merchant;
+                if (isset($research[$merchant['slug']]['site_review'])) {
+                    $snapshot['research']['site_review'] ??= $research[$merchant['slug']]['site_review'];
+                }
                 $snapshot['showroom'] ??= ['tenant_id' => $tenant->id, 'site_id' => $site->id, 'slug' => $merchant['slug']];
                 $snapshot['festival'] ??= ['stage' => 'Research', 'shown' => false];
-                $snapshot['festival']['walking_order'] ??= $walkingOrder[$merchant['slug']];
+                $snapshot['festival']['walking_order'] ??= $merchant['walking_order'] ?? $walkingOrder[$merchant['slug']] ?? $index + 1;
                 $prospect->source_snapshot = $snapshot;
                 $prospect->save();
                 $draft = TenantOnboardingBlueprint::where('tenant_id', $tenant->id)->where('status', 'draft')->first();
@@ -149,7 +154,7 @@ class RetailShowroomService
             } unset($variant);
         } unset($product);
 
-        return array_intersect_key($merchant, array_flip(['slug', 'name', 'booth', 'website', 'image', 'headline', 'tagline', 'cta', 'theme', 'colors', 'shipping', 'products']));
+        return array_intersect_key($merchant, array_flip(['slug', 'name', 'booth', 'website', 'image', 'headline', 'tagline', 'cta', 'theme', 'colors', 'shipping', 'products', 'category_label', 'intro', 'shopping_journey']));
     }
 
     public function resolveLines(string $slug, array $lines): array

@@ -57,5 +57,5 @@ test('one managed website offer includes the weekly strategic partnership', func
     $offer = app(EvergroveOffer::class)->presentation();
     expect($offer['monthly_cents'])->toBe(9900)->and($offer['setup_cents'])->toBe(49900)->and($offer['partnership'][0])->toBe('One-hour video call every week');
     $this->get('http://'.$this->host.'/retail/showroom/pricing')->assertOk();
-    $this->getJson('http://'.$this->host.'/retail/showroom/api/bootstrap?merchant=joy-fudge-company')->assertJsonCount(8,'vendors')->assertJsonPath('offer.setup_cents',49900);
+    $this->getJson('http://'.$this->host.'/retail/showroom/api/bootstrap?merchant=joy-fudge-company')->assertJsonCount(21, 'vendors')->assertJsonPath('offer.setup_cents', 49900);
 });

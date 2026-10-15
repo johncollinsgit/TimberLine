@@ -30,11 +30,11 @@ beforeEach(function () {
     $this->base = 'http://'.$this->host.'/retail/showroom/api/';
     $this->actingAs($this->owner);
 });
-test('seeding preserves edits and creates exactly seven isolated drafts and prospects', function () {
+test('seeding preserves edits and creates exactly twenty isolated drafts and prospects', function () {
     $p = WebsiteProduct::first();
     $p->update(['title' => 'Operator edit']);
     $this->showroom->seed($this->owner);
-    expect(Tenant::where('slug', 'like', 'ww-demo-%')->count())->toBe(7)->and(TenantOnboardingBlueprint::where('status', 'draft')->count())->toBe(7)->and(LandlordProspect::where('source', 'woolly-worm-2026')->count())->toBe(7)->and($p->fresh()->title)->toBe('Operator edit');
+    expect(Tenant::where('slug', 'like', 'ww-demo-%')->count())->toBe(20)->and(TenantOnboardingBlueprint::where('status', 'draft')->count())->toBe(20)->and(LandlordProspect::where('source', 'woolly-worm-2026')->count())->toBe(20)->and($p->fresh()->title)->toBe('Operator edit');
     expect(TenantSite::where('public_enabled', true)->count())->toBe(0);
     expect($this->showroom->catalog('sawyer-naturals')['products'])->toHaveCount(62);
 });
@@ -47,8 +47,8 @@ test('a private showroom requires the configured active verified owner', functio
 });
 test('catalogs omit private notes research contacts and scores', function () {
     $r = $this->getJson($this->base.'bootstrap')->assertOk();
-    expect($r->json('vendors'))->toHaveCount(8);
-    expect($r->getContent())->not->toContain('private_notes', 'fit_score', 'requires_merchant_confirmation', 'sample-0@');
+    expect($r->json('vendors'))->toHaveCount(21);
+    expect($r->getContent())->not->toContain('private_notes', 'fit_score', 'requires_merchant_confirmation', 'sample-0@', 'site_review', 'opportunity', 'live_mobile_review');
 });
 test('packing changes quantities and mixed groups without offering meat shipping', function () {
     $one = $this->showroom->quote('mcneills-pottery', [['product_id' => 'p1', 'variant_id' => 'blue', 'quantity' => 1]], ['zip' => '28604', 'state' => 'NC']);
@@ -129,7 +129,7 @@ test('existing prospects are linked without duplicating or replacing their histo
     $count = LandlordProspect::count();
     $this->showroom->seed($this->owner);
     expect(LandlordProspect::count())->toBe($count)->and($p->fresh()->source)->toBe('Existing research')->and($p->fresh()->notes)->toBe('Existing relationship');
-    $this->getJson($this->base.'research')->assertOk()->assertJsonCount(7, 'prospects');
+    $this->getJson($this->base.'research')->assertOk()->assertJsonCount(20, 'prospects');
 });
 
 test('a signed-in preview recipient gets only the shared storefront without staff access', function () {
@@ -167,4 +167,65 @@ test('the private festival route saves walking order without replacing notes or 
     Mail::assertNothingSent();
     Http::assertNothingSent();
     $this->putJson($this->base.'joy-fudge-company/prospect', ['stage' => 'Visit', 'walking_order' => 0])->assertUnprocessable();
+});
+
+test('all twenty concepts keep catalogs customers carts and replayed sample checkouts isolated', function () {
+    $vendors = $this->showroom->definitions()['vendors'];
+    expect($vendors)->toHaveCount(20);
+    $tenantIds = [];
+    $tokens = [];
+    $actual = [WebsiteOrder::count(), WebsitePayment::count(), WebsiteShipment::count()];
+    foreach ($vendors as $index => $merchant) {
+        $slug = $merchant['slug'];
+        $site = $this->showroom->site($slug);
+        $tenantIds[] = $site->tenant_id;
+        $catalog = $this->showroom->catalog($slug);
+        expect($catalog['products'])->toHaveCount(6);
+        $product = collect($catalog['products'])->first(fn ($p) => ! $p['quote_only'] && collect($p['variants'])->contains(fn ($v) => $v['stock'] > 0));
+        $variant = collect($product['variants'])->first(fn ($v) => $v['stock'] > 0);
+        $lines = [['product_id' => $product['id'], 'variant_id' => $variant['id'], 'quantity' => 1]];
+        $cart = $this->showroom->syncCart($slug, $lines, $tokens[0] ?? null);
+        $tokens[] = $cart->token;
+        expect($cart->tenant_id)->toBe($site->tenant_id);
+        $customer = WebsiteCustomer::where('tenant_id', $site->tenant_id)->firstOrFail();
+        $input = ['lines' => $lines, 'destination' => ['zip' => '28604', 'state' => 'NC'], 'service' => 'pickup', 'customer_id' => $customer->id];
+        $key = 'twenty-concepts-replay-'.$index;
+        $order = $this->showroom->checkout($slug, $input, $this->owner, $key);
+        expect($this->showroom->checkout($slug, $input, $this->owner, $key))->toBe($order)
+            ->and($order['is_demo'])->toBeTrue()
+            ->and($order['subtotal_cents'])->toBe($variant['price_cents'])
+            ->and(data_get($site->fresh()->settings, 'retail_demo.orders'))->toHaveCount(1)
+            ->and(data_get($customer->fresh()->notes, 'reward_entries'))->toHaveCount(1);
+        if (isset($merchant['category_label'])) {
+            expect($catalog['category_label'])->toBe($merchant['category_label'])
+                ->and($catalog['intro'])->toBe($merchant['intro'])
+                ->and($catalog['shopping_journey'])->toBe($merchant['shopping_journey']);
+        }
+    }
+    expect(array_unique($tenantIds))->toHaveCount(20)
+        ->and(array_unique($tokens))->toHaveCount(20)
+        ->and([WebsiteOrder::count(), WebsitePayment::count(), WebsiteShipment::count()])->toBe($actual);
+    Http::assertNothingSent();
+    Mail::assertNothingSent();
+});
+
+test('additional website observations stay in private prospect research and survive reseeding', function () {
+    $source = json_decode(file_get_contents(resource_path('data/retail-additional-vendor-research.json')), true, 512, JSON_THROW_ON_ERROR)['vendors'];
+    expect($source)->toHaveCount(13);
+    foreach ($source as $review) {
+        $p = LandlordProspect::where('source_snapshot->showroom->slug', $review['slug'])->firstOrFail();
+        expect(data_get($p->source_snapshot, 'research.site_review.opportunity'))->toBe($review['site_review']['opportunity']);
+        $catalog = $this->showroom->catalog($review['slug']);
+        expect($catalog)->not->toHaveKeys(['web_presence', 'concept', 'site_review', 'sources']);
+    }
+    $p = LandlordProspect::where('source_snapshot->showroom->slug', $source[0]['slug'])->firstOrFail();
+    $snapshot = $p->source_snapshot;
+    $snapshot['festival']['walking_order'] = 88;
+    $snapshot['research']['site_review']['opportunity'] = 'Owner reviewed the next conversation.';
+    $p->source_snapshot = $snapshot;
+    $p->save();
+    $this->showroom->seed($this->owner);
+    expect(data_get($p->fresh()->source_snapshot, 'festival.walking_order'))->toBe(88)
+        ->and(data_get($p->fresh()->source_snapshot, 'research.site_review.opportunity'))->toBe('Owner reviewed the next conversation.');
+    $this->getJson($this->base.'bootstrap')->assertOk()->assertDontSee('Owner reviewed the next conversation.')->assertDontSee('site_review');
 });

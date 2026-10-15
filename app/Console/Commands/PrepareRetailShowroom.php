@@ -10,7 +10,7 @@ class PrepareRetailShowroom extends Command
 {
     protected $signature = 'everbranch:prepare-retail-showroom {--owner-email=} {--dry-run}';
 
-    protected $description = 'Prepare seven isolated Woolly Worm retail concept drafts without merchant activation or provider actions.';
+    protected $description = 'Prepare isolated Woolly Worm retail concept drafts without merchant activation or provider actions.';
 
     public function handle(RetailShowroomService $showroom): int
     {
@@ -27,7 +27,7 @@ class PrepareRetailShowroom extends Command
             return self::SUCCESS;
         }
         $showroom->seed($owner);
-        $this->info('Prepared seven private demo sites, prospect records, and draft blueprints. No merchant account, payments, shipping or public website activated.');
+        $this->info('Prepared '.count($names).' private demo sites, prospect records, and draft blueprints. No merchant account, payments, shipping or public website activated.');
 
         return self::SUCCESS;
     }

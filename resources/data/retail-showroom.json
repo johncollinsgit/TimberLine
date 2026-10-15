@@ -1706,6 +1706,3089 @@
           ]
         }
       ]
+    },
+    {
+      "slug": "appalachian-divinitea",
+      "name": "Appalachian DiviniTEA",
+      "booth": "Row 2 C",
+      "website": "https://appalachiandivinitea.com/",
+      "web_presence": "The mobile homepage offers many tea categories, a market finder, and a free-shipping code that excludes canned drinks.",
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://appalachiandivinitea.com/"
+      ],
+      "confirmed_catalog_examples": [
+        {
+          "name": "Rose Chai Organic Tea",
+          "price_usd": null
+        },
+        {
+          "name": "Mellow Mood Organic Tea",
+          "price_usd": null
+        }
+      ],
+      "concept": "Browse by tea style, choose a sample pouch size, then compare a dry-tea basket with a canned-drink basket. Customer favorites demonstrate a useful return visit.",
+      "shipping_profile": "Dry tea and canned drinks are separate example package groups. The observed free-shipping promotion is not enabled; packed weights, origin and exclusion rules need approval.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": [
+        "Actual tea sizes and prices",
+        "Current promotion and canned-drink exclusions",
+        "Canned beverage packing and dispatch limits",
+        "Fulfillment origin and pickup arrangements",
+        "Permission to reuse blend names, descriptions and photos"
+      ],
+      "image": "tea",
+      "headline": "Find your next cup.",
+      "tagline": "A small ritual, steeped in possibility.",
+      "cta": "Explore the collection",
+      "theme": "pantry",
+      "category_label": "Teas & teawares",
+      "intro": "Explore a tea-first concept with clear collection choices, favorite blends and a sample mixed basket.",
+      "shopping_journey": "Browse by tea style, choose a sample pouch size, then compare a dry-tea basket with a canned-drink basket. Customer favorites demonstrate a useful return visit.",
+      "colors": {
+        "ink": "#293d2e",
+        "accent": "#a27d42",
+        "paper": "#f7f3e7"
+      },
+      "walking_order": 8,
+      "live_shipping_enabled": false,
+      "payment_enabled": false,
+      "shipping": {
+        "kind": "mixed",
+        "origin": null,
+        "allowed_states": "US",
+        "pickup": true,
+        "local_delivery": false,
+        "handling_cents": 250,
+        "free_over_cents": null,
+        "live_enabled": false,
+        "measurements_verified": false,
+        "policy_note": "All package measurements, handling and availability are synthetic demonstration inputs. No live merchant policy is activated."
+      },
+      "products": [
+        {
+          "id": "p1",
+          "name": "Rose Chai Organic Tea",
+          "category": "Tea blends",
+          "description": "Rose Chai Organic Tea. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": true,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 4,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "tea",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "pouch",
+              "title": "Small pouch · sample size",
+              "price_cents": 1400,
+              "stock": 12
+            },
+            {
+              "id": "large",
+              "title": "Large pouch · sample size",
+              "price_cents": 2400,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "name": "Mellow Mood Organic Tea",
+          "category": "Tea blends",
+          "description": "Mellow Mood Organic Tea. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": true,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 4,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "tea",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "pouch",
+              "title": "Small pouch · sample size",
+              "price_cents": 1400,
+              "stock": 12
+            },
+            {
+              "id": "large",
+              "title": "Large pouch · sample size",
+              "price_cents": 2400,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "name": "Tea discovery sampler · sample",
+          "category": "Discovery",
+          "description": "Tea discovery sampler · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 8,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "tea",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 2200,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p4",
+          "name": "Mountain morning black tea · sample",
+          "category": "Black teas",
+          "description": "Mountain morning black tea · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 4,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "tea",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 1400,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p5",
+          "name": "Iced tea four-pack · sample",
+          "category": "Canned drinks",
+          "description": "Iced tea four-pack · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 52,
+          "dimensions_inches": [
+            8,
+            6,
+            6
+          ],
+          "measurements_verified": false,
+          "group": "cans",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 1600,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p6",
+          "name": "Steep & sip gift set · sample",
+          "category": "Teawares",
+          "description": "Steep & sip gift set · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 18,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "teaware",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 3200,
+              "stock": 12
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "avery-knifeworks",
+      "name": "Avery KnifeWorks",
+      "booth": "Row 4 A-B",
+      "website": "https://www.averyknifeworks.com/",
+      "web_presence": "Mobile review found horizontal overflow; the site promotes kitchen/outdoor knives and lifetime support.",
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://www.averyknifeworks.com/"
+      ],
+      "confirmed_catalog_examples": [],
+      "concept": "Compare ordinary kitchen and outdoor tool formats, inspect a single-piece stock limit, and keep sample customer care preferences connected to a purchase.",
+      "shipping_profile": "Only safe simulated parcels for ordinary kitchen/outdoor tools. Real sale, age/carrier restrictions, lawful destinations, safe blade packaging and origin must be confirmed before activation.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": [
+        "Actual knife catalog and piece-specific prices",
+        "Mobile layout across actual devices",
+        "Secure blade packaging and carrier restrictions",
+        "Approved product and care photography",
+        "Care/guarantee workflow and customer history permissions"
+      ],
+      "image": "forge",
+      "headline": "A useful piece of craftsmanship.",
+      "tagline": "From the kitchen to the camp table.",
+      "cta": "Explore the collection",
+      "theme": "gallery",
+      "category_label": "Kitchen & outdoor craft",
+      "intro": "A quiet gallery for practical handmade kitchen and outdoor tools, with clear sample availability and a path back for care.",
+      "shopping_journey": "Compare ordinary kitchen and outdoor tool formats, inspect a single-piece stock limit, and keep sample customer care preferences connected to a purchase.",
+      "colors": {
+        "ink": "#282d2b",
+        "accent": "#b17b46",
+        "paper": "#f3f0e7"
+      },
+      "walking_order": 9,
+      "live_shipping_enabled": false,
+      "payment_enabled": false,
+      "shipping": {
+        "kind": "tools",
+        "origin": null,
+        "allowed_states": "US",
+        "pickup": true,
+        "local_delivery": false,
+        "handling_cents": 125,
+        "free_over_cents": null,
+        "live_enabled": false,
+        "measurements_verified": false,
+        "policy_note": "All package measurements, handling and availability are synthetic demonstration inputs. No live merchant policy is activated."
+      },
+      "products": [
+        {
+          "id": "p1",
+          "name": "Chef’s knife · sample",
+          "category": "Kitchen",
+          "description": "Chef’s knife · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 16,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "tools",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 18500,
+              "stock": 1
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "name": "Paring knife · sample",
+          "category": "Kitchen",
+          "description": "Paring knife · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 8,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "tools",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 8500,
+              "stock": 1
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "name": "Kitchen utility knife · sample",
+          "category": "Kitchen",
+          "description": "Kitchen utility knife · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 12,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "tools",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 12500,
+              "stock": 1
+            }
+          ]
+        },
+        {
+          "id": "p4",
+          "name": "Outdoor camp knife · sample",
+          "category": "Outdoor",
+          "description": "Outdoor camp knife · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 16,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "tools",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 15500,
+              "stock": 1
+            }
+          ]
+        },
+        {
+          "id": "p5",
+          "name": "Leather sheath · sample",
+          "category": "Care & accessories",
+          "description": "Leather sheath · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 6,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "leather",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "brown",
+              "title": "Brown · sample",
+              "price_cents": 3500,
+              "stock": 12
+            },
+            {
+              "id": "black",
+              "title": "Black · sample",
+              "price_cents": 3500,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p6",
+          "name": "Blade care kit · sample",
+          "category": "Care & accessories",
+          "description": "Blade care kit · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 10,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "care",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 2400,
+              "stock": 12
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "boone-barndog",
+      "name": "Boone Barndog Art & Books",
+      "booth": "Row 6 A",
+      "website": "https://www.boonebarndog.com/",
+      "web_presence": "The shop includes print-at-home posters, physical ColorParty packs and books. The artist explicitly emphasizes hand-drawn work.",
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://www.boonebarndog.com/"
+      ],
+      "confirmed_catalog_examples": [
+        {
+          "name": "ColorParty Poster Packs",
+          "price_usd": 38.0
+        }
+      ],
+      "concept": "Choose a sample printed format or group pack, compare quantities and save a group’s preferences for a future event. Download handling remains a merchant discovery question.",
+      "shipping_profile": "All cartable products in this concept are physical print/book examples. Actual downloadable files are not copied or delivered. Flat mailers, rolled posters, sizes and origin need approval.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": [
+        "Permission to reproduce artwork or book covers",
+        "Physical versus digital catalog and delivery licensing",
+        "Print sizes, paper, quantities and prices",
+        "Group-order and classroom terms",
+        "Mailers, rolled-poster packaging and origin"
+      ],
+      "image": "art",
+      "headline": "Make a little room for color.",
+      "tagline": "A creative afternoon starts here.",
+      "cta": "Explore the collection",
+      "theme": "editorial",
+      "category_label": "Coloring, art & books",
+      "intro": "A print-first concept for coloring, gathering and thoughtful books. The imagery shows an unbranded workstation, not the artist’s actual work.",
+      "shopping_journey": "Choose a sample printed format or group pack, compare quantities and save a group’s preferences for a future event. Download handling remains a merchant discovery question.",
+      "colors": {
+        "ink": "#263752",
+        "accent": "#c8663d",
+        "paper": "#faf3e7"
+      },
+      "walking_order": 10,
+      "live_shipping_enabled": false,
+      "payment_enabled": false,
+      "shipping": {
+        "kind": "prints",
+        "origin": null,
+        "allowed_states": "US",
+        "pickup": true,
+        "local_delivery": false,
+        "handling_cents": 125,
+        "free_over_cents": null,
+        "live_enabled": false,
+        "measurements_verified": false,
+        "policy_note": "All package measurements, handling and availability are synthetic demonstration inputs. No live merchant policy is activated."
+      },
+      "products": [
+        {
+          "id": "p1",
+          "name": "Mountain-town coloring poster · sample",
+          "category": "Printed posters",
+          "description": "Mountain-town coloring poster · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 5,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "prints",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "letter",
+              "title": "Letter format · sample",
+              "price_cents": 1200,
+              "stock": 12
+            },
+            {
+              "id": "large",
+              "title": "Large format · sample",
+              "price_cents": 1800,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "name": "ColorParty Poster Packs",
+          "category": "Group creativity",
+          "description": "ColorParty Poster Packs. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.boonebarndog.com/",
+          "price_note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant.",
+          "weight_oz": 24,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "prints",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 3800,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "name": "Nature coloring book · sample",
+          "category": "Coloring books",
+          "description": "Nature coloring book · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 12,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "books",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 1600,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p4",
+          "name": "Poetry collection · sample",
+          "category": "Books",
+          "description": "Poetry collection · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 10,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "books",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 1800,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p5",
+          "name": "Classroom printed bundle · sample",
+          "category": "Group creativity",
+          "description": "Classroom printed bundle · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 36,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "prints",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 4200,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p6",
+          "name": "Creative gift envelope · sample",
+          "category": "Gifts",
+          "description": "Creative gift envelope · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 10,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "prints",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 2200,
+              "stock": 12
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "britts-leather",
+      "name": "Britt’s Leather Co.",
+      "booth": "Row 14 A-B",
+      "website": "https://brittsleatherco.com/",
+      "web_presence": "The homepage introduces custom-fit belts and several leather collections.",
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://brittsleatherco.com/"
+      ],
+      "confirmed_catalog_examples": [],
+      "concept": "Choose a sample belt size and leather color, browse related accessories, and show how customer notes can remember fit and personalization preferences.",
+      "shipping_profile": "Sample leather/textile parcel groups only. Sizing, personalization lead times, returns, actual packed weights and dispatch origin remain unverified.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": [
+        "Approved product names, images and prices",
+        "Belt measurement and size guide",
+        "Personalization fields, proofs and lead times",
+        "Return policy for custom-fit items",
+        "Packaging and fulfillment origin"
+      ],
+      "image": "leather",
+      "headline": "Made for your everyday.",
+      "tagline": "Leather choices with a personal fit.",
+      "cta": "Explore the collection",
+      "theme": "editorial",
+      "category_label": "Leather goods",
+      "intro": "Explore a leather collection concept that keeps sizing, finish and gifting decisions clear from the first visit to the next.",
+      "shopping_journey": "Choose a sample belt size and leather color, browse related accessories, and show how customer notes can remember fit and personalization preferences.",
+      "colors": {
+        "ink": "#342820",
+        "accent": "#a76d42",
+        "paper": "#f6eee1"
+      },
+      "walking_order": 11,
+      "live_shipping_enabled": false,
+      "payment_enabled": false,
+      "shipping": {
+        "kind": "leather",
+        "origin": null,
+        "allowed_states": "US",
+        "pickup": true,
+        "local_delivery": false,
+        "handling_cents": 125,
+        "free_over_cents": null,
+        "live_enabled": false,
+        "measurements_verified": false,
+        "policy_note": "All package measurements, handling and availability are synthetic demonstration inputs. No live merchant policy is activated."
+      },
+      "products": [
+        {
+          "id": "p1",
+          "name": "Custom-fit leather belt · sample",
+          "category": "Belts",
+          "description": "Custom-fit leather belt · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 12,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "leather",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "medium",
+              "title": "Medium · sample sizing",
+              "price_cents": 6500,
+              "stock": 12
+            },
+            {
+              "id": "large",
+              "title": "Large · sample sizing",
+              "price_cents": 6500,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "name": "Folded leather wallet · sample",
+          "category": "Wallets",
+          "description": "Folded leather wallet · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 6,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "leather",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "cognac",
+              "title": "Cognac · sample",
+              "price_cents": 5500,
+              "stock": 12
+            },
+            {
+              "id": "dark",
+              "title": "Dark brown · sample",
+              "price_cents": 5500,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "name": "Leather journal cover · sample",
+          "category": "Journals",
+          "description": "Leather journal cover · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 12,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "leather",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 4800,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p4",
+          "name": "Everyday leather tote · sample",
+          "category": "Bags",
+          "description": "Everyday leather tote · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 32,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "leather",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 14500,
+              "stock": 3
+            }
+          ]
+        },
+        {
+          "id": "p5",
+          "name": "Leather patch hat · sample",
+          "category": "Patch hats",
+          "description": "Leather patch hat · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 7,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "textile",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 3000,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p6",
+          "name": "Personalized key fob · sample",
+          "category": "Accessories",
+          "description": "Personalized key fob · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 3,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "leather",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 1800,
+              "stock": 12
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "datil-sensation",
+      "name": "Datil Sensation",
+      "booth": "Row 8 D",
+      "website": "https://datilsensations.com/",
+      "web_presence": "The mobile homepage contains visible theme placeholder text. Larger-order and special-shipping assistance is directed to phone support.",
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://datilsensations.com/"
+      ],
+      "confirmed_catalog_examples": [
+        {
+          "name": "Indian Summer",
+          "price_usd": 8.5
+        },
+        {
+          "name": "Tears",
+          "price_usd": 8.5
+        },
+        {
+          "name": "Scorch",
+          "price_usd": 12.0
+        },
+        {
+          "name": "Viper",
+          "price_usd": 15.0
+        }
+      ],
+      "concept": "Browse sauce families, compare sample heat labels, build a tasting basket and demonstrate a saved customer favorite. Larger requests remain a human conversation.",
+      "shipping_profile": "Glass bottles and jars use illustrative packing and handling. Ingredients, allergens, heat descriptions, shelf stability, large-order shipping and origin require merchant approval.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": [
+        "Current bottle sizes and verified heat guide",
+        "Ingredients, allergens and shelf stability",
+        "Remove or replace visible theme placeholder content",
+        "Bulk-order and special-shipping workflow",
+        "Glass packing, dispatch days and origin"
+      ],
+      "image": "sauce",
+      "headline": "Choose a little sweet heat.",
+      "tagline": "Find the bottle you’ll come back for.",
+      "cta": "Explore the collection",
+      "theme": "cocoa",
+      "category_label": "Sauces, salsa & preserves",
+      "intro": "A flavor-first sauce concept with clear tasting choices, a sample gift selection and a simple path from the festival table to a reorder.",
+      "shopping_journey": "Browse sauce families, compare sample heat labels, build a tasting basket and demonstrate a saved customer favorite. Larger requests remain a human conversation.",
+      "colors": {
+        "ink": "#44261e",
+        "accent": "#c45d32",
+        "paper": "#fff1d7"
+      },
+      "walking_order": 12,
+      "live_shipping_enabled": false,
+      "payment_enabled": false,
+      "shipping": {
+        "kind": "sauce",
+        "origin": null,
+        "allowed_states": "US",
+        "pickup": true,
+        "local_delivery": false,
+        "handling_cents": 250,
+        "free_over_cents": null,
+        "live_enabled": false,
+        "measurements_verified": false,
+        "policy_note": "All package measurements, handling and availability are synthetic demonstration inputs. No live merchant policy is activated."
+      },
+      "products": [
+        {
+          "id": "p1",
+          "name": "Indian Summer",
+          "category": "Hot sauces",
+          "description": "Indian Summer. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://datilsensations.com/",
+          "price_note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant.",
+          "weight_oz": 12,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "glass",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 850,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "name": "Tears",
+          "category": "Hot sauces",
+          "description": "Tears. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://datilsensations.com/",
+          "price_note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant.",
+          "weight_oz": 12,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "glass",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 850,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "name": "Scorch",
+          "category": "Hot sauces",
+          "description": "Scorch. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://datilsensations.com/",
+          "price_note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant.",
+          "weight_oz": 12,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "glass",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 1200,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p4",
+          "name": "Viper",
+          "category": "Hot sauces",
+          "description": "Viper. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://datilsensations.com/",
+          "price_note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant.",
+          "weight_oz": 12,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "glass",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 1500,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p5",
+          "name": "Festival salsa jar · sample",
+          "category": "Salsas",
+          "description": "Festival salsa jar · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 22,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "glass",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "mild",
+              "title": "Mild · sample recipe",
+              "price_cents": 1000,
+              "stock": 12
+            },
+            {
+              "id": "hot",
+              "title": "Hot · sample recipe",
+              "price_cents": 1000,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p6",
+          "name": "Sweet-heat preserve · sample",
+          "category": "Preserves",
+          "description": "Sweet-heat preserve · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 20,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "glass",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 1000,
+              "stock": 12
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "gw-watts-sauce",
+      "name": "GW Watts Sauce",
+      "booth": "Row 13 A",
+      "website": "https://www.wattssauce.com/",
+      "web_presence": "The homepage presents many sampler packs with abbreviated product codes.",
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://www.wattssauce.com/"
+      ],
+      "confirmed_catalog_examples": [
+        {
+          "name": "Honey Bourbon Hot Sauce",
+          "price_usd": 15.0
+        },
+        {
+          "name": "Honey Hot Sauce Gift Pack",
+          "price_usd": 25.0
+        },
+        {
+          "name": "Watts Barbecue Sauce Sampler – Smoky Mountain - MHBH",
+          "price_usd": 20.0
+        }
+      ],
+      "concept": "Compare sample flavor families, browse an observed sampler, create a gift basket and keep a customer’s tasting preferences for an easier reorder.",
+      "shipping_profile": "Example glass and dry-spice package groups. The observed $45-or-more shipping offer is research only; the concept does not activate that rule.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": [
+        "Exact sampler contents and consumer-friendly names",
+        "Current ingredients, allergens and prices",
+        "Shipping threshold and eligible destinations",
+        "Glass packaging, dispatch schedule and origin",
+        "Approved photos and product stories"
+      ],
+      "image": "sauce",
+      "headline": "Find your table’s favorite.",
+      "tagline": "A little smoky. A little bold.",
+      "cta": "Explore the collection",
+      "theme": "farm",
+      "category_label": "BBQ sauces & tasting sets",
+      "intro": "A sampler-led concept that puts pack contents and flavor differences ahead of internal product codes.",
+      "shopping_journey": "Compare sample flavor families, browse an observed sampler, create a gift basket and keep a customer’s tasting preferences for an easier reorder.",
+      "colors": {
+        "ink": "#313c2b",
+        "accent": "#a94e2e",
+        "paper": "#f6efd9"
+      },
+      "walking_order": 13,
+      "live_shipping_enabled": false,
+      "payment_enabled": false,
+      "shipping": {
+        "kind": "sauce",
+        "origin": null,
+        "allowed_states": "US",
+        "pickup": true,
+        "local_delivery": false,
+        "handling_cents": 250,
+        "free_over_cents": null,
+        "live_enabled": false,
+        "measurements_verified": false,
+        "policy_note": "All package measurements, handling and availability are synthetic demonstration inputs. No live merchant policy is activated."
+      },
+      "products": [
+        {
+          "id": "p1",
+          "name": "Honey Bourbon Hot Sauce",
+          "category": "Hot sauces",
+          "description": "Honey Bourbon Hot Sauce. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.wattssauce.com/",
+          "price_note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant.",
+          "weight_oz": 14,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "glass",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 1500,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "name": "Honey Hot Sauce Gift Pack",
+          "category": "Gift packs",
+          "description": "Honey Hot Sauce Gift Pack. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.wattssauce.com/",
+          "price_note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant.",
+          "weight_oz": 28,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "glass",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 2500,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "name": "Watts Barbecue Sauce Sampler – Smoky Mountain - MHBH",
+          "category": "Samplers",
+          "description": "Watts Barbecue Sauce Sampler – Smoky Mountain - MHBH. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.wattssauce.com/",
+          "price_note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant.",
+          "weight_oz": 32,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "glass",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 2000,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p4",
+          "name": "Carolina barbecue bottle · sample",
+          "category": "BBQ sauces",
+          "description": "Carolina barbecue bottle · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 20,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "glass",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "tangy",
+              "title": "Tangy · sample style",
+              "price_cents": 1000,
+              "stock": 12
+            },
+            {
+              "id": "smoky",
+              "title": "Smoky · sample style",
+              "price_cents": 1000,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p5",
+          "name": "Table mustard jar · sample",
+          "category": "Mustards",
+          "description": "Table mustard jar · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 18,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "glass",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 900,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p6",
+          "name": "Grill seasoning blend · sample",
+          "category": "Seasonings",
+          "description": "Grill seasoning blend · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 8,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "dry",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 800,
+              "stock": 12
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "honest-elderberry-company",
+      "name": "Honest Elderberry Company",
+      "booth": "Row 15 E",
+      "website": "https://honestelderberryco.com/",
+      "web_presence": "The shop mixes syrups, tea, honey, body products and wholesale navigation.",
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://honestelderberryco.com/"
+      ],
+      "confirmed_catalog_examples": [],
+      "concept": "Browse by product type, compare sample sizes and assemble a household basket. Separate food and body-care package groups keep fulfillment questions visible.",
+      "shipping_profile": "All packages are example-only. Refrigeration, shelf life, food handling, food/body-care separation, ingredients and origin must be confirmed. No medical benefit claims or live subscription is included.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": [
+        "Actual food safety, refrigeration and shelf-life requirements",
+        "Approved product language without unverified health claims",
+        "Food versus body-care packaging",
+        "Ingredients, allergens, sizes and prices",
+        "Retail versus wholesale catalog access",
+        "Permission and consent for customer follow-up"
+      ],
+      "image": "pantry",
+      "headline": "Favorite things, thoughtfully gathered.",
+      "tagline": "Find your collection. Remember your favorites.",
+      "cta": "Explore the collection",
+      "theme": "pantry",
+      "category_label": "Pantry & everyday collections",
+      "intro": "A collection-first concept for pantry items, tea and separate body-care choices. This demo makes no health or treatment claims.",
+      "shopping_journey": "Browse by product type, compare sample sizes and assemble a household basket. Separate food and body-care package groups keep fulfillment questions visible.",
+      "colors": {
+        "ink": "#343b2e",
+        "accent": "#93719b",
+        "paper": "#f7f0e5"
+      },
+      "walking_order": 14,
+      "live_shipping_enabled": false,
+      "payment_enabled": false,
+      "shipping": {
+        "kind": "mixed",
+        "origin": null,
+        "allowed_states": "US",
+        "pickup": true,
+        "local_delivery": false,
+        "handling_cents": 250,
+        "free_over_cents": null,
+        "live_enabled": false,
+        "measurements_verified": false,
+        "policy_note": "All package measurements, handling and availability are synthetic demonstration inputs. No live merchant policy is activated."
+      },
+      "products": [
+        {
+          "id": "p1",
+          "name": "Elderberry syrup selection · sample",
+          "category": "Elderberry",
+          "description": "Elderberry syrup selection · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 20,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "food",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "small",
+              "title": "Small bottle · sample",
+              "price_cents": 2200,
+              "stock": 12
+            },
+            {
+              "id": "large",
+              "title": "Large bottle · sample",
+              "price_cents": 3400,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "name": "Pantry honey jar · sample",
+          "category": "Honey",
+          "description": "Pantry honey jar · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 20,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "food",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 1400,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "name": "Loose-leaf tea pouch · sample",
+          "category": "Tea",
+          "description": "Loose-leaf tea pouch · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 4,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "tea",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 1200,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p4",
+          "name": "At-home pantry kit · sample",
+          "category": "Kits",
+          "description": "At-home pantry kit · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 16,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "dry",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 2400,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p5",
+          "name": "Body-care jar · sample",
+          "category": "Body care",
+          "description": "Body-care jar · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 10,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "body-care",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 1800,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p6",
+          "name": "Tea & honey gift selection · sample",
+          "category": "Gifts",
+          "description": "Tea & honey gift selection · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 28,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "food",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 3200,
+              "stock": 12
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "jc-wicks",
+      "name": "JC Wicks",
+      "booth": "Row 18 E",
+      "website": "https://jcwicks.com/",
+      "web_presence": "The site offers multiple scent product types and announces Friday shipping and a free-shipping threshold.",
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://jcwicks.com/"
+      ],
+      "confirmed_catalog_examples": [],
+      "concept": "Choose a fictional scent family, compare candle and melt formats, build a gift basket and show sample dispatch information without promising a real ship date.",
+      "shipping_profile": "Candles, liquids and electrical accessories are separate illustrative groups. The site’s Friday dispatch and $60+ free-shipping notices are recorded as research, not activated promises.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": [
+        "Actual scents and cross-product availability",
+        "Friday dispatch cutoff and holiday handling",
+        "Current free-shipping threshold and exclusions",
+        "Liquid transport and wax temperature limits",
+        "Electrical product compliance and packing",
+        "Approved ingredients, prices and photos"
+      ],
+      "image": "croft",
+      "headline": "Follow a favorite scent.",
+      "tagline": "One scent. A few lovely ways to enjoy it.",
+      "cta": "Explore the collection",
+      "theme": "croft",
+      "category_label": "Candles & home fragrance",
+      "intro": "Explore a scent-led collection concept that keeps fragrance choices and product formats together.",
+      "shopping_journey": "Choose a fictional scent family, compare candle and melt formats, build a gift basket and show sample dispatch information without promising a real ship date.",
+      "colors": {
+        "ink": "#243c37",
+        "accent": "#bb8b63",
+        "paper": "#f6f0e4"
+      },
+      "walking_order": 15,
+      "live_shipping_enabled": false,
+      "payment_enabled": false,
+      "shipping": {
+        "kind": "candles",
+        "origin": null,
+        "allowed_states": "US",
+        "pickup": true,
+        "local_delivery": false,
+        "handling_cents": 250,
+        "free_over_cents": null,
+        "live_enabled": false,
+        "measurements_verified": false,
+        "policy_note": "All package measurements, handling and availability are synthetic demonstration inputs. No live merchant policy is activated."
+      },
+      "products": [
+        {
+          "id": "p1",
+          "name": "Signature candle · sample",
+          "category": "Candles",
+          "description": "Signature candle · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 22,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "glass",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "fresh",
+              "title": "Fresh linen · sample fragrance",
+              "price_cents": 2000,
+              "stock": 12
+            },
+            {
+              "id": "warm",
+              "title": "Warm woods · sample fragrance",
+              "price_cents": 2000,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "name": "Wax melt collection · sample",
+          "category": "Wax melts",
+          "description": "Wax melt collection · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 5,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "wax",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "fresh",
+              "title": "Fresh linen · sample fragrance",
+              "price_cents": 650,
+              "stock": 12
+            },
+            {
+              "id": "warm",
+              "title": "Warm woods · sample fragrance",
+              "price_cents": 650,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "name": "Room & linen spray · sample",
+          "category": "Sprays",
+          "description": "Room & linen spray · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 10,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "liquid",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 1100,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p4",
+          "name": "Hand & body cream · sample",
+          "category": "Body care",
+          "description": "Hand & body cream · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 10,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "body-care",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 1400,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p5",
+          "name": "Candle & melt gift box · sample",
+          "category": "Gifts",
+          "description": "Candle & melt gift box · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 30,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "glass",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 3200,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p6",
+          "name": "Electric wax warmer · sample",
+          "category": "Warmers",
+          "description": "Electric wax warmer · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 26,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "electrical",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 2400,
+              "stock": 12
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "little-elk-candle-company",
+      "name": "Little Elk Candle Company",
+      "booth": "Row 15 B",
+      "website": "https://www.littleelkcandles.com/",
+      "web_presence": "The homepage lists over twenty scents across candles, diffusers, melts and home fragrance.",
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://www.littleelkcandles.com/"
+      ],
+      "confirmed_catalog_examples": [
+        {
+          "name": "8 oz. soy blend candle",
+          "price_usd": 12.0
+        },
+        {
+          "name": "Car diffuser",
+          "price_usd": 6.5
+        },
+        {
+          "name": "Room/linen spray · 4 oz.",
+          "price_usd": 7.0
+        },
+        {
+          "name": "Wax melts · 2.75 oz.",
+          "price_usd": 4.0
+        },
+        {
+          "name": "Laundry booster · 12 oz. pouch",
+          "price_usd": 6.5
+        },
+        {
+          "name": "Rug freshener · 10 oz. pouch",
+          "price_usd": 6.5
+        }
+      ],
+      "concept": "Start with a fictional scent family, select a format and show how a customer can remember the choice for a return purchase.",
+      "shipping_profile": "Source sizes are product contents, not verified packed weights. Liquid, wax and powder groups use synthetic dimensions only. Scent availability and transport restrictions need approval.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": [
+        "Complete scent list and scent-to-format availability",
+        "Current prices and product-content sizes",
+        "Liquid ingredients and transport restrictions",
+        "Safe-use text approved by merchant",
+        "Glass, powder and heat-sensitive packing",
+        "Origin and actual dispatch policy"
+      ],
+      "image": "croft",
+      "headline": "A scent for the way you live.",
+      "tagline": "Discover a familiar little favorite.",
+      "cta": "Explore the collection",
+      "theme": "croft",
+      "category_label": "Scent & home rituals",
+      "intro": "A scent-first concept for candles and home fragrance, with sample favorites and easy product-format comparisons.",
+      "shopping_journey": "Start with a fictional scent family, select a format and show how a customer can remember the choice for a return purchase.",
+      "colors": {
+        "ink": "#284238",
+        "accent": "#b3885b",
+        "paper": "#faf2e4"
+      },
+      "walking_order": 16,
+      "live_shipping_enabled": false,
+      "payment_enabled": false,
+      "shipping": {
+        "kind": "candles",
+        "origin": null,
+        "allowed_states": "US",
+        "pickup": true,
+        "local_delivery": false,
+        "handling_cents": 250,
+        "free_over_cents": null,
+        "live_enabled": false,
+        "measurements_verified": false,
+        "policy_note": "All package measurements, handling and availability are synthetic demonstration inputs. No live merchant policy is activated."
+      },
+      "products": [
+        {
+          "id": "p1",
+          "name": "8 oz. soy blend candle",
+          "category": "Candles",
+          "description": "The 8 oz. candle format and $12 listing were observed on the merchant homepage on 2026-10-15. Scents, stock, imagery and packed weight here are illustrative, not merchant-confirmed.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.littleelkcandles.com/",
+          "price_note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant.",
+          "weight_oz": 20,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "glass",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "woodland",
+              "title": "Woodland · fictional scent",
+              "price_cents": 1200,
+              "stock": 12
+            },
+            {
+              "id": "citrus",
+              "title": "Citrus · fictional scent",
+              "price_cents": 1200,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "name": "Car diffuser",
+          "category": "Diffusers",
+          "description": "Car diffuser. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.littleelkcandles.com/",
+          "price_note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant.",
+          "weight_oz": 6,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "liquid",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 650,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "name": "Room/linen spray · 4 oz.",
+          "category": "Sprays",
+          "description": "Room/linen spray · 4 oz.. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.littleelkcandles.com/",
+          "price_note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant.",
+          "weight_oz": 10,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "liquid",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 700,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p4",
+          "name": "Wax melts · 2.75 oz.",
+          "category": "Wax melts",
+          "description": "Wax melts · 2.75 oz.. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.littleelkcandles.com/",
+          "price_note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant.",
+          "weight_oz": 5,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "wax",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 400,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p5",
+          "name": "Laundry booster · 12 oz. pouch",
+          "category": "Laundry",
+          "description": "Laundry booster · 12 oz. pouch. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.littleelkcandles.com/",
+          "price_note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant.",
+          "weight_oz": 15,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "powder",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 650,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p6",
+          "name": "Rug freshener · 10 oz. pouch",
+          "category": "Home fragrance",
+          "description": "Rug freshener · 10 oz. pouch. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.littleelkcandles.com/",
+          "price_note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant.",
+          "weight_oz": 13,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "powder",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 650,
+              "stock": 12
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "lonon-pottery",
+      "name": "Lonon Pottery",
+      "booth": "Row 12 C",
+      "website": "https://www.lononpottery.com/shop",
+      "web_presence": "The live mobile shop review found many products marked sold out.",
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://www.lononpottery.com/shop"
+      ],
+      "confirmed_catalog_examples": [
+        {
+          "name": "Coffee Mug",
+          "price_usd": 25.0
+        },
+        {
+          "name": "Tumbler with Straw",
+          "price_usd": 20.0
+        },
+        {
+          "name": "Tiny Vase",
+          "price_usd": 10.0
+        },
+        {
+          "name": "Spoon Rest-Plain",
+          "price_usd": 12.0
+        },
+        {
+          "name": "Bowl-Small",
+          "price_usd": 10.0
+        },
+        {
+          "name": "Jewelry Holder",
+          "price_usd": 25.0
+        }
+      ],
+      "concept": "Explore a sample glaze choice and packing changes for multiple pieces. Keep restock or commission preferences in a fictional customer note instead of losing the conversation.",
+      "shipping_profile": "Protective packing grows with ceramic quantity using synthetic weights and dimensions. Source-listed availability is not imported; all concept stock is fictional.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": [
+        "Restock versus made-to-order versus commission workflow",
+        "Actual stock: selected source listings were sold out on review",
+        "Glaze/shape variation and approved product photos",
+        "Protective packing, breakage policy and origin",
+        "Whether customers may opt into restock contact"
+      ],
+      "image": "pottery",
+      "headline": "A place for the next piece.",
+      "tagline": "Made to be used, held and remembered.",
+      "cta": "Explore the collection",
+      "theme": "ceramic",
+      "category_label": "Pottery for everyday",
+      "intro": "A pottery concept with glaze browsing, sample stock and a useful conversation when a favorite piece is unavailable. Source listings observed sold out remain clearly distinct from sample availability.",
+      "shopping_journey": "Explore a sample glaze choice and packing changes for multiple pieces. Keep restock or commission preferences in a fictional customer note instead of losing the conversation.",
+      "colors": {
+        "ink": "#3d4139",
+        "accent": "#818c98",
+        "paper": "#f7eee3"
+      },
+      "walking_order": 17,
+      "live_shipping_enabled": false,
+      "payment_enabled": false,
+      "shipping": {
+        "kind": "ceramic",
+        "origin": null,
+        "allowed_states": "US",
+        "pickup": true,
+        "local_delivery": false,
+        "handling_cents": 400,
+        "free_over_cents": null,
+        "live_enabled": false,
+        "measurements_verified": false,
+        "policy_note": "All package measurements, handling and availability are synthetic demonstration inputs. No live merchant policy is activated."
+      },
+      "products": [
+        {
+          "id": "p1",
+          "name": "Coffee Mug",
+          "category": "Mugs",
+          "description": "This product name and displayed price were observed on the merchant’s shop on 2026-10-15, where this listing was marked sold out. This independent demo uses fictional stock and illustrative glaze choices to show the journey; it does not indicate actual availability. Generic pottery photography is not the merchant’s work.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.lononpottery.com/shop",
+          "price_note": "Source price observed 2026-10-15; source listing sold out. Stock, glazes and packed measurements here are fictional.",
+          "weight_oz": 16,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "ceramic",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "blue",
+              "title": "Blue glaze · sample availability",
+              "price_cents": 2500,
+              "stock": 4
+            },
+            {
+              "id": "earth",
+              "title": "Earth glaze · sample availability",
+              "price_cents": 2500,
+              "stock": 3
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "name": "Tumbler with Straw",
+          "category": "Drinkware",
+          "description": "This product name and displayed price were observed on the merchant’s shop on 2026-10-15, where this listing was marked sold out. This independent demo uses fictional stock and illustrative glaze choices to show the journey; it does not indicate actual availability. Generic pottery photography is not the merchant’s work.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.lononpottery.com/shop",
+          "price_note": "Source price observed 2026-10-15; source listing sold out. Stock, glazes and packed measurements here are fictional.",
+          "weight_oz": 18,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "ceramic",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 2000,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "name": "Tiny Vase",
+          "category": "Vases",
+          "description": "This product name and displayed price were observed on the merchant’s shop on 2026-10-15, where this listing was marked sold out. This independent demo uses fictional stock and illustrative glaze choices to show the journey; it does not indicate actual availability. Generic pottery photography is not the merchant’s work.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.lononpottery.com/shop",
+          "price_note": "Source price observed 2026-10-15; source listing sold out. Stock, glazes and packed measurements here are fictional.",
+          "weight_oz": 10,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "ceramic",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 1000,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p4",
+          "name": "Spoon Rest-Plain",
+          "category": "Kitchen",
+          "description": "This product name and displayed price were observed on the merchant’s shop on 2026-10-15, where this listing was marked sold out. This independent demo uses fictional stock and illustrative glaze choices to show the journey; it does not indicate actual availability. Generic pottery photography is not the merchant’s work.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.lononpottery.com/shop",
+          "price_note": "Source price observed 2026-10-15; source listing sold out. Stock, glazes and packed measurements here are fictional.",
+          "weight_oz": 12,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "ceramic",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 1200,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p5",
+          "name": "Bowl-Small",
+          "category": "Bowls",
+          "description": "This product name and displayed price were observed on the merchant’s shop on 2026-10-15, where this listing was marked sold out. This independent demo uses fictional stock and illustrative glaze choices to show the journey; it does not indicate actual availability. Generic pottery photography is not the merchant’s work.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.lononpottery.com/shop",
+          "price_note": "Source price observed 2026-10-15; source listing sold out. Stock, glazes and packed measurements here are fictional.",
+          "weight_oz": 14,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "ceramic",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 1000,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p6",
+          "name": "Jewelry Holder",
+          "category": "Home",
+          "description": "This product name and displayed price were observed on the merchant’s shop on 2026-10-15, where this listing was marked sold out. This independent demo uses fictional stock and illustrative glaze choices to show the journey; it does not indicate actual availability. Generic pottery photography is not the merchant’s work.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.lononpottery.com/shop",
+          "price_note": "Source price observed 2026-10-15; source listing sold out. Stock, glazes and packed measurements here are fictional.",
+          "weight_oz": 18,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "ceramic",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 2500,
+              "stock": 12
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "michaels-exotic-peppers",
+      "name": "Michael’s Exotic Peppers",
+      "booth": "Row 11 D",
+      "website": "https://michaelsexoticpeppers.com/",
+      "web_presence": "The shop presents many pepper/flavor combinations and amplified versions.",
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://michaelsexoticpeppers.com/"
+      ],
+      "confirmed_catalog_examples": [
+        {
+          "name": "Grilled Pineapple Mango & Carolina Reaper Hot Sauce",
+          "price_usd": 9.99
+        },
+        {
+          "name": "Black Garlic & Ghost Pepper Hot Sauce",
+          "price_usd": 9.99
+        },
+        {
+          "name": "Grilled Banana & Trinidad Scorpion Hot Sauce",
+          "price_usd": 9.99
+        },
+        {
+          "name": "Grilled Pineapple Mango & Carolina Reaper - Amplification Hot Sauce",
+          "price_usd": 11.49
+        },
+        {
+          "name": "Watermelon & Red Scotch Bonnet Pepper Hot Sauce",
+          "price_usd": 9.99
+        }
+      ],
+      "concept": "Compare pepper and fruit combinations, select a sample bottle size and record fictional tasting preferences for a future reorder. Heat ratings require merchant approval.",
+      "shipping_profile": "Example glass-bottle packing only. Starting prices do not establish bottle size, packed weight, measured heat or safe handling. Ingredients, packaging and origin need merchant approval.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": [
+        "Bottle sizes matching each starting price",
+        "Merchant-approved heat guide and safe handling",
+        "Actual sampler contents and prices",
+        "Allergens, food handling and glass packing",
+        "Favorites/reorder consent and wholesale scope",
+        "Origin and shipping destinations"
+      ],
+      "image": "sauce",
+      "headline": "Find your flavor of bold.",
+      "tagline": "Remember the one you tasted.",
+      "cta": "Explore the collection",
+      "theme": "cocoa",
+      "category_label": "Craft hot sauce",
+      "intro": "A heat-and-flavor concept that helps festival tasters find the bottle they enjoyed and return to it later.",
+      "shopping_journey": "Compare pepper and fruit combinations, select a sample bottle size and record fictional tasting preferences for a future reorder. Heat ratings require merchant approval.",
+      "colors": {
+        "ink": "#3e251c",
+        "accent": "#bc5632",
+        "paper": "#fff0d9"
+      },
+      "walking_order": 18,
+      "live_shipping_enabled": false,
+      "payment_enabled": false,
+      "shipping": {
+        "kind": "sauce",
+        "origin": null,
+        "allowed_states": "US",
+        "pickup": true,
+        "local_delivery": false,
+        "handling_cents": 250,
+        "free_over_cents": null,
+        "live_enabled": false,
+        "measurements_verified": false,
+        "policy_note": "All package measurements, handling and availability are synthetic demonstration inputs. No live merchant policy is activated."
+      },
+      "products": [
+        {
+          "id": "p1",
+          "name": "Grilled Pineapple Mango & Carolina Reaper Hot Sauce",
+          "category": "Fruit & pepper",
+          "description": "Grilled Pineapple Mango & Carolina Reaper Hot Sauce. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://michaelsexoticpeppers.com/",
+          "price_note": "Homepage starting price observed 2026-10-15; size mapping and sample availability need confirmation.",
+          "weight_oz": 12,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "glass",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 999,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "name": "Black Garlic & Ghost Pepper Hot Sauce",
+          "category": "Garlic & pepper",
+          "description": "Black Garlic & Ghost Pepper Hot Sauce. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://michaelsexoticpeppers.com/",
+          "price_note": "Homepage starting price observed 2026-10-15; size mapping and sample availability need confirmation.",
+          "weight_oz": 12,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "glass",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 999,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "name": "Grilled Banana & Trinidad Scorpion Hot Sauce",
+          "category": "Fruit & pepper",
+          "description": "Grilled Banana & Trinidad Scorpion Hot Sauce. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://michaelsexoticpeppers.com/",
+          "price_note": "Homepage starting price observed 2026-10-15; size mapping and sample availability need confirmation.",
+          "weight_oz": 12,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "glass",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 999,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p4",
+          "name": "Grilled Pineapple Mango & Carolina Reaper - Amplification Hot Sauce",
+          "category": "Amplified sauces",
+          "description": "Grilled Pineapple Mango & Carolina Reaper - Amplification Hot Sauce. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://michaelsexoticpeppers.com/",
+          "price_note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant.",
+          "weight_oz": 12,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "glass",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 1149,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p5",
+          "name": "Watermelon & Red Scotch Bonnet Pepper Hot Sauce",
+          "category": "Fruit & pepper",
+          "description": "Watermelon & Red Scotch Bonnet Pepper Hot Sauce. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://michaelsexoticpeppers.com/",
+          "price_note": "Homepage starting price observed 2026-10-15; size mapping and sample availability need confirmation.",
+          "weight_oz": 12,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "glass",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 999,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p6",
+          "name": "Tasting discovery set · sample",
+          "category": "Discovery sets",
+          "description": "Tasting discovery set · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 36,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "glass",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "fruit",
+              "title": "Fruit-forward · sample contents",
+              "price_cents": 2800,
+              "stock": 12
+            },
+            {
+              "id": "garlic",
+              "title": "Garlic-forward · sample contents",
+              "price_cents": 2800,
+              "stock": 12
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "noodlecakes",
+      "name": "NoodleCakes",
+      "booth": "Row 4 D",
+      "website": "https://noodlecakes.com/",
+      "web_presence": "The homepage spans beadwork, stained glass, cat toys and local stockists.",
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://noodlecakes.com/"
+      ],
+      "confirmed_catalog_examples": [],
+      "concept": "Browse a product family, select a fictional colorway, inspect a unique-piece stock limit and preserve a custom gift preference in a sample customer profile.",
+      "shipping_profile": "Separate sample jewelry, fragile glass and textile package groups. Real materials, glass protection, pet-toy safety, unique inventory and destination rules need approval.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": [
+        "Actual piece photos and permission to reproduce designs",
+        "One-of-a-kind inventory and color variants",
+        "Jewelry materials and relevant disclosures",
+        "Pet-toy construction and approved safety text",
+        "Fragile glass packing and origin",
+        "Custom gift lead times and customer contact consent"
+      ],
+      "image": "beads",
+      "headline": "A small treasure, found.",
+      "tagline": "Something colorful to come back for.",
+      "cta": "Explore the collection",
+      "theme": "gallery",
+      "category_label": "Beadwork, glass & playful gifts",
+      "intro": "A maker-gallery concept that gives beadwork, glass and playful gift ideas their own clear shopping paths.",
+      "shopping_journey": "Browse a product family, select a fictional colorway, inspect a unique-piece stock limit and preserve a custom gift preference in a sample customer profile.",
+      "colors": {
+        "ink": "#43344d",
+        "accent": "#be704c",
+        "paper": "#fbf1e7"
+      },
+      "walking_order": 19,
+      "live_shipping_enabled": false,
+      "payment_enabled": false,
+      "shipping": {
+        "kind": "mixed",
+        "origin": null,
+        "allowed_states": "US",
+        "pickup": true,
+        "local_delivery": false,
+        "handling_cents": 250,
+        "free_over_cents": null,
+        "live_enabled": false,
+        "measurements_verified": false,
+        "policy_note": "All package measurements, handling and availability are synthetic demonstration inputs. No live merchant policy is activated."
+      },
+      "products": [
+        {
+          "id": "p1",
+          "name": "Beaded drop earrings · sample",
+          "category": "Beadwork",
+          "description": "Beaded drop earrings · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 3,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "jewelry",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "terracotta",
+              "title": "Terracotta · sample",
+              "price_cents": 3200,
+              "stock": 1
+            },
+            {
+              "id": "blue",
+              "title": "Blue · sample",
+              "price_cents": 3200,
+              "stock": 1
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "name": "Beaded bracelet · sample",
+          "category": "Beadwork",
+          "description": "Beaded bracelet · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 3,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "jewelry",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 2400,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "name": "Small glass suncatcher · sample",
+          "category": "Stained glass",
+          "description": "Small glass suncatcher · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 14,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "glass",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 4800,
+              "stock": 1
+            }
+          ]
+        },
+        {
+          "id": "p4",
+          "name": "Window color charm · sample",
+          "category": "Stained glass",
+          "description": "Window color charm · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 10,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "glass",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 2800,
+              "stock": 1
+            }
+          ]
+        },
+        {
+          "id": "p5",
+          "name": "Cat play pouch · sample",
+          "category": "Cat toys",
+          "description": "Cat play pouch · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 5,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "textile",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 1400,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p6",
+          "name": "Handmade gift pairing · sample",
+          "category": "Gifts",
+          "description": "Handmade gift pairing · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 12,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "jewelry",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 4200,
+              "stock": 12
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "pillowsak",
+      "name": "PillowSak",
+      "booth": "Row 13 D",
+      "website": "https://pillowsak.com/",
+      "web_presence": "The homepage foregrounds fabric designs; the travel-pillow purpose is explained below the best sellers.",
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://pillowsak.com/"
+      ],
+      "confirmed_catalog_examples": [],
+      "concept": "Start with a travel occasion, compare fictional fit options and choose an unbranded sample fabric. Saved preferences make repeat gifting easier to demonstrate.",
+      "shipping_profile": "All fit, fabrics, bundle contents, prices and packed measurements are illustrative. The observed $44.99 starting price is retained in research but does not verify these fictional selections.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": [
+        "Fit dimensions and included items for Original/Premium",
+        "Current prices and fabric inventory",
+        "Licensed-fabric permissions; no copied licensed artwork in demo",
+        "Care instructions and returns",
+        "Travel-use photography permission",
+        "Packing origin and shipping policy"
+      ],
+      "image": "textiles",
+      "headline": "Bring a little home along.",
+      "tagline": "A favorite pillow, ready for the journey.",
+      "cta": "Explore the collection",
+      "theme": "editorial",
+      "category_label": "Travel & textile accessories",
+      "intro": "A use-first travel accessory concept that connects fabric choice, fit and gifting before browsing a long pattern list.",
+      "shopping_journey": "Start with a travel occasion, compare fictional fit options and choose an unbranded sample fabric. Saved preferences make repeat gifting easier to demonstrate.",
+      "colors": {
+        "ink": "#304550",
+        "accent": "#b56e51",
+        "paper": "#f6f1e8"
+      },
+      "walking_order": 20,
+      "live_shipping_enabled": false,
+      "payment_enabled": false,
+      "shipping": {
+        "kind": "textiles",
+        "origin": null,
+        "allowed_states": "US",
+        "pickup": true,
+        "local_delivery": false,
+        "handling_cents": 125,
+        "free_over_cents": null,
+        "live_enabled": false,
+        "measurements_verified": false,
+        "policy_note": "All package measurements, handling and availability are synthetic demonstration inputs. No live merchant policy is activated."
+      },
+      "products": [
+        {
+          "id": "p1",
+          "name": "Original travel pillow carrier · sample",
+          "category": "Original",
+          "description": "Original travel pillow carrier · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 12,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "textile",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "sage",
+              "title": "Solid sage · sample fabric",
+              "price_cents": 4499,
+              "stock": 12
+            },
+            {
+              "id": "stripe",
+              "title": "Simple stripe · sample fabric",
+              "price_cents": 4499,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "name": "Premium fabric carrier · sample",
+          "category": "Premium",
+          "description": "Premium fabric carrier · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 14,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "textile",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "indigo",
+              "title": "Solid indigo · sample fabric",
+              "price_cents": 4999,
+              "stock": 12
+            },
+            {
+              "id": "sand",
+              "title": "Solid sand · sample fabric",
+              "price_cents": 4999,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "name": "Weekend travel carrier · sample",
+          "category": "Travel",
+          "description": "Weekend travel carrier · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 12,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "textile",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 4499,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p4",
+          "name": "Reading retreat carrier · sample",
+          "category": "Travel",
+          "description": "Reading retreat carrier · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 12,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "textile",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 4499,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p5",
+          "name": "Travel gift pair · sample",
+          "category": "Gifts",
+          "description": "Travel gift pair · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 24,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "textile",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 8499,
+              "stock": 12
+            }
+          ]
+        },
+        {
+          "id": "p6",
+          "name": "Guest-room gift selection · sample",
+          "category": "Gifts",
+          "description": "Guest-room gift selection · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 18,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "textile",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · sample availability",
+              "price_cents": 6499,
+              "stock": 12
+            }
+          ]
+        }
+      ]
     }
   ],
   "schema_version": 1,

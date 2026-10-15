@@ -15,6 +15,7 @@ if (is_string($host) && $host !== '') {
         Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/showroom', [Retail::class, 'index'])->name('retail.showroom');
             Route::get('/showroom/pricing', [Retail::class, 'index'])->name('retail.pricing');
+            Route::get('/showroom/outreach', [Retail::class, 'outreach'])->name('retail.outreach');
             Route::get('/showroom/concepts/{slug}', [Retail::class, 'concept']);
             Route::get('/staff/{slug}', [Retail::class, 'concept']);
             Route::get('/showroom/api/research', [Retail::class, 'research']);
@@ -33,6 +34,6 @@ if (is_string($host) && $host !== '') {
 if (is_string($host) && $host !== '') {
     Route::domain($host)->middleware(['auth', 'verified'])->group(function () {
         Route::get('/studio/', [\App\Http\Controllers\Retail\StudioGatewayController::class, 'page']);
-        Route::match(['get', 'post', 'put', 'delete'], '/api/studio/{path?}', [\App\Http\Controllers\Retail\StudioGatewayController::class, 'proxy'])->where('path','[A-Za-z0-9_/-]+')->middleware('throttle:60,1');
+        Route::match(['get', 'post', 'put', 'delete'], '/api/studio/{path?}', [\App\Http\Controllers\Retail\StudioGatewayController::class, 'proxy'])->where('path', '[A-Za-z0-9_/-]+')->middleware('throttle:60,1');
     });
 }

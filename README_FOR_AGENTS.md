@@ -2,17 +2,26 @@
 
 ## 2026-10-15 — Private four-app retail showroom (development)
 
-Seven isolated festival retail concepts and a retained Sawyer source-catalog preview
+Twenty isolated festival retail concepts and a retained Sawyer source-catalog preview
 share the existing Website Commerce catalog/cart lane. Owner-only routes, scoped
 team access, revocable previews, draft prospect/onboarding records, demo-only
 receipts/rewards, deterministic offline shipping, and test-only EasyPost rates stay
 separate from live payments, fulfillment, notifications, Shopify and Modern Forestry.
 The showroom is disabled by default; no merchant or production activation occurred.
+Twenty vendor-specific message templates, site observations and recipient evidence
+are owner-only. The review page has no send path. Separately approved external
+Facebook/email outreach records actual receipts in ignored private storage; reusable
+template draft metadata does not describe current delivery state. Honest Elderberry
+is excluded from outreach while its storefront remains. Private research and delivery
+records stay out of public/offline data.
 
 Retail and the separate Renfrow Studio are installable PWAs; Field retains live
 authentication and adds the bundled offline sample, alongside existing Showcase.
 The offer uses Managed Website pricing ($499 setup / $99 monthly) and a one-hour
-weekly strategic video call. See `docs/retail/SHOWROOM_RUNBOOK.md` and
+weekly strategic video call. Retail cache v3 refreshes public CORE/assets and retires
+the stale seven-concept shell; prepare the full twenty-concept pack on each device.
+Vector-derived PWA/native icons preserve app identities, and Android auth fallbacks
+keep the sign-in layout/heading readable. See `docs/retail/SHOWROOM_RUNBOOK.md` and
 `docs/retail/VERIFICATION.md` for device setup, scope, checks and release limitations.
 
 ## 2026-10-15 — Everbranch Showcase workspace and landlord presentation
