@@ -13,6 +13,7 @@ export default defineConfig(() => ({
         'resources/css/evergrove-booking.css',
         'resources/js/evergrove-booking.js',
         'resources/js/highlevel/fleet.js',
+        'resources/js/field-service/fleet-map.js',
         'resources/js/trajectory/app.js',
         'resources/js/admin/master-data-grid.tsx',
         'resources/js/marketing/customers-grid.tsx',

@@ -30,3 +30,6 @@ yarn-error.log
 /.lighthouseci/
 
 /output/trajectory/
+
+# Private customer audit evidence and isolated fleet preview output
+/artifacts/collins-fleet/
