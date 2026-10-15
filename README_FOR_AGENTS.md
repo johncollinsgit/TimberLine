@@ -1,3 +1,19 @@
+## Retail shipping Phase 2 (2026-10-15)
+
+- Continue from `docs/operations/retail-shipping-launch-plan.md`. Phase 1 is
+  draft PR #394; Phase 2 is isolated on `codex/retail-shipping-phase-2`.
+- Reviewed package rules/services/mode live in `TenantSite.settings.shipping`.
+  Quote `parcel._shipping_plan` carries current eligibility evidence; the full
+  accepted plan is copied to `WebsiteOrder.shipping_rate_snapshot`. Never delete
+  quotes on cart edits or rebuild a paid order's parcel from the current cart.
+- Product dimensions or explicitly merchant-tested capacity establish a bounded
+  fit. Box and protective packing tare is separate from item retail packaging.
+  Unreviewed presets, unsupported fits, wrong accounts/modes, and stale quotes
+  fail before payment. Existing rollout/entitlement gates stay closed.
+- No real carrier test or production activation is implied by HTTP-faked tests.
+  Finish payment/inventory, tracking/postage recovery, and the physical pilot in
+  later phases before declaring end-to-end retail shipping ready.
+
 # START HERE
 
 ## 2026-10-15 - Retail shipping weight readiness

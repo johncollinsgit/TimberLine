@@ -1,5 +1,20 @@
 # SYSTEM SNAPSHOT
 
+## Native retail shipping Phase 2 (2026-10-15; review branch)
+
+- Phase 1 is draft PR #394. Phase 2 adds reviewed package capacity, explicit USPS
+  services/mode, box/packing tare, correct EasyPost shipment requests, current
+  quote context checks, and an immutable order-owned shipping plan.
+- `WebsiteShippingSetupService` stores tenant/site-scoped policy and package
+  rules in existing site JSON. `WebsiteShippingPlanService` handles conservative
+  packing, account/address/cart fingerprints, and order evidence. Missing item
+  dimensions require a merchant-tested capacity; weights are never guessed.
+- Both retail themes share rate selection and the published free-shipping
+  threshold. Cart edits expire quote eligibility without erasing order evidence.
+- No migration, production deployment, or activation is included. Payment and
+  inventory reliability, provider lifecycle/recovery, and a real shipping pilot
+  remain Phases 3–5. See `docs/operations/retail-shipping-launch-plan.md`.
+
 ## 2026-10-15 - Retail shipping weight readiness
 
 - Native Website Products identifies available physical variants missing weights

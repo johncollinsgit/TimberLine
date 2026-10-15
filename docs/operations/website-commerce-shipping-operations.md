@@ -8,6 +8,33 @@ commerce source.
 
 ## Carrier lifecycle
 
+### Reviewed parcel and rate setup
+
+Save explicit test/production mode and approved USPS services in Native shipping
+setup, then a complete US state/DC origin. Review package outside dimensions,
+usable inside dimensions after protective packing, box/packing tare, maximum
+packed weight, and maximum physical item count. Tare is added once to measured
+item weights. The preferred supported preset is tried first, then alternatives
+by outside volume. Existing unreviewed presets are skipped.
+
+Measured items must fit a conservative vertical stack with rotation. To use
+variants without dimensions, explicitly select a physically tested product mix
+and confirm every combination up to the capacity. This approval never supplies
+invented measurements or overrides a known oversized item. Mark items that must
+ship alone in the product editor. Unsupported carts stop before a carrier request.
+
+Rates use the tenant's EasyPost account and official `shipment` envelope. Only
+approved USD services in the configured mode are offered. A cart/address,
+catalog/packing, origin/account, service-policy, or free-shipping-threshold change
+requires new rates. Checkout also requires matching Stripe and carrier modes.
+
+Cart edits expire quotes but retain their evidence. Checkout copies a complete
+shipping plan to the order; labels use the order's accepted parcel and address
+even after cart/quote deletion. An unrelated rate, modified address, or different
+carrier credential is rejected. Old quotes without a plan must be replaced;
+old orders without a reviewed plan need staff review. Postage timeout recovery,
+refund state, tracking signatures, and payment reliability remain later phases.
+
 ### Catalog readiness
 
 Products shows missing-weight warnings for non-archived physical products with

@@ -231,49 +231,63 @@ class WebsiteCommerceService
 
     public function addToCart(WebsiteCart $cart, WebsiteProductVariant $variant, int $quantity): WebsiteCart
     {
-        abort_unless((int) $cart->tenant_id === (int) $variant->tenant_id, 404);
+        abort_unless((int) $cart->tenant_id === (int) $variant->tenant_id && (int) $cart->tenant_site_id === (int) $variant->product?->tenant_site_id, 404);
         abort_unless($variant->is_available && $variant->product?->status === 'active', 422, 'This item is not available.');
         abort_if($variant->product?->product_type === 'quote', 422, 'Quote-only services cannot be purchased from the cart.');
         $quantity = max(1, min(20, $quantity));
 
         DB::transaction(function () use ($cart, $variant, $quantity): void {
-            $locked = WebsiteProductVariant::query()->lockForUpdate()->findOrFail($variant->id);
+            $cart = WebsiteCart::query()->forTenantId($cart->tenant_id)->lockForUpdate()->findOrFail($cart->id);
+            abort_unless($cart->status === 'active', 422, 'This cart is no longer active.');
+            $locked = WebsiteProductVariant::query()->forTenantId($cart->tenant_id)->lockForUpdate()->with('product')->findOrFail($variant->id);
+            abort_unless($locked->product?->tenant_site_id === $cart->tenant_site_id && $locked->is_available && $locked->product->status === 'active', 422, 'This item is no longer available.');
             $item = WebsiteCartItem::query()->firstOrNew([
                 'tenant_id' => $cart->tenant_id,
                 'website_cart_id' => $cart->id,
                 'website_product_variant_id' => $locked->id,
             ]);
             $nextQuantity = (int) ($item->quantity ?? 0) + $quantity;
+            abort_if($nextQuantity > 20, 422, 'Choose a quantity from 1 to 20.');
             if ($locked->product?->track_inventory && $locked->inventory_quantity !== null && $nextQuantity > $locked->inventory_quantity) {
                 throw ValidationException::withMessages(['quantity' => 'Only '.$locked->inventory_quantity.' available.']);
             }
             $item->quantity = $nextQuantity;
             $item->save();
+            $this->expireShippingQuotes($cart);
         });
-        WebsiteShippingRateQuote::query()->forTenantId($cart->tenant_id)->where('website_cart_id', $cart->id)->delete();
 
         return $cart->fresh(['items.variant.product']);
     }
 
     public function setCartQuantity(WebsiteCart $cart, int $itemId, int $quantity): WebsiteCart
     {
-        abort_unless($cart->status === 'active', 422, 'This cart is no longer active.');
-        $item = WebsiteCartItem::query()->forTenantId($cart->tenant_id)
-            ->where('website_cart_id', $cart->id)->findOrFail($itemId);
-        if ($quantity === 0) {
-            $item->delete();
-        } else {
-            abort_unless($quantity > 0 && $quantity <= 20, 422, 'Choose a quantity from 1 to 20.');
-            $variant = $item->variant()->with('product')->firstOrFail();
-            abort_unless($variant->is_available && $variant->product?->status === 'active', 422, 'This item is not available.');
-            if ($variant->product->track_inventory && $variant->inventory_quantity !== null && $quantity > $variant->inventory_quantity) {
-                throw ValidationException::withMessages(['quantity' => 'Only '.$variant->inventory_quantity.' available.']);
+        DB::transaction(function () use ($cart, $itemId, $quantity): void {
+            $cart = WebsiteCart::query()->forTenantId($cart->tenant_id)->lockForUpdate()->findOrFail($cart->id);
+            abort_unless($cart->status === 'active', 422, 'This cart is no longer active.');
+            $item = WebsiteCartItem::query()->forTenantId($cart->tenant_id)
+                ->where('website_cart_id', $cart->id)->findOrFail($itemId);
+            if ($quantity === 0) {
+                $item->delete();
+            } else {
+                abort_unless($quantity > 0 && $quantity <= 20, 422, 'Choose a quantity from 1 to 20.');
+                $variant = $item->variant()->with('product')->firstOrFail();
+                abort_unless($variant->is_available && $variant->product?->status === 'active', 422, 'This item is not available.');
+                if ($variant->product->track_inventory && $variant->inventory_quantity !== null && $quantity > $variant->inventory_quantity) {
+                    throw ValidationException::withMessages(['quantity' => 'Only '.$variant->inventory_quantity.' available.']);
+                }
+                $item->forceFill(['quantity' => $quantity])->save();
             }
-            $item->forceFill(['quantity' => $quantity])->save();
-        }
-        WebsiteShippingRateQuote::query()->forTenantId($cart->tenant_id)->where('website_cart_id', $cart->id)->delete();
+            $this->expireShippingQuotes($cart);
+        });
 
         return $cart->fresh(['items.variant.product']);
+    }
+
+    private function expireShippingQuotes(WebsiteCart $cart): void
+    {
+        // Preserve evidence referenced by pending/paid orders when the cart changes.
+        WebsiteShippingRateQuote::query()->forTenantId($cart->tenant_id)->where('website_cart_id', $cart->id)
+            ->where('expires_at', '>', now())->update(['expires_at' => now()]);
     }
 
     /** @param array<string,mixed> $buyer @return array{order:WebsiteOrder,url:string} */
@@ -285,14 +299,18 @@ class WebsiteCommerceService
         abort_unless($readiness['ready'], 423, implode(' ', $readiness['blockers']));
 
         $order = DB::transaction(function () use ($cart, $site, $buyer): WebsiteOrder {
+            $site = TenantSite::query()->forTenantId($cart->tenant_id)->lockForUpdate()->findOrFail($site->id);
             $cart = WebsiteCart::query()->lockForUpdate()->with('items.variant.product')->findOrFail($cart->id);
             abort_if($cart->status !== 'active' || $cart->items->isEmpty(), 422, 'Your cart is empty or no longer active.');
             $fulfillmentMethod = in_array(($buyer['fulfillment_method'] ?? ''), ['ship', 'pickup', 'local_delivery'], true) ? $buyer['fulfillment_method'] : 'pickup';
             $shippingQuote = null;
             if ($fulfillmentMethod === 'ship') {
-                $shippingQuote = WebsiteShippingRateQuote::query()->forTenantId($site->tenant_id)
-                    ->where('website_cart_id', $cart->id)->whereKey((int) ($buyer['shipping_rate_quote_id'] ?? 0))->where('expires_at', '>', now())->firstOrFail();
                 abort_if(empty($buyer['shipping_address']) || ! is_array($buyer['shipping_address']), 422, 'A shipping address is required.');
+                app(WebsiteShippingReadinessService::class)->assertCartCanShip($cart);
+                abort_unless(app(WebsiteCommerceShippingService::class)->enabledFor($site->tenant), 423, 'Native shipping is not enabled for this website.');
+                $shippingQuote = app(WebsiteShippingPlanService::class)->selectedQuote($cart, (int) ($buyer['shipping_rate_quote_id'] ?? 0), $buyer['shipping_address']);
+                $paymentMode = str_starts_with((string) config('services.stripe.secret'), 'sk_test_') ? 'test' : 'production';
+                abort_unless(data_get($shippingQuote->parcel, '_shipping_plan.mode') === $paymentMode, 423, 'Shipping and payment account modes must match before checkout.');
             }
 
             $customer = WebsiteCustomer::query()->firstOrCreate(
@@ -337,9 +355,9 @@ class WebsiteCommerceService
                 'shipping_cents' => $shippingCents,
                 'total_cents' => $subtotal + $shippingCents,
                 'customer_snapshot' => ['name' => trim((string) $buyer['name']), 'email' => strtolower(trim((string) $buyer['email'])), 'phone' => trim((string) ($buyer['phone'] ?? ''))],
-                'shipping_address' => $shippingQuote ? $buyer['shipping_address'] : null,
+                'shipping_address' => $shippingQuote?->destination,
                 'billing_address' => null,
-                'shipping_rate_snapshot' => $shippingQuote ? ['quote_id' => $shippingQuote->id, 'carrier' => $shippingQuote->carrier, 'service' => $shippingQuote->service, 'amount_cents' => $shippingQuote->amount_cents, 'customer_shipping_cents' => $shippingCents, 'provider_shipment_id' => $shippingQuote->provider_shipment_id] : null,
+                'shipping_rate_snapshot' => $shippingQuote ? app(WebsiteShippingPlanService::class)->orderSnapshot($shippingQuote, $shippingCents) : null,
                 'service_request' => ['preferred_at' => trim((string) ($buyer['preferred_at'] ?? '')), 'notes' => trim((string) ($buyer['notes'] ?? ''))],
             ]);
             foreach ($lines as $line) {

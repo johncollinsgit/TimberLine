@@ -1,3 +1,15 @@
+## 2026-10-15 - Reviewed parcels and shared shipping checkout
+
+- Native shipping setup adds explicit test/production mode, approved USPS
+  services, usable package dimensions, packed-weight/item limits, and optional
+  confirmed product-mix capacity. Product variants expose dimensions and a
+  must-ship-alone flag while retaining existing measurements during other edits.
+- Retail themes share shipping address and rate selection. Address/name changes
+  clear stale selections; test rates are identified. Store copy and checkout use
+  the published free-shipping threshold. The standard theme also supports cart
+  quantity updates/removal through its existing scoped endpoint.
+- No production activation is included. See the retail shipping launch plan.
+
 ## 2026-10-15 - Retail shipping weight readiness
 
 - Products shows missing-weight product counts, a filter, and row warnings.

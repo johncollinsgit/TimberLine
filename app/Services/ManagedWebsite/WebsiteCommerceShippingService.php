@@ -8,17 +8,14 @@ use App\Models\User;
 use App\Models\WebsiteCart;
 use App\Models\WebsiteFulfillment;
 use App\Models\WebsiteFulfillmentLine;
-use App\Models\WebsiteFulfillmentLocation;
 use App\Models\WebsiteOrder;
 use App\Models\WebsiteShipment;
 use App\Models\WebsiteShipmentEvent;
-use App\Models\WebsiteShippingPackage;
 use App\Models\WebsiteShippingRateQuote;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Validation\ValidationException;
 
 /**
  * US-domestic shipping for native Website Commerce only.
@@ -45,54 +42,63 @@ class WebsiteCommerceShippingService
         $tenant = Tenant::query()->findOrFail($cart->tenant_id);
         abort_unless($this->enabledFor($tenant), 423, 'Native shipping is not enabled for this website.');
         app(WebsiteShippingReadinessService::class)->assertCartCanShip($cart);
-        $destination = $this->address($destination, 'shipping_address');
-        $location = WebsiteFulfillmentLocation::query()->forTenant($tenant)->where('tenant_site_id', $cart->tenant_site_id)->where('active', true)->orderByDesc('is_default')->first();
-        $package = WebsiteShippingPackage::query()->forTenant($tenant)->where('tenant_site_id', $cart->tenant_site_id)->where('active', true)->orderByDesc('is_default')->first();
-        abort_unless($location && $package, 423, 'Add an active ship-from location and package preset before quoting shipping.');
-
-        [$parcel, $hasPhysicalItems] = $this->parcelFor($cart, $package);
-        abort_unless($hasPhysicalItems, 422, 'Shipping is only available for physical products.');
-        $response = $this->client($tenant)->post('/shipments', [
-            'from_address' => $location->address,
+        $plans = app(WebsiteShippingPlanService::class);
+        $destination = $plans->address($destination);
+        $plan = $plans->build($cart, $destination);
+        $response = $this->client($tenant)->post('/shipments', ['shipment' => [
+            'from_address' => $plan['origin'],
             'to_address' => $destination,
-            'parcel' => $parcel,
-        ]);
+            'parcel' => $plan['parcel'],
+        ]]);
         $shipment = (array) $response->json();
-        abort_if($response->failed() || blank($shipment['id'] ?? null), 502, 'Carrier rates are temporarily unavailable.');
+        abort_if($response->failed() || ! preg_match('/^shp_[A-Za-z0-9_]+$/', (string) ($shipment['id'] ?? ''))
+            || ($shipment['mode'] ?? '') !== $plan['context']['mode'], 502, 'Carrier rates are temporarily unavailable or use the wrong account mode.');
 
-        WebsiteShippingRateQuote::query()->forTenant($tenant)->where('website_cart_id', $cart->id)->where('expires_at', '<=', now())->delete();
-        $quotes = [];
-        foreach ((array) ($shipment['rates'] ?? []) as $rate) {
-            if (blank($rate['id'] ?? null) || ! is_numeric($rate['rate'] ?? null) || blank($rate['carrier'] ?? null) || blank($rate['service'] ?? null)) {
-                continue;
+        return DB::transaction(function () use ($cart, $tenant, $destination, $plans, $plan, $shipment): array {
+            \App\Models\TenantSite::query()->forTenant($tenant)->whereKey($cart->tenant_site_id)->lockForUpdate()->firstOrFail();
+            $cart = WebsiteCart::query()->forTenant($tenant)->lockForUpdate()->findOrFail($cart->id);
+            $current = $plans->build($cart, $destination);
+            abort_unless(hash_equals($plan['context']['fingerprint'], $current['context']['fingerprint']), 422, 'Your shipping details changed. Request shipping options again.');
+            $quotes = [];
+            foreach ((array) ($shipment['rates'] ?? []) as $rate) {
+                if (! is_array($rate) || ! preg_match('/^rate_[A-Za-z0-9_]+$/', (string) ($rate['id'] ?? ''))
+                    || ! preg_match('/^\d{1,7}(?:\.\d{1,6})?$/', (string) ($rate['rate'] ?? ''))
+                    || strtolower((string) ($rate['currency'] ?? '')) !== 'usd'
+                    || ($rate['mode'] ?? $shipment['mode']) !== $plan['context']['mode']
+                    || ($rate['shipment_id'] ?? $shipment['id']) !== $shipment['id']
+                    || ! in_array(($rate['carrier'] ?? '').':'.($rate['service'] ?? ''), $plan['context']['services'], true)) {
+                    continue;
+                }
+                $quotes[] = WebsiteShippingRateQuote::query()->create([
+                    'tenant_id' => $tenant->id,
+                    'tenant_site_id' => $cart->tenant_site_id,
+                    'website_cart_id' => $cart->id,
+                    'website_fulfillment_location_id' => $plan['context']['location_id'],
+                    'provider' => 'easypost',
+                    'provider_shipment_id' => (string) $shipment['id'],
+                    'provider_rate_id' => (string) $rate['id'],
+                    'carrier' => (string) $rate['carrier'],
+                    'service' => (string) $rate['service'],
+                    'amount_cents' => $this->rateCents((string) $rate['rate']),
+                    'currency' => 'usd',
+                    'delivery_days' => isset($rate['delivery_days']) ? (int) $rate['delivery_days'] : null,
+                    'destination' => $destination,
+                    'parcel' => $plan['parcel'] + ['_shipping_plan' => $plan['context'], '_carrier_account_id' => $rate['carrier_account_id'] ?? null],
+                    'expires_at' => now()->addMinutes(20),
+                ]);
             }
-            $quotes[] = WebsiteShippingRateQuote::query()->create([
-                'tenant_id' => $tenant->id,
-                'tenant_site_id' => $cart->tenant_site_id,
-                'website_cart_id' => $cart->id,
-                'website_fulfillment_location_id' => $location->id,
-                'provider' => 'easypost',
-                'provider_shipment_id' => (string) $shipment['id'],
-                'provider_rate_id' => (string) $rate['id'],
-                'carrier' => (string) $rate['carrier'],
-                'service' => (string) $rate['service'],
-                'amount_cents' => (int) round(((float) $rate['rate']) * 100),
-                'currency' => strtolower((string) ($rate['currency'] ?? 'usd')),
-                'delivery_days' => isset($rate['delivery_days']) ? (int) $rate['delivery_days'] : null,
-                'destination' => $destination,
-                'parcel' => $parcel,
-                'expires_at' => now()->addMinutes(20),
-            ]);
-        }
-        abort_if($quotes === [], 422, 'No domestic shipping rate is available for this address.');
+            abort_if($quotes === [], 422, 'No approved domestic shipping rate is available for this address.');
 
-        return $quotes;
+            return $quotes;
+        });
     }
 
-    public function selectedQuote(WebsiteCart $cart, int $quoteId): WebsiteShippingRateQuote
+    public function selectedQuote(WebsiteCart $cart, int $quoteId, ?array $destination = null): WebsiteShippingRateQuote
     {
-        return WebsiteShippingRateQuote::query()->forTenantId($cart->tenant_id)
-            ->where('website_cart_id', $cart->id)->whereKey($quoteId)->where('expires_at', '>', now())->firstOrFail();
+        $quote = WebsiteShippingRateQuote::query()->forTenantId($cart->tenant_id)->where('tenant_site_id', $cart->tenant_site_id)
+            ->where('website_cart_id', $cart->id)->findOrFail($quoteId);
+
+        return app(WebsiteShippingPlanService::class)->selectedQuote($cart, $quoteId, $destination ?? $quote->destination);
     }
 
     public function purchaseLabel(WebsiteOrder $order, WebsiteShippingRateQuote $quote, User $actor): WebsiteShipment
@@ -100,10 +106,13 @@ class WebsiteCommerceShippingService
         $tenant = Tenant::query()->findOrFail($order->tenant_id);
         abort_unless($this->enabledFor($tenant), 423, 'Native shipping is not enabled for this website.');
         abort_unless($order->payment_status === 'paid' && $order->fulfillment_method === 'ship', 422, 'Only paid shipping orders can receive labels.');
-        abort_unless($quote->tenant_id === $order->tenant_id && $quote->tenant_site_id === $order->tenant_site_id, 422, 'This shipping rate does not belong to the order.');
+        app(WebsiteShippingPlanService::class)->assertOrderQuote($order, $quote);
 
         return DB::transaction(function () use ($order, $quote, $actor, $tenant): WebsiteShipment {
             $order = WebsiteOrder::query()->lockForUpdate()->with('lines', 'fulfillments.lines')->findOrFail($order->id);
+            abort_unless($order->payment_status === 'paid' && $order->fulfillment_method === 'ship', 422, 'Only paid shipping orders can receive labels.');
+            $quote = app(WebsiteShippingPlanService::class)->quoteForOrder($order, $quote->id);
+            app(WebsiteShippingPlanService::class)->assertOrderQuote($order, $quote);
             $fulfillment = WebsiteFulfillment::query()->create([
                 'tenant_id' => $order->tenant_id,
                 'website_order_id' => $order->id,
@@ -143,7 +152,7 @@ class WebsiteCommerceShippingService
                 'currency' => strtolower((string) data_get($data, 'selected_rate.currency', $quote->currency)),
                 'status' => 'label_purchased',
                 'destination' => $quote->destination,
-                'parcel' => $quote->parcel,
+                'parcel' => app(WebsiteShippingPlanService::class)->parcel($quote),
                 'purchased_at' => now(),
             ]);
             $fulfillment->forceFill(['status' => 'fulfilled', 'fulfilled_at' => now()])->save();
@@ -209,48 +218,12 @@ class WebsiteCommerceShippingService
         return Http::baseUrl((string) config('managed_website.easypost_api_base'))->withBasicAuth($key, '')->acceptJson()->asJson()->timeout(20);
     }
 
-    /** @param array<string,mixed> $address @return array<string,string> */
-    private function address(array $address, string $field): array
+    private function rateCents(string $value): int
     {
-        $result = [
-            'name' => trim((string) ($address['name'] ?? '')),
-            'street1' => trim((string) ($address['street1'] ?? '')),
-            'street2' => trim((string) ($address['street2'] ?? '')),
-            'city' => trim((string) ($address['city'] ?? '')),
-            'state' => strtoupper(trim((string) ($address['state'] ?? ''))),
-            'zip' => trim((string) ($address['zip'] ?? '')),
-            'country' => strtoupper(trim((string) ($address['country'] ?? 'US'))),
-            'phone' => trim((string) ($address['phone'] ?? '')),
-            'email' => trim((string) ($address['email'] ?? '')),
-        ];
-        if ($result['name'] === '' || $result['street1'] === '' || $result['city'] === '' || ! preg_match('/^[A-Z]{2}$/', $result['state']) || ! preg_match('/^\d{5}(?:-\d{4})?$/', $result['zip']) || $result['country'] !== 'US') {
-            throw ValidationException::withMessages([$field => 'Enter a complete US domestic shipping address.']);
-        }
+        [$whole, $fraction] = array_pad(explode('.', $value, 2), 2, '');
 
-        return array_filter($result, fn ($value) => $value !== '');
-    }
-
-    /** @return array{0:array<string,int>,1:bool} */
-    private function parcelFor(WebsiteCart $cart, WebsiteShippingPackage $package): array
-    {
-        $items = $cart->loadMissing('items.variant.product')->items;
-        $weight = 0;
-        $physical = false;
-        foreach ($items as $item) {
-            $variant = $item->variant;
-            if ($variant?->product?->product_type !== 'physical') {
-                continue;
-            }
-            $physical = true;
-            $weight += (int) $variant->shipping_weight_ounces * $item->quantity;
-        }
-
-        return [[
-            'length' => $package->length_inches,
-            'width' => $package->width_inches,
-            'height' => $package->height_inches,
-            'weight' => max(1, $weight),
-        ], $physical];
+        return (int) $whole * 100 + (int) str_pad(substr($fraction, 0, 2), 2, '0')
+            + ((int) ($fraction[2] ?? '0') >= 5 ? 1 : 0);
     }
 
     /** @return \Illuminate\Support\Collection<int,\App\Models\WebsiteOrderLine> */

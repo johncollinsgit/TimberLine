@@ -836,6 +836,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/commerce/pirate-ship/tracking', [PirateShipBridgeController::class, 'import'])->name('commerce.pirate-ship.import');
             Route::post('/commerce/shipping/locations', [WebsiteCommerceController::class, 'saveFulfillmentLocation'])->name('commerce.shipping.locations.store');
             Route::post('/commerce/shipping/packages', [WebsiteCommerceController::class, 'saveShippingPackage'])->name('commerce.shipping.packages.store');
+            Route::post('/commerce/shipping/policy', [WebsiteCommerceController::class, 'saveShippingPolicy'])->name('commerce.shipping.policy.store');
             Route::get('/products/export', [WebsiteCommerceController::class, 'exportProducts'])->name('products.export');
             Route::post('/products/import', [WebsiteCommerceController::class, 'importProducts'])->name('products.import');
             Route::get('/products/shipping-weights', [\App\Http\Controllers\WebsiteCatalogController::class, 'shippingWeights'])->name('products.shipping-weights');

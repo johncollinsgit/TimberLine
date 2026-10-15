@@ -8,6 +8,8 @@ blocked. This plan does not change a Shopify merchant's discount policies.
 
 ## Phase 1 Shipping readiness and weights
 
+Implemented in draft PR #394. Production activation remains separate.
+
 Implementation is isolated to the tenant-owned Website lane.
 
 - Show the number of non-archived physical products with available variants
@@ -42,17 +44,50 @@ or bypass the existing release and rollout gates. No schema migration is needed.
 
 ## Phase 2 Packages and accurate rates
 
-Configure a merchant-owned carrier connection, ship-from address, package
-presets, and approved services. Add item weights, box tare, and packing material
-correctly; define supported box/quantity rules and separately shipped products.
-Repair the EasyPost request envelope. Bind each quote to the exact cart revision,
-destination, origin, package, account, currency, and service. Re-rate on material
-changes and preserve an immutable order-owned shipping plan.
+Implementation follows Phase 1 on `codex/retail-shipping-phase-2`.
+
+- Require a merchant-owned EasyPost connection, complete US state/DC origin,
+  explicit test/production mode, and approved USPS Ground Advantage, Priority,
+  or Express services. Filter provider rates by mode, USD, shipment identity,
+  service, and valid nonnegative decimal amount. Match shipping/payment modes.
+- Send the official `shipment` request envelope. Packed weight is the sum of
+  physical item weights times quantities plus measured box/packing tare once.
+- Review each package's outer dimensions, usable inside dimensions, maximum
+  packed weight, and maximum physical item count. Try the preferred supported
+  package, then the smallest supported alternative. Unreviewed presets cannot
+  quote. Use a conservative rotated-item vertical stack for measured items.
+- For missing dimensions, allow a merchant-confirmed, physically tested set of
+  variants and every supported mix up to the package capacity. Never invent
+  measurements. A known oversized item still fails the individual fit check.
+  Separately shipped variants cannot share a parcel with other physical units.
+- Bind quotes to current tenant/site/cart contents, quantity, price, weight,
+  dimensions, separate-shipping flags, destination, origin, package rules,
+  provider connection/key fingerprint, mode, currency, services, and published
+  free-shipping threshold. Recheck after carrier latency and before checkout.
+- Expire quotes on cart edits without deleting evidence. Copy the full plan,
+  parcel, carrier/rate/account references, and costs to the order. Use that
+  order-owned plan for labels even after cart/quote deletion, while rejecting a
+  different quote, altered destination, or changed carrier account.
+- Share rate selection across retail themes; clear selected rates on address or
+  recipient edits, suppress stale responses, label test rates, and use the same
+  published free-shipping threshold in copy and checkout.
+
+Package rules and service policy use the site's existing `settings.shipping`
+JSON. Quote context uses existing `parcel` JSON; order-owned evidence uses
+`shipping_rate_snapshot`. No database migration or production configuration
+change is required. Pre-Phase-2 quotes need new rates; orders without a reviewed
+plan require staff review before automatic postage purchase.
 
 Acceptance: one item, repeated quantities, and mixed products produce the
 measured supported parcel. Unsupported fits stop before payment. Address/cart
 changes invalidate eligibility without deleting shipping evidence for an order.
 Shared retail themes show the same shipping policy and rates.
+
+Provider contract references: [EasyPost shipments](https://docs.easypost.com/docs/shipments),
+[parcels and units](https://docs.easypost.com/docs/parcels), and
+[rates](https://docs.easypost.com/docs/shipments/rates). Contract tests use HTTP
+fakes. A configured merchant sandbox and the authorized physical launch remain
+separate verification gates; no real postage was purchased during implementation.
 
 ## Phase 3 Payment and inventory reliability
 

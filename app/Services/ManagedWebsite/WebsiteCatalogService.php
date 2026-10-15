@@ -57,6 +57,10 @@ class WebsiteCatalogService
                 'variants.*.inventory_quantity' => ['nullable', 'integer', 'min:0', 'max:1000000'],
                 'variants.*.is_available' => ['required', 'boolean'],
                 'variants.*.shipping_weight_ounces' => ['nullable', 'integer', 'min:1', 'max:1000000'],
+                'variants.*.shipping_length_inches' => ['nullable', 'integer', 'between:1,1000'],
+                'variants.*.shipping_width_inches' => ['nullable', 'integer', 'between:1,1000'],
+                'variants.*.shipping_height_inches' => ['nullable', 'integer', 'between:1,1000'],
+                'variants.*.shipping_separately' => ['sometimes', 'boolean'],
                 'image_alt' => ['nullable', 'string', 'max:500'], 'details' => ['nullable', 'string', 'max:8000'],
                 'vendor' => ['nullable', 'string', 'max:190'], 'category' => ['nullable', 'string', 'max:190'], 'tags' => ['nullable', 'string', 'max:1000'],
                 'seo_title' => ['nullable', 'string', 'max:190'], 'seo_description' => ['nullable', 'string', 'max:320'],
@@ -86,6 +90,14 @@ class WebsiteCatalogService
                 ]);
                 if (array_key_exists('shipping_weight_ounces', $row)) {
                     $variant->shipping_weight_ounces = $row['shipping_weight_ounces'];
+                }
+                foreach (['shipping_length_inches', 'shipping_width_inches', 'shipping_height_inches'] as $field) {
+                    if (array_key_exists($field, $row)) {
+                        $variant->{$field} = $row[$field];
+                    }
+                }
+                if (array_key_exists('shipping_separately', $row)) {
+                    $variant->options = array_merge($variant->options ?? [], ['shipping_separately' => (bool) $row['shipping_separately']]);
                 }
                 $variant->save();
                 if ($product->track_inventory && $oldQuantity !== $variant->inventory_quantity) {

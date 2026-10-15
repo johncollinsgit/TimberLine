@@ -23,6 +23,7 @@ use App\Services\ManagedWebsite\WebsiteCommerceService;
 use App\Services\ManagedWebsite\WebsiteCommerceShippingService;
 use App\Services\ManagedWebsite\WebsiteProductCsvService;
 use App\Services\ManagedWebsite\WebsiteQuoteAttributionService;
+use App\Services\ManagedWebsite\WebsiteShippingSetupService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -281,7 +282,7 @@ class WebsiteCommerceController extends Controller
         $tenant = $this->tenant($request);
         abort_unless((int) $order->tenant_id === (int) $tenant->id, 404);
         $quoteId = (int) $request->validate(['shipping_rate_quote_id' => ['required', 'integer']])['shipping_rate_quote_id'];
-        $quote = WebsiteShippingRateQuote::query()->forTenant($tenant)->findOrFail($quoteId);
+        $quote = app(\App\Services\ManagedWebsite\WebsiteShippingPlanService::class)->quoteForOrder($order, $quoteId);
         $shipment = $shipping->purchaseLabel($order, $quote, $request->user());
 
         return back()->with('status', 'Label purchased'.($shipment->tracking_number ? ' — tracking '.$shipment->tracking_number : '.'));
@@ -304,19 +305,17 @@ class WebsiteCommerceController extends Controller
         $locations = WebsiteFulfillmentLocation::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->latest('is_default')->get();
         $packages = WebsiteShippingPackage::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->latest('is_default')->get();
 
-        return view('managed-website.commerce.shipping', compact('tenant', 'site', 'locations', 'packages'));
+        app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->assertEditor($site, $request->user());
+        $variants = WebsiteProductVariant::query()->forTenant($tenant)->where('is_available', true)->whereHas('product', fn ($query) => $query->where('tenant_site_id', $site->id)->where('product_type', 'physical')->where('status', '!=', 'archived'))->with('product')->orderBy('website_product_id')->get();
+
+        return view('managed-website.commerce.shipping', compact('tenant', 'site', 'locations', 'packages', 'variants'));
     }
 
     public function saveFulfillmentLocation(Request $request, WebsiteCommerceShippingService $shipping): RedirectResponse
     {
         $tenant = $this->tenant($request);
         abort_unless($shipping->enabledFor($tenant), 423, 'Native shipping is not enabled for this workspace.');
-        $data = $request->validate(['name' => ['required', 'string', 'max:190'], 'street1' => ['required', 'string', 'max:190'], 'street2' => ['nullable', 'string', 'max:190'], 'city' => ['required', 'string', 'max:120'], 'state' => ['required', 'string', 'size:2'], 'zip' => ['required', 'string', 'max:10'], 'is_default' => ['nullable', 'boolean']]);
-        $site = $this->site($tenant);
-        if (($data['is_default'] ?? false) === true) {
-            WebsiteFulfillmentLocation::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->update(['is_default' => false]);
-        }
-        WebsiteFulfillmentLocation::query()->create(['tenant_id' => $tenant->id, 'tenant_site_id' => $site->id, 'name' => $data['name'], 'address' => ['name' => $data['name'], 'street1' => $data['street1'], 'street2' => $data['street2'] ?? '', 'city' => $data['city'], 'state' => strtoupper($data['state']), 'zip' => $data['zip'], 'country' => 'US'], 'is_default' => (bool) ($data['is_default'] ?? false), 'active' => true]);
+        app(WebsiteShippingSetupService::class)->saveLocation($this->site($tenant), $request->all(), $request->user());
 
         return back()->with('status', 'Ship-from location saved.');
     }
@@ -325,14 +324,18 @@ class WebsiteCommerceController extends Controller
     {
         $tenant = $this->tenant($request);
         abort_unless($shipping->enabledFor($tenant), 423, 'Native shipping is not enabled for this workspace.');
-        $data = $request->validate(['name' => ['required', 'string', 'max:190'], 'length_inches' => ['required', 'integer', 'min:1', 'max:1000'], 'width_inches' => ['required', 'integer', 'min:1', 'max:1000'], 'height_inches' => ['required', 'integer', 'min:1', 'max:1000'], 'weight_ounces' => ['required', 'integer', 'min:1', 'max:1000000'], 'is_default' => ['nullable', 'boolean']]);
-        $site = $this->site($tenant);
-        if (($data['is_default'] ?? false) === true) {
-            WebsiteShippingPackage::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->update(['is_default' => false]);
-        }
-        WebsiteShippingPackage::query()->create($data + ['tenant_id' => $tenant->id, 'tenant_site_id' => $site->id, 'is_default' => (bool) ($data['is_default'] ?? false), 'active' => true]);
+        app(WebsiteShippingSetupService::class)->savePackage($this->site($tenant), $request->all(), $request->user());
 
         return back()->with('status', 'Package preset saved.');
+    }
+
+    public function saveShippingPolicy(Request $request, WebsiteCommerceShippingService $shipping): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        abort_unless($shipping->enabledFor($tenant), 423, 'Native shipping is not enabled for this workspace.');
+        app(WebsiteShippingSetupService::class)->savePolicy($this->site($tenant), $request->all(), $request->user());
+
+        return back()->with('status', 'Shipping services and mode saved.');
     }
 
     public function imports(Request $request, CommerceImportService $imports): View
@@ -397,7 +400,7 @@ class WebsiteCommerceController extends Controller
         $request->session()->put($this->cartSessionKey($site), $cart->token);
 
         return view('managed-website.cart', compact('site', 'cart') + [
-            'shippingEnabled' => $shipping->enabledFor($tenant),
+            'shippingEnabled' => $shipping->enabledFor($tenant) && $cart->loadMissing('items.variant.product')->items->contains(fn ($item) => $item->variant?->product?->product_type === 'physical'),
             'checkoutReady' => $commerce->checkoutReadiness($tenant)['ready'],
             'missingShippingWeights' => app(\App\Services\ManagedWebsite\WebsiteShippingReadinessService::class)->missingCartWeights($cart),
         ]);
@@ -490,7 +493,7 @@ class WebsiteCommerceController extends Controller
         $data = $request->validate(['shipping_address' => ['required', 'array'], 'shipping_address.name' => ['required', 'string', 'max:190'], 'shipping_address.street1' => ['required', 'string', 'max:190'], 'shipping_address.street2' => ['nullable', 'string', 'max:190'], 'shipping_address.city' => ['required', 'string', 'max:120'], 'shipping_address.state' => ['required', 'string', 'size:2'], 'shipping_address.zip' => ['required', 'string', 'max:10'], 'shipping_address.country' => ['required', 'string', 'size:2']]);
         $quotes = $shipping->quote($cart, $data['shipping_address']);
 
-        return response()->json(['quotes' => collect($quotes)->map(fn (WebsiteShippingRateQuote $quote) => ['id' => $quote->id, 'carrier' => $quote->carrier, 'service' => $quote->service, 'amount_cents' => $quote->amount_cents, 'currency' => $quote->currency, 'delivery_days' => $quote->delivery_days, 'expires_at' => $quote->expires_at->toIso8601String()])->values()]);
+        return response()->json(['quotes' => collect($quotes)->map(fn (WebsiteShippingRateQuote $quote) => ['id' => $quote->id, 'carrier' => $quote->carrier, 'service' => $quote->service, 'amount_cents' => $quote->amount_cents, 'currency' => $quote->currency, 'delivery_days' => $quote->delivery_days, 'expires_at' => $quote->expires_at->toIso8601String(), 'mode' => data_get($quote->parcel, '_shipping_plan.mode')])->values()]);
     }
 
     public function shippingWebhook(Request $request, WebsiteCommerceShippingService $shipping): JsonResponse
