@@ -1,5 +1,59 @@
 # SYSTEM SNAPSHOT
 
+## Native retail shipping Phase 3 (2026-10-15; review branch)
+
+- `WebsiteCheckoutService` saves durable attempts/holds before provider calls;
+  frozen requests and hosted URLs stay in encrypted order data. Both retail
+  carts expose scoped resume/cancel controls and freeze open checkout contents.
+- `WebsitePaymentService` verifies canonical Stripe Session/Intent/account/tax
+  and financial state before once-only inventory commitment. Uncertain payments
+  and stock conflicts block fulfillment; confirmed provider expiry releases
+  holds. Refund requests reserve balance, reverse destination transfers and
+  application fees, and reconcile final provider status without restocking.
+- `WebsiteStripeService` pins the native contract to `2025-06-30.basil`. The
+  native webhook secret is required for checkout; v1 signature rotation works.
+  `website:reconcile-payments` runs every five minutes with bounded native-only
+  recovery, including after new commerce is paused. No provider Session is
+  created by the reconciliation command.
+- Pre-deploy review fixes expose pickup origin setup independently of carrier
+  activation and durable pending-refund controls during paused checkout.
+- No migration, deployment, rollout activation, real payment/refund, or postage
+  purchase is included. Phase 4 remains labels/tracking/recovery/customer
+  updates; Phase 5 proves merchant tax, settlement, and physical delivery.
+  Phase 4 also includes printer-independent thermal/Letter/A4 documents and
+  a verified printer matrix; USB DYMO LabelWriter 4XL is the first named device.
+  See `docs/operations/retail-shipping-launch-plan.md` and the rollback runbook.
+
+## Native retail shipping Phase 2 (2026-10-15; review branch)
+
+- Phase 1 is draft PR #394. Phase 2 adds reviewed package capacity, explicit USPS
+  services/mode, box/packing tare, correct EasyPost shipment requests, current
+  quote context checks, and an immutable order-owned shipping plan.
+- `WebsiteShippingSetupService` stores tenant/site-scoped policy and package
+  rules in existing site JSON. `WebsiteShippingPlanService` handles conservative
+  packing, account/address/cart fingerprints, and order evidence. Missing item
+  dimensions require a merchant-tested capacity; weights are never guessed.
+- Both retail themes share rate selection and the published free-shipping
+  threshold. Cart edits expire quote eligibility without erasing order evidence.
+- No migration, production deployment, or activation is included. Payment and
+  inventory reliability, provider lifecycle/recovery, and a real shipping pilot
+  remain Phases 3–5. See `docs/operations/retail-shipping-launch-plan.md`.
+
+## 2026-10-15 - Retail shipping weight readiness
+
+- Native Website Products identifies available physical variants missing weights
+  with a product count, filter, row warnings, and a paginated bulk weight editor.
+  Merchants can enter ounces, pounds, or grams; existing whole-ounce storage
+  rounds converted measurements upward.
+- Ordinary product edits and older CSV files preserve omitted measurements.
+  Catalog CSV export includes every variant and its stable ID, name, weight, and
+  dimensions. Import validates ownership and preserves blank measurement cells.
+- Missing weights block carrier quoting and shipping checkout, while browsing
+  and pickup remain available. No account, entitlement, rollout, payment,
+  provider activation, or schema change is included.
+- Follow docs/operations/retail-shipping-launch-plan.md for the five phases
+  and docs/operations/website-commerce-shipping-operations.md for operation.
+
 ## 2026-10-15 — Selected-van map and trip history
 
 The standalone Field Service locator keeps all configured company vans visible,

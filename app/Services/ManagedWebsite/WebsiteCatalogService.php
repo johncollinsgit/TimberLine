@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\WebsiteCollection;
 use App\Models\WebsiteInventoryMovement;
 use App\Models\WebsiteProduct;
+use App\Models\WebsiteProductVariant;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -24,6 +25,11 @@ class WebsiteCatalogService
     public function saveProduct(TenantSite $site, ?WebsiteProduct $product, array $data, User $actor): WebsiteProduct
     {
         $this->assertEditor($site, $actor);
+        foreach ((array) ($data['variants'] ?? []) as $index => $variant) {
+            if (is_array($variant)) {
+                $data['variants'][$index] = app(WebsiteShippingReadinessService::class)->normalizeWeight($variant, 'variants.'.$index.'.shipping_weight');
+            }
+        }
 
         return DB::transaction(function () use ($site, $product, $data, $actor) {
             TenantSite::query()->whereKey($site->id)->lockForUpdate()->firstOrFail();
@@ -51,6 +57,10 @@ class WebsiteCatalogService
                 'variants.*.inventory_quantity' => ['nullable', 'integer', 'min:0', 'max:1000000'],
                 'variants.*.is_available' => ['required', 'boolean'],
                 'variants.*.shipping_weight_ounces' => ['nullable', 'integer', 'min:1', 'max:1000000'],
+                'variants.*.shipping_length_inches' => ['nullable', 'integer', 'between:1,1000'],
+                'variants.*.shipping_width_inches' => ['nullable', 'integer', 'between:1,1000'],
+                'variants.*.shipping_height_inches' => ['nullable', 'integer', 'between:1,1000'],
+                'variants.*.shipping_separately' => ['sometimes', 'boolean'],
                 'image_alt' => ['nullable', 'string', 'max:500'], 'details' => ['nullable', 'string', 'max:8000'],
                 'vendor' => ['nullable', 'string', 'max:190'], 'category' => ['nullable', 'string', 'max:190'], 'tags' => ['nullable', 'string', 'max:1000'],
                 'seo_title' => ['nullable', 'string', 'max:190'], 'seo_description' => ['nullable', 'string', 'max:320'],
@@ -81,6 +91,14 @@ class WebsiteCatalogService
                 if (array_key_exists('shipping_weight_ounces', $row)) {
                     $variant->shipping_weight_ounces = $row['shipping_weight_ounces'];
                 }
+                foreach (['shipping_length_inches', 'shipping_width_inches', 'shipping_height_inches'] as $field) {
+                    if (array_key_exists($field, $row)) {
+                        $variant->{$field} = $row[$field];
+                    }
+                }
+                if (array_key_exists('shipping_separately', $row)) {
+                    $variant->options = array_merge($variant->options ?? [], ['shipping_separately' => (bool) $row['shipping_separately']]);
+                }
                 $variant->save();
                 if ($product->track_inventory && $oldQuantity !== $variant->inventory_quantity) {
                     WebsiteInventoryMovement::query()->create(['tenant_id' => $site->tenant_id, 'website_product_variant_id' => $variant->id, 'quantity_delta' => $variant->inventory_quantity - $oldQuantity, 'reason' => 'catalog_adjustment', 'actor_user_id' => $actor->id]);
@@ -103,6 +121,54 @@ class WebsiteCatalogService
         [$whole,$fraction] = array_pad(explode('.', (string) $value, 2), 2, '');
 
         return (int) $whole * 100 + (int) str_pad(substr($fraction, 0, 2), 2, '0');
+    }
+
+    /** @param array<string,mixed> $data */
+    public function saveShippingWeights(TenantSite $site, array $data, User $actor): int
+    {
+        $this->assertEditor($site, $actor);
+        $data = Validator::make($data, [
+            'variants' => ['required', 'array', 'min:1', 'max:100'],
+            'variants.*.id' => ['required', 'integer', 'distinct'],
+            'variants.*.revision' => ['required', 'integer', 'min:0'],
+            'variants.*.shipping_weight' => ['nullable', 'numeric', 'gt:0'],
+            'variants.*.shipping_weight_unit' => ['required', Rule::in(['oz', 'lb', 'g'])],
+        ])->validate();
+
+        return DB::transaction(function () use ($site, $data, $actor): int {
+            TenantSite::query()->whereKey($site->id)->lockForUpdate()->firstOrFail();
+            $variants = WebsiteProductVariant::query()->forTenantId($site->tenant_id)
+                ->whereIn('id', array_column($data['variants'], 'id'))->where('is_available', true)
+                ->whereHas('product', fn ($query) => $query->forTenantId($site->tenant_id)
+                    ->where('tenant_site_id', $site->id)->where('product_type', 'physical')->where('status', '!=', 'archived'))
+                ->with('product')->lockForUpdate()->get()->keyBy('id');
+            abort_unless($variants->count() === count($data['variants']), 404);
+            $changes = [];
+            foreach ($data['variants'] as $index => $row) {
+                $variant = $variants[$row['id']];
+                abort_unless((int) data_get($variant->product->service_details, 'catalog_revision', 0) === (int) $row['revision'], 409, 'A product changed. Reload the weights before saving.');
+                // Blank bulk fields leave existing measurements unchanged.
+                if (! filled($row['shipping_weight'] ?? null)) {
+                    continue;
+                }
+                abort_unless($variant->product->status !== 'active' || app(ManagedWebsiteService::class)->publishingEnabled(), 423, 'Publishing is paused. Active products cannot change right now.');
+                $normalized = app(WebsiteShippingReadinessService::class)->normalizeWeight($row, 'variants.'.$index.'.shipping_weight');
+                if ($variant->shipping_weight_ounces === $normalized['shipping_weight_ounces']) {
+                    continue;
+                }
+                $changes[$variant->website_product_id][] = ['variant_id' => $variant->id, 'before_ounces' => $variant->shipping_weight_ounces, 'after_ounces' => $normalized['shipping_weight_ounces']];
+                $variant->update(['shipping_weight_ounces' => $normalized['shipping_weight_ounces']]);
+            }
+            foreach ($changes as $productId => $rows) {
+                $product = WebsiteProduct::query()->forTenantId($site->tenant_id)->whereKey($productId)->lockForUpdate()->firstOrFail();
+                $details = $product->service_details ?? [];
+                $details['catalog_revision'] = (int) ($details['catalog_revision'] ?? 0) + 1;
+                $product->update(['service_details' => $details]);
+                app(ManagedWebsiteService::class)->recordEvent($site, null, $actor, 'catalog.shipping_weights_saved', ['product_id' => $productId, 'changes' => $rows]);
+            }
+
+            return array_sum(array_map('count', $changes));
+        });
     }
 
     private function optionalCents(mixed $value): ?int

@@ -1,3 +1,26 @@
+## 2026-10-15 - Reviewed parcels and shared shipping checkout
+
+- Native shipping setup adds explicit test/production mode, approved USPS
+  services, usable package dimensions, packed-weight/item limits, and optional
+  confirmed product-mix capacity. Product variants expose dimensions and a
+  must-ship-alone flag while retaining existing measurements during other edits.
+- Retail themes share shipping address and rate selection. Address/name changes
+  clear stale selections; test rates are identified. Store copy and checkout use
+  the published free-shipping threshold. The standard theme also supports cart
+  quantity updates/removal through its existing scoped endpoint.
+- No production activation is included. See the retail shipping launch plan.
+
+## 2026-10-15 - Retail shipping weight readiness
+
+- Products shows missing-weight product counts, a filter, and row warnings.
+  Add weights opens a paginated bulk variant editor with ounces, pounds, and
+  grams; product editing includes the same units and a missing-weight notice.
+- Shopper carts identify items unavailable for shipping while keeping catalog
+  access and other configured delivery options. Missing measurements are
+  merchant setup tasks and do not open checkout or carrier rollout gates.
+- CSV/edit preservation and transactional tenant-scoped weight updates accompany
+  the UI. See docs/operations/retail-shipping-launch-plan.md.
+
 ## 2026-10-15 — Selected company vans and recorded trip paths
 
 - The standalone Location Tracker starts with all configured vans selected and

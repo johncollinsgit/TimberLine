@@ -303,3 +303,6 @@ Schedule::command('highlevel:fleet-maintain')->everyFiveMinutes()->withoutOverla
 Schedule::command('highlevel:fleet-reconcile')->hourly()->withoutOverlapping();
 
 Schedule::command('soccer:process')->everyMinute()->withoutOverlapping(5)->runInBackground();
+
+// Reconciles only explicitly versioned native Website attempts. Never enables commerce.
+Schedule::command('website:reconcile-payments')->everyFiveMinutes()->withoutOverlapping(10)->runInBackground();

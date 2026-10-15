@@ -764,6 +764,8 @@ Route::post('/account/profile', [WebsiteShopperAccountController::class, 'update
 Route::get('/account/orders/{number}', [WebsiteShopperAccountController::class, 'order'])->name('managed-website.store.account.orders.show');
 Route::post('/cart/items/{variant}', [WebsiteCommerceController::class, 'addCartItem'])->middleware('throttle:30,1')->name('managed-website.store.cart.items.store');
 Route::post('/cart/lines/{item}', [WebsiteCommerceController::class, 'updateCartItem'])->middleware('throttle:30,1')->name('managed-website.store.cart.lines.update');
+Route::post('/checkout/website/resume', [WebsiteCommerceController::class, 'resumeCheckout'])->middleware('throttle:10,1')->name('managed-website.store.checkout.resume');
+Route::post('/checkout/website/cancel', [WebsiteCommerceController::class, 'cancelCheckout'])->middleware('throttle:10,1')->name('managed-website.store.checkout.cancel');
 Route::post('/checkout/website', [WebsiteCommerceController::class, 'checkout'])->middleware('throttle:10,1')->name('managed-website.store.checkout');
 Route::post('/cart/shipping-rates', [WebsiteCommerceController::class, 'shippingRates'])->middleware('throttle:10,1')->name('managed-website.store.shipping-rates');
 Route::get('/checkout/website/success', [WebsiteCommerceController::class, 'success'])->name('managed-website.store.success');
@@ -836,8 +838,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/commerce/pirate-ship/tracking', [PirateShipBridgeController::class, 'import'])->name('commerce.pirate-ship.import');
             Route::post('/commerce/shipping/locations', [WebsiteCommerceController::class, 'saveFulfillmentLocation'])->name('commerce.shipping.locations.store');
             Route::post('/commerce/shipping/packages', [WebsiteCommerceController::class, 'saveShippingPackage'])->name('commerce.shipping.packages.store');
+            Route::post('/commerce/shipping/policy', [WebsiteCommerceController::class, 'saveShippingPolicy'])->name('commerce.shipping.policy.store');
             Route::get('/products/export', [WebsiteCommerceController::class, 'exportProducts'])->name('products.export');
             Route::post('/products/import', [WebsiteCommerceController::class, 'importProducts'])->name('products.import');
+            Route::get('/products/shipping-weights', [\App\Http\Controllers\WebsiteCatalogController::class, 'shippingWeights'])->name('products.shipping-weights');
+            Route::post('/products/shipping-weights', [\App\Http\Controllers\WebsiteCatalogController::class, 'saveShippingWeights'])->name('products.shipping-weights.save');
             Route::post('/products', [\App\Http\Controllers\WebsiteCatalogController::class, 'store'])->name('products.store');
             Route::put('/products/{product}', [\App\Http\Controllers\WebsiteCatalogController::class, 'update'])->name('products.update');
             Route::delete('/products/{product}', [\App\Http\Controllers\WebsiteCatalogController::class, 'archive'])->name('products.destroy');
@@ -855,6 +860,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/orders/{order}/fulfill', [WebsiteCommerceController::class, 'fulfill'])->name('orders.fulfill');
             Route::post('/orders/{order}/cancel', [WebsiteCommerceController::class, 'cancel'])->name('orders.cancel');
             Route::post('/orders/{order}/refund', [WebsiteCommerceController::class, 'refund'])->name('orders.refund');
+            Route::post('/orders/{order}/refunds/check', [WebsiteCommerceController::class, 'checkRefunds'])->name('orders.refunds.check');
             Route::post('/orders/{order}/notes', [WebsiteCommerceController::class, 'addOrderNote'])->name('orders.notes.store');
             Route::post('/orders/{order}/labels', [WebsiteCommerceController::class, 'purchaseLabel'])->name('orders.labels.purchase');
             Route::post('/shipments/{shipment}/void', [WebsiteCommerceController::class, 'voidLabel'])->name('shipments.void');

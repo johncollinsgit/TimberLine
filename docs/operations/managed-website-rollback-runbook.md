@@ -103,3 +103,34 @@ affected tenant from its import allowlist. Pause the import run, preserve its
 mapping and audit events, and verify no record was written outside the
 read-only commerce lane. Do not delete source snapshots until incident evidence
 and the tenant retention policy have been reviewed.
+
+## Native payment and stock recovery (Phase 3)
+
+Keep the scheduler and `website:reconcile-payments --limit=100` available while
+new checkout is paused. The command touches only explicitly versioned native
+Website attempts; it retrieves provider state and never creates a Stripe Session.
+A nonzero exit means at least one attempt needs another retry or staff review.
+Logs include only attempt IDs and exception types, not provider customer data.
+
+An active stock hold remains active after its local expiry until Stripe confirms
+the Session is expired/unpaid. Lost Session responses are recovered using the
+persisted attempt-specific Customer and nonce. Only after the frozen expiry plus
+five minutes, a successful complete provider list proving no matching Session
+can release that attempt. Provider outages and incomplete lists retain holds.
+Use the provider account/key and mode that created the attempt. Key/account
+rotation, multiple matches, and pre-versioned attempts need deliberate review;
+do not edit metadata or release reservations to make a retry pass.
+
+`payment_review` means provider details disagree with the saved attempt;
+`paid_review` means money was verified but stock/order state needs investigation.
+Both block labels and fulfillment. Compare the native order/attempt, provider
+Session/Intent, frozen destination/tax context, charge/transfer references, and
+inventory movements. A verified paid inventory-conflict order can be refunded
+through the native action. Refunds never restock physical goods automatically.
+
+Retain the UUID when retrying a refund. Pending/unknown refunds reserve their
+balance until canonical provider reconciliation succeeds or confirms failure.
+Never submit an unrelated new refund to bypass that reservation. Native refund
+requests reverse destination transfers and return application fees; inspect
+provider evidence and settlement for refunds created directly in Stripe.
+Do not mark a refund complete from an API timeout or a merely pending response.

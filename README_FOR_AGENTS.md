@@ -1,4 +1,67 @@
+## Retail shipping Phase 3 (2026-10-15)
+
+- Continue from the phased retail shipping plan. Phase 3 is isolated on
+  `codex/retail-shipping-phase-3`, stacked on Phase 2 (draft PR #395).
+- Native checkout attempts use `WebsitePayment.metadata.checkout_version = 1`.
+  Never release their active reservations merely because `expires_at` passed;
+  reconcile canonical provider state first. Pre-versioned pending attempts
+  require manual provider review. Do not retrofit legacy or Shopify payments.
+- Frozen Stripe requests/URLs/tax address are encrypted in
+  `WebsiteOrder.service_request.checkout`. Keep PII and hosted payment URLs out
+  of plain payment metadata and webhook evidence. Native provider calls use
+  the pinned contract via `WebsiteStripeService` and the original platform-key
+  fingerprint; key/account changes require deliberate reconciliation.
+- New checkout requires existing entitlement/rollout/Connect/tax readiness and
+  its signed webhook secret. Recovery/refunds deliberately service previously
+  authorized native attempts while checkout is paused. The five-minute
+  `website:reconcile-payments` command uses provider GETs, reports failures,
+  rotates at most 100 attempts by default, and never enables commerce.
+- Pickup/tax origins can be configured by scoped website editors before carrier
+  activation. Package/policy actions retain carrier rollout checks.
+- Existing native payment controls remain available while new checkout is paused;
+  unresolved refunds have durable fixed-amount retry/check forms after navigation.
+- Refund callers must retain their request UUID on retries. Pending/unknown
+  operations reserve balance. Never auto-restock on refund. Fulfillment remains
+  blocked for `payment_review` and `paid_review`. Real tax, fee/transfer/payout,
+  label, notification, and physical-delivery evidence remain launch gates.
+- Phase 4 printing must support multiple printer families through standard
+  actual-size PDF/driver printing and separate optional device adapters. The
+  first known physical device is a USB DYMO LabelWriter 4XL, not the sole
+  supported family. See the plan's thermal/Letter/A4 compatibility matrix and
+  no-duplicate-postage print/reprint acceptance requirements.
+
+## Retail shipping Phase 2 (2026-10-15)
+
+- Continue from `docs/operations/retail-shipping-launch-plan.md`. Phase 1 is
+  draft PR #394; Phase 2 is isolated on `codex/retail-shipping-phase-2`.
+- Reviewed package rules/services/mode live in `TenantSite.settings.shipping`.
+  Quote `parcel._shipping_plan` carries current eligibility evidence; the full
+  accepted plan is copied to `WebsiteOrder.shipping_rate_snapshot`. Never delete
+  quotes on cart edits or rebuild a paid order's parcel from the current cart.
+- Product dimensions or explicitly merchant-tested capacity establish a bounded
+  fit. Box and protective packing tare is separate from item retail packaging.
+  Unreviewed presets, unsupported fits, wrong accounts/modes, and stale quotes
+  fail before payment. Existing rollout/entitlement gates stay closed.
+- No real carrier test or production activation is implied by HTTP-faked tests.
+  Finish payment/inventory, tracking/postage recovery, and the physical pilot in
+  later phases before declaring end-to-end retail shipping ready.
+
 # START HERE
+
+## 2026-10-15 - Retail shipping weight readiness
+
+Native Website shipping weights are catalog readiness, not a vendor launch
+failure. Products shows missing-weight counts and filters; the product editor
+and /website/products/shipping-weights accept ounces, pounds, or grams with
+upward whole-ounce storage. Blank bulk fields and omitted CSV/edit fields
+preserve existing measurements; the product editor can explicitly clear a
+weight. CSV exports include all variants with scoped stable IDs. Keep revision,
+membership, active-product publishing, tenant, and site guards.
+
+Missing physical-item weights block carrier quotes and shipping checkout only;
+never use package tare as an item weight. Browsing and configured pickup remain
+available. No commerce or shipping gate is enabled by this change. The five-phase
+implementation sequence is docs/operations/retail-shipping-launch-plan.md.
 
 The standalone Fleet map/history uses per-user selected vans and recorded
 Bouncie trip paths. Read `docs/operations/collins-fleet-selected-routes.md` before
