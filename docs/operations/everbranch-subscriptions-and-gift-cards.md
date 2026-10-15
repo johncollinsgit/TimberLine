@@ -51,19 +51,24 @@ absent. A 2026-10 `subscriptionContracts(first: 1)` query returned zero nodes an
 no next page: this app currently owns **zero** Shopify subscription contracts.
 The one local subscription row is not evidence of a provider-owned contract.
 An explicit all-app selling-plan query returned six groups, all with app ID
-`294517`; the default current-app query returned zero. The current catalog's
-selling plans therefore belong to another app. Its provider name has not been
-verified and must not be inferred from the numeric app ID.
+`294517`; the default current-app query returned zero. A separate canonical
+`app(id: "gid://shopify/App/294517")` query identified it as **Recharge
+Subscriptions**. Its `installation` field returned null; that field alone does
+not establish whether historical billing remains active, whether migration has
+occurred, or who controls a payment vault. The current Backstage installation is
+`gid://shopify/AppInstallation/669328507139`, and the shop is
+`gid://shopify/Shop/20812479`, timezone `America/New_York`.
 
 These facts do not establish that Backstage can operate contracts created by
-Recharge or another app. Identify the existing selling-plan app and validate a
-reviewed ownership/payment-vault migration before any cutover. Keep existing
+Recharge or another app. Validate a reviewed ownership/payment-vault migration
+before any cutover. Keep existing
 provider billing, Shopify checkout, sign-in, customer records and orders intact.
 The checks contained no customer names, addresses, card data or provider writes.
 
 ## Phase 1 — access, ownership foundation and truthful behavior
 
-Implemented in this branch; provider execution remains hard disabled:
+Deployed through PR #401 at `f8bf74f3` (protected run `38818732814`, Forge
+`80346741`); provider execution and purchasing remain hard disabled:
 
 - `SubscriptionAccessService` applies the canonical entitlement to all service
   entry points. Managers must be active members with owner/admin/manager roles.
@@ -118,6 +123,14 @@ regression. No real card, renewal, notification, gift card or provider mutation
 is part of verification.
 
 ## Phase 2 — trustworthy provider reads and operations ledger
+
+The first bounded implementation is staged with five additive evidence tables,
+explicit query-only CLI setup/probe/resumable sync, a saved-history workspace and
+a dedicated raw-HMAC evidence inbox. See
+`everbranch-subscriptions-provider-reads.md` for exact setup, retries, freshness,
+size limits and default-disabled gates. Production rollout, scheduled inbox
+reconciliation, customer-facing history and secure token acquisition/refresh are
+still acceptance requirements; no financial worker or provider mutation exists.
 
 Build a subscription-only adapter pinned to 2026-10; do not repurpose global
 retail/wholesale slots to onboard unrelated retailers. Add tenant-owned immutable

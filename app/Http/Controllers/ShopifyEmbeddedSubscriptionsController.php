@@ -72,6 +72,7 @@ class ShopifyEmbeddedSubscriptionsController extends Controller
                 'message' => $enabled ? null : 'An enabled Subscriptions add-on and an active Everbranch workspace owner, admin or manager sign-in are required. Shopify launch context alone does not grant management access.',
             ],
             'subscriptionsPayload' => $payload,
+            'workspaceSubscriptionsUrl' => $enabled ? route('subscriptions.workspace.index', ['tenant' => $tenantId]) : null,
         ], $enabled ? 200 : 403);
     }
 

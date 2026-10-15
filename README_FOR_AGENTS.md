@@ -1,4 +1,26 @@
-## Subscriptions Phase 1 foundation (2026-10-15; isolated review branch)
+## Subscriptions Phase 2 provider evidence (2026-10-15; staged)
+
+- Read `docs/operations/everbranch-subscriptions-provider-reads.md` before setup.
+  Explicit read-only CLI operations require an active entitled manager, a selected
+  tenant-owned ShopifyStore, independently verified provider IDs, the global read
+  gate and tenant allowlist. Do not borrow global retail/wholesale credentials.
+- Keep credential/installation identities immutable after verification. Pending
+  setup corrections are audited local operations that invalidate old probe UUIDs.
+  Every read is fenced to its original credential, request, generation and slice.
+- The five additive evidence tables need the reviewed disposable baseline and
+  protected MySQL recovery/deployment gate. Partial sync never publishes a total;
+  only complete index revalidation promotes staged resources. Never rejuvenate old
+  observations or turn absence into cancellation. Preserve paused/cancelled history.
+- `/subscriptions` reads local saved history only. Dedicated raw-HMAC webhooks use
+  pinned per-installation signing revisions, retain encrypted evidence, and stay
+  quarantined while background reads are disabled. Token setup does not configure
+  signing or prove webhook registration. There is no mutation, mail, card retry,
+  background worker, automatic token refresh or paid activation in this phase.
+- Six Modern Forestry selling-plan groups belong to verified Recharge Subscriptions
+  app `294517`; Backstage owns zero contracts/groups. This does not establish the old
+  provider's billing/vault/migration state. Keep provider adoption a reviewed phase.
+
+## Subscriptions Phase 1 foundation (2026-10-15; deployed disabled)
 
 - Canonical subscription entitlements cover admin, customer/mobile, public polls,
   webhook evidence and CLI apply paths. Active tenant managers require a separate
@@ -17,6 +39,8 @@
   subscriptions require reviewed ownership/vault migration. See
   `docs/operations/everbranch-subscriptions-and-gift-cards.md` for the five
   subscription phases, gift-card phases, limitations and acceptance gates.
+- Foundation PR #401 is deployed at `f8bf74f3`, protected run `38818732814` /
+  Forge `80346741`. Modern Forestry's existing comped grant is unchanged.
 
 ## Reviewed schema reconciliation (2026-10-15)
 
@@ -33,7 +57,7 @@
   Modern Forestry's native pilot with its existing Shopify operations intact.
   Follow `docs/operations/schema-drift-reconciliation-2026-10-15.md`.
 
-## Native Shopify catalog snapshot pilot (2026-10-15; staged)
+## Native Shopify catalog snapshot pilot (2026-10-15; deployed drafts)
 
 - The user explicitly approved Modern Forestry Shopify products as a read-only
   source for its separate native Website pilot. This narrow catalog exception
@@ -48,8 +72,13 @@
   Weights stay missing when unknown; unreviewed dimensions are not inferred.
   Inventory is a snapshot, not shared live stock. Require pilot allocation before
   activation. See `docs/operations/native-shopify-catalog-snapshot.md`.
+- Production import and replay verification are complete: 397 draft products,
+  1,681 variants, 24 draft collections and 2,102 encrypted mappings; 101/109 source
+  active products covered. Exact replay changed no catalog/inventory/audit rows.
+  Missing weights/dimensions remain missing and 369 invalid-stock variants remain
+  unavailable. No pilot publication, order, payment or shipment was created.
 
-## Retail shipping Phase 4 (2026-10-15)
+## Retail shipping Phase 4 (2026-10-15; deployed disabled)
 
 - Continue the native-only five-phase plan. Phases 1–3 are live behind disabled
   checkout/shipping gates via PR #397 (`88bda81a`). Phase 4 keeps activation separate from its code release.
@@ -74,6 +103,8 @@
   on Mac and Windows is the first physical target; other exact models need
   verification. Do not claim hardware, barcode, USPS delivery, tax, or settlement
   evidence from mocked or browser tests. Phase 5 remains the controlled pilot.
+- PR #399 is deployed at `34a04d4b`, protected run `38816970879` / Forge
+  `80346236`, with reviewed disposable schema `a4555a6b` (404 tables).
 
 ## Retail shipping Phase 3 (2026-10-15)
 

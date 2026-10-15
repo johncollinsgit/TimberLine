@@ -1,6 +1,27 @@
 # SYSTEM SNAPSHOT
 
-## Subscriptions Phase 1 foundation (2026-10-15; isolated review branch)
+## Subscriptions Phase 2 provider evidence (2026-10-15; staged, reads disabled)
+
+- A separate query-only Shopify adapter verifies tenant-owned Shop/App/installation
+  identity and immutable encrypted credential revisions. Explicit manager-triggered
+  reads require both the global gate and tenant allowlist; no global Shopify token
+  fallback, provider mutation, automatic refresh, billing, mail or scheduled read
+  is introduced.
+- Five additive evidence tables retain operations, signed webhook deliveries and
+  owned provider resources. Sync resumes bounded slices, then verifies the complete
+  index before publishing totals. Failed/partial reads preserve accepted history;
+  unknown totals remain distinct from verified zero. Original observation times
+  and exact unsigned revisions survive retries and promotion.
+- `/subscriptions` shows scoped saved history, search/status filters, prerequisites
+  and freshness without provider calls. A dedicated installation-bound raw-HMAC
+  endpoint retains encrypted/quarantined evidence only; signing material and actual
+  webhook registration remain separate setup requirements.
+- Real MySQL partial-DDL/concurrency recovery, fake-provider race/ownership tests,
+  and synthetic desktop/mobile browser checks passed. The disposable baseline,
+  protected CI and deployment gate still govern release. See
+  `docs/operations/everbranch-subscriptions-provider-reads.md` for operational limits.
+
+## Subscriptions Phase 1 foundation (2026-10-15; deployed disabled)
 
 - Canonical subscription entitlements cover admin, customer/mobile, public polls,
   webhook evidence and CLI apply paths. Active tenant managers require a separate
@@ -16,9 +37,14 @@
   catalogs, direct/plan checkout and mobile handoff. No external billing setup
   occurs. Gift Cards is a later separate add-on with pricing pending approval.
 - Read-only merchant checks found zero contracts owned by Backstage; other-app
-  subscriptions require reviewed ownership/vault migration. See
+  subscriptions require reviewed ownership/vault migration. Six existing selling
+  plan groups belong to the separately verified Recharge Subscriptions app; its
+  nullable installation lookup does not establish billing or migration state. See
   `docs/operations/everbranch-subscriptions-and-gift-cards.md` for the five
   subscription phases, gift-card phases, limitations and acceptance gates.
+- PR #401 deployed at `f8bf74f3` through protected run `38818732814` / Forge
+  `80346741`. Exact-release readiness and the approved 404-table schema passed;
+  subscription purchasing, execution, scheduling and native commerce remain off.
 
 ## Reviewed schema reconciliation (2026-10-15; deployed)
 
@@ -38,7 +64,7 @@
   is the native pilot; its Shopify store and checkout stay independent.
 - See `docs/operations/schema-drift-reconciliation-2026-10-15.md`.
 
-## Native Shopify catalog snapshot adapter (2026-10-15; staged, activation disabled)
+## Native Shopify catalog snapshot adapter (2026-10-15; deployed, activation disabled)
 
 - An explicit local-file CLI adapter prepares native drafts from the approved
   read-only Shopify catalog export. Tenant/site/shop/GID mappings retain encrypted
@@ -48,15 +74,17 @@
   original values stay encrypted. Galleries display up to twelve safe images while
   retaining the complete source gallery. Stock allocation, dimensions/packing,
   source tax policy and unsupported commerce features require launch review.
-- Disposable SQLite and MySQL 8.4 full-source rehearsals prepared 397 drafts and
-  1,681 variants, covering 101 of 109 source ACTIVE products. These are local test
-  results, not production catalog changes or physical shipping evidence. MySQL
-  partial-DDL recovery and two concurrent initial imports passed without duplicate
-  catalog rows; identical replays changed no catalog, inventory or audit rows.
-- The combined disposable schema baseline and normal release gates are still
-  required. See `docs/operations/native-shopify-catalog-snapshot.md`.
+- After disposable SQLite/MySQL recovery rehearsals, the approved production pilot
+  import prepared 397 draft products, 1,681 variants and 24 draft collections,
+  covering 101 of 109 source ACTIVE products (92.7%). Identical apply replay changed
+  no catalog, mapping, inventory or audit rows. The two missing weights and every
+  missing dimension remain NULL; 369 invalid-stock variants remain unavailable.
+- The pilot published no catalog or site changes. Checkout, shipping and sender
+  gates stayed closed; no pilot order, payment or shipment was created. Inventory
+  is a snapshot and requires merchant allocation. See
+  `docs/operations/native-shopify-catalog-snapshot.md`.
 
-## Native retail shipping Phase 4 (2026-10-15; activation disabled)
+## Native retail shipping Phase 4 (2026-10-15; deployed, activation disabled)
 
 - Durable original-account postage attempts distinguish resumable preflight from
   ambiguous submitted buys; recovery never blindly buys another label. Packing,
@@ -70,8 +98,9 @@
   transactional sender, unique transitions, after-commit jobs and a bounded
   scanner. Ambiguous sends require operator evidence; disabled history does not
   automatically send after activation. Guest tracking is host/site/token scoped.
-- The additive outbox migration repairs interrupted MySQL FK/index creation.
-  Baseline generation and the mandatory MySQL release gate remain required.
+- PR #399 deployed at `34a04d4b` through protected run `38816970879` / Forge
+  `80346236`. The disposable 404-table schema `a4555a6b` and mandatory MySQL
+  migration gate passed, including interrupted FK/index recovery.
   Checkout, shipping and notifications remain disabled until the controlled
   Phase 5 merchant/hardware/provider launch. No real postage or mail was sent.
 - See `docs/operations/retail-shipping-launch-plan.md`, shipping operations,

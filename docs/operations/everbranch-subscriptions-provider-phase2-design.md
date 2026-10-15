@@ -5,6 +5,12 @@ credential migration, provider operation, billing worker or cutover is enabled b
 this document. Implement after the separate subscription foundation release and
 review through the normal test, schema and deployment gates.
 
+Implementation status: the foundation is deployed at `f8bf74f3` through PR #401.
+The initial bounded Phase 2 implementation is staged; the operational companion
+`everbranch-subscriptions-provider-reads.md` is authoritative for actual CLI,
+table names, implemented limits and remaining acceptance work. This design also
+describes later reconciliation/refresh capabilities not yet implemented.
+
 ## Scope and verified limits
 
 Phase 2 should make owned Shopify subscriptions visible and explain their
@@ -19,13 +25,15 @@ The coordinator's read-only provider evidence supplied for this design reports:
 - Current-app owned subscription contracts: **0**.
 - Current-app owned selling-plan groups: **0**.
 - The all-app selling-plan-group result contains **6** groups with source
-  `appId: 294517`, a different app.
+  `appId: 294517`, separately verified by canonical app lookup as **Recharge
+  Subscriptions**. Its nullable installation result does not establish billing,
+  uninstall or migration state.
 - The current app has read/write **own** subscription-contract scopes,
   `read_customer_payment_methods` and `write_customers`.
 
 These counts are observations from that evidence, not a new live probe performed
-for this document. The different app's provider name is unverified; do not infer
-it from a numeric app ID, product name or local migration field. All-app groups
+for this document. Provider identity came from an explicit canonical app lookup,
+not a numeric app ID, product name or local migration field. All-app groups
 are not evidence that the current app owns their contracts, that any contracts
 exist, or that Everbranch may service them. An empty, completely paginated
 owned-contract result must render as a valid empty result with an observation
