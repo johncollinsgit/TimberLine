@@ -1,5 +1,10 @@
 # START HERE
 
+The standalone Fleet map/history uses per-user selected vans and recorded
+Bouncie trip paths. Read `docs/operations/collins-fleet-selected-routes.md` before
+continuing it. Release through the protected GitHub/Forge gates, use isolated
+fixtures, and preserve existing fleet/policy/provider configuration.
+
 ## 2026-10-15 — Everbranch Showcase workspace and landlord presentation
 
 - Shared Everbranch web workspaces adopt the approved Showcase palette, readable

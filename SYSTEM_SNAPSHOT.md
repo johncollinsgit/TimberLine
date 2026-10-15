@@ -1,5 +1,16 @@
 # SYSTEM SNAPSHOT
 
+## 2026-10-15 — Selected-van map and trip history
+
+The standalone Field Service locator keeps all configured company vans visible,
+with user/workspace-scoped display selections, independently ranked latest
+positions, and Bouncie trip history. Provider GPS paths are simplified within
+12 meters, with trips and large sample gaps kept separate. History reads retain
+policy, entitlement, account and retention gates. Credentials stay server-side.
+No migrations or fleet setup changes are required. Release through the normal
+protected GitHub/Forge pipeline. See
+`docs/operations/collins-fleet-selected-routes.md` for validation and limits.
+
 ## 2026-10-15 — Everbranch Showcase workspace and landlord presentation
 
 - Shared Everbranch web workspaces adopt the approved Showcase palette, readable

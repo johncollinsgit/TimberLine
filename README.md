@@ -1,5 +1,12 @@
 # Modern Forestry Backstage
 
+## Company vehicle locator
+
+The Field Service Location Tracker shows selected company vans and their
+recorded Bouncie trip paths, with local-date history and per-vehicle health.
+See [selected van map operations](docs/operations/collins-fleet-selected-routes.md)
+for access boundaries, isolated validation and release checks.
+
 ## Tenant mailboxes (staged)
 
 Everbranch Mail now has tenant-scoped shared inboxes and guided domain setup. A Cloudflare quick path can add the ownership record with a zone-scoped token; the direct SMTP/JMAP transport remains gated until a dedicated host passes delivery checks. See [Everbranch mail service rollout](docs/operations/everbranch-mail-service.md).
