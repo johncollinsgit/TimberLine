@@ -1,5 +1,20 @@
 # SYSTEM SNAPSHOT
 
+## 2026-10-15 — Private four-app retail showroom (development)
+
+Seven isolated festival retail concepts and a retained Sawyer source-catalog preview
+share the existing Website Commerce catalog/cart lane. Owner-only routes, scoped
+team access, revocable previews, draft prospect/onboarding records, demo-only
+receipts/rewards, deterministic offline shipping, and test-only EasyPost rates stay
+separate from live payments, fulfillment, notifications, Shopify and Modern Forestry.
+The showroom is disabled by default; no merchant or production activation occurred.
+
+Retail and the separate Renfrow Studio are installable PWAs; Field retains live
+authentication and adds the bundled offline sample, alongside existing Showcase.
+The offer uses Managed Website pricing ($499 setup / $99 monthly) and a one-hour
+weekly strategic video call. See `docs/retail/SHOWROOM_RUNBOOK.md` and
+`docs/retail/VERIFICATION.md` for device setup, scope, checks and release limitations.
+
 ## 2026-10-15 — Everbranch Showcase workspace and landlord presentation
 
 - Shared Everbranch web workspaces adopt the approved Showcase palette, readable

@@ -1,0 +1,3540 @@
+{
+  "event": {
+    "name": "Woolly Worm Festival 2026",
+    "dates": [
+      "2026-10-17",
+      "2026-10-18"
+    ],
+    "place": "Banner Elk, North Carolina",
+    "source": "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+    "research_date": "2026-10-15"
+  },
+  "important": [
+    "Data is a public-source research seed for an INDEPENDENT Evergrove demonstration, not an approved merchant catalog.",
+    "No public consumer checkout, production payment processing, shipping label purchases, or live orders are authorized.",
+    "Verified website features and policies can change; verify with each merchant before any commercial deployment.",
+    "Null prices, product measurements and shipping origins must be completed with merchant permission; do not silently invent them.",
+    "Merchant trademarks and original product photos must not be copied to a public production site without permission."
+  ],
+  "vendors": [
+    {
+      "slug": "joy-fudge-company",
+      "name": "Joy Fudge Company",
+      "booth": "Row 3 A",
+      "website": "https://www.joyfudgecompany.com/",
+      "web_presence": "Informational site with flavors, catering, retailer locator and contact. Public online checkout not verified.",
+      "sources": [
+        "https://www.joyfudgecompany.com/",
+        "https://www.joyfudgecompany.com/retail-locations"
+      ],
+      "confirmed_catalog_examples": [
+        {
+          "name": "Chocolate fudge",
+          "price_usd": null
+        },
+        {
+          "name": "Chocolate walnut fudge",
+          "price_usd": null
+        },
+        {
+          "name": "Chocolate peanut butter fudge",
+          "price_usd": null
+        },
+        {
+          "name": "Maple walnut fudge",
+          "price_usd": null
+        },
+        {
+          "name": "Pumpkin pie fudge",
+          "price_usd": null
+        }
+      ],
+      "concept": "Rich confectionery/gifting: assortment box builder, seasonal collections, corporate gifts, catering and wholesale enquiry.",
+      "shipping_profile": "Ambient-food shipping candidate. Heat-sensitive packaging, destination/season review, shelf-life and allergen checks required. No official shipping policy/rates verified.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": [
+        "Prices",
+        "portion weights",
+        "ingredients/allergens",
+        "shelf life",
+        "heat protection",
+        "ship days",
+        "carrier/service",
+        "fulfillment address",
+        "permission to ship"
+      ],
+      "image": "fudge",
+      "headline": "A little square. A beautiful occasion.",
+      "tagline": "Small joys, beautifully boxed.",
+      "cta": "Explore the flavors",
+      "theme": "cocoa",
+      "colors": {
+        "ink": "#342017",
+        "accent": "#b77642",
+        "paper": "#fbf4e8"
+      },
+      "walking_order": 1,
+      "live_shipping_enabled": false,
+      "payment_enabled": false,
+      "shipping": {
+        "kind": "fudge",
+        "origin": null,
+        "allowed_states": "US",
+        "pickup": true,
+        "local_delivery": false,
+        "handling_cents": 250,
+        "free_over_cents": null,
+        "live_enabled": false,
+        "measurements_verified": false
+      },
+      "products": [
+        {
+          "id": "p1",
+          "name": "Chocolate fudge",
+          "category": "Classic flavors",
+          "description": "Chocolate fudge. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "identity_verified": true,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 8,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "fudge",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 1200,
+              "stock": 24
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "name": "Chocolate walnut fudge",
+          "category": "Classic flavors",
+          "description": "Chocolate walnut fudge. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "identity_verified": true,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 8,
+          "dimensions_inches": [
+            10,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "fudge",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 1400,
+              "stock": 24
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "name": "Chocolate peanut butter fudge",
+          "category": "Classic flavors",
+          "description": "Chocolate peanut butter fudge. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "identity_verified": true,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 8,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "fudge",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 1400,
+              "stock": 24
+            }
+          ]
+        },
+        {
+          "id": "p4",
+          "name": "Maple walnut fudge",
+          "category": "Seasonal flavors",
+          "description": "Maple walnut fudge. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "identity_verified": true,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 8,
+          "dimensions_inches": [
+            10,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "fudge",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 1400,
+              "stock": 24
+            }
+          ]
+        },
+        {
+          "id": "p5",
+          "name": "Pumpkin pie fudge",
+          "category": "Seasonal flavors",
+          "description": "Pumpkin pie fudge. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "identity_verified": true,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 8,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "fudge",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 1400,
+              "stock": 24
+            }
+          ]
+        },
+        {
+          "id": "p6",
+          "name": "Choose-your-flavors gift box",
+          "category": "Gifts",
+          "description": "Choose-your-flavors gift box. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 20,
+          "dimensions_inches": [
+            10,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "fudge",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 3200,
+              "stock": 24
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "old-beech-mountain-farms",
+      "name": "Old Beech Mountain Farms",
+      "booth": "Row 2 E",
+      "website": null,
+      "primary_public_profile": "https://highcountryfoodhub.localfoodmarketplace.com/Producer/3f9b5846-d06d-40e5-9e01-789afbf98c6f",
+      "facebook": "https://www.facebook.com/oldbeechmtnfarm/",
+      "web_presence": "High Country Food Hub producer page links to Facebook; no standalone retail site verified.",
+      "sources": [
+        "https://highcountryfoodhub.localfoodmarketplace.com/Producer/3f9b5846-d06d-40e5-9e01-789afbf98c6f",
+        "https://www.fsis.usda.gov/inspection/state-inspection-programs"
+      ],
+      "confirmed_catalog_examples": [
+        {
+          "name": "Farm-raised beef",
+          "price_usd": null
+        },
+        {
+          "name": "Farm-raised pork",
+          "price_usd": null
+        }
+      ],
+      "concept": "Farm-direct preorder and pickup reservations, meat cuts or bulk custom request, pickup schedule, farm story.",
+      "shipping_profile": "PICKUP-FIRST: disable consumer meat shipping. Refrigerated/frozen shipping must remain gated pending confirmation of inspection status, interstate commerce eligibility, food safety, insulation, cold-chain, carriers and delivery regions.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": [
+        "Product/cut list",
+        "weight-based prices",
+        "availability",
+        "pickup location/schedule",
+        "local delivery zones",
+        "inspection and interstate shipping eligibility",
+        "cold-chain SOP",
+        "carrier options"
+      ],
+      "image": "farm",
+      "headline": "Good food starts close to home.",
+      "tagline": "From the pasture to your table.",
+      "cta": "Explore pickup reservations",
+      "theme": "farm",
+      "colors": {
+        "ink": "#213e2a",
+        "accent": "#a33c30",
+        "paper": "#f5f1e5"
+      },
+      "walking_order": 2,
+      "live_shipping_enabled": false,
+      "payment_enabled": false,
+      "shipping": {
+        "kind": "meat",
+        "origin": null,
+        "allowed_states": [
+          "NC"
+        ],
+        "pickup": true,
+        "local_delivery": true,
+        "handling_cents": 0,
+        "free_over_cents": null,
+        "live_enabled": false,
+        "measurements_verified": false
+      },
+      "products": [
+        {
+          "id": "p1",
+          "name": "Beef cut reservation",
+          "category": "Beef",
+          "description": "Beef cut reservation. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 16,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "meat",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 1600,
+              "stock": 24
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "name": "Pork cut reservation",
+          "category": "Pork",
+          "description": "Pork cut reservation. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 16,
+          "dimensions_inches": [
+            10,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "meat",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 1400,
+              "stock": 24
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "name": "Family freezer bundle request",
+          "category": "Bundles",
+          "description": "Family freezer bundle request. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 80,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "meat",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 8500,
+              "stock": 24
+            }
+          ]
+        },
+        {
+          "id": "p4",
+          "name": "Weekend grill selection",
+          "category": "Bundles",
+          "description": "Weekend grill selection. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 48,
+          "dimensions_inches": [
+            10,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "meat",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 4200,
+              "stock": 24
+            }
+          ]
+        },
+        {
+          "id": "p5",
+          "name": "Farm pantry pickup box",
+          "category": "Pickup boxes",
+          "description": "Farm pantry pickup box. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 48,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "meat",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 3800,
+              "stock": 24
+            }
+          ]
+        },
+        {
+          "id": "p6",
+          "name": "Custom bulk order inquiry",
+          "category": "Custom requests",
+          "description": "Custom bulk order inquiry. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 0,
+          "dimensions_inches": [
+            10,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "meat",
+          "quote_only": true,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 0,
+              "stock": 24
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "4-pelicans-woodworking",
+      "name": "4 Pelicans Woodworking",
+      "booth": "Row 5 A",
+      "website": null,
+      "facebook": "https://www.facebook.com/4pelicanswoodworking",
+      "web_presence": "A 2026 artisan biography lists Facebook and email, not a dedicated commerce domain.",
+      "sources": [
+        "https://www.oldebeaufortfarmersmarket.org/aritsanbios",
+        "https://woollyworm.com/vendor-marketplace/"
+      ],
+      "confirmed_catalog_examples": [
+        {
+          "name": "One-of-a-kind wood and hand-colored epoxy home piece",
+          "price_usd": null
+        }
+      ],
+      "concept": "Design-gallery ecommerce for one-of-a-kind pieces; product availability=1, sold-out states, commission inquiries, custom finish requests.",
+      "shipping_profile": "Dimension/weight-based parcel shipping for small pieces; oversized pieces require manually approved delivery or shipping quote. Actual measurements/rates unverified.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": [
+        "Catalog photos and rights",
+        "prices",
+        "parcel dimensions",
+        "oversized thresholds",
+        "shipping regions",
+        "packaging/insurance",
+        "lead times"
+      ],
+      "image": "wood",
+      "headline": "Made once. Kept for years.",
+      "tagline": "Wood with a little wonder.",
+      "cta": "Find your one-of-a-kind piece",
+      "theme": "gallery",
+      "colors": {
+        "ink": "#443325",
+        "accent": "#428e8a",
+        "paper": "#f5f0e6"
+      },
+      "walking_order": 3,
+      "live_shipping_enabled": false,
+      "payment_enabled": false,
+      "shipping": {
+        "kind": "wood",
+        "origin": null,
+        "allowed_states": "US",
+        "pickup": true,
+        "local_delivery": false,
+        "handling_cents": 200,
+        "free_over_cents": null,
+        "live_enabled": false,
+        "measurements_verified": false
+      },
+      "products": [
+        {
+          "id": "p1",
+          "name": "Walnut & sea-glass serving board",
+          "category": "Boards",
+          "description": "Walnut & sea-glass serving board. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 28,
+          "dimensions_inches": [
+            9,
+            7,
+            3
+          ],
+          "measurements_verified": false,
+          "group": "wood",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 8900,
+              "stock": 1
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "name": "River-inspired catchall",
+          "category": "Home accents",
+          "description": "River-inspired catchall. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 16,
+          "dimensions_inches": [
+            10,
+            7,
+            3
+          ],
+          "measurements_verified": false,
+          "group": "wood",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 4600,
+              "stock": 1
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "name": "Hand-turned keepsake bowl",
+          "category": "Bowls",
+          "description": "Hand-turned keepsake bowl. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 24,
+          "dimensions_inches": [
+            9,
+            7,
+            3
+          ],
+          "measurements_verified": false,
+          "group": "wood",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 6400,
+              "stock": 1
+            }
+          ]
+        },
+        {
+          "id": "p4",
+          "name": "Epoxy accent tray",
+          "category": "Home accents",
+          "description": "Epoxy accent tray. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 30,
+          "dimensions_inches": [
+            10,
+            7,
+            3
+          ],
+          "measurements_verified": false,
+          "group": "wood",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 7800,
+              "stock": 0
+            }
+          ]
+        },
+        {
+          "id": "p5",
+          "name": "Statement console commission",
+          "category": "Commissions",
+          "description": "Statement console commission. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 800,
+          "dimensions_inches": [
+            9,
+            7,
+            3
+          ],
+          "measurements_verified": false,
+          "group": "wood",
+          "quote_only": true,
+          "oversized": true,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 0,
+              "stock": 1
+            }
+          ]
+        },
+        {
+          "id": "p6",
+          "name": "Small oak gift board",
+          "category": "Boards",
+          "description": "Small oak gift board. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 18,
+          "dimensions_inches": [
+            10,
+            7,
+            3
+          ],
+          "measurements_verified": false,
+          "group": "wood",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 3900,
+              "stock": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "leather-link-studio",
+      "name": "Leather Link Studio",
+      "booth": "Row 20 D-E",
+      "website": "https://leatherlinkstudio.com/",
+      "web_presence": "Existing ecommerce catalog with custom work, bags, totes, duffles, wholesale inquiries and a shipping FAQ.",
+      "sources": [
+        "https://leatherlinkstudio.com/",
+        "https://leatherlinkstudio.com/faq/",
+        "https://leatherlinkstudio.com/story/"
+      ],
+      "confirmed_catalog_examples": [
+        {
+          "name": "Leather purses",
+          "price_usd": null
+        },
+        {
+          "name": "Leather market totes",
+          "price_usd": null
+        },
+        {
+          "name": "Leather duffles",
+          "price_usd": null
+        },
+        {
+          "name": "Leather wine totes",
+          "price_usd": null
+        }
+      ],
+      "concept": "Refined leather goods store with personalization requests, one-off inventory, custom orders and a wholesale application; demonstrate operational improvements, not a nonexistent website problem.",
+      "shipping_profile": "Published FAQ: small packages below 13 oz use USPS Priority Mail; larger boxes use USPS Ground; most in-stock items ship in 1-3 days. Verify current carrier/service terminology before implementation.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": [
+        "Current products/prices",
+        "weights/dimensions",
+        "carrier service nomenclature",
+        "shipping origin",
+        "custom lead time",
+        "wholesale rules",
+        "permission to use assets"
+      ],
+      "image": "leather",
+      "headline": "The everyday, well carried.",
+      "tagline": "Character in every detail.",
+      "cta": "Discover the collection",
+      "theme": "editorial",
+      "colors": {
+        "ink": "#292421",
+        "accent": "#ad6b38",
+        "paper": "#f7f0e6"
+      },
+      "walking_order": 4,
+      "live_shipping_enabled": false,
+      "payment_enabled": false,
+      "shipping": {
+        "kind": "leather",
+        "origin": null,
+        "allowed_states": "US",
+        "pickup": true,
+        "local_delivery": false,
+        "handling_cents": 100,
+        "free_over_cents": null,
+        "live_enabled": false,
+        "measurements_verified": false
+      },
+      "products": [
+        {
+          "id": "p1",
+          "name": "Everyday leather tote",
+          "category": "Bags",
+          "description": "Everyday leather tote. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 38,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "leather",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 16500,
+              "stock": 1
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "name": "Compact leather purse",
+          "category": "Bags",
+          "description": "Compact leather purse. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 24,
+          "dimensions_inches": [
+            10,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "leather",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 9500,
+              "stock": 1
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "name": "Weekend leather duffle",
+          "category": "Travel",
+          "description": "Weekend leather duffle. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 64,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "leather",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 24500,
+              "stock": 1
+            }
+          ]
+        },
+        {
+          "id": "p4",
+          "name": "Leather wine tote",
+          "category": "Gifting",
+          "description": "Leather wine tote. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 22,
+          "dimensions_inches": [
+            10,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "leather",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 6800,
+              "stock": 1
+            }
+          ]
+        },
+        {
+          "id": "p5",
+          "name": "Personalized travel pouch",
+          "category": "Travel",
+          "description": "Personalized travel pouch. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 12,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "leather",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 5200,
+              "stock": 1
+            }
+          ]
+        },
+        {
+          "id": "p6",
+          "name": "Market tote",
+          "category": "Bags",
+          "description": "Market tote. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 34,
+          "dimensions_inches": [
+            10,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "leather",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 14500,
+              "stock": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "mcneills-pottery",
+      "name": "McNeill's Pottery",
+      "booth": "Row 23 B-C",
+      "website": "https://www.mcneillspottery.com/",
+      "web_presence": "Functional catalog/store built with Weebly. Detailed product pricing and color options published; shipping rates/policy not confirmed.",
+      "sources": [
+        "https://www.mcneillspottery.com/shop.html",
+        "https://www.mcneillspottery.com/about-us.html"
+      ],
+      "confirmed_catalog_examples": [
+        {
+          "name": "Coffee Mug (W)",
+          "price_usd": 18.0
+        },
+        {
+          "name": "Large Serving Bowl",
+          "price_usd": 54.0
+        },
+        {
+          "name": "Square Serving Tray with Dragonfly",
+          "price_usd": 48.0
+        },
+        {
+          "name": "Candle Lantern with Bumble Bee",
+          "price_usd": 25.0
+        }
+      ],
+      "concept": "Warm artisan ceramics storefront with glaze/color variations, care guidance, gifts, and robust fragile-order handling.",
+      "shipping_profile": "Fragile ceramic parcel shipping: configurable protective packaging, multi-item packing rules, insurance and dimensional weight. No public rate policy verified.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": [
+        "Inventory counts",
+        "color availability",
+        "actual packed weights/dimensions",
+        "breakage policy",
+        "shipping charges",
+        "origin ZIP",
+        "photos/rights"
+      ],
+      "image": "pottery",
+      "headline": "A place at your everyday table.",
+      "tagline": "Made by hand. Used with love.",
+      "cta": "Find your favorite glaze",
+      "theme": "ceramic",
+      "colors": {
+        "ink": "#3d484b",
+        "accent": "#668eaa",
+        "paper": "#f3efe7"
+      },
+      "walking_order": 5,
+      "live_shipping_enabled": false,
+      "payment_enabled": false,
+      "shipping": {
+        "kind": "ceramic",
+        "origin": null,
+        "allowed_states": "US",
+        "pickup": true,
+        "local_delivery": false,
+        "handling_cents": 400,
+        "free_over_cents": null,
+        "live_enabled": false,
+        "measurements_verified": false
+      },
+      "products": [
+        {
+          "id": "p1",
+          "name": "Coffee Mug (W)",
+          "category": "Mugs",
+          "description": "Coffee Mug (W). A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.mcneillspottery.com/shop.html",
+          "price_note": "Source-observed on 2026-10-15; confirm with merchant.",
+          "weight_oz": 14,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "ceramic",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "blue",
+              "title": "Blue glaze",
+              "price_cents": 1800,
+              "stock": 12
+            },
+            {
+              "id": "earth",
+              "title": "Earth glaze · sample color",
+              "price_cents": 1800,
+              "stock": 8
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "name": "Large Serving Bowl",
+          "category": "Serving",
+          "description": "Large Serving Bowl. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.mcneillspottery.com/shop.html",
+          "price_note": "Source-observed on 2026-10-15; confirm with merchant.",
+          "weight_oz": 40,
+          "dimensions_inches": [
+            10,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "ceramic",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "blue",
+              "title": "Blue glaze",
+              "price_cents": 5400,
+              "stock": 12
+            },
+            {
+              "id": "earth",
+              "title": "Earth glaze · sample color",
+              "price_cents": 5400,
+              "stock": 8
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "name": "Square Serving Tray with Dragonfly",
+          "category": "Serving",
+          "description": "Square Serving Tray with Dragonfly. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.mcneillspottery.com/shop.html",
+          "price_note": "Source-observed on 2026-10-15; confirm with merchant.",
+          "weight_oz": 34,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "ceramic",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "blue",
+              "title": "Blue glaze",
+              "price_cents": 4800,
+              "stock": 12
+            },
+            {
+              "id": "earth",
+              "title": "Earth glaze · sample color",
+              "price_cents": 4800,
+              "stock": 8
+            }
+          ]
+        },
+        {
+          "id": "p4",
+          "name": "Candle Lantern with Bumble Bee",
+          "category": "Home",
+          "description": "Candle Lantern with Bumble Bee. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.mcneillspottery.com/shop.html",
+          "price_note": "Source-observed on 2026-10-15; confirm with merchant.",
+          "weight_oz": 20,
+          "dimensions_inches": [
+            10,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "ceramic",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "blue",
+              "title": "Blue glaze",
+              "price_cents": 2500,
+              "stock": 12
+            },
+            {
+              "id": "earth",
+              "title": "Earth glaze · sample color",
+              "price_cents": 2500,
+              "stock": 8
+            }
+          ]
+        },
+        {
+          "id": "p5",
+          "name": "Coffee Mug (G)",
+          "category": "Mugs",
+          "description": "Coffee Mug (G). A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.mcneillspottery.com/shop.html",
+          "price_note": "Source-observed on 2026-10-15; confirm with merchant.",
+          "weight_oz": 14,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "ceramic",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "blue",
+              "title": "Blue glaze",
+              "price_cents": 1800,
+              "stock": 12
+            },
+            {
+              "id": "earth",
+              "title": "Earth glaze · sample color",
+              "price_cents": 1800,
+              "stock": 8
+            }
+          ]
+        },
+        {
+          "id": "p6",
+          "name": "Soup Mug",
+          "category": "Mugs",
+          "description": "Soup Mug. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.mcneillspottery.com/shop.html",
+          "price_note": "Source-observed on 2026-10-15; confirm with merchant.",
+          "weight_oz": 16,
+          "dimensions_inches": [
+            10,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "ceramic",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "blue",
+              "title": "Blue glaze",
+              "price_cents": 1800,
+              "stock": 12
+            },
+            {
+              "id": "earth",
+              "title": "Earth glaze · sample color",
+              "price_cents": 1800,
+              "stock": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "highland-croft-candle-company",
+      "name": "Highland Croft Candle Company",
+      "booth": "Row 22 D",
+      "website": "https://www.highcountryhighlandcroft.com/",
+      "web_presence": "Existing shoppable site with candles, loose-leaf tea and Celtic-inspired jewelry; also farm shop and events.",
+      "sources": [
+        "https://www.highcountryhighlandcroft.com/shop",
+        "https://www.highcountryhighlandcroft.com/product-page/kitchen-garden"
+      ],
+      "confirmed_catalog_examples": [
+        {
+          "name": "Kitchen Garden wood wick candle",
+          "price_usd": 30.0
+        },
+        {
+          "name": "Peat Hearth wood wick candle",
+          "price_usd": 30.0
+        },
+        {
+          "name": "Crofter's Chai tea",
+          "price_usd": 15.0
+        },
+        {
+          "name": "Thistle Ring",
+          "price_usd": 45.0
+        }
+      ],
+      "concept": "Appalachian-Scottish brand, fragrance storytelling, candles/tea/gifts in one cart, local farm-shop pickup, gift bundles and retention.",
+      "shipping_profile": "Product pages state shipping costs are determined by local USPS or UPS branch; no fixed customer-facing tariff verified. Candle packaging must account for glass/heat as applicable.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": [
+        "Packed weights",
+        "USPS/UPS service and account",
+        "shipping origin",
+        "local pickup eligibility",
+        "bundle inventory",
+        "discount rules",
+        "photos/rights"
+      ],
+      "image": "croft",
+      "headline": "Bring a little croft home.",
+      "tagline": "A slower kind of lovely.",
+      "cta": "Explore the croft shop",
+      "theme": "croft",
+      "colors": {
+        "ink": "#263e36",
+        "accent": "#aa8a63",
+        "paper": "#f4f1e5"
+      },
+      "walking_order": 6,
+      "live_shipping_enabled": false,
+      "payment_enabled": false,
+      "shipping": {
+        "kind": "mixed",
+        "origin": null,
+        "allowed_states": "US",
+        "pickup": true,
+        "local_delivery": false,
+        "handling_cents": 300,
+        "free_over_cents": null,
+        "live_enabled": false,
+        "measurements_verified": false
+      },
+      "products": [
+        {
+          "id": "p1",
+          "name": "Kitchen Garden",
+          "category": "Candles",
+          "description": "Kitchen Garden. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.highcountryhighlandcroft.com/shop",
+          "price_note": "Source-observed on 2026-10-15; confirm with merchant.",
+          "weight_oz": 22,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "glass",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 3000,
+              "stock": 24
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "name": "Peat Hearth",
+          "category": "Candles",
+          "description": "Peat Hearth. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.highcountryhighlandcroft.com/shop",
+          "price_note": "Source-observed on 2026-10-15; confirm with merchant.",
+          "weight_oz": 22,
+          "dimensions_inches": [
+            10,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "glass",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 3000,
+              "stock": 24
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "name": "Crofter’s Chai",
+          "category": "Tea",
+          "description": "Crofter’s Chai. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.highcountryhighlandcroft.com/shop",
+          "price_note": "Source-observed on 2026-10-15; confirm with merchant.",
+          "weight_oz": 6,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "tea",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 1500,
+              "stock": 24
+            }
+          ]
+        },
+        {
+          "id": "p4",
+          "name": "Thistle Ring",
+          "category": "Jewelry",
+          "description": "Thistle Ring. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.highcountryhighlandcroft.com/shop",
+          "price_note": "Source-observed on 2026-10-15; confirm with merchant.",
+          "weight_oz": 2,
+          "dimensions_inches": [
+            10,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "mixed",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 4500,
+              "stock": 24
+            }
+          ]
+        },
+        {
+          "id": "p5",
+          "name": "Highland Breakfast Tea",
+          "category": "Tea",
+          "description": "Highland Breakfast Tea. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.highcountryhighlandcroft.com/shop",
+          "price_note": "Source-observed on 2026-10-15; confirm with merchant.",
+          "weight_oz": 6,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "tea",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 1500,
+              "stock": 24
+            }
+          ]
+        },
+        {
+          "id": "p6",
+          "name": "Feather Brooch",
+          "category": "Jewelry",
+          "description": "Feather Brooch. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://www.highcountryhighlandcroft.com/shop",
+          "price_note": "Source-observed on 2026-10-15; confirm with merchant.",
+          "weight_oz": 2,
+          "dimensions_inches": [
+            10,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "mixed",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 2500,
+              "stock": 24
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "mountain-momma-organics",
+      "name": "Mountain Momma Organics",
+      "booth": "Rows 22-23 A",
+      "website": "https://mountainmommaorganics.com/",
+      "web_presence": "Large functional ecommerce catalog including soups, granola, herbal products and variants.",
+      "sources": [
+        "https://mountainmommaorganics.com/",
+        "https://mountainmommaorganics.com/product/seven-bean/",
+        "https://mountainmommaorganics.com/product/just-over-yonder-taco-soup-kit/",
+        "https://mountainmommaorganics.com/product/cream-tater-soup-mix-potato-soup/"
+      ],
+      "confirmed_catalog_examples": [
+        {
+          "name": "Seven Bean Soup Kit",
+          "price_usd": null,
+          "price_note": "Published price range $19-$20 based on variants"
+        },
+        {
+          "name": "Just Over Yonder Taco Soup Kit",
+          "price_usd": 22.0
+        },
+        {
+          "name": "Cream of Tater Soup Mix",
+          "price_usd": 19.0
+        },
+        {
+          "name": "Curried Lentil Soup Kit",
+          "price_usd": null,
+          "price_note": "Published price range $19-$20 based on variants"
+        }
+      ],
+      "concept": "Clean and efficient organic pantry storefront with category filtering, variants, bundles, subscriptions and transparent fulfillment.",
+      "shipping_profile": "Home page advertises free shipping for online orders over $175; says current shipments are 1-3 weeks, but this timing and dated holiday notice should be reconfirmed. Restrict all health/organic/allergen claims to source-verified statements with merchant approval.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": [
+        "Current shipping threshold",
+        "processing window",
+        "eligibility rules for free shipping",
+        "weights/dimensions",
+        "product claims and allergen details",
+        "subscription terms",
+        "photos/rights"
+      ],
+      "image": "pantry",
+      "headline": "A well-stocked kind of happy.",
+      "tagline": "Good things, ready for your pantry.",
+      "cta": "Build your pantry",
+      "theme": "pantry",
+      "colors": {
+        "ink": "#39442e",
+        "accent": "#a18a51",
+        "paper": "#f7f3e8"
+      },
+      "walking_order": 7,
+      "live_shipping_enabled": false,
+      "payment_enabled": false,
+      "shipping": {
+        "kind": "pantry",
+        "origin": null,
+        "allowed_states": "US",
+        "pickup": true,
+        "local_delivery": false,
+        "handling_cents": 125,
+        "free_over_cents": 17500,
+        "live_enabled": false,
+        "measurements_verified": false
+      },
+      "products": [
+        {
+          "id": "p1",
+          "name": "Just Over Yonder Taco Soup Kit",
+          "category": "Soup kits",
+          "description": "Just Over Yonder Taco Soup Kit. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://mountainmommaorganics.com/",
+          "price_note": "Source-observed on 2026-10-15; confirm with merchant.",
+          "weight_oz": 18,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "pantry",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 2200,
+              "stock": 24
+            }
+          ]
+        },
+        {
+          "id": "p2",
+          "name": "Cream of Tater Soup Mix",
+          "category": "Soup kits",
+          "description": "Cream of Tater Soup Mix. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_source": "https://mountainmommaorganics.com/",
+          "price_note": "Source-observed on 2026-10-15; confirm with merchant.",
+          "weight_oz": 16,
+          "dimensions_inches": [
+            10,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "pantry",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 1900,
+              "stock": 24
+            }
+          ]
+        },
+        {
+          "id": "p3",
+          "name": "Seven Bean Soup Kit",
+          "category": "Soup kits",
+          "description": "Seven Bean Soup Kit. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "identity_verified": true,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 18,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "pantry",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · example variant",
+              "price_cents": 1900,
+              "stock": 24
+            },
+            {
+              "id": "large",
+              "title": "Larger pack · example variant",
+              "price_cents": 2000,
+              "stock": 18
+            }
+          ]
+        },
+        {
+          "id": "p4",
+          "name": "Curried Lentil Soup Kit",
+          "category": "Soup kits",
+          "description": "Curried Lentil Soup Kit. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "identity_verified": true,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 18,
+          "dimensions_inches": [
+            10,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "pantry",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard · example variant",
+              "price_cents": 1900,
+              "stock": 24
+            },
+            {
+              "id": "large",
+              "title": "Larger pack · example variant",
+              "price_cents": 2000,
+              "stock": 18
+            }
+          ]
+        },
+        {
+          "id": "p5",
+          "name": "Pantry granola selection",
+          "category": "Breakfast",
+          "description": "Pantry granola selection. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 16,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "pantry",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 1200,
+              "stock": 24
+            }
+          ]
+        },
+        {
+          "id": "p6",
+          "name": "Soup-night gift box",
+          "category": "Gifts",
+          "description": "Soup-night gift box. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "identity_verified": false,
+          "price_verified": false,
+          "price_source": null,
+          "price_note": "Illustrative demo price — not a merchant offer.",
+          "weight_oz": 48,
+          "dimensions_inches": [
+            10,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "pantry",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "standard",
+              "title": "Standard",
+              "price_cents": 4900,
+              "stock": 24
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "sawyer": {
+    "slug": "sawyer-naturals",
+    "name": "Sawyer Naturals",
+    "booth": "Existing Everbranch demo",
+    "website": "https://www.sawyernaturals.com/",
+    "image": "pantry",
+    "headline": "A little care, naturally.",
+    "tagline": "From the homestead, with care.",
+    "cta": "Explore the existing collection",
+    "theme": "pantry",
+    "colors": {
+      "ink": "#34513b",
+      "accent": "#bc965c",
+      "paper": "#f7f3e8"
+    },
+    "read_only_source": true,
+    "shipping": {
+      "kind": "mixed",
+      "origin": null,
+      "allowed_states": "US",
+      "pickup": true,
+      "local_delivery": false,
+      "handling_cents": 200,
+      "free_over_cents": null,
+      "live_enabled": false,
+      "measurements_verified": false
+    },
+    "products": [
+      {
+        "id": "tallow-body-balm-summertime-splash",
+        "name": "Tallow Body Balm-Summertime Splash",
+        "category": "Homestead care",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-0.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/tallow-body-balm-summertime-splash",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 3499,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "tallow-eye-cream",
+        "name": "2oz Tallow Eye & Face Cream",
+        "category": "face-care",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-1.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/tallow-eye-cream",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 4999,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "platinum-face-serum-1fl-oz",
+        "name": "Platinum Face Serum 1Fl OZ",
+        "category": "face-care",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-2.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/platinum-face-serum-1fl-oz",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 13999,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "natural-deodorant-2-pack-mix-and-match",
+        "name": "Natural Deodorant 2 Pack-Mix and Match",
+        "category": "deodorant",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-3.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/natural-deodorant-2-pack-mix-and-match",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 2699,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "platinum-face-serum-1fl-oz-10ml",
+        "name": "Platinum Face Serum 1Fl OZ & 10ML",
+        "category": "face-care",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-4.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/platinum-face-serum-1fl-oz-10ml",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 17999,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "platinum-face-serum-10ml",
+        "name": "Platinum Face Serum 10ML",
+        "category": "face-care",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-5.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/platinum-face-serum-10ml",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 4999,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "sawyer-naturals-t-shirt-black",
+        "name": "Sawyer Naturals T-Shirt Black",
+        "category": "apparel",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-6.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/sawyer-naturals-t-shirt-black",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 500,
+            "stock": 0
+          }
+        ]
+      },
+      {
+        "id": "tallow-body-balm-carolina-sunset",
+        "name": "Tallow Body Balm- Carolina Sunset",
+        "category": "Homestead care",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-7.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/tallow-body-balm-carolina-sunset",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 3499,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "tallow-body-balm-wisdom-of-solomon",
+        "name": "Tallow Body Balm- Wisdom of Solomon",
+        "category": "Homestead care",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-8.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/tallow-body-balm-wisdom-of-solomon",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 3499,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "1oz-tallow-eye-face-cream",
+        "name": "1oz Tallow Eye & Face Cream",
+        "category": "face-care",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-9.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/1oz-tallow-eye-face-cream",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 3499,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "natural-deodorant-minty-woodsman",
+        "name": "Natural Deodorant- Minty Woodsman",
+        "category": "deodorant",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-10.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/natural-deodorant-minty-woodsman",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 1399,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "activated-charcoal-facial-bar",
+        "name": "Activated Charcoal Facial Bar",
+        "category": "face-care",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-11.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/activated-charcoal-facial-bar",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 1999,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "tallow-lip-balm",
+        "name": "Tallow Lip Balm",
+        "category": "face-care",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-12.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/tallow-lip-balm",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 699,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "glass-natural-deodorant-og",
+        "name": "Glass Natural Deodorant- OG",
+        "category": "deodorant",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-13.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/glass-natural-deodorant-og",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 1599,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "glass-natural-deodorant-citrus-hippie",
+        "name": "Glass Natural Deodorant- Citrus Hippie",
+        "category": "deodorant",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-14.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/glass-natural-deodorant-citrus-hippie",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 1599,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "glass-natural-deodorant-carolina-sunset",
+        "name": "Glass Natural Deodorant- Carolina Sunset",
+        "category": "deodorant",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-15.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/glass-natural-deodorant-carolina-sunset",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 1599,
+            "stock": 0
+          }
+        ]
+      },
+      {
+        "id": "small-face-serum-roller",
+        "name": "Small Face Serum-roller",
+        "category": "face-care",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-16.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/small-face-serum-roller",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 1499,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "wooden-spoon",
+        "name": "Wooden Spoon",
+        "category": "deodorant",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-17.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/wooden-spoon",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 299,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "3-step-face-package",
+        "name": "3 Step Face Package",
+        "category": "face-care",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-18.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/3-step-face-package",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 6499,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "beard-balm-citrus-hippie",
+        "name": "Beard Balm - Citrus Hippie",
+        "category": "beards",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-19.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/beard-balm-citrus-hippie",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 1999,
+            "stock": 0
+          }
+        ]
+      },
+      {
+        "id": "natural-deodorant-carolina-sunset",
+        "name": "Natural Deodorant- Carolina Sunset",
+        "category": "deodorant",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-20.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/natural-deodorant-carolina-sunset",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 1399,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "natural-deodorant-og",
+        "name": "Natural Deodorant- OG",
+        "category": "deodorant",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-21.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/natural-deodorant-og",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 1399,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "natural-deodorant-citrus-hippie",
+        "name": "Natural Deodorant - Citrus Hippie",
+        "category": "deodorant",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-22.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/natural-deodorant-citrus-hippie",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 1399,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "all-natural-deodorant-4-pack",
+        "name": "Natural Deodorant 3 Pack-Mix and Match",
+        "category": "deodorant",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-23.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/all-natural-deodorant-4-pack",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 3999,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "natural-deodorant-6-pack",
+        "name": "Natural Deodorant 6 Pack-Mix and Match",
+        "category": "deodorant",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-24.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/natural-deodorant-6-pack",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 7999,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "natural-deodorant-sample-3-pack",
+        "name": "Natural Deodorant Sample 3 pack",
+        "category": "deodorant",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-25.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/natural-deodorant-sample-3-pack",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 999,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "citrus-hippie-baking-soda-free-deodorant",
+        "name": "BAKING SODA FREE Natural Deodorant- Citrus Hippie",
+        "category": "deodorant",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-26.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/citrus-hippie-baking-soda-free-deodorant",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 1399,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "og-baking-soda-free-deodorant",
+        "name": "BAKING SODA FREE Natural Deodorant- OG",
+        "category": "deodorant",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-27.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/og-baking-soda-free-deodorant",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 1399,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "natural-deodorant-baking-soda-free-carolina-sunset",
+        "name": "BAKING SODA FREE Natural Deodorant-Carolina Sunset",
+        "category": "deodorant",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-28.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/natural-deodorant-baking-soda-free-carolina-sunset",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 1399,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "baking-soda-free-natural-deodorant-2-pack-citrus-hippie",
+        "name": "BAKING SODA FREE Natural Deodorant 2 Pack-Mix and Match",
+        "category": "deodorant",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-29.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/baking-soda-free-natural-deodorant-2-pack-citrus-hippie",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 2699,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "baking-soda-free-natural-deodorant-3-pack-mix-and-match",
+        "name": "BAKING SODA FREE Natural Deodorant 3 Pack-Mix and Match",
+        "category": "deodorant",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-30.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/baking-soda-free-natural-deodorant-3-pack-mix-and-match",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 3999,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "baking-soda-free-natural-deodorant-6-pack-mix-and-match",
+        "name": "BAKING SODA FREE Natural Deodorant 6 Pack-Mix and Match",
+        "category": "deodorant",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-31.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/baking-soda-free-natural-deodorant-6-pack-mix-and-match",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 7999,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "face-serum",
+        "name": "Face Serum",
+        "category": "face-care",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-32.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/face-serum",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 2999,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "lip-balm",
+        "name": "Lip Balm",
+        "category": "face-care",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-33.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/lip-balm",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 499,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "face-scrub",
+        "name": "Face Scrub",
+        "category": "face-care",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-34.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/face-scrub",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 1499,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "night-balm",
+        "name": "Night Balm",
+        "category": "face-care",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-35.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/night-balm",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 2999,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "three-step-face-package",
+        "name": "Ultimate Face Package",
+        "category": "face-care",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-36.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/three-step-face-package",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 7499,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "shampoo-bar",
+        "name": "Shampoo Bar",
+        "category": "soaps",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-37.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/shampoo-bar",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 1499,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "soap-carolina-sunset",
+        "name": "Soap - Carolina Sunset",
+        "category": "soaps",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-38.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/soap-carolina-sunset",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 799,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "soap-citrus-hippie",
+        "name": "Soap - Citrus Hippie",
+        "category": "soaps",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-39.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/soap-citrus-hippie",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 799,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "soap-cool-evenings",
+        "name": "Soap - Cool Evenings",
+        "category": "soaps",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-40.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/soap-cool-evenings",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 799,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "soap-invigorating-peace",
+        "name": "Soap - Invigorating Peace",
+        "category": "soaps",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-41.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/soap-invigorating-peace",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 799,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "soap-lavender",
+        "name": "Soap - Lavender",
+        "category": "soaps",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-42.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/soap-lavender",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 799,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "soap-minty-woodsman",
+        "name": "Soap - Minty Woodsman",
+        "category": "soaps",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-43.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/soap-minty-woodsman",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 799,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "soap-peppermint",
+        "name": "Soap - Peppermint",
+        "category": "soaps",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-44.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/soap-peppermint",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 799,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "soap-unscented",
+        "name": "Soap- Unscented",
+        "category": "soaps",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-45.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/soap-unscented",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 799,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "beard-balm-lumberjack-sunrise",
+        "name": "Beard Balm - Lumberjack Sunrise",
+        "category": "beards",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-46.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/beard-balm-lumberjack-sunrise",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 1999,
+            "stock": 0
+          }
+        ]
+      },
+      {
+        "id": "beard-balm-minty-woodsman",
+        "name": "Beard Balm - Minty Woodsman",
+        "category": "beards",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-47.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/beard-balm-minty-woodsman",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 1999,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "beard-balm-wisdom-of-solomon",
+        "name": "Beard Balm- Wisdom of Solomon",
+        "category": "beards",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-48.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/beard-balm-wisdom-of-solomon",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 1999,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "beard-oil-citrus-hippie",
+        "name": "Beard Oil - Citrus Hippie",
+        "category": "beards",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-49.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/beard-oil-citrus-hippie",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 1999,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "beard-oil-lumberjack-sunrise",
+        "name": "Beard Oil - Lumberjack Sunrise",
+        "category": "beards",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-50.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/beard-oil-lumberjack-sunrise",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 1999,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "beard-oil-minty-woodsman",
+        "name": "Beard Oil - Minty Woodsman",
+        "category": "beards",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-51.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/beard-oil-minty-woodsman",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 1999,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "beard-oil-viking-sunset",
+        "name": "Beard Oil - Viking Sunset",
+        "category": "beards",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-52.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/beard-oil-viking-sunset",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 1999,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "beard-oil-wisdom-of-solomon",
+        "name": "Beard Oil - Wisdom of Solomon",
+        "category": "beards",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-53.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/beard-oil-wisdom-of-solomon",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 1999,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "beard-butter-citrus-hippie",
+        "name": "Beard Butter- Citrus Hippie",
+        "category": "beards",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-54.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/beard-butter-citrus-hippie",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 2499,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "beard-butter-lumberjack-sunrise",
+        "name": "Beard Butter- Lumberjack Sunrise",
+        "category": "beards",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-55.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/beard-butter-lumberjack-sunrise",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 2499,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "beard-butter-minty-woodsman",
+        "name": "Beard Butter- Minty Woodsman",
+        "category": "beards",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-56.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/beard-butter-minty-woodsman",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 2499,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "beard-butter-viking-sunset",
+        "name": "Beard Butter- Viking Sunset",
+        "category": "beards",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-57.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/beard-butter-viking-sunset",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 2499,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "beard-butter-wisdom-of-solomon",
+        "name": "Beard Butter- Wisdom of Solomon",
+        "category": "beards",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-58.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/beard-butter-wisdom-of-solomon",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 2499,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "body-butter-citrus-hippie",
+        "name": "Body Butter - Citrus Hippie",
+        "category": "scrubs-butters",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-59.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/body-butter-citrus-hippie",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 2499,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "body-butter-carolina-sunset",
+        "name": "Body Butter - Carolina Sunset",
+        "category": "scrubs-butters",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": "/retail/assets/sawyer-60.webp",
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/product-page/body-butter-carolina-sunset",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": false,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 2499,
+            "stock": 20
+          }
+        ]
+      },
+      {
+        "id": "sawyer-naturals-egift-card",
+        "name": "Sawyer Naturals eGift Card",
+        "category": "gift-cards",
+        "description": "Preserved from the existing Sawyer Naturals source catalog. Private demonstration; current pricing, availability and merchant approval require review.",
+        "image": null,
+        "identity_verified": true,
+        "price_verified": true,
+        "price_source": "https://www.sawyernaturals.com/gift-card",
+        "price_note": "Existing source catalog observed 2026-10-01. Merchant review required.",
+        "weight_oz": 16,
+        "dimensions_inches": [
+          8,
+          6,
+          4
+        ],
+        "measurements_verified": false,
+        "group": "sample-care",
+        "quote_only": true,
+        "oversized": false,
+        "variants": [
+          {
+            "id": "standard",
+            "title": "Source catalog option",
+            "price_cents": 2500,
+            "stock": 0
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -2514,3 +2514,6 @@ Route::post('/email/unsubscribe', [\App\Http\Controllers\Marketing\MarketingEmai
     ->name('marketing.email.unsubscribe.store');
 
 require __DIR__.'/soccer.php';
+
+// Private retail concepts never enter the public merchant commerce routes.
+require __DIR__.'/retail.php';
