@@ -11,6 +11,8 @@ class MarketingEmailDelivery extends Model
 {
     use HasTenantScope;
 
+    protected $hidden = ['legacy_marketing_profile_id'];
+
     protected $fillable = [
         'marketing_campaign_recipient_id',
         'marketing_profile_id',

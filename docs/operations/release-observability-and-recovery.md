@@ -53,7 +53,13 @@ the GitHub run URL.
 `database/schema/mysql-schema.sha256` are data-free artifacts created from a
 disposable MySQL 8.4 database. The SQL dump is not created with `--prune`; no
 migration files are removed. The companion SHA-256 represents table, column,
-index, and foreign-key metadata, not data or auto-increment values.
+index, and foreign-key metadata, not data or auto-increment values. Canonical
+fingerprints also include FK delete/update actions. The reviewed historical
+compatibility manifest permits only exact declared name aliases and physical
+column-order equivalence on four listed tables, preserving all definitions and
+duplicate objects. The original raw metadata hash remains available to pin
+historical recovery fixtures. See
+`schema-drift-reconciliation-2026-10-15.md` for the audited repair and limits.
 
 To intentionally refresh the baseline after an approved migration:
 
