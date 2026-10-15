@@ -15,7 +15,7 @@
   is the native pilot; its existing Shopify store and checkout stay independent.
 - See `docs/operations/schema-drift-reconciliation-2026-10-15.md`.
 
-## Native retail shipping Phase 4 (2026-10-15; review branch)
+## Native retail shipping Phase 4 (2026-10-15; activation disabled)
 
 - Durable original-account postage attempts distinguish resumable preflight from
   ambiguous submitted buys; recovery never blindly buys another label. Packing,

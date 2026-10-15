@@ -16,7 +16,7 @@
 ## Retail shipping Phase 4 (2026-10-15)
 
 - Continue the native-only five-phase plan. Phases 1–3 are live behind disabled
-  checkout/shipping gates via PR #397 (`88bda81a`). Phase 4 remains under review.
+  checkout/shipping gates via PR #397 (`88bda81a`). Phase 4 keeps activation separate from its code release.
 - `WebsiteShipmentLifecycleService` owns durable original-account postage,
   GET-only recovery after an uncertain POST, refund/replacement state, explicit
   pack/handoff, signed events and canonical tracking. Never reset an unknown

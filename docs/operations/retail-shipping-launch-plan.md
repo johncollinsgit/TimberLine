@@ -163,7 +163,7 @@ Provider references: [Checkout creation](https://docs.stripe.com/api/checkout/se
 
 ## Phase 4 Labels printing tracking and customer updates
 
-Implemented for review on `codex/retail-shipping-phase-4`. Checkout, shipping,
+Implemented on `codex/retail-shipping-phase-4`. Checkout, shipping,
 and transactional notifications remain independently gated. This phase adds a
 restart-safe native notification outbox migration; it requires a refreshed
 data-free MySQL baseline and actual MySQL partial-DDL recovery checks.
