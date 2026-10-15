@@ -1,28 +1,29 @@
-<x-layouts::app.sidebar title="Native shipping">
+<x-layouts::app.sidebar title="Pickup and shipping">
     <flux:main>
         <div class="mx-auto max-w-6xl space-y-6 pb-12">
-            <header><a class="text-sm font-semibold text-emerald-800" href="{{ route('managed-website.orders.index') }}">← Orders</a><h1 class="mt-4 text-3xl font-bold">Native shipping setup</h1><p class="mt-2 text-sm text-zinc-600">Review your US origin, parcel capacity, and approved USPS services. Saving setup does not enable checkout or the shipping rollout.</p><a class="mt-3 inline-block text-sm font-semibold text-emerald-800" href="{{ route('managed-website.products.shipping-weights') }}">Review product weights →</a></header>
+            <header><a class="text-sm font-semibold text-emerald-800" href="{{ route('managed-website.orders.index') }}">← Orders</a><h1 class="mt-4 text-3xl font-bold">Pickup and shipping setup</h1><p class="mt-2 text-sm text-zinc-600">Set your US pickup/tax origin and, when enabled, carrier packages and services. Saving setup does not enable checkout or the shipping rollout.</p><a class="mt-3 inline-block text-sm font-semibold text-emerald-800" href="{{ route('managed-website.products.shipping-weights') }}">Review product weights →</a></header>
             @if(session('status'))<p role="status" class="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-950">{{ session('status') }}</p>@endif
             @if($errors->any())<div role="alert" class="rounded-xl bg-rose-50 p-4 text-sm text-rose-950">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif
             @if(config('managed_website.pirate_ship_bridge_enabled') && in_array((int) $tenant->id, (array) config('managed_website.pirate_ship_bridge_tenant_ids', []), true))<a class="block rounded-xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-900" href="{{ route('managed-website.commerce.pirate-ship') }}">Pirate Ship spreadsheet bridge →</a>@endif
+            @if(!($shippingEnabled ?? true))<p role="status" class="rounded-xl bg-amber-50 p-4 text-sm text-amber-950">Pickup locations can be configured now. Carrier shipping remains disabled.</p>@endif
             @php($policy = data_get($site->settings, 'shipping', []))
-            <section class="rounded-2xl border bg-white p-6">
+            @if($shippingEnabled ?? true)<section class="rounded-2xl border bg-white p-6">
                 <h2 class="text-lg font-bold">Carrier services</h2><p class="mt-2 text-sm text-zinc-600">Use a matching test account for rehearsal. Production requires the reviewed merchant launch. Other carriers and services are excluded from rates.</p>
                 <form method="POST" action="{{ route('managed-website.commerce.shipping.policy.store') }}" class="mt-4 space-y-4">@csrf
                     <label class="block text-sm font-semibold">Account mode<select name="mode" class="mt-1 block rounded-lg border-zinc-300"><option value="test" @selected(old('mode', $policy['mode'] ?? 'test') === 'test')>Test</option><option value="production" @selected(old('mode', $policy['mode'] ?? '') === 'production')>Production</option></select></label>
                     <div class="flex flex-wrap gap-5">@foreach(['USPS:GroundAdvantage' => 'USPS Ground Advantage', 'USPS:Priority' => 'USPS Priority Mail', 'USPS:Express' => 'USPS Priority Mail Express'] as $key => $label)<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="services[]" value="{{ $key }}" @checked(in_array($key, old('services', $policy['services'] ?? []), true))>{{ $label }}</label>@endforeach</div>
                     <button class="fb-btn fb-btn-secondary">Save services and mode</button>
                 </form>
-            </section>
+            </section>@endif
             <div class="grid gap-6 lg:grid-cols-2">
-                <section class="rounded-2xl border bg-white p-6"><h2 class="text-lg font-bold">Ship-from locations</h2>
-                    <div class="mt-4 space-y-3">@forelse($locations as $location)<div class="rounded-xl bg-zinc-50 p-3 text-sm"><strong>{{ $location->name }}</strong>@if($location->is_default) · <span>Default</span>@endif<p>{{ data_get($location->address, 'city') }}, {{ data_get($location->address, 'state') }} {{ data_get($location->address, 'zip') }}</p></div>@empty<p class="text-sm text-zinc-500">Add a US ship-from location.</p>@endforelse</div>
+                <section class="rounded-2xl border bg-white p-6"><h2 class="text-lg font-bold">Pickup / ship-from locations</h2>
+                    <div class="mt-4 space-y-3">@forelse($locations as $location)<div class="rounded-xl bg-zinc-50 p-3 text-sm"><strong>{{ $location->name }}</strong>@if($location->is_default) · <span>Default</span>@endif<p>{{ data_get($location->address, 'city') }}, {{ data_get($location->address, 'state') }} {{ data_get($location->address, 'zip') }}</p></div>@empty<p class="text-sm text-zinc-500">Add the US location where customers collect physical orders. It also supplies the pickup tax location.</p>@endforelse</div>
                     <form method="POST" action="{{ route('managed-website.commerce.shipping.locations.store') }}" class="mt-5 grid gap-3 sm:grid-cols-2">@csrf
                         @foreach(['name' => 'Name', 'street1' => 'Street', 'street2' => 'Suite / unit', 'city' => 'City', 'state' => 'State', 'zip' => 'ZIP'] as $field => $label)<label class="text-sm font-semibold">{{ $label }}<input name="{{ $field }}" @required($field !== 'street2') value="{{ old($field) }}" class="mt-1 block w-full rounded-lg border-zinc-300"></label>@endforeach
                         <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="is_default" value="1"> Default location</label><button class="fb-btn fb-btn-secondary sm:col-span-2">Save location</button>
                     </form>
                 </section>
-                <section class="rounded-2xl border bg-white p-6"><h2 class="text-lg font-bold">Reviewed package presets</h2>
+                @if($shippingEnabled ?? true)<section class="rounded-2xl border bg-white p-6"><h2 class="text-lg font-bold">Reviewed package presets</h2>
                     <div class="mt-4 space-y-3">@forelse($packages as $package)<div class="rounded-xl bg-zinc-50 p-3 text-sm"><strong>{{ $package->name }}</strong>@if($package->is_default) · <span>Default</span>@endif<p>{{ $package->length_inches }} × {{ $package->width_inches }} × {{ $package->height_inches }} in outside · {{ $package->weight_ounces }} oz box and packing</p>@php($rule = data_get($policy, 'packages.'.$package->id))@if($rule)<p class="mt-1">Up to {{ $rule['max_items'] }} physical items · {{ $rule['max_weight_ounces'] }} oz maximum packed weight</p>@else<p class="mt-1 font-semibold text-amber-800">Capacity not reviewed. Save a reviewed preset below before using it.</p>@endif</div>@empty<p class="text-sm text-zinc-500">Add a measured package and capacity.</p>@endforelse</div>
                     <form method="POST" action="{{ route('managed-website.commerce.shipping.packages.store') }}" class="mt-5 grid gap-3 sm:grid-cols-2">@csrf
                         <label class="text-sm font-semibold sm:col-span-2">Preset name<input required name="name" value="{{ old('name') }}" class="mt-1 block w-full rounded-lg border-zinc-300"></label>
@@ -36,7 +37,7 @@
                         <label class="flex items-start gap-2 text-sm sm:col-span-2"><input type="checkbox" name="confirmed_capacity" value="1"><span>I tested the selected variants, protective packing, and every supported mix up to this capacity. Missing dimensions do not imply a fit.</span></label>
                         <button class="fb-btn fb-btn-secondary sm:col-span-2">Save reviewed package</button>
                     </form>
-                </section>
+                </section>@endif
             </div>
         </div>
     </flux:main>

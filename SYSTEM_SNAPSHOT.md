@@ -15,6 +15,8 @@
   `website:reconcile-payments` runs every five minutes with bounded native-only
   recovery, including after new commerce is paused. No provider Session is
   created by the reconciliation command.
+- Pre-deploy review fixes expose pickup origin setup independently of carrier
+  activation and durable pending-refund controls during paused checkout.
 - No migration, deployment, rollout activation, real payment/refund, or postage
   purchase is included. Phase 4 remains labels/tracking/recovery/customer
   updates; Phase 5 proves merchant tax, settlement, and physical delivery.

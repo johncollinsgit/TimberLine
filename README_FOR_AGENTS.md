@@ -16,6 +16,10 @@
   authorized native attempts while checkout is paused. The five-minute
   `website:reconcile-payments` command uses provider GETs, reports failures,
   rotates at most 100 attempts by default, and never enables commerce.
+- Pickup/tax origins can be configured by scoped website editors before carrier
+  activation. Package/policy actions retain carrier rollout checks.
+- Existing native payment controls remain available while new checkout is paused;
+  unresolved refunds have durable fixed-amount retry/check forms after navigation.
 - Refund callers must retain their request UUID on retries. Pending/unknown
   operations reserve balance. Never auto-restock on refund. Fulfillment remains
   blocked for `payment_review` and `paid_review`. Real tax, fee/transfer/payout,

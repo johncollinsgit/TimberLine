@@ -142,12 +142,16 @@ or production activation is included.
   events with provider GETs, reconciles refunds, retains uncertain holds, and
   exits unsuccessfully when attempts need another retry. It does not enable
   commerce or start new provider checkout Sessions. Existing payments/refunds
-  can be serviced while new checkout is disabled.
+  can be serviced while new checkout is disabled. Staff screens retain refund,
+  cancellation, and durable pending-refund retry/check controls during that pause;
+  an interrupted request keeps its original UUID and amount after navigation.
+  Pickup/tax locations are configurable before carrier rollout; carrier services
+  and package mutations remain separately gated.
 
 Acceptance: HTTP-faked tests cover duplicate submission, lost responses, early
 webhooks, last-unit holds, mismatches, event reordering, expiry, cancellation
 races, pending/replayed refunds, paused checkout servicing, signature rotation,
-and host/session scoping. The local verification includes 159 Website and Shopify
+and host/session scoping. The local verification includes 163 Website and Shopify
 surface-isolation tests, a production asset build, and four browser screens at
 desktop/mobile sizes. These tests do not establish a real merchant's tax,
 provider fees, transfer/payout settlement, or physical USPS delivery; retain those
@@ -223,6 +227,28 @@ Exercise a pause of new checkout while servicing already-paid orders.
 Acceptance: retain the end-to-end evidence, pass the GitHub/Forge release gates,
 then enable only the reviewed merchant. Expand from actual operating results.
 Account setup and missing vendor data remain visible readiness tasks.
+
+## Retail account boundaries before broader onboarding
+
+Keep the native Website shipping release independent of Modern Forestry's
+existing Shopify app. A Shopify organization/login, an individual store's app
+installation and staff roles, an Everbranch tenant subscription, the shopper's
+account, and the tenant's Stripe Connect payout account are separate boundaries.
+Native shopper checkout does not require a Shopify admin or Everbranch staff login.
+
+The 2026-10-15 read-only review found that the legacy embedded Shopify lane uses
+global Modern Forestry retail/wholesale slots. Unrelated retailers must use a
+separate tenant-owned connection/onboarding path. Before public Shopify client
+onboarding, confirm app distribution, implement the appropriate Shopify app
+billing lane, map staff capabilities, and prove token refresh/uninstall/reinstall
+and cross-store isolation. Do not repurpose Modern Forestry's installed app,
+credentials, store slots, or billing to perform that work. These onboarding
+requirements do not activate or gate the disabled native shipping deployment.
+
+References: [Shopify identity tokens](https://shopify.dev/docs/apps/build/authentication-authorization/id-tokens),
+[distribution](https://shopify.dev/docs/apps/launch/distribution/select-distribution-method),
+[app pricing](https://shopify.dev/docs/apps/launch/billing/shopify-app-pricing), and
+[offline token lifecycle](https://shopify.dev/docs/apps/build/authentication-authorization/migrate-to-expiring-offline-access-tokens).
 
 ## Scope after the initial launch
 

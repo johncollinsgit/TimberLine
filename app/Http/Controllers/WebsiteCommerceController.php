@@ -235,7 +235,19 @@ class WebsiteCommerceController extends Controller
         abort_unless((int) $order->tenant_id === (int) $tenant->id, 404);
         $order->load(['lines', 'payments', 'fulfillments.lines', 'shipments.events', 'events']);
 
-        return view('managed-website.commerce.order', compact('tenant', 'order') + ['canManageOrders' => $commerce->enabledFor($tenant)]);
+        $nativePayments = $order->payments->filter(fn ($payment) => $payment->provider === 'stripe' && data_get($payment->metadata, 'checkout_version') === 1);
+        $pendingRefunds = $nativePayments->flatMap(function ($payment) {
+            return collect((array) data_get($payment->metadata, 'refunds', []))
+                ->reject(fn ($operation) => in_array($operation['status'] ?? '', ['succeeded', 'failed', 'canceled'], true))
+                ->map(fn ($operation, $requestId) => $operation + ['request_id' => $requestId,
+                    'can_retry' => isset($operation['provider_id']) || now()->timestamp - (int) ($operation['requested_at'] ?? 0) < 23 * 3600])
+                ->values();
+        });
+        $refundableCents = max(0, $order->total_cents - $order->refunded_cents - $pendingRefunds->sum('amount_cents'));
+
+        return view('managed-website.commerce.order', compact('tenant', 'order', 'pendingRefunds', 'refundableCents') + [
+            'canManageOrders' => $commerce->enabledFor($tenant), 'canServicePayments' => $nativePayments->isNotEmpty(),
+        ]);
     }
 
     public function fulfill(Request $request, WebsiteOrder $order, WebsiteCommerceService $commerce): RedirectResponse
@@ -266,6 +278,17 @@ class WebsiteCommerceController extends Controller
         $commerce->refund($order, $request->user(), app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->cents($data['amount']), (string) ($data['reason'] ?? ''), $data['request_id']);
 
         return back()->with('status', 'Refund submitted to Stripe.');
+    }
+
+    public function checkRefunds(Request $request, WebsiteOrder $order): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        abort_unless((int) $order->tenant_id === (int) $tenant->id, 404);
+        $payment = $order->payments()->forTenantId($tenant->id)->where('provider', 'stripe')
+            ->where('metadata->checkout_version', 1)->where('metadata->paid_confirmed', true)->latest('id')->firstOrFail();
+        app(\App\Services\ManagedWebsite\WebsitePaymentService::class)->reconcileRefunds($payment);
+
+        return back()->with('status', 'Refund status checked with Stripe.');
     }
 
     public function addOrderNote(Request $request, WebsiteOrder $order, WebsiteCommerceService $commerce): RedirectResponse
@@ -300,24 +323,23 @@ class WebsiteCommerceController extends Controller
     public function shippingSettings(Request $request, WebsiteCommerceShippingService $shipping): View
     {
         $tenant = $this->tenant($request);
-        abort_unless($shipping->enabledFor($tenant), 423, 'Native shipping is not enabled for this workspace.');
         $site = $this->site($tenant);
+        $shippingEnabled = $shipping->enabledFor($tenant);
         $locations = WebsiteFulfillmentLocation::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->latest('is_default')->get();
         $packages = WebsiteShippingPackage::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->latest('is_default')->get();
 
         app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->assertEditor($site, $request->user());
         $variants = WebsiteProductVariant::query()->forTenant($tenant)->where('is_available', true)->whereHas('product', fn ($query) => $query->where('tenant_site_id', $site->id)->where('product_type', 'physical')->where('status', '!=', 'archived'))->with('product')->orderBy('website_product_id')->get();
 
-        return view('managed-website.commerce.shipping', compact('tenant', 'site', 'locations', 'packages', 'variants'));
+        return view('managed-website.commerce.shipping', compact('tenant', 'site', 'locations', 'packages', 'variants', 'shippingEnabled'));
     }
 
-    public function saveFulfillmentLocation(Request $request, WebsiteCommerceShippingService $shipping): RedirectResponse
+    public function saveFulfillmentLocation(Request $request): RedirectResponse
     {
         $tenant = $this->tenant($request);
-        abort_unless($shipping->enabledFor($tenant), 423, 'Native shipping is not enabled for this workspace.');
         app(WebsiteShippingSetupService::class)->saveLocation($this->site($tenant), $request->all(), $request->user());
 
-        return back()->with('status', 'Ship-from location saved.');
+        return back()->with('status', 'Pickup / ship-from location saved.');
     }
 
     public function saveShippingPackage(Request $request, WebsiteCommerceShippingService $shipping): RedirectResponse

@@ -860,6 +860,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/orders/{order}/fulfill', [WebsiteCommerceController::class, 'fulfill'])->name('orders.fulfill');
             Route::post('/orders/{order}/cancel', [WebsiteCommerceController::class, 'cancel'])->name('orders.cancel');
             Route::post('/orders/{order}/refund', [WebsiteCommerceController::class, 'refund'])->name('orders.refund');
+            Route::post('/orders/{order}/refunds/check', [WebsiteCommerceController::class, 'checkRefunds'])->name('orders.refunds.check');
             Route::post('/orders/{order}/notes', [WebsiteCommerceController::class, 'addOrderNote'])->name('orders.notes.store');
             Route::post('/orders/{order}/labels', [WebsiteCommerceController::class, 'purchaseLabel'])->name('orders.labels.purchase');
             Route::post('/shipments/{shipment}/void', [WebsiteCommerceController::class, 'voidLabel'])->name('shipments.void');

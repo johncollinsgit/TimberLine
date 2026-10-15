@@ -50,6 +50,7 @@ beforeEach(function (): void {
     $this->refundStatus = 'succeeded';
     $this->sessionTimeout = false;
     $this->refundTimeout = false;
+    $this->refundBeforeCreationTimeout = false;
     $this->providerDown = false;
     $this->earlyWebhook = false;
     Http::preventStrayRequests();
@@ -102,6 +103,10 @@ beforeEach(function (): void {
             return Http::response(array_replace_recursive($session, $this->overrides));
         }
         if ($path === '/v1/refunds' && $request->method() === 'POST') {
+            if ($this->refundBeforeCreationTimeout) {
+                $this->refundBeforeCreationTimeout = false;
+                throw new ConnectionException('Fixture refund request did not reach Stripe');
+            }
             $id = 're_fixture_'.str_replace('-', '', $request['metadata[website_refund_request]']);
             $refund = ['id' => $id, 'payment_intent' => $request['payment_intent'], 'amount' => (int) $request['amount'], 'currency' => 'usd', 'status' => $this->refundStatus,
                 'transfer_reversal' => 'trr_fixture', 'metadata' => ['website_refund_request' => $request['metadata[website_refund_request]']]];
@@ -417,4 +422,60 @@ test('reconciliation recovers the hosted URL after a lost creation response', fu
     $result = ($this->begin)();
     expect($result['url'])->toBe('https://checkout.stripe.com/c/pay/cs_fixture_1')->and(WebsitePayment::query()->count())->toBe(1);
     expect($this->sessionRequests)->toHaveCount(1);
+});
+
+test('pickup tax origin can be configured without shipping rollout or a carrier connection', function (): void {
+    config()->set('managed_website.commerce_shipping_enabled', false);
+    App\Models\WebsiteFulfillmentLocation::query()->forTenantId($this->tenant->id)->delete();
+    $this->actingAs($this->actor)->withSession(['active_tenant_id' => $this->tenant->id]);
+    $host = 'https://payment-pilot.theeverbranch.com';
+    $this->get($host.'/website/products')->assertOk()->assertSeeText('Pickup & shipping');
+    $this->get($host.'/website/commerce/shipping')->assertOk()->assertSeeText('Pickup / ship-from locations')->assertDontSeeText('Carrier services')->assertDontSeeText('Reviewed package presets');
+    $this->post($host.'/website/commerce/shipping/locations', ['name' => 'Pickup desk', 'street1' => '1 Main St', 'city' => 'Austin', 'state' => 'TX', 'zip' => '78701', 'is_default' => true])->assertRedirect()->assertSessionHasNoErrors();
+    $this->post($host.'/website/commerce/shipping/policy', ['mode' => 'production', 'services' => ['USPS:Priority']])->assertStatus(423);
+    expect($this->variant->fresh()->shipping_weight_ounces)->toBeNull();
+    expect(($this->begin)()['order']->fulfillment_method)->toBe('pickup');
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), 'easypost'));
+    $this->actor->tenants()->updateExistingPivot($this->tenant->id, ['membership_active' => false]);
+    $this->post($host.'/website/commerce/shipping/locations', ['name' => 'Blocked'])->assertForbidden();
+});
+
+test('paused checkout keeps durable refund retry available after leaving the order page', function (): void {
+    $order = ($this->pay)();
+    config()->set('managed_website.commerce_enabled', false);
+    $this->refundBeforeCreationTimeout = true;
+    $id = (string) Str::uuid();
+    $url = 'https://payment-pilot.theeverbranch.com/website/orders/'.$order->id;
+    $this->actingAs($this->actor)->withSession(['active_tenant_id' => $this->tenant->id]);
+    $this->from($url)->post($url.'/refund', ['request_id' => $id, 'amount' => '20.00'])->assertRedirect()->assertSessionHasErrors(['amount']);
+    expect($this->refunds)->toBeEmpty();
+    $this->get($url)->assertOk();
+    $this->get('https://payment-pilot.theeverbranch.com/website/products')->assertOk();
+    $this->get($url)->assertOk()->assertSeeText('New checkout is paused')->assertSeeText('Retry unconfirmed refund')
+        ->assertSee('value="'.$id.'"', false)->assertSee('value="20.00"', false)->assertDontSeeText('Mark fulfilled');
+    $this->post($url.'/refund', ['request_id' => $id, 'amount' => '20.00'])->assertRedirect()->assertSessionHasNoErrors();
+    expect($order->fresh()->refunded_cents)->toBe(2000)->and($this->refunds)->toHaveCount(1);
+});
+
+test('pending refunds discovered from Stripe can be checked without a native request UUID', function (): void {
+    $order = ($this->pay)();
+    $this->refunds['re_external_fixture'] = ['id' => 're_external_fixture', 'payment_intent' => $order->payments()->sole()->provider_payment_intent_id,
+        'amount' => 500, 'currency' => 'usd', 'status' => 'pending', 'metadata' => []];
+    $this->payments->reconcileRefunds($order->payments()->sole());
+    config()->set('managed_website.commerce_enabled', false);
+    $url = 'https://payment-pilot.theeverbranch.com/website/orders/'.$order->id;
+    $this->actingAs($this->actor)->withSession(['active_tenant_id' => $this->tenant->id]);
+    $this->get($url)->assertOk()->assertSeeText('Check refund');
+    $this->refunds['re_external_fixture']['status'] = 'succeeded';
+    $this->post($url.'/refunds/check')->assertRedirect()->assertSessionHasNoErrors();
+    expect($order->fresh()->refunded_cents)->toBe(500);
+    Http::assertNotSent(fn ($request) => $request->method() === 'POST' && str_ends_with($request->url(), '/refunds'));
+});
+
+test('staff order screens show the accepted local delivery destination', function (): void {
+    $this->buyer['fulfillment_method'] = 'local_delivery';
+    $this->buyer['shipping_address'] = ['name' => 'Retail Buyer', 'street1' => '22 Delivery Way', 'street2' => 'Suite 7', 'city' => 'Austin', 'state' => 'TX', 'zip' => '78702', 'country' => 'US'];
+    $order = ($this->begin)()['order'];
+    $this->actingAs($this->actor)->withSession(['active_tenant_id' => $this->tenant->id]);
+    $this->get('https://payment-pilot.theeverbranch.com/website/orders/'.$order->id)->assertOk()->assertSeeText('22 Delivery Way')->assertSeeText('Suite 7')->assertSeeText('78702');
 });
