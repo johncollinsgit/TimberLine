@@ -1,0 +1,289 @@
+/* Approved Showcase presentation. Deliberately opt-in: no embedded Shopify,
+   flagship console, checkout, or public tenant site styling. */
+body.mf-app-shell[data-eb-workspace], body.mf-app-shell[data-eb-landlord], body.eb-auth-theme, body.eb-studio-body, body.eb-studio-support-body {
+  --eb-page-background: #edf0e9;
+  --eb-surface: #fffef9;
+  --eb-surface-subtle: #f6f8f0;
+  --eb-surface-muted: #e3ecd6;
+  --eb-surface-strong: #dce9b4;
+  --eb-border: #d2dccf;
+  --eb-text-primary: #172d23;
+  --eb-text-secondary: #43584d;
+  --eb-text-muted: #43584d;
+  --eb-accent: #214a36;
+  --eb-brand: #214a36;
+  --eb-focus-ring: #628947;
+  --eb-font-ui: 'Avenir Next', Avenir, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --eb-font-display: var(--eb-font-ui);
+  --eb-shadow-sm: 0 4px 16px rgb(23 45 35 / 4%);
+  --eb-shadow-md: 0 12px 28px rgb(23 45 35 / 7%);
+  --color-accent: #214a36;
+  --color-accent-content: #214a36;
+  --color-accent-foreground: #fffef9;
+  --fb-page-background: var(--eb-page-background);
+  --fb-surface: var(--eb-surface);
+  --fb-surface-subtle: var(--eb-surface-subtle);
+  --fb-surface-muted: var(--eb-surface-muted);
+  --fb-surface-strong: var(--eb-surface-strong);
+  --fb-border: var(--eb-border);
+  --fb-text-primary: var(--eb-text-primary);
+  --fb-text-secondary: var(--eb-text-secondary);
+  --fb-text-muted: var(--eb-text-muted);
+  --fb-text: var(--eb-text-primary);
+  --fb-muted: var(--eb-text-muted);
+  --fb-brand: var(--eb-brand);
+  --fb-accent: var(--eb-accent);
+  --fb-brand-2: var(--eb-accent);
+  --fb-ring: var(--eb-focus-ring);
+  --fb-font-ui: var(--eb-font-ui);
+  --fb-font-display: var(--eb-font-display);
+  --fb-focus-ring: var(--eb-focus-ring);
+  color-scheme: light;
+  color: var(--eb-text-primary);
+  font-family: var(--eb-font-ui);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+:is([data-eb-workspace], [data-eb-landlord]) .mf-app-main {
+  position: relative;
+  background: var(--eb-page-background);
+  padding: 24px clamp(18px, 2vw, 32px) 48px;
+}
+:is([data-eb-workspace], [data-eb-landlord]) :is(.mf-shell-content, .fb-workflow-shell, .fb-workflow-shell--wide) {
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+}
+:is([data-eb-workspace], [data-eb-landlord]) .fb-workflow-shell { padding-inline: 0; }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main [data-flux-main] { padding: 0; min-width: 0; }
+:is([data-eb-workspace], [data-eb-landlord]) .eb-workspace-content { padding: 0; }
+:is([data-eb-workspace], [data-eb-landlord]) .mf-shell-content > .eb-workspace-content > :is(div, section) {
+  max-width: none;
+  padding-inline: 0;
+}
+:is([data-eb-workspace], [data-eb-landlord]) #app-main :is(.text-zinc-500, .text-zinc-600, .text-zinc-700) { color: var(--eb-text-secondary); }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main :is(.text-zinc-900, .text-zinc-950) { color: var(--eb-text-primary); }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main .text-sm { font-size: 15px; line-height: 1.55; }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main .text-xs { font-size: 13px; line-height: 1.5; }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main :is(h1, h2, h3, .fb-panel-title) { font-family: var(--eb-font-ui); }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main h1 { font-size: clamp(28px, 2.4vw, 32px); line-height: 1.2; letter-spacing: -.04em; }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main :is(h2, .fb-panel-title) { font-size: 22px; line-height: 1.3; letter-spacing: -.025em; }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main :is(.fb-panel, .eb-dashboard-panel, .eb-channel-chart, .eb-dashboard-notice) {
+  background: var(--eb-surface);
+  border: 1px solid var(--eb-border);
+  border-radius: 16px;
+  box-shadow: var(--eb-shadow-sm);
+}
+:is([data-eb-workspace], [data-eb-landlord]) #app-main .fb-panel-head { border-color: var(--eb-border); padding: 20px; }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main .fb-panel-body { padding: 20px; }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main .bg-white { background-color: var(--eb-surface); }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main :is(.border-zinc-200, .border-zinc-300) { border-color: var(--eb-border); }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main :is(.eb-dashboard-rows > a, .eb-dashboard-metrics > a) { padding: 20px; }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main :is(.eb-dashboard-header p, .eb-dashboard-panel p, .eb-dashboard-rows small, .eb-dashboard-metrics small) {
+  font-size: 15px;
+  color: var(--eb-text-secondary);
+  line-height: 1.55;
+}
+:is([data-eb-workspace], [data-eb-landlord]) #app-main .eb-dashboard-metrics { gap: 12px; background: transparent; }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main .eb-dashboard-stack > * + * { margin-top: 24px; }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main .eb-dashboard-columns { gap: 24px; }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main .eb-dashboard-summary .eb-dashboard-panel__header { padding: 0 0 18px; border: 0; background: transparent; }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main .eb-dashboard-summary .eb-dashboard-metrics { display: grid; grid-template-columns: repeat(var(--eb-metric-columns, 3), minmax(0, 1fr)); gap: 18px; }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main .eb-dashboard-summary .eb-dashboard-metrics > a { padding: 22px; box-shadow: var(--eb-shadow-sm); }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main .eb-dashboard-metrics > a { border: 1px solid var(--eb-border); border-radius: 12px; background: var(--eb-surface); }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main .eb-dashboard-rows > a:hover { background: #f0f5e7; }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main .eb-workspace-banner {
+  position: relative; isolation: isolate; overflow: hidden; display: flex;
+  align-items: center; min-height: 148px; padding: 26px; border-radius: 18px;
+  background: #214a36; color: #fffef9;
+}
+.eb-workspace-banner__photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 65% center; z-index: -2; }
+.eb-workspace-banner::before { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, #172d23ee, #214a36a8 60%, #214a3630); z-index: -1; }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main .eb-workspace-banner :is(h1, p) { color: #fffef9; }
+.eb-workspace-banner__eyebrow { display: block; margin-bottom: 10px; color: #dce9b4; font-size: 12px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+.eb-workspace-banner__brand { display: flex; align-items: center; gap: 6px; position: absolute; bottom: 16px; right: 20px; font-size: 13px; font-weight: 650; }
+.eb-workspace-banner__brand img { width: 18px; height: 20px; filter: brightness(0) invert(1); }
+.eb-job-cover { position: relative; overflow: hidden; border-radius: 18px; margin-block: 24px; background: #214a36; }
+.eb-job-cover img { display: block; width: 100%; max-height: 340px; object-fit: cover; }
+.eb-job-cover figcaption { position: absolute; bottom: 0; padding: 12px 18px; width: 100%; background: linear-gradient(transparent, #172d23e6); color: #fffef9; font-size: 14px; pointer-events: none; }
+.eb-task-progress { display: grid; gap: 10px; margin-bottom: 18px; font-size: 14px; color: #43584d; }
+.eb-task-progress progress { width: 100%; height: 7px; appearance: none; border: 0; border-radius: 10px; overflow: hidden; background: #e3ecd6; }
+.eb-task-progress progress::-webkit-progress-bar { background: #e3ecd6; }
+.eb-task-progress progress::-webkit-progress-value { background: #426e36; }
+.eb-task-progress progress::-moz-progress-bar { background: #426e36; }
+
+/* One control contract, including the native selects used by older forms.
+   Keep native keyboard, validation, mobile picker, and multiple selection. */
+:is([data-eb-workspace], [data-eb-landlord]) #app-main :is(input, textarea, select), .eb-auth-theme :is(input, textarea, select) {
+  font-family: var(--eb-font-ui);
+  font-size: 16px;
+  color: var(--eb-text-primary);
+  accent-color: var(--eb-brand);
+}
+:is([data-eb-workspace], [data-eb-landlord]) #app-main input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=file]),
+:is([data-eb-workspace], [data-eb-landlord]) #app-main :is(textarea, select) {
+  background-color: var(--eb-surface);
+  border: 1px solid #bacbb2;
+  border-radius: 12px;
+  min-height: 46px;
+  padding: 11px 14px;
+  line-height: 1.4;
+  max-width: 100%;
+}
+:is([data-eb-workspace], [data-eb-landlord]) #app-main select:not([multiple]):not([size]) {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='m5 7 5 5 5-5' fill='none' stroke='%23214a36' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 13px center;
+  background-size: 20px;
+  padding-right: 42px;
+}
+:is([data-eb-workspace], [data-eb-landlord]) #app-main select[multiple] { min-height: 112px; padding: 8px; }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main select[multiple] option { padding: 8px; border-radius: 6px; }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main :is(input, textarea)::placeholder { color: #5b6c60; opacity: 1; }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main label { font-size: 14px; line-height: 1.5; }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main :is(button, .fb-btn, [data-flux-button]) { font-family: var(--eb-font-ui); min-height: 44px; }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main :is(.fb-btn, [data-flux-button]), .eb-auth-theme :is(.fb-btn, [data-flux-button], .fb-auth-google-btn) {
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+:is([data-eb-workspace], [data-eb-landlord]) #app-main .fb-btn-primary { background: var(--eb-brand); color: #fffef9; border-color: var(--eb-brand); }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main .fb-btn-secondary { background: var(--eb-surface); color: var(--eb-brand); border-color: #bacbb2; }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main .fb-btn-primary:hover { background: #2f6043; }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main :is(a, button).text-white { color: #fffef9 !important; }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main :is(.bg-zinc-900, .bg-zinc-950, .bg-emerald-700, .bg-emerald-800) { background-color: #214a36; }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main :is(.fb-btn-secondary:hover, .eb-job-task) { background: #f6f8f0; }
+:is([data-eb-workspace], [data-eb-landlord]) :is(button, a, input, textarea, select, summary):focus-visible,
+.eb-auth-theme :is(button, a, input, textarea, select):focus-visible {
+  outline: 3px solid #628947;
+  outline-offset: 3px;
+}
+:is([data-eb-workspace], [data-eb-landlord]) #app-main :is(input, textarea, select):disabled { background: #e8ece3; color: #52634f; }
+:is([data-eb-workspace], [data-eb-landlord]) #app-main :is(.fb-btn, button):disabled { cursor: not-allowed; }
+
+:is([data-eb-workspace], [data-eb-landlord]) .mf-global-bar {
+  background: #f9faf4ed;
+  color: var(--eb-text-primary);
+  border-color: var(--eb-border);
+  box-shadow: none;
+  backdrop-filter: blur(18px);
+}
+:is([data-eb-workspace], [data-eb-landlord]) :is(.mf-global-brand-link, .mf-global-bud, .mf-global-context) { color: var(--eb-text-primary); }
+:is([data-eb-workspace], [data-eb-landlord]) .mf-global-brand-mark { background: transparent; }
+:is([data-eb-workspace], [data-eb-landlord]) .mf-global-brand-mark img { filter: none; }
+:is([data-eb-workspace], [data-eb-landlord]) :is(.mf-global-search, .mf-global-bud, .mf-global-employee-preview) {
+  color: var(--eb-brand);
+  background: var(--eb-surface);
+  border: 1px solid var(--eb-border);
+  border-radius: 12px;
+  min-height: 44px;
+}
+:is([data-eb-workspace], [data-eb-landlord]) .mf-global-search-shortcut { color: var(--eb-text-secondary); }
+:is([data-eb-workspace], [data-eb-landlord]) .mf-global-sidebar-toggle { color: #214a36 !important; }
+.eb-mobile-records { display: none; }
+:is([data-eb-workspace], [data-eb-landlord]) .eb-dashboard-sales-details { border: 1px solid var(--eb-border); border-radius: 16px; padding: 18px; background: var(--eb-surface); }
+:is([data-eb-workspace], [data-eb-landlord]) .eb-dashboard-sales-details > summary { min-height: 44px; cursor: pointer; font-size: 16px; font-weight: 650; }
+.eb-mobile-context, .eb-context-back { display: none; }
+.eb-workspace-skip {
+  position: fixed; z-index: 100; top: 12px; left: 12px;
+  background: #214a36; color: #fffef9; padding: 12px 18px;
+  border-radius: 12px; transform: translateY(-160%);
+}
+.eb-workspace-skip:focus { transform: translateY(0); }
+
+.eb-auth-theme { background: var(--eb-page-background); }
+.eb-auth-theme .fb-auth-card { background: var(--eb-surface); border: 1px solid var(--eb-border); border-radius: 18px; }
+.eb-auth-theme .fb-auth-brand-panel { background: linear-gradient(140deg, #214a36, #172d23); }
+.eb-auth-theme :is(.fb-auth-brand-copy h1, .fb-auth-title) { font-family: var(--eb-font-ui); }
+.eb-auth-theme :is(.fb-auth-subtitle, .fb-auth-support) { color: var(--eb-text-secondary); font-size: 15px; }
+.eb-auth-theme .fb-auth-submit { background: var(--eb-brand); color: #fffef9; }
+
+/* Public product pages share the language, while keeping public navigation
+   and explicitly fictional examples separate from signed-in work. */
+.eb-studio-body, .eb-studio-support-body {
+  --eb-ink: #172d23; --eb-ink-deep: #172d23; --eb-paper: #edf0e9;
+  --eb-paper-bright: #fffef9; --eb-sand: #e3ecd6; --eb-clay: #426e36; --eb-muted: #43584d;
+  background: #edf0e9;
+}
+.eb-studio-body :is(h1, h2, h3, .eb-studio-story__steps button span, .eb-studio-product-frame__headline),
+.eb-studio-support-body :is(h1, h2, h3) { font-family: var(--eb-font-ui); font-weight: 650; }
+.eb-studio-body .eb-studio-button, .eb-studio-support-body .fb-btn { border-radius: 12px; font-size: 15px; min-height: 48px; }
+.eb-studio-body .eb-studio-industry-card { border-radius: 18px; }
+.eb-studio-body .eb-collection-lockup {
+  position: absolute; z-index: 2; top: 16px; right: 16px; display: flex;
+  align-items: center; gap: 5px; padding: 8px 10px; border-radius: 10px;
+  background: #172d23d9; color: #fffef9; font-size: 13px; font-weight: 650;
+}
+.eb-studio-body .eb-collection-lockup img { position: static; width: 16px; height: 19px; filter: brightness(0) invert(1); }
+.eb-studio-body .eb-collection-lockup small { color: #dce9b4; font-size: 12px; margin-left: 4px; }
+.eb-studio-body :is(.eb-studio-hero__note, .eb-studio-hero__lede) { color: #f0f5e7; }
+
+@media (max-width: 1023px) {
+  :is([data-eb-workspace], [data-eb-landlord]) .eb-workspace-grid-canvas { display: none; }
+  :is([data-eb-workspace], [data-eb-landlord]) .eb-customer-results { min-height: 0; }
+  :is([data-eb-workspace], [data-eb-landlord]) .eb-mobile-records { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .eb-mobile-record { display: grid; gap: 8px; padding: 20px; border: 1px solid #d2dccf; border-radius: 16px; background: #fffef9; color: #172d23; text-align: left; }
+  .eb-mobile-record strong { font-size: 18px; }
+  .eb-mobile-record :is(span, small) { font-size: 14px; line-height: 1.5; color: #43584d; }
+  .eb-mobile-record .eb-mobile-record__status { font-size: 12px; font-weight: 650; text-transform: capitalize; color: #214a36; }
+  .eb-mobile-record .eb-mobile-record__open { color: #214a36; font-weight: 650; margin-top: 6px; }
+  :is([data-eb-workspace], [data-eb-landlord]) .mf-global-brand { min-width: 0; flex: 1; gap: 8px; }
+  :is([data-eb-workspace], [data-eb-landlord]) .mf-global-brand-link { display: none; }
+  :is([data-eb-workspace], [data-eb-landlord]) .eb-mobile-context { display: grid; gap: 2px; min-width: 0; }
+  .eb-mobile-context strong { font-size: 17px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .eb-mobile-context span { font-size: 13px; line-height: 1.3; color: #43584d; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  :is([data-eb-workspace], [data-eb-landlord]) .eb-context-back { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; color: #214a36; }
+  [data-eb-workspace]:has(.eb-context-back) .mf-global-sidebar-toggle { display: none; }
+  :is([data-eb-workspace], [data-eb-landlord]) .mf-global-context { display: none; }
+  :is([data-eb-workspace], [data-eb-landlord]) .mf-global-actions { gap: 8px; }
+  :is([data-eb-workspace], [data-eb-landlord]) .mf-global-employee-preview { display: none; }
+  :is([data-eb-workspace], [data-eb-landlord]) .mf-global-bar { padding-inline: 16px; }
+}
+@media (max-width: 640px) {
+  :is([data-eb-workspace], [data-eb-landlord]) #app-main .eb-dashboard-summary .eb-dashboard-metrics { grid-template-columns: 1fr; gap: 14px; }
+  :is([data-eb-workspace], [data-eb-landlord]) .eb-mobile-records { grid-template-columns: 1fr; }
+  :is([data-eb-workspace], [data-eb-landlord]) .mf-app-main { padding: 20px 16px 40px; }
+  :is([data-eb-workspace], [data-eb-landlord]) #app-main .eb-workspace-banner { padding: 22px; min-height: 164px; padding-bottom: 40px; }
+  :is([data-eb-workspace], [data-eb-landlord]) #app-main :is(.fb-panel-head, .fb-panel-body) { padding: 18px; }
+  :is([data-eb-workspace], [data-eb-landlord]) .mf-global-search { min-width: 44px; width: 44px; }
+  :is([data-eb-workspace], [data-eb-landlord]) .mf-global-search-placeholder { display: none; }
+  :is([data-eb-workspace], [data-eb-landlord]) .mf-global-search-shortcut { display: none; }
+  .eb-auth-theme .fb-auth-shell { display: block; }
+  .eb-auth-theme .fb-auth-brand-panel { min-height: 0; padding: 24px; }
+  .eb-auth-theme .fb-auth-brand-copy, .eb-auth-theme .fb-auth-brand-foot { display: none; }
+  .eb-auth-theme .fb-auth-card-wrap { padding: 24px 16px 40px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :is([data-eb-workspace], [data-eb-landlord]) *, :is([data-eb-workspace], [data-eb-landlord]) *::before, :is([data-eb-workspace], [data-eb-landlord]) *::after { transition-duration: 0s !important; animation: none !important; scroll-behavior: auto !important; }
+}
+
+/* Owner console: the same readable surfaces, with primary work separated
+   from optional configuration and compact technical evidence. */
+[data-eb-landlord] .eb-landlord-console { background: transparent; border: 0; box-shadow: none; }
+[data-eb-landlord] .eb-landlord-header { background: transparent; border: 0; padding: 0 0 24px; }
+[data-eb-landlord] .eb-landlord-header__main { align-items: flex-start; gap: 24px; }
+[data-eb-landlord] .eb-landlord-header h2 { font-size: 30px; color: #172d23; }
+[data-eb-landlord] .eb-landlord-header p { font-size: 16px; color: #43584d; margin-top: 8px; }
+[data-eb-landlord] .eb-landlord-tabs { margin-top: 24px; border: 0; }
+[data-eb-landlord] :is(.eb-admin-button, .eb-admin-overflow > summary) { min-height: 44px; border-radius: 12px; font-size: 15px; padding: 10px 16px; }
+[data-eb-landlord] .eb-admin-button.eb-admin-button--primary { background: #214a36; border-color: #214a36; color: #fffef9; }
+[data-eb-landlord] .eb-landlord-console > .space-y-8 { padding: 0; }
+[data-eb-landlord] .eb-landlord-card { padding: 24px; border: 1px solid #d2dccf; border-radius: 16px; background: #fffef9; }
+[data-eb-landlord] #app-main :is(section, article).bg-white { background: #fffef9; box-shadow: 0 4px 16px rgb(23 45 35 / 4%); }
+[data-eb-landlord] #app-main :is(.bg-zinc-50, .bg-zinc-100) { background: #f6f8f0; }
+[data-eb-landlord] #app-main :is(.grid.gap-3, .grid.gap-4) { gap: 20px; }
+[data-eb-landlord] #app-main .rounded-full:not([role]) { border-radius: 12px; }
+[data-eb-landlord] #app-main a[class*='px-3'][class*='py-1'] { display: inline-flex; align-items: center; min-height: 44px; padding-block: 10px; }
+[data-eb-landlord] #app-main table { font-size: 15px; line-height: 1.5; }
+[data-eb-landlord] #app-main .overflow-x-auto { position: relative; max-width: 100%; }
+[data-eb-landlord] #app-main :is(th, td) { padding: 14px 16px; }
+[data-eb-landlord] #app-main :is(.eb-admin-tabs, .eb-landlord-tabs) a { min-height: 44px; font-size: 15px; }
+[data-eb-landlord] #app-main code { overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  [data-eb-landlord] .eb-landlord-card { padding: 18px; }
+  [data-eb-landlord] #app-main .p-6 { padding: 18px; }
+  [data-eb-landlord] .eb-landlord-header__actions { flex-wrap: wrap; }
+}

@@ -71,7 +71,7 @@ test('login route renders the dedicated light auth shell', function (): void {
 
     $this->get(route('login'))
         ->assertOk()
-        ->assertSee('class="fb-auth-body antialiased"', false)
+        ->assertSee('class="fb-auth-body antialiased eb-auth-theme"', false)
         ->assertSee('brand/everbranch-auth.svg?v='.$cacheTag, false)
         ->assertSeeText('Welcome back');
 });

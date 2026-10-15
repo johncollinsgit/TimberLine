@@ -65,7 +65,7 @@
                 <div>
                     <h3 class="text-lg font-semibold text-zinc-950">Activity analytics</h3>
                     <p class="mt-1 text-sm text-zinc-600">
-                        Shopify-admin-style trend view for revenue, onboarding, reward redemption, and tenant activity.
+                        See how client activity, onboarding, and recorded commercial measures change over time.
                     </p>
                 </div>
                 <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
@@ -116,7 +116,7 @@
             </div>
 
             <div class="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_320px]">
-                <div class="rounded-[1.5rem] border border-zinc-200 bg-[radial-gradient(circle_at_top_left,_rgba(18,60,67,0.08),_transparent_44%),linear-gradient(180deg,_#ffffff,_#f7f8f8)] p-4">
+                <div class="eb-landlord-card">
                     <div class="flex flex-wrap items-center justify-between gap-2 pb-3">
                         <div>
                             <p class="text-sm font-semibold text-zinc-900" x-text="chartState.metric_label || activeMetricLabel()"></p>
@@ -135,7 +135,7 @@
                     <div x-show="!activityLoading && chartState.empty_state" class="flex min-h-[360px] items-center justify-center rounded-2xl border border-dashed border-zinc-300 bg-white/70 px-5 py-10 text-center text-sm text-zinc-500" x-text="chartState.empty_state"></div>
 
                     <div x-show="!activityLoading && !chartState.empty_state">
-                        <div x-ref="activityChart" class="min-h-[360px]"></div>
+                        <div x-ref="activityChart" role="img" :aria-label="`${chartState.metric_label || activeMetricLabel()} for ${chartState.window_label || selectedRangeLabel()}, ${selectedTenantLabel()}`" class="min-h-[360px]"></div>
                     </div>
                 </div>
 
@@ -144,7 +144,7 @@
                         <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-zinc-500">Selected window</p>
                         <p class="mt-3 text-2xl font-semibold text-zinc-950" x-text="chartState.window_label || selectedRangeLabel()"></p>
                         <p class="mt-2 text-sm leading-6 text-zinc-600">
-                            One shared filter state drives the KPI strip, the activity graph, and the tenant table so we do not drift between surfaces.
+                            The chart, summary numbers, and client list below use the same filters.
                         </p>
                         <div class="mt-4 space-y-2 text-xs text-zinc-600">
                             <div><span class="font-semibold text-zinc-900">Dataset:</span> <span x-text="activeDatasetLabel()"></span></div>
@@ -156,11 +156,11 @@
                     </article>
 
                     <article class="rounded-[1.5rem] border border-zinc-200 bg-white p-4 shadow-sm">
-                        <h4 class="text-sm font-semibold text-zinc-900">Data contract notes</h4>
+                        <h4 class="text-sm font-semibold text-zinc-900">How these numbers are calculated</h4>
                         <ul class="mt-3 space-y-2 text-sm leading-6 text-zinc-600">
-                            <li>Subscription income stays honest by using configured recurring run rate until captured billing history exists.</li>
-                            <li>Module revenue charts use current recurring commercial mix until module-attributed revenue is modeled canonically.</li>
-                            <li>Tenant table and graph both read from dedicated landlord analytics endpoints.</li>
+                            <li>Subscription income shows the configured recurring amount until captured billing history is available.</li>
+                            <li>Module revenue shows the current recurring allocation, rather than payments attributed to each module.</li>
+                            <li>Use the selected window and filters to compare the chart with the client list.</li>
                         </ul>
                     </article>
                 </div>
@@ -469,7 +469,7 @@
                                     <p class="text-xs uppercase tracking-[0.2em] text-zinc-500">Sales trend</p>
                                     <p class="mt-1 text-sm font-semibold text-zinc-900" x-text="formatCurrency(selectedRow.sales_generated_cents)"></p>
                                 </div>
-                                <svg viewBox="0 0 120 40" class="h-10 w-28 text-[#123C43]">
+                                <svg viewBox="0 0 120 40" class="h-10 w-28 text-[#214a36]">
                                     <polyline fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" :points="sparklinePoints(selectedRow.sales_sparkline)"></polyline>
                                 </svg>
                             </div>
@@ -799,11 +799,11 @@
                             toolbar: { show: true },
                             zoom: { enabled: false },
                             stacked: !! this.chartState.stacked,
-                            animations: { easing: 'easeinout', speed: 350 },
-                            fontFamily: 'Inter, sans-serif',
+                            animations: { enabled: !window.matchMedia('(prefers-reduced-motion: reduce)').matches, easing: 'easeinout', speed: 350 },
+                            fontFamily: window.getComputedStyle(document.body).fontFamily,
                         },
                         series: this.chartState.series,
-                        colors: ['#123C43', '#2F7D6B', '#A97C50', '#D6A15E', '#6D8494', '#A7B5B7'],
+                        colors: ['#214a36', '#2F7D6B', '#A97C50', '#D6A15E', '#6D8494', '#A7B5B7'],
                         stroke: {
                             curve: this.chartState.chart_type === 'area' ? 'smooth' : 'straight',
                             width: this.chartState.chart_type === 'area' ? 3 : 0,
@@ -814,23 +814,23 @@
                         dataLabels: { enabled: false },
                         legend: { position: 'top', horizontalAlign: 'left' },
                         plotOptions: { bar: { borderRadius: 6, columnWidth: '55%' } },
-                        grid: { borderColor: '#E7ECEB', strokeDashArray: 4 },
+                        grid: { borderColor: '#d2dccf', strokeDashArray: 4 },
                         xaxis: useDatetimeAxis
                             ? {
                                 type: 'datetime',
-                                labels: { datetimeUTC: false, style: { colors: '#5D6B6A', fontSize: '11px' } },
+                                labels: { datetimeUTC: false, style: { colors: '#43584d', fontSize: '13px' } },
                                 axisBorder: { show: false },
                                 axisTicks: { show: false },
                               }
                             : {
                                 categories: this.chartState.categories || [],
-                                labels: { style: { colors: '#5D6B6A', fontSize: '11px' } },
+                                labels: { style: { colors: '#43584d', fontSize: '13px' } },
                                 axisBorder: { show: false },
                                 axisTicks: { show: false },
                               },
                         yaxis: {
                             labels: {
-                                style: { colors: '#5D6B6A', fontSize: '11px' },
+                                style: { colors: '#43584d', fontSize: '13px' },
                                 formatter: (value) => this.formatAxisValue(this.chartState.unit || 'count', value),
                             },
                         },

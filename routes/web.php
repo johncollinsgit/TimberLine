@@ -439,6 +439,8 @@ $landlordRoutes = static function (): void {
         ->name('tenants.blueprint.update');
     Route::get('/landlord/tenants/{tenant}', [LandlordTenantDirectoryController::class, 'show'])
         ->name('tenants.show');
+    Route::put('/landlord/tenants/{tenant}/presentation', [\App\Http\Controllers\Landlord\LandlordWorkspacePresentationController::class, 'update'])
+        ->name('tenants.presentation.update');
     Route::post('/landlord/tenants/{tenant}/forms/templates/{templateKey}', [LandlordTenantDirectoryController::class, 'provisionFormFromTemplate'])
         ->name('tenants.forms.templates.provision');
     Route::post('/landlord/tenants/{tenant}/role', [LandlordTenantDirectoryController::class, 'updateRole'])

@@ -22,7 +22,12 @@ class AuthTenantPresentation
     {
         $portalName = (string) config('tenancy.auth.portal_name', config('everbranch.product_name', 'Everbranch'));
 
-        if ($context->classification === AuthTenantContext::NONE) {
+        // Public Everbranch login is product-branded even when legacy host
+        // resolution remembers the flagship tenant. This changes copy only;
+        // the resolved authentication intent and authorization stay intact.
+        $publicHost = strtolower(trim((string) config('tenancy.domains.canonical.public_host')));
+        if ($context->classification === AuthTenantContext::NONE
+            || ($publicHost !== '' && strtolower((string) $context->host) === $publicHost)) {
             return [
                 'variant' => AuthTenantContext::NONE,
                 'app_name' => $portalName,

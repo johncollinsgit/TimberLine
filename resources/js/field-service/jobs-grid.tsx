@@ -1,4 +1,5 @@
 import "../bootstrap";
+import { workspaceGridTheme } from "../workspace-theme";
 import axios from "axios";
 import "@glideapps/glide-data-grid/dist/index.css";
 import { CustomCell, CustomRenderer, DataEditor, GridCell, GridCellKind, GridColumn, Item, roundedRect } from "@glideapps/glide-data-grid";
@@ -495,7 +496,9 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, update
     const activateCell = useCallback(([col, rowIndex]: Item) => {
         const row = rows[rowIndex]; const key = columns[col]?.id;
         if (!row || key !== "open") return;
-        if (row.kind === "candidate") setCandidate(row); else setOpenedJobId(row.id);
+        if (row.kind === "candidate") setCandidate(row);
+        else if (document.body.hasAttribute("data-eb-workspace") && window.matchMedia("(max-width: 1023px)").matches && row.url) window.location.assign(row.url);
+        else setOpenedJobId(row.id);
     }, [columns, rows]);
 
     function saveView() {
@@ -527,7 +530,7 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, update
             </div>
             <div className="flex flex-1 flex-wrap justify-end gap-2">
                 <input type="search" value={q} onChange={event => setQ(event.target.value)} placeholder="Search jobs, customers, addresses" className="min-h-11 min-w-[260px] flex-1 rounded-xl border border-zinc-300 bg-white px-4 text-sm xl:max-w-md" />
-                <select value={sort} onChange={event => setSort(event.target.value)} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-3 text-sm"><option value="status">Sort: active now</option><option value="scheduled_for">Schedule</option><option value="priority">Priority</option><option value="customer">Customer</option><option value="title">Job</option><option value="hours">Hours</option><option value="updated_at">Last update</option></select>
+                <select aria-label="Sort jobs" value={sort} onChange={event => setSort(event.target.value)} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-3 text-sm"><option value="status">Sort: active now</option><option value="scheduled_for">Schedule</option><option value="priority">Priority</option><option value="customer">Customer</option><option value="title">Job</option><option value="hours">Hours</option><option value="updated_at">Last update</option></select>
                 <button onClick={() => setDir(value => value === "asc" ? "desc" : "asc")} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-4 text-sm font-semibold">{dir === "asc" ? "Ascending" : "Descending"}</button>
                 {canManage && bucket === "current" ? <button onClick={() => setEditAll(value => !value)} className={`min-h-11 rounded-xl border px-4 text-sm font-semibold ${editAll ? "border-emerald-800 bg-emerald-800 text-white hover:bg-emerald-900" : "border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100"}`}>{editAll ? "Done editing" : "Edit all"}</button> : null}
                 <button onClick={() => setColumnsOpen(value => !value)} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-4 text-sm font-semibold">Columns</button>
@@ -535,7 +538,7 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, update
         </div>
 
         <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-zinc-200 bg-white p-3">
-            <select defaultValue="" onChange={event => applyView(event.target.value)} className="min-h-11 rounded-xl border border-zinc-300 px-3 text-sm"><option value="" disabled>Saved views</option>{views.map(view => <option key={view.name}>{view.name}</option>)}</select>
+            <select aria-label="Saved job views" defaultValue="" onChange={event => applyView(event.target.value)} className="min-h-11 rounded-xl border border-zinc-300 px-3 text-sm"><option value="" disabled>Saved views</option>{views.map(view => <option key={view.name}>{view.name}</option>)}</select>
             <button onClick={saveView} className="min-h-11 rounded-xl border border-zinc-300 px-4 text-sm font-semibold">Save this view</button>
             <span className={`ml-auto text-sm font-semibold ${saveState.includes("failed") ? "text-rose-700" : "text-emerald-700"}`}>{saveState || (loading ? "Loading…" : `${meta.total} ${bucket === "potential" ? "job draft" : `${bucket} job`}${meta.total === 1 ? "" : "s"}`)}</span>
         </div>
@@ -547,8 +550,19 @@ function FieldServiceGrid({ endpoint, updateTemplate, transitionTemplate, update
         {columnsOpen ? <div className="flex flex-wrap gap-2 rounded-2xl border border-zinc-200 bg-white p-3">{availableColumns.map(column => <label key={column.id} className="flex min-h-11 items-center gap-2 rounded-xl border border-zinc-200 px-3 text-sm"><input type="checkbox" checked={visible.includes(column.id)} onChange={() => setVisible(current => current.includes(column.id) ? current.filter(key => key !== column.id) : [...current, column.id])} />{column.title}</label>)}</div> : null}
         {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}<button onClick={() => setError("")} className="ml-3 font-semibold underline">Dismiss</button></div> : null}
 
-        <div ref={gridRef} className="min-h-[570px] overflow-hidden rounded-2xl border border-zinc-200 bg-white">
-            {size.width > 0 ? <DataEditor columns={columns} rows={rows.length} getCellContent={getCellContent} onCellEdited={editCell} onCellClicked={clickCell} onCellActivated={activateCell} cellActivationBehavior="single-click" customRenderers={[selectCellRenderer, openCellRenderer, deleteCellRenderer]} freezeColumns={showDeleteAction ? 3 : 1} rowMarkers="none" width={size.width} height={size.height} rowHeight={46} headerHeight={46} smoothScrollX smoothScrollY /> : null}
+        {document.body.hasAttribute("data-eb-workspace") ? <div className="eb-mobile-records" aria-label="Jobs">
+            {rows.map(row => row.kind === "job" && row.url ? <a key={row.id} href={row.url} className="eb-mobile-record">
+                <span className="eb-mobile-record__status">{row.status.replaceAll("_", " ")}</span>
+                <strong>{row.title}</strong>
+                <span>{row.customer || "Customer not named"}</span>
+                <small>{display("scheduled_for", row)}{row.lead ? ` · ${row.lead}` : ""}</small>
+                <span className="eb-mobile-record__open">Open job <span aria-hidden="true">→</span></span>
+            </a> : <button key={row.id} className="eb-mobile-record" onClick={() => setCandidate(row)}><strong>{row.title}</strong><span>{row.customer || "Customer not linked"}</span><span className="eb-mobile-record__open">Review job draft →</span></button>)}
+            {!loading && rows.length === 0 ? <p>No {bucket === "past" ? "completed" : bucket === "potential" ? "draft" : "current"} jobs match this view. Try another search or create a job.</p> : null}
+        </div> : null}
+
+        <div ref={gridRef} className="eb-workspace-grid-canvas min-h-[570px] overflow-hidden rounded-2xl border border-zinc-200 bg-white">
+            {size.width > 0 ? <DataEditor columns={columns} rows={rows.length} getCellContent={getCellContent} onCellEdited={editCell} onCellClicked={clickCell} onCellActivated={activateCell} cellActivationBehavior="single-click" customRenderers={[selectCellRenderer, openCellRenderer, deleteCellRenderer]} freezeColumns={showDeleteAction ? 3 : 1} rowMarkers="none" width={size.width} height={size.height} rowHeight={document.body.hasAttribute("data-eb-workspace") ? 54 : 46} theme={workspaceGridTheme()} headerHeight={46} smoothScrollX smoothScrollY /> : null}
         </div>
 
         <div className="flex items-center justify-between"><button disabled={page <= 1} onClick={() => setPage(value => value - 1)} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-4 text-sm font-semibold disabled:opacity-40">Previous</button><span className="text-sm text-zinc-600">Page {meta.page} of {Math.max(1, meta.last_page)}</span><button disabled={page >= meta.last_page} onClick={() => setPage(value => value + 1)} className="min-h-11 rounded-xl border border-zinc-300 bg-white px-4 text-sm font-semibold disabled:opacity-40">Next</button></div>

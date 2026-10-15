@@ -1,4 +1,5 @@
 import "../bootstrap";
+import { workspaceGridTheme } from "../workspace-theme";
 import axios from "axios";
 import "@glideapps/glide-data-grid/dist/index.css";
 import {
@@ -230,6 +231,7 @@ function resolveGridTheme(): Theme {
         horizontalBorderColor: panelBorder,
         headerBottomBorderColor: panelBorderStrong,
         roundingRadius: 10,
+        ...workspaceGridTheme(),
     };
 }
 
@@ -665,7 +667,9 @@ function MarketingCustomersGridApp(props: RootDataset) {
                         <p className="mt-1.5 max-w-3xl text-sm leading-6 text-[#6d7175]">
                             {props.operationalDirectory
                                 ? "Search customers, keep service addresses current, and archive outdated records without losing job history."
-                                : "Search customer profiles, keep Candle Cash separate from the legacy Growave loyalty balance, and open full customer records without fighting a long static table."}
+                                : document.body.hasAttribute("data-eb-workspace")
+                                    ? "Search customer history, find contact details, and open the full record for your next step."
+                                    : "Search customer profiles, keep Candle Cash separate from the legacy Growave loyalty balance, and open full customer records without fighting a long static table."}
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -817,10 +821,22 @@ function MarketingCustomersGridApp(props: RootDataset) {
                 </div>
             ) : null}
 
-            <section className="flex min-h-[36rem] flex-col overflow-hidden rounded-lg border border-[#e1e3e5] bg-white">
+            <section className="eb-customer-results flex min-h-[36rem] flex-col overflow-hidden rounded-lg border border-[#e1e3e5] bg-white">
+                {document.body.hasAttribute("data-eb-workspace") ? <div className="eb-mobile-records p-4" aria-label="Customers">
+                    {rows.map(row => <div key={row.id} className="eb-mobile-record">
+                        <a href={row.profile_url} className="grid gap-2">
+                            <strong>{String(row.customer || "Customer")}</strong>
+                            <span>{String(row.email && row.email !== "—" ? row.email : row.phone || "Contact details not added")}</span>
+                            <span className="eb-mobile-record__open">Open customer <span aria-hidden="true">→</span></span>
+                        </a>
+                        {props.operationalDirectory ? <label className="flex min-h-11 items-center gap-3"><input type="checkbox" checked={selectedIds.includes(row.id)} onChange={() => setSelectedIds(current => current.includes(row.id) ? current.filter(id => id !== row.id) : [...current, row.id])} />Select customer</label> : null}
+                    </div>)}
+                    {!loading && rows.length === 0 ? <p>No customers match this view. Try another search or add a customer.</p> : null}
+                    {loading ? <p role="status">Loading customers…</p> : null}
+                </div> : null}
                 <div
                     ref={gridWrapRef}
-                    className="relative flex-1 min-h-[36rem] w-full"
+                    className="eb-workspace-grid-canvas relative flex-1 min-h-[36rem] w-full"
                     style={gridCssVars}
                 >
                     {canRenderGrid ? (
@@ -837,7 +853,7 @@ function MarketingCustomersGridApp(props: RootDataset) {
                             smoothScrollY={true}
                             overscrollX={96}
                             overscrollY={32}
-                            rowHeight={42}
+                            rowHeight={document.body.hasAttribute("data-eb-workspace") ? 54 : 42}
                             headerHeight={42}
                             theme={gridTheme}
                         />

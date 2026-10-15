@@ -1,5 +1,19 @@
 # START HERE
 
+## 2026-10-15 — Everbranch Showcase workspace and landlord presentation
+
+- Shared Everbranch web workspaces adopt the approved Showcase palette, readable
+  typography, full-width canvas beside the existing sidebar, modern native fields,
+  and contextual phone/tablet headers. Mobile Jobs/Customers use real paginated
+  records and full-screen destinations; desktop grid editing remains available.
+- The configured flagship console and separate Shopify, checkout/payment, and
+  tenant-site surfaces retain their contracts. Public auth copy stays Everbranch
+  branded while preserving authentication intent and permissions.
+- The landlord console uses five primary groups. Owner-only client presentation
+  presets save audited metadata without changing access or billing. Blank owner
+  email configuration disables template editing.
+- No provider, billing, entitlement, schema, or production activation is included.
+  See `docs/ui/everbranch-showcase-polish.md` for scope and verification boundaries.
 
 ## 2026-10-13 - Wren family soccer workspace
 

@@ -125,18 +125,17 @@ test('landlord shell keeps Home first and uses Everbranch Admin navigation', fun
         ->assertSee('data-app-shell-topbar', false)
         ->assertSee('data-shell-context="landlord"', false)
         ->assertSeeText('Everbranch Admin')
-        ->assertSeeText('Workspaces')
+        ->assertSeeText('Clients')
         ->assertSeeText('Access Requests')
         ->assertSeeText('Setup Reviews')
         ->assertSeeText('Branches')
-        ->assertSee('data-sidebar-key="branches"', false)
+        ->assertSee('data-sidebar-child-key="branches"', false)
         ->assertSee('href="'.route('landlord.branches.index').'"', false)
         ->assertSeeText('Features')
         ->assertSeeText('Custom Requests')
         ->assertSeeText('Plan / Billing Readiness')
-        ->assertSee('data-sidebar-key="invoices"', false)
+        ->assertSee('data-sidebar-child-key="invoices"', false)
         ->assertSee('href="'.route('landlord.invoices.index').'"', false)
-        ->assertSeeText('Shopify Readiness')
         ->assertSeeText('System Readiness')
         ->assertSee('Search or ask what you want to do...', false)
         ->assertSee('data-assistant-entry', false)
@@ -149,23 +148,7 @@ test('landlord shell keeps Home first and uses Everbranch Admin navigation', fun
         ->assertDontSeeText('Forestry Backstage');
 
     $html = $response->getContent();
-    $expectedOrder = [
-        'home',
-        'workspaces',
-        'access-requests',
-        'setup-reviews',
-        'branches',
-        'features',
-        'custom-requests',
-        'tickets',
-        'plan-billing-readiness',
-        'invoices',
-        'agreements',
-        'shopify-readiness',
-        'system-readiness',
-        'developer',
-        'settings',
-    ];
+    $expectedOrder = ['home', 'clients', 'money', 'support', 'platform'];
     $positions = collect($expectedOrder)->mapWithKeys(
         fn (string $key): array => [$key => strpos($html, 'data-sidebar-key="'.$key.'"')]
     );
