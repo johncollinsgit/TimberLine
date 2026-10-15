@@ -244,7 +244,11 @@ test('every profile-owned foreign key has an explicit merge policy', function ()
         ->merge(collect($registry->conflictReferences())->map(fn (array $policy, string $table) => $table.'.'.$policy['column']))
         ->merge(['candle_cash_transactions.marketing_profile_id', 'candle_cash_balances.marketing_profile_id'])
         ->all();
-    $excludedAuditReferences = ['customer_merge_operation_members.marketing_profile_id'];
+    // Historical evidence is immutable, not a live customer relationship.
+    $excludedAuditReferences = [
+        'customer_merge_operation_members.marketing_profile_id',
+        'marketing_email_deliveries.legacy_marketing_profile_id',
+    ];
     $unhandled = [];
     foreach (Schema::getTables() as $tableMeta) {
         $table = (string) ($tableMeta['name'] ?? '');
@@ -255,6 +259,26 @@ test('every profile-owned foreign key has an explicit merge policy', function ()
         }
     }
     expect($unhandled)->toBe([]);
+});
+
+test('customer merges preserve the original archived delivery profile evidence', function (): void {
+    $survivor = MarketingProfile::factory()->create(['tenant_id' => 1]);
+    $donor = MarketingProfile::factory()->create(['tenant_id' => 1]);
+    $deliveryId = DB::table('marketing_email_deliveries')->insertGetId([
+        'tenant_id' => 1,
+        'email' => 'archived-reference@example.test',
+        'marketing_profile_id' => $donor->id,
+        'legacy_marketing_profile_id' => $donor->id,
+        'status' => 'failed',
+    ]);
+    $service = app(CustomerMergeService::class);
+    $operation = $service->createOperation(1, [$survivor->id, $donor->id], $survivor->id, 'retail', 'archived-delivery-reference');
+    $completed = $service->apply($operation);
+
+    expect($completed->status)->toBe('completed')
+        ->and(DB::table('marketing_email_deliveries')->where('id', $deliveryId)->value('marketing_profile_id'))->toBe($survivor->id)
+        ->and(DB::table('marketing_email_deliveries')->where('id', $deliveryId)->value('legacy_marketing_profile_id'))->toBe($donor->id)
+        ->and(DB::table('marketing_email_deliveries')->where('id', $deliveryId)->value('status'))->toBe('failed');
 });
 
 test('failed Shopify merge webhook is HMAC verified and recorded as a blocked operation', function (): void {
