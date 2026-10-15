@@ -26,14 +26,10 @@ class RetailShowroomController extends Controller
         if ($this->showroom->owner($r->user())) {
             return;
         }
-        if ($r->user()) {
-            $this->showroom->staffRole($r->user(), $slug);
-
-            return;
-        }
         $grant = $r->session()->get('retail.preview.'.$slug);
         $shares = data_get($this->showroom->site($slug)->settings, 'retail_demo.shares', []);
-        abort_unless($grant && isset($shares[$grant]) && $shares[$grant]['expires_at'] > time(), 403);
+        $shared = $grant && isset($shares[$grant]) && $shares[$grant]['expires_at'] > time();
+        abort_unless($shared || $this->showroom->staffRoleOrNull($r->user(), $slug) !== null, 403);
     }
 
     private function response(array $data): \Illuminate\Http\JsonResponse
@@ -69,8 +65,9 @@ class RetailShowroomController extends Controller
             $vendors[] = $this->showroom->catalog('sawyer-naturals');
         }
         $sawyer = \App\Models\Tenant::where('slug', 'sawyer-naturals')->first();
+        $staff = $all || $this->showroom->staffRoleOrNull($r->user(), $slug) !== null;
 
-        return $this->response(['event' => $this->showroom->definitions()['event'], 'offer' => app(\App\Services\Retail\EvergroveOffer::class)->presentation(), 'vendors' => $vendors, 'owner' => $this->showroom->owner($r->user()), 'staff' => $r->user() !== null, 'sawyer_url' => $sawyer && $this->showroom->owner($r->user()) ? url('/landlord/tenants/'.$sawyer->id) : null]);
+        return $this->response(['event' => $this->showroom->definitions()['event'], 'offer' => app(\App\Services\Retail\EvergroveOffer::class)->presentation(), 'vendors' => $vendors, 'owner' => $this->showroom->owner($r->user()), 'staff' => $staff, 'sawyer_url' => $sawyer && $this->showroom->owner($r->user()) ? url('/landlord/tenants/'.$sawyer->id) : null]);
     }
 
     public function quote(Request $r, string $slug)

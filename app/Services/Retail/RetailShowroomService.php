@@ -49,13 +49,25 @@ class RetailShowroomService
 
     public function staffRole(User $user, string $slug): string
     {
+        $role = $this->staffRoleOrNull($user, $slug);
+        abort_unless($role !== null, 403);
+
+        return $role;
+    }
+
+    public function staffRoleOrNull(?User $user, string $slug): ?string
+    {
         if ($this->owner($user)) {
             return 'owner';
         }
-        abort_unless(config('retail_showroom.enabled') && $user->is_active && $user->hasVerifiedEmail(), 403);
+        if (! config('retail_showroom.enabled') || ! $user || ! $user->is_active || ! $user->hasVerifiedEmail()) {
+            return null;
+        }
         $site = $this->site($slug);
         $member = $user->tenants()->where('tenants.id', $site->tenant_id)->wherePivot('membership_active', true)->first();
-        abort_unless($member, 403);
+        if (! $member) {
+            return null;
+        }
 
         return in_array($member->pivot->role, ['owner', 'admin', 'manager'], true) ? 'manager' : 'associate';
     }

@@ -1,6 +1,6 @@
 # Verification — 2026-10-15
 
-- `php vendor/bin/pest tests/Feature/Retail`: **40 passed, 209 assertions**.
+- `php vendor/bin/pest tests/Feature/Retail`: **41 passed, 223 assertions**.
 - Website Commerce safety/operations, canonical onboarding draft store, and
   landlord prospect onboarding pipeline: **21 passed, 165 assertions**.
 - `node --test tests/retail/commerce.test.mjs`: **6 passed**.

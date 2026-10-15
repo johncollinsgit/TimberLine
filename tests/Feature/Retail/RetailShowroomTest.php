@@ -131,6 +131,22 @@ test('existing prospects are linked without duplicating or replacing their histo
     expect(LandlordProspect::count())->toBe($count)->and($p->fresh()->source)->toBe('Existing research')->and($p->fresh()->notes)->toBe('Existing relationship');
     $this->getJson($this->base.'research')->assertOk()->assertJsonCount(7, 'prospects');
 });
+
+test('a signed-in preview recipient gets only the shared storefront without staff access', function () {
+    $slug = 'joy-fudge-company';
+    $link = $this->postJson($this->base.$slug.'/share')->assertOk()->json('url');
+    $recipient = User::factory()->create(['is_active' => true, 'email_verified_at' => now(), 'approved_at' => now()]);
+    $this->actingAs($recipient);
+    $this->get($link)->assertOk();
+    $this->getJson($this->base.'bootstrap?merchant='.$slug)->assertOk()->assertJsonCount(1, 'vendors')->assertJsonPath('staff', false)->assertJsonPath('owner', false)->assertDontSee('private_notes');
+    $this->getJson($this->base.$slug.'/staff')->assertForbidden();
+    $this->putJson($this->base.$slug.'/cart', ['lines' => []])->assertForbidden();
+    $this->postJson($this->base.$slug.'/checkout', [])->assertForbidden();
+    $this->getJson($this->base.'research')->assertForbidden();
+    $this->getJson($this->base.'bootstrap?merchant=leather-link-studio')->assertForbidden();
+    $this->actingAs($this->owner)->deleteJson($this->base.$slug.'/share')->assertOk();
+    $this->actingAs($recipient)->getJson($this->base.'bootstrap?merchant='.$slug)->assertForbidden();
+});
 test('draft onboarding uses the canonical fresh-customer contract and excludes sample history', function () {
     $draft = TenantOnboardingBlueprint::firstOrFail();
     expect($draft->payload['version'])->toBe(1)->and($draft->payload['tenant_creation_policy'])->toBe('create_fresh_production_tenant')->and($draft->payload['selected_modules'])->toBe([])->and(data_get($draft->payload, 'demo_origin.merchant_activation_approved'))->toBeFalse()->and(data_get($draft->payload, 'demo_origin.review_configuration.catalog'))->toHaveCount(6)->and(data_get($draft->payload, 'demo_origin.excluded'))->toContain('customers', 'orders', 'users', 'rewards');
