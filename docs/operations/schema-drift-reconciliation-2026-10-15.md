@@ -108,3 +108,17 @@ An older release's raw signature is not the new approved schema signature.
 2026-10-15: added reviewed forward repair, pinned historical compatibility,
 FK-action verification, observed-shape recovery, orphan-ID retention and release
 gate coverage. Code release and shipping activation remain separate steps.
+
+## Production verification
+
+PR #400 deployed through protected run `38815157152` / Forge `80345469` at
+`228c84d5f302db247b00c110d9fac7d165e28bbe`. `/ready` returned that exact release;
+`/up`, migration status and `schema:fingerprint` passed. Production matched
+approved canonical hash `cb51b941553b6acb63b928f367db0f776a1f65bbf2c2cddea2f27d583bbb01bf`.
+
+A consistent read-only snapshot verified all four original delivery references
+and all other fields against the pre-release aggregate digests. No dangling
+profile links remain. The one saved pause setting remains 2 and the future
+default is 2. Historical table counts remain zero. Commerce/shipping are disabled,
+and native payments, active holds and shipments remain zero. Phase 4 can now
+proceed through its own combined schema baseline and protected release gates.

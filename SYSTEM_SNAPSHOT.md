@@ -1,6 +1,6 @@
 # SYSTEM SNAPSHOT
 
-## Reviewed schema reconciliation (2026-10-15; release pending)
+## Reviewed schema reconciliation (2026-10-15; deployed)
 
 - A separate forward-only repair addresses historical production drift before
   shipping Phase 4. It restores constraints/indexes, preserves historical tables
@@ -10,9 +10,12 @@
 - Fingerprints permit only definition-checked historical name aliases and
   column-order equivalence on four declared tables; they now verify FK actions.
   Missing, changed and duplicate constraints still fail the release gate.
-- Observed-shape MySQL recovery, disposable baseline generation and exact-head
-  checks precede deployment. Checkout/shipping remain disabled. Modern Forestry
-  is the native pilot; its existing Shopify store and checkout stay independent.
+- PR #400 deployed through protected run `38815157152` / Forge `80345469` at
+  `228c84d5`. Exact-release readiness, migrations and the approved `cb51b941`
+  fingerprint passed. All four retained delivery references and every other
+  field matched the before-release aggregate digests. Checkout/shipping remain
+  disabled with zero native payments, active holds or shipments. Modern Forestry
+  is the native pilot; its Shopify store and checkout stay independent.
 - See `docs/operations/schema-drift-reconciliation-2026-10-15.md`.
 
 ## Native Shopify catalog snapshot adapter (2026-10-15; staged, activation disabled)
