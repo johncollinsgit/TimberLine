@@ -3,7 +3,8 @@
 ## Scope and commercial decision
 
 Subscriptions and Gift Cards are separate add-ons. Modern Forestry retains its
-explicit `modern_forestry_subscription_bootstrap` comped subscription entitlement;
+existing explicit comped subscription entitlement (production source
+`modern_forestry_alpha_default`, observed on October 15);
 there is no runtime tenant-ID, tenant-name or customer-email bypass. Other
 workspaces require canonical enabled paid or deliberately granted access through
 the existing module entitlement system. Revoking access blocks every subscription
