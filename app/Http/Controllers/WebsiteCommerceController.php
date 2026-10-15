@@ -23,6 +23,8 @@ use App\Services\ManagedWebsite\WebsiteCommerceService;
 use App\Services\ManagedWebsite\WebsiteCommerceShippingService;
 use App\Services\ManagedWebsite\WebsiteProductCsvService;
 use App\Services\ManagedWebsite\WebsiteQuoteAttributionService;
+use App\Services\ManagedWebsite\WebsiteShipmentLifecycleService;
+use App\Services\ManagedWebsite\WebsiteShippingAccessService;
 use App\Services\ManagedWebsite\WebsiteShippingSetupService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -247,6 +249,8 @@ class WebsiteCommerceController extends Controller
 
         return view('managed-website.commerce.order', compact('tenant', 'order', 'pendingRefunds', 'refundableCents') + [
             'canManageOrders' => $commerce->enabledFor($tenant), 'canServicePayments' => $nativePayments->isNotEmpty(),
+            'canManageShipping' => app(WebsiteShippingAccessService::class)->canManage($tenant, $request->user()),
+            'shippingEnabled' => app(WebsiteCommerceShippingService::class)->enabledFor($tenant),
         ]);
     }
 
@@ -308,16 +312,78 @@ class WebsiteCommerceController extends Controller
         $quote = app(\App\Services\ManagedWebsite\WebsiteShippingPlanService::class)->quoteForOrder($order, $quoteId);
         $shipment = $shipping->purchaseLabel($order, $quote, $request->user());
 
-        return back()->with('status', 'Label purchased'.($shipment->tracking_number ? ' — tracking '.$shipment->tracking_number : '.'));
+        return back()->with('status', data_get($shipment->parcel, '_native.buy_state') === 'purchased'
+            ? 'Label purchased'.($shipment->tracking_number ? ' — tracking '.$shipment->tracking_number : '.')
+            : 'Postage is not confirmed. Check or resume the saved attempt before preparing another label.');
     }
 
     public function voidLabel(Request $request, WebsiteShipment $shipment, WebsiteCommerceShippingService $shipping): RedirectResponse
     {
         $tenant = $this->tenant($request);
         abort_unless((int) $shipment->tenant_id === (int) $tenant->id, 404);
+        $request->validate(['confirm_unused' => ['required', 'accepted']]);
         $shipping->voidLabel($shipment, $request->user());
 
         return back()->with('status', 'Label void requested.');
+    }
+
+    public function reconcileShipment(Request $request, WebsiteShipment $shipment, WebsiteShipmentLifecycleService $lifecycle): RedirectResponse
+    {
+        $this->authorizeShipment($request, $shipment);
+        $lifecycle->reconcile($shipment);
+
+        return back()->with('status', 'Shipment checked with the original carrier account.');
+    }
+
+    public function packShipment(Request $request, WebsiteShipment $shipment, WebsiteShipmentLifecycleService $lifecycle): RedirectResponse
+    {
+        $this->authorizeShipment($request, $shipment);
+        $lifecycle->pack($shipment, $request->user());
+
+        return back()->with('status', 'Package marked packed. Carrier handoff is recorded separately.');
+    }
+
+    public function resumePostage(Request $request, WebsiteShipment $shipment, WebsiteShipmentLifecycleService $lifecycle): RedirectResponse
+    {
+        $this->authorizeShipment($request, $shipment);
+        $shipment = $lifecycle->resumePurchase($shipment, $request->user());
+
+        return back()->with('status', data_get($shipment->parcel, '_native.buy_state') === 'purchased'
+            ? 'The saved postage purchase is confirmed.' : 'The saved postage purchase still needs review. No replacement was purchased.');
+    }
+
+    public function handoffShipment(Request $request, WebsiteShipment $shipment, WebsiteShipmentLifecycleService $lifecycle): RedirectResponse
+    {
+        $this->authorizeShipment($request, $shipment);
+        $request->validate(['confirm_handoff' => ['required', 'accepted']]);
+        $lifecycle->handoff($shipment, $request->user());
+
+        return back()->with('status', 'Carrier handoff recorded.');
+    }
+
+    public function prepareReplacement(Request $request, WebsiteShipment $shipment, WebsiteShipmentLifecycleService $lifecycle): RedirectResponse
+    {
+        $this->authorizeShipment($request, $shipment);
+        $request->validate(['confirm_retired_label' => ['required', 'accepted']]);
+        $lifecycle->prepareReplacement($shipment, $request->user(), true);
+
+        return back()->with('status', 'Replacement rates prepared. Review and approve the separate postage cost before purchase.');
+    }
+
+    public function approveReplacement(Request $request, WebsiteShipment $shipment, WebsiteShipmentLifecycleService $lifecycle): RedirectResponse
+    {
+        $this->authorizeShipment($request, $shipment);
+        $data = $request->validate(['rate_id' => ['required', 'string', 'max:190'], 'cost_cents' => ['required', 'integer', 'min:0', 'max:10000000'], 'confirm_cost' => ['required', 'accepted']]);
+        $lifecycle->approveReplacement($shipment, $data['rate_id'], (int) $data['cost_cents'], $request->user());
+
+        return back()->with('status', 'Replacement postage submitted. Check the saved purchase status before printing.');
+    }
+
+    private function authorizeShipment(Request $request, WebsiteShipment $shipment): void
+    {
+        $tenant = $this->tenant($request);
+        abort_unless($shipment->tenant_id === $tenant->id && $shipment->provider === 'easypost', 404);
+        app(WebsiteShippingAccessService::class)->assertCanManage($tenant, $request->user());
     }
 
     public function shippingSettings(Request $request, WebsiteCommerceShippingService $shipping): View
@@ -330,8 +396,10 @@ class WebsiteCommerceController extends Controller
 
         app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->assertEditor($site, $request->user());
         $variants = WebsiteProductVariant::query()->forTenant($tenant)->where('is_available', true)->whereHas('product', fn ($query) => $query->where('tenant_site_id', $site->id)->where('product_type', 'physical')->where('status', '!=', 'archived'))->with('product')->orderBy('website_product_id')->get();
+        $canManageShipping = app(WebsiteShippingAccessService::class)->canManage($tenant, $request->user());
+        $shippingHealth = $canManageShipping ? app(\App\Services\ManagedWebsite\WebsiteShippingHealthService::class)->forSite($site) : null;
 
-        return view('managed-website.commerce.shipping', compact('tenant', 'site', 'locations', 'packages', 'variants', 'shippingEnabled'));
+        return view('managed-website.commerce.shipping', compact('tenant', 'site', 'locations', 'packages', 'variants', 'shippingEnabled', 'canManageShipping', 'shippingHealth'));
     }
 
     public function saveFulfillmentLocation(Request $request): RedirectResponse
@@ -520,12 +588,17 @@ class WebsiteCommerceController extends Controller
         return redirect()->route('managed-website.store.cart')->with('cart_status', 'Checkout cancelled. You can update your cart.');
     }
 
-    public function success(Request $request, ManagedWebsiteService $websites): View
+    public function success(Request $request, ManagedWebsiteService $websites): \Illuminate\Http\Response
     {
         [$tenant, $site] = $this->publicSite($request, $websites);
-        $order = WebsiteOrder::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->where('number', (string) $request->query('order'))->where('lookup_token', (string) $request->query('token'))->with('lines')->firstOrFail();
+        $token = $request->query('token');
+        $number = $request->query('order');
+        abort_unless(is_string($token) && preg_match('/^[A-Za-z0-9]{56}$/D', $token) && is_string($number) && strlen($number) <= 190, 404);
+        $order = WebsiteOrder::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->where('number', $number)->where('lookup_token', $token)->with('lines', 'shipments')->firstOrFail();
+        abort_unless(hash_equals((string) $order->lookup_token, $token), 404);
 
-        return view('managed-website.order', compact('site', 'order'));
+        return response()->view('managed-website.order', compact('site', 'order'))->header('Cache-Control', 'private, no-store')
+            ->header('Referrer-Policy', 'no-referrer')->header('X-Robots-Tag', 'noindex, nofollow');
     }
 
     public function webhook(Request $request, WebsiteCommerceService $commerce): JsonResponse
@@ -557,9 +630,7 @@ class WebsiteCommerceController extends Controller
 
     public function shippingWebhook(Request $request, WebsiteCommerceShippingService $shipping): JsonResponse
     {
-        $payload = $request->getContent();
-        abort_unless($this->validEasyPostSignature($payload, (string) $request->header('X-Hmac-Signature')), 400, 'Invalid shipping webhook signature.');
-        $shipping->processWebhook((array) json_decode($payload, true, 512, JSON_THROW_ON_ERROR));
+        app(WebsiteShipmentLifecycleService::class)->ingest($request->getContent(), $request->headers->all(), $request->method(), $request->getPathInfo());
 
         return response()->json(['received' => true]);
     }
@@ -655,16 +726,5 @@ class WebsiteCommerceController extends Controller
         }
 
         return false;
-    }
-
-    private function validEasyPostSignature(string $payload, string $signature): bool
-    {
-        $secret = trim((string) config('managed_website.easypost_webhook_secret'));
-        if ($secret === '' || $signature === '') {
-            return false;
-        }
-        $signature = str_starts_with($signature, 'v1=') ? substr($signature, 3) : $signature;
-
-        return hash_equals(hash_hmac('sha256', $payload, $secret), $signature);
     }
 }

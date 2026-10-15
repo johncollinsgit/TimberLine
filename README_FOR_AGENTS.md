@@ -13,6 +13,32 @@
   Modern Forestry's native pilot with its existing Shopify operations intact.
   Follow `docs/operations/schema-drift-reconciliation-2026-10-15.md`.
 
+## Retail shipping Phase 4 (2026-10-15)
+
+- Continue the native-only five-phase plan. Phases 1–3 are live behind disabled
+  checkout/shipping gates via PR #397 (`88bda81a`). Phase 4 remains under review.
+- `WebsiteShipmentLifecycleService` owns durable original-account postage,
+  GET-only recovery after an uncertain POST, refund/replacement state, explicit
+  pack/handoff, signed events and canonical tracking. Never reset an unknown
+  buy to prepared or use a print failure to buy replacement postage.
+- `WebsiteLabelDocumentService` retains private original PNG and exact-size PDF
+  layouts. Only active workspace shipping managers may access address-bearing
+  labels. Browser dialog closure never proves printing or carrier handoff.
+- `WebsiteOrderNotificationService` is a separate encrypted native outbox. Never
+  route it through marketing/Shopify gateways. Unknown acceptance cannot retry
+  automatically; operator evidence and a separate explicit retry are required.
+  Its new migration must repair partial MySQL constraints/indexes and retain
+  deduplication. Refresh only the disposable data-free schema baseline.
+- `website:reconcile-shipments` runs every five minutes; the native notification
+  scanner runs each minute. Neither activates rollout gates. Health rendering
+  uses local configuration/counters and must not call providers.
+- Carrier credential rotation creates a new encrypted IntegrationConnection;
+  retain old credentials for their pinned attempts. Never flash keys/secrets.
+- Printing supports the standard PDF/driver path. The USB DYMO LabelWriter 4XL
+  on Mac and Windows is the first physical target; other exact models need
+  verification. Do not claim hardware, barcode, USPS delivery, tax, or settlement
+  evidence from mocked or browser tests. Phase 5 remains the controlled pilot.
+
 ## Retail shipping Phase 3 (2026-10-15)
 
 - Continue from the phased retail shipping plan. Phase 3 is isolated on

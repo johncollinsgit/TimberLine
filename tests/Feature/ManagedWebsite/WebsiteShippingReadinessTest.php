@@ -19,6 +19,7 @@ use App\Services\ManagedWebsite\WebsiteShippingReadinessService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\Support\WebsiteStripeFixture;
 
 beforeEach(function (): void {
@@ -207,7 +208,7 @@ test('missing weights stop carrier requests and shipping checkout but do not sto
         'commercial.billing_readiness.tenant_payments' => ['enabled' => true, 'tenant_slugs' => [$this->tenant->slug], 'connect_webhooks_verified' => true, 'automatic_tax_enabled' => true, 'tax_decision_confirmed' => true],
     ]);
     TenantPaymentAccount::query()->create(['tenant_id' => $this->tenant->id, 'provider_account_id' => 'acct_weights', 'status' => 'ready', 'charges_enabled' => true, 'payouts_enabled' => true, 'details_submitted' => true]);
-    IntegrationConnection::query()->create(['tenant_id' => $this->tenant->id, 'provider' => 'easypost', 'status' => 'connected', 'access_token' => 'EZTK_test_weights']);
+    IntegrationConnection::query()->create(['tenant_id' => $this->tenant->id, 'provider' => 'easypost', 'status' => 'connected', 'access_token' => 'EZTK_test_weights', 'external_account_secret' => 'carrier-secret']);
     $product = weightProduct($this->site, $this->actor, 'soap');
     $cart = $this->commerce->addToCart($this->commerce->cartFor($this->site, null), $product->variants->first(), 1);
     Http::fake([...WebsiteStripeFixture::support(), 'https://api.stripe.com/v1/checkout/sessions' => Http::response(['id' => 'cs_weights', 'url' => 'https://checkout.stripe.com/weights'])]);
@@ -224,3 +225,26 @@ test('missing weights stop carrier requests and shipping checkout but do not sto
     $result = $this->commerce->beginCheckout($cart, $buyer, 'https://example.test/success', 'https://example.test/cart');
     expect($result['order']->fulfillment_method)->toBe('pickup')->and($product->fresh()->status)->toBe('active');
 });
+
+test('incomplete carrier keys or account webhook secrets block shipping before payment while pickup stays available', function (string $missing): void {
+    config()->set(['managed_website.commerce_enabled' => true, 'managed_website.commerce_shipping_enabled' => true,
+        'managed_website.commerce_shipping_tenant_ids' => [$this->tenant->id], 'services.stripe.secret' => 'sk_test_weights',
+        'commercial.billing_readiness.tenant_payments' => ['enabled' => true, 'tenant_slugs' => [$this->tenant->slug], 'connect_webhooks_verified' => true, 'automatic_tax_enabled' => true, 'tax_decision_confirmed' => true]]);
+    TenantPaymentAccount::query()->create(['tenant_id' => $this->tenant->id, 'provider_account_id' => 'acct_weights', 'status' => 'ready', 'charges_enabled' => true, 'payouts_enabled' => true]);
+    IntegrationConnection::query()->create(['tenant_id' => $this->tenant->id, 'provider' => 'easypost', 'status' => 'connected',
+        'access_token' => $missing === 'key' ? null : 'EZTK_fixture', 'external_account_secret' => $missing === 'secret' ? null : 'carrier-secret']);
+    WebsiteStripeFixture::origin($this->site);
+    $product = weightProduct($this->site, $this->actor, 'measured', [['title' => 'Default', 'price' => '15.00', 'is_available' => true, 'shipping_weight_ounces' => 12]]);
+    $cart = $this->commerce->addToCart($this->commerce->cartFor($this->site, null), $product->variants->first(), 1);
+    $destination = ['name' => 'Buyer', 'street1' => '10 Market St', 'city' => 'Austin', 'state' => 'TX', 'zip' => '78702', 'country' => 'US'];
+    Http::preventStrayRequests();
+    Http::fake([...WebsiteStripeFixture::support(), 'https://api.stripe.com/v1/checkout/sessions' => Http::response(['id' => 'cs_weights', 'url' => 'https://checkout.stripe.com/weights'])]);
+    expect(app(WebsiteCommerceShippingService::class)->enabledFor($this->tenant))->toBeFalse();
+    expect(fn () => app(WebsiteCommerceShippingService::class)->quote($cart, $destination))->toThrow(HttpException::class);
+    $buyer = ['name' => 'Buyer', 'email' => 'buyer@example.test', 'fulfillment_method' => 'ship', 'shipping_rate_quote_id' => 1, 'shipping_address' => $destination];
+    expect(fn () => $this->commerce->beginCheckout($cart, $buyer, 'https://weights.test/success', 'https://weights.test/cart'))->toThrow(HttpException::class);
+    expect(WebsiteOrder::query()->count())->toBe(0)->and(App\Models\WebsitePayment::query()->count())->toBe(0);
+    Http::assertNothingSent();
+    $buyer['fulfillment_method'] = 'pickup';
+    expect($this->commerce->beginCheckout($cart, $buyer, 'https://weights.test/success', 'https://weights.test/cart')['order']->fulfillment_method)->toBe('pickup');
+})->with(['key', 'secret']);

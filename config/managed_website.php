@@ -27,6 +27,13 @@ return [
     'commerce_operations_tenant_ids' => $tenantIds('MANAGED_WEBSITE_COMMERCE_OPERATIONS_TENANT_IDS'),
     'commerce_shipping_enabled' => $bool('MANAGED_WEBSITE_COMMERCE_SHIPPING_ENABLED'),
     'commerce_shipping_tenant_ids' => $tenantIds('MANAGED_WEBSITE_COMMERCE_SHIPPING_TENANT_IDS'),
+    // Transactional native order updates never use a marketing/provider fallback.
+    'order_notifications_enabled' => $bool('MANAGED_WEBSITE_ORDER_NOTIFICATIONS_ENABLED'),
+    'order_notifications_tenant_ids' => $tenantIds('MANAGED_WEBSITE_ORDER_NOTIFICATIONS_TENANT_IDS'),
+    'order_notifications_sender_approved' => $bool('MANAGED_WEBSITE_ORDER_NOTIFICATIONS_SENDER_APPROVED'),
+    'order_notifications_mailer' => trim((string) env('MANAGED_WEBSITE_ORDER_NOTIFICATIONS_MAILER', '')),
+    'order_notifications_from_address' => trim((string) env('MANAGED_WEBSITE_ORDER_NOTIFICATIONS_FROM_ADDRESS', '')),
+    'order_notifications_from_name' => trim((string) env('MANAGED_WEBSITE_ORDER_NOTIFICATIONS_FROM_NAME', 'Everbranch')),
     'pirate_ship_bridge_enabled' => $bool('MANAGED_WEBSITE_PIRATE_SHIP_BRIDGE_ENABLED'),
     'pirate_ship_bridge_tenant_ids' => $tenantIds('MANAGED_WEBSITE_PIRATE_SHIP_BRIDGE_TENANT_IDS'),
     'commerce_imports_enabled' => $bool('MANAGED_WEBSITE_COMMERCE_IMPORTS_ENABLED'),

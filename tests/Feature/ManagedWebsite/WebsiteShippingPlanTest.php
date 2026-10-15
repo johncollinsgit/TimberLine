@@ -21,6 +21,7 @@ use App\Services\ManagedWebsite\WebsiteShippingSetupService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
+use Tests\Support\WebsiteEasyPostFixture;
 use Tests\Support\WebsiteStripeFixture;
 
 beforeEach(function (): void {
@@ -39,7 +40,7 @@ beforeEach(function (): void {
         'commercial.billing_readiness.tenant_payments' => ['enabled' => true, 'tenant_slugs' => ['shipping-pilot'], 'connect_webhooks_verified' => true, 'automatic_tax_enabled' => true, 'tax_decision_confirmed' => true],
     ]);
     $this->site = app(ManagedWebsiteService::class)->createSite($this->tenant, $this->actor);
-    $this->connection = IntegrationConnection::query()->create(['tenant_id' => $this->tenant->id, 'provider' => 'easypost', 'status' => IntegrationConnection::STATUS_CONNECTED, 'access_token' => 'EZTK_private_fixture']);
+    $this->connection = IntegrationConnection::query()->create(['tenant_id' => $this->tenant->id, 'provider' => 'easypost', 'status' => IntegrationConnection::STATUS_CONNECTED, 'access_token' => 'EZTK_private_fixture', 'external_account_secret' => 'fixture-carrier-webhook']);
     $this->setup = app(WebsiteShippingSetupService::class);
     $this->setup->savePolicy($this->site, ['mode' => 'test', 'services' => ['USPS:GroundAdvantage', 'USPS:Priority']], $this->actor);
     $this->setup->saveLocation($this->site, ['name' => 'Warehouse', 'street1' => '1 Main St', 'city' => 'Austin', 'state' => 'TX', 'zip' => '78701', 'is_default' => true], $this->actor);
@@ -67,7 +68,8 @@ beforeEach(function (): void {
             return Http::response($this->carrierResponse);
         },
         'https://api.stripe.com/v1/checkout/sessions' => Http::response(['id' => 'cs_pilot', 'url' => 'https://checkout.stripe.com/pilot']),
-        'https://api.easypost.com/v2/shipments/shp_pilot/buy' => Http::response(['id' => 'shp_pilot', 'tracking_code' => 'TEST9400', 'selected_rate' => ['carrier' => 'USPS', 'service' => 'GroundAdvantage', 'rate' => '5.25', 'currency' => 'USD'], 'postage_label' => ['label_url' => 'https://labels.test/pilot']]),
+        'https://api.easypost.com/v2/shipments/shp_pilot' => fn () => Http::response(WebsiteEasyPostFixture::shipment(App\Models\WebsiteShipment::query()->where('provider_shipment_id', 'shp_pilot')->firstOrFail())),
+        'https://api.easypost.com/v2/shipments/shp_pilot/buy' => fn () => Http::response(WebsiteEasyPostFixture::shipment(App\Models\WebsiteShipment::query()->where('provider_shipment_id', 'shp_pilot')->firstOrFail(), true)),
     ]);
 });
 
@@ -131,6 +133,18 @@ test('carrier test and production modes cannot be mixed', function (): void {
     $this->carrierResponse['mode'] = 'production';
     expect(fn () => $this->shipping->quote($this->cart, $this->destination))->toThrow(HttpException::class);
     expect(WebsiteShippingRateQuote::query()->count())->toBe(0);
+});
+
+test('declared carrier credential mode is checked before contacting the provider and successful rates verify health', function (): void {
+    $this->connection->update(['metadata' => ['native_shipping' => ['mode' => 'production']]]);
+    expect(fn () => $this->shipping->quote($this->cart, $this->destination))->toThrow(HttpException::class);
+    Http::assertNothingSent();
+    $this->connection->update(['metadata' => ['native_shipping' => ['mode' => 'test']]]);
+    $fingerprint = $this->plans->accountFingerprint($this->connection->fresh());
+    $this->shipping->quote($this->cart, $this->destination);
+    expect(data_get($this->connection->fresh()->metadata, 'native_shipping.verified_at'))->not->toBeNull()
+        ->and(data_get($this->connection->fresh()->metadata, 'native_shipping.verified_mode'))->toBe('test')
+        ->and($this->plans->accountFingerprint($this->connection->fresh()))->toBe($fingerprint);
 });
 
 test('material changes invalidate a quote before payment', function (string $change): void {
