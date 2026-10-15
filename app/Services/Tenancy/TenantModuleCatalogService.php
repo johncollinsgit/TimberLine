@@ -734,6 +734,9 @@ class TenantModuleCatalogService
             if (! is_array($definition) || ! in_array($moduleKey, array_map('strval', (array) ($definition['modules'] ?? [])), true)) {
                 continue;
             }
+            if (! \App\Support\Tenancy\CatalogPurchasePolicy::addonEnabled((string) $addonKey)) {
+                return [];
+            }
 
             $billingMode = strtolower(trim((string) ($definition['billing_mode'] ?? 'unavailable')));
             $purchaseKey = trim((string) ($definition['purchase_key'] ?? ''));

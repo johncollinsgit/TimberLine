@@ -1,5 +1,25 @@
 # SYSTEM SNAPSHOT
 
+## Subscriptions Phase 1 foundation (2026-10-15; isolated review branch)
+
+- Canonical subscription entitlements cover admin, customer/mobile, public polls,
+  webhook evidence and CLI apply paths. Active tenant managers require a separate
+  Everbranch sign-in; Shopify launch/session context alone is insufficient.
+- Store/app identity is locally frozen; new request evidence is encrypted and
+  truthful. Requests, cutover review and received webhooks never execute Shopify
+  changes, queue payment emails or charge cards. The isolated adapter contract is
+  pinned to 2026-10; provider execution and scheduling remain hard disabled.
+- App Review subscription demos no longer seed operational contracts/polls or
+  live votes/reviews. Existing demo evidence is retained and excluded from metrics.
+- Subscriptions has local USD 99/month separate add-on metadata; Modern Forestry
+  retains its explicit comped grant. Canonical new purchases stay disabled in
+  catalogs, direct/plan checkout and mobile handoff. No external billing setup
+  occurs. Gift Cards is a later separate add-on with pricing pending approval.
+- Read-only merchant checks found zero contracts owned by Backstage; other-app
+  subscriptions require reviewed ownership/vault migration. See
+  `docs/operations/everbranch-subscriptions-and-gift-cards.md` for the five
+  subscription phases, gift-card phases, limitations and acceptance gates.
+
 ## Reviewed schema reconciliation (2026-10-15; deployed)
 
 - A separate forward-only repair addresses historical production drift before

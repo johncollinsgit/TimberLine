@@ -10,7 +10,6 @@ use App\Services\Marketing\MarketingStorefrontIdentityService;
 use App\Services\Marketing\ShopifyCustomerAddressSyncService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -92,7 +91,6 @@ class ModernForestryMobileCustomerSessionService
         }
 
         $profile = $this->ensureAppReviewDemoProfile($configuredEmail);
-        $this->ensureAppReviewDemoSubscriptionState($profile);
 
         return $this->demoTokenPayload($profile);
     }
@@ -486,81 +484,6 @@ class ModernForestryMobileCustomerSessionService
         }
 
         return $resolved['profile'];
-    }
-
-    protected function ensureAppReviewDemoSubscriptionState(MarketingProfile $profile): void
-    {
-        $tenantId = ModernForestryMobileCheckoutService::TENANT_ID;
-        $now = now();
-
-        $contractId = DB::table('subscription_contracts')->updateOrInsert(
-            [
-                'tenant_id' => $tenantId,
-                'shopify_subscription_contract_gid' => 'gid://evergrove/AppReviewSubscriptionContract/modern-forestry-candle-club',
-            ],
-            [
-                'marketing_profile_id' => (int) $profile->id,
-                'shopify_customer_gid' => 'gid://evergrove/AppReviewCustomer/modern-forestry',
-                'status' => 'active',
-                'is_candle_club' => true,
-                'next_billing_date' => $now->copy()->addWeeks(2)->toDateString(),
-                'next_shipping_date' => $now->copy()->addWeeks(3)->toDateString(),
-                'completed_cycles' => 3,
-                'pause_count_current_commitment' => 0,
-                'commitment_ends_on' => $now->copy()->addMonths(3)->toDateString(),
-                'shipping_address' => json_encode([
-                    'firstName' => 'App',
-                    'lastName' => 'Reviewer',
-                    'address1' => '123 Forest Lane',
-                    'city' => 'Asheville',
-                    'province' => 'North Carolina',
-                    'provinceCode' => 'NC',
-                    'zip' => '28801',
-                    'country' => 'United States',
-                    'countryCode' => 'US',
-                ], JSON_THROW_ON_ERROR),
-                'metadata' => json_encode(['app_review_demo' => true, 'normalized_email' => (string) $profile->normalized_email], JSON_THROW_ON_ERROR),
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]
-        );
-
-        $pollId = DB::table('subscription_polls')
-            ->where('tenant_id', $tenantId)
-            ->where('poll_type', 'candle_club_scent')
-            ->where('status', 'open')
-            ->orderByDesc('id')
-            ->value('id');
-
-        if (! $pollId) {
-            $pollId = DB::table('subscription_polls')->insertGetId([
-                'tenant_id' => $tenantId,
-                'poll_type' => 'candle_club_scent',
-                'title' => 'Vote for next month',
-                'description' => 'App Review demo ballot for Candle Club scent voting.',
-                'status' => 'open',
-                'opens_at' => $now->copy()->subDay(),
-                'closes_at' => $now->copy()->addWeek(),
-                'share_token' => Str::random(40),
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]);
-        }
-
-        foreach (['Coffeehouse', 'Cabin Morning', 'Forest Rain'] as $index => $label) {
-            DB::table('subscription_poll_options')->updateOrInsert(
-                [
-                    'tenant_id' => $tenantId,
-                    'subscription_poll_id' => (int) $pollId,
-                    'label' => $label,
-                ],
-                [
-                    'position' => $index + 1,
-                    'updated_at' => $now,
-                    'created_at' => $now,
-                ]
-            );
-        }
     }
 
     /**

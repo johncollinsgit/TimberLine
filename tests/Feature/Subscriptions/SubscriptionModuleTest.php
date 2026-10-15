@@ -5,20 +5,27 @@ use App\Models\Tenant;
 use App\Models\TenantModuleEntitlement;
 use App\Services\Shopify\ShopifyEmbeddedPageRegistry;
 use App\Services\Subscriptions\SubscriptionModuleService;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 require_once __DIR__.'/../ShopifyEmbeddedTestHelpers.php';
+require_once __DIR__.'/../../Support/SubscriptionFoundationHelpers.php';
+
+beforeEach(function (): void {
+    $this->withoutVite();
+});
 
 test('subscriptions module is a paid shopify add-on with an embedded app link', function (): void {
     $tenant = Tenant::query()->create([
         'name' => 'Modern Forestry',
         'slug' => 'modern-forestry',
     ]);
+    subscriptionFoundationFixture($this, $tenant);
 
     configureEmbeddedRetailStore((int) $tenant->id);
 
-    TenantModuleEntitlement::query()->create([
+    TenantModuleEntitlement::query()->updateOrCreate(['tenant_id' => $tenant->id, 'module_key' => 'subscriptions'], [
         'tenant_id' => $tenant->id,
         'module_key' => 'subscriptions',
         'availability_status' => 'available',
@@ -41,7 +48,9 @@ test('subscriptions module is a paid shopify add-on with an embedded app link', 
 
     $this->get(route('shopify.app.subscriptions', retailEmbeddedSignedQuery()))
         ->assertOk()
-        ->assertSeeText('Subscriptions');
+        ->assertSeeText('Subscriptions')
+        ->assertSeeText('No provider-confirmed sync or payment retry is enabled.')
+        ->assertDontSeeText('API contract:');
 });
 
 test('migration dry-run is local only and cutover requires recharge billing pause confirmation', function (): void {
@@ -49,6 +58,7 @@ test('migration dry-run is local only and cutover requires recharge billing paus
         'name' => 'Modern Forestry',
         'slug' => 'modern-forestry',
     ]);
+    subscriptionFoundationFixture($this, $tenant);
 
     $service = app(SubscriptionModuleService::class);
     $dryRun = $service->createMigrationDryRun((int) $tenant->id, null, [[
@@ -60,7 +70,7 @@ test('migration dry-run is local only and cutover requires recharge billing paus
         'status' => 'active',
     ]]);
 
-    expect($dryRun['status'])->toBe('ready_for_cutover')
+    expect($dryRun['status'])->toBe('ready_for_review')
         ->and((int) $dryRun['summary']['valid_rows'])->toBe(1)
         ->and(DB::table('subscription_contracts')->where('tenant_id', $tenant->id)->count())->toBe(0);
 
@@ -70,7 +80,7 @@ test('migration dry-run is local only and cutover requires recharge billing paus
 
     $approved = $service->approveCutover((int) $tenant->id, (int) $dryRun['id'], null, true);
     expect($approved['ok'])->toBeTrue()
-        ->and($approved['status'])->toBe('approved')
+        ->and($approved['status'])->toBe('cutover_review_requested')
         ->and(DB::table('subscription_module_settings')
             ->where('tenant_id', $tenant->id)
             ->where('billing_scheduler_enabled', false)
@@ -82,6 +92,7 @@ test('facebook style otp voting allows one active candle club vote per shopify c
         'name' => 'Modern Forestry',
         'slug' => 'modern-forestry',
     ]);
+    subscriptionFoundationFixture($this, $tenant);
 
     $profile = MarketingProfile::factory()->create([
         'tenant_id' => $tenant->id,
@@ -174,6 +185,7 @@ test('authenticated mobile candle club action records one vote per active contra
         'name' => 'Modern Forestry',
         'slug' => 'modern-forestry',
     ]);
+    subscriptionFoundationFixture($this, $tenant);
 
     $profile = MarketingProfile::factory()->create([
         'tenant_id' => $tenant->id,
@@ -239,6 +251,7 @@ test('storefront poll payload reads the same active candle club poll', function 
         'name' => 'Modern Forestry',
         'slug' => 'modern-forestry',
     ]);
+    subscriptionFoundationFixture($this, $tenant);
 
     $pollId = DB::table('subscription_polls')->insertGetId([
         'tenant_id' => $tenant->id,
@@ -272,6 +285,7 @@ test('paused or cancelled candle club contracts cannot request a voting code', f
         'name' => 'Modern Forestry',
         'slug' => 'modern-forestry',
     ]);
+    subscriptionFoundationFixture($this, $tenant);
 
     $customerId = DB::table('subscription_customers')->insertGetId([
         'tenant_id' => $tenant->id,
@@ -309,12 +323,13 @@ test('paused or cancelled candle club contracts cannot request a voting code', f
         ->and($result['status'])->toBe('not_eligible');
 })->with(['paused', 'cancelled', 'failed']);
 
-test('john preview account gets unlocked candle club menus while normal accounts stay locked', function (): void {
+test('demo preview is explicit and email alone does not unlock candle club', function (): void {
     $tenant = Tenant::query()->create([
         'id' => 1,
         'name' => 'Modern Forestry',
         'slug' => 'modern-forestry',
     ]);
+    subscriptionFoundationFixture($this, $tenant);
 
     $john = MarketingProfile::factory()->create([
         'tenant_id' => $tenant->id,
@@ -329,7 +344,7 @@ test('john preview account gets unlocked candle club menus while normal accounts
     ]);
 
     $service = app(SubscriptionModuleService::class);
-    $preview = $service->customerCandleClubPayload($john);
+    $preview = $service->customerCandleClubPayload($john, true);
     $locked = $service->customerCandleClubPayload($normal);
 
     expect($preview['eligible'])->toBeTrue()
@@ -347,12 +362,13 @@ test('john preview account gets unlocked candle club menus while normal accounts
         ->and(data_get($locked, 'actions.can_pause'))->toBeFalse();
 });
 
-test('john preview profile records mobile candle club actions as shopify preview intents', function (): void {
+test('explicit demo requests do not create operational events', function (): void {
     $tenant = Tenant::query()->create([
         'id' => 1,
         'name' => 'Modern Forestry',
         'slug' => 'modern-forestry',
     ]);
+    subscriptionFoundationFixture($this, $tenant);
 
     $john = MarketingProfile::factory()->create([
         'tenant_id' => $tenant->id,
@@ -363,22 +379,14 @@ test('john preview profile records mobile candle club actions as shopify preview
     $result = app(SubscriptionModuleService::class)->recordCustomerCandleClubAction($john, 'update_payment_card', [
         'action' => 'update_payment_card',
         'source' => 'ios_app',
-    ]);
+    ], true);
 
     expect($result['ok'])->toBeTrue()
         ->and($result['status'])->toBe('preview_recorded')
         ->and($result['action'])->toBe('send_payment_update_email')
-        ->and($result['shopify_mutation'])->toBe('customerPaymentMethodSendUpdateEmail')
         ->and(data_get($result, 'candle_club.preview'))->toBeTrue();
 
-    $event = DB::table('subscription_lifecycle_events')->first();
-
-    expect($event)->not->toBeNull()
-        ->and($event->subscription_contract_id)->toBeNull()
-        ->and($event->event_type)->toBe('send_payment_update_email')
-        ->and($event->source)->toBe('mobile_app')
-        ->and($event->status)->toBe('shopify_preview_recorded')
-        ->and(data_get(json_decode((string) $event->metadata, true), 'shopify_mode'))->toBe('preview_no_live_mutation');
+    expect(DB::table('subscription_lifecycle_events')->where('source', 'mobile_app')->count())->toBe(0);
 });
 
 test('non candle club profile cannot record mobile candle club actions', function (): void {
@@ -387,6 +395,7 @@ test('non candle club profile cannot record mobile candle club actions', functio
         'name' => 'Modern Forestry',
         'slug' => 'modern-forestry',
     ]);
+    subscriptionFoundationFixture($this, $tenant);
 
     $profile = MarketingProfile::factory()->create([
         'tenant_id' => $tenant->id,
@@ -402,7 +411,7 @@ test('non candle club profile cannot record mobile candle club actions', functio
     expect($result['ok'])->toBeFalse()
         ->and($result['status'])->toBe('not_eligible')
         ->and(data_get($result, 'candle_club.eligible'))->toBeFalse()
-        ->and(DB::table('subscription_lifecycle_events')->count())->toBe(0);
+        ->and(DB::table('subscription_lifecycle_events')->where('source', 'mobile_app')->count())->toBe(0);
 });
 
 test('active candle club payload exposes commitment menus shipping and payment summaries', function (): void {
@@ -410,6 +419,7 @@ test('active candle club payload exposes commitment menus shipping and payment s
         'name' => 'Modern Forestry',
         'slug' => 'modern-forestry',
     ]);
+    subscriptionFoundationFixture($this, $tenant);
 
     $profile = MarketingProfile::factory()->create([
         'tenant_id' => $tenant->id,
@@ -490,6 +500,7 @@ test('active candle club payload exposes commitment menus shipping and payment s
 
 test('pause action validates pause allowance and records structured payload', function (): void {
     $tenant = Tenant::query()->create(['name' => 'Modern Forestry', 'slug' => 'modern-forestry']);
+    subscriptionFoundationFixture($this, $tenant);
     $profile = MarketingProfile::factory()->create(['tenant_id' => $tenant->id]);
 
     DB::table('subscription_candle_club_settings')->insert([
@@ -516,15 +527,16 @@ test('pause action validates pause allowance and records structured payload', fu
         'duration_months' => 2,
     ]);
 
-    $event = DB::table('subscription_lifecycle_events')->first();
+    $event = DB::table('subscription_lifecycle_events')->where('source', 'mobile_app')->first();
 
     expect($result['ok'])->toBeTrue()
         ->and($event->event_type)->toBe('pause')
-        ->and(data_get(json_decode((string) $event->after_payload, true), 'duration_months'))->toBe(2);
+        ->and(data_get(json_decode(Crypt::decryptString(json_decode((string) $event->after_payload, true)['encrypted']), true), 'duration_months'))->toBe(2);
 });
 
 test('candle club scent feedback exports to native reviews as pending', function (): void {
     $tenant = Tenant::query()->create(['name' => 'Modern Forestry', 'slug' => 'modern-forestry']);
+    subscriptionFoundationFixture($this, $tenant);
     $profile = MarketingProfile::factory()->create(['tenant_id' => $tenant->id]);
 
     DB::table('subscription_contracts')->insert([
@@ -569,6 +581,7 @@ test('candle club recipe import keeps oils internal and member cards recipe free
         'name' => 'Modern Forestry',
         'slug' => 'modern-forestry',
     ]);
+    subscriptionFoundationFixture($this, $tenant);
 
     $this->artisan('subscriptions:import-candle-club-recipes', [
         '--tenant' => $tenant->id,
