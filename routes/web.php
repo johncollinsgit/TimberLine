@@ -28,6 +28,7 @@ use App\Http\Controllers\Integrations\BouncieConnectionController;
 use App\Http\Controllers\Integrations\InstagramConnectionController;
 use App\Http\Controllers\Integrations\InstagramWebhookController;
 use App\Http\Controllers\Integrations\QuickBooksConnectionController;
+use App\Http\Controllers\JarvisPublicPagesController;
 use App\Http\Controllers\Landlord\LandlordAgreementController;
 use App\Http\Controllers\Landlord\LandlordBranchPreviewController;
 use App\Http\Controllers\Landlord\LandlordClientProjectTicketController;
@@ -254,6 +255,11 @@ Route::get('/', function (
 Route::get('/privacy', [PublicLegalController::class, 'privacy'])->name('legal.privacy');
 Route::get('/terms', [PublicLegalController::class, 'terms'])->name('legal.terms');
 Route::get('/support', [PublicLegalController::class, 'support'])->name('legal.support');
+Route::prefix('jarvis')->name('evergrove.jarvis.')->group(function (): void {
+    Route::get('/', [JarvisPublicPagesController::class, 'home'])->name('home');
+    Route::get('/privacy', [JarvisPublicPagesController::class, 'privacy'])->name('privacy');
+    Route::get('/terms', [JarvisPublicPagesController::class, 'terms'])->name('terms');
+});
 Route::get('/ready', ProductionReadinessController::class)->name('production.ready');
 Route::get('/integrations/quickbooks/disconnected', [QuickBooksConnectionController::class, 'disconnected'])
     ->name('integrations.quickbooks.disconnected');
@@ -433,6 +439,8 @@ $landlordRoutes = static function (): void {
         ->name('tenants.blueprint.update');
     Route::get('/landlord/tenants/{tenant}', [LandlordTenantDirectoryController::class, 'show'])
         ->name('tenants.show');
+    Route::put('/landlord/tenants/{tenant}/presentation', [\App\Http\Controllers\Landlord\LandlordWorkspacePresentationController::class, 'update'])
+        ->name('tenants.presentation.update');
     Route::post('/landlord/tenants/{tenant}/forms/templates/{templateKey}', [LandlordTenantDirectoryController::class, 'provisionFormFromTemplate'])
         ->name('tenants.forms.templates.provision');
     Route::post('/landlord/tenants/{tenant}/role', [LandlordTenantDirectoryController::class, 'updateRole'])
@@ -542,6 +550,12 @@ Route::get('/lander', [EvergroveServicesController::class, 'lander'])->name('eve
 Route::get('/book', [EvergroveServicesController::class, 'book'])
     ->middleware(EnsureEvergroveProposalHost::class)
     ->name('evergrove.book');
+Route::post('/book/brief', [EvergroveServicesController::class, 'submitBrief'])
+    ->middleware([EnsureEvergroveProposalHost::class, 'throttle:6,1'])
+    ->name('evergrove.book.brief');
+Route::post('/book/hurdle', [EvergroveServicesController::class, 'submitHurdle'])
+    ->middleware([EnsureEvergroveProposalHost::class, 'throttle:6,1'])
+    ->name('evergrove.book.hurdle');
 Route::get('/tools/project-estimate', [EvergroveServicesController::class, 'projectEstimate'])->name('evergrove.tools.project-estimate');
 Route::get('/tools/ai-roi', [EvergroveServicesController::class, 'aiRoi'])->name('evergrove.tools.ai-roi');
 Route::get('/tools/automation-savings', [EvergroveServicesController::class, 'automationSavings'])->name('evergrove.tools.automation-savings');
@@ -1377,6 +1391,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::get('/results', [MarketingResultsController::class, 'show'])
                     ->middleware('module:reporting')
                     ->name('results');
+                Route::get('/weekly-recap/{metric}', [\App\Http\Controllers\Marketing\WeeklyRecapActivityController::class, 'show'])->name('weekly-recap.activity');
                 Route::get('/customers', [MarketingCustomersController::class, 'index'])->name('customers');
                 Route::get('/customers/data', [MarketingCustomersController::class, 'data'])->name('customers.data');
                 Route::post('/customers/bulk-archive', [MarketingCustomersController::class, 'bulkArchive'])->name('customers.bulk-archive');
@@ -2499,3 +2514,5 @@ Route::get('/email/unsubscribe', [\App\Http\Controllers\Marketing\MarketingEmail
 Route::post('/email/unsubscribe', [\App\Http\Controllers\Marketing\MarketingEmailUnsubscribeController::class, 'store'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class, \Illuminate\Session\Middleware\StartSession::class, \Illuminate\View\Middleware\ShareErrorsFromSession::class])
     ->name('marketing.email.unsubscribe.store');
+
+require __DIR__.'/soccer.php';

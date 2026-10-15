@@ -50,6 +50,10 @@ class UnifiedAppNavigationService
         $tenantId = $tenant ? (int) $tenant->id : null;
         $profile = $this->experienceProfileService->forTenant($tenantId, $user, $tenant);
 
+        if (($profile['workspace_focus'] ?? null) === 'soccer' && $tenant && $user && app(\App\Services\Soccer\SoccerAccess::class)->enabled($tenant)) {
+            return app(\App\Services\Soccer\SoccerWorkspaceService::class)->navigation($request, $tenant, $user, $profile);
+        }
+
         if (($profile['workspace_focus'] ?? null) === 'website_sales' && $tenant && $user) {
             return $this->buildWebsiteSalesShell($request, $tenant, $user, $profile);
         }
@@ -409,7 +413,32 @@ class UnifiedAppNavigationService
         // Operator work follows the same scanning order as tenant work:
         // live work first, branch/configuration tools next, settings last.
         // Do not alphabetize this list; it makes urgent setup work harder to find.
-        $items = [$homeItem, ...$landlordItems];
+        $destinations = collect($landlordItems)->keyBy('key');
+        $group = static function (string $key, string $label, string $icon, array $children): array {
+            return ['key' => $key, 'label' => $label, 'icon' => $icon,
+                'href' => $children[0]['href'],
+                'current' => collect($children)->contains(fn (array $child): bool => (bool) ($child['current'] ?? false)),
+                'children' => $children];
+        };
+        $items = [$homeItem,
+            $group('clients', 'Clients', 'building-office-2', [
+                $destinations['workspaces']['children'][0],
+                ['key' => 'launch-partners', 'icon' => 'user-group', 'label' => 'Launch partners', 'href' => route('landlord.onboarding.prospects.index'), 'current' => $request->routeIs('landlord.onboarding.prospects.*')],
+                $destinations['access-requests'], $destinations['setup-reviews'],
+            ]),
+            $group('money', 'Money', 'credit-card', [
+                $destinations['invoices'], $destinations['agreements'],
+                $destinations['workspaces']['children'][1], $destinations['plan-billing-readiness'],
+            ]),
+            $group('support', 'Support', 'lifebuoy', [
+                $destinations['tickets'], $destinations['custom-requests'],
+                ['key' => 'service-inquiries', 'icon' => 'chat-bubble-left-right', 'label' => 'Service inquiries', 'href' => route('landlord.service-inquiries.index'), 'current' => $request->routeIs('landlord.service-inquiries.*')],
+            ]),
+            $group('platform', 'Platform', 'cog-6-tooth', [
+                $destinations['branches'], $destinations['features'],
+                $destinations['system-readiness'], $destinations['developer'],
+            ]),
+        ];
 
         return [
             'tenant' => null,

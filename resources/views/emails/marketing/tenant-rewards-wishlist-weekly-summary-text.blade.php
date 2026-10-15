@@ -8,8 +8,14 @@ Birthday gifts redeemed: {{ data_get($report, 'recap.birthday_redeemed', 0) }}
 Candle Cash added: ${{ number_format((float) data_get($report, 'candle_cash.earned.amount', 0), 2) }}
 Candle Cash codes issued: {{ data_get($report, 'candle_cash.issued.count', 0) }} · ${{ number_format((float) data_get($report, 'candle_cash.issued.amount', 0), 2) }}
 Candle Cash codes redeemed: {{ data_get($report, 'candle_cash.redeemed.count', 0) }} · ${{ number_format((float) data_get($report, 'candle_cash.redeemed.amount', 0), 2) }}
-Emails sent / failed: {{ data_get($report, 'recap.emails_sent', 0) }} / {{ data_get($report, 'recap.emails_failed', 0) }}
+Emails sent: {{ data_get($report, 'recap.emails_sent', 0) }}
+Emails failed: {{ data_get($report, 'recap.emails_failed', 0) }}
 Wishlist items added: {{ data_get($report, 'wishlist.adds', 0) }}
+
+VIEW ACTIVITY IN EVERBRANCH
+@foreach((array) data_get($report, 'links', []) as $metric => $link)
+{{ \App\Services\Marketing\WeeklyRecapActivityService::METRICS[$metric] }}: {!! $link !!}
+@endforeach
 
 UNSUBSCRIBES
 @forelse((array) data_get($report, 'recap.unsubscribed_customers', []) as $customer)
@@ -21,7 +27,10 @@ No email unsubscribe requests were recorded this week.
 STOREFRONT HEALTH
 {{ data_get($report, 'health.label') }}: {{ data_get($report, 'health.summary') }}
 
-Open Everbranch: {{ rtrim(config('app.url'), '/') }}/marketing/customers
+Open Everbranch: {{ rtrim(config('app.url'), '/') }}/marketing/customers?tenant={{ data_get($report, 'tenant.id') }}
 
 Unsubscribes take effect when processed. This is an internal recap containing customer details.
 Figures reflect activity recorded in Everbranch. Applying a code is not a checkout redemption.
+
+Sent means accepted by the provider. Follow the email links for delivery history and failure reasons.
+Permanent recipient failures, spam complaints and unsubscribes stop future marketing emails. Temporary and sender failures preserve eligibility.

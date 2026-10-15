@@ -20,7 +20,7 @@
     $uploadedImages = $job->assets->filter(fn ($asset) => str_starts_with((string) $asset->mime_type, 'image/'));
 @endphp
 
-<x-layouts::app.sidebar title="Field Service Job">
+<x-layouts::app.sidebar title="Job detail">
     <flux:main>
         <div class="fb-workflow-shell fb-workflow-shell--wide field-service-job-shell">
             <header class="border-b border-zinc-200 pb-5">
@@ -51,6 +51,20 @@
                     @endif
                 </div>
             </header>
+
+            @php
+                $coverAsset = app(\App\Services\Tenancy\TenantModuleAccessResolver::class)->canAccess((int) $tenant->id, 'documents')
+                    ? $uploadedImages->first(fn ($asset) => $asset->visibility !== 'owner' || app(\App\Services\Tenancy\TenantFinancialAccess::class)->allows(auth()->user(), $tenant))
+                    : null;
+            @endphp
+            @if($coverAsset && (string) $tenant->slug !== (string) config('tenancy.auth.flagship_tenant_slug'))
+                <figure class="eb-job-cover">
+                    <a href="{{ route('documents.preview', [$tenant, $coverAsset]) }}" target="_blank" aria-label="Open full job photo">
+                        <img src="{{ route('documents.preview', [$tenant, $coverAsset]) }}" alt="{{ $coverAsset->caption ?: 'Job photo' }}" />
+                    </a>
+                    <figcaption>{{ $coverAsset->caption ?: 'From this job' }}</figcaption>
+                </figure>
+            @endif
 
             @if (session('status'))<div class="fb-state fb-state-success">{{ session('status') }}</div>@endif
             @unless(data_get($readiness, 'ready', false))
@@ -108,6 +122,12 @@
 
                 <aside class="space-y-6">
                     <section class="fb-panel"><div class="fb-panel-head"><div class="fb-panel-title">Tasks</div></div><div class="fb-panel-body space-y-3">
+                        @if($job->tasks->isNotEmpty())
+                            <div class="eb-task-progress">
+                                <span>{{ $job->tasks->where('status', 'done')->count() }} of {{ $job->tasks->count() }} tasks complete</span>
+                                <progress aria-label="Task completion" max="{{ $job->tasks->count() }}" value="{{ $job->tasks->where('status', 'done')->count() }}"></progress>
+                            </div>
+                        @endif
                         @if(data_get($capabilities, 'create_task'))
                             <form method="POST" action="{{ route('field-service.tasks.store', $job) }}" enctype="multipart/form-data" class="space-y-2">@csrf
                                 <input name="title" required class="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" placeholder="Add task">
@@ -125,15 +145,15 @@
                             </form>
                         @endif
                             @forelse($job->tasks->sortBy('sort_order') as $task)
-                            <div class="rounded-lg border border-zinc-200 p-3">
+                            <div class="eb-job-task rounded-lg border border-zinc-200 p-3">
                                 <div class="flex items-start justify-between gap-3"><div><div class="font-semibold text-zinc-950">{{ $task->title }}</div><div class="mt-1 text-xs text-zinc-500">{{ $task->assignees->map(fn($member) => $member->name ?: $member->email)->join(', ') ?: ($task->assignedUser?->name ?? 'Unassigned') }}@if($task->due_at) · {{ $task->due_at->format('M j') }}@endif</div></div><span class="rounded-full bg-zinc-100 px-2 py-1 text-[11px] font-semibold text-zinc-700">{{ ucfirst(str_replace('_', ' ', $task->status)) }}</span></div>
                                 @if($task->description)<p class="mt-2 whitespace-pre-wrap text-sm text-zinc-600">{{ $task->description }}</p>@endif
                                 @php($taskPhotos = $job->assets->filter(fn ($asset) => (int) data_get($asset->metadata, 'field_service_task_id', 0) === (int) $task->id && str_starts_with((string) $asset->mime_type, 'image/')))
                                 @if($taskPhotos->isNotEmpty())<div class="mt-3 flex gap-2 overflow-x-auto">@foreach($taskPhotos as $asset)<a href="{{ route('documents.preview', [$tenant, $asset]) }}" target="_blank" class="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100"><img src="{{ route('documents.preview', [$tenant, $asset]) }}" alt="{{ $asset->caption ?: $asset->file_name }}" class="h-full w-full object-cover"></a>@endforeach</div>@endif
                                 @if($taskUpdateIds->contains((int) $task->id))
                                     <div class="mt-3 grid gap-2 border-t border-zinc-100 pt-3">
-                                        <form method="POST" action="{{ route('field-service.tasks.update', [$job, $task]) }}" enctype="multipart/form-data" class="grid gap-2">@csrf @method('PATCH')<div class="flex gap-2"><select name="status" class="min-h-11 flex-1 rounded-lg border border-zinc-300 px-2 text-sm">@foreach(['open' => 'Open', 'in_progress' => 'In progress', 'waiting' => 'Waiting', 'done' => 'Done'] as $value => $label)<option value="{{ $value }}" @selected($task->status === $value)>{{ $label }}</option>@endforeach</select><button class="fb-btn fb-btn-secondary">Save</button></div><label class="text-xs font-semibold text-zinc-600">Task description<textarea name="description" rows="2" class="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm font-normal">{{ $task->description }}</textarea></label><label class="cursor-pointer rounded-lg border border-dashed border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-900">Add task photos<input name="photos[]" type="file" accept="image/*" multiple class="sr-only"><span class="mt-1 block text-xs font-normal text-emerald-700">Choose photos from this device.</span></label></form>
-                                        @if($task->status !== 'done' && $officeTeam->isNotEmpty())<details><summary class="cursor-pointer py-2 text-sm font-semibold text-emerald-800">Send to Office</summary><form method="POST" action="{{ route('field-service.tasks.handoff', [$job, $task]) }}" class="mt-2 space-y-2">@csrf<input type="hidden" name="idempotency_key" value="{{ (string) \Illuminate\Support\Str::uuid() }}"><label class="text-xs font-semibold text-zinc-600">Office recipient<select name="assignee_ids[]" required class="mt-1 min-h-11 w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm"><option value="">Choose an office person</option>@foreach($officeTeam as $member)<option value="{{ $member->id }}">{{ $member->name ?: $member->email }} · {{ ucfirst(str_replace('_', ' ', $member->pivot->role)) }}</option>@endforeach</select></label><textarea name="note" rows="2" class="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" placeholder="What does the office need to do?"></textarea><button class="fb-btn fb-btn-primary w-full justify-center">Send to Office and mark waiting</button></form></details>@endif
+                                        <form method="POST" action="{{ route('field-service.tasks.update', [$job, $task]) }}" enctype="multipart/form-data" class="grid gap-2">@csrf @method('PATCH')<div class="flex gap-2"><select name="status" aria-label="Status for {{ $task->title }}" class="min-h-11 flex-1 rounded-lg border border-zinc-300 px-2 text-sm">@foreach(['open' => 'Open', 'in_progress' => 'In progress', 'waiting' => 'Waiting', 'done' => 'Done'] as $value => $label)<option value="{{ $value }}" @selected($task->status === $value)>{{ $label }}</option>@endforeach</select><button class="fb-btn fb-btn-secondary">Save</button></div><label class="text-xs font-semibold text-zinc-600">Task description<textarea name="description" rows="2" class="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm font-normal">{{ $task->description }}</textarea></label><label class="cursor-pointer rounded-lg border border-dashed border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-900">Add task photos<input name="photos[]" type="file" accept="image/*" multiple class="sr-only"><span class="mt-1 block text-xs font-normal text-emerald-700">Choose photos from this device.</span></label></form>
+                                        @if($task->status !== 'done' && $officeTeam->isNotEmpty())<details><summary class="cursor-pointer py-2 text-sm font-semibold text-emerald-800">Send to Office</summary><form method="POST" action="{{ route('field-service.tasks.handoff', [$job, $task]) }}" class="mt-2 space-y-2">@csrf<input type="hidden" name="idempotency_key" value="{{ (string) \Illuminate\Support\Str::uuid() }}"><label class="text-xs font-semibold text-zinc-600">Office recipient<select name="assignee_ids[]" required class="mt-1 min-h-11 w-full rounded-lg border border-zinc-300 px-2 py-2 text-sm"><option value="">Choose an office person</option>@foreach($officeTeam as $member)<option value="{{ $member->id }}">{{ $member->name ?: $member->email }} · {{ ucfirst(str_replace('_', ' ', $member->pivot->role)) }}</option>@endforeach</select></label><label class="text-sm font-semibold">Office handoff note<textarea name="note" rows="2" class="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" placeholder="What does the office need to do?"></textarea></label><button class="fb-btn fb-btn-primary w-full justify-center">Send to Office and mark waiting</button></form></details>@endif
                                     </div>
                                 @endif
                             </div>
@@ -146,7 +166,7 @@
             <section class="fb-panel">
                 <div class="fb-panel-head"><div><div class="fb-panel-title">Updates</div><p class="fb-panel-copy">Keep the whole team informed with progress, notes, and handoffs.</p></div></div>
                 <div class="fb-panel-body space-y-3">
-                    <form method="POST" action="{{ route('field-service.notes.store', $job) }}" enctype="multipart/form-data">@csrf<textarea name="body" rows="3" class="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" placeholder="Share an update or @mention a teammate"></textarea><div class="mt-3 flex flex-wrap items-center gap-3"><label class="fb-btn fb-btn-secondary cursor-pointer"><span>Take or add photos</span><input name="attachments[]" type="file" accept="image/*" capture="environment" multiple class="sr-only"></label><label class="fb-btn fb-btn-secondary cursor-pointer"><span>Add files</span><input name="attachments[]" type="file" accept="image/*,application/pdf,text/plain,text/csv,.doc,.docx,.xls,.xlsx" multiple class="sr-only"></label><span class="text-xs text-zinc-500">Photos, PDFs, documents, spreadsheets, and text files · up to 25 MB each</span></div><button class="fb-btn fb-btn-primary mt-3">Save update</button></form>
+                    <form method="POST" action="{{ route('field-service.notes.store', $job) }}" enctype="multipart/form-data">@csrf<label for="job-update-body" class="mb-2 block text-sm font-semibold">Your update</label><textarea id="job-update-body" name="body" rows="3" class="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" placeholder="Share an update or @mention a teammate"></textarea><div class="mt-3 flex flex-wrap items-center gap-3"><label class="fb-btn fb-btn-secondary cursor-pointer"><span>Take or add photos</span><input name="attachments[]" type="file" accept="image/*" capture="environment" multiple class="sr-only"></label><label class="fb-btn fb-btn-secondary cursor-pointer"><span>Add files</span><input name="attachments[]" type="file" accept="image/*,application/pdf,text/plain,text/csv,.doc,.docx,.xls,.xlsx" multiple class="sr-only"></label><span class="text-xs text-zinc-500">Photos, PDFs, documents, spreadsheets, and text files · up to 25 MB each</span></div><button class="fb-btn fb-btn-primary mt-3">Save update</button></form>
                     @forelse($job->notes->sortByDesc('noted_at') as $note)<article class="border-t border-zinc-200 pt-3"><div class="flex items-start justify-between gap-3"><div class="text-sm font-semibold text-zinc-950">{{ $note->createdBy?->name ?? 'Team update' }} <span class="font-normal text-zinc-500">{{ optional($note->noted_at)->diffForHumans() }}</span></div>@if($canManage)<form method="POST" action="{{ route('field-service.notes.destroy', [$job, $note]) }}" onsubmit="return confirm('Do you want to delete this update?')">@csrf @method('DELETE')<button class="text-xs font-semibold text-rose-700">Delete</button></form>@endif</div><div class="mt-1 whitespace-pre-wrap text-sm text-zinc-700">{{ $note->body }}</div>@if($updateAttachmentsByNote->has((int) $note->id))<div class="mt-3 flex flex-wrap gap-3">@foreach($updateAttachmentsByNote->get((int) $note->id) as $asset)@if(str_starts_with((string) $asset->mime_type, 'image/'))<a href="{{ route('documents.preview', [$tenant, $asset]) }}" target="_blank" class="group relative h-40 w-56 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100"><img src="{{ route('documents.preview', [$tenant, $asset]) }}" alt="{{ $asset->caption ?: $asset->file_name }}" class="h-full w-full object-cover transition duration-200 group-hover:scale-[1.03]"><span class="absolute inset-x-0 bottom-0 truncate bg-zinc-950/65 px-2 py-1.5 text-xs font-semibold text-white">{{ $asset->file_name }}</span></a>@else<a href="{{ route('documents.download', [$tenant, $asset]) }}" class="inline-flex min-h-10 max-w-full items-center rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-sm font-semibold text-emerald-900 hover:border-emerald-300"><span class="truncate">File · {{ $asset->file_name }}</span></a>@endif @endforeach</div>@endif</article>@empty<p class="text-sm text-zinc-600">No updates yet.</p>@endforelse
                 </div>
             </section>

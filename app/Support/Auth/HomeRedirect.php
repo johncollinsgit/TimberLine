@@ -15,6 +15,13 @@ class HomeRedirect
             return route('login', absolute: false);
         }
 
+        $activeTenants = $tenant ? null : $user->tenants()->wherePivot('membership_active', true)->get();
+        $soccerTenant = $tenant ?? ($activeTenants?->count() === 1 ? $activeTenants->first() : null);
+        $soccerAccess = app(\App\Services\Soccer\SoccerAccess::class);
+        if ($soccerTenant && $soccerAccess->enabled($soccerTenant) && ($soccerAccess->admin($soccerTenant, $user) || $soccerAccess->coach($soccerTenant, $user))) {
+            return route('soccer.workspace', ['tenant' => $soccerTenant->slug], absolute: false);
+        }
+
         if (self::isPlatformOperator($user)) {
             return route('landlord.dashboard', absolute: false);
         }

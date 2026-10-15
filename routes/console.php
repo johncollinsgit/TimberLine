@@ -301,3 +301,5 @@ Schedule::command('trajectory:review-emails')->everyFifteenMinutes()->withoutOve
 Schedule::command('highlevel:fleet-maintain')->everyFiveMinutes()->withoutOverlapping();
 
 Schedule::command('highlevel:fleet-reconcile')->hourly()->withoutOverlapping();
+
+Schedule::command('soccer:process')->everyMinute()->withoutOverlapping(5)->runInBackground();

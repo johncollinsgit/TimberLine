@@ -12,6 +12,48 @@
 - Existing account gates, Bouncie configuration and vehicle assignments remain
   unchanged. See `docs/operations/collins-fleet-selected-routes.md`.
 
+## 2026-10-15 — Everbranch Showcase workspace and landlord presentation
+
+- Shared Everbranch web workspaces adopt the approved Showcase palette, readable
+  typography, full-width canvas beside the existing sidebar, modern native fields,
+  and contextual phone/tablet headers. Mobile Jobs/Customers use real paginated
+  records and full-screen destinations; desktop grid editing remains available.
+- The configured flagship console and separate Shopify, checkout/payment, and
+  tenant-site surfaces retain their contracts. Public auth copy stays Everbranch
+  branded while preserving authentication intent and permissions.
+- The landlord console uses five primary groups. Owner-only client presentation
+  presets save audited metadata without changing access or billing. Blank owner
+  email configuration disables template editing.
+- No provider, billing, entitlement, schema, or production activation is included.
+  See `docs/ui/everbranch-showcase-polish.md` for scope and verification boundaries.
+
+## 2026-10-13 — Residential exterior electrical photos
+
+- Corrected the first Everbranch banner photo and the Field & service teams
+  card photo: residential meters and closed weatherproof disconnects replace
+  the open indoor-style breaker panels shown outside.
+- Preserved the technicians, existing scenes, text, slideshow, and card layout.
+  New asset filenames prevent cached versions from retaining the old panels;
+  the field-service example reuses the corrected card photo.
+
+## 2026-10-13 — Evergrove mobile navigation
+
+- Mobile and tablet headers show the Evergrove logo left and a touch-sized
+  hamburger right, with an animated dropdown and keyboard/Escape support.
+- Removed Contact, Our Work, Use Cases, and Login from public top navigation.
+- Retained What We Build, Everbranch, Book, and Start a Project on all sizes.
+- `/book` begins with Quick Note, then the live calendar, followed by the full
+  consultation explanation/business brief and supporting graphics/details.
+
+## 2026-10-13 — Evergrove consultation and business-hurdle intake
+
+- `/book` leads with “I help business owners run their business better.”
+- Added a responsive three-step consultation brief and a separate short contact
+  form, an animated connected-business graphic, and reduced-motion support.
+- Saved briefs proceed to Google scheduling when configured; the page clearly
+  distinguishes inquiry submission from a confirmed appointment.
+- Both forms use the existing authorized Landlord Messages inbox and server validation.
+
 ## 2026-10-07 — CRM Fleet free preview and 100 vehicles
 
 ## 2026-10-08 — Carolina Heritage theme (development)

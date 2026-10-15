@@ -43,6 +43,9 @@ class GlobalSearchCoordinator
         $limit = is_numeric($context['limit'] ?? null) ? max(1, min(20, (int) $context['limit'])) : 10;
 
         $tenantId = is_numeric($context['tenant_id'] ?? null) ? (int) $context['tenant_id'] : null;
+        if (app(\App\Services\Tenancy\TenantExperienceProfileService::class)->workspaceFocusForTenant($tenantId) === 'soccer') {
+            return app(\App\Services\Soccer\SoccerWorkspaceService::class)->search($normalized, $context);
+        }
         $websiteSales = app(\App\Services\Tenancy\TenantExperienceProfileService::class)->workspaceFocusForTenant($tenantId) === 'website_sales';
 
         /** @var Collection<int,array<string,mixed>> $results */

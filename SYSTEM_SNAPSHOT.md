@@ -11,6 +11,50 @@ No migrations or fleet setup changes are required. Release through the normal
 protected GitHub/Forge pipeline. See
 `docs/operations/collins-fleet-selected-routes.md` for validation and limits.
 
+## 2026-10-15 — Everbranch Showcase workspace and landlord presentation
+
+- Shared Everbranch web workspaces adopt the approved Showcase palette, readable
+  typography, full-width canvas beside the existing sidebar, modern native fields,
+  and contextual phone/tablet headers. Mobile Jobs/Customers use real paginated
+  records and full-screen destinations; desktop grid editing remains available.
+- The configured flagship console and separate Shopify, checkout/payment, and
+  tenant-site surfaces retain their contracts. Public auth copy stays Everbranch
+  branded while preserving authentication intent and permissions.
+- The landlord console uses five primary groups. Owner-only client presentation
+  presets save audited metadata without changing access or billing. Blank owner
+  email configuration disables template editing.
+- No provider, billing, entitlement, schema, or production activation is included.
+  See `docs/ui/everbranch-showcase-polish.md` for scope and verification boundaries.
+
+## 2026-10-13 - Wren family soccer workspace
+
+Wren has an isolated, default-disabled soccer lane and an authenticated bridge
+to easleyfamilysoccer.com. Parents use public verified-email family sessions;
+coaches receive assigned-team backend access. Historical evidence is immutable,
+imports are replayable, and Spring 2027 stays closed behind season/provider
+readiness. Wren-only SMS provisioning uses an explicit tenant-ID allowlist;
+Settings collects encrypted operator details without activating an unapproved sender.
+Follow `docs/operations/wren-soccer.md` for release, setup, and rollback.
+
+## 2026-10-13 - Evergrove consultation intake
+
+`/book` adds a mobile business brief, a short business-hurdle contact form,
+and an embedded live Google appointment schedule with available dates/times.
+Both forms use existing Landlord Messages inquiry records. The owner's supplied
+schedule was verified as 60-minute appointments with Google Meet. Missing/unsafe
+configuration clearly presents a consultation request.
+See `docs/operations/evergrove-consultation-booking.md` for validation and rollout.
+
+## 2026-10-12 - Jarvis public branding pages
+
+- `/jarvis`, `/jarvis/privacy`, and `/jarvis/terms` describe the separate local
+  Jarvis assistant on configured Evergrove public hosts only. Existing site
+  policies, tenant surfaces, and Google integration behavior remain unchanged.
+- Existing installed Jarvis J favicon is reused. Disclosure evidence, owner
+  review gaps, and the gated release path are in
+  `docs/operations/jarvis-oauth-branding.md`. Owner-reviewed PR383 was published
+  through the GitHub/Forge gate; the owner also supplied the public support phone.
+
 ## 2026-10-12 — Field mobile customer contact restriction (staged)
 
 - Job detail APIs redact homeowner phone and email for ordinary team members.
@@ -33,6 +77,10 @@ protected GitHub/Forge pipeline. See
   Monday through Sunday. It includes customers added, opt-out identities, birthday
   and Candle Cash issuance/redemption, email delivery and storefront activity.
   A retained delivery record prevents duplicate reports on replay.
+- Every recap metric opens a tenant-gated activity list for the exact reporting
+  interval. Email details include failure reasons and future-send eligibility.
+  Verified SendGrid events suppress permanent recipient failures, complaints
+  and opt-outs; temporary and sender failures preserve address eligibility.
 - Already sent mailto emails need legacy inbox request reconciliation; the new
   links work without SendGrid inbound domain configuration. See
   `docs/operations/automatic-email-unsubscribe-and-weekly-recap.md` for validation,
@@ -202,9 +250,9 @@ release ID preservation.
   adjustment separately. The public Birthday Club page still links to the
   retired `/apps/birthday` path, which returns 404.
 
-## Public launch partner offer (2026-10-02)
+## Public launch partner offer (2026-10-13)
 
-- Evergrove and Everbranch share the public Launch Partner offer in `config/product_surfaces.php`: $499 one-time setup, $89/month for the first six billing months, then $199/month. The first six months total $1,033 before taxes or add-ons.
+- Evergrove and Everbranch share the public Launch Partner offer in `config/product_surfaces.php`: $499 one-time setup, $89/month for the first six billing months, then $149/month. The first six months total $1,033 and the first year totals $1,927 before taxes or add-ons. Starter and Growth public prices are unchanged.
 - This is prospective public pricing. Existing client agreements, subscription authorizations, Stripe subscriptions, and the client-specific Front Yard Foods and Collins Electric agreement templates retain their recorded terms and rates.
 
 ## Website Commerce encrypted storage repair (2026-10-02)

@@ -247,7 +247,7 @@ return [
                 'summary' => 'Limited first-10-businesses partner offer with guided setup and direct feedback access while Everbranch is shaped in the field.',
                 'highlights' => [
                     '$499 one-time setup',
-                    '$199/mo after the first 6 months',
+                    '$149/mo after the first 6 months',
                     'Priority partner support and feedback calls',
                 ],
                 'cta' => [
@@ -377,7 +377,7 @@ return [
             'features' => [
                 ['label' => 'Setup', 'starter' => '$499 one-time', 'launch_partner' => '$499 one-time', 'growth' => '$999 one-time'],
                 ['label' => 'First 6 months', 'starter' => '$149/mo', 'launch_partner' => '$89/mo', 'growth' => '$249/mo'],
-                ['label' => 'After 6 months', 'starter' => '$149/mo', 'launch_partner' => '$199/mo', 'growth' => '$249/mo'],
+                ['label' => 'After 6 months', 'starter' => '$149/mo', 'launch_partner' => '$149/mo', 'growth' => '$249/mo'],
                 ['label' => '6-month total', 'starter' => '$1,393', 'launch_partner' => '$1,033', 'growth' => '$2,493'],
                 ['label' => 'Team members', 'starter' => 'Up to 3 users', 'launch_partner' => 'Up to 3 users', 'growth' => 'Unlimited users'],
                 ['label' => 'Email contacts', 'starter' => 'Up to 2,000 contacts', 'launch_partner' => 'Up to 2,000 contacts', 'growth' => 'Up to 15,000 contacts'],

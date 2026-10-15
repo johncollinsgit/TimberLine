@@ -40,6 +40,9 @@ class MarketingEmailDeliveryTrackingService
 
             $summary['processed']++;
             $delivery = $this->resolveDelivery($event);
+            if ($delivery && filled($event['email'] ?? null) && strtolower(trim((string) $event['email'])) !== strtolower(trim((string) $delivery->email))) {
+                $delivery = null;
+            }
             if (! $delivery) {
                 $summary['unmatched']++;
                 Log::warning('marketing sendgrid callback unmatched', ['event' => $event]);
@@ -64,6 +67,7 @@ class MarketingEmailDeliveryTrackingService
             }
 
             $occurredAt = $this->occurredAtForEvent($event);
+            $failurePolicy = app(MarketingEmailFailurePolicy::class)->classify($event);
             $mapped = $this->mapEvent((string) ($event['event'] ?? ''));
             $currentStatusRank = $this->statusRank((string) $delivery->status);
             $incomingStatusRank = $this->statusRank((string) ($mapped['delivery_status'] ?? ''));
@@ -76,7 +80,7 @@ class MarketingEmailDeliveryTrackingService
                 : false;
             $shouldApplyState = (bool) ($mapped['apply_state'] ?? false)
                 && ! $isOlderEvent
-                && $incomingStatusRank >= $currentStatusRank
+                && ($incomingStatusRank >= $currentStatusRank || ($currentStatus === 'failed' && ($mapped['set_delivered_at'] ?? false)))
                 && (! $isFailureTransition || ! $hasDeliveredEngagement);
             $normalizedProviderMessageId = $this->normalizedMessageId((string) ($event['sg_message_id'] ?? ''));
 
@@ -89,6 +93,10 @@ class MarketingEmailDeliveryTrackingService
                     'at' => $occurredAt?->toIso8601String(),
                     'sg_message_id' => $event['sg_message_id'] ?? null,
                     'applied' => $shouldApplyState,
+                    'reason' => $event['reason'] ?? $event['response'] ?? null,
+                    'status' => $event['status'] ?? null,
+                    'type' => $event['type'] ?? null,
+                    'failure_policy' => $failurePolicy,
                 ])
                 ->slice(-30)
                 ->values()
@@ -97,6 +105,15 @@ class MarketingEmailDeliveryTrackingService
             $nextLastEventAt = $isOlderEvent && $lastEventAt instanceof CarbonImmutable
                 ? $lastEventAt
                 : $occurredAt;
+
+            $metadata = (array) $delivery->metadata;
+            if ($failurePolicy['category'] !== 'none') {
+                $metadata['failure_policy'] = [...$failurePolicy, 'occurred_at' => $occurredAt->toIso8601String()];
+            }
+
+            // Suppression must succeed before the event hash is retained; a database
+            // failure must remain retryable when SendGrid replays the callback.
+            $this->syncChannelStateFromEvent($delivery, (string) ($event['event'] ?? ''), $occurredAt, $event);
 
             $delivery->forceFill([
                 'provider_message_id' => $delivery->provider_message_id ?: $normalizedProviderMessageId,
@@ -119,6 +136,7 @@ class MarketingEmailDeliveryTrackingService
                 'sent_at' => $shouldApplyState && ($mapped['set_sent_at'] ?? false) && ! $delivery->sent_at
                     ? $occurredAt
                     : $delivery->sent_at,
+                'metadata' => $metadata,
                 'raw_payload' => [
                     ...$rawPayload,
                     'last_event' => $event,
@@ -138,8 +156,6 @@ class MarketingEmailDeliveryTrackingService
                 $this->updateRecipientFromDelivery($delivery->recipient, (string) ($mapped['recipient_status'] ?? ''));
             }
 
-            $this->syncChannelStateFromEvent($delivery, (string) ($event['event'] ?? ''), $occurredAt, $event);
-
             $this->syncBirthdayMessageEvent($delivery, $event, $occurredAt);
 
             $summary['updated']++;
@@ -155,7 +171,7 @@ class MarketingEmailDeliveryTrackingService
     {
         $customArgs = (array) ($event['custom_args'] ?? []);
         $tenantId = (int) ($customArgs['tenant_id'] ?? $event['tenant_id'] ?? 0);
-        $deliveryId = (int) ($customArgs['marketing_email_delivery_id'] ?? 0);
+        $deliveryId = (int) ($customArgs['marketing_email_delivery_id'] ?? $event['marketing_email_delivery_id'] ?? 0);
         if ($deliveryId > 0) {
             $delivery = MarketingEmailDelivery::query()
                 ->when($tenantId > 0, fn ($query) => $query->where('tenant_id', $tenantId))
@@ -321,32 +337,7 @@ class MarketingEmailDeliveryTrackingService
         CarbonImmutable $occurredAt,
         array $event
     ): void {
-        $normalized = strtolower(trim($eventType));
-        $status = match ($normalized) {
-            'bounce', 'bounced' => 'bounced',
-            'dropped', 'drop', 'blocked', 'spamreport', 'spam_report' => 'suppressed',
-            'unsubscribe', 'group_unsubscribe' => 'unsubscribed',
-            default => null,
-        };
-
-        if ($status === null) {
-            return;
-        }
-
-        $this->channelStateService->markEmailStatus(
-            tenantId: (int) $delivery->tenant_id,
-            profile: $delivery->profile,
-            email: $delivery->email,
-            status: $status,
-            reason: $normalized,
-            providerSource: 'sendgrid_events',
-            metadata: [
-                'marketing_email_delivery_id' => (int) $delivery->id,
-                'provider_message_id' => $delivery->provider_message_id,
-                'event' => $event,
-            ],
-            occurredAt: $occurredAt
-        );
+        app(MarketingEmailFailurePolicy::class)->apply($delivery, $event, $occurredAt);
     }
 
     protected function updateRecipientFromDelivery(MarketingCampaignRecipient $recipient, string $nextStatus): void

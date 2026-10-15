@@ -25,7 +25,8 @@ test('guest home route renders the marketing landing page by default', function 
         ->assertSee('data-industry-option="studio"', false)
         ->assertSee('data-industry-option="practice"', false)
         ->assertSee('data-industry-option="community"', false)
-        ->assertSee('everbranch-hvac-electrical-hero.jpg', false)
+        ->assertSee('everbranch-residential-electrical-hero.jpg', false)
+        ->assertSee('everbranch-industry-field-service-exterior.jpg', false)
         ->assertSee('everbranch-hvac-electrical-field.jpg', false)
         ->assertSee('everbranch-field-owner-office.jpg', false)
         ->assertSee('data-studio-hero-slide', false)
@@ -70,7 +71,7 @@ test('login route renders the dedicated light auth shell', function (): void {
 
     $this->get(route('login'))
         ->assertOk()
-        ->assertSee('class="fb-auth-body antialiased"', false)
+        ->assertSee('class="fb-auth-body antialiased eb-auth-theme"', false)
         ->assertSee('brand/everbranch-auth.svg?v='.$cacheTag, false)
         ->assertSeeText('Welcome back');
 });

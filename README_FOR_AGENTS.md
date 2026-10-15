@@ -5,6 +5,43 @@ Bouncie trip paths. Read `docs/operations/collins-fleet-selected-routes.md` befo
 continuing it. Release through the protected GitHub/Forge gates, use isolated
 fixtures, and preserve existing fleet/policy/provider configuration.
 
+## 2026-10-15 — Everbranch Showcase workspace and landlord presentation
+
+- Shared Everbranch web workspaces adopt the approved Showcase palette, readable
+  typography, full-width canvas beside the existing sidebar, modern native fields,
+  and contextual phone/tablet headers. Mobile Jobs/Customers use real paginated
+  records and full-screen destinations; desktop grid editing remains available.
+- The configured flagship console and separate Shopify, checkout/payment, and
+  tenant-site surfaces retain their contracts. Public auth copy stays Everbranch
+  branded while preserving authentication intent and permissions.
+- The landlord console uses five primary groups. Owner-only client presentation
+  presets save audited metadata without changing access or billing. Blank owner
+  email configuration disables template editing.
+- No provider, billing, entitlement, schema, or production activation is included.
+  See `docs/ui/everbranch-showcase-polish.md` for scope and verification boundaries.
+
+## 2026-10-13 - Wren family soccer workspace
+
+Wren has an isolated, default-disabled soccer lane and an authenticated bridge
+to easleyfamilysoccer.com. Parents use public verified-email family sessions;
+coaches receive assigned-team backend access. Historical evidence is immutable,
+imports are replayable, and Spring 2027 stays closed behind season/provider
+readiness. Wren-only SMS provisioning uses an explicit tenant-ID allowlist;
+Settings collects encrypted operator details without activating an unapproved sender.
+Follow `docs/operations/wren-soccer.md` for release, setup, and rollback.
+
+Evergrove `/book` has consultation briefs and a short business-hurdle form using
+`service_inquiries` and the existing Landlord Messages inbox. Google scheduling
+uses the owner's verified one-hour Google Meet appointment schedule, embedded
+directly on the page. Follow `docs/operations/evergrove-consultation-booking.md`.
+
+Jarvis public branding pages at `/jarvis`, `/jarvis/privacy`, and `/jarvis/terms`
+are limited to `evergrove.hosts`. They describe the separate desktop app and
+must not be substituted for existing Everbranch or tenant policies. Follow
+`docs/operations/jarvis-oauth-branding.md`; PR383 was owner-reviewed and published
+through GitHub/Forge. Keep disclosures grounded and verify live release evidence
+before production Branding links are used.
+
 Field mobile job detail must redact customer phone/email unless
 `FieldServiceAccessService::canViewCustomerContact` allows the active viewer.
 The iOS and Android apps share this API. Keep authorization on the server;
@@ -21,6 +58,10 @@ employee preview masking alone cannot protect contact data.
   Monday through Sunday. It includes customers added, opt-out identities, birthday
   and Candle Cash issuance/redemption, email delivery and storefront activity.
   A retained delivery record prevents duplicate reports on replay.
+- Every recap metric opens a tenant-gated activity list for the exact reporting
+  interval. Email details include failure reasons and future-send eligibility.
+  Verified SendGrid events suppress permanent recipient failures, complaints
+  and opt-outs; temporary and sender failures preserve address eligibility.
 - Already sent mailto emails need legacy inbox request reconciliation; the new
   links work without SendGrid inbound domain configuration. See
   `docs/operations/automatic-email-unsubscribe-and-weekly-recap.md` for validation,
@@ -138,9 +179,9 @@ release ID preservation.
   before the hourly detector writes fundraiser queue records. See the
   fundraiser order invoicing runbook for the full safety contract.
 
-## Public launch partner pricing (2026-10-02)
+## Public launch partner pricing (2026-10-13)
 
-- The Evergrove/Everbranch public offer is $499 setup, $89/month for six months, then $199/month. It applies to future offers only. Preserve earlier client-specific agreement versions and subscription rates, including Collins Electric and Front Yard Foods; do not reprice their drafts to apply this public change.
+- The Evergrove/Everbranch public offer is $499 setup, $89/month for six months, then $149/month. It applies to future offers only. The first year totals $1,927 before taxes or add-ons. Preserve earlier client-specific agreement versions and subscription rates, including Collins Electric and Front Yard Foods; do not reprice their drafts to apply this public change. See `docs/operations/everbranch-billing-readiness-audit.md` for the public-pricing release scope.
 
 ## Collins employee install release (2026-09-30)
 

@@ -3241,11 +3241,11 @@ CREATE TABLE `fleet_operation_records` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `tenant_id` bigint unsigned NOT NULL,
   `device_id` bigint unsigned DEFAULT NULL,
-  `kind` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `source_key` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'open',
+  `kind` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `source_key` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'open',
   `event_at` timestamp NULL DEFAULT NULL,
-  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -7124,6 +7124,314 @@ CREATE TABLE `sizes` (
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `sizes_code_unique` (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `soccer_challenges`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `soccer_challenges` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `email` varchar(254) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `code_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `attempts` int unsigned NOT NULL DEFAULT '0',
+  `expires_at` timestamp NOT NULL,
+  `consumed_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `soccer_challenges_tenant_id_index` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `soccer_coaches`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `soccer_coaches` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `family_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `user_id` bigint unsigned DEFAULT NULL,
+  `name` varchar(160) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `role` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'assistant',
+  `jersey_size` varchar(30) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `team_keys` json NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `soc_coach_user` (`tenant_id`,`user_id`),
+  KEY `soccer_coaches_tenant_id_index` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `soccer_deliveries`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `soccer_deliveries` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `event_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `recipient_key` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `provider_message_id` varchar(190) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `attempts` int unsigned NOT NULL DEFAULT '0',
+  `retry_at` timestamp NULL DEFAULT NULL,
+  `error` longtext COLLATE utf8mb4_unicode_ci,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `soc_delivery_dedupe` (`event_id`,`recipient_key`),
+  KEY `soccer_deliveries_tenant_id_index` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `soccer_events`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `soccer_events` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `season_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `family_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `actor_id` bigint unsigned DEFAULT NULL,
+  `action` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `event_key` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `data` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `soc_event_key` (`tenant_id`,`event_key`),
+  KEY `soccer_events_tenant_id_index` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `soccer_families`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `soccer_families` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `email` varchar(254) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `profile` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `verified_at` timestamp NULL DEFAULT NULL,
+  `sms_consent_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `soc_family_email` (`tenant_id`,`email`),
+  KEY `soccer_families_tenant_id_index` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `soccer_groupme_connections`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `soccer_groupme_connections` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `provider_user_id` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `token` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `soc_groupme_user` (`tenant_id`,`user_id`),
+  KEY `soccer_groupme_connections_tenant_id_index` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `soccer_import_rows`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `soccer_import_rows` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `source` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `season_key` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `row_number` int unsigned NOT NULL,
+  `fingerprint` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `family_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `player_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `evidence` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `soc_import_dedupe` (`tenant_id`,`fingerprint`),
+  KEY `soccer_import_rows_tenant_id_index` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `soccer_invoices`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `soccer_invoices` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `season_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `family_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `offer_group` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `registration_ids` json NOT NULL,
+  `amount_cents` int unsigned NOT NULL,
+  `refunded_cents` int unsigned NOT NULL DEFAULT '0',
+  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'unpaid',
+  `provider` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `checkout_id` varchar(190) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `payment_intent_id` varchar(190) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `expires_at` timestamp NOT NULL,
+  `paid_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `soc_invoice_offer` (`offer_group`),
+  KEY `soccer_invoices_tenant_id_index` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `soccer_payments`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `soccer_payments` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `invoice_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider_key` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `amount_cents` int unsigned NOT NULL,
+  `evidence` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `soc_payment_dedupe` (`tenant_id`,`provider`,`provider_key`),
+  KEY `soccer_payments_tenant_id_index` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `soccer_players`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `soccer_players` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `family_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name` varchar(160) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `birthday` date DEFAULT NULL,
+  `profile` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `soc_player_family` (`tenant_id`,`family_id`),
+  KEY `soccer_players_tenant_id_index` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `soccer_refunds`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `soccer_refunds` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `invoice_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `amount_cents` int unsigned NOT NULL,
+  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider_key` varchar(190) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `evidence` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `soccer_refunds_tenant_id_index` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `soccer_registrations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `soccer_registrations` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `season_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `family_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `player_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `release_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `team_key` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `seat_kind` varchar(12) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `offer_group` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `auto_eligible` tinyint(1) NOT NULL DEFAULT '1',
+  `needs_jersey` tinyint(1) NOT NULL,
+  `jersey_size` varchar(30) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `waived` tinyint(1) NOT NULL DEFAULT '0',
+  `amount_cents` int unsigned NOT NULL,
+  `payment_status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'unpaid',
+  `queued_at` timestamp NOT NULL,
+  `queue_sequence` bigint unsigned NOT NULL DEFAULT '0',
+  `offer_expires_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `soc_reg_player_season` (`tenant_id`,`season_id`,`player_id`),
+  KEY `soc_reg_queue` (`tenant_id`,`season_id`,`team_key`,`status`),
+  KEY `soccer_registrations_tenant_id_index` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `soccer_releases`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `soccer_releases` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `family_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `player_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `season_key` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `source_key` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `form_version` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `answers` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `sha256` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `signed_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `soc_release_source` (`tenant_id`,`source_key`),
+  KEY `soccer_releases_tenant_id_index` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `soccer_seasons`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `soccer_seasons` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `season_key` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `starts_on` date DEFAULT NULL,
+  `age_as_of` date DEFAULT NULL,
+  `registration_opens_at` timestamp NULL DEFAULT NULL,
+  `registration_open` tinyint(1) NOT NULL DEFAULT '0',
+  `offer_hours` int unsigned NOT NULL DEFAULT '48',
+  `next_queue_sequence` bigint unsigned NOT NULL DEFAULT '0',
+  `teams` json NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `soc_season_key` (`tenant_id`,`season_key`),
+  KEY `soccer_seasons_tenant_id_index` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `soccer_sessions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `soccer_sessions` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `family_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `token_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `expires_at` timestamp NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `soc_session_token` (`token_hash`),
+  KEY `soccer_sessions_tenant_id_index` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `soccer_settings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `soccer_settings` (
+  `tenant_id` bigint unsigned NOT NULL,
+  `data` longtext COLLATE utf8mb4_unicode_ci,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `square_customers`;
@@ -11058,3 +11366,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (273,'2026_10_05_19
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (274,'2026_10_05_200000_create_team_message_attachments',19);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (275,'2026_10_06_170000_create_tenant_mailboxes',20);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (276,'2026_10_08_000000_create_fleet_operation_records',21);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (277,'2026_10_13_220000_create_soccer_workspace',22);

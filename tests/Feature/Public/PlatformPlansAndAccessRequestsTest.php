@@ -22,7 +22,8 @@ test('public plans page renders tiers and add-ons', function (): void {
         ->assertSeeText('Included now')
         ->assertSeeText('$89/mo for 6 months')
         ->assertSeeText('$499 one-time setup')
-        ->assertSeeText('$199/mo after the first 6 months');
+        ->assertSeeText('$149/mo after the first 6 months')
+        ->assertDontSeeText('$199/mo after the first 6 months');
 });
 
 test('public demo request page renders access request form', function (): void {
@@ -61,7 +62,8 @@ test('public start as a client page renders plan interest inputs', function (): 
         ->assertSeeText('$149')
         ->assertSeeText('$499 one-time')
         ->assertSeeText('$89/mo')
-        ->assertSeeText('$199/mo')
+        ->assertSeeText('$149/mo')
+        ->assertDontSeeText('$199/mo')
         ->assertSeeText('$1,033')
         ->assertSeeText('save $360 in the first 6 months')
         ->assertSeeText('Limited to 10')

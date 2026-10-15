@@ -1,6 +1,7 @@
 import "./shopify/command-menu";
 import "./bootstrap";
 import "./public-premium-motion";
+import "./evergrove-navigation";
 
 const contextualModules = [
   {

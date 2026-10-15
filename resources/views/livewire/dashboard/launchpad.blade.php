@@ -10,6 +10,14 @@
     $upcomingJobs = is_array($dashboard['upcoming_jobs'] ?? null) ? $dashboard['upcoming_jobs'] : [];
     $ownerReporting = is_array($dashboard['owner_reporting'] ?? null) ? $dashboard['owner_reporting'] : null;
     $classCalendar = is_array($dashboard['class_calendar'] ?? null) ? $dashboard['class_calendar'] : null;
+    $presentationTenant = request()->attributes->get('current_tenant');
+    $showcaseWorkspace = $presentationTenant instanceof \App\Models\Tenant
+        && (string) $presentationTenant->slug !== (string) config('tenancy.auth.flagship_tenant_slug');
+    $fieldWorkspace = $showcaseWorkspace && ($experience['use_case_profile'] ?? '') === 'field_service'
+        && ($experience['workspace_focus'] ?? '') !== 'website_sales';
+    $workspacePresentation = $showcaseWorkspace
+        ? app(\App\Services\Tenancy\WorkspacePresentationService::class)->forTenant($presentationTenant, ($experience['workspace_focus'] ?? '') === 'website_sales' ? 'retail' : ($fieldWorkspace ? 'field' : 'generic'))
+        : null;
     $frontYardLaunch = is_array($dashboard['front_yard_launch'] ?? null) ? $dashboard['front_yard_launch'] : null;
     $workflowHealth = is_array($dashboard['workflow_automation_health'] ?? null) ? $dashboard['workflow_automation_health'] : null;
     $channelPulse = is_array($dashboard['channel_pulse'] ?? null) ? $dashboard['channel_pulse'] : null;
@@ -33,14 +41,21 @@
 @endphp
 
 <div class="mx-auto w-full max-w-[1800px] px-3 pb-4 pt-2 sm:px-4 sm:pb-6 sm:pt-3 md:px-6 min-w-0">
-    <div class="space-y-4 min-w-0">
-        <header class="eb-dashboard-header">
+    <div class="space-y-4 min-w-0 {{ $showcaseWorkspace ? 'eb-dashboard-stack' : '' }}">
+        <header class="eb-dashboard-header {{ $showcaseWorkspace ? 'eb-workspace-banner' : '' }}">
+            @if(filled($workspacePresentation['photo'] ?? null))
+                <img src="{{ asset($workspacePresentation['photo']) }}" alt="" class="eb-workspace-banner__photo" />
+            @endif
             <div>
-                <h1>Home</h1>
+                @if($showcaseWorkspace)<span class="eb-workspace-banner__eyebrow">{{ $workspacePresentation['collection'] }}</span>@endif
+                <h1>{{ $showcaseWorkspace ? ($experience['tenant_name'] ?? 'Home') : 'Home' }}</h1>
                 @if(filled($workspace['label'] ?? null))
-                    <p>{{ $workspace['label'] }}</p>
+                    <p>{{ filled($workspacePresentation['summary'] ?? null) ? $workspacePresentation['summary'] : $workspace['label'] }}</p>
                 @endif
             </div>
+            @if($showcaseWorkspace)
+                <span class="eb-workspace-banner__brand"><img src="{{ asset('brand/everbranch-mark.svg') }}" alt="" /> everbranch</span>
+            @endif
         </header>
 
         @if(is_array($dashboard['fleet_tracker'] ?? null))
@@ -62,81 +77,9 @@
             </nav>
         @endif
 
-        @if($channelPulse)
-            <section class="eb-channel-pulse" aria-label="Channel performance" wire:poll.30s.visible>
-                <div class="eb-channel-pulse__context">
-                    <a href="{{ $channelPulse['href'] ?? route('sales-channels.index') }}">All channels</a>
-                    <label>
-                        <span class="sr-only">Time window</span>
-                        <select wire:model.live="range" aria-label="Time window">
-                            @foreach($rangeOptions as $value => $label)
-                                <option value="{{ $value }}">{{ $value === '1d' ? 'Today' : $label }}</option>
-                            @endforeach
-                        </select>
-                    </label>
-                </div>
-                <div class="eb-channel-pulse__metrics">
-                    @foreach(($channelPulse['metrics'] ?? []) as $metric)
-                        <button
-                            type="button"
-                            class="eb-channel-pulse__metric {{ ($channelChart['key'] ?? 'sales') === ($metric['key'] ?? '') ? 'is-selected' : '' }}"
-                            wire:click="selectPulseMetric('{{ $metric['key'] ?? 'sales' }}')"
-                            aria-pressed="{{ ($channelChart['key'] ?? 'sales') === ($metric['key'] ?? '') ? 'true' : 'false' }}"
-                        >
-                            <span>{{ $metric['label'] ?? 'Metric' }}</span>
-                            <strong>{{ $metric['value'] ?? '—' }}</strong>
-                            <small>
-                                @if(is_array($metric['trend'] ?? null))
-                                    <b class="eb-channel-pulse__trend eb-channel-pulse__trend--{{ $metric['trend']['tone'] ?? 'neutral' }}">{{ $metric['trend']['label'] ?? '' }}</b>
-                                @endif
-                                @if($metric['live'] ?? false)<i class="eb-channel-pulse__live" aria-hidden="true"></i>@endif
-                                {{ $metric['detail'] ?? '' }}
-                            </small>
-                        </button>
-                    @endforeach
-                </div>
-            </section>
-
-            <section class="eb-channel-chart" wire:key="channel-chart-{{ $channelChart['key'] ?? 'sales' }}-{{ $dateRange['key'] ?? '1m' }}" wire:transition wire:loading.class="is-loading" wire:target="selectPulseMetric,range" aria-labelledby="channel-chart-title">
-                <header class="eb-channel-chart__header">
-                    <div>
-                        <h2 id="channel-chart-title">{{ $channelChart['title'] ?? 'Channel performance over time' }}</h2>
-                        <strong>{{ $channelChart['value'] ?? '—' }}</strong>
-                        <p>{{ $channelChart['subtitle'] ?? '' }}</p>
-                    </div>
-                    <div class="eb-channel-chart__legend" aria-label="Chart comparison">
-                        <span><i class="eb-channel-chart__legend-line"></i>{{ $channelChart['current_label'] ?? $dateRange['label'] ?? 'Current period' }}</span>
-                        <span><i class="eb-channel-chart__legend-line eb-channel-chart__legend-line--prior"></i>{{ $channelChart['previous_label'] ?? 'Prior period' }}</span>
-                    </div>
-                </header>
-                @if($channelChart['has_data'] ?? false)
-                    <div class="eb-channel-chart__plot" role="img" aria-label="{{ $channelChart['title'] ?? 'Channel performance' }} line chart">
-                        <svg viewBox="0 0 724 210" preserveAspectRatio="none" aria-hidden="true">
-                            <defs>
-                                <linearGradient id="eb-channel-chart-area" x1="0" x2="0" y1="0" y2="1">
-                                    <stop offset="0%" stop-color="#149dd8" stop-opacity="0.42" />
-                                    <stop offset="100%" stop-color="#149dd8" stop-opacity="0" />
-                                </linearGradient>
-                            </defs>
-                            <line x1="24" x2="700" y1="34" y2="34" />
-                            <line x1="24" x2="700" y1="86" y2="86" />
-                            <line x1="24" x2="700" y1="138" y2="138" />
-                            <line x1="24" x2="700" y1="190" y2="190" />
-                            <polyline class="eb-channel-chart__prior" points="{{ $chartPreviousPoints }}" />
-                            <polygon class="eb-channel-chart__area" points="24,190 {{ $chartCurrentPoints }} 700,190" />
-                            <polyline class="eb-channel-chart__current" points="{{ $chartCurrentPoints }}" />
-                        </svg>
-                        <div class="eb-channel-chart__axis" aria-hidden="true">
-                            @foreach($chartAxisIndexes as $index)
-                                <span>{{ $chartLabels[$index] ?? '' }}</span>
-                            @endforeach
-                        </div>
-                    </div>
-                @else
-                    <div class="eb-channel-chart__empty">{{ $channelChart['empty_message'] ?? 'No data is available for this period yet.' }}</div>
-                @endif
-            </section>
-        @endif
+        @unless($fieldWorkspace)
+            @include('livewire.dashboard.partials.channel-pulse')
+        @endunless
 
         @if($workflowHealth)
             <section class="eb-dashboard-notice" aria-labelledby="workflow-health-title">
@@ -256,7 +199,7 @@
             </section>
         @endif
 
-        <section class="eb-dashboard-panel">
+        <section class="{{ $showcaseWorkspace ? 'eb-dashboard-summary' : 'eb-dashboard-panel' }}" @if($showcaseWorkspace) style="--eb-metric-columns: {{ max(1, min(4, count($summaryCards))) }}" @endif>
             <div class="eb-dashboard-panel__header">
                 <div>
                     <h2>{{ $hero['label'] ?? 'Workspace readiness' }}</h2>
@@ -269,7 +212,7 @@
                 <div class="eb-dashboard-metrics">
                     @foreach($summaryCards as $card)
                         <a href="{{ $card['href'] ?? route('dashboard') }}">
-                            <span>{{ $card['label'] ?? 'Metric' }}</span>
+                            <span>{{ $showcaseWorkspace && ($card['label'] ?? '') === 'Total gross revenue' && ($card['detail'] ?? '') === 'Active job value' ? 'Active job value' : ($card['label'] ?? 'Metric') }}</span>
                             <strong>{{ $card['value'] ?? '0' }}</strong>
                             <small>{{ $card['detail'] ?? '' }}</small>
                         </a>
@@ -349,5 +292,11 @@
                 </div>
             </section>
         </div>
+        @if($fieldWorkspace && $channelPulse)
+            <details class="eb-dashboard-sales-details">
+                <summary>Sales channels and storefront activity</summary>
+                @include('livewire.dashboard.partials.channel-pulse')
+            </details>
+        @endif
     </div>
 </div>
