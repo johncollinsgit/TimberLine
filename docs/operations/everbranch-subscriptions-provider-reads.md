@@ -178,6 +178,17 @@ Only the disposable schema-baseline workflow may generate the five-table schema
 addition; exact-head CI and the protected production migration gate are required
 before release. Gates remain disabled after deployment until reviewed acceptance.
 
+Disposable workflow `38820032871` generated and boot-verified the reviewed
+409-table baseline `dbf93f3edf9b447b9a03eca97d7ec9d12ea555df802ea3d8e50086a9b88387f2`.
+It adds only the five declared evidence tables; two older tables have equivalent
+explicit charset spelling in the new dump. No production dump was adopted.
+After rebasing onto the deployed foundation, subscription plus embedded-surface
+checks passed 174 tests / 923 assertions. The six fixed read documents were also
+accepted by the real 2026-10 Shopify schema via the existing CLI installation:
+the owned index was completely empty; four unowned synthetic contract lookups
+returned null and cycles returned expected NOT_FOUND. This validates document
+shape, not live contract-data acceptance, expiry lifecycle or mutation authority.
+
 ## Provider references
 
 - [AppInstallation](https://shopify.dev/docs/api/admin-graphql/2026-10/objects/AppInstallation), [App](https://shopify.dev/docs/api/admin-graphql/2026-10/objects/App), [Shop](https://shopify.dev/docs/api/admin-graphql/2026-10/objects/Shop)
