@@ -7,6 +7,7 @@
             @if(config('managed_website.pirate_ship_bridge_enabled') && in_array((int) $tenant->id, (array) config('managed_website.pirate_ship_bridge_tenant_ids', []), true))<a class="block rounded-xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-900" href="{{ route('managed-website.commerce.pirate-ship') }}">Pirate Ship spreadsheet bridge →</a>@endif
             @if(!($shippingEnabled ?? true))<p role="status" class="rounded-xl bg-amber-50 p-4 text-sm text-amber-950">Pickup locations can be configured now. Carrier shipping remains disabled.</p>@endif
             @php($policy = data_get($site->settings, 'shipping', []))
+            @include('managed-website.commerce.shipping-health')
             @if($shippingEnabled ?? true)<section class="rounded-2xl border bg-white p-6">
                 <h2 class="text-lg font-bold">Carrier services</h2><p class="mt-2 text-sm text-zinc-600">Use a matching test account for rehearsal. Production requires the reviewed merchant launch. Other carriers and services are excluded from rates.</p>
                 <form method="POST" action="{{ route('managed-website.commerce.shipping.policy.store') }}" class="mt-4 space-y-4">@csrf

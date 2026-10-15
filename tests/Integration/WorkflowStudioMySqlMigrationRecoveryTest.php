@@ -1096,3 +1096,117 @@ it('resumes website collections after MySQL retains the collection table', funct
     expect(Schema::hasIndex('website_collections', 'wc_site_handle_uq'))->toBeTrue()
         ->and(Schema::hasIndex('website_collection_products', 'wcp_collection_product_uq'))->toBeTrue();
 });
+
+it('repairs native Website notification constraints after MySQL retains only the outbox table', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires disposable MySQL.');
+    }
+    foreach (['tenants', 'tenant_sites', 'website_orders', 'website_shipments'] as $name) {
+        if (! Schema::hasTable($name)) {
+            Schema::create($name, fn (Blueprint $table) => $table->id());
+        }
+    }
+    $migration = require database_path('migrations/2026_10_15_210000_create_website_order_notifications.php');
+    Schema::dropIfExists('website_order_notifications');
+    // Exact durable boundary: CREATE TABLE committed, but none of Laravel's
+    // following named FK/index ALTER statements or migration bookkeeping ran.
+    Schema::create('website_order_notifications', function (Blueprint $table): void {
+        $table->id();
+        $table->unsignedBigInteger('tenant_id');
+        $table->unsignedBigInteger('website_order_id');
+        $table->unsignedBigInteger('website_shipment_id')->nullable();
+        $table->char('transition_key', 64);
+        $table->string('kind', 32);
+        $table->string('status', 24)->default('pending');
+        $table->longText('snapshot');
+        $table->unsignedSmallInteger('attempts')->default(0);
+        $table->timestamp('next_attempt_at')->nullable();
+        $table->char('lease_token', 36)->nullable();
+        $table->timestamp('lease_expires_at')->nullable();
+        $table->timestamp('accepted_at')->nullable();
+        $table->string('provider_message_id', 255)->nullable();
+        $table->string('failure_code', 64)->nullable();
+        $table->timestamps();
+    });
+    expect(Schema::getForeignKeys('website_order_notifications'))->toBeEmpty()
+        ->and(Schema::hasIndex('website_order_notifications', 'won_transition_uq'))->toBeFalse()
+        ->and(Schema::hasIndex('website_order_notifications', 'won_due_idx'))->toBeFalse()
+        ->and(Schema::hasIndex('website_order_notifications', 'won_lease_idx'))->toBeFalse()
+        ->and(Schema::hasIndex('website_order_notifications', 'won_order_status_idx'))->toBeFalse();
+    $key = hash('sha256', random_bytes(20));
+    $tenantId = DB::table('tenants')->insertGetId(array_intersect_key(['name' => 'Notification recovery', 'slug' => 'notification-recovery-'.substr($key, 0, 12)], array_flip(Schema::getColumnListing('tenants'))));
+    $siteId = DB::table('tenant_sites')->insertGetId(array_intersect_key(['tenant_id' => $tenantId, 'status' => 'draft', 'public_enabled' => false, 'subdomain' => 'notification-'.substr($key, 0, 12)], array_flip(Schema::getColumnListing('tenant_sites'))));
+    $orderId = DB::table('website_orders')->insertGetId(array_intersect_key(['tenant_id' => $tenantId, 'tenant_site_id' => $siteId, 'number' => 'RECOVERY-'.substr($key, 0, 12), 'lookup_token' => substr($key, 0, 56)], array_flip(Schema::getColumnListing('website_orders'))));
+    DB::table('website_order_notifications')->insert(['tenant_id' => $tenantId, 'website_order_id' => $orderId,
+        'transition_key' => $key, 'kind' => 'confirmed', 'snapshot' => 'encrypted-recovery-sentinel', 'status' => 'blocked', 'created_at' => now(), 'updated_at' => now()]);
+    $migration->up();
+    $migration->up();
+    expect(Schema::hasIndex('website_order_notifications', 'won_transition_uq'))->toBeTrue()
+        ->and(Schema::hasIndex('website_order_notifications', 'won_due_idx'))->toBeTrue()
+        ->and(Schema::hasIndex('website_order_notifications', 'won_lease_idx'))->toBeTrue()
+        ->and(Schema::hasIndex('website_order_notifications', 'won_order_status_idx'))->toBeTrue()
+        ->and(Schema::getColumnType('website_order_notifications', 'snapshot'))->toBe('longtext')
+        ->and(DB::table('website_order_notifications')->where('transition_key', $key)->value('snapshot'))->toBe('encrypted-recovery-sentinel')
+        ->and(collect(Schema::getForeignKeys('website_order_notifications'))->pluck('name')->all())
+        ->toContain('won_tenant_fk', 'won_order_fk', 'won_shipment_fk');
+    expect(fn () => DB::table('website_order_notifications')->insert(['tenant_id' => $tenantId, 'website_order_id' => $orderId,
+        'transition_key' => $key, 'kind' => 'confirmed', 'snapshot' => 'duplicate-must-be-rejected', 'status' => 'blocked']))
+        ->toThrow(\Illuminate\Database\QueryException::class);
+    // A different interruption can retain some constraints. Repair the missing
+    // final index without recreating the table, its other keys, or its sentinel.
+    Schema::table('website_order_notifications', fn (Blueprint $table) => $table->dropIndex('won_order_status_idx'));
+    $migration->up();
+    $migration->up();
+    expect(Schema::hasIndex('website_order_notifications', 'won_order_status_idx'))->toBeTrue()
+        ->and(DB::table('website_order_notifications')->where('transition_key', $key)->value('snapshot'))->toBe('encrypted-recovery-sentinel');
+    DB::table('website_order_notifications')->where('transition_key', $key)->delete();
+});
+
+it('repairs native catalog source identities after MySQL retained the bare table before named keys', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires disposable MySQL.');
+    }
+    foreach (['tenants', 'tenant_sites', 'website_products', 'website_product_variants', 'website_collections'] as $name) {
+        if (! Schema::hasTable($name)) {
+            Schema::create($name, fn (Blueprint $table) => $table->id());
+        }
+    }
+    Schema::dropIfExists('website_catalog_source_mappings');
+    Schema::create('website_catalog_source_mappings', function (Blueprint $table): void {
+        $table->id();
+        $table->unsignedBigInteger('tenant_id');
+        $table->unsignedBigInteger('tenant_site_id');
+        $table->string('provider', 24);
+        $table->string('source_shop', 253);
+        $table->string('source_type', 16);
+        $table->string('source_gid', 190);
+        $table->unsignedBigInteger('website_product_id')->nullable();
+        $table->unsignedBigInteger('website_product_variant_id')->nullable();
+        $table->unsignedBigInteger('website_collection_id')->nullable();
+        $table->char('source_fingerprint', 64);
+        $table->char('target_fingerprint', 64);
+        $table->longText('provenance');
+        $table->timestamps();
+    });
+    expect(Schema::getForeignKeys('website_catalog_source_mappings'))->toBeEmpty()->and(Schema::hasIndex('website_catalog_source_mappings', 'wcs_source_uq'))->toBeFalse();
+    $key = substr(hash('sha256', random_bytes(20)), 0, 12);
+    $tenant = DB::table('tenants')->insertGetId(array_intersect_key(['name' => 'Catalog recovery', 'slug' => 'catalog-recovery-'.$key], array_flip(Schema::getColumnListing('tenants'))));
+    $site = DB::table('tenant_sites')->insertGetId(array_intersect_key(['tenant_id' => $tenant, 'subdomain' => 'catalog-recovery-'.$key, 'status' => 'draft', 'public_enabled' => false], array_flip(Schema::getColumnListing('tenant_sites'))));
+    $row = ['tenant_id' => $tenant, 'tenant_site_id' => $site, 'provider' => 'shopify', 'source_shop' => 'fictional-recovery.myshopify.com', 'source_type' => 'product', 'source_gid' => 'gid://shopify/Product/123', 'source_fingerprint' => str_repeat('a', 64), 'target_fingerprint' => str_repeat('b', 64), 'provenance' => 'encrypted-recovery-sentinel'];
+    $id = DB::table('website_catalog_source_mappings')->insertGetId($row);
+    $migration = require database_path('migrations/2026_10_15_230000_create_website_catalog_source_mappings.php');
+    $migration->up();
+    $migration->up();
+    expect(collect(Schema::getForeignKeys('website_catalog_source_mappings'))->pluck('name')->all())->toContain('wcs_tenant_fk', 'wcs_site_fk', 'wcs_product_fk', 'wcs_variant_fk', 'wcs_collection_fk');
+    foreach (['wcs_source_uq', 'wcs_product_idx', 'wcs_variant_idx', 'wcs_collection_idx'] as $name) {
+        expect(Schema::hasIndex('website_catalog_source_mappings', $name))->toBeTrue();
+    }
+    expect(DB::table('website_catalog_source_mappings')->where('id', $id)->value('provenance'))->toBe('encrypted-recovery-sentinel');
+    expect(fn () => DB::table('website_catalog_source_mappings')->insert($row))->toThrow(\Illuminate\Database\QueryException::class);
+    expect(fn () => DB::table('website_catalog_source_mappings')->insert(array_merge($row, ['tenant_id' => PHP_INT_MAX, 'source_gid' => 'gid://shopify/Product/124'])))->toThrow(\Illuminate\Database\QueryException::class);
+    Schema::table('website_catalog_source_mappings', fn (Blueprint $table) => $table->dropIndex('wcs_collection_idx'));
+    $migration->up();
+    $migration->up();
+    expect(Schema::hasIndex('website_catalog_source_mappings', 'wcs_collection_idx'))->toBeTrue()->and(DB::table('website_catalog_source_mappings')->where('id', $id)->value('provenance'))->toBe('encrypted-recovery-sentinel');
+    DB::table('website_catalog_source_mappings')->where('id', $id)->delete();
+});

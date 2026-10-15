@@ -1,3 +1,14 @@
+## 2026-10-15 - Native shipping lifecycle and printer setup
+
+- Order fulfillment separates saved postage, packing, label output, handoff,
+  refund review and separately approved replacement rates. Retired labels lose
+  print actions; unresolved purchases retain check/resume actions.
+- Printer setup supports saved Mac/Windows driver profiles, actual-size thermal
+  and sheet PDFs, calibration, and explicit print outcome history. Guest and
+  account tracking omit private documents and staff/provider details.
+- Local setup checks and per-order transactional update states expose blocked or
+  uncertain work without starting provider operations. Rollout remains disabled.
+
 ## 2026-10-15 - Reviewed parcels and shared shipping checkout
 
 - Native shipping setup adds explicit test/production mode, approved USPS

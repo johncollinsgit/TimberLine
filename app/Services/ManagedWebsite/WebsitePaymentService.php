@@ -164,6 +164,7 @@ class WebsitePaymentService
                 $stripe->event($order, $committed ? 'paid' : 'paid_inventory_review', $committed
                     ? 'Stripe payment verified. Inventory committed once.'
                     : 'Stripe payment verified, but inventory needs staff review. Fulfillment is blocked.');
+                app(WebsiteOrderNotificationService::class)->record($order, 'order:'.$order->id.':confirmed', $committed ? 'confirmed' : 'payment_review');
             } elseif (($session['status'] ?? '') === 'expired' && ($session['payment_status'] ?? '') === 'unpaid') {
                 $this->expire($order, $payment);
             }

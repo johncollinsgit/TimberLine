@@ -8,7 +8,7 @@ blocked. This plan does not change a Shopify merchant's discount policies.
 
 ## Phase 1 Shipping readiness and weights
 
-Implemented in draft PR #394. Production activation remains separate.
+Released with Phases 2–3 in PR #397 (`88bda81a`), with checkout and shipping disabled. Draft PR #394 was superseded by that cumulative release.
 
 Implementation is isolated to the tenant-owned Website lane.
 
@@ -44,7 +44,7 @@ or bypass the existing release and rollout gates. No schema migration is needed.
 
 ## Phase 2 Packages and accurate rates
 
-Implementation follows Phase 1 on `codex/retail-shipping-phase-2`.
+Released with Phases 1 and 3 in PR #397. Draft PR #395 was superseded by that cumulative release.
 
 - Require a merchant-owned EasyPost connection, complete US state/DC origin,
   explicit test/production mode, and approved USPS Ground Advantage, Priority,
@@ -91,8 +91,7 @@ separate verification gates; no real postage was purchased during implementation
 
 ## Phase 3 Payment and inventory reliability
 
-Implemented on `codex/retail-shipping-phase-3`, stacked on Phase 2. No migration
-or production activation is included.
+Released with Phases 1–2 in PR #397 (`88bda81a`), Forge release `80340808`. The exact-SHA readiness check passed; checkout/shipping stayed disabled and native payments, active holds, and shipments remained zero. No schema migration was included.
 
 - Create the order, inventory reservations, and a versioned payment attempt in
   one transaction before calling Stripe. Site/cart locks serialize submissions;
@@ -164,56 +163,72 @@ Provider references: [Checkout creation](https://docs.stripe.com/api/checkout/se
 
 ## Phase 4 Labels printing tracking and customer updates
 
-- Purchase, recover, and retain the label against the correct order-owned
-  parcel. A charged-but-timed-out request must recover the existing label,
-  never buy postage again to make a print retry work. Keep label purchase,
-  replacement postage, void/refund, and printing as distinct audited actions.
-- Build a printer-independent document path: an actual-size 4x6-inch thermal
-  label PDF and a Letter/A4 sheet layout that preserves the carrier label's
-  physical dimensions. Verify provider format and page size; an EasyPost PDF
-  may contain a 4x6 label on a Letter page. Use the carrier's existing label
-  image/conversion where needed rather than shrinking, cropping, redrawing
-  barcodes, or repurchasing postage.
-- Offer Print label, Download PDF, and Reprint from the stored purchased label.
-  Reprint must not call a postage-buy endpoint. Preview the selected media size
-  and orientation; provide actual-size, margin, and header/footer guidance.
-  Support ordinary operating-system drivers and browser/PDF print dialogs as
-  the common path for USB and network printers.
-- Add saved workstation print profiles for printer/media/layout/orientation.
-  Keep the document and provider layers independent of any one printer brand.
-  Target DYMO, Rollo, Zebra, Brother, and ordinary laser/inkjet printers where
-  the model and installed driver support the chosen media. Do not advertise
-  an entire brand or every model as tested. Narrow printers must not receive
-  a scaled-down shipping barcode that requires wider stock.
-- The first named hardware test is the user's DYMO LabelWriter 4XL over USB,
-  using 4x6 stock. Also define coverage for another thermal printer and a
-  Letter/A4 desktop printer. Maintain a support matrix by exact model, media,
-  connection, OS/driver, browser, document format, and physical test result.
-  Confirm the actual workstation OS during printing implementation.
-- Keep an adapter boundary for optional direct-print connectors and native
-  ZPL/EPL2 output where both carrier and printer support it. A connector-specific
-  setup must not prevent the standard PDF path from working. Direct/silent
-  printing requires its own installed connector and compatibility verification.
-- Add a no-postage setup/test print and actionable driver, offline, wrong-media,
-  and print-dialog-cancel handling. Opening a dialog is a print request, not
-  proof that a label reached paper. Separate requested, operator-confirmed,
-  failed, and reprinted history. Printer failures never imply carrier handoff.
-- Repair official EasyPost signature validation, account-scoped shipment
-  matching, event ordering, and delivery states. Add unused-label refund states,
-  replacement labels, pack/handoff actions, customer confirmations, tracking,
-  and exceptions. Use explicit postage/refund permissions and merchant
-  setup/health screens, and protect label documents containing addresses.
+Implemented on `codex/retail-shipping-phase-4`. Checkout, shipping,
+and transactional notifications remain independently gated. This phase adds a
+restart-safe native notification outbox migration; it requires a refreshed
+data-free MySQL baseline and actual MySQL partial-DDL recovery checks.
 
-Acceptance: staff can move a paid order through packing, a valid USPS label,
-printing/reprinting on supported thermal and sheet printers without duplicate
-postage, carrier acceptance, delivery, and a separately reconciled refund/void
-scenario. Verify exact printed dimensions, no clipped address/barcode, and a
-scannable tracking barcode. Customers receive each transactional update once and
-can track the order. A physical device test, including the USB DYMO 4XL, is part
-of Phase 5 evidence; mocked/browser tests do not claim hardware compatibility.
+- Persist a shipment/fulfillment attempt before any postage request, bound to the
+  accepted order parcel, rate, mode, and original encrypted carrier credentials.
+  A preflight GET failure leaves approved postage resumable. Only one durable
+  claim can issue the buy POST. After a POST may have started, every recovery
+  uses the same provider shipment and GETs only; no blind purchase retry.
+- Use explicit packing and carrier-handoff actions. Buying, downloading,
+  printing, and cancelling a print dialog never mark a parcel shipped. Canonical
+  carrier acceptance also records fulfillment. Retired originals retain actual
+  acceptance evidence and cannot authorize duplicate replacement postage.
+- Keep unused-label refund requests pending until canonical provider status
+  confirms refunded/rejected. Retire old labels locally while awaiting review.
+  Replacement rates use the accepted origin/destination/parcel, require a fresh
+  separate cost approval, and reuse the fulfillment allocation. Ambiguous
+  replacement creation without a provider ID requires manual provider review.
+- Verify account-specific untouched-body EasyPost HMAC, including official
+  legacy prefix and timestamp/path-bound v2 without downgrade. Persist accepted
+  events, acknowledge promptly, then retrieve canonical event/shipment/Tracker
+  through original credentials. Poll missed updates every five minutes. Ignore
+  stale microsecond timestamps, retain delivered/accepted states, and deduplicate
+  notification transitions and exception episodes.
+- Preserve the original 4x6 PNG privately and generate lossless actual-size
+  thermal, Letter, and A4 PDFs. A sheet PDF contains the same 4x6 image; neither
+  barcodes nor addresses are cropped or scaled to a narrow printer. Protect
+  downloads and print previews with tenant/operator authorization.
+- Save user/tenant/workstation print profiles for Mac and Windows, driver paper,
+  orientation, connection hint, and printer family/model. Standard PDF/browser
+  printing supports compatible installed drivers; only the browser adapter is
+  implemented. Direct/silent or ZPL/EPL2 adapters remain optional future work.
+- Provide no-postage calibration pages, Download PDF, Print, and Reprint. Retain
+  requested, operator-confirmed, failed, and cancelled history. A browser's
+  `afterprint` event is never proof of paper output. A print retry cannot call
+  the postage-buy endpoint. See `website-label-printing.md` for exact support
+  claims and the physical test matrix.
+- Add an encrypted native transactional outbox with deterministic transition
+  uniqueness, after-commit scalar-ID jobs, bounded scanner recovery, explicit
+  approved sender/transport, and paused-checkout servicing. Provider acceptance
+  is distinct from inbox delivery. Unknown sends never auto-resend; staff must
+  record provider evidence and separately approve a retry. Disabled historical
+  rows stay blocked, and obsolete shipping notices are superseded.
+- Share safe shopper tracking across guest links and account views. Guest links
+  bind the verified host, site, order, and high-entropy token; responses suppress
+  referrers/caching/indexing and omit addresses, staff notes, provider payloads,
+  and label documents. Staff setup shows local readiness and unresolved work
+  without live provider calls. Active workspace admin/manager membership is
+  required for native postage and address-bearing documents.
 
-Printing references: [EasyPost label format and size options](https://docs.easypost.com/docs/shipments/options)
-and [DYMO model/OS software compatibility](https://www.dymo.com/user-guide.html).
+Software acceptance uses HTTP-faked provider lifecycle tests, private-document
+and PDF geometry/pixel tests, outbox/lease/permission tests, independent reviews,
+and desktop/mobile browser checks. These establish implementation behavior,
+not a live carrier purchase, physical printer compatibility, or final settlement.
+
+The user's first physical target is a USB DYMO LabelWriter 4XL, on both Mac and
+Windows. Other thermal models and an office printer require their own driver,
+media, actual dimensions, clipping, and barcode-scan evidence in Phase 5.
+
+Provider references: [EasyPost shipments](https://docs.easypost.com/docs/shipments),
+[errors and ambiguous purchases](https://docs.easypost.com/guides/errors-guide),
+[refund states](https://docs.easypost.com/docs/shipments/shipping-refund),
+[tracking](https://docs.easypost.com/docs/trackers),
+[HMAC specification](https://support.easypost.com/hc/en-us/articles/39826034964237-Webhook-HMAC-Validation),
+and [label formats and sizes](https://docs.easypost.com/docs/shipments/options).
 
 ## Phase 5 Controlled merchant launch
 

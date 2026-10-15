@@ -13,6 +13,48 @@
   Modern Forestry's native pilot with its existing Shopify operations intact.
   Follow `docs/operations/schema-drift-reconciliation-2026-10-15.md`.
 
+## Native Shopify catalog snapshot pilot (2026-10-15; staged)
+
+- The user explicitly approved Modern Forestry Shopify products as a read-only
+  source for its separate native Website pilot. This narrow catalog exception
+  does not authorize Shopify writes, customer/order imports, checkout changes,
+  new connections, publication, provider calls, or activation.
+- `website:import-shopify-catalog-snapshot` defaults to dry run and requires an
+  existing scoped site, active catalog operator, and independently reviewed shop
+  domain/Shop GID. Stable source mappings and encrypted provenance protect identity;
+  operator edits or source removals require review rather than automatic overwrite.
+- All imported products remain draft. Invalid/unknown tracked source stock becomes
+  zero sellable quantity and unavailable, with the original source value retained.
+  Weights stay missing when unknown; unreviewed dimensions are not inferred.
+  Inventory is a snapshot, not shared live stock. Require pilot allocation before
+  activation. See `docs/operations/native-shopify-catalog-snapshot.md`.
+
+## Retail shipping Phase 4 (2026-10-15)
+
+- Continue the native-only five-phase plan. Phases 1–3 are live behind disabled
+  checkout/shipping gates via PR #397 (`88bda81a`). Phase 4 keeps activation separate from its code release.
+- `WebsiteShipmentLifecycleService` owns durable original-account postage,
+  GET-only recovery after an uncertain POST, refund/replacement state, explicit
+  pack/handoff, signed events and canonical tracking. Never reset an unknown
+  buy to prepared or use a print failure to buy replacement postage.
+- `WebsiteLabelDocumentService` retains private original PNG and exact-size PDF
+  layouts. Only active workspace shipping managers may access address-bearing
+  labels. Browser dialog closure never proves printing or carrier handoff.
+- `WebsiteOrderNotificationService` is a separate encrypted native outbox. Never
+  route it through marketing/Shopify gateways. Unknown acceptance cannot retry
+  automatically; operator evidence and a separate explicit retry are required.
+  Its new migration must repair partial MySQL constraints/indexes and retain
+  deduplication. Refresh only the disposable data-free schema baseline.
+- `website:reconcile-shipments` runs every five minutes; the native notification
+  scanner runs each minute. Neither activates rollout gates. Health rendering
+  uses local configuration/counters and must not call providers.
+- Carrier credential rotation creates a new encrypted IntegrationConnection;
+  retain old credentials for their pinned attempts. Never flash keys/secrets.
+- Printing supports the standard PDF/driver path. The USB DYMO LabelWriter 4XL
+  on Mac and Windows is the first physical target; other exact models need
+  verification. Do not claim hardware, barcode, USPS delivery, tax, or settlement
+  evidence from mocked or browser tests. Phase 5 remains the controlled pilot.
+
 ## Retail shipping Phase 3 (2026-10-15)
 
 - Continue from the phased retail shipping plan. Phase 3 is isolated on

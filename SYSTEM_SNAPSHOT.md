@@ -1,6 +1,6 @@
 # SYSTEM SNAPSHOT
 
-## Reviewed schema reconciliation (2026-10-15; release pending)
+## Reviewed schema reconciliation (2026-10-15; deployed)
 
 - A separate forward-only repair addresses historical production drift before
   shipping Phase 4. It restores constraints/indexes, preserves historical tables
@@ -10,12 +10,54 @@
 - Fingerprints permit only definition-checked historical name aliases and
   column-order equivalence on four declared tables; they now verify FK actions.
   Missing, changed and duplicate constraints still fail the release gate.
-- Observed-shape MySQL recovery, disposable baseline generation and exact-head
-  checks precede deployment. Checkout/shipping remain disabled. Modern Forestry
-  is the native pilot; its existing Shopify store and checkout stay independent.
+- PR #400 deployed through protected run `38815157152` / Forge `80345469` at
+  `228c84d5`. Exact-release readiness, migrations and the approved `cb51b941`
+  fingerprint passed. All four retained delivery references and every other
+  field matched the before-release aggregate digests. Checkout/shipping remain
+  disabled with zero native payments, active holds or shipments. Modern Forestry
+  is the native pilot; its Shopify store and checkout stay independent.
 - See `docs/operations/schema-drift-reconciliation-2026-10-15.md`.
 
-## Native retail shipping Phase 3 (2026-10-15; review branch)
+## Native Shopify catalog snapshot adapter (2026-10-15; staged, activation disabled)
+
+- An explicit local-file CLI adapter prepares native drafts from the approved
+  read-only Shopify catalog export. Tenant/site/shop/GID mappings retain encrypted
+  source provenance and compare imported targets before any overwrite. The adapter
+  does not invoke provider APIs, publish, activate, or import customers/orders.
+- Missing weights remain NULL. Invalid tracked stock projects to zero/unavailable;
+  original values stay encrypted. Galleries display up to twelve safe images while
+  retaining the complete source gallery. Stock allocation, dimensions/packing,
+  source tax policy and unsupported commerce features require launch review.
+- Disposable SQLite and MySQL 8.4 full-source rehearsals prepared 397 drafts and
+  1,681 variants, covering 101 of 109 source ACTIVE products. These are local test
+  results, not production catalog changes or physical shipping evidence. MySQL
+  partial-DDL recovery and two concurrent initial imports passed without duplicate
+  catalog rows; identical replays changed no catalog, inventory or audit rows.
+- The combined disposable schema baseline and normal release gates are still
+  required. See `docs/operations/native-shopify-catalog-snapshot.md`.
+
+## Native retail shipping Phase 4 (2026-10-15; activation disabled)
+
+- Durable original-account postage attempts distinguish resumable preflight from
+  ambiguous submitted buys; recovery never blindly buys another label. Packing,
+  printing, handoff, canonical carrier acceptance, refunds, and replacement cost
+  approval have separate states. Signed queued events and bounded GET polling
+  retain precise tracking order and exception episodes.
+- Protected original PNG plus lossless 4x6/Letter/A4 PDFs, Mac/Windows workstation
+  profiles, calibration pages, and explicit print-result history use ordinary
+  OS drivers. No physical printer has been verified.
+- The encrypted `website_order_notifications` outbox uses an explicit approved
+  transactional sender, unique transitions, after-commit jobs and a bounded
+  scanner. Ambiguous sends require operator evidence; disabled history does not
+  automatically send after activation. Guest tracking is host/site/token scoped.
+- The additive outbox migration repairs interrupted MySQL FK/index creation.
+  Baseline generation and the mandatory MySQL release gate remain required.
+  Checkout, shipping and notifications remain disabled until the controlled
+  Phase 5 merchant/hardware/provider launch. No real postage or mail was sent.
+- See `docs/operations/retail-shipping-launch-plan.md`, shipping operations,
+  and `website-label-printing.md` for scope and physical verification limits.
+
+## Native retail shipping Phase 3 (2026-10-15; released disabled)
 
 - `WebsiteCheckoutService` saves durable attempts/holds before provider calls;
   frozen requests and hosted URLs stay in encrypted order data. Both retail
@@ -32,14 +74,15 @@
   created by the reconciliation command.
 - Pre-deploy review fixes expose pickup origin setup independently of carrier
   activation and durable pending-refund controls during paused checkout.
-- No migration, deployment, rollout activation, real payment/refund, or postage
-  purchase is included. Phase 4 remains labels/tracking/recovery/customer
-  updates; Phase 5 proves merchant tax, settlement, and physical delivery.
+- Phases 1–3 deployed together through PR #397 / Forge `80340808` at
+  `88bda81a`, with checkout/shipping disabled and no native payments, active
+  holds, or shipments. No migration was needed. Phase 5 still proves real
+  merchant tax, settlement, carrier delivery, and hardware printing.
   Phase 4 also includes printer-independent thermal/Letter/A4 documents and
   a verified printer matrix; USB DYMO LabelWriter 4XL is the first named device.
   See `docs/operations/retail-shipping-launch-plan.md` and the rollback runbook.
 
-## Native retail shipping Phase 2 (2026-10-15; review branch)
+## Native retail shipping Phase 2 (2026-10-15; released disabled)
 
 - Phase 1 is draft PR #394. Phase 2 adds reviewed package capacity, explicit USPS
   services/mode, box/packing tare, correct EasyPost shipment requests, current

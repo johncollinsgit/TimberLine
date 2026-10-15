@@ -306,3 +306,5 @@ Schedule::command('soccer:process')->everyMinute()->withoutOverlapping(5)->runIn
 
 // Reconciles only explicitly versioned native Website attempts. Never enables commerce.
 Schedule::command('website:reconcile-payments')->everyFiveMinutes()->withoutOverlapping(10)->runInBackground();
+Schedule::command('website:reconcile-shipments')->everyFiveMinutes()->withoutOverlapping(10)->runInBackground();
+Schedule::command('website:dispatch-order-notifications')->everyMinute()->withoutOverlapping(10)->runInBackground();
