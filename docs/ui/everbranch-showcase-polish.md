@@ -1,6 +1,6 @@
 # Everbranch Showcase presentation
 
-Local review branch: `codex/everbranch-showcase-polish`, based on production release
+Implementation branch: `codex/everbranch-showcase-polish`, based on production release
 `1a777845ca3c7ffe6ccceb73804ead0ee4a97c1a` (2026-10-14).
 
 The approved reference is the current Everbranch Showcase workspace, job, gallery,
@@ -37,7 +37,7 @@ in screenshots or review attachments. Device evidence is browser emulation; came
 soft keyboard, native app, offline, and physical-device checks remain separate.
 
 Before publication, retain the GitHub test/build gate and protected Forge release
-process. This branch has not been pushed or deployed. The audit's access and billing
+process. Publication requires those gates and exact-release readiness verification. The audit's access and billing
 findings are independent of this presentation change and are not certified fixed.
 
 ## Owner controls and landlord console

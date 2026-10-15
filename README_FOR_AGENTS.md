@@ -1,6 +1,6 @@
 # START HERE
 
-## 2026-10-15 — Everbranch Showcase workspace presentation (local review)
+## 2026-10-15 — Everbranch Showcase workspace and landlord presentation
 
 - Shared Everbranch web workspaces adopt the approved Showcase palette, readable
   typography, full-width canvas beside the existing sidebar, modern native fields,
