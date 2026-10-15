@@ -56,7 +56,7 @@
                         <p class="mt-1 text-sm font-semibold text-zinc-900">{{ $typeLabel }}</p>
                     </article>
                     <article class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">
-                        <p class="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Current role</p>
+                        <p class="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Default user role</p>
                         <p class="mt-1 text-sm font-semibold text-zinc-900">{{ $roleLabel }}</p>
                     </article>
                     <article class="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3">
@@ -71,21 +71,25 @@
             </div>
 
             <div class="mt-5 flex flex-wrap gap-2">
-                <button type="button" @click="showEdit = true" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Tenant</button>
+                <button type="button" @click="showEdit = true" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Edit workspace</button>
+                <details class="eb-admin-overflow">
+                    <summary>Workspace controls</summary>
+                    <div class="flex flex-wrap gap-3 p-3">
                 <button type="button" @click="showRole = true" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Role</button>
                 <button type="button" @click="showModules = true" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Modules</button>
                 <button type="button" @click="showType = true" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Tenant Type</button>
-                <a href="{{ route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'onboarding_journey']) }}" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Onboarding</a>
-                <a href="{{ route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'applications']) }}" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Applications</a>
-                <a href="{{ route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'customers']) }}" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Customers</a>
-                <a href="{{ route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'activity']) }}" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Activity</a>
-                <a href="{{ route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'performance']) }}" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Performance</a>
-                <a href="{{ route('landlord.tenants.show', ['tenant' => $tenant->id, 'tab' => 'settings']) }}" class="rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100">Settings</a>
                 <button type="button" @click="showDeleteTenant = true" class="rounded-full border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50">Delete tenant</button>
+                    </div>
+                </details>
             </div>
         </section>
 
-        <section class="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+        @if($activeTab === 'settings')
+            @include('landlord.tenants.partials.presentation')
+        @endif
+
+        <details class="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+<summary class="mb-4 cursor-pointer text-base font-semibold">Workspace setup guide</summary>
             <div class="flex flex-wrap items-start justify-between gap-4">
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-[0.24em] text-zinc-500">Landlord control center</p>
@@ -125,7 +129,7 @@
                     </article>
                 @endforeach
             </div>
-        </section>
+        </details>
 
         @php
             $tenantBlueprint = is_array($tenantBlueprint ?? null) ? $tenantBlueprint : [];
@@ -137,7 +141,8 @@
             $blueprintRecommendationSummary = is_array($blueprintModuleRecommendations['summary'] ?? null) ? $blueprintModuleRecommendations['summary'] : [];
         @endphp
 
-        <section class="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+        <details class="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+            <summary class="mb-4 cursor-pointer text-base font-semibold">Business setup profile</summary>
             <div class="flex flex-wrap items-start justify-between gap-4">
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-[0.24em] text-zinc-500">Tenant setup plan</p>
@@ -308,7 +313,7 @@
                     </div>
                 </div>
             </article>
-        </section>
+        </details>
 
         @php
             $testAccess = is_array($testAccess ?? null) ? $testAccess : [];
@@ -1099,7 +1104,7 @@
                     </div>
                 @else
                     <div class="rounded-2xl border border-zinc-200 p-4">
-                        <div id="tenant-performance-chart" class="min-h-[340px]"></div>
+                        <div id="tenant-performance-chart" role="img" aria-label="Workspace performance for the selected period, with amounts in dollars" class="min-h-[340px]"></div>
                     </div>
                 @endif
             </section>
@@ -1352,6 +1357,8 @@
                         height: 340,
                         toolbar: { show: false },
                         zoom: { enabled: false },
+                        fontFamily: window.getComputedStyle(document.body).fontFamily,
+                        animations: { enabled: !window.matchMedia('(prefers-reduced-motion: reduce)').matches },
                     },
                     series: chartPayload.series || [],
                     dataLabels: { enabled: false },
@@ -1364,20 +1371,20 @@
                             opacityTo: 0.03,
                         },
                     },
-                    colors: ['#0f766e', '#1d4ed8', '#7c3aed'],
+                    colors: ['#214a36', '#2f7d6b', '#a97c50'],
                     grid: {
-                        borderColor: '#e4e4e7',
+                        borderColor: '#d2dccf',
                         strokeDashArray: 4,
                     },
                     xaxis: {
                         categories: chartPayload.categories || [],
                         labels: {
-                            style: { colors: '#71717a', fontSize: '11px' },
+                            style: { colors: '#43584d', fontSize: '13px' },
                         },
                     },
                     yaxis: {
                         labels: {
-                            style: { colors: '#71717a', fontSize: '11px' },
+                            style: { colors: '#43584d', fontSize: '13px' },
                             formatter: function (value) {
                                 const number = Number(value || 0) / 100;
                                 return '$' + number.toLocaleString(undefined, {

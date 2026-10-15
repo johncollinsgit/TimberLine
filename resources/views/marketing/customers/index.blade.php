@@ -1,4 +1,7 @@
 @php
+    $presentationTenant = request()->attributes->get('current_tenant');
+    $genericWorkspacePresentation = $presentationTenant instanceof \App\Models\Tenant
+        && (string) $presentationTenant->slug !== (string) config('tenancy.auth.flagship_tenant_slug');
     $tenantId = request()?->attributes->get('current_tenant_id');
     $resolvedTenantId = is_numeric($tenantId) ? (int) $tenantId : null;
     $resolvedLabels = app(\App\Services\Tenancy\TenantDisplayLabelResolver::class)->resolve($resolvedTenantId);
@@ -25,7 +28,7 @@
                     <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">Missing Address</div>
                     <div class="mt-1 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($quickStats['missing_address'] ?? 0)) }}</div>
                 </article>
-            @else
+            @elseif(! $genericWorkspacePresentation)
                 <article class="px-4 py-3">
                     <div class="text-xs uppercase tracking-[0.2em] text-zinc-500">{{ $rewardsLabel }} Holders</div>
                     <div class="mt-1 text-2xl font-semibold text-zinc-950">{{ number_format((int) ($quickStats['candle_cash_holders'] ?? 0)) }}</div>
@@ -61,6 +64,8 @@
                             {{ number_format((int) ($totalProfiles ?? 0)) }} customer profile{{ (int) ($totalProfiles ?? 0) === 1 ? '' : 's' }} indexed.
                             @if($operationalDirectory ?? false)
                                 Search, update service addresses, and archive outdated customers without losing their job history.
+                            @elseif($genericWorkspacePresentation)
+                                Search customer history, contact details, and next steps.
                             @else
                                 Search-first results load in the live grid below, and {{ $rewardsLabel }} stays separate from the legacy Growave balance.
                             @endif

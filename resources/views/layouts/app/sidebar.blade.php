@@ -45,6 +45,16 @@
   $isNeutralTenantSurface = request()->routeIs('proposals.*', 'billing.*', 'payments.*', 'invoices.*')
       || request()->is('proposals*', 'billing*', 'payments*', 'invoices*');
   $activeTenant = $navigationShell['tenant'] ?? null;
+  // The shared Everbranch workspace has its own presentation contract. Leave
+  // the established flagship console and separate product surfaces alone.
+  $useShowcaseStyle = ! $isLandlordShell && ! $isNeutralTenantSurface
+      && $activeTenant instanceof \App\Models\Tenant
+      && (string) $activeTenant->slug !== (string) config('tenancy.auth.flagship_tenant_slug');
+  $contextBackHref = match (true) {
+      request()->routeIs('field-service.jobs.show') => route('field-service.index', ['tenant' => $activeTenant?->slug]),
+      request()->routeIs('marketing.customers.show', 'marketing.customers.create', 'marketing.customers.edit') => route('marketing.customers', ['tenant' => $activeTenant?->slug]),
+      default => null,
+  };
   $isCollinsWorkspace = ! $isLandlordShell
       && ! $isNeutralTenantSurface
       && $activeTenant instanceof \App\Models\Tenant
@@ -107,6 +117,8 @@
   }
 @endphp
 <body
+  @if($useShowcaseStyle) data-eb-workspace="showcase" @endif
+  @if($isLandlordShell) data-eb-landlord="showcase" @endif
   data-mf-theme="{{ ($isLandlordShell || $isNeutralTenantSurface) ? 'everbranch' : $tenantBrand['theme_key'] }}"
   data-tenant-theme="{{ ($isLandlordShell || $isNeutralTenantSurface) ? 'everbranch' : $tenantBrand['theme_key'] }}"
   data-tenant-decor="{{ ($isLandlordShell || $isNeutralTenantSurface) ? 'none' : $tenantBrand['decor_preset'] }}"
@@ -116,9 +128,24 @@
   class="min-h-screen antialiased mf-app-shell {{ $wideLayout ? 'mf-wide' : '' }} {{ $compactTables ? 'mf-compact' : '' }} {{ $isLandlordShell ? 'mf-landlord-shell' : '' }} {{ (! $isLandlordShell && ! $isNeutralTenantSurface) ? 'mf-tenant-themed' : '' }} {{ $isCollinsWorkspace ? 'mf-collins-full-canvas' : '' }}"
 >
 
+@if($useShowcaseStyle)
+  <a href="#app-main" class="eb-workspace-skip">Skip to workspace</a>
+@endif
+
 <header class="mf-global-bar" data-app-shell-topbar>
   <div class="mf-global-brand">
     <flux:sidebar.toggle class="lg:hidden mf-global-sidebar-toggle" icon="bars-2" />
+    @if($useShowcaseStyle || $isLandlordShell)
+      @if($contextBackHref)
+        <a href="{{ $contextBackHref }}" wire:navigate class="eb-context-back" aria-label="Back to {{ request()->routeIs('field-service.jobs.show') ? 'jobs' : 'customers' }}">
+          <flux:icon.chevron-left class="size-5" aria-hidden="true" />
+        </a>
+      @endif
+      <div class="eb-mobile-context">
+        <strong>{{ $title ?? ($isLandlordShell ? 'Everbranch Admin' : 'Workspace') }}</strong>
+        <span>{{ $isLandlordShell ? 'Owner console' : $activeTenant->name }}</span>
+      </div>
+    @endif
     <a href="{{ $hrefDashboard }}" wire:navigate class="mf-global-brand-link" aria-label="Open Everbranch home">
       <span class="mf-global-brand-mark" aria-hidden="true"><img src="{{ asset('brand/everbranch-mark.svg') }}" alt="" /></span>
       <span>Everbranch</span>
@@ -279,6 +306,7 @@
               </div>
             @endforeach
             <div class="mf-sidebar-entry" data-sidebar-key="wiki-sections">
+              @if(! $isLandlordShell || $wikiSectionItems !== [])
               <details class="mf-admin-group" data-sidebar-group-key="wiki-sections" {{ $wikiSectionsActive ? 'open' : '' }}>
                 <summary class="mf-admin-group-summary {{ $wikiSectionsActive ? 'is-current-group' : '' }}">
                   <span class="mf-admin-group-main">
@@ -304,6 +332,7 @@
                   @endforeach
                 </div>
               </details>
+              @endif
             </div>
           </div>
         </flux:sidebar.group>
@@ -323,7 +352,7 @@
   <div class="flex-1 min-w-0 flex flex-col">
 
     {{-- Main content --}}
-    <main id="app-main" class="mf-app-main flex-1 min-w-0 overflow-y-auto">
+    <main id="app-main" tabindex="-1" class="mf-app-main flex-1 min-w-0 overflow-y-auto">
       @if(is_array($accessLaneBanner))
         <div
           class="mx-auto mb-4 max-w-[1180px] rounded-2xl border px-4 py-3 text-sm {{ $accessLaneBanner['classes'] }}"
@@ -365,7 +394,7 @@
         </div>
       @endif
       <div class="mf-shell-content mx-auto text-[var(--fb-text)]">
-        <div class="rounded-2xl mf-app-card mf-app-glow p-5 md:p-7">
+        <div class="rounded-2xl {{ ($useShowcaseStyle || $isLandlordShell) ? 'eb-workspace-content' : 'mf-app-card mf-app-glow' }} p-5 md:p-7">
         {{ $slot }}
         </div>
       </div>

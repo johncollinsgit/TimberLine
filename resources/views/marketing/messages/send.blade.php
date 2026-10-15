@@ -81,6 +81,7 @@
                                 <input
                                     type="text"
                                     x-model="query"
+                                    aria-label="Find a customer"
                                     @keydown="handleKeydown($event)"
                                     @focus="handleFocus()"
                                     placeholder="Type a name, email, or phone"
@@ -179,6 +180,7 @@
                                     <input
                                         type="text"
                                         x-model="query"
+                                    aria-label="Find a customer"
                                         @keydown="handleKeydown($event)"
                                         @focus="handleFocus()"
                                         placeholder="Search and press enter to add"

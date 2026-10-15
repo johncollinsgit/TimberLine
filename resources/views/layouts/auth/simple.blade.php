@@ -3,7 +3,7 @@
     <head>
         @include('partials.head')
     </head>
-    <body class="fb-auth-body antialiased">
+    <body class="fb-auth-body antialiased {{ ($authTenantPresentation['variant'] ?? 'none') !== 'flagship' ? 'eb-auth-theme' : '' }}">
         @php
             $authTenantPresentation = $authTenantPresentation ?? [];
             $tenantLabel = $authTenantPresentation['tenant_label'] ?? 'Your workspace';

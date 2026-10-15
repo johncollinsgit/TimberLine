@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Log;
 
 beforeEach(function (): void {
     config()->set('tenancy.auth.flagship_tenant_slug', 'modern-forestry');
+    config()->set('tenancy.domains.canonical.public_host', 'theeverbranch.com');
     config()->set('tenancy.domains.tenant_base_domains', ['theeverbranch.com']);
     config()->set('tenancy.auth.flagship_hosts', [
         'app.theeverbranch.com',
@@ -37,7 +38,7 @@ test('unknown hosts are rejected on login route', function (): void {
     $this->get('http://unknown.local/login')->assertNotFound();
 });
 
-test('flagship host resolves modern forestry flagship presentation path', function (): void {
+test('public product login preserves flagship auth intent without borrowing its branding', function (): void {
     Tenant::query()->create([
         'name' => 'Modern Forestry',
         'slug' => 'modern-forestry',
@@ -52,10 +53,22 @@ test('flagship host resolves modern forestry flagship presentation path', functi
             && data_get($context, 'tenant.slug') === 'modern-forestry';
     });
     $response->assertViewHas('authTenantPresentation', function (array $presentation): bool {
-        return ($presentation['variant'] ?? null) === 'flagship'
-            && ($presentation['tenant_label'] ?? null) === 'Modern Forestry';
+        return ($presentation['variant'] ?? null) === 'none'
+            && ($presentation['tenant_label'] ?? null) === 'Everbranch';
     });
-    $response->assertSee('Operations Console', false);
+    $response->assertSee('A clearer day starts here.', false)
+        ->assertDontSee('Modern Forestry Everbranch', false)
+        ->assertDontSee('Production, shipping, and wholesale in one place.', false);
+});
+
+test('flagship tenant host retains its existing tenant presentation', function (): void {
+    Tenant::query()->create(['name' => 'Modern Forestry', 'slug' => 'modern-forestry']);
+
+    $response = $this->get('http://modern-forestry.theeverbranch.com/login');
+
+    $response->assertOk()->assertSee('Operations Console', false)
+        ->assertViewHas('authTenantPresentation', fn (array $presentation): bool => ($presentation['variant'] ?? null) === 'flagship'
+            && ($presentation['tenant_label'] ?? null) === 'Modern Forestry');
 });
 
 test('non flagship tenant gets safe generic auth presentation', function (): void {
