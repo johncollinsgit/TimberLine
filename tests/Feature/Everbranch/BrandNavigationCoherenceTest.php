@@ -53,7 +53,7 @@ test('public product pages display Everbranch as the platform brand', function (
         ->assertSeeText('Plans & Add-ons');
 });
 
-test('auth presentation uses Everbranch for platform workspace language while preserving tenant label', function (): void {
+test('public auth uses Everbranch identity while the resolved tenant context stays separate', function (): void {
     Tenant::query()->create([
         'name' => 'Modern Forestry',
         'slug' => 'modern-forestry',
@@ -62,8 +62,9 @@ test('auth presentation uses Everbranch for platform workspace language while pr
     $response = $this->get('http://theeverbranch.com/login');
 
     $response->assertOk()
-        ->assertSeeText('Modern Forestry')
+        ->assertSeeText('Everbranch')
         ->assertSeeText('Sign in to continue to your Everbranch workspace.')
+        ->assertDontSeeText('Modern Forestry')
         ->assertDontSeeText('Forestry Backstage');
 });
 
