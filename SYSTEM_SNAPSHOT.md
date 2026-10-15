@@ -18,6 +18,8 @@
 - No migration, deployment, rollout activation, real payment/refund, or postage
   purchase is included. Phase 4 remains labels/tracking/recovery/customer
   updates; Phase 5 proves merchant tax, settlement, and physical delivery.
+  Phase 4 also includes printer-independent thermal/Letter/A4 documents and
+  a verified printer matrix; USB DYMO LabelWriter 4XL is the first named device.
   See `docs/operations/retail-shipping-launch-plan.md` and the rollback runbook.
 
 ## Native retail shipping Phase 2 (2026-10-15; review branch)

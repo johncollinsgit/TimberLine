@@ -158,25 +158,66 @@ Provider references: [Checkout creation](https://docs.stripe.com/api/checkout/se
 [destination charges](https://docs.stripe.com/connect/destination-charges), and
 [refund transfer/application-fee behavior](https://docs.stripe.com/api/refunds/create).
 
-## Phase 4 Labels tracking and customer updates
+## Phase 4 Labels printing tracking and customer updates
 
-Purchase, print, reprint, and recover labels against the correct order-owned
-parcel. Handle charged-but-timed-out requests without duplicate postage. Repair
-official EasyPost signature validation, account-scoped shipment matching, event
-ordering, and delivery states. Add unused-label refund states, replacement
-labels, pack/handoff actions, customer confirmations, tracking, and exceptions.
-Use explicit postage/refund permissions and merchant setup/health screens.
+- Purchase, recover, and retain the label against the correct order-owned
+  parcel. A charged-but-timed-out request must recover the existing label,
+  never buy postage again to make a print retry work. Keep label purchase,
+  replacement postage, void/refund, and printing as distinct audited actions.
+- Build a printer-independent document path: an actual-size 4x6-inch thermal
+  label PDF and a Letter/A4 sheet layout that preserves the carrier label's
+  physical dimensions. Verify provider format and page size; an EasyPost PDF
+  may contain a 4x6 label on a Letter page. Use the carrier's existing label
+  image/conversion where needed rather than shrinking, cropping, redrawing
+  barcodes, or repurchasing postage.
+- Offer Print label, Download PDF, and Reprint from the stored purchased label.
+  Reprint must not call a postage-buy endpoint. Preview the selected media size
+  and orientation; provide actual-size, margin, and header/footer guidance.
+  Support ordinary operating-system drivers and browser/PDF print dialogs as
+  the common path for USB and network printers.
+- Add saved workstation print profiles for printer/media/layout/orientation.
+  Keep the document and provider layers independent of any one printer brand.
+  Target DYMO, Rollo, Zebra, Brother, and ordinary laser/inkjet printers where
+  the model and installed driver support the chosen media. Do not advertise
+  an entire brand or every model as tested. Narrow printers must not receive
+  a scaled-down shipping barcode that requires wider stock.
+- The first named hardware test is the user's DYMO LabelWriter 4XL over USB,
+  using 4x6 stock. Also define coverage for another thermal printer and a
+  Letter/A4 desktop printer. Maintain a support matrix by exact model, media,
+  connection, OS/driver, browser, document format, and physical test result.
+  Confirm the actual workstation OS during printing implementation.
+- Keep an adapter boundary for optional direct-print connectors and native
+  ZPL/EPL2 output where both carrier and printer support it. A connector-specific
+  setup must not prevent the standard PDF path from working. Direct/silent
+  printing requires its own installed connector and compatibility verification.
+- Add a no-postage setup/test print and actionable driver, offline, wrong-media,
+  and print-dialog-cancel handling. Opening a dialog is a print request, not
+  proof that a label reached paper. Separate requested, operator-confirmed,
+  failed, and reprinted history. Printer failures never imply carrier handoff.
+- Repair official EasyPost signature validation, account-scoped shipment
+  matching, event ordering, and delivery states. Add unused-label refund states,
+  replacement labels, pack/handoff actions, customer confirmations, tracking,
+  and exceptions. Use explicit postage/refund permissions and merchant
+  setup/health screens, and protect label documents containing addresses.
 
 Acceptance: staff can move a paid order through packing, a valid USPS label,
-carrier acceptance, delivery, and a separately reconciled refund/void scenario.
-Customers receive each transactional update once and can track the order.
+printing/reprinting on supported thermal and sheet printers without duplicate
+postage, carrier acceptance, delivery, and a separately reconciled refund/void
+scenario. Verify exact printed dimensions, no clipped address/barcode, and a
+scannable tracking barcode. Customers receive each transactional update once and
+can track the order. A physical device test, including the USB DYMO 4XL, is part
+of Phase 5 evidence; mocked/browser tests do not claim hardware compatibility.
+
+Printing references: [EasyPost label format and size options](https://docs.easypost.com/docs/shipments/options)
+and [DYMO model/OS software compatibility](https://www.dymo.com/user-guide.html).
 
 ## Phase 5 Controlled merchant launch
 
 Start with one merchant, one origin, measured SKUs, a small package selection,
 standard domestic services, and one published shipping/free-shipping policy.
 Verify provider test mode, then run an authorized real paid shipment through
-acceptance, delivery, notifications, payout, and final postage reconciliation.
+actual-size printing and barcode scan, acceptance, delivery, notifications,
+payout, and final postage reconciliation.
 Exercise a pause of new checkout while servicing already-paid orders.
 
 Acceptance: retain the end-to-end evidence, pass the GitHub/Forge release gates,

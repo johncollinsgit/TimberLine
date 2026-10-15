@@ -20,6 +20,11 @@
   operations reserve balance. Never auto-restock on refund. Fulfillment remains
   blocked for `payment_review` and `paid_review`. Real tax, fee/transfer/payout,
   label, notification, and physical-delivery evidence remain launch gates.
+- Phase 4 printing must support multiple printer families through standard
+  actual-size PDF/driver printing and separate optional device adapters. The
+  first known physical device is a USB DYMO LabelWriter 4XL, not the sole
+  supported family. See the plan's thermal/Letter/A4 compatibility matrix and
+  no-duplicate-postage print/reprint acceptance requirements.
 
 ## Retail shipping Phase 2 (2026-10-15)
 
