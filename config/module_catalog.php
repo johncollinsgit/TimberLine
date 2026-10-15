@@ -1754,7 +1754,7 @@ $catalog = [
         ],
         'subscriptions' => [
             'display_name' => 'Subscriptions',
-            'description' => 'Subscription setup, local requests for review, and Candle Club voting. Provider changes and payment retries remain disabled.',
+            'description' => 'Subscription setup, local requests for review, and subscriber voting. Provider changes and payment retries remain disabled.',
             'status' => 'beta',
             'market_state' => 'SAFE_TO_MARKET',
             'channels' => ['shopify'],
