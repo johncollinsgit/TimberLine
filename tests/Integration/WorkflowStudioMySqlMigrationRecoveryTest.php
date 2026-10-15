@@ -1161,3 +1161,48 @@ it('repairs native Website notification constraints after MySQL retains only the
         ->and(DB::table('website_order_notifications')->where('transition_key', $key)->value('snapshot'))->toBe('encrypted-recovery-sentinel');
     DB::table('website_order_notifications')->where('transition_key', $key)->delete();
 });
+
+it('repairs native catalog source identities after MySQL retained the bare table before named keys', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires disposable MySQL.');
+    }
+    foreach (['tenants','tenant_sites','website_products','website_product_variants','website_collections'] as $name) {
+        if (! Schema::hasTable($name)) { Schema::create($name, fn (Blueprint $table) => $table->id()); }
+    }
+    Schema::dropIfExists('website_catalog_source_mappings');
+    Schema::create('website_catalog_source_mappings', function (Blueprint $table): void {
+        $table->id();
+        $table->unsignedBigInteger('tenant_id');
+        $table->unsignedBigInteger('tenant_site_id');
+        $table->string('provider',24);
+        $table->string('source_shop',253);
+        $table->string('source_type',16);
+        $table->string('source_gid',190);
+        $table->unsignedBigInteger('website_product_id')->nullable();
+        $table->unsignedBigInteger('website_product_variant_id')->nullable();
+        $table->unsignedBigInteger('website_collection_id')->nullable();
+        $table->char('source_fingerprint',64);
+        $table->char('target_fingerprint',64);
+        $table->longText('provenance');
+        $table->timestamps();
+    });
+    expect(Schema::getForeignKeys('website_catalog_source_mappings'))->toBeEmpty()->and(Schema::hasIndex('website_catalog_source_mappings','wcs_source_uq'))->toBeFalse();
+    $key = substr(hash('sha256',random_bytes(20)),0,12);
+    $tenant = DB::table('tenants')->insertGetId(array_intersect_key(['name'=>'Catalog recovery','slug'=>'catalog-recovery-'.$key],array_flip(Schema::getColumnListing('tenants'))));
+    $site = DB::table('tenant_sites')->insertGetId(array_intersect_key(['tenant_id'=>$tenant,'subdomain'=>'catalog-recovery-'.$key,'status'=>'draft','public_enabled'=>false],array_flip(Schema::getColumnListing('tenant_sites'))));
+    $row = ['tenant_id'=>$tenant,'tenant_site_id'=>$site,'provider'=>'shopify','source_shop'=>'fictional-recovery.myshopify.com','source_type'=>'product','source_gid'=>'gid://shopify/Product/123','source_fingerprint'=>str_repeat('a',64),'target_fingerprint'=>str_repeat('b',64),'provenance'=>'encrypted-recovery-sentinel'];
+    $id = DB::table('website_catalog_source_mappings')->insertGetId($row);
+    $migration = require database_path('migrations/2026_10_15_230000_create_website_catalog_source_mappings.php');
+    $migration->up();
+    $migration->up();
+    expect(collect(Schema::getForeignKeys('website_catalog_source_mappings'))->pluck('name')->all())->toContain('wcs_tenant_fk','wcs_site_fk','wcs_product_fk','wcs_variant_fk','wcs_collection_fk');
+    foreach (['wcs_source_uq','wcs_product_idx','wcs_variant_idx','wcs_collection_idx'] as $name) { expect(Schema::hasIndex('website_catalog_source_mappings',$name))->toBeTrue(); }
+    expect(DB::table('website_catalog_source_mappings')->where('id',$id)->value('provenance'))->toBe('encrypted-recovery-sentinel');
+    expect(fn () => DB::table('website_catalog_source_mappings')->insert($row))->toThrow(\Illuminate\Database\QueryException::class);
+    expect(fn () => DB::table('website_catalog_source_mappings')->insert(array_merge($row, ['tenant_id'=>PHP_INT_MAX, 'source_gid'=>'gid://shopify/Product/124'])))->toThrow(\Illuminate\Database\QueryException::class);
+    Schema::table('website_catalog_source_mappings',fn (Blueprint $table) => $table->dropIndex('wcs_collection_idx'));
+    $migration->up();
+    $migration->up();
+    expect(Schema::hasIndex('website_catalog_source_mappings','wcs_collection_idx'))->toBeTrue()->and(DB::table('website_catalog_source_mappings')->where('id',$id)->value('provenance'))->toBe('encrypted-recovery-sentinel');
+    DB::table('website_catalog_source_mappings')->where('id',$id)->delete();
+});

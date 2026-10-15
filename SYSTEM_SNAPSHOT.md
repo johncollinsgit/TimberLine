@@ -15,6 +15,24 @@
   is the native pilot; its existing Shopify store and checkout stay independent.
 - See `docs/operations/schema-drift-reconciliation-2026-10-15.md`.
 
+## Native Shopify catalog snapshot adapter (2026-10-15; staged, activation disabled)
+
+- An explicit local-file CLI adapter prepares native drafts from the approved
+  read-only Shopify catalog export. Tenant/site/shop/GID mappings retain encrypted
+  source provenance and compare imported targets before any overwrite. The adapter
+  does not invoke provider APIs, publish, activate, or import customers/orders.
+- Missing weights remain NULL. Invalid tracked stock projects to zero/unavailable;
+  original values stay encrypted. Galleries display up to twelve safe images while
+  retaining the complete source gallery. Stock allocation, dimensions/packing,
+  source tax policy and unsupported commerce features require launch review.
+- Disposable SQLite and MySQL 8.4 full-source rehearsals prepared 397 drafts and
+  1,681 variants, covering 101 of 109 source ACTIVE products. These are local test
+  results, not production catalog changes or physical shipping evidence. MySQL
+  partial-DDL recovery and two concurrent initial imports passed without duplicate
+  catalog rows; identical replays changed no catalog, inventory or audit rows.
+- The combined disposable schema baseline and normal release gates are still
+  required. See `docs/operations/native-shopify-catalog-snapshot.md`.
+
 ## Native retail shipping Phase 4 (2026-10-15; activation disabled)
 
 - Durable original-account postage attempts distinguish resumable preflight from

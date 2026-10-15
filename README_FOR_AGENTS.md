@@ -13,6 +13,22 @@
   Modern Forestry's native pilot with its existing Shopify operations intact.
   Follow `docs/operations/schema-drift-reconciliation-2026-10-15.md`.
 
+## Native Shopify catalog snapshot pilot (2026-10-15; staged)
+
+- The user explicitly approved Modern Forestry Shopify products as a read-only
+  source for its separate native Website pilot. This narrow catalog exception
+  does not authorize Shopify writes, customer/order imports, checkout changes,
+  new connections, publication, provider calls, or activation.
+- `website:import-shopify-catalog-snapshot` defaults to dry run and requires an
+  existing scoped site, active catalog operator, and independently reviewed shop
+  domain/Shop GID. Stable source mappings and encrypted provenance protect identity;
+  operator edits or source removals require review rather than automatic overwrite.
+- All imported products remain draft. Invalid/unknown tracked source stock becomes
+  zero sellable quantity and unavailable, with the original source value retained.
+  Weights stay missing when unknown; unreviewed dimensions are not inferred.
+  Inventory is a snapshot, not shared live stock. Require pilot allocation before
+  activation. See `docs/operations/native-shopify-catalog-snapshot.md`.
+
 ## Retail shipping Phase 4 (2026-10-15)
 
 - Continue the native-only five-phase plan. Phases 1–3 are live behind disabled
