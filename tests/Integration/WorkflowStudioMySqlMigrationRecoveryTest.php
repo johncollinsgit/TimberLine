@@ -1210,3 +1210,179 @@ it('repairs native catalog source identities after MySQL retained the bare table
     expect(Schema::hasIndex('website_catalog_source_mappings', 'wcs_collection_idx'))->toBeTrue()->and(DB::table('website_catalog_source_mappings')->where('id', $id)->value('provenance'))->toBe('encrypted-recovery-sentinel');
     DB::table('website_catalog_source_mappings')->where('id', $id)->delete();
 });
+
+it('recovers subscription provider evidence from bare MySQL tables and preserves scoped durable identities', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Requires disposable MySQL.');
+    }
+    foreach (['tenants', 'shopify_stores'] as $name) {
+        if (! Schema::hasTable($name)) {
+            Schema::create($name, function (Blueprint $t) use ($name): void {
+                $t->id();
+                if ($name === 'shopify_stores') {
+                    $t->unsignedBigInteger('tenant_id');
+                    $t->string('store_key')->nullable();
+                    $t->string('shop_domain')->nullable();
+                }
+            });
+        }
+    }
+    $migration = require database_path('migrations/2026_10_15_235000_create_subscription_provider_evidence.php');
+    $tables = array_keys($migration->indexes());
+    Schema::disableForeignKeyConstraints();
+    foreach (array_reverse($tables) as $table) {
+        Schema::dropIfExists($table);
+    }
+    Schema::enableForeignKeyConstraints();
+    $migration->up();
+    // CREATE of the first table survived, while later tables did not.
+    Schema::table('subscription_installations', fn (Blueprint $t) => $t->dropForeign('si_active_credential_fk'));
+    foreach (array_reverse(array_slice($tables, 1)) as $table) {
+        Schema::drop($table);
+    }
+    $migration->up();
+    $migration->up();
+    $fingerprint = function () use ($tables): array {
+        $result = [];
+        foreach ($tables as $table) {
+            $indexes = collect(Schema::getIndexes($table))->map(fn ($x) => \Illuminate\Support\Arr::only($x, ['name', 'columns', 'unique', 'primary']))->sortBy('name')->values()->all();
+            $keys = collect(Schema::getForeignKeys($table))->map(fn ($x) => \Illuminate\Support\Arr::only($x, ['name', 'columns', 'foreign_table', 'foreign_columns', 'on_update', 'on_delete']))->sortBy('name')->values()->all();
+            $result[$table] = [$indexes, $keys];
+        }
+
+        return $result;
+    };
+    $clean = $fingerprint();
+    foreach ($tables as $table) {
+        foreach (Schema::getForeignKeys($table) as $fk) {
+            Schema::table($table, fn (Blueprint $t) => $t->dropForeign($fk['name']));
+        }
+    }
+    foreach ($tables as $table) {
+        foreach (Schema::getIndexes($table) as $index) {
+            if (! $index['primary']) {
+                Schema::table($table, fn (Blueprint $t) => $index['unique'] ? $t->dropUnique($index['name']) : $t->dropIndex($index['name']));
+            }
+        }
+    }
+    $suffix = bin2hex(random_bytes(5));
+    $tenant = DB::table('tenants')->insertGetId(array_intersect_key(['name' => 'Subscription recovery', 'slug' => 'subscription-recovery-'.$suffix], array_flip(Schema::getColumnListing('tenants'))));
+    $store = DB::table('shopify_stores')->insertGetId(array_intersect_key(['tenant_id' => $tenant, 'store_key' => 'recovery-'.$suffix, 'shop_domain' => 'recovery-'.$suffix.'.myshopify.com'], array_flip(Schema::getColumnListing('shopify_stores'))));
+    $install = ['public_id' => (string) \Illuminate\Support\Str::uuid(), 'tenant_id' => $tenant, 'shopify_store_id' => $store, 'shop_domain' => 'recovery-'.$suffix.'.myshopify.com', 'shop_gid' => 'gid://shopify/Shop/1', 'app_gid' => 'gid://shopify/App/1', 'app_installation_gid' => 'gid://shopify/AppInstallation/1', 'public_client_id' => 'recovery-public', 'evidence' => 'encrypted-installation-sentinel'];
+    $id = DB::table('subscription_installations')->insertGetId($install);
+    $credential = DB::table('subscription_credential_revisions')->insertGetId(['tenant_id' => $tenant, 'installation_id' => $id, 'revision' => 1, 'credentials' => 'encrypted-token-sentinel', 'app_secret' => 'encrypted-app-secret-sentinel', 'app_secret_reference' => 'test:app', 'app_secret_revision' => '1', 'credential_fingerprint' => str_repeat('a', 64), 'digest_key_id' => str_repeat('a', 16)]);
+    $operation = DB::table('subscription_operations')->insertGetId(['tenant_id' => $tenant, 'installation_id' => $id, 'credential_revision_id' => $credential, 'request_uuid' => (string) \Illuminate\Support\Str::uuid(), 'kind' => 'installation_probe', 'request_fingerprint' => str_repeat('b', 64), 'digest_key_id' => str_repeat('a', 16), 'request' => 'encrypted-request-sentinel']);
+    $delivery = ['tenant_id' => $tenant, 'installation_id' => $id, 'delivery_id' => 'delivery-sentinel', 'topic' => 'app/uninstalled', 'api_version' => '2026-10', 'body_fingerprint' => str_repeat('c', 64), 'digest_key_id' => str_repeat('a', 16), 'raw_body' => 'encrypted-body-sentinel', 'headers' => 'encrypted-headers-sentinel', 'verification' => 'encrypted-signature-revision-sentinel'];
+    $inbox = DB::table('subscription_webhook_inboxes')->insertGetId($delivery);
+    DB::table('subscription_provider_resources')->insert(['tenant_id' => $tenant, 'installation_id' => $id, 'sync_operation_id' => $operation, 'resource_type' => 'contract', 'provider_gid' => 'gid://shopify/SubscriptionContract/1', 'provider_revision' => '18446744073709551615', 'status' => 'ACTIVE', 'observed_at' => now(), 'snapshot' => 'encrypted-snapshot-sentinel']);
+    $migration->up();
+    $migration->up();
+    expect($fingerprint())->toBe($clean)
+        ->and(DB::table('subscription_installations')->where('id', $id)->value('evidence'))->toBe('encrypted-installation-sentinel')
+        ->and(DB::table('subscription_webhook_inboxes')->where('id', $inbox)->value('raw_body'))->toBe('encrypted-body-sentinel')
+        ->and(DB::table('subscription_provider_resources')->value('provider_revision'))->toBe('18446744073709551615');
+    $second = DB::table('subscription_installations')->insertGetId(array_merge($install, ['public_id' => (string) \Illuminate\Support\Str::uuid(), 'shop_domain' => 'second-'.$suffix.'.myshopify.com', 'shop_gid' => 'gid://shopify/Shop/2', 'app_installation_gid' => 'gid://shopify/AppInstallation/2', 'public_client_id' => 'second-public']));
+    expect(fn () => DB::table('subscription_installations')->where('id', $second)->update(['active_credential_revision_id' => $credential]))->toThrow(\Illuminate\Database\QueryException::class);
+    DB::table('subscription_installations')->where('id', $id)->update(['active_credential_revision_id' => $credential]);
+    Schema::table('subscription_webhook_inboxes', function (Blueprint $t): void {
+        $t->dropForeign('swi_install_fk');
+        $t->dropIndex('swi_due_idx');
+    });
+    $migration->up();
+    $migration->up();
+    expect($fingerprint())->toBe($clean);
+    Schema::table('subscription_webhook_inboxes', function (Blueprint $t): void {
+        $t->dropForeign('swi_install_fk');
+        $t->foreign(['installation_id', 'tenant_id'], 'swi_install_fk')->references(['id', 'tenant_id'])->on('subscription_installations')->restrictOnDelete()->cascadeOnUpdate();
+    });
+    expect(fn () => $migration->up())->toThrow(RuntimeException::class);
+    Schema::table('subscription_webhook_inboxes', fn (Blueprint $t) => $t->dropForeign('swi_install_fk'));
+    $migration->up();
+    Schema::table('subscription_webhook_inboxes', fn (Blueprint $t) => $t->dropUnique('swi_delivery_uq'));
+    $duplicate = DB::table('subscription_webhook_inboxes')->insertGetId($delivery);
+    expect(fn () => $migration->up())->toThrow(\Illuminate\Database\QueryException::class);
+    expect(DB::table('subscription_webhook_inboxes')->count())->toBe(2);
+    DB::table('subscription_webhook_inboxes')->where('id', $duplicate)->delete();
+    $migration->up();
+    Schema::table('subscription_webhook_inboxes', fn (Blueprint $t) => $t->dropForeign('swi_install_fk'));
+    $orphan = DB::table('subscription_webhook_inboxes')->insertGetId(array_merge($delivery, ['delivery_id' => 'orphan-sentinel', 'installation_id' => PHP_INT_MAX]));
+    expect(fn () => $migration->up())->toThrow(\Illuminate\Database\QueryException::class);
+    expect(DB::table('subscription_webhook_inboxes')->where('id', $orphan)->value('raw_body'))->toBe('encrypted-body-sentinel');
+    DB::table('subscription_webhook_inboxes')->where('id', $orphan)->delete();
+    $migration->up();
+    $migration->up();
+    expect($fingerprint())->toBe($clean)->and(DB::table('subscription_operations')->where('id', $operation)->value('request'))->toBe('encrypted-request-sentinel');
+});
+
+it('deduplicates concurrent subscription operations and webhook deliveries on MySQL after lost dispatch', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Requires disposable MySQL.');
+    }
+    $migration = require database_path('migrations/2026_10_15_235000_create_subscription_provider_evidence.php');
+    $migration->up();
+    $suffix = bin2hex(random_bytes(6));
+    $tenant = DB::table('tenants')->insertGetId(array_intersect_key(['name' => 'Concurrency fixture', 'slug' => 'subscription-race-'.$suffix], array_flip(Schema::getColumnListing('tenants'))));
+    $store = DB::table('shopify_stores')->insertGetId(array_intersect_key(['tenant_id' => $tenant, 'store_key' => 'race-'.$suffix, 'shop_domain' => 'race-'.$suffix.'.myshopify.com'], array_flip(Schema::getColumnListing('shopify_stores'))));
+    $install = \App\Models\SubscriptionInstallation::query()->create(['tenant_id' => $tenant, 'shopify_store_id' => $store, 'shop_domain' => 'race-'.$suffix.'.myshopify.com', 'shop_gid' => 'gid://shopify/Shop/'.$suffix, 'app_gid' => 'gid://shopify/App/'.$suffix, 'app_installation_gid' => 'gid://shopify/AppInstallation/'.$suffix, 'public_client_id' => 'race-'.$suffix, 'status' => 'verified', 'verified_at' => now()]);
+    $credential = \App\Models\SubscriptionCredentialRevision::query()->create(['tenant_id' => $tenant, 'installation_id' => $install->id, 'revision' => 1, 'status' => 'active', 'credentials' => ['access_token' => 'synthetic-private-token'], 'credential_fingerprint' => str_repeat('a', 64), 'digest_key_id' => str_repeat('a', 16)]);
+    $install->update(['active_credential_revision_id' => $credential->id]);
+    $dir = sys_get_temp_dir().'/subscription-evidence-race-'.$suffix;
+    mkdir($dir, 0700);
+    $cache = $dir.'/config.php';
+    file_put_contents($cache, '<?php return '.var_export(config()->all(), true).';');
+    chmod($cache, 0600);
+    $processes = [];
+    $results = [];
+    $uuid = (string) \Illuminate\Support\Str::uuid();
+    $code = <<<'PHP'
+require 'vendor/autoload.php';
+$d=json_decode(stream_get_contents(STDIN),true,512,JSON_THROW_ON_ERROR);
+$app=require 'bootstrap/app.php'; $app->useEnvironmentPath($d['dir']); $app->loadEnvironmentFrom('absent.env'); $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+Illuminate\Support\Facades\Http::preventStrayRequests(); Illuminate\Support\Facades\Queue::fake();
+config()->set('subscriptions.provider_reads_enabled',true); config()->set('subscriptions.provider_read_tenant_ids',[$d['tenant']]);
+// This test isolates database concurrency. Real canonical manager/entitlement
+// checks are exercised by SubscriptionEvidencePersistenceTest.
+$access=new class extends App\Services\Subscriptions\SubscriptionAccessService { public function assertManager(int $id,?App\Models\User $actor):void {} public function entitled(int $id):bool{return true;} };
+$actor=(new App\Models\User)->forceFill(['id'=>1]);
+touch($d['dir'].'/ready-'.$d['worker']); $deadline=microtime(true)+15; while(!file_exists($d['dir'].'/go')) { if(microtime(true)>$deadline){throw new RuntimeException('Barrier timeout');} usleep(10000); }
+$lost=function(int $id) use($d):void { file_put_contents($d['dir'].'/dispatches',json_encode($id).PHP_EOL,FILE_APPEND|LOCK_EX); chmod($d['dir'].'/dispatches',0600); throw new RuntimeException('Synthetic lost after-commit dispatch'); };
+$op=(new App\Services\Subscriptions\SubscriptionOperationService($access))->record($d['tenant'],$d['install'],$actor,'owned_contract_sync',$d['uuid'],['bound'=>2],afterCommit:$lost);
+$inbox=(new App\Services\Subscriptions\SubscriptionWebhookInboxService($access))->persist($d['tenant'],$d['install'],'race-delivery','same-event','subscription_contracts/update','2026-10','{"id":1}',afterCommit:$lost,signingEvidence:['app_secret_reference'=>'test:app','app_secret_revision'=>'1']);
+Illuminate\Support\Facades\Http::assertNothingSent(); Illuminate\Support\Facades\Queue::assertNothingPushed();
+echo json_encode(['operation'=>$op->id,'inbox'=>$inbox->id]);
+PHP;
+    try {
+        foreach ([1, 2] as $worker) {
+            $process = new \Symfony\Component\Process\Process([PHP_BINARY, '-r', $code], base_path(), ['APP_CONFIG_CACHE' => $cache, 'APP_ENV' => 'testing', 'LOG_CHANNEL' => 'null'], json_encode(['dir' => $dir, 'worker' => $worker, 'tenant' => $tenant, 'install' => $install->id, 'uuid' => $uuid]), 25);
+            $process->start();
+            $processes[] = $process;
+        }
+        $deadline = microtime(true) + 15;
+        while (! file_exists($dir.'/ready-1') || ! file_exists($dir.'/ready-2')) {
+            if (microtime(true) > $deadline) {
+                throw new RuntimeException('Workers did not reach barrier.');
+            } usleep(10000);
+        }
+        touch($dir.'/go');
+        foreach ($processes as $process) {
+            $process->wait();
+            expect($process->isSuccessful())->toBeTrue($process->getErrorOutput());
+            $results[] = json_decode($process->getOutput(), true, 512, JSON_THROW_ON_ERROR);
+        }
+        expect(count(file($dir.'/dispatches', FILE_IGNORE_NEW_LINES)))->toBe(2)
+            ->and($results[0])->toBe($results[1])
+            ->and(DB::table('subscription_operations')->where('installation_id', $install->id)->where('request_uuid', $uuid)->count())->toBe(1)
+            ->and(DB::table('subscription_operations')->where('id', $results[0]['operation'])->value('status'))->toBe('queued')
+            ->and(DB::table('subscription_webhook_inboxes')->where('installation_id', $install->id)->count())->toBe(1)
+            ->and(DB::table('subscription_webhook_inboxes')->where('id', $results[0]['inbox'])->value('status'))->toBe('pending');
+    } finally {
+        foreach ($processes as $process) {
+            if ($process->isRunning()) {
+                $process->stop();
+            }
+        }
+        foreach (glob($dir.'/*') as $file) {
+            unlink($file);
+        } rmdir($dir);
+    }
+});
