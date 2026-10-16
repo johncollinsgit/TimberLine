@@ -40,7 +40,10 @@ waitlist offers require each waiting sibling to head its team queue.
 ## Required account setup before opening
 
 - Complete Wren-owned Stripe Express onboarding in Settings. Onboarding and
-  checkout retain the canonical tenant-payment rollout gates. Refresh checks
+  checkout retain the canonical tenant-payment rollout gates. Live Connect
+  webhook verification blocks collection, but does not block starting onboarding;
+  the account must exist before a controlled payment/refund can verify callbacks.
+  Refresh checks
   Stripe's current charges/payouts flags; no parent declaration confirms payment.
 - Configure the signed soccer endpoint `/api/soccer/stripe`, including
   `WREN_SOCCER_STRIPE_WEBHOOK_SECRET`. Subscribe to checkout completion and refund
