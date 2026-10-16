@@ -56,24 +56,36 @@ class SoccerRegistrationService
             }
             $players = $this->store->query('players', $tenant)->where('family_id', $familyId)->whereIn('id', $ids)->get()->keyBy('id');
             abort_unless($players->count() === count($ids), 403);
-            $waiverIds = $input['waived_player_ids'] ?? [];
-            if (count($waiverIds) > 2 || array_diff($waiverIds, $ids)) {
-                throw ValidationException::withMessages(['waived_player_ids' => 'Choose up to two selected children.']);
-            }
             $volunteer = (bool) ($input['volunteer'] ?? false);
-            if (! $volunteer && $waiverIds) {
-                throw ValidationException::withMessages(['volunteer' => 'The coaching checkbox is required for a waiver.']);
-            }
             if ($volunteer && empty($input['coach_jersey_size'])) {
                 throw ValidationException::withMessages(['coach_jersey_size' => 'Enter your coach jersey size.']);
             }
+            if ($volunteer && (! in_array($input['coach_parent'] ?? null, ['mother', 'father'], true)
+                || ! is_string($input['coach_name'] ?? null) || trim($input['coach_name']) === ''
+                || ! is_array($input['coach_teams'] ?? null) || ! $input['coach_teams']
+                || array_diff($input['coach_teams'], array_keys(config('soccer.teams')))
+                || ($input['coach_available_8_of_10'] ?? false) !== true)) {
+                throw ValidationException::withMessages(['volunteer' => 'Choose the coaching parent and teams, and confirm availability for 8 of 10 weeks.']);
+            }
             $existing = $this->store->query('registrations', $tenant)->where('season_id', $season->id)->where('family_id', $familyId)->get();
             $newIds = array_diff($ids, $existing->pluck('player_id')->all());
-            if ($existing->where('waived', true)->whereNotIn('player_id', $ids)->where('status', '!=', 'cancelled')->count() + count($waiverIds) > 2) {
-                throw ValidationException::withMessages(['waived_player_ids' => 'This household already used its two season waivers.']);
-            }
+            $seasonWaivers = $existing->where('waived', true)->where('status', '!=', 'cancelled')->pluck('player_id')->unique()->all();
+            $remainingWaivers = $volunteer ? max(0, 2 - count($seasonWaivers)) : 0;
+            $waiverIds = collect($selected)->filter(fn ($child) => in_array($child['player_id'], $newIds, true))
+                ->sortByDesc(fn ($child) => (bool) $child['needs_jersey'])->take($remainingWaivers)
+                ->pluck('player_id')->all();
             $profile = $this->store->decrypt($family->profile);
-            $profile['coaching_by_season'][$season->season_key] = ['volunteer' => $volunteer, 'jersey_size' => $volunteer ? $input['coach_jersey_size'] : null];
+            if ($volunteer || empty($profile['coaching_by_season'][$season->season_key]['volunteer'])) {
+                $profile['coaching_by_season'][$season->season_key] = [
+                    'volunteer' => $volunteer,
+                    'role' => $volunteer ? 'assistant' : null,
+                    'parent' => $volunteer ? $input['coach_parent'] : null,
+                    'name' => $volunteer ? trim($input['coach_name']) : null,
+                    'teams' => $volunteer ? array_values(array_unique($input['coach_teams'])) : [],
+                    'available_8_of_10' => $volunteer && $input['coach_available_8_of_10'],
+                    'jersey_size' => $volunteer ? $input['coach_jersey_size'] : null,
+                ];
+            }
             $profile['volunteer'] = $volunteer || ($profile['volunteer'] ?? false);
             if ($volunteer) {
                 $profile['coach_jersey_size'] = $input['coach_jersey_size'];
@@ -92,8 +104,12 @@ class SoccerRegistrationService
                 if ($jersey && empty($child['jersey_size'])) {
                     throw ValidationException::withMessages(['jersey_size' => 'Choose a size for each new jersey.']);
                 }
-                $release = $this->store->query('releases', $tenant)->where('player_id', $p->id)->where('family_id', $familyId)->where('season_key', $season->season_key)->whereNotNull('signed_at')->latest('signed_at')->first();
-                abort_unless($release, 422, 'Sign this season’s release for every selected player.');
+                $releases = $this->store->query('releases', $tenant)->where('player_id', $p->id)->where('family_id', $familyId)->where('season_key', $season->season_key)->whereNotNull('signed_at')->latest('signed_at')->get();
+                $datedReleases = $releases->filter(fn ($row) => ! empty($this->store->decrypt($row->answers)['child1Birthday']));
+                $release = $datedReleases->isNotEmpty()
+                    ? $datedReleases->first(fn ($row) => $this->store->decrypt($row->answers)['child1Birthday'] === $p->birthday)
+                    : $releases->first();
+                abort_unless($release, 422, 'Review and sign this season’s release with the current birthday for every selected player.');
                 $hasQueue = $this->store->query('registrations', $tenant)->where('season_id', $season->id)->where('team_key', $team)->where('status', 'waitlisted')->exists();
                 $seat = ! $hasQueue && $capacity[$team]['public_free'] > 0 ? 'public' : null;
                 if ($seat) {
