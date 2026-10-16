@@ -7,13 +7,17 @@ use App\Models\AiBranchAction;
 use App\Models\AiBranchConversation;
 use App\Models\AiBranchMemory;
 use App\Models\Tenant;
+use App\Models\TenantAccessProfile;
 use App\Services\AiBranch\AiBranchAccess;
 use App\Services\AiBranch\AiBranchActions;
 use App\Services\AiBranch\AiBranchChat;
 use App\Services\AiBranch\AiBranchContext;
+use App\Services\AiBranch\AiWorkspaceContext;
+use App\Services\AiBranch\AiWorkspacePage;
 use App\Services\Tenancy\LandlordOperatorActionAuditService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class AiBranchController extends Controller
 {
@@ -33,14 +37,31 @@ class AiBranchController extends Controller
         $tenant = $this->tenant($request);
         $tier = $this->access->authorize($tenant, $request->user(), false);
         $account = AiBranchAccount::query()->where('tenant_id', $tenant->id)->first();
-        $conversation = $request->integer('conversation') ? $this->chat->conversation($tenant, $request->user(), $request->integer('conversation')) : null;
-        $scopeHash = app(AiBranchContext::class)->scopeHash($tenant, $request->user());
+        $conversation = null;
+        $contextNotice = null;
+        if ($request->integer('conversation')) {
+            try {
+                $conversation = $this->chat->conversation($tenant, $request->user(), $request->integer('conversation'));
+            } catch (HttpException $exception) {
+                if ($exception->getStatusCode() !== 409) {
+                    throw $exception;
+                }
+                $contextNotice = $exception->getMessage();
+            }
+        }
+        $workspaceContext = app(AiWorkspaceContext::class);
+        $enhanced = $workspaceContext->enabled($tenant);
+        $origin = $this->origin($request);
+        abort_if(! $enhanced && $origin !== [], 422, 'Page context is unavailable.');
+        $snapshot = $enhanced && $account?->enabled ? $workspaceContext->capture($tenant, $request->user(), $origin) : null;
+        $workspace = $enhanced ? ($snapshot['workspace'] ?? $workspaceContext->profile($tenant, $request->user())) : null;
 
         return response()->view('ai-branch.index', [
             'tenant' => $tenant, 'tier' => $tier, 'account' => $account,
+            'enhanced' => $enhanced, 'snapshot' => $snapshot, 'workspace' => $workspace, 'origin' => $origin, 'contextNotice' => $contextNotice,
             'usage' => $this->chat->usage($tenant), 'conversation' => $conversation,
             'conversations' => AiBranchConversation::query()->where('tenant_id', $tenant->id)->where('user_id', $request->user()->id)
-                ->where('context_hash', $scopeHash)->where('expires_at', '>', now())->latest('id')->limit(30)->get(),
+                ->where('expires_at', '>', now())->latest('id')->limit(30)->get(),
             'memories' => AiBranchMemory::query()->where('tenant_id', $tenant->id)->where('user_id', $request->user()->id)->where('expires_at', '>', now())->get(),
             'actions' => AiBranchAction::query()->where('tenant_id', $tenant->id)->where('user_id', $request->user()->id)->where('status', 'pending')->where('expires_at', '>', now())->latest()->limit(20)->get(),
             'jobs' => $account?->enabled ? app(AiBranchContext::class)->sources($tenant, $request->user()) : [],
@@ -56,15 +77,25 @@ class AiBranchController extends Controller
             $request->validate(['budget_dollars' => ['required', 'regex:/^\d{1,4}(\.\d{1,2})?$/']]);
             $request->merge(['budget_cents' => (int) round((float) $request->input('budget_dollars') * 100)]);
         }
-        $data = $request->validate(['enabled' => ['required', 'boolean'], 'budget_cents' => ['required', 'integer', 'min:0', 'max:'.$tier['ai_limits']['provider_budget_cents']], 'confirmed' => ['accepted']]);
+        $data = $request->validate(['enabled' => ['required', 'boolean'], 'budget_cents' => ['required', 'integer', 'min:0', 'max:'.$tier['ai_limits']['provider_budget_cents']], 'confirmed' => ['accepted'], 'timezone' => ['sometimes', 'required', 'string', 'timezone:all']]);
+        if (isset($data['timezone'])) {
+            app(AiWorkspaceContext::class)->authorize($tenant, $request->user(), false);
+        }
         DB::transaction(function () use ($tenant, $request, $data): void {
             $account = AiBranchAccount::query()->firstOrCreate(['tenant_id' => $tenant->id]);
             $account = AiBranchAccount::query()->whereKey($account->id)->lockForUpdate()->firstOrFail();
             $before = $account->only(['enabled', 'budget_cents']);
+            if (isset($data['timezone'])) {
+                $profile = TenantAccessProfile::query()->where('tenant_id', $tenant->id)->lockForUpdate()->firstOrFail();
+                $metadata = (array) $profile->metadata;
+                $before['timezone'] = data_get($metadata, 'ai_branch.timezone', 'UTC');
+                data_set($metadata, 'ai_branch.timezone', $data['timezone']);
+                $profile->forceFill(['metadata' => $metadata])->save();
+            }
             $account->fill(['enabled' => $data['enabled'], 'budget_cents' => $data['budget_cents'], 'approved_by' => $request->user()->id, 'approved_at' => now()])->save();
             app(LandlordOperatorActionAuditService::class)->record($tenant->id, $request->user()->id, 'ai_branch.opt_in',
                 targetType: 'ai_branch_account', targetId: $account->id,
-                confirmation: ['explicit' => true], beforeState: $before, afterState: $account->only(['enabled', 'budget_cents']),
+                confirmation: ['explicit' => true], beforeState: $before, afterState: [...$account->only(['enabled', 'budget_cents']), ...(isset($data['timezone']) ? ['timezone' => $data['timezone']] : [])],
                 context: ['billing_impact' => 'No subscription change or overage charge; provider cap only.']);
         }, 3);
 
@@ -74,21 +105,54 @@ class AiBranchController extends Controller
     public function start(Request $request)
     {
         $tenant = $this->tenant($request);
+        $origin = $this->origin($request);
+        if ($origin !== []) {
+            app(AiWorkspaceContext::class)->authorize($tenant, $request->user());
+            app(AiWorkspacePage::class)->resolve($tenant, $request->user(), $origin);
+        }
         $conversation = $this->chat->start($tenant, $request->user());
 
-        return redirect()->route('ai-branch.index', ['tenant' => $tenant->slug, 'conversation' => $conversation->id]);
+        return redirect()->route('ai-branch.index', ['tenant' => $tenant->slug, 'conversation' => $conversation->id, ...($origin !== [] ? ['origin' => $origin] : [])]);
     }
 
     public function ask(Request $request, int $conversation)
     {
         $tenant = $this->tenant($request);
         $data = $request->validate(['question' => ['required', 'string', 'max:3000'], 'request_id' => ['required', 'uuid']]);
-        $result = $this->chat->ask($tenant, $request->user(), $conversation, $data['question'], $data['request_id']);
+        $result = $this->chat->ask($tenant, $request->user(), $conversation, $data['question'], $data['request_id'], $this->origin($request));
         if ($request->expectsJson()) {
             return response()->json($result)->header('Cache-Control', 'no-store');
         }
 
-        return redirect()->route('ai-branch.index', ['tenant' => $tenant->slug, 'conversation' => $conversation]);
+        return redirect()->route('ai-branch.index', ['tenant' => $tenant->slug, 'conversation' => $conversation, ...($request->has('origin') ? ['origin' => $this->origin($request)] : [])]);
+    }
+
+    private function origin(Request $request): array
+    {
+        $data = $request->validate(['origin' => ['sometimes', 'array:kind,id']]);
+
+        return isset($data['origin']) ? app(AiWorkspacePage::class)->normalize($data['origin']) : [];
+    }
+
+    public function briefing(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        $data = $request->validate(['request_id' => ['required', 'uuid']]);
+        try {
+            $result = $this->chat->briefing($tenant, $request->user(), $data['request_id'], $this->origin($request));
+        } catch (HttpException $exception) {
+            $id = $exception->getHeaders()['X-AI-Conversation'] ?? null;
+            if (! $id || $request->expectsJson()) {
+                throw $exception;
+            }
+
+            return redirect()->route('ai-branch.index', ['tenant' => $tenant->slug, 'conversation' => $id])->with('status', $exception->getMessage());
+        }
+        if ($request->expectsJson()) {
+            return response()->json($result)->header('Cache-Control', 'no-store');
+        }
+
+        return redirect()->route('ai-branch.index', ['tenant' => $tenant->slug, 'conversation' => $result['conversation_id']]);
     }
 
     public function deleteConversation(Request $request, int $conversation)

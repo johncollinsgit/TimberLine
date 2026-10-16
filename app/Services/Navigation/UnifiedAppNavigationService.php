@@ -303,7 +303,7 @@ class UnifiedAppNavigationService
         }
 
         if ($user && app(\App\Services\AiBranch\AiBranchAccess::class)->visible($tenant, $user)) {
-            $items[] = ['key' => 'ai-branch', 'icon' => 'sparkles', 'href' => route('ai-branch.index', ['tenant' => $tenant->slug]), 'label' => 'AI Branch', 'current' => request()->routeIs('ai-branch.*')];
+            $items[] = ['key' => 'ai-branch', 'icon' => 'sparkles', 'href' => app(\App\Services\AiBranch\AiWorkspacePage::class)->launcherUrl($request, $tenant), 'label' => 'AI Branch', 'current' => request()->routeIs('ai-branch.*')];
         }
 
         $items = $this->normalizeNavigationItems($items);
@@ -360,6 +360,9 @@ class UnifiedAppNavigationService
                 $add('sales-channels', 'Sales channels', 'sales-channels.index', 'chart-bar');
             }
             $add('user-agreements', 'User Agreements', 'agreements.index', 'document-check');
+        }
+        if (app(\App\Services\AiBranch\AiBranchAccess::class)->visible($tenant, $user)) {
+            $items[] = ['key' => 'ai-branch', 'icon' => 'sparkles', 'href' => app(\App\Services\AiBranch\AiWorkspacePage::class)->launcherUrl($request, $tenant), 'label' => 'AI Branch', 'current' => $request->routeIs('ai-branch.*')];
         }
         $add('account-help', 'Account Help', 'account-help.index', 'lifebuoy');
         $quickActions = array_map(fn (array $item): array => [

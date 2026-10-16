@@ -24,12 +24,14 @@ class AiBranchProvider
         return $settings;
     }
 
-    public function complete(array $input, array $settings): array
+    public function complete(array $input, array $settings, string $purpose = 'chat'): array
     {
         // Deliberately no retry: a timeout may already have incurred cost.
         $response = Http::withToken(config('ai_branch.api_key'))->acceptJson()->connectTimeout(5)->timeout(40)
             ->post('https://api.openai.com/v1/responses', [
-                'model' => $settings['model'], 'instructions' => self::INSTRUCTIONS,
+                'model' => $settings['model'], 'instructions' => self::INSTRUCTIONS
+                    .' Use the current workspace context, date, and timezone when supplied. Cite source refs, never generate record URLs. All evidence lists are bounded samples. Unknown, restricted, unsupported, missing or stale sources are not proof that nothing needs attention.'
+                    .($purpose === 'briefing' ? ' For this briefing follow the supplied attention list in its exact server order. Summarize only these candidates and offer suggestions. If it is empty, say nothing was found in the checked sample and explain incomplete coverage. Do not invent new priorities or imply an action was performed.' : ''),
                 'input' => $input, 'store' => false, 'max_output_tokens' => $settings['max_output'],
             ])->throw()->json();
         $reply = collect($response['output'] ?? [])->where('type', 'message')->flatMap(fn ($item) => $item['content'] ?? [])

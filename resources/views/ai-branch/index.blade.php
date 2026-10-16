@@ -10,19 +10,30 @@
             </header>
             @if(session('status'))<p role="status" class="rounded-lg bg-emerald-50 p-3 text-emerald-900">{{ session('status') }}</p>@endif
             @if($errors->any())<div role="alert" class="text-red-800">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif
+            @if($contextNotice)<p role="alert" class="rounded-lg bg-amber-50 p-3 text-amber-900">{{ $contextNotice }} Older chats can still be deleted from your chat list.</p>@endif
+            @if($snapshot) @include('ai-branch.context', ['context' => $snapshot, 'current' => true]) @endif
             <details @if(!$account?->enabled) open @endif class="border-b border-zinc-200 pb-5">
                 <summary class="cursor-pointer font-semibold">Workspace AI settings</summary>
                 <form method="post" action="{{ route('ai-branch.settings', ['tenant' => $tenant->slug]) }}" class="mt-4 flex flex-wrap items-end gap-4">@csrf
                     <label class="text-sm">AI access<select name="enabled" class="mt-1 block rounded-lg border-zinc-300"><option value="0">Off</option><option value="1" @selected($account?->enabled)>On</option></select></label>
                     <label class="text-sm">Monthly AI spending cap ($)<input type="number" name="budget_dollars" min="0" step="0.01" max="{{ $tier['ai_limits']['provider_budget_cents'] / 100 }}" value="{{ number_format(($account?->budget_cents ?? $tier['ai_limits']['provider_budget_cents']) / 100, 2, '.', '') }}" required class="mt-1 block rounded-lg border-zinc-300"></label>
+                    @if($enhanced)<label class="text-sm">Workspace timezone<select name="timezone" class="mt-1 block max-w-full rounded-lg border-zinc-300">@foreach(DateTimeZone::listIdentifiers(DateTimeZone::ALL_WITH_BC) as $zone)<option value="{{ $zone }}" @selected($zone === $workspace['timezone'])>{{ $zone }}</option>@endforeach</select></label>@endif
                     <label class="text-sm"><input type="checkbox" name="confirmed" value="1" required> I approve sharing permitted context with the AI provider under this cap.</label>
                     <button class="fb-btn fb-btn-primary">Save settings</button>
                 </form>
             </details>
             @if($account?->enabled)
+            @if($enhanced)
+            <form method="post" action="{{ route('ai-branch.briefings', ['tenant' => $tenant->slug]) }}" class="space-y-2">@csrf
+                @include('ai-branch.origin')
+                <input type="hidden" name="request_id" value="{{ Illuminate\Support\Str::uuid() }}">
+                <button class="fb-btn fb-btn-primary">What needs attention?</button>
+                <p class="text-xs text-zinc-500">Generates a private briefing only when requested. Uses the same monthly AI allowance as chat.</p>
+            </form>
+            @endif
             <div class="grid gap-6 lg:grid-cols-[220px_1fr]">
                 <aside class="space-y-4">
-                    <form method="post" action="{{ route('ai-branch.start', ['tenant' => $tenant->slug]) }}">@csrf<button class="fb-btn fb-btn-primary">New chat</button></form>
+                    <form method="post" action="{{ route('ai-branch.start', ['tenant' => $tenant->slug]) }}">@csrf @include('ai-branch.origin')<button class="fb-btn fb-btn-primary">New chat</button></form>
                     <nav aria-label="Your AI chats" class="space-y-2">@forelse($conversations as $row)<div class="flex items-center justify-between gap-2"><a class="text-sm underline" href="{{ route('ai-branch.index', ['tenant' => $tenant->slug, 'conversation' => $row->id]) }}">Chat {{ $row->id }}</a><form method="post" action="{{ route('ai-branch.conversations.delete', ['tenant' => $tenant->slug, 'conversation' => $row->id]) }}">@csrf @method('DELETE')<button class="text-xs underline" aria-label="Delete chat {{ $row->id }}">Delete</button></form></div>@empty<p class="text-sm text-zinc-500">Start a chat to ask your first question.</p>@endforelse</nav>
                     <p class="text-xs text-zinc-500">Chats expire after 30 days. Your chats and memory are private to your sign-in in this workspace.</p>
                 </aside>
@@ -30,11 +41,20 @@
                     @if($conversation)
                         @foreach($conversation->messages ?? [] as $message)
                             <article class="border-b border-zinc-100 pb-4"><h2 class="text-sm font-semibold">{{ $message['role'] === 'user' ? 'You' : 'Everbranch AI' }}</h2><p class="mt-2 whitespace-pre-wrap break-words text-sm">{{ $message['text'] }}</p>
-                                @if(!empty($message['sources']))<details class="mt-3"><summary class="cursor-pointer text-xs text-zinc-600">Workspace evidence supplied for this answer</summary><ul class="mt-2 space-y-1 text-xs">@foreach($message['sources'] as $source)<li>[{{ $source['ref'] }}] {{ $source['title'] }} · {{ $source['status'] }}</li>@endforeach</ul></details>@endif
+                                @if(!empty($message['workspace_context']))
+                                    @php($savedContext = $message['workspace_context'])
+                                    @if(($message['purpose'] ?? '') === 'briefing')
+                                        <p class="mt-3 text-xs text-zinc-500">Briefing generated {{ \Carbon\CarbonImmutable::parse($message['generated_at'] ?? $savedContext['generated_at'])->setTimezone($savedContext['workspace']['timezone'])->format('M j, Y g:i a') }} ({{ $savedContext['workspace']['timezone'] }}).</p>
+                                        <h3 class="mt-3 text-sm font-semibold">Attention evidence, in priority order</h3>
+                                        <ol class="mt-2 list-decimal space-y-2 pl-5 text-sm">@forelse($savedContext['attention'] as $candidate)<li><a class="underline" href="{{ $candidate['url'] }}">{{ $candidate['title'] }}</a> · {{ $candidate['status'] }} @if($candidate['due_at']) · {{ \Carbon\CarbonImmutable::parse($candidate['due_at'])->setTimezone($savedContext['workspace']['timezone'])->format('M j, Y g:i a') }} @endif</li>@empty<li>Nothing found in the checked sources. Review coverage below for unavailable or incomplete sources.</li>@endforelse</ol>
+                                    @endif
+                                    <div class="mt-3">@include('ai-branch.context', ['context' => $savedContext, 'current' => false])</div>
+                                @endif
+                                @if(!empty($message['sources']))<details class="mt-3"><summary class="cursor-pointer text-xs text-zinc-600">Workspace evidence supplied for this answer</summary><ul class="mt-2 space-y-1 text-xs">@foreach($message['sources'] as $source)<li>[{{ $source['ref'] }}] @if(isset($source['url']))<a class="underline" href="{{ $source['url'] }}">{{ $source['title'] }}</a>@else{{ $source['title'] }}@endif · {{ $source['status'] }}</li>@endforeach</ul></details>@endif
                             </article>
                         @endforeach
                         @if($conversation->pending_uuid)<p role="status">This request is pending or needs usage review. Start a new chat if needed.</p>@else
-                        <form method="post" action="{{ route('ai-branch.ask', ['tenant' => $tenant->slug, 'conversation' => $conversation->id]) }}" class="space-y-3">@csrf<input type="hidden" name="request_id" value="{{ Illuminate\Support\Str::uuid() }}"><label class="block text-sm font-medium" for="ai-question">Your question</label><textarea id="ai-question" name="question" maxlength="3000" required rows="4" class="w-full rounded-xl border-zinc-300">{{ old('question') }}</textarea><button class="fb-btn fb-btn-primary">Ask AI</button><p class="text-xs text-zinc-500">Check the evidence before relying on an answer. Job evidence covers only ten recent permitted jobs.</p></form>
+                        <form method="post" action="{{ route('ai-branch.ask', ['tenant' => $tenant->slug, 'conversation' => $conversation->id]) }}" class="space-y-3">@csrf @include('ai-branch.origin')<input type="hidden" name="request_id" value="{{ Illuminate\Support\Str::uuid() }}"><label class="block text-sm font-medium" for="ai-question">Your question</label><textarea id="ai-question" name="question" maxlength="3000" required rows="4" class="w-full rounded-xl border-zinc-300">{{ old('question') }}</textarea><button class="fb-btn fb-btn-primary">Ask AI</button><p class="text-xs text-zinc-500">Check the evidence before relying on an answer. {{ $enhanced ? 'Evidence is a bounded sample of permitted sources shown above.' : 'Job evidence covers only ten recent permitted jobs.' }}</p></form>
                         @endif
                     @else<p class="text-zinc-600">Choose a chat or start a new one.</p>@endif
                 </section>

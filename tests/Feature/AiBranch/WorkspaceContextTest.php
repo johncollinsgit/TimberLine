@@ -133,3 +133,252 @@ test('the context flag and tenant allowlist are independent of paid AI access', 
     expect(fn () => app(AiWorkspaceContext::class)->capture($tenant, $user))->toThrow(HttpException::class);
 });
 
+function workspaceResponse(string $text = 'Review the permitted sample.'): array
+{
+    return ['id' => 'fake_response', 'status' => 'completed', 'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => $text]]]], 'usage' => ['input_tokens' => 100, 'output_tokens' => 30]];
+}
+
+test('briefings create one encrypted private conversation and reuse its usage reservation', function () {
+    [$tenant, $user] = workspaceFixture();
+    FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'Blocked fixture', 'status' => 'blocked']);
+    Http::fake(['api.openai.com/*' => Http::response(workspaceResponse())]);
+    $uuid = (string) Illuminate\Support\Str::uuid();
+    $chat = app(App\Services\AiBranch\AiBranchChat::class);
+    $first = $chat->briefing($tenant, $user, $uuid);
+    expect($chat->briefing($tenant, $user, $uuid))->toBe($first)
+        ->and($first['workspace_context']['attention'][0]['title'])->toBe('Blocked fixture')
+        ->and(App\Models\AiBranchConversation::count())->toBe(1)->and(App\Models\TenantAiUsageEvent::count())->toBe(1);
+    $event = App\Models\TenantAiUsageEvent::sole();
+    expect($event->buyer_charge_micros)->toBe(0)->and($event->metadata['context_version'])->toBe(2)->and($event->metadata['purpose'])->toBe('briefing')
+        ->and(Illuminate\Support\Facades\DB::table('ai_branch_conversations')->value('messages'))->not->toContain('Blocked fixture');
+    Http::assertSentCount(1);
+    Http::assertSent(fn ($r) => str_contains($r['instructions'], 'exact server order') && ! isset($r['tools']) && $r['store'] === false);
+});
+
+test('chat and briefing share quotas and rejected reservations create no conversation', function () {
+    [$tenant, $user] = workspaceFixture();
+    config()->set('module_catalog.addons.ai_branch_growth.ai_limits.responses', 1);
+    Http::fake(['api.openai.com/*' => Http::response(workspaceResponse())]);
+    $chat = app(App\Services\AiBranch\AiBranchChat::class);
+    $conversation = $chat->start($tenant, $user);
+    $chat->ask($tenant, $user, $conversation->id, 'Hello', (string) Illuminate\Support\Str::uuid());
+    expect(fn () => $chat->briefing($tenant, $user, (string) Illuminate\Support\Str::uuid()))->toThrow(HttpException::class);
+    expect(App\Models\AiBranchConversation::count())->toBe(1)->and($chat->usage($tenant)['responses'])->toBe(1);
+    Http::assertSentCount(1);
+});
+
+test('briefing spending caps and input ceilings reject before dispatch atomically', function (string $limit) {
+    [$tenant, $user] = workspaceFixture();
+    if ($limit === 'cap') {
+        AiBranchAccount::where('tenant_id', $tenant->id)->update(['budget_cents' => 0]);
+    } else {
+        config()->set('ai_branch.max_input_bytes', 1000);
+    }
+    expect(fn () => app(App\Services\AiBranch\AiBranchChat::class)->briefing($tenant, $user, (string) Illuminate\Support\Str::uuid()))->toThrow(HttpException::class);
+    expect(App\Models\AiBranchConversation::count())->toBe(0)->and(App\Models\TenantAiUsageEvent::count())->toBe(0);
+    Http::assertNothingSent();
+})->with(['cap', 'input']);
+
+test('uncertain briefing failures retain one reservation and never retry provider dispatch', function () {
+    [$tenant, $user] = workspaceFixture();
+    Http::fake(fn () => throw new Illuminate\Http\Client\ConnectionException('Simulated timeout'));
+    $chat = app(App\Services\AiBranch\AiBranchChat::class);
+    $uuid = (string) Illuminate\Support\Str::uuid();
+    expect(fn () => $chat->briefing($tenant, $user, $uuid))->toThrow(HttpException::class);
+    $event = App\Models\TenantAiUsageEvent::sole();
+    expect($event->status)->toBe('uncertain')->and($event->provider_cost_micros)->toBeGreaterThan(0);
+    expect(fn () => $chat->briefing($tenant, $user, $uuid))->toThrow(HttpException::class);
+    expect(App\Models\AiBranchConversation::count())->toBe(1)->and(App\Models\TenantAiUsageEvent::count())->toBe(1);
+});
+
+test('forged cross tenant and disallowed page descriptors fail before provider or reservation', function () {
+    [$tenant, $user] = workspaceFixture();
+    [$other] = workspaceFixture('other');
+    $job = FieldServiceJob::create(['tenant_id' => $other->id, 'title' => 'Other', 'status' => 'open']);
+    $this->actingAs($user)->postJson(route('ai-branch.briefings', ['tenant' => $tenant->slug]), ['request_id' => (string) Illuminate\Support\Str::uuid(), 'origin' => ['kind' => 'job', 'id' => $job->id]])->assertNotFound();
+    $this->postJson(route('ai-branch.briefings', ['tenant' => $tenant->slug]), ['request_id' => (string) Illuminate\Support\Str::uuid(), 'origin' => ['kind' => 'job', 'id' => $job->id, 'tenant_id' => $other->id]])->assertUnprocessable();
+    expect(App\Models\AiBranchConversation::count())->toBe(0)->and(App\Models\TenantAiUsageEvent::count())->toBe(0);
+    Http::assertNothingSent();
+});
+
+test('workspace switching isolates identity capabilities records and personal memory', function () {
+    [$tenant, $user] = workspaceFixture();
+    [$other] = workspaceFixture('other');
+    $user->tenants()->attach($other->id, ['role' => 'admin', 'membership_active' => true]);
+    TenantModuleEntitlement::create(['tenant_id' => $other->id, 'module_key' => 'field_service', 'enabled_status' => 'disabled', 'billing_status' => 'included']);
+    FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'FIRST-ONLY', 'status' => 'blocked']);
+    App\Models\AiBranchMemory::create(['tenant_id' => $tenant->id, 'user_id' => $user->id, 'body' => 'FIRST-MEMORY', 'expires_at' => now()->addDay()]);
+    App\Models\AiBranchMemory::create(['tenant_id' => $other->id, 'user_id' => $user->id, 'body' => 'SECOND-MEMORY', 'expires_at' => now()->addDay()]);
+    Http::fake(['api.openai.com/*' => Http::response(workspaceResponse())]);
+    $chat = app(App\Services\AiBranch\AiBranchChat::class);
+    $first = $chat->briefing($tenant, $user, (string) Illuminate\Support\Str::uuid());
+    $second = $chat->briefing($other, $user, (string) Illuminate\Support\Str::uuid());
+    expect($second['workspace_context']['workspace']['name'])->toBe($other->name)
+        ->and($second['workspace_context']['workspace']['role'])->toBe('admin')
+        ->and($second['workspace_context']['coverage']['jobs']['status'])->toBe('restricted')
+        ->and($second['workspace_context']['workspace']['capabilities'])->not->toContain('field_service.jobs');
+    $sent = Http::recorded()->map(fn ($pair) => json_encode($pair[0]->data()));
+    expect($sent[0])->toContain('FIRST-MEMORY', 'FIRST-ONLY')->not->toContain('SECOND-MEMORY');
+    expect($sent[1])->toContain('SECOND-MEMORY')->not->toContain('FIRST-MEMORY', 'FIRST-ONLY');
+    expect(fn () => $chat->conversation($other, $user, $first['conversation_id']))->toThrow(Illuminate\Database\Eloquent\ModelNotFoundException::class);
+});
+
+test('workspace briefings block staff managers and inactive members', function (string $role, bool $active) {
+    [$tenant, $user] = workspaceFixture();
+    $user->tenants()->updateExistingPivot($tenant->id, ['role' => $role, 'membership_active' => $active]);
+    $this->actingAs($user)->postJson(route('ai-branch.briefings', ['tenant' => $tenant->slug]), ['request_id' => (string) Illuminate\Support\Str::uuid()])->assertForbidden();
+    Http::assertNothingSent();
+})->with([['staff', true], ['manager', true], ['owner', false]]);
+
+test('permission or record revocation prevents returning an in flight answer', function (string $change) {
+    [$tenant, $user] = workspaceFixture();
+    $job = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'Permitted then revoked', 'status' => 'blocked']);
+    Http::fake(function () use ($change, $tenant, $user, $job) {
+        match ($change) {
+            'module' => TenantModuleEntitlement::create(['tenant_id' => $tenant->id, 'module_key' => 'field_service', 'enabled_status' => 'disabled', 'billing_status' => 'included']),
+            'membership' => $user->tenants()->updateExistingPivot($tenant->id, ['role' => 'staff']),
+            'inactive' => User::whereKey($user->id)->update(['is_active' => false]),
+            'record' => $job->update(['archived_at' => now()]),
+        };
+
+        return Http::response(workspaceResponse('REVOKED-ANSWER'));
+    });
+    expect(fn () => app(App\Services\AiBranch\AiBranchChat::class)->briefing($tenant, $user, (string) Illuminate\Support\Str::uuid()))->toThrow(HttpException::class);
+    expect(App\Models\TenantAiUsageEvent::sole()->status)->toBe('settled');
+    Http::assertSentCount(1);
+})->with(['module', 'membership', 'inactive', 'record']);
+
+test('incompatible chats show restart instructions and retain deletion without showing old text', function () {
+    [$tenant, $user] = workspaceFixture();
+    $conversation = App\Models\AiBranchConversation::create(['tenant_id' => $tenant->id, 'user_id' => $user->id, 'context_hash' => str_repeat('0', 64), 'messages' => [['role' => 'assistant', 'text' => 'OLD-PRIVATE-TEXT']], 'expires_at' => now()->addDay()]);
+    $this->actingAs($user)->get(route('ai-branch.index', ['tenant' => $tenant->slug, 'conversation' => $conversation->id]))->assertOk()->assertSee('Start a new chat')->assertSee('Delete chat '.$conversation->id)->assertDontSee('OLD-PRIVATE-TEXT');
+    $this->delete(route('ai-branch.conversations.delete', ['tenant' => $tenant->slug, 'conversation' => $conversation->id]))->assertRedirect();
+    expect(App\Models\AiBranchConversation::count())->toBe(0);
+    Http::assertNothingSent();
+});
+
+test('timezone settings validate preserve profile metadata and default to UTC', function () {
+    [$tenant, $user] = workspaceFixture();
+    $profile = TenantAccessProfile::where('tenant_id', $tenant->id)->sole();
+    $profile->update(['metadata' => ['unrelated' => ['keep' => true]]]);
+    expect(app(AiWorkspaceContext::class)->timezone($tenant))->toBe('UTC');
+    $payload = ['enabled' => 1, 'budget_cents' => 1500, 'confirmed' => 1, 'timezone' => 'America/Los_Angeles'];
+    $this->actingAs($user)->post(route('ai-branch.settings', ['tenant' => $tenant->slug]), $payload)->assertRedirect();
+    expect($profile->fresh()->metadata['unrelated'])->toBe(['keep' => true])->and(app(AiWorkspaceContext::class)->timezone($tenant))->toBe('America/Los_Angeles');
+    $this->postJson(route('ai-branch.settings', ['tenant' => $tenant->slug]), [...$payload, 'timezone' => 'not/a/zone'])->assertUnprocessable();
+    Http::assertNothingSent();
+});
+
+test('briefing UI escapes generated text links evidence and GET context never calls provider', function () {
+    [$tenant, $user] = workspaceFixture();
+    $job = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'Fixture attention job', 'status' => 'blocked']);
+    $url = route('ai-branch.index', ['tenant' => $tenant->slug, 'origin' => ['kind' => 'job', 'id' => $job->id]]);
+    $this->actingAs($user)->get($url)->assertOk()->assertSee('Context used')->assertSee('What needs attention?')->assertSee('Opened from: Fixture attention job');
+    Http::assertNothingSent();
+    Http::fake(['api.openai.com/*' => Http::response(workspaceResponse('<script>alert("unsafe")</script>'))]);
+    $result = $this->postJson(route('ai-branch.briefings', ['tenant' => $tenant->slug]), ['request_id' => (string) Illuminate\Support\Str::uuid(), 'origin' => ['kind' => 'job', 'id' => $job->id]])->assertOk()->json();
+    $page = $this->get(route('ai-branch.index', ['tenant' => $tenant->slug, 'conversation' => $result['conversation_id']]))->assertOk();
+    $page->assertSee('&lt;script&gt;', false)->assertDontSee('<script>alert', false)->assertSee('America/New_York')->assertSee('Attention evidence, in priority order')->assertSee(route('field-service.jobs.show', ['tenant' => $tenant->slug, 'job' => $job->id], false));
+    $this->get(route('field-service.jobs.show', ['tenant' => $tenant->slug, 'job' => $job->id]))->assertOk();
+    Http::assertSentCount(1);
+});
+
+test('refreshing context uses updated records and memory changes invalidate history', function () {
+    [$tenant, $user] = workspaceFixture();
+    $job = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'Before update', 'status' => 'blocked']);
+    Http::fake(['api.openai.com/*' => Http::response(workspaceResponse())]);
+    $chat = app(App\Services\AiBranch\AiBranchChat::class);
+    $conversation = $chat->start($tenant, $user);
+    $chat->ask($tenant, $user, $conversation->id, 'Hello', (string) Illuminate\Support\Str::uuid());
+    $job->update(['title' => 'After update']);
+    $answer = $chat->ask($tenant, $user, $conversation->id, 'Again', (string) Illuminate\Support\Str::uuid());
+    expect($answer['sources'][0]['title'])->toBe('After update');
+    App\Models\AiBranchMemory::create(['tenant_id' => $tenant->id, 'user_id' => $user->id, 'body' => 'New preference', 'expires_at' => now()->addDay()]);
+    expect(fn () => $chat->conversation($tenant, $user, $conversation->id))->toThrow(HttpException::class);
+    Http::assertSentCount(2);
+});
+
+test('Collins restriction applies before every operational adapter', function () {
+    [$tenant, $user] = workspaceFixture('collins-electric');
+    FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'RESTRICTED-JOB', 'status' => 'blocked']);
+    $context = app(AiWorkspaceContext::class)->capture($tenant, $user);
+    expect($context['sources'])->toBe([])->and($context['coverage']['jobs']['status'])->toBe('restricted');
+    expect(fn () => app(App\Services\AiBranch\AiWorkspaceSources::class)->jobsQuery($tenant, $user))->toThrow(HttpException::class);
+});
+
+test('empty samples and stale missing unsupported sources remain distinguishable', function () {
+    [$tenant, $user] = workspaceFixture();
+    IntegrationConnection::create(['tenant_id' => $tenant->id, 'provider' => 'quickbooks', 'status' => 'connected', 'last_synced_at' => now()->subDays(2)]);
+    $snapshot = app(AiWorkspaceContext::class)->capture($tenant, $user, [], 'briefing');
+    expect($snapshot['attention'])->toBe([])->and($snapshot['coverage']['jobs']['status'])->toBe('empty')
+        ->and($snapshot['coverage']['connections']['status'])->toBe('stale')->and($snapshot['coverage']['external_calendar']['status'])->toBe('unsupported');
+    Illuminate\Support\Facades\Schema::drop('scheduled_classes');
+    expect(app(AiWorkspaceContext::class)->capture($tenant, $user)['coverage']['scheduling']['status'])->toBe('missing');
+});
+
+test('classes activities and connection evidence never load private provider or record fields into a prompt', function () {
+    [$tenant, $user] = workspaceFixture();
+    $customer = MarketingProfile::create(['tenant_id' => $tenant->id, 'first_name' => 'Fictional client', 'email' => 'SECRET-CONTACT@example.test']);
+    $job = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'Safe job label', 'status' => 'blocked']);
+    $task = FieldServiceTask::create(['tenant_id' => $tenant->id, 'field_service_job_id' => $job->id, 'title' => 'Safe task label', 'status' => 'open']);
+    FieldServiceTaskEvent::create(['tenant_id' => $tenant->id, 'field_service_task_id' => $task->id, 'event_type' => 'note', 'note' => 'SECRET-NOTE', 'metadata' => ['private' => 'SECRET-METADATA']]);
+    CustomerLoopActivity::create(['tenant_id' => $tenant->id, 'marketing_profile_id' => $customer->id, 'source_type' => 'manual', 'event_key' => 'private', 'title' => 'SECRET-EVENT', 'summary' => 'SECRET-SUMMARY', 'occurred_at' => now()]);
+    ScheduledClass::create(['tenant_id' => $tenant->id, 'title' => 'Fictional workshop', 'slug' => 'fictional-class', 'starts_at' => now()->addHour(), 'ends_at' => now()->addHours(2), 'status' => 'published', 'price' => '9887.67', 'location' => 'SECRET-ADDRESS', 'capacity' => 10, 'description' => 'SECRET-CLASS']);
+    IntegrationConnection::create(['tenant_id' => $tenant->id, 'provider' => 'quickbooks', 'status' => 'error', 'access_token' => 'SECRET-CREDENTIAL', 'last_error_message' => 'SECRET-PROVIDER-ERROR']);
+    Http::fake(['api.openai.com/*' => Http::response(workspaceResponse())]);
+    $result = app(App\Services\AiBranch\AiBranchChat::class)->briefing($tenant, $user, (string) Illuminate\Support\Str::uuid());
+    expect(collect($result['sources'])->pluck('type')->all())->toContain('class', 'task_activity', 'customer_activity');
+    Http::assertSent(function ($request) {
+        $json = json_encode($request->data());
+
+        return str_contains($json, 'Fictional workshop') && ! str_contains($json, 'SECRET-') && ! str_contains($json, '9887.67');
+    });
+});
+
+test('metrics record request counts latency usage and outcome without record content', function () {
+    [$tenant, $user] = workspaceFixture();
+    FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'CONTENT-NOT-FOR-LOGS', 'status' => 'blocked']);
+    Http::fake(['api.openai.com/*' => Http::response(workspaceResponse('ANSWER-NOT-FOR-LOGS'))]);
+    Illuminate\Support\Facades\Log::spy();
+    $uuid = (string) Illuminate\Support\Str::uuid();
+    app(App\Services\AiBranch\AiBranchChat::class)->briefing($tenant, $user, $uuid);
+    Illuminate\Support\Facades\Log::shouldHaveReceived('info')->withArgs(function ($name, $data) use ($uuid) {
+        return $name === 'ai_branch.request' && $data['request_id'] === $uuid && $data['context_version'] === 2
+            && $data['adapter_counts']['jobs'] === 1 && $data['latency_ms'] >= 0 && $data['input_tokens'] === 100
+            && $data['provider_cost_micros'] === 220 && $data['outcome'] === 'settled'
+            && ! str_contains(json_encode($data), 'NOT-FOR-LOGS');
+    })->once();
+});
+
+test('shared launcher carries only an allowlisted page identity and works in Website sales', function () {
+    [$tenant, $user] = workspaceFixture();
+    $job = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'Origin job', 'status' => 'open']);
+    $response = $this->actingAs($user)->get(route('field-service.jobs.show', ['tenant' => $tenant->slug, 'job' => $job->id]))->assertOk();
+    $response->assertSee('origin%5Bkind%5D=job', false)->assertSee('origin%5Bid%5D='.$job->id, false);
+    $profile = TenantAccessProfile::where('tenant_id', $tenant->id)->sole();
+    $metadata = $profile->metadata;
+    $metadata['workspace_focus'] = 'website_sales';
+    $profile->update(['metadata' => $metadata]);
+    $request = Illuminate\Http\Request::create('/dashboard');
+    $request->attributes->set('current_tenant', $tenant);
+    $request->setUserResolver(fn () => $user);
+    $navigation = app(App\Services\Navigation\UnifiedAppNavigationService::class)->build($request, $user);
+    expect(collect($navigation['items'])->pluck('key')->all())->toContain('ai-branch');
+    config()->set('ai_branch.workspace_context_enabled', false);
+    expect(app(AiWorkspacePage::class)->launcherUrl($request, $tenant))->not->toContain('origin');
+    $this->postJson(route('ai-branch.briefings', ['tenant' => $tenant->slug]), ['request_id' => (string) Illuminate\Support\Str::uuid()])->assertNotFound();
+    Http::assertNothingSent();
+});
+
+test('the message endpoint accepts authorized page context and rejects a changed UUID replay', function () {
+    [$tenant, $user] = workspaceFixture();
+    $job = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'Selected job', 'status' => 'open']);
+    $chat = app(App\Services\AiBranch\AiBranchChat::class);
+    $conversation = $chat->start($tenant, $user);
+    Http::fake(['api.openai.com/*' => Http::response(workspaceResponse())]);
+    $uuid = (string) Illuminate\Support\Str::uuid();
+    $url = route('ai-branch.ask', ['tenant' => $tenant->slug, 'conversation' => $conversation->id]);
+    $this->actingAs($user)->postJson($url, ['request_id' => $uuid, 'question' => 'Describe this work', 'origin' => ['kind' => 'job', 'id' => $job->id]])->assertOk()->assertJsonPath('workspace_context.page.title', 'Selected job');
+    $this->postJson($url, ['request_id' => $uuid, 'question' => 'Describe this work', 'origin' => ['kind' => 'workspace']])->assertConflict();
+    Http::assertSentCount(1);
+});

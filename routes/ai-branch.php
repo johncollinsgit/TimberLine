@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified', 'tenant.access', 'throttle:20,1'])->prefix('ai-branch')->name('ai-branch.')->group(function (): void {
     Route::get('/', [AiBranchController::class, 'index'])->name('index');
+    Route::post('/briefings', [AiBranchController::class, 'briefing'])->name('briefings');
     Route::post('/settings', [AiBranchController::class, 'settings'])->name('settings');
     Route::post('/conversations', [AiBranchController::class, 'start'])->name('start');
     Route::post('/conversations/{conversation}/messages', [AiBranchController::class, 'ask'])->whereNumber('conversation')->name('ask');
