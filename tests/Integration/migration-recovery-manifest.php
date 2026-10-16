@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_16_120000_create_subscription_recharge_evidence.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['early connection retained before trailing tables', 'bare tables and encrypted evidence retained before every named index and foreign key', 'partial constraints repaired repeatedly without changing accepted generations', 'wrong-tenant and wrong-connection credential and operation parents rejected', 'duplicate generation or request and orphan scope fail without deleting evidence', 'same-named changed index or referential action fails closed', 'concurrent operation UUID dedupe with recovered fenced lease and immutable request replay'],
+    ],
     '2026_10_16_000000_create_ai_branch_accounts.php' => [
         'test' => 'tests/Integration/AiBranchMySqlMigrationRecoveryTest.php',
         'scenarios' => ['completed table and encrypted sentinel retained before migration bookkeeping'],

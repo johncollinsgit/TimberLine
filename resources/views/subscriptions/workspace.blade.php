@@ -4,6 +4,7 @@
             <p class="text-sm text-zinc-600">{{ $tenant->name }}</p>
             <h1 class="mt-1 text-3xl font-semibold tracking-tight text-zinc-950">Subscriptions</h1>
             <p class="mt-2 max-w-3xl text-sm leading-6 text-zinc-600">Review verified Shopify contract history and the last completed synchronization for this workspace.</p>
+            <a href="{{ route('subscriptions.recharge.index', ['tenant' => $tenant->id]) }}" class="mt-3 inline-flex rounded-xl bg-emerald-900 px-4 py-2 text-sm font-semibold text-white">Prepare Recharge customers and settings</a>
         </header>
 
         <section class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950" aria-label="Subscription availability">

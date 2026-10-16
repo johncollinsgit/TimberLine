@@ -795,6 +795,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->get('/subscriptions', [\App\Http\Controllers\SubscriptionWorkspaceController::class, 'index'])
         ->name('subscriptions.workspace.index');
 
+    Route::middleware(['tenant.access', 'module:subscriptions'])->prefix('subscriptions/recharge')->name('subscriptions.recharge.')->group(function (): void {
+        Route::get('/', [\App\Http\Controllers\SubscriptionRechargeController::class, 'index'])->name('index');
+        Route::get('/records/{resource}', [\App\Http\Controllers\SubscriptionRechargeController::class, 'show'])->whereNumber('resource')->name('show');
+        Route::post('/source', [\App\Http\Controllers\SubscriptionRechargeController::class, 'source'])->middleware('throttle:10,1')->name('source');
+        Route::post('/verify', [\App\Http\Controllers\SubscriptionRechargeController::class, 'verify'])->middleware('throttle:10,1')->name('verify');
+        Route::post('/capture', [\App\Http\Controllers\SubscriptionRechargeController::class, 'capture'])->middleware('throttle:20,1')->name('capture');
+        Route::post('/prepare', [\App\Http\Controllers\SubscriptionRechargeController::class, 'prepare'])->middleware('throttle:20,1')->name('prepare');
+    });
+
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
         ->get('/sales-channels', [SalesChannelController::class, 'index'])
         ->name('sales-channels.index');
