@@ -12,7 +12,7 @@
         <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:560px;background:#ffffff;border-collapse:collapse;border-radius:18px;overflow:hidden;">
             <tr><td style="background:#061827;padding:20px 28px;">
                 <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;"><tr>
-                    <td width="58" style="vertical-align:middle;"><img src="{{ $origin }}/wren-crest.webp" width="48" height="48" alt="Wren Family Soccer crest" style="display:block;border:0;border-radius:8px;"></td>
+                    <td width="58" style="vertical-align:middle;"><img src="{{ $origin }}/wren-crest-email.png" width="48" height="48" alt="Wren Family Soccer crest" style="display:block;border:0;border-radius:8px;"></td>
                     <td style="vertical-align:middle;color:#ffffff;font-size:20px;line-height:24px;font-weight:800;letter-spacing:.2px;">Wren Family Soccer</td>
                 </tr></table>
             </td></tr>
