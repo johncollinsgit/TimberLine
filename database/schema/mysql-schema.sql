@@ -407,6 +407,76 @@ CREATE TABLE `agreements` (
   CONSTRAINT `agreements_updated_by_foreign` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `ai_branch_accounts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ai_branch_accounts` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `enabled` tinyint(1) NOT NULL DEFAULT '0',
+  `budget_cents` int unsigned NOT NULL DEFAULT '0',
+  `approved_by` bigint unsigned DEFAULT NULL,
+  `approved_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `aib_account_tenant_uq` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `ai_branch_actions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ai_branch_actions` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `client_uuid` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `kind` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `digest` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `expires_at` timestamp NOT NULL,
+  `decided_at` timestamp NULL DEFAULT NULL,
+  `result_id` bigint unsigned DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `aib_action_request_uq` (`tenant_id`,`client_uuid`),
+  KEY `aib_action_scope_idx` (`tenant_id`,`user_id`,`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `ai_branch_conversations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ai_branch_conversations` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `context_hash` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `messages` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `pending_uuid` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `expires_at` timestamp NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `aib_conversation_scope_idx` (`tenant_id`,`user_id`,`expires_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `ai_branch_memories`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ai_branch_memories` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `body` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `expires_at` timestamp NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `aib_memory_scope_idx` (`tenant_id`,`user_id`,`expires_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `automation_workflow_action_receipts`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -11868,14 +11938,18 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (278,'2026_10_15_22
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (279,'2026_10_15_210000_create_website_order_notifications',24);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (280,'2026_10_15_230000_create_website_catalog_source_mappings',24);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (281,'2026_10_15_235000_create_subscription_provider_evidence',25);
-INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (282,'2026_10_16_100000_create_marketing_brand_knowledge_versions',26);
-INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (283,'2026_10_16_100001_create_marketing_reply_policies',26);
-INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (284,'2026_10_16_100002_create_marketing_social_posts',26);
-INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (285,'2026_10_16_100003_create_marketing_social_publications',26);
-INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (286,'2026_10_16_100004_create_marketing_assistant_turns',26);
-INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (287,'2026_10_16_100005_create_marketing_audience_permissions',26);
-INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (288,'2026_10_16_100006_create_marketing_automation_enrollments',26);
-INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (289,'2026_10_16_100007_create_marketing_delivery_authorizations',26);
-INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (290,'2026_10_16_100008_create_marketing_delivery_attempts',26);
-INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (291,'2026_10_16_100009_create_marketing_conversation_controls',26);
-INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (292,'2026_10_16_100010_create_marketing_social_account_bindings',26);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (282,'2026_10_16_000000_create_ai_branch_accounts',26);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (283,'2026_10_16_000001_create_ai_branch_conversations',26);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (284,'2026_10_16_000002_create_ai_branch_memories',26);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (285,'2026_10_16_000003_create_ai_branch_actions',26);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (286,'2026_10_16_100000_create_marketing_brand_knowledge_versions',27);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (287,'2026_10_16_100001_create_marketing_reply_policies',27);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (288,'2026_10_16_100002_create_marketing_social_posts',27);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (289,'2026_10_16_100003_create_marketing_social_publications',27);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (290,'2026_10_16_100004_create_marketing_assistant_turns',27);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (291,'2026_10_16_100005_create_marketing_audience_permissions',27);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (292,'2026_10_16_100006_create_marketing_automation_enrollments',27);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (293,'2026_10_16_100007_create_marketing_delivery_authorizations',27);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (294,'2026_10_16_100008_create_marketing_delivery_attempts',27);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (295,'2026_10_16_100009_create_marketing_conversation_controls',27);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (296,'2026_10_16_100010_create_marketing_social_account_bindings',27);

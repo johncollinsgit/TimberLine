@@ -219,6 +219,9 @@ class ModernForestryAlphaBootstrapService
         $now = now();
         $moduleKeys = collect(array_keys((array) config('module_catalog.modules', [])))
             ->map(static fn ($moduleKey): string => strtolower(trim((string) $moduleKey)))
+            // The paid AI Branch has its own verified subscription and owner opt-in.
+            // Keep the existing Shopify AI Assistant (`ai`) in the alpha grants.
+            ->reject(static fn (string $moduleKey): bool => $moduleKey === 'ai_branch')
             ->filter(static fn (string $moduleKey): bool => $moduleKey !== '')
             ->unique()
             ->values()

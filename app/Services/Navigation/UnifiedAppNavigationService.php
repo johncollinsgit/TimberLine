@@ -311,6 +311,10 @@ class UnifiedAppNavigationService
             $items[] = ['key' => 'account-help', 'icon' => 'lifebuoy', 'href' => route('account-help.index'), 'label' => 'Account Help', 'current' => request()->routeIs('account-help.*')];
         }
 
+        if ($user && app(\App\Services\AiBranch\AiBranchAccess::class)->visible($tenant, $user)) {
+            $items[] = ['key' => 'ai-branch', 'icon' => 'sparkles', 'href' => app(\App\Services\AiBranch\AiWorkspacePage::class)->launcherUrl($request, $tenant), 'label' => 'AI Branch', 'current' => request()->routeIs('ai-branch.*')];
+        }
+
         $items = $this->normalizeNavigationItems($items);
 
         $prefs = is_array($user?->ui_preferences ?? null) ? $user->ui_preferences : [];
@@ -365,6 +369,9 @@ class UnifiedAppNavigationService
                 $add('sales-channels', 'Sales channels', 'sales-channels.index', 'chart-bar');
             }
             $add('user-agreements', 'User Agreements', 'agreements.index', 'document-check');
+        }
+        if (app(\App\Services\AiBranch\AiBranchAccess::class)->visible($tenant, $user)) {
+            $items[] = ['key' => 'ai-branch', 'icon' => 'sparkles', 'href' => app(\App\Services\AiBranch\AiWorkspacePage::class)->launcherUrl($request, $tenant), 'label' => 'AI Branch', 'current' => $request->routeIs('ai-branch.*')];
         }
         if (Route::has('subscriptions.workspace.index')
             && app(\App\Services\Subscriptions\SubscriptionAccessService::class)->canManage((int) $tenant->id, $user)) {

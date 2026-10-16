@@ -3,6 +3,22 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_16_000000_create_ai_branch_accounts.php' => [
+        'test' => 'tests/Integration/AiBranchMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['completed table and encrypted sentinel retained before migration bookkeeping'],
+    ],
+    '2026_10_16_000001_create_ai_branch_conversations.php' => [
+        'test' => 'tests/Integration/AiBranchMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['completed table and encrypted sentinel retained before migration bookkeeping'],
+    ],
+    '2026_10_16_000002_create_ai_branch_memories.php' => [
+        'test' => 'tests/Integration/AiBranchMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['completed table and encrypted sentinel retained before migration bookkeeping'],
+    ],
+    '2026_10_16_000003_create_ai_branch_actions.php' => [
+        'test' => 'tests/Integration/AiBranchMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['completed table and encrypted sentinel retained before migration bookkeeping'],
+    ],
     '2026_10_15_235000_create_subscription_provider_evidence.php' => [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['early installation retained before trailing tables', 'all-column bare tables with encrypted sentinel before every FK/index', 'partial constraints repaired twice with unchanged evidence and uint64 precision', 'conflicting duplicates or orphan scope fails without deleting evidence', 'same-named changed referential action fails closed', 'concurrent UUID and delivery dedupe with lost scalar after-commit dispatch remains recoverable'],

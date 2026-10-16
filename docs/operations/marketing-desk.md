@@ -3,12 +3,12 @@
 ## Status and ownership
 
 Implemented as a shared, tenant-owned product on the current production baseline
-`5adeb70a` (rebased from `6acaea0f`), with all new execution gates disabled by
+`08fca383` (including AI Branch PR #407), with all new execution gates disabled by
 default. Modern Forestry is the intended retail/wholesale pilot, not a separate
 implementation. No production
 settings, credentials, live workflows, posts, customer messages, or billing were
-changed by this build. The separate AI Branch work remains independent; this
-feature extends Bud and reuses the canonical tenant AI usage ledger, marketing
+changed by this build. The separately gated AI Branch keeps its own commercial activation and settings;
+this feature extends Bud and reuses the canonical tenant AI usage ledger, marketing
 profiles, campaigns, inbox, access resolver, and Workflow Studio v2 runtime.
 
 The desk lives at `/marketing/desk`. Navigation appears only for entitled,

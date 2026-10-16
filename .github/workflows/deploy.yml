@@ -271,7 +271,7 @@ jobs:
         run: php scripts/ci/lint-migrations.php --base="${{ steps.migration-base.outputs.sha }}"
 
       - name: Verify interrupted migration recovery
-        run: php ./vendor/bin/pest tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php tests/Integration/HighLevelFleetMySqlMigrationRecoveryTest.php tests/Integration/TenantMailMySqlMigrationRecoveryTest.php tests/Integration/FleetOperationsMySqlMigrationRecoveryTest.php tests/Integration/SoccerMySqlMigrationRecoveryTest.php tests/Integration/SoccerAllocationConcurrencyTest.php tests/Integration/MarketingDeskMySqlRecoveryTest.php tests/Integration/ReviewedSchemaDriftRecoveryTest.php --compact
+        run: php ./vendor/bin/pest tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php tests/Integration/HighLevelFleetMySqlMigrationRecoveryTest.php tests/Integration/TenantMailMySqlMigrationRecoveryTest.php tests/Integration/FleetOperationsMySqlMigrationRecoveryTest.php tests/Integration/SoccerMySqlMigrationRecoveryTest.php tests/Integration/SoccerAllocationConcurrencyTest.php tests/Integration/MarketingDeskMySqlRecoveryTest.php tests/Integration/ReviewedSchemaDriftRecoveryTest.php tests/Integration/AiBranchMySqlMigrationRecoveryTest.php --compact
 
       - name: Rehearse prior production schema upgrade
         run: scripts/ci/rehearse-migrations.sh "${{ steps.migration-base.outputs.sha }}"
@@ -281,6 +281,9 @@ jobs:
 
       - name: Verify tenant marketing AI budget concurrency
         run: php ./vendor/bin/pest tests/Integration/MarketingDeskConcurrencyTest.php --compact
+
+      - name: Verify AI quota and approval concurrency on MySQL
+        run: php ./vendor/bin/pest tests/Integration/AiBranchMySqlConcurrencyTest.php --compact
 
   deploy:
     name: Deploy

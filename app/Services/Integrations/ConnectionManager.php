@@ -85,6 +85,14 @@ class ConnectionManager
             ->get();
     }
 
+    /** A bounded local health projection; never reads or refreshes credentials. */
+    public function statusForTenant(int $tenantId, array $providers, int $limit = 5): Collection
+    {
+        return IntegrationConnection::query()->forTenantId($tenantId)->whereIn('provider', $providers)
+            ->orderByRaw("case when status in ('error','disconnected','expired') or (status='connected' and expires_at < ?) then 0 else 1 end", [now()])->orderBy('id')
+            ->limit(max(1, min(5, $limit)))->get(['id', 'provider', 'status', 'expires_at', 'last_synced_at']);
+    }
+
     /**
      * Connections due for a token refresh across all tenants (for the scheduled
      * connections:refresh command). Selection is done in PHP because needsRefresh()

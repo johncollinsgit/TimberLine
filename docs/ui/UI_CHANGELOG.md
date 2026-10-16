@@ -9,7 +9,18 @@
 - Desktop/phone browser checks use a clearly fictional local workspace. Provider
   execution and production rollout remain disabled.
 
+## 2026-10-16 - Workspace-aware AI attention briefings
+
+- Added the gated What needs attention? request, collapsible Context used panels, ordered evidence links, source coverage and generation time with workspace timezone. Viewing context consumes no AI allowance.
+- Standard and Website & sales launchers pass allowlisted page identity. Private chat/memory scope follows the selected workspace. Changed permissions or context versions show a restart explanation with private deletion controls.
+- Added validated workspace timezone to existing AI settings. Briefings share chat limits and provider spending caps. No financial summaries, external calendar retrieval or automated actions are introduced; rollout remains disabled.
+
 ## 2026-10-15 - Native shipping lifecycle and printer setup
+
+## 2026-10-15 AI Branch pilot workspace
+
+- Added a gated AI workspace and canonical navigation launcher with escaped conversation text, evidence lists, explicit owner budget opt-in, private memory controls and exact internal-note previews. Uses the existing app shell and controls. Hidden/default-off rollout preserves all current customer surfaces.
+
 
 - Order fulfillment separates saved postage, packing, label output, handoff,
   refund review and separately approved replacement rates. Retired labels lose
