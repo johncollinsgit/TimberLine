@@ -15,6 +15,10 @@ class AiBranchContext
 
     public function scopeHash(Tenant $tenant, User $user): string
     {
+        if (app(AiWorkspaceContext::class)->enabled($tenant)) {
+            return app(AiWorkspaceContext::class)->stamp($tenant, $user);
+        }
+
         return hash('sha256', json_encode([
             app(TenantModuleAccessResolver::class)->canAccess($tenant->id, 'field_service'),
             $this->clients->allows($user, $tenant), $this->jobs->role($user, $tenant),

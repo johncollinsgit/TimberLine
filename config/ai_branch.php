@@ -3,6 +3,8 @@
 return [
     'enabled' => (bool) env('EVERBRANCH_AI_BRANCH_ENABLED', false),
     'tenant_ids' => array_values(array_filter(array_map('intval', explode(',', (string) env('EVERBRANCH_AI_BRANCH_TENANT_IDS', ''))))),
+    'workspace_context_enabled' => (bool) env('EVERBRANCH_AI_WORKSPACE_CONTEXT_ENABLED', false),
+    'workspace_context_tenant_ids' => array_values(array_filter(array_map('intval', explode(',', (string) env('EVERBRANCH_AI_WORKSPACE_CONTEXT_TENANT_IDS', ''))))),
     'actions_enabled' => (bool) env('EVERBRANCH_AI_BRANCH_ACTIONS_ENABLED', false),
     // Transport interfaces are reserved; these flags cannot activate a transport.
     'voice_enabled' => false,

@@ -41,6 +41,7 @@ class AiBranchAccess
 
     public function member(Tenant $tenant, User $user): void
     {
+        $user->refresh();
         $membership = $user->tenants()->whereKey($tenant->id)->wherePivot('membership_active', true)->first();
         abort_unless($user->is_active !== false && $membership && in_array($membership->pivot->role, ['owner', 'tenant_owner', 'admin'], true), 403);
     }
