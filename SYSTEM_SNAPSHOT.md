@@ -1,5 +1,21 @@
 # SYSTEM SNAPSHOT
 
+## Modern Forestry AI purchase preparation (2026-10-16; staged)
+
+- The user approved an AI-only Growth purchase at $99/month and a separate
+  fictional provider request capped at $0.10. Its genuine provider request
+  succeeded with 39 input / 18 output tokens and a conservative $0.000024
+  cost ceiling. Final provider billing remains unreconciled. A dedicated OpenAI
+  project/service key is installed securely and expires November 14, 2026.
+- A private preview-first operator command prepares one tenant-allowlisted,
+  idempotent subscription Checkout. Its rollout is independently off by default;
+  public purchasing stays closed. Setup and Launch Partner base charges are
+  excluded from this checkout. A new verified paid webhook is still required.
+- Add-on fulfillment preserves workspace profile metadata and the base plan.
+  Paid Checkout/invoice statuses normalize to active subscription evidence;
+  late events preserve known periods and single-item provider periods work.
+  See the Modern Forestry rollout and AI operations runbooks before activation.
+
 ## Modern Forestry Launch Partner AI selection (2026-10-16; billing/AI pending)
 
 - Modern Forestry tenant 1 is now registered as a Launch Partner client (directory record 314, audit 620), at the current $89/month for six cycles then $149/month, plus $99/month AI Branch Growth. Monthly totals are $188 then $248 before tax. This records commercial intent, not an active paid subscription. Setup applicability and provider spending cap still require review/approval.

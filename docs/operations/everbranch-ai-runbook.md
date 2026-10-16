@@ -2,6 +2,9 @@
 
 ## Current status
 
+The named Growth purchase exception below is a private operator flow. Public
+catalog purchases remain disabled, independently of AI runtime rollout.
+
 The branch is implemented for an owner/admin pilot and disabled by default. New AI tier purchases are blocked with the existing CatalogPurchasePolicy. Chat and notes use no live credentials in automated tests. No production tenant, subscription, Stripe product, message delivery, voice or telephone integration is activated by this change.
 
 The implementation and phased contract is in `docs/architecture/everbranch-ai-implementation.md`. Starter, Growth and Pro cost $49, $99 and $199 monthly. Limits of 300/1,000/3,000 requests and $5/$15/$35 provider budgets are proposed pilot defaults requiring commercial review. Voice and telephone costs are separate future work.
@@ -155,3 +158,64 @@ This selection does not itself establish an accepted contract, paid subscription
 provider spending-cap approval or AI activation. Preserve existing operational
 access. The alpha bootstrap must not grant or rewrite paid `ai_branch` access;
 the existing Shopify assistant `ai` remains separate.
+
+### Approved AI-only purchase preparation
+
+The user approved Modern Forestry's genuine USD 99/month AI Growth purchase and
+one fictional provider diagnostic capped at USD 0.10. This does not authorize the
+Launch Partner base invoice, the setup fee, customer email/SMS, a saved-card
+charge, or an ongoing $15 provider cap. The diagnostic completed with verified
+39 input / 18 output tokens; its conservative cost ceiling is $0.000024. Final
+provider billing evidence remains separate from that estimate.
+
+The dedicated OpenAI project is **Everbranch AI Branch**. Its service key is
+installed in the shared Forge secret environment and expires **November 14,
+2026**. Rotate it before expiry through the normal secure credential process.
+Never reuse this key for Bud, Wren, Shopify or another integration. The selected
+model is `gpt-6-luna`, standard service tier. Conservative reservation/settlement
+ceilings are 250,000 input and 750,000 output USD microdollars per million tokens,
+covering standard long-context/cache-write rates as checked October 16. These
+are cost ceilings, not a claim of exact invoice pricing. Actual provider cost
+requires billing reconciliation. No automatic retry was used for the diagnostic.
+
+After protected deployment, enable only `EVERBRANCH_AI_PURCHASE_ENABLED=true`
+and `EVERBRANCH_AI_PURCHASE_TENANT_IDS=1` for the named preparation window. Leave
+AI/context/action runtime gates off until current paid evidence and owner opt-in.
+The server-only command requires an active `platform_admin` actor:
+
+```sh
+php artisan ai-branch:prepare-purchase modern-forestry --actor=OPERATOR_ID
+php artisan ai-branch:prepare-purchase modern-forestry --actor=OPERATOR_ID --authorization=HUMAN_APPROVAL_REFERENCE --apply
+```
+
+The first invocation makes no provider call or mutation. The second prepares or
+resumes one customer-present recurring checkout; it never pays it. Stripe must
+have exactly one active USD 99 monthly per-unit price with canonical lookup key
+`addon_ai_branch_growth_monthly` and price metadata
+`purchase_key=addon.ai_branch_growth`. Provision an approved price through audited
+operator tooling; never substitute another price or silently change a mismatch.
+
+A saved customer is reusable only after live-mode and tenant ownership checks.
+An explicitly missing saved reference may be skipped only after a successful,
+empty provider search for tenant ID, slug and business name. The stale mapping
+is retained until a verified webhook replaces it. Matching candidates require
+operator review. Checkout collects the payer's email and billing details directly;
+the preparation command does not invent a billing contact or email anyone.
+
+Reservation evidence lives in `TenantAccessProfile.metadata.ai_branch_purchase`.
+It stores no hosted URL, credentials or payment data. Tenant profile row locks
+serialize reservation creation, and Stripe idempotency handles simultaneous POSTs.
+Retries reuse the same frozen request and session. A changed Stripe credential,
+unknown old attempt, existing active/past-due AI tier or attempt older than 23 hours
+requires reconciliation, not deletion/reset/new checkout. Persisted session IDs
+are resumed by GET. Payment failures never fabricate a paid ledger or entitlement.
+
+Signed `addon_checkout` metadata contains only the AI purchase key, not a paid
+base-plan purchase. Existing add-on fulfillment preserves the base plan and
+profile settings, timezone and enrollment. Current genuine paid evidence must
+still pass `AiBranchAccess`; configuration and a checkout link alone grant no AI.
+Turn off the private purchase flag after the checkout is prepared; its existing
+signed webhook can still settle and reconcile the payment. Hand the secure link
+to the authorized payer for payment. Do not enter payment details or submit a
+payment on their behalf. Reconcile provider receipt, subscription period, exact
+AI ledger and entitlement before enabling owner-approved runtime access.

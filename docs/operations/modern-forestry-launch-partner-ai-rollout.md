@@ -4,6 +4,23 @@ Date: October 16, 2026 (America/New_York). This is the execution plan for the
 user-selected first production AI workspace. Commercial registration is recorded;
 payment collection and AI activation remain pending the explicit gates below.
 
+## Subsequent approved purchase scope
+
+The user expressly chose **Modern Forestry's genuine $99 AI service purchase**
+and **up to $0.10 real AI usage**, then asked Codex to configure the dedicated key.
+Prepare that AI-only checkout independently from the pending Launch Partner base
+agreement. Its genuine subscription uses `addon_checkout` metadata and carries
+only `addon.ai_branch_growth`; it must not imply the base service is paid. The
+combined phase schedule below remains a prerequisite before starting or merging
+the base-service subscription later. Do not charge $188, $248 or a setup fee in
+this approved $99 checkout.
+
+A dedicated OpenAI project/service key is securely installed (November 14, 2026
+expiry). One fictional standard-tier request succeeded with 39 input/18 output
+tokens, conservative cost ceiling $0.000024. Final provider billing reconciliation,
+genuine Stripe payment and tenant AI opt-in remain distinct evidence gates. See
+the operator purchase command and reconciliation rules in the AI runbook.
+
 ## Approved selection and exact pricing
 
 Use the existing Modern Forestry workspace (`modern-forestry`, verified production

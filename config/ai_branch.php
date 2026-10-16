@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'purchase_enabled' => (bool) env('EVERBRANCH_AI_PURCHASE_ENABLED', false),
+    'purchase_tenant_ids' => array_values(array_filter(array_map('intval', explode(',', (string) env('EVERBRANCH_AI_PURCHASE_TENANT_IDS', ''))))),
     'enabled' => (bool) env('EVERBRANCH_AI_BRANCH_ENABLED', false),
     'tenant_ids' => array_values(array_filter(array_map('intval', explode(',', (string) env('EVERBRANCH_AI_BRANCH_TENANT_IDS', ''))))),
     'workspace_context_enabled' => (bool) env('EVERBRANCH_AI_WORKSPACE_CONTEXT_ENABLED', false),

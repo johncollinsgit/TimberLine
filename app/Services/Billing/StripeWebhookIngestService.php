@@ -103,7 +103,7 @@ class StripeWebhookIngestService
 
         $checkoutSessionId = (string) ($this->extractCheckoutSessionId($eventType, $object) ?? '');
         $stripeCustomer = trim((string) ($object['customer'] ?? ''));
-        $stripeSubscription = trim((string) ($object['subscription'] ?? ''));
+        $stripeSubscription = trim((string) ($object['subscription'] ?? data_get($object, 'parent.subscription_details.subscription', data_get($object, 'subscription_details.subscription', ''))));
         $stripeObjectId = trim((string) ($object['id'] ?? ''));
 
         if (($object['object'] ?? '') === 'subscription') {

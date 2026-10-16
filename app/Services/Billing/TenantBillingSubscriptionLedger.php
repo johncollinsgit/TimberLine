@@ -46,6 +46,18 @@ class TenantBillingSubscriptionLedger
                 'addon_keys' => $this->addonKeys($metadata),
             ],
         ];
+        // Checkout and invoice events need not repeat the subscription period.
+        // Preserve previously verified coverage instead of replacing it with null.
+        if ($attributes['current_period_ends_at'] === null) {
+            $items = (array) data_get($object, 'items.data', []);
+            $itemEnd = count($items) === 1 && ! data_get($object, 'items.has_more', false)
+                ? $this->timestamp(data_get($items, '0.current_period_end')) : null;
+            if ($itemEnd) {
+                $attributes['current_period_ends_at'] = $itemEnd;
+            } else {
+                unset($attributes['current_period_ends_at']);
+            }
+        }
 
         if ($purchaseKeys === []) {
             TenantBillingSubscription::withoutGlobalScopes()
@@ -117,10 +129,11 @@ class TenantBillingSubscriptionLedger
             return 'past_due';
         }
 
-        if ($eventType === 'checkout.session.completed'
-            && data_get($object, 'metadata.purpose') === 'agreement_checkout'
-            && ! in_array(strtolower(trim((string) ($object['payment_status'] ?? ''))), ['paid', 'no_payment_required'], true)) {
-            return 'pending';
+        if (in_array($eventType, ['checkout.session.completed', 'checkout.session.async_payment_succeeded'], true)) {
+            return in_array(strtolower(trim((string) ($object['payment_status'] ?? ''))), ['paid', 'no_payment_required'], true) ? 'active' : 'pending';
+        }
+        if (in_array($eventType, ['invoice.paid', 'invoice.payment_succeeded'], true)) {
+            return 'active';
         }
 
         $status = strtolower(trim((string) ($object['status'] ?? '')));

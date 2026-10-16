@@ -62,7 +62,7 @@ test('chat retrieves only allowed tenant fields and records encrypted history an
     Http::assertSent(function ($request): bool {
         $body = json_encode($request->data());
 
-        return $request->url() === 'https://api.openai.com/v1/responses' && $request['store'] === false
+        return $request->url() === 'https://api.openai.com/v1/responses' && $request['store'] === false && $request['service_tier'] === 'default'
             && ! isset($request['tools']) && str_contains($body, 'Install switch')
             && ! str_contains($body, 'OTHER TENANT SECRET') && ! str_contains($body, 'SECRET-CODE') && ! str_contains($body, 'private@example.test');
     });

@@ -188,7 +188,8 @@ class StripeCommercialFulfillmentService
                 $triggeredBy,
                 $actorUserId,
                 $sourceEventId,
-                $sourceEventType
+                $sourceEventType,
+                $addonCheckoutEvent
             ): array {
                 $existing = TenantBillingFulfillment::query()
                     ->where('tenant_id', $tenantId)
@@ -239,13 +240,17 @@ class StripeCommercialFulfillmentService
                     'applied_at' => null,
                 ]);
 
-                $this->commercialConfigService->assignTenantPlan(
-                    tenantId: $tenantId,
-                    planKey: $desiredPlanKey,
-                    operatingMode: $operatingMode,
-                    source: 'stripe_fulfillment',
-                    actorId: $actorUserId
-                );
+                // An add-on purchase does not replace the base plan or its
+                // business settings, timezone, enrollment or checkout evidence.
+                if (! $addonCheckoutEvent) {
+                    $this->commercialConfigService->assignTenantPlan(
+                        tenantId: $tenantId,
+                        planKey: $desiredPlanKey,
+                        operatingMode: $operatingMode,
+                        source: 'stripe_fulfillment',
+                        actorId: $actorUserId
+                    );
+                }
 
                 foreach ($desiredAddonKeys as $addonKey) {
                     $this->commercialConfigService->setTenantAddonState(
