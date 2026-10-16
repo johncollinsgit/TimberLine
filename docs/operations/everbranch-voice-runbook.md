@@ -72,6 +72,121 @@ production activation. Physical iOS/Android acceptance and paired signed builds
 remain required. Follow protected release procedures; rollback paired navigation
 commits while preserving checkpoints and business data.
 
-Executive AI, weekly reports/triage, customer workflows, approval center,
-mail/phone and receptionist remain separate increments. Navigation checks do not
-establish completion of the combined 35-criterion release.
+## Business assistant increment
+
+`EVERBRANCH_AI_ASSISTANT_ENABLED` and the exact
+`EVERBRANCH_AI_ASSISTANT_TENANT_IDS` list gate the panel and mobile JSON adapter.
+They do not grant the AI Branch entitlement, bypass its opt-in/budget, or grant
+non-admin access. Verified active owner/admin membership remains mandatory.
+Workspace-aware context additionally requires the existing context flags.
+No GET dispatches a provider request. Dictation produces an editable draft;
+only Ask sends it. Unknown provider outcomes reserve allowance and require
+conversation/usage review; closing or Stop waiting does not promise cancellation
+of work already accepted by the server. Existing chat UUID deduplication applies.
+
+The web panel is lazy-loaded in the existing app shell. Its origin descriptor
+is server-owned, allowlisted and contains only record kind/ID. Native visible
+record context is a hint, validated against current server access. Both clients
+render generated text as text, show available source/freshness evidence and
+offer explicit OS/browser spoken playback with stop. Private memory is explicit,
+encrypted, workspace/user-scoped, expiring and forgettable using existing services.
+Changing memory invalidates old conversation context; unsent question drafts remain.
+
+Activity shows current permitted internal note actions and receipts. Recent
+permitted jobs can be selected to prepare a note preview without execution.
+Approving requires the exact job/body digest and current job version. Replay
+does not add another note. Undo is restricted to an unchanged, unattached AI
+internal owner note; it archives the original rather than deleting concurrent
+evidence, writes a content-free audit entry and creates one compensating receipt.
+Model edits permanently invalidate undo, even if someone restores the old text.
+This increment does not execute model tool calls or send communications.
+
+`EVERBRANCH_AI_ASSISTANT_FINANCE_ENABLED` exposes saved, current-connection
+QuickBooks Profit and Loss totals for the exact current reporting period, only
+with canonical accounting/QuickBooks entitlements. Unknown values/currency/basis
+stay unknown. Decimal conversion uses exact safe integer cents; snapshots expose
+observation time and staleness. No provider refresh or accounting mutation occurs.
+These totals are outside model input: financial question interpretation, expense
+drivers, arbitrary historical comparisons and customer rankings remain open.
+
+`EVERBRANCH_AI_ASSISTANT_REPORTS_ENABLED` additionally requires enhanced context.
+POST reports takes a UUID, optional local week start, `executive|team` audience
+and selected active team IDs. Seven local days use an exclusive end; DST may
+produce 167/169 hours. Task events, current job notes and executive customer
+activity are streamed in chunks and deduplicated by source ref, beyond chat
+sample limits. Team entries require access for every recipient and exclude owner
+notes entirely. At 10,000 entries generation fails without saving a partial report.
+
+Snapshots are immutable/idempotent encrypted files under the configured private
+workspace asset disk, bound to workspace/user/UUID, inputs and scope stamp, and
+expire after 30 days. Reads and authenticated web print recheck current role,
+modules, audience and source existence/visibility. JSON/native preview paginates
+all entries; web print includes the full appendix. `coverage_complete=false`
+explicitly excludes unregistered modules, finance, mail, calls and unrecorded edits.
+These are not yet the full registered business ledger or a shared report inbox.
+
+`php artisan ai-branch:prune` previews expiry. `--apply` deletes expired verified
+reports/chat/memory and redacts old action and reversed-note text while retaining
+receipts/usage. An unreadable report is retained for investigation and makes apply
+fail visibly. Retention runs even with runtime flags disabled. Do not expose the
+private report directory through a public storage URL.
+
+All assistant flags remain false in the committed defaults. Fictional browser
+fixtures replace every API/provider response; feature tests use HTTP fakes and
+temporary storage. No pilot has been activated against a real workspace.
+
+## Remaining release evidence
+
+The paired local browser harness currently checks navigation, private assistant
+interaction, exact note approval/undo, finance disclosures and weekly pagination.
+Run it after both builds. The backend test suite needs process-local
+`OPENSSL_CONF` on this Windows installation and `APP_URL=http://localhost` for
+host-bound fleet tests; these settings do not alter application security.
+POSIX file-mode and shell-quote assertions need Linux CI evidence.
+
+See `docs/architecture/everbranch-voice-acceptance.md` for all 35 criteria.
+Shared triage, connected customer workflows, comprehensive activity reconciliation,
+mail/phone, receptionist and physical native acceptance remain separate increments.
+The combined release is not complete or approved for activation.
+
+
+## Native capture rail (device acceptance deferred)
+
+The bundled Java/Swift bridges accept a capture UUID and emit `captureEnded` for
+natural completion, silence/errors and background interruption. Results are kept
+only until the matching stop consumes them. Stop/cancel and delayed callbacks are
+bound to that capture. Cancel during OS permission approval prevents a late start;
+old final callbacks and stop timers cannot complete the next capture. JavaScript
+registers its listener before starting, handles completion-before-start ordering,
+removes listeners/timers on every terminal path and cancels when UI access changes.
+
+The native Java/Swift changes have not been compiled or exercised on physical
+devices here. Mocked bridge contract tests are not native acceptance. The user
+chose to defer the Mac/device build and continue the underlying rails. Validate
+permission denial, natural completion, silence, stop, rapid reactivation, cancelling
+an OS prompt, interruption/background and late callbacks on both platforms before
+release. Platform references: Android SpeechRecognizer
+(https://developer.android.com/reference/android/speech/SpeechRecognizer),
+Apple SFSpeechRecognitionTask
+(https://developer.apple.com/documentation/speech/sfspeechrecognitiontask),
+and Capacitor plugin events (https://capacitorjs.com/docs/plugins/android).
+
+## Verified checkpoint results (Windows, October 16)
+
+- Restoration: 12 package checksums, 20 transferred source hashes and both
+  complete checkpoint Git trees match the manifest.
+- Focused AI Branch/search/mobile inventory checks: 164 tests, 1,463 assertions.
+  The APNs signature and affected environment-dependent suites also pass after
+  configuring OpenSSL and localhost (98 tests in the environment rerun).
+- Complete configured backend run: 3,563 passed, five failed, one skipped;
+  24,655 assertions, 570 seconds. This is not an all-green release suite.
+  Remaining failures are the POSIX `0600` assertion in
+  `ShopifyCatalogSnapshotImporterTest`, POSIX shell quote assertions in
+  `WeeklyRewardsWishlistSummaryTest` and both `ScheduledImportsCoverBothStoresTest`
+  cases, and the private-file import in `SubscriptionRechargeManualSettingsTest`
+  (Windows does not establish its required POSIX mode). Keep those protections;
+  obtain Linux CI evidence rather than relaxing privacy checks.
+- Backend assets and formatting pass. Mobile lint, 94 tests and bundled
+  TypeScript/Vite build pass, with the existing large-chunk advisory.
+- Paired browser acceptance: 27 scenarios pass with fictional fixtures; no page
+  errors. These are component interactions, not physical-device evidence.

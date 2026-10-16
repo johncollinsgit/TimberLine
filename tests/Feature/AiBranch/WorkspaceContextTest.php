@@ -68,6 +68,95 @@ test('workspace context identifies the current workspace without serializing pro
     Http::assertNothingSent();
 });
 
+test('weekly snapshots reconcile more than chat sample limits and remain encrypted and idempotent', function () {
+    [$tenant, $user] = workspaceFixture('fictional-weekly');
+    config()->set(['ai_branch.assistant_enabled' => true, 'ai_branch.assistant_tenant_ids' => [$tenant->id], 'ai_branch.assistant_reports_enabled' => true]);
+    \Illuminate\Support\Facades\Storage::fake('local');
+    $job = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'Fictional weekly work', 'status' => 'open']);
+    $task = FieldServiceTask::create(['tenant_id' => $tenant->id, 'field_service_job_id' => $job->id, 'title' => 'Fictional task', 'status' => 'open']);
+    for ($index = 0; $index < 30; $index++) {
+        $event = FieldServiceTaskEvent::create(['tenant_id' => $tenant->id, 'field_service_task_id' => $task->id, 'event_type' => 'updated', 'note' => 'PRIVATE NOTE']);
+        $event->forceFill(['created_at' => \Carbon\CarbonImmutable::parse('2026-11-02 12:00:00', 'America/New_York')->utc()])->save();
+    }
+    $uuid = (string) \Illuminate\Support\Str::uuid();
+    $reports = app(\App\Services\AiBranch\AiWeeklyReport::class);
+    $report = $reports->capture($tenant, $user, '2026-11-01', 'executive', [], $uuid);
+    expect($report['count'])->toBe(30)->and($report['coverage']['task_events']['count'])->toBe(30)
+        ->and($report['coverage_complete'])->toBeFalse()->and(json_encode($report))->not->toContain('PRIVATE NOTE');
+    expect(\Carbon\CarbonImmutable::parse($report['starts_at'])->diffInHours(\Carbon\CarbonImmutable::parse($report['ends_before'])))->toBe(169.0);
+    expect($reports->capture($tenant, $user, '2026-11-01', 'executive', [], $uuid))->toBe($report);
+    $stored = \Illuminate\Support\Facades\Storage::disk('local')->get('ai-weekly-reports/'.$tenant->id.'/'.$user->id.'/'.$uuid.'.enc');
+    expect($stored)->not->toContain('Fictional task');
+    $user->tenants()->updateExistingPivot($tenant->id, ['role' => 'member']);
+    expect(fn () => $reports->read($tenant, $user, $uuid))->toThrow(HttpException::class);
+    Http::assertNothingSent();
+});
+
+test('team reports exclude private-note existence and recheck changed source visibility', function () {
+    [$tenant, $user] = workspaceFixture('fictional-team-weekly');
+    config()->set(['ai_branch.assistant_enabled' => true, 'ai_branch.assistant_tenant_ids' => [$tenant->id], 'ai_branch.assistant_reports_enabled' => true]);
+    \Illuminate\Support\Facades\Storage::fake('local');
+    $member = User::factory()->create(['role' => 'member', 'is_active' => true]);
+    $member->tenants()->attach($tenant->id, ['role' => 'member', 'membership_active' => true]);
+    $job = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'Fictional shared work', 'status' => 'open']);
+    \App\Models\FieldServiceJobNote::create(['tenant_id' => $tenant->id, 'field_service_job_id' => $job->id, 'body' => 'OWNER SECRET', 'metadata' => ['visibility' => 'owner']]);
+    $shared = \App\Models\FieldServiceJobNote::create(['tenant_id' => $tenant->id, 'field_service_job_id' => $job->id, 'body' => 'Shared note']);
+    $week = \Carbon\CarbonImmutable::now('America/New_York')->startOfWeek()->toDateString();
+    $uuid = (string) \Illuminate\Support\Str::uuid();
+    $reports = app(\App\Services\AiBranch\AiWeeklyReport::class);
+    $report = $reports->capture($tenant, $user, $week, 'team', [$member->id], $uuid);
+    expect($report['count'])->toBe(1)->and($report['coverage']['job_notes']['count'])->toBe(1)
+        ->and(json_encode($report))->not->toContain('OWNER SECRET', 'Shared note');
+    $shared->update(['metadata' => ['visibility' => 'owner']]);
+    expect(fn () => $reports->read($tenant, $user, $uuid))->toThrow(HttpException::class);
+    Http::assertNothingSent();
+});
+
+test('native assistant origin binds the selected permitted job and rejects another workspace record', function () {
+    [$tenant, $user] = workspaceFixture('fictional-origin');
+    [$other] = workspaceFixture('fictional-other-origin');
+    config()->set(['ai_branch.assistant_enabled' => true, 'ai_branch.assistant_tenant_ids' => [$tenant->id]]);
+    $job = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'Fictional selected job', 'status' => 'open']);
+    $foreign = FieldServiceJob::create(['tenant_id' => $other->id, 'title' => 'OTHER TENANT JOB', 'status' => 'open']);
+    \Laravel\Sanctum\Sanctum::actingAs($user, ['mobile:read', 'mobile:write']);
+    $base = '/api/mobile/v1/workspaces/'.$tenant->slug.'/ai-assistant';
+    $this->getJson($base.'?'.http_build_query(['origin' => ['kind' => 'job', 'id' => $job->id]]))->assertOk()->assertJsonPath('context.page.id', $job->id)->assertJsonPath('context.page.title', 'Fictional selected job');
+    $this->getJson($base.'?'.http_build_query(['origin' => ['kind' => 'job', 'id' => $foreign->id]]))->assertNotFound();
+    Http::assertNothingSent();
+});
+
+test('weekly report retention deletes only expired verified private snapshots even with runtime disabled', function () {
+    [$tenant, $user] = workspaceFixture('fictional-report-retention');
+    config()->set(['ai_branch.assistant_enabled' => true, 'ai_branch.assistant_tenant_ids' => [$tenant->id], 'ai_branch.assistant_reports_enabled' => true]);
+    \Illuminate\Support\Facades\Storage::fake('local');
+    $reports = app(\App\Services\AiBranch\AiWeeklyReport::class);
+    $uuid = (string) \Illuminate\Support\Str::uuid();
+    $reports->capture($tenant, $user, now()->startOfWeek()->toDateString(), 'executive', [], $uuid);
+    $this->travel(31)->days();
+    config()->set('ai_branch.assistant_enabled', false);
+    expect($reports->prune(false)['expired'])->toBe(1);
+    expect(\Illuminate\Support\Facades\Storage::disk('local')->allFiles('ai-weekly-reports'))->toHaveCount(1);
+    expect($reports->prune(true)['expired'])->toBe(1);
+    expect(\Illuminate\Support\Facades\Storage::disk('local')->allFiles('ai-weekly-reports'))->toHaveCount(0);
+});
+
+test('weekly JSON and print exports recheck ownership scope and changed audience', function () {
+    [$tenant, $user] = workspaceFixture('fictional-report-routes');
+    [$foreign, $foreignUser] = workspaceFixture('fictional-foreign-report');
+    config()->set(['ai_branch.assistant_enabled' => true, 'ai_branch.assistant_tenant_ids' => [$tenant->id, $foreign->id], 'ai_branch.assistant_reports_enabled' => true]);
+    \Illuminate\Support\Facades\Storage::fake('local');
+    $job = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => '<script>private report</script>', 'status' => 'open']);
+    \App\Models\FieldServiceJobNote::create(['tenant_id' => $tenant->id, 'field_service_job_id' => $job->id, 'body' => 'Private note body']);
+    $uuid = (string) \Illuminate\Support\Str::uuid();
+    $this->actingAs($user)->postJson(route('ai-branch.assistant.reports.store', ['tenant' => $tenant->slug]), ['request_id' => $uuid, 'audience' => 'executive'])->assertCreated()->assertJsonPath('count', 1);
+    $url = route('ai-branch.assistant.reports.print', ['tenant' => $tenant->slug, 'report' => $uuid]);
+    $this->get($url)->assertOk()->assertSee('&lt;script&gt;private report&lt;/script&gt;', false)->assertDontSee('<script>private report</script>', false)->assertDontSee('Private note body');
+    $this->actingAs($foreignUser)->get(route('ai-branch.assistant.reports.print', ['tenant' => $foreign->slug, 'report' => $uuid]))->assertNotFound();
+    $user->tenants()->updateExistingPivot($tenant->id, ['role' => 'member']);
+    $this->actingAs($user)->get($url)->assertForbidden();
+    Http::assertNothingSent();
+});
+
 test('page descriptors reject arbitrary details and other tenant records', function () {
     [$tenant, $user] = workspaceFixture();
     [$other] = workspaceFixture('other');

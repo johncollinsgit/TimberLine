@@ -13,6 +13,34 @@ await mkdir(output, { recursive: true })
 const blade = await readFile(resolve(root, 'resources/views/components/app-command-palette.blade.php'), 'utf8')
 const markup = blade.slice(blade.indexOf('<div'), blade.indexOf('@once')).replaceAll('{{ $searchEndpoint }}', '/search').replace(/{{[^}]+}}/g, 'Ask Everbranch')
 const script = blade.match(/<script>([\s\S]*?)<\/script>/)[1]
+const manifest = JSON.parse(await readFile(resolve(root, 'public/build/manifest.json'), 'utf8'))
+const assistantEntry = manifest['resources/js/ai-assistant.jsx']
+const assistantData = { version: 1, workspace: { id: 1, name: 'Fictional Cedar Works' }, context: null, conversation: null, conversations: [], memories: [], actions: [], usage: { responses: 0, provider_micros: 0 } }
+let assistantAllowed = true
+let assistantRequests = 0
+const assistantResponse = (path, method, body = {}, conversation = false) => {
+  if (path.endsWith('/reports') && method === 'POST') {
+    return { request_id: body.request_id, audience: body.audience, starts_at: '2026-10-12T00:00:00Z', ends_before: '2026-10-19T00:00:00Z', timezone: 'UTC', generated_at: '2026-10-16T12:00:00Z', count: 60, coverage_complete: false, coverage_notice: 'Fictional registered task events only. Mail, calls and finance are not included.', entries: Array.from({ length: 60 }, (_, index) => ({ ref: 'task_event:' + index, event: 'Task completed', title: 'Fictional task ' + index, occurred_at: '2026-10-16T12:00:00Z' })) }
+  } else if (path.endsWith('/actions') && method === 'POST') {
+    assistantData.actions = [{ id: 3, kind: 'internal_job_note', status: 'pending', payload: { job_title: 'Fictional panel work', body: body.body }, digest: 'a'.repeat(64), expires_at: new Date(Date.now() + 900_000).toISOString() }]
+    return { action_id: 3, status: 'pending' }
+  } else if (path.endsWith('/decision')) {
+    assistantData.actions[0] = { ...assistantData.actions[0], status: body.decision === 'approve' ? 'executed' : 'rejected', result_id: body.decision === 'approve' ? 3 : undefined }
+    return { status: assistantData.actions[0].status }
+  } else if (path.endsWith('/undo')) {
+    assistantData.actions[0] = { ...assistantData.actions[0], status: 'reversed', can_undo: false }
+    return { action_id: 2, status: 'executed', reversed_action_id: 1 }
+  } else if (path.endsWith('/messages')) {
+    assistantRequests++
+    assistantData.conversation = { id: 1, pending: false, messages: [{ role: 'user', text: body.question }, { role: 'assistant', text: 'Fictional answer: <img src=x onerror=alert(1)>', sources: [], generated_at: new Date().toISOString() }] }
+  } else if (path.endsWith('/conversations')) {
+    assistantData.conversation = { id: 1, pending: false, messages: [] }
+    assistantData.conversations = [{ id: 1, created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 86_400_000).toISOString() }]
+    return { conversation_id: 1 }
+  } else if (path.endsWith('/memories') && method === 'POST') assistantData.memories = [{ id: 1, body: body.body, expires_at: new Date(Date.now() + 86_400_000).toISOString() }]
+  else if (path.endsWith('/memories/1') && method === 'DELETE') assistantData.memories = []
+  return { ...assistantData, conversation: conversation || path.endsWith('/messages') ? assistantData.conversation : null }
+}
 let revoked = false
 const pageRow = (title, url, exact = false) => ({ type: 'navigation', title, url, meta: { exact_match: exact } })
 const fixture = query => {
@@ -23,8 +51,23 @@ const fixture = query => {
   if (revoked) results = []
   return { results, groups: { navigation: results }, total: results.length, navigation: { status: query === 'home' && !revoked ? 'matched' : results.length ? 'choose' : 'no_match', destination: results[0] } }
 }
-const web = createServer((request, response) => {
+const web = createServer(async (request, response) => {
   const url = new URL(request.url, 'http://localhost')
+  if (url.pathname.startsWith('/build/')) {
+    const file = resolve(root, 'public', '.' + url.pathname)
+    if (!file.startsWith(resolve(root, 'public/build'))) { response.writeHead(403); response.end(); return }
+    response.setHeader('Content-Type', file.endsWith('.css') ? 'text/css' : 'application/javascript')
+    response.end(await readFile(file)); return
+  }
+  if (url.pathname === '/assistant-preview') {
+    response.end('<!doctype html><html><head><meta name="csrf-token" content="fictional-token">' + (assistantEntry.css || []).map(file => '<link rel="stylesheet" href="/build/' + file + '">').join('') + '</head><body><main><h1>Fictional Cedar Works</h1></main><div data-ai-assistant data-base-url="/ai-branch?tenant=fictional-voice" data-workspace="Fictional Cedar Works"></div><script type="module">import {mountAiAssistantNow} from "/build/' + assistantEntry.file + '";mountAiAssistantNow();</script></body></html>'); return
+  }
+  if (url.pathname.startsWith('/ai-branch')) {
+    response.setHeader('Content-Type', 'application/json')
+    if (!assistantAllowed) { response.writeHead(403); response.end(JSON.stringify({ message: 'Access was revoked.' })); return }
+    let body = ''; for await (const chunk of request) body += chunk
+    response.end(JSON.stringify(assistantResponse(url.pathname, request.method, body ? JSON.parse(body) : {}, url.searchParams.has('conversation')))); return
+  }
   if (url.pathname === '/search') {
     response.setHeader('Content-Type', 'application/json')
     response.end(JSON.stringify(fixture(url.searchParams.get('q') || '')))
@@ -94,7 +137,12 @@ try {
   assert.equal(await page.evaluate(() => document.activeElement?.hasAttribute('data-command-voice-trigger')), true)
   checks.push('web focus restoration')
 
-  await page.route('**/api/mobile/v1/**', route => route.fulfill({ json: { results: [] } }))
+  await page.route('**/api/mobile/v1/**', route => {
+    const url = new URL(route.request().url())
+    if (!url.pathname.includes('/ai-assistant')) return route.fulfill({ json: { results: [] } })
+    if (!assistantAllowed) return route.fulfill({ status: 403, json: { message: 'Access was revoked.' } })
+    return route.fulfill({ json: assistantResponse(url.pathname, route.request().method(), route.request().postDataJSON() || {}, url.searchParams.has('conversation')) })
+  })
   await page.goto(mobileUrl + '/tests/browser/voice-navigation.html')
   const openMobile = () => page.getByRole('button', { name: 'Ask Everbranch', exact: true }).click()
   const search = async text => { await page.getByRole('textbox', { name: 'Page or record to find' }).fill(text); await page.getByRole('button', { name: 'Find', exact: true }).click() }
@@ -137,6 +185,101 @@ try {
   await page.keyboard.press('Escape')
   assert.equal(await page.getByRole('button', { name: 'Ask Everbranch', exact: true }).evaluate(node => node === document.activeElement), true)
   checks.push('mobile focus restoration')
+  assistantData.financial_summary = { available: true, source: 'Fictional QuickBooks report', period_start: '2026-10-01', period_end: '2026-10-16', currency: null, basis: 'cash', amounts_cents: { total_income: 105001, total_expenses: 10102, net_income: 94899 }, observed_at: '2026-10-16T12:00:00Z', stale: false, coverage: 'Fictional saved report totals only.' }
+  assistantData.actions = [{ id: 1, kind: 'internal_job_note', status: 'executed', payload: { job_title: 'Fictional panel work', body: 'Reviewed fictional internal note' }, digest: '0'.repeat(64), result_id: 1, can_undo: true }]
+  assistantData.actions_available = true
+  assistantData.note_jobs = [{ id: 1, title: 'Fictional panel work' }]
+  assistantData.reports_available = true
+  assistantData.report_audience = [{ id: 1, name: 'Fictional Alex' }]
+  await openMobile()
+  await page.getByRole('button', { name: 'Ask about my business' }).click()
+  await page.getByRole('status').filter({ hasText: 'Nothing is sent' }).waitFor()
+  assert.equal(assistantRequests, 0)
+  checks.push('mobile assistant view does not dispatch a provider request')
+  await page.getByRole('textbox', { name: 'Question', exact: true }).fill('Summarize the fictional work')
+  await page.getByRole('button', { name: 'Ask', exact: true }).click()
+  await page.getByText('Fictional answer:', { exact: false }).waitFor()
+  assert.equal(await page.locator('.assistant-messages img').count(), 0)
+  assert.equal(assistantRequests, 1)
+  checks.push('mobile contextual conversation renders generated text safely')
+  await page.getByRole('button', { name: 'Financial snapshot', exact: true }).click()
+  await page.getByText('Currency unrecorded', { exact: false }).waitFor()
+  await page.getByText('1,050.01', { exact: true }).waitFor()
+  checks.push('mobile saved financial totals preserve currency and period disclosure')
+  await page.getByRole('button', { name: 'Activity and approvals', exact: true }).click()
+  assert.equal(await page.getByRole('button', { name: 'Undo note', exact: true }).isDisabled(), true)
+  await page.getByRole('checkbox', { name: 'Remove this exact unchanged internal note.' }).check()
+  await page.getByRole('button', { name: 'Undo note', exact: true }).click()
+  await page.getByText('Fictional panel work · reversed', { exact: true }).waitFor()
+  checks.push('mobile supported undo requires an explicit exact-note review')
+  await page.getByRole('combobox', { name: 'Job', exact: true }).selectOption('1')
+  await page.getByRole('textbox', { name: 'Internal note', exact: true }).fill('Fictional customer requested a panel review')
+  await page.getByRole('button', { name: 'Prepare note preview', exact: true }).click()
+  await page.getByText('Fictional panel work · pending', { exact: true }).waitFor()
+  assert.equal(await page.getByRole('button', { name: 'Approve note', exact: true }).isDisabled(), true)
+  await page.getByRole('checkbox', { name: 'I reviewed this exact note and job.' }).check()
+  await page.getByRole('button', { name: 'Approve note', exact: true }).click()
+  await page.getByText('Fictional panel work · executed', { exact: true }).waitFor()
+  checks.push('mobile internal note preparation is separate from exact-preview approval')
+  await page.getByRole('button', { name: 'Weekly report', exact: true }).click()
+  await page.getByRole('combobox', { name: 'Audience', exact: true }).selectOption('team')
+  assert.equal(await page.getByRole('button', { name: 'Save weekly snapshot', exact: true }).isDisabled(), true)
+  await page.getByRole('checkbox', { name: 'Fictional Alex', exact: true }).check()
+  await page.getByRole('button', { name: 'Save weekly snapshot', exact: true }).click()
+  await page.getByText('Team edition · 60 activity entries', { exact: true }).waitFor()
+  await page.getByText('Fictional registered task events only.', { exact: false }).waitFor()
+  await page.getByRole('button', { name: 'Show more (10 remaining)', exact: true }).click()
+  await page.getByText('Fictional task 59', { exact: true }).waitFor()
+  checks.push('mobile weekly snapshots require team audience and disclose reconciled coverage with full pagination')
+  await page.getByRole('button', { name: 'Private memory', exact: true }).click()
+  await page.getByRole('textbox', { name: 'Remember this' }).fill('Use brief fictional summaries')
+  await page.keyboard.press('Tab')
+  assert.equal(await page.getByRole('button', { name: 'Save private memory' }).evaluate(node => node === document.activeElement), true)
+  checks.push('mobile assistant focus order includes textareas and select controls')
+  await page.getByRole('button', { name: 'Save private memory' }).click()
+  await page.getByRole('button', { name: 'Forget', exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Forget', exact: true }).click()
+  await page.getByRole('button', { name: 'Forget', exact: true }).waitFor({ state: 'hidden' })
+  checks.push('mobile explicit memory save and forget')
+  assistantAllowed = false
+  await page.getByRole('button', { name: 'Refresh conversation', exact: true }).click()
+  await page.getByRole('status').filter({ hasText: 'Access was revoked' }).waitFor()
+  assert.equal(await page.getByText('Fictional answer:', { exact: false }).count(), 0)
+  checks.push('mobile assistant revocation clears prior answers')
+  assistantAllowed = true
+  await page.goto(webUrl + '/assistant-preview')
+  await page.getByRole('button', { name: 'Ask Everbranch', exact: true }).click()
+  await page.getByRole('status').filter({ hasText: 'Review dictated text' }).waitFor()
+  assert.equal(assistantRequests, 1)
+  await page.getByRole('textbox', { name: 'Question', exact: true }).fill('Summarize this fictional workspace')
+  await page.getByRole('button', { name: 'Ask', exact: true }).click()
+  await page.getByText('Fictional answer:', { exact: false }).waitFor()
+  assert.equal(await page.locator('dialog img').count(), 0)
+  checks.push('web assistant dispatches only on Ask and escapes generated text')
+  await page.screenshot({ path: resolve(output, 'web-assistant.png') })
+  await page.getByRole('button', { name: 'Financial snapshot', exact: true }).click()
+  await page.getByText('Currency unrecorded', { exact: false }).waitFor()
+  await page.getByText('1,050.01', { exact: true }).waitFor()
+  checks.push('web saved financial totals preserve currency and period disclosure')
+  await page.screenshot({ path: resolve(output, 'web-financial-snapshot.png') })
+  await page.getByRole('button', { name: 'Weekly report', exact: true }).click()
+  await page.getByRole('button', { name: 'Save weekly snapshot', exact: true }).click()
+  await page.getByText('Executive edition · 60 activity entries', { exact: true }).waitFor()
+  assert.equal(new URL(await page.getByRole('link', { name: 'Print / Save as PDF', exact: true }).getAttribute('href')).origin, new URL(webUrl).origin)
+  checks.push('web weekly snapshot exposes authenticated same-origin print and coverage')
+  await page.setViewportSize({ width: 1360, height: 900 })
+  await page.screenshot({ path: resolve(output, 'web-weekly-report.png') })
+  await page.getByRole('button', { name: 'Conversation', exact: true }).click()
+  await page.getByRole('textbox', { name: 'Question', exact: true }).fill('An unsent question')
+  page.once('dialog', dialog => dialog.dismiss())
+  await page.getByRole('button', { name: 'Close assistant' }).click()
+  assert.equal(await page.getByRole('dialog').isVisible(), true)
+  checks.push('web assistant retains an unsent draft when closing is declined')
+  assistantAllowed = false
+  await page.getByRole('button', { name: 'Refresh conversation', exact: true }).click()
+  await page.getByRole('status').filter({ hasText: 'Access was revoked' }).waitFor()
+  assert.equal(await page.getByText('Fictional answer:', { exact: false }).count(), 0)
+  checks.push('web assistant revocation clears prior answers')
   assert.deepEqual(errors, [])
   console.log(JSON.stringify({ passed: checks.length, checks, output }, null, 2))
 } finally {

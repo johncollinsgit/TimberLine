@@ -1,3 +1,21 @@
+## Ask Everbranch (2026-10-16; local, disabled)
+
+- Read `docs/operations/everbranch-voice-runbook.md` and
+  `docs/architecture/everbranch-voice-acceptance.md` before extending the assistant.
+  Navigation uses deterministic authorized search. Business mode reuses AI Branch,
+  requires its current commercial/owner/admin access and an independent exact
+  tenant rollout gate. Landlord status is not a data-access grant.
+- Financial snapshots expose saved QuickBooks totals only; never infer currency,
+  basis or missing totals, combine channel revenue, refresh providers from a GET,
+  inject raw accounting into prompts or add accounting writes.
+- Reports are encrypted private, expiring registered-source snapshots, not a
+  complete business ledger. Selected team scope intersects current job access.
+  Preserve reauthorization on read/print and fail instead of returning partial
+  counts. Prune also works while runtime flags are off.
+- Note undo archives a precisely unchanged internal AI note and records a
+  compensating receipt. Any later model edit permanently removes automatic undo.
+  Never extend that promise to sent communications or changed evidence.
+
 ## Stripe and PayPal payment setup (2026-10-16; deployed, Wren setup pilot)
 
 - Read `docs/architecture/stripe-paypal-payments-plan.md` and

@@ -1,5 +1,18 @@
 # SYSTEM SNAPSHOT
 
+## Ask Everbranch assistant (2026-10-16; local fictional acceptance)
+
+- A default-off, tenant-allowlisted web panel/native sheet reuses AI Branch chat,
+  private memory, context, actions and usage. Reading the panel does not dispatch
+  a provider request. Owner/admin authorization remains unchanged.
+- Additional independent flags expose saved QuickBooks report totals and private
+  weekly snapshots of registered task events, current notes and customer activity.
+  Reports disclose incomplete sources and recheck scope before JSON/print export.
+- Internal note previews require exact approval. Unchanged AI notes support one
+  audited compensating archive; intervening edits invalidate undo permanently.
+- No new schema or activation. See the voice runbook and acceptance matrix for
+  evidence and open customer, triage, mail, phone, receptionist and device work.
+
 ## Ask Everbranch voice navigation (2026-10-16; local implementation)
 
 - Verified Mac restoration now has navigation-only action filtering, exact

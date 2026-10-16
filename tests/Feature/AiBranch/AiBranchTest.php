@@ -72,6 +72,100 @@ test('chat retrieves only allowed tenant fields and records encrypted history an
         ->and(DB::table('ai_branch_conversations')->value('messages'))->not->toContain('Summarize recent jobs');
 });
 
+test('the native assistant reuses private chat and memory without dispatching on view', function (): void {
+    [$tenant, $user] = aiBranchFixture('fictional-voice');
+    config()->set(['ai_branch.assistant_enabled' => true, 'ai_branch.assistant_tenant_ids' => [$tenant->id]]);
+    \Laravel\Sanctum\Sanctum::actingAs($user, ['mobile:read', 'mobile:write']);
+    $base = '/api/mobile/v1/workspaces/'.$tenant->slug.'/ai-assistant';
+    $this->getJson($base)->assertOk()->assertJsonPath('version', 1)->assertJsonPath('conversation', null);
+    Http::assertNothingSent();
+    $conversation = $this->postJson($base.'/conversations')->assertCreated()->json('conversation_id');
+    Http::fake(['api.openai.com/*' => Http::response(aiBranchResponse('Fictional answer.'))]);
+    $uuid = (string) Str::uuid();
+    $this->postJson($base.'/conversations/'.$conversation.'/messages', ['question' => 'Hello', 'request_id' => $uuid])->assertOk()->assertJsonPath('text', 'Fictional answer.');
+    $this->postJson($base.'/conversations/'.$conversation.'/messages', ['question' => 'Hello', 'request_id' => $uuid])->assertOk();
+    Http::assertSentCount(1);
+    $this->postJson($base.'/memories', ['body' => 'Use short summaries.', 'confirmed' => true])->assertCreated()->assertJsonPath('restart_required', true);
+    $memory = AiBranchMemory::query()->where('tenant_id', $tenant->id)->sole();
+    $this->getJson($base)->assertOk()->assertJsonPath('memories.0.body', 'Use short summaries.');
+    $this->deleteJson($base.'/memories/'.$memory->id)->assertOk();
+    expect(AiBranchMemory::query()->where('tenant_id', $tenant->id)->count())->toBe(0);
+});
+
+test('the native assistant gate and current membership protect every request', function (): void {
+    [$tenant, $user] = aiBranchFixture('fictional-voice');
+    \Laravel\Sanctum\Sanctum::actingAs($user, ['mobile:read', 'mobile:write']);
+    $base = '/api/mobile/v1/workspaces/'.$tenant->slug.'/ai-assistant';
+    $this->getJson($base)->assertNotFound();
+    config()->set(['ai_branch.assistant_enabled' => true, 'ai_branch.assistant_tenant_ids' => [$tenant->id]]);
+    $user->tenants()->updateExistingPivot($tenant->id, ['role' => 'member']);
+    $this->getJson($base)->assertForbidden();
+    $this->postJson($base.'/conversations')->assertForbidden();
+    Http::assertNothingSent();
+});
+
+test('native assistant rollout revocation during dispatch suppresses the answer and retains usage', function (): void {
+    [$tenant, $user] = aiBranchFixture('fictional-revocation');
+    config()->set(['ai_branch.assistant_enabled' => true, 'ai_branch.assistant_tenant_ids' => [$tenant->id]]);
+    \Laravel\Sanctum\Sanctum::actingAs($user, ['mobile:read', 'mobile:write']);
+    $base = '/api/mobile/v1/workspaces/'.$tenant->slug.'/ai-assistant';
+    $conversation = $this->postJson($base.'/conversations')->assertCreated()->json('conversation_id');
+    Http::fake(function () {
+        config()->set('ai_branch.assistant_tenant_ids', []);
+
+        return Http::response(aiBranchResponse('PRIVATE ANSWER'));
+    });
+    $this->postJson($base.'/conversations/'.$conversation.'/messages', ['question' => 'Hello', 'request_id' => (string) Str::uuid()])->assertNotFound()->assertDontSee('PRIVATE ANSWER');
+    expect(TenantAiUsageEvent::query()->sole()->status)->toBe('settled');
+    Http::assertSentCount(1);
+});
+
+test('native note preview approval and undo keep one receipt and reject another tenant job', function (): void {
+    [$tenant, $user] = aiBranchFixture('fictional-note');
+    [$other] = aiBranchFixture('fictional-other-note');
+    config()->set(['ai_branch.assistant_enabled' => true, 'ai_branch.assistant_tenant_ids' => [$tenant->id]]);
+    \Laravel\Sanctum\Sanctum::actingAs($user, ['mobile:read', 'mobile:write']);
+    $job = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'Fictional work', 'status' => 'open']);
+    $foreign = FieldServiceJob::create(['tenant_id' => $other->id, 'title' => 'FOREIGN JOB', 'status' => 'open']);
+    $base = '/api/mobile/v1/workspaces/'.$tenant->slug.'/ai-assistant';
+    $this->getJson($base)->assertOk()->assertJsonPath('actions_available', true)->assertJsonPath('note_jobs.0.id', $job->id)->assertDontSee('FOREIGN JOB');
+    $this->postJson($base.'/actions', ['job_id' => $foreign->id, 'body' => 'Forbidden', 'request_id' => (string) Str::uuid()])->assertNotFound();
+    $preview = $this->postJson($base.'/actions', ['job_id' => $job->id, 'body' => 'Fictional internal note', 'request_id' => (string) Str::uuid()])->assertCreated()->json();
+    expect(FieldServiceJobNote::count())->toBe(0);
+    $payload = ['digest' => $preview['digest'], 'decision' => 'approve', 'confirmed' => true];
+    $this->postJson($base.'/actions/'.$preview['action_id'].'/decision', $payload)->assertOk();
+    $this->postJson($base.'/actions/'.$preview['action_id'].'/decision', $payload)->assertOk();
+    expect(FieldServiceJobNote::count())->toBe(1);
+    $undo = ['digest' => $preview['digest'], 'request_id' => (string) Str::uuid(), 'confirmed' => true];
+    $this->postJson($base.'/actions/'.$preview['action_id'].'/undo', $undo)->assertOk()->assertJsonPath('status', 'executed');
+    $this->postJson($base.'/actions/'.$preview['action_id'].'/undo', $undo)->assertOk();
+    expect(FieldServiceJobNote::count())->toBe(0)->and(DB::table('field_service_job_notes')->count())->toBe(1);
+    Http::assertNothingSent();
+});
+
+test('assistant financial summaries expose only saved authoritative totals and stop on connector revocation', function (): void {
+    [$tenant, $user] = aiBranchFixture('fictional-finance');
+    config()->set(['ai_branch.assistant_enabled' => true, 'ai_branch.assistant_tenant_ids' => [$tenant->id], 'ai_branch.assistant_finance_enabled' => true]);
+    foreach (['integrations', 'accounting_command_center', 'quickbooks'] as $module) {
+        TenantModuleEntitlement::query()->create(['tenant_id' => $tenant->id, 'module_key' => $module, 'availability_status' => 'available', 'enabled_status' => 'enabled', 'billing_status' => 'included_in_plan', 'entitlement_source' => 'test']);
+    }
+    $connection = \App\Models\IntegrationConnection::query()->create(['tenant_id' => $tenant->id, 'provider' => 'quickbooks', 'status' => 'connected', 'access_token' => 'fictional-secret']);
+    $range = app(\App\Services\Accounting\AccountingDateRangeService::class)->resolve('current_month');
+    \App\Models\QuickBooksReportingSnapshot::query()->create([
+        'tenant_id' => $tenant->id, 'integration_connection_id' => $connection->id, 'range_key' => 'current_month',
+        'period_start' => $range['starts_at'], 'period_end' => $range['ends_at'], 'observed_at' => now()->subDays(2),
+        'metrics' => ['total_income' => '1000.01', 'total_expenses' => '200.02', 'net_income' => '799.99', 'accounting_method' => 'Cash', 'account_lines' => [['label' => 'PRIVATE LINE']]],
+    ]);
+    $summary = app(\App\Services\AiBranch\AiFinancialSummary::class)->capture($tenant, $user);
+    expect($summary['available'])->toBeTrue()->and($summary['amounts_cents']['total_income'])->toBe(100001)
+        ->and($summary['currency'])->toBeNull()->and($summary['basis'])->toBe('cash')->and($summary['stale'])->toBeTrue()
+        ->and(json_encode($summary))->not->toContain('PRIVATE LINE', 'fictional-secret');
+    $connection->update(['status' => 'disconnected']);
+    $unavailable = app(\App\Services\AiBranch\AiFinancialSummary::class)->capture($tenant, $user);
+    expect($unavailable['available'])->toBeFalse()->and($unavailable)->not->toHaveKey('amounts_cents');
+    Http::assertNothingSent();
+});
+
 test('chat request replay is idempotent and changed inputs conflict', function (): void {
     [$tenant, $user] = aiBranchFixture();
     Http::fake(['api.openai.com/*' => Http::response(aiBranchResponse())]);
@@ -216,6 +310,34 @@ test('note approval requires immutable preview and executes only once without de
     $actions->decide($tenant, $user, $action->id, $action->digest, true);
     expect(FieldServiceJobNote::query()->count())->toBe(1)->and($job->fresh()->status)->toBe('scheduled')
         ->and(FieldServiceJobNote::query()->sole()->metadata['visibility'])->toBe('owner');
+    Http::assertNothingSent();
+});
+
+test('an unchanged AI internal note has one audited compensating undo', function (): void {
+    [$tenant, $user] = aiBranchFixture();
+    $job = FieldServiceJob::query()->create(['tenant_id' => $tenant->id, 'title' => 'Fictional panel work', 'status' => 'scheduled']);
+    $actions = app(AiBranchActions::class);
+    $action = $actions->propose($tenant, $user, $job->id, 'Reviewed fictional note', (string) Str::uuid());
+    $actions->decide($tenant, $user, $action->id, $action->digest, true);
+    $uuid = (string) Str::uuid();
+    $receipt = $actions->undo($tenant, $user, $action->id, $action->digest, $uuid);
+    expect($actions->undo($tenant, $user, $action->id, $action->digest, $uuid)->id)->toBe($receipt->id)
+        ->and(FieldServiceJobNote::query()->count())->toBe(0)->and(DB::table('field_service_job_notes')->count())->toBe(1)->and($action->fresh()->status)->toBe('reversed')
+        ->and(\App\Models\LandlordOperatorAction::query()->where('action_type', 'ai_branch.note_undo')->count())->toBe(1);
+    Http::assertNothingSent();
+});
+
+test('intervening note edits prevent undo even if the text is subsequently restored', function (): void {
+    [$tenant, $user] = aiBranchFixture();
+    $job = FieldServiceJob::query()->create(['tenant_id' => $tenant->id, 'title' => 'Fictional panel work', 'status' => 'scheduled']);
+    $actions = app(AiBranchActions::class);
+    $action = $actions->propose($tenant, $user, $job->id, 'Original', (string) Str::uuid());
+    $actions->decide($tenant, $user, $action->id, $action->digest, true);
+    $note = FieldServiceJobNote::query()->sole();
+    $note->update(['body' => 'A teammate edited this']);
+    $note->update(['body' => 'Original']);
+    expect(fn () => $actions->undo($tenant, $user, $action->id, $action->digest, (string) Str::uuid()))->toThrow(HttpException::class);
+    expect(FieldServiceJobNote::query()->count())->toBe(1)->and($action->fresh()->status)->toBe('executed');
     Http::assertNothingSent();
 });
 

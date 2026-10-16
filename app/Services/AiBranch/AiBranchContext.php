@@ -44,7 +44,7 @@ class AiBranchContext
     public function job(Tenant $tenant, User $user, int $id): FieldServiceJob
     {
         abort_unless(app(TenantModuleAccessResolver::class)->canAccess($tenant->id, 'field_service') && $this->clients->allows($user, $tenant), 403);
-        $job = FieldServiceJob::query()->where('tenant_id', $tenant->id)->whereKey($id)->whereNull('archived_at')->firstOrFail();
+        $job = FieldServiceJob::query()->where('tenant_id', $tenant->id)->whereKey($id)->whereNull('archived_at')->notGeneratedQuickBooksInvoice()->firstOrFail();
         abort_unless($this->jobs->canAccessJob($user, $tenant, $job) && $this->jobs->canManageJobs($user, $tenant), 403);
 
         return $job;

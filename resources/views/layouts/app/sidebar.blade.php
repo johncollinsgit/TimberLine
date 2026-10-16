@@ -415,6 +415,9 @@
   :context-label="$workspaceLabel"
   :description="$commandSearchDescription"
 />
+@if(!$isLandlordShell && $activeTenant instanceof \App\Models\Tenant && $user && app(\App\Services\AiBranch\AiAssistantAccess::class)->allows($activeTenant, $user))
+  <x-app-ai-assistant :tenant="$activeTenant" />
+@endif
 <script>
   (function () {
     let timeoutId;
