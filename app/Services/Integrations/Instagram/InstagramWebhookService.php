@@ -59,6 +59,9 @@ class InstagramWebhookService
                     continue;
                 }
 
+                if (data_get($event, 'message.is_echo')) {
+                    continue;
+                }
                 $accountId = trim((string) (data_get($event, 'recipient.id') ?: data_get($entry, 'id')));
                 $senderId = trim((string) data_get($event, 'sender.id'));
                 $messageId = trim((string) data_get($event, 'message.mid'));
@@ -118,12 +121,14 @@ class InstagramWebhookService
 
     protected function connectionForAccount(string $accountId): ?IntegrationConnection
     {
-        return IntegrationConnection::query()
+        $matches = IntegrationConnection::query()
             ->forAllTenants()
             ->where('provider', 'instagram')
             ->where('status', IntegrationConnection::STATUS_CONNECTED)
             ->where('external_account_id', hash_hmac('sha256', $accountId, (string) config('app.key')))
-            ->first();
+            ->limit(2)->get();
+
+        return $matches->count() === 1 ? $matches->first() : null;
     }
 
     protected function timestamp(mixed $value): Carbon

@@ -1012,7 +1012,7 @@ class WorkflowRunItemExecutionService
 
             throw $exception;
         } catch (Throwable $exception) {
-            $uncertain = $context->componentKey === 'everbranch.email.send';
+            $uncertain = $exception instanceof WorkflowActionOutcomeUncertain || $context->componentKey === 'everbranch.email.send';
             $receipt->forceFill([
                 'status' => $uncertain
                     ? AutomationWorkflowActionReceipt::STATUS_UNCERTAIN
@@ -1022,7 +1022,7 @@ class WorkflowRunItemExecutionService
             ])->save();
             if ($uncertain) {
                 throw new WorkflowActionOutcomeUncertain(
-                    'Email delivery outcome is uncertain. Review the provider before retrying.',
+                    'Delivery outcome is uncertain. Review the provider before retrying.',
                     previous: $exception,
                 );
             }

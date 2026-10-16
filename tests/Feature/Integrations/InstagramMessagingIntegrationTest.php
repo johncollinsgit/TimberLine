@@ -53,6 +53,7 @@ test('instagram oauth connects a professional account to only the selected works
             'access_token' => 'instagram-access-token',
             'expires_in' => 5184000,
         ]),
+        'https://graph.instagram.com/access_token*' => Http::response(['access_token' => 'instagram-access-token', 'expires_in' => 5184000]),
         'https://graph.instagram.com/v24.0/me*' => Http::response([
             'user_id' => 'ig-account-42',
             'username' => 'modernforestry',

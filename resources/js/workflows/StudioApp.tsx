@@ -192,8 +192,11 @@ export function StudioApp({ bootstrap }: { bootstrap: WorkflowStudioBootstrap })
   const [busyAction, setBusyAction] = useState<"creating" | "testing" | "publish" | "test-run" | "status" | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Array<{path: string; message: string}>>([]);
   const [testRunNotice, setTestRunNotice] = useState<{ message: string; url?: string } | null>(null);
   const [overflowOpen, setOverflowOpen] = useState(false);
+  const [workspaceView, setWorkspaceView] = useState<"overview" | "build" | "activity" | "settings">("build");
+  const [outlineOpen, setOutlineOpen] = useState(true);
 
   const definitionRef = useRef(definition);
   const workflowRef = useRef(workflow);
@@ -238,6 +241,32 @@ export function StudioApp({ bootstrap }: { bootstrap: WorkflowStudioBootstrap })
       : [],
     [components, definition, selectedStepId],
   );
+
+  const captureFieldErrors = useCallback((error: unknown) => {
+    const errors = error instanceof WorkflowApiError ? error.payload.errors : null;
+    setFieldErrors(errors && typeof errors === "object" ? Object.entries(errors).map(([path, value]) => ({path, message: Array.isArray(value) ? String(value[0]) : String(value)})) : []);
+  }, []);
+  const goToFieldError = (path: string) => {
+    const parts = path.replace(/^(definition|draft_definition)\./, "").split(".");
+    let cursor: unknown = definitionForApi(definitionRef.current);
+    let target: string | null = null;
+    for (const part of parts) {
+      if (!cursor || typeof cursor !== "object") break;
+      const object = cursor as Record<string, unknown>;
+      if (typeof object.id === "string" && typeof object.kind === "string") target = object.id;
+      cursor = object[part];
+    }
+    if (!target) { setWorkspaceView("settings"); return; }
+    setSelectedStepId(target); setWorkspaceView("build");
+    window.requestAnimationFrame(() => {
+      const tab = parts.includes("connection_id") ? "account" : "configure";
+      document.querySelector<HTMLButtonElement>(`.eb-step-inspector [role="tab"][aria-controls$="-panel-${tab}"]`)?.click();
+      window.requestAnimationFrame(() => {
+        const control = document.getElementById(`eb-config-${parts[parts.length - 1]}`) ?? document.querySelector<HTMLElement>(`.eb-step-inspector [role="tabpanel"]:not([hidden]) input, .eb-step-inspector [role="tabpanel"]:not([hidden]) select`);
+        control?.focus(); control?.scrollIntoView({block: "nearest"});
+      });
+    });
+  };
 
   const markChanged = useCallback(() => {
     setChangeVersion((value) => {
@@ -441,10 +470,12 @@ export function StudioApp({ bootstrap }: { bootstrap: WorkflowStudioBootstrap })
         } else {
           setSaveState("saved");
           setErrorMessage("");
+          setFieldErrors([]);
           setAnnouncement("Draft saved");
         }
         return true;
       } catch (error) {
+        captureFieldErrors(error);
         if (error instanceof WorkflowApiError && error.status === 409) {
           setSaveState("conflict");
           setErrorMessage("A newer draft was saved elsewhere. Reload before making more changes.");
@@ -551,6 +582,7 @@ export function StudioApp({ bootstrap }: { bootstrap: WorkflowStudioBootstrap })
       if (showUrl) window.history.replaceState({}, "", showUrl);
       return true;
     } catch (error) {
+        captureFieldErrors(error);
       setSaveState("error");
       setErrorMessage(readableError(error));
       setAnnouncement("Workflow could not be created");
@@ -707,6 +739,7 @@ export function StudioApp({ bootstrap }: { bootstrap: WorkflowStudioBootstrap })
       }
       setAnnouncement(hasNewerChanges ? "Step test finished for the prior saved draft" : "Step test passed");
     } catch (error) {
+        captureFieldErrors(error);
       const message = readableError(error);
       setErrorMessage(message);
       if (changeVersionRef.current === testVersion) {
@@ -795,6 +828,7 @@ export function StudioApp({ bootstrap }: { bootstrap: WorkflowStudioBootstrap })
         setAnnouncement(nextWorkflow.status === "active" ? "Workflow turned on" : "Workflow paused");
       }
     } catch (error) {
+        captureFieldErrors(error);
       setErrorMessage(readableError(error));
       if (action === "test-run") {
         setTestRunNotice({
@@ -835,6 +869,7 @@ export function StudioApp({ bootstrap }: { bootstrap: WorkflowStudioBootstrap })
       mergeOperationalPayload(payload);
       setAnnouncement(action === "release" ? "Held items released" : "Held items discarded");
     } catch (error) {
+        captureFieldErrors(error);
       setErrorMessage(readableError(error));
       setAnnouncement("Held-item action failed");
     } finally {
@@ -891,6 +926,21 @@ export function StudioApp({ bootstrap }: { bootstrap: WorkflowStudioBootstrap })
     conflict: "Newer draft found",
   }[saveState];
   const backUrl = endpoints.index || "/workflows";
+  const outlineSteps: Array<{ step: WorkflowStep; depth: number; branch?: string }> = [];
+  const visitSteps = (steps: WorkflowStep[], depth = 0, branch?: string) => {
+    steps.forEach((step) => {
+      outlineSteps.push({ step, depth, branch });
+      (step.branches ?? []).forEach((path) => visitSteps(path.steps, depth + 1, path.name || "Path"));
+    });
+  };
+  if (definition.trigger) outlineSteps.push({ step: definition.trigger, depth: 0 });
+  visitSteps(definition.steps);
+  const marketingWorkflow = outlineSteps.some(({ step }) => step.component_key.startsWith("everbranch.marketing."));
+  const chooseSetupStep = (kind: "audience" | "message" | "timing") => {
+    const target = kind === "audience" ? definition.trigger : outlineSteps.find(({ step }) => kind === "message" ? step.kind === "action" : step.kind === "delay")?.step;
+    setSelectedStepId(target?.id ?? definition.trigger?.id ?? null);
+    setWorkspaceView("build");
+  };
 
   return (
     <div className="eb-workflow-studio">
@@ -923,7 +973,8 @@ export function StudioApp({ bootstrap }: { bootstrap: WorkflowStudioBootstrap })
               {saveCopy}
             </span>
             <span aria-hidden="true">·</span>
-            <span>{workflow.published_version ? `Version ${workflow.published_version}` : "Not published"}</span>
+            <span>{workflow.published_version ? `Live version ${workflow.published_version}` : "Not published"}</span>
+            {workflow.published_version && (workflow.has_unpublished_changes || changeVersion > 0) && <span>· Unpublished changes</span>}
           </div>
         </div>
 
@@ -1012,7 +1063,12 @@ export function StudioApp({ bootstrap }: { bootstrap: WorkflowStudioBootstrap })
         </div>
       </header>
 
+      <nav className="eb-studio-nav" aria-label="Workflow views">
+        {(["overview", "build", "activity", "settings"] as const).map((view) => <button type="button" key={view} aria-current={workspaceView === view ? "page" : undefined} onClick={() => setWorkspaceView(view)}>{view.charAt(0).toUpperCase() + view.slice(1)}</button>)}
+        <span className="eb-publish-help" role="status">{!canPublish ? publishReason : "Tests passed for this draft. Ready to publish."}</span>
+      </nav>
       <div className="eb-studio-messages">
+        {fieldErrors.length > 0 && <div className="eb-studio-alert" role="alert"><strong>Review these fields</strong><ul>{fieldErrors.map((error) => <li key={error.path}><button type="button" onClick={() => goToFieldError(error.path)}>{error.message} →</button></li>)}</ul></div>}
         {errorMessage && (
           <div className={`eb-studio-alert ${saveState === "conflict" ? "is-conflict" : ""}`} role="alert">
             <span>
@@ -1041,7 +1097,22 @@ export function StudioApp({ bootstrap }: { bootstrap: WorkflowStudioBootstrap })
         )}
       </div>
 
-      <div className={`eb-studio-workspace ${selectedStep ? "has-inspector" : ""}`}>
+      {workspaceView !== "build" && <section className="eb-studio-overview">
+        {workspaceView === "overview" && <>
+          <h2>How this workflow works</h2>
+          <p><strong>Starts with:</strong> {componentForStep(components, definition.trigger)?.label ?? "Choose a trigger"}</p>
+          <p><strong>Then:</strong> {outlineSteps.filter(({step}) => step.kind !== "trigger").map(({step}) => componentForStep(components, step)?.label ?? step.kind).join(" → ") || "Add what happens next."}</p>
+          {marketingWorkflow && <><p>Messages require an approved audience and exact published version. Follow-ups stop after a reply, purchase, opt-out, complaint, or human takeover.</p><div className="md-actions"><button className="eb-secondary-button" onClick={() => chooseSetupStep("audience")}>1. Review audience</button><button className="eb-secondary-button" onClick={() => chooseSetupStep("message")}>2. Review content</button><button className="eb-secondary-button" onClick={() => chooseSetupStep("timing")}>3. Review timing and test</button></div></>}
+          <p>{workflow.published_version ? `Live version ${workflow.published_version} remains in effect while you edit the draft.` : "This draft cannot run until it is tested and published."}</p>
+        </>}
+        {workspaceView === "activity" && <><h2>Activity and run results</h2><p>Review actual attempts, failures, delayed items, and recorded outcomes.</p>{endpoints.history && <a className="eb-secondary-button" href={endpoints.history}>Open run history</a>}<p>Tests describe this draft. Historical runs keep their original published version.</p></>}
+        {workspaceView === "settings" && <><h2>Workflow settings</h2><p>Checks every {definition.settings.poll_interval_minutes} minutes. Connections and draft changes are checked again before publication.</p>{connectionsUrl && <a className="eb-secondary-button" href={connectionsUrl}>Manage connections</a>}<p>Use the status control to pause or resume. Publishing requires fresh tests after each draft change.</p></>}
+      </section>}
+      <div hidden={workspaceView !== "build"} className={`eb-studio-workspace ${selectedStep ? "has-inspector" : ""}`}>
+        <aside className={`eb-studio-outline ${outlineOpen ? "" : "is-collapsed"}`} aria-label="Step outline">
+          <button type="button" aria-expanded={outlineOpen} aria-label={outlineOpen ? "Hide step outline" : "Show step outline"} onClick={() => setOutlineOpen(!outlineOpen)}>{outlineOpen ? "Hide step outline" : "☰"}</button>
+          {outlineOpen && outlineSteps.map(({step, depth, branch}, index) => <button type="button" key={step.id} style={{paddingLeft: 8 + depth * 12}} aria-current={selectedStepId === step.id ? "step" : undefined} onClick={() => setSelectedStepId(step.id)}>{branch && <small>{branch} · </small>}{index + 1}. {componentForStep(components, step)?.label ?? step.kind}</button>)}
+        </aside>
         <WorkflowCanvas
           definition={definition}
           components={components}

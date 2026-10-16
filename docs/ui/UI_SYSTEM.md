@@ -170,6 +170,7 @@ Every UI change must classify its destination before implementation:
 | Website products, orders, customers | Searchable list / object detail | Website Commerce |
 | Customer Loop | Searchable/actionable list + guided launcher | Marketing |
 | Workflow Studio | Immersive builder | Workflow Studio |
+| Marketing Desk | Daily dashboard / calendar / inbox detail | Marketing + Bud; shared workflow runtime |
 | Shopify Backstage | Shared shell / list / detail | Embedded shell |
 
 Future changes must extend this table rather than inventing a page-local visual

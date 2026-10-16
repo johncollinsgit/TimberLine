@@ -142,6 +142,9 @@ class UnifiedAppNavigationService
                 || $this->moduleStateRelevant($moduleStates['birthdays'] ?? null);
 
             $marketingChildren = $this->marketingNavigationChildren($tenantId !== null, $birthdaysRelevant, $tenantId !== null && Route::has('customer-loop.index'));
+            if ($tenantId && app(\App\Services\Marketing\Desk\MarketingDeskAccess::class)->available($tenantId)) {
+                array_unshift($marketingChildren, ['key' => 'marketing-desk', 'icon' => 'sparkles', 'label' => 'Marketing desk', 'href' => route('marketing.desk.index'), 'current' => request()->routeIs('marketing.desk.*')]);
+            }
             $marketingCurrent = collect($marketingChildren)->contains(
                 fn (array $child): bool => (bool) ($child['current'] ?? false)
             );

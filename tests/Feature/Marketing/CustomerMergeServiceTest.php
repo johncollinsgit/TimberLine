@@ -242,6 +242,7 @@ test('every profile-owned foreign key has an explicit merge policy', function ()
     $registry = app(MarketingProfileMergeReferenceRegistry::class);
     $handled = collect($registry->directReferences())->flatMap(fn (array $columns, string $table) => collect($columns)->map(fn (string $column) => $table.'.'.$column))
         ->merge(collect($registry->conflictReferences())->map(fn (array $policy, string $table) => $table.'.'.$policy['column']))
+        ->merge(collect($registry->immutableReferences())->flatMap(fn (array $columns, string $table) => collect($columns)->map(fn (string $column) => $table.'.'.$column)))
         ->merge(['candle_cash_transactions.marketing_profile_id', 'candle_cash_balances.marketing_profile_id'])
         ->all();
     // Historical evidence is immutable, not a live customer relationship.

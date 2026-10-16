@@ -1,6 +1,7 @@
 <?php
 
 require __DIR__.'/highlevel.php';
+require __DIR__.'/marketing-desk.php';
 
 use App\Http\Controllers\AccountingCommandCenterController;
 use App\Http\Controllers\AdminMasterDataController;
@@ -794,6 +795,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->get('/subscriptions', [\App\Http\Controllers\SubscriptionWorkspaceController::class, 'index'])
         ->name('subscriptions.workspace.index');
 
+    Route::middleware(['tenant.access', 'module:subscriptions'])->prefix('subscriptions/recharge')->name('subscriptions.recharge.')->group(function (): void {
+        Route::get('/', [\App\Http\Controllers\SubscriptionRechargeController::class, 'index'])->name('index');
+        Route::get('/records/{resource}', [\App\Http\Controllers\SubscriptionRechargeController::class, 'show'])->whereNumber('resource')->name('show');
+        Route::get('/settings/{category}', [\App\Http\Controllers\SubscriptionRechargeController::class, 'settings'])->whereIn('category', array_keys(\App\Services\Subscriptions\SubscriptionRechargeManualSettingsService::SOURCE_PATHS))->name('settings');
+        Route::post('/source', [\App\Http\Controllers\SubscriptionRechargeController::class, 'source'])->middleware('throttle:10,1')->name('source');
+        Route::post('/verify', [\App\Http\Controllers\SubscriptionRechargeController::class, 'verify'])->middleware('throttle:10,1')->name('verify');
+        Route::post('/capture', [\App\Http\Controllers\SubscriptionRechargeController::class, 'capture'])->middleware('throttle:20,1')->name('capture');
+        Route::post('/prepare', [\App\Http\Controllers\SubscriptionRechargeController::class, 'prepare'])->middleware('throttle:20,1')->name('prepare');
+    });
+
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
         ->get('/sales-channels', [SalesChannelController::class, 'index'])
         ->name('sales-channels.index');
@@ -974,6 +985,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->prefix('workspaces/{tenant:slug}/integrations/instagram')
         ->name('integrations.instagram.')
         ->group(function (): void {
+            Route::post('/subscribe', [InstagramConnectionController::class, 'subscribe'])->name('subscribe');
             Route::get('/connect', [InstagramConnectionController::class, 'connect'])->name('connect');
         });
 

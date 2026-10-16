@@ -33,18 +33,22 @@ class WorkflowComponentCatalog
      */
     public function publicCatalog(): array
     {
+        $tenantId = app(\App\Support\Tenancy\TenantContext::class)->id();
+        $marketing = $tenantId && app(\App\Services\Marketing\Desk\MarketingDeskAccess::class)->available($tenantId);
+        $visible = fn (array $entry): bool => $marketing || (! str_starts_with((string) ($entry['key'] ?? ''), 'everbranch.marketing.') && ! str_starts_with((string) ($entry['key'] ?? ''), 'marketing_'));
+
         return [
             'components' => array_values(array_map(
                 fn (array $component): array => $this->publicComponent($component),
-                $this->components()
+                array_filter($this->components(), $visible)
             )),
             'roadmap' => array_values(array_map(
                 fn (array $component): array => $this->publicComponent($component),
-                $this->roadmap()
+                array_filter($this->roadmap(), $visible)
             )),
             'templates' => array_values(array_map(
                 fn (array $template): array => $this->publicTemplate($template),
-                $this->templates()
+                array_filter($this->templates(), $visible)
             )),
         ];
     }
@@ -98,6 +102,7 @@ class WorkflowComponentCatalog
     public function templates(): array
     {
         return [
+            ...(config('marketing_desk.enabled') ? app(\App\Services\Marketing\Desk\MarketingWorkflowCatalog::class)->recipes() : []),
             'asana_to_google_calendar' => [
                 'key' => 'asana_to_google_calendar',
                 'name' => 'Asana tasks to Google Calendar',
@@ -793,6 +798,74 @@ class WorkflowComponentCatalog
             ),
         ];
 
+        $definitions[] = $this->componentDefinition(
+            key: 'everbranch.marketing.event', label: 'Customer marketing milestone',
+            description: 'Verified subscription, inquiry, fulfillment, sample delivery or inactivity in this workspace.',
+            kind: 'trigger', provider: 'everbranch', providerLabel: 'Everbranch', category: 'apps', icon: 'everbranch',
+            handler: \App\Services\Automation\V2\Operations\Native\MarketingEventTriggerOperation::class,
+            connectionRequired: false, testPolicy: 'sample_read',
+            configFields: [
+                $this->configField('audience', 'Audience', 'select', true, options: ['retail', 'wholesale', 'services']),
+                $this->configField('event', 'Milestone', 'select', true, options: ['subscription', 'segment', 'inquiry', 'fulfilled', 'sample_delivered', 'completed', 'inactive_90', 'inactive_60', 'inbound']),
+                $this->configField('store_key', 'Store key (blank for workspace)', 'string'),
+            ], outputFields: [
+                $this->schemaField('marketing_profile_id', 'Customer profile', 'string'),
+                $this->schemaField('store_key', 'Store', 'string'),
+                $this->schemaField('marketing_event_key', 'Milestone identity', 'string'),
+                $this->schemaField('wholesale_prospect_id', 'Wholesale prospect', 'string'),
+            ],
+        );
+        foreach (['email', 'sms'] as $channel) {
+            $definitions[] = $this->componentDefinition(
+                key: 'everbranch.marketing.'.$channel.'.send', label: 'Send approved marketing '.$channel,
+                description: 'Send only to an eligible profile under an approved workflow and audience policy.',
+                kind: 'action', provider: 'everbranch', providerLabel: 'Everbranch', category: 'apps', icon: 'everbranch',
+                handler: \App\Services\Automation\V2\Operations\Native\MarketingSendActionOperation::class,
+                connectionRequired: false, testPolicy: 'dry_run', configFields: [
+                    $this->configField('marketing_profile_id', 'Customer profile', 'mapped_value', true),
+                    $this->configField('audience', 'Audience', 'select', true, options: ['retail', 'wholesale', 'services']),
+                    $this->configField('subject', 'Subject', 'string', true),
+                    $this->configField('body', 'Approved message', 'string', true),
+                ], outputFields: [$this->schemaField('status', 'Delivery status', 'string')],
+            );
+        }
+        $definitions[] = $this->componentDefinition(
+            key: 'everbranch.marketing.follow_up.prepare', label: 'Prepare wholesale follow-up task',
+            description: 'Add a review task to the existing wholesale prospect workflow.', kind: 'action',
+            provider: 'everbranch', providerLabel: 'Everbranch', category: 'apps', icon: 'everbranch',
+            handler: \App\Services\Automation\V2\Operations\Native\MarketingFollowUpActionOperation::class,
+            connectionRequired: false, testPolicy: 'dry_run', configFields: [
+                $this->configField('marketing_profile_id', 'Customer profile', 'mapped_value', true),
+                $this->configField('title', 'Task title', 'string', true),
+            ], outputFields: [$this->schemaField('status', 'Task status', 'string')],
+        );
+        $definitions[] = $this->componentDefinition(
+            key: 'everbranch.marketing.schedule', label: 'Scheduled marketing audience',
+            description: 'Enroll an approved audience once per local day. Missed days are skipped.', kind: 'trigger',
+            provider: 'everbranch', providerLabel: 'Everbranch', category: 'apps', icon: 'everbranch',
+            handler: \App\Services\Automation\V2\Operations\Native\MarketingScheduleTriggerOperation::class,
+            connectionRequired: false, testPolicy: 'sample_read', configFields: [
+                $this->configField('audience', 'Audience', 'select', true, options: ['retail', 'wholesale', 'services']),
+                $this->configField('channel', 'Consent channel', 'select', true, options: ['email', 'sms'], default: 'email'),
+                $this->configField('store_key', 'Store key', 'string'),
+                $this->configField('time', 'Workspace local time', 'string', true, default: '09:00'),
+                $this->configField('days', 'Days', 'select', true, options: ['daily', 'weekdays'], default: 'weekdays'),
+            ], outputFields: [
+                $this->schemaField('marketing_profile_id', 'Customer profile', 'string'),
+                $this->schemaField('store_key', 'Store', 'string'),
+                $this->schemaField('marketing_event_key', 'Schedule identity', 'string'),
+            ],
+        );
+        if (! config('marketing_desk.enabled')) {
+            foreach ($definitions as &$definition) {
+                if (str_starts_with($definition['key'], 'everbranch.marketing.')) {
+                    $definition['available'] = false;
+                    $definition['availability'] = 'roadmap';
+                }
+            }
+            unset($definition);
+        }
+
         return collect($definitions)->keyBy('key')->all();
     }
 
@@ -868,7 +941,7 @@ class WorkflowComponentCatalog
             'placeholder' => $placeholder,
             'min' => $min,
             'max' => $max,
-            'options' => $options,
+            'options' => array_map(fn ($option) => is_array($option) ? $option : ['value' => (string) $option, 'label' => ucfirst(str_replace('_', ' ', (string) $option))], $options),
             'default' => $default,
         ], fn (mixed $value, string $field): bool => match ($field) {
             'required' => true,
@@ -925,7 +998,7 @@ class WorkflowComponentCatalog
                 $field['type'] = match ($field['type'] ?? 'string') {
                     'integer' => 'number',
                     'mapped_value' => 'mapping',
-                    'string' => 'text',
+                    'string' => ($field['key'] ?? '') === 'body' ? 'textarea' : 'text',
                     default => $field['type'] ?? 'text',
                 };
 

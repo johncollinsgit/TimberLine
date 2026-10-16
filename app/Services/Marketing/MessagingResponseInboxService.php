@@ -38,7 +38,7 @@ class MessagingResponseInboxService
      */
     public function index(int $tenantId, ?string $storeKey, array $filters = []): array
     {
-        $channel = in_array(($filters['channel'] ?? null), ['sms', 'email', 'instagram', 'all'], true)
+        $channel = in_array(($filters['channel'] ?? null), ['sms', 'email', 'instagram', 'facebook', 'all'], true)
             ? (string) $filters['channel']
             : 'sms';
         $search = trim((string) ($filters['search'] ?? ''));
@@ -173,7 +173,11 @@ class MessagingResponseInboxService
         $body = trim((string) $validated['body']);
         $subject = $this->nullableString($validated['subject'] ?? null);
 
-        if ($conversation->channel === 'instagram') {
+        app(\App\Services\Marketing\Desk\ReplyAutomationService::class)->takeover($tenantId, $conversationId);
+
+        if ($conversation->channel === 'facebook') {
+            app(\App\Services\Marketing\Desk\FacebookMessagingService::class)->sendReply($conversation, $body, $actor);
+        } elseif ($conversation->channel === 'instagram') {
             $this->instagramMessagingService->sendReply($conversation, $body, $actor);
         } elseif ($conversation->channel === 'sms') {
             if ($this->isMobileAppConversation($conversation)) {

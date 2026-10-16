@@ -14,6 +14,44 @@
   See `docs/architecture/stripe-paypal-payments-plan.md` and
   `docs/operations/tenant-payment-setup.md` before continuing.
 
+## Recharge customer/settings rollout preparation (2026-10-16; disabled)
+
+- The owner confirmed Recharge handles Modern Forestry's active subscriptions and
+  requested customer/settings parity preparation without activation. A separate
+  tenant-scoped, query-only source lane retains encrypted immutable credentials,
+  complete accepted captures and proposed local drafts. It creates no operational
+  customers, provider changes, card charges, notifications or cutover.
+- `/subscriptions/recharge` provides secure private source setup, explicit bounded
+  capture, customer/address/subscription review and exact field comparisons. Page
+  rendering is offline. Read flags default false/empty independently of all live
+  operations. Source credentials and expected Recharge store identity are required;
+  no configured production credential or actual source reconciliation was found.
+- Versioned manual settings observations and exact isolated drafts retain source
+  provenance, missing fields and nulls; tenant managers can compare them privately.
+  Recharge reports an incomplete Shopify Checkout conversion with legacy
+  Braintree/PayPal subscribers. No source setting was changed.
+- Full settings/history/vault parity remains unverified. API store facts do not
+  prove notification, dunning, portal, shipping/tax or workflow equivalence; absent
+  resource families remain coverage gaps. See
+  `docs/operations/everbranch-recharge-rollout-preparation.md`.
+
+## 2026-10-16 — Marketing Desk and Automation Studio (implemented, disabled)
+
+- Shared `/marketing/desk` adds Today, Bud, a social calendar, measured best posts,
+  a four-channel inbox, recipes, versioned approved knowledge and owner settings.
+- Marketing reuses canonical profiles, campaign delivery/consent, the tenant AI
+  ledger and Workflow Studio v2. New execution requires explicit tenant allowlists,
+  independent delivery/AI/Meta flags and recorded approvals. No production
+  activation, provider send, published post or billing change was performed.
+- Studio gains a wider directory, connection summaries, Overview/Build/Activity/
+  Settings, an outline, fit to view and clearer draft/live/test states. Existing
+  workflow versions and operational Asana/Calendar behavior remain compatible.
+- Eleven additive tables retain approvals, enrollment, cost-only usage references,
+  social attempts and exclusive account binding. Unknown external outcomes never
+  automatically resend. Profile merges cannot transfer marketing permission.
+- Read `docs/operations/marketing-desk.md` for setup, exact boundaries, verification
+  and rollback. Real Meta review/provider tests and merchant acceptance gate launch.
+
 ## Modern Forestry AI purchase preparation (2026-10-16; staged)
 
 - The user approved an AI-only Growth purchase at $99/month and a separate
@@ -49,7 +87,7 @@
 - Read `docs/architecture/everbranch-ai-implementation.md` and `docs/operations/everbranch-ai-runbook.md` before continuing. Additive schema, daily retention, an audited usage reconciliation command and AI-specific tests are included. Provider and commercial activation still require a named approved pilot.
 
 
-## Subscriptions Phase 2 provider evidence (2026-10-15; staged, reads disabled)
+## Subscriptions Phase 2 provider evidence (2026-10-15; deployed, reads disabled)
 
 - A separate query-only Shopify adapter verifies tenant-owned Shop/App/installation
   identity and immutable encrypted credential revisions. Explicit manager-triggered
@@ -69,6 +107,10 @@
   and synthetic desktop/mobile browser checks passed. The disposable baseline,
   protected CI and deployment gate still govern release. See
   `docs/operations/everbranch-subscriptions-provider-reads.md` for operational limits.
+- PR #402 deployed at `f62584af` through protected run `38821001498` / Forge
+  `80347709`. CI passed 3,248 tests and 41 MySQL recovery tests. Exact-release
+  readiness and the reviewed 409-table schema passed; 18 historical subscription
+  tables and the native catalog/site/inventory/audits retained matching digests.
 
 ## Subscriptions Phase 1 foundation (2026-10-15; deployed disabled)
 

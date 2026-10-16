@@ -32,7 +32,7 @@ class InstagramApiClient
 
         $response = $this->request()
             ->post($this->endpoint($this->accountId().'/messages'), [
-                'recipient_id' => $recipientId,
+                'recipient' => ['id' => $recipientId],
                 'message' => ['text' => $body],
             ])
             ->throw()

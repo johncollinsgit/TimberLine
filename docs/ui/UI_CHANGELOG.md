@@ -8,6 +8,17 @@
   clearly states that Everbranch billing is separate and PayPal checkout is not
   active. No customer-facing checkout option is introduced in this phase.
 
+## 2026-10-16 — Marketing Desk and workflow usability
+
+- Marketing Desk uses the shared dashboard/list/detail/form shapes and restrained
+  workspace tokens. Daily actions, approval states and real source freshness stay
+  visible; unrelated import diagnostics do not occupy the desk.
+- Studio retains its real canvas/inspector and gains an outline, fit, four views,
+  visible publication guidance and connection summaries. Small screens keep a
+  readable step flow and existing inspector drawer.
+- Desktop/phone browser checks use a clearly fictional local workspace. Provider
+  execution and production rollout remain disabled.
+
 ## 2026-10-16 - Workspace-aware AI attention briefings
 
 - Added the gated What needs attention? request, collapsible Context used panels, ordered evidence links, source coverage and generation time with workspace timezone. Viewing context consumes no AI allowance.

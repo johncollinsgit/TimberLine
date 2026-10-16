@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_16_120000_create_subscription_recharge_evidence.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['early connection retained before trailing tables', 'bare tables and encrypted evidence retained before every named index and foreign key', 'partial constraints repaired repeatedly without changing accepted generations', 'wrong-tenant and wrong-connection credential and operation parents rejected', 'duplicate generation or request and orphan scope fail without deleting evidence', 'same-named changed index or referential action fails closed', 'concurrent operation UUID dedupe with recovered fenced lease and immutable request replay'],
+    ],
     '2026_10_16_000000_create_ai_branch_accounts.php' => [
         'test' => 'tests/Integration/AiBranchMySqlMigrationRecoveryTest.php',
         'scenarios' => ['completed table and encrypted sentinel retained before migration bookkeeping'],
@@ -158,5 +162,49 @@ return [
     '2026_10_08_000000_create_fleet_operation_records.php' => [
         'test' => 'tests/Integration/FleetOperationsMySqlMigrationRecoveryTest.php',
         'scenarios' => ['operation table retained before Laravel records the migration batch'],
+    ],
+    '2026_10_16_100000_create_marketing_brand_knowledge_versions.php' => [
+        'test' => 'tests/Integration/MarketingDeskMySqlRecoveryTest.php',
+        'scenarios' => ['table retained before tenant and unique indexes; completed DDL and saved rows retained before migration bookkeeping'],
+    ],
+    '2026_10_16_100001_create_marketing_reply_policies.php' => [
+        'test' => 'tests/Integration/MarketingDeskMySqlRecoveryTest.php',
+        'scenarios' => ['table retained before tenant and unique indexes; completed DDL and saved rows retained before migration bookkeeping'],
+    ],
+    '2026_10_16_100002_create_marketing_social_posts.php' => [
+        'test' => 'tests/Integration/MarketingDeskMySqlRecoveryTest.php',
+        'scenarios' => ['table retained before tenant and unique indexes; completed DDL and saved rows retained before migration bookkeeping'],
+    ],
+    '2026_10_16_100003_create_marketing_social_publications.php' => [
+        'test' => 'tests/Integration/MarketingDeskMySqlRecoveryTest.php',
+        'scenarios' => ['table retained before tenant and unique indexes; completed DDL and saved rows retained before migration bookkeeping'],
+    ],
+    '2026_10_16_100004_create_marketing_assistant_turns.php' => [
+        'test' => 'tests/Integration/MarketingDeskMySqlRecoveryTest.php',
+        'scenarios' => ['table retained before tenant and unique indexes; completed DDL and saved rows retained before migration bookkeeping'],
+    ],
+    '2026_10_16_100005_create_marketing_audience_permissions.php' => [
+        'test' => 'tests/Integration/MarketingDeskMySqlRecoveryTest.php',
+        'scenarios' => ['table retained before tenant and unique indexes; completed DDL and saved rows retained before migration bookkeeping'],
+    ],
+    '2026_10_16_100006_create_marketing_automation_enrollments.php' => [
+        'test' => 'tests/Integration/MarketingDeskMySqlRecoveryTest.php',
+        'scenarios' => ['table retained before tenant and unique indexes; completed DDL and saved rows retained before migration bookkeeping'],
+    ],
+    '2026_10_16_100007_create_marketing_delivery_authorizations.php' => [
+        'test' => 'tests/Integration/MarketingDeskMySqlRecoveryTest.php',
+        'scenarios' => ['table retained before tenant and unique indexes; completed DDL and saved rows retained before migration bookkeeping'],
+    ],
+    '2026_10_16_100008_create_marketing_delivery_attempts.php' => [
+        'test' => 'tests/Integration/MarketingDeskMySqlRecoveryTest.php',
+        'scenarios' => ['table retained before tenant and unique indexes; completed DDL and saved rows retained before migration bookkeeping'],
+    ],
+    '2026_10_16_100009_create_marketing_conversation_controls.php' => [
+        'test' => 'tests/Integration/MarketingDeskMySqlRecoveryTest.php',
+        'scenarios' => ['table retained before tenant and unique indexes; completed DDL and saved rows retained before migration bookkeeping'],
+    ],
+    '2026_10_16_100010_create_marketing_social_account_bindings.php' => [
+        'test' => 'tests/Integration/MarketingDeskMySqlRecoveryTest.php',
+        'scenarios' => ['table retained before tenant and unique indexes; completed DDL and saved rows retained before migration bookkeeping'],
     ],
 ];

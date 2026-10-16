@@ -54,6 +54,14 @@ class InstagramConnector implements ProviderConnector
         $accessToken = trim((string) ($tokens['access_token'] ?? ''));
         abort_if($accessToken === '', 422, 'Instagram did not return an access token.');
 
+        // Instagram's authorization-code token is short-lived. Exchange it before persisting.
+        $long = Http::acceptJson()->timeout(15)->get(rtrim((string) config('services.instagram.api_base'), '/').'/access_token', [
+            'grant_type' => 'ig_exchange_token', 'client_secret' => (string) config('services.instagram.client_secret'), 'access_token' => $accessToken,
+        ])->throw()->json();
+        abort_if(empty($long['access_token']) || empty($long['expires_in']), 422, 'Instagram long-lived authorization could not be verified.');
+        $tokens = array_replace($tokens, $long);
+        $accessToken = (string) $tokens['access_token'];
+
         $profile = (new InstagramApiClient(
             new IntegrationConnection(['access_token' => $accessToken]),
             (string) config('services.instagram.api_base'),
@@ -72,7 +80,7 @@ class InstagramConnector implements ProviderConnector
 
         $response = Http::acceptJson()
             ->timeout(15)
-            ->get($this->endpoint('refresh_access_token'), [
+            ->get(rtrim((string) config('services.instagram.api_base'), '/').'/refresh_access_token', [
                 'grant_type' => 'ig_refresh_token',
                 'access_token' => $token,
             ])
@@ -95,6 +103,16 @@ class InstagramConnector implements ProviderConnector
         ])->save();
 
         return $connection->fresh();
+    }
+
+    public function subscribe(IntegrationConnection $connection): void
+    {
+        if ($connection->needsRefresh()) {
+            $connection = $this->refresh($connection);
+        }
+        $response = Http::withToken($connection->access_token)->acceptJson()->timeout(15)->post($this->endpoint((string) $connection->external_account_secret.'/subscribed_apps'), ['subscribed_fields' => 'messages'])->throw()->json();
+        abort_unless(($response['success'] ?? false) === true, 422, 'Instagram webhook subscription could not be verified.');
+        $connection->update(['metadata' => [...(array) $connection->metadata, 'webhook_subscription' => 'subscribed', 'subscription_verified_at' => now()->toIso8601String()]]);
     }
 
     public function client(IntegrationConnection $connection): InstagramApiClient
@@ -132,6 +150,10 @@ class InstagramConnector implements ProviderConnector
         $accessToken = (string) ($tokens['access_token'] ?? '');
         $label = $username !== '' ? '@'.$username : 'Instagram professional account';
 
+        if (\Illuminate\Support\Facades\Schema::hasTable('marketing_social_account_bindings')) {
+            app(\App\Services\Marketing\Desk\SocialAccountOwnership::class)->claim((int) $tenant->id, 'instagram', $fingerprint);
+        }
+
         return IntegrationConnection::query()->updateOrCreate(
             [
                 'tenant_id' => (int) $tenant->id,
@@ -151,6 +173,8 @@ class InstagramConnector implements ProviderConnector
                     'source' => 'instagram_login_oauth',
                     'username' => $username !== '' ? $username : null,
                 ],
+                'oauth_client_id' => (string) config('services.instagram.client_id'),
+                'oauth_client_secret' => (string) config('services.instagram.client_secret'),
                 'connected_at' => now(),
                 'last_error_code' => null,
                 'last_error_message' => null,
