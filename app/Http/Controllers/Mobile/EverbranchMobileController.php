@@ -615,6 +615,14 @@ class EverbranchMobileController extends Controller
         return response()->json($payload);
     }
 
+    /** Body-based navigation keeps recognized words out of request URLs. */
+    public function navigateSearch(Request $request, GlobalSearchCoordinator $search, TenantMobileResourceService $resources): JsonResponse
+    {
+        $request->merge(['intent' => 'navigate']);
+
+        return $this->search($request, $search, $resources);
+    }
+
     public function branches(Request $request, TenantModuleCatalogService $catalog): JsonResponse
     {
         $tenant = $this->tenant($request);

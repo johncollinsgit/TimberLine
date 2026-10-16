@@ -47,7 +47,8 @@ class LandlordSearchCoordinator
                 } catch (\Throwable $exception) {
                     Log::warning('landlord_search.provider_failed_closed', [
                         'provider' => $provider::class,
-                        'message' => $exception->getMessage(),
+                        'message' => empty($context['navigation_only']) ? $exception->getMessage() : 'Navigation provider failed.',
+                        'exception_type' => $exception::class,
                     ]);
 
                     return [];

@@ -306,7 +306,7 @@ $landlordHosts = array_values(array_unique(array_filter($landlordHosts, static f
 $landlordRoutes = static function (): void {
     Route::get('/landlord', [LandlordTenantDirectoryController::class, 'dashboard'])
         ->name('dashboard');
-    Route::get('/landlord/search', LandlordSearchController::class)
+    Route::match(['GET', 'POST'], '/landlord/search', LandlordSearchController::class)
         ->name('search');
     Route::post('/landlord/operator-costs', [LandlordTenantDirectoryController::class, 'storeRecurringCost'])
         ->name('operator-costs.store');
@@ -933,7 +933,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/dashboard', DashboardLaunchpad::class)->name('dashboard');
     });
     Route::middleware(['role:admin,manager,marketing_manager,member', 'tenant.access'])
-        ->get('/search', [GlobalSearchController::class, 'index'])
+        ->match(['GET', 'POST'], '/search', [GlobalSearchController::class, 'index'])
         ->name('app.search');
 
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access', 'module:class_scheduling'])

@@ -85,6 +85,14 @@ test('landlord navigation never returns action typed rows without an action fiel
     expect(collect($response->json('results'))->pluck('type'))->not->toContain('action');
 });
 
+test('landlord navigation accepts private request bodies without granting tenant administrators operator access', function (): void {
+    $operator = User::factory()->platformAdmin()->create();
+    $this->actingAs($operator)->postJson(route('landlord.search'), ['q' => 'Go back', 'intent' => 'navigate'])
+        ->assertOk()->assertJsonPath('navigation.control', 'back');
+    $this->actingAs(User::factory()->tenantAdmin()->create())
+        ->postJson(route('landlord.search'), ['q' => 'Go back', 'intent' => 'navigate'])->assertForbidden();
+});
+
 test('landlord search returns control plane workspaces tickets and phrase actions', function (): void {
     [$tenant, $ticket] = landlordSearchTenant();
     $operator = User::factory()->platformAdmin()->create();

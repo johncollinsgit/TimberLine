@@ -14,7 +14,7 @@ class LandlordSearchController extends Controller
     {
         $navigationOnly = $request->validated('intent') === 'navigate';
         $navigation = app(NavigationQuery::class);
-        $query = (string) $request->query('q', '');
+        $query = (string) $request->validated('q', '');
         if ($navigationOnly && ($control = $navigation->control($query))) {
             return response()->json(['query' => $query, 'results' => [], 'groups' => [], 'total' => 0, 'navigation' => ['status' => 'control', 'control' => $control]]);
         }

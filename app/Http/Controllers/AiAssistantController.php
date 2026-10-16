@@ -34,7 +34,9 @@ class AiAssistantController extends Controller
         $data = $request->validate(['conversation' => ['nullable', 'integer', 'min:1'], 'origin' => ['sometimes', 'array:kind,id']]);
         $origin = isset($data['origin']) ? app(\App\Services\AiBranch\AiWorkspacePage::class)->normalize($data['origin']) : [];
         $conversation = ! empty($data['conversation']) ? $chat->conversation($tenant, $user, (int) $data['conversation']) : null;
-        $actions = AiBranchAction::query()->where('tenant_id', $tenant->id)->where('user_id', $user->id)->latest('id')->limit(30)->get()
+        $commitmentsAvailable = app(\App\Services\AiBranch\AiCommitments::class)->allows($tenant, $user);
+        $kinds = ['internal_job_note', 'undo_internal_job_note', ...($commitmentsAvailable ? ['internal_commitment_task'] : [])];
+        $actions = AiBranchAction::query()->where('tenant_id', $tenant->id)->where('user_id', $user->id)->whereIn('kind', $kinds)->latest('id')->limit(30)->get()
             ->filter(function ($action) use ($tenant, $user): bool {
                 try {
                     app(AiBranchContext::class)->job($tenant, $user, (int) ($action->payload['job_id'] ?? 0));
@@ -69,6 +71,7 @@ class AiAssistantController extends Controller
         }
         unset($message);
         $payload = [
+            'commitments_available' => $commitmentsAvailable,
             'phone_practice_available' => app(\App\Services\Voice\PhonePractice::class)->available($tenant, $user),
             'attention_available' => (bool) config('ai_branch.assistant_attention_enabled') && $context->enabled($tenant) && $context->permissions($tenant, $user)['followups'],
             'actions_available' => (bool) $actionsAvailable,

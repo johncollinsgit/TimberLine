@@ -63,7 +63,15 @@ class AiBranchController extends Controller
             'conversations' => AiBranchConversation::query()->where('tenant_id', $tenant->id)->where('user_id', $request->user()->id)
                 ->where('expires_at', '>', now())->latest('id')->limit(30)->get(),
             'memories' => AiBranchMemory::query()->where('tenant_id', $tenant->id)->where('user_id', $request->user()->id)->where('expires_at', '>', now())->get(),
-            'actions' => AiBranchAction::query()->where('tenant_id', $tenant->id)->where('user_id', $request->user()->id)->where('status', 'pending')->where('expires_at', '>', now())->latest()->limit(20)->get(),
+            'actions' => AiBranchAction::query()->where('tenant_id', $tenant->id)->where('user_id', $request->user()->id)->where('kind', 'internal_job_note')->where('status', 'pending')->where('expires_at', '>', now())->latest()->limit(20)->get()->filter(function ($action) use ($tenant, $request): bool {
+                try {
+                    app(AiBranchContext::class)->job($tenant, $request->user(), (int) ($action->payload['job_id'] ?? 0));
+
+                    return true;
+                } catch (HttpException|\Illuminate\Database\Eloquent\ModelNotFoundException) {
+                    return false;
+                }
+            }),
             'jobs' => $account?->enabled ? app(AiBranchContext::class)->sources($tenant, $request->user()) : [],
         ])->header('Cache-Control', 'no-store');
     }

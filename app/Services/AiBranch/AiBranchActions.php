@@ -46,19 +46,23 @@ class AiBranchActions
     public function decide(Tenant $tenant, User $user, int $id, string $digest, bool $approve): AiBranchAction
     {
         $this->authorize($tenant, $user);
+        $kind = AiBranchAction::where('tenant_id', $tenant->id)->where('user_id', $user->id)->whereKey($id)->value('kind');
+        if ($kind === 'internal_commitment_task') {
+            return app(AiCommitments::class)->decide($tenant, $user, $id, $digest, $approve);
+        }
 
         return DB::transaction(function () use ($tenant, $user, $id, $digest, $approve): AiBranchAction {
             $action = AiBranchAction::query()->where('tenant_id', $tenant->id)->where('user_id', $user->id)->whereKey($id)->lockForUpdate()->firstOrFail();
             abort_unless($action->kind === 'internal_job_note' && hash_equals($action->digest, $digest)
                 && hash_equals($action->digest, hash('sha256', json_encode($action->payload, JSON_THROW_ON_ERROR))), 409);
             $this->authorize($tenant, $user);
+            $job = $this->context->job($tenant, $user, (int) $action->payload['job_id']);
             if ($action->status !== 'pending') {
                 abort_unless($action->status === ($approve ? 'executed' : 'rejected'), 409);
 
                 return $action;
             }
             abort_unless($action->expires_at->isFuture(), 409, 'The review window expired. Prepare a new action.');
-            $job = $this->context->job($tenant, $user, (int) $action->payload['job_id']);
             $job = \App\Models\FieldServiceJob::query()->where('tenant_id', $tenant->id)->whereKey($job->id)->lockForUpdate()->firstOrFail();
             abort_unless(hash_equals($action->payload['target_hash'], hash('sha256', json_encode($job->getRawOriginal(), JSON_THROW_ON_ERROR))), 409, 'The job changed. Prepare a new action.');
             if ($approve) {

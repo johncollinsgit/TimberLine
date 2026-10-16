@@ -34,7 +34,13 @@ Unrelated PC changes and the incomplete October 12 clone are untouched.
 Microphones start only on explicit activation. Navigation uses device/browser
 recognition and deterministic matching, not a paid model call. Typing remains
 available. Handle denial, silence, natural end, stop, cancel, timeout and late
-callbacks. Navigation transcripts are not saved to recent searches or logs.
+callbacks. New clients send navigation text in POST bodies (web `/search` or
+`/landlord/search`; native `/search/navigation`), keeping recognized words out of
+access-log URLs. Navigation provider failures redact exception messages as well.
+Do not configure request-body tracing for these endpoints. Legacy GET navigation
+remains compatible and can put words in infrastructure access logs; upgrade those
+clients before claiming transcript privacy across a deployment. The application
+does not save navigation transcripts to recent searches.
 
 Manual web choices refresh access and enforce same origin. Edits, close and
 Livewire navigation invalidate old requests. Bounded session history is scoped by
@@ -220,14 +226,62 @@ mobile lint / 94 tests and 31 paired browser scenarios pass. Twilio has not been
 connected; real calling, porting, voicemail, consent and device acceptance remain
 open. Email-verification revocation is rechecked after refreshing the user record.
 
+## Reviewed commitment tasks
+
+`EVERBRANCH_AI_ASSISTANT_COMMITMENTS_ENABLED` is independently default-off.
+Assistant/context, current owner/admin access, job access and the existing
+reviewed-actions tier/gate are all required. The activity view can prepare a task
+from an exact quote in a recent team-visible job note. Owner-private notes and
+unsourced text are not eligible. A conservative English promise-candidate check
+rejects suggestions/conditions; it is not general natural-language interpretation.
+The person explicitly confirms the promise, chooses its task title, assignee and
+due time, then reviews the immutable full preview before approving separately.
+
+Dates and assignees are not inferred. Due times resolve in the server-owned
+workspace timezone. Missing DST times are rejected and repeated times require an
+explicit valid UTC offset. The preview records the exact zone/offset, job/source
+versions and selected assignee. Approval rechecks expiry, digest, source visibility,
+source/job hashes, active eligible assignment and timezone under row locks. It
+creates one existing Field Service task, assignment and source-linked task event.
+It does not dispatch a notification/message or alter accounting. Task undo is not
+promised. Pending/overdue/completed queries use authoritative tasks, with bounded
+pages and explicit source coverage; automatic reminders remain unimplemented.
+
+The new approval center filters supported action kinds before limiting results.
+Legacy AI Branch continues to render note previews only and revalidates job access;
+replaying a previous approval also rechecks current record access.
+
+## Shared navigation guard and final interaction checks
+
+Web assistant source links refresh permission, enforce same origin and synchronously
+request the page's `everbranch:check-navigation` guard. Missing guards fail closed;
+pending saves/uploads or declined confirmations retain drafts/history. Dirty-input
+evidence is not cleared before actual navigation. Close aborts pending source reads
+and ignores late responses. The native source path cancels its read too and retains
+all unsent assistant drafts, including collapsed task/resolution forms.
+
+Starting recognition invalidates old search requests. An empty voice activation
+does not search and overwrite the listening status. A final recognized query stops
+capture before searching; manual selection stops capture as well. Native typed
+correction invalidates capture through a cancellation token. Focus containment
+includes disclosure summaries and all form controls, and access-change remounts
+have a safe trigger-focus fallback.
+
+The standalone mobile acceptance fixture refuses non-loopback API configuration;
+the paired runner injects its local URL and blocks external requests. No manual
+fixture opening can fall back to the production API. Native builds/device checks
+remain deferred by the user. These rails do not complete the combined launch.
+
 ## Verified checkpoint results (Windows, October 16)
 
 - Restoration: 12 package checksums, 20 transferred source hashes and both
   complete checkpoint Git trees match the manifest.
-- Focused AI Branch/search/mobile inventory checks: 164 tests, 1,463 assertions.
+- Latest focused AI Branch/search/mobile inventory/provider/timezone checks:
+  219 tests, 1,729 assertions.
   The APNs signature and affected environment-dependent suites also pass after
   configuring OpenSSL and localhost (98 tests in the environment rerun).
-- Complete configured backend run: 3,563 passed, five failed, one skipped;
+- Earlier complete configured backend run (assistant checkpoint, before the
+  later attention/phone/commitment increments): 3,563 passed, five failed, one skipped;
   24,655 assertions, 570 seconds. This is not an all-green release suite.
   Remaining failures are the POSIX `0600` assertion in
   `ShopifyCatalogSnapshotImporterTest`, POSIX shell quote assertions in
@@ -235,7 +289,7 @@ open. Email-verification revocation is rechecked after refreshing the user recor
   cases, and the private-file import in `SubscriptionRechargeManualSettingsTest`
   (Windows does not establish its required POSIX mode). Keep those protections;
   obtain Linux CI evidence rather than relaxing privacy checks.
-- Backend assets and formatting pass. Mobile lint, 94 tests and bundled
+- Backend assets and formatting pass. Mobile lint, 95 tests and bundled
   TypeScript/Vite build pass, with the existing large-chunk advisory.
-- Paired browser acceptance: 27 scenarios pass with fictional fixtures; no page
+- Paired browser acceptance: 39 scenarios pass with fictional fixtures; no page
   errors. These are component interactions, not physical-device evidence.

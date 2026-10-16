@@ -5,6 +5,7 @@ import { formatReportCents } from './ai-report-money'
 import WeeklyReport from './ai-weekly-report'
 import SharedAttention from './ai-shared-attention'
 import PhonePractice from './ai-phone-practice'
+import CommitmentDraft from './ai-commitment-draft'
 
 function Assistant({ host }) {
   const dialog = useRef(null)
@@ -68,6 +69,7 @@ function Assistant({ host }) {
   }, [open])
   const close = () => {
     if ((draft.trim() || memory.trim() || note.trim() || dialog.current?.querySelector('[data-assistant-dirty="true"]')) && !window.confirm('Discard the assistant draft you have not sent?')) return false
+    ++sequence.current; abort.current?.abort(); stopCapture(); stopSpeech(); setBusy(false)
     dialog.current?.close(); setOpen(false); setDraft(''); setMemory(''); setNote(''); noteRequest.current = null; setSession(null); setConversation(null); requestId.current = null; setUncertain(false); trigger.current?.focus()
     return true
   }
@@ -144,16 +146,30 @@ function Assistant({ host }) {
     let url
     try { url = new URL(source.url, location.origin) } catch { return <span>{source.title || source.ref}</span> }
     if (url.origin !== location.origin) return <span>{source.title || source.ref}</span>
-    return <a href={url.href} onClick={async event => { event.preventDefault(); try { const fresh = await loadSession(conversation); if (!fresh.conversation?.messages.some(row => row.sources?.some(item => item.url === source.url))) throw new Error('Source access changed.'); if (draft.trim() && !window.confirm('Discard the question you have not sent?')) return; location.assign(url.href) } catch (error) { setSession(null); setNotice(error.message) } }}>{source.title || source.ref}</a>
+    return <a href={url.href} onClick={async event => {
+      event.preventDefault()
+      const turn = ++sequence.current; abort.current?.abort(); const controller = new AbortController(); abort.current = controller; setBusy(true)
+      try {
+        const fresh = await loadSession(conversation, controller.signal)
+        if (turn !== sequence.current) return
+        if (!fresh.conversation?.messages.some(row => row.sources?.some(item => item.url === source.url))) throw new Error('Source access changed.')
+        const detail = { allowed: null, hasAssistantDraft: Boolean(draft.trim() || memory.trim() || note.trim() || dialog.current?.querySelector('[data-assistant-dirty="true"]')), message: '' }
+        document.dispatchEvent(new CustomEvent('everbranch:check-navigation', { cancelable: true, detail }))
+        if (detail.allowed !== true) { setNotice(detail.message || 'Navigation protection is unavailable. Open this record through the menus.'); return }
+        location.assign(url.href)
+      } catch (error) { if (turn === sequence.current && !controller.signal.aborted) { setSession(null); setNotice(error.message) } }
+      finally { if (turn === sequence.current) setBusy(false) }
+    }}>{source.title || source.ref}</a>
   }
   return <>
     <button ref={trigger} type="button" className="everbranch-assistant-launcher" onClick={() => { setOpen(true); dialog.current.showModal() }}>Ask Everbranch</button>
     <dialog ref={dialog} className="everbranch-assistant-panel" aria-labelledby="everbranch-assistant-title" onCancel={event => { event.preventDefault(); close() }}>
       <header><div><small>{host.dataset.workspace}</small><h2 id="everbranch-assistant-title">Ask Everbranch</h2></div><button onClick={close} aria-label="Close assistant">×</button></header>
       <button className="assistant-link" onClick={() => { if (close()) document.dispatchEvent(new CustomEvent('app-command-palette:open', { detail: { voice: true, query: '' } })) }}>Find a page</button>
-      <nav aria-label="Assistant views">{[['chat', 'Conversation'], ['memory', 'Private memory'], ['activity', 'Activity and approvals'], ...(session?.financial_summary ? [['finance', 'Financial snapshot']] : []), ...(session?.reports_available ? [['reports', 'Weekly report']] : []), ...(session?.attention_available ? [['attention', 'Needs attention']] : []), ...(session?.phone_practice_available ? [['phone', 'Phone practice']] : [])].map(([key, label]) => <button key={key} aria-pressed={tab === key} onClick={() => { stopCapture(); stopSpeech(); setTab(key) }}>{label}</button>)}</nav>
+      <nav aria-label="Assistant views">{[['chat', 'Conversation'], ['memory', 'Private memory'], ['activity', 'Activity and approvals'], ...(session?.financial_summary ? [['finance', 'Financial snapshot']] : []), ...(session?.reports_available ? [['reports', 'Weekly report']] : []), ...(session?.attention_available ? [['attention', 'Needs attention']] : []), ...(session?.phone_practice_available ? [['phone', 'Phone practice']] : [])].map(([key, label]) => <button key={key} aria-pressed={tab === key} disabled={busy} onClick={() => { stopCapture(); stopSpeech(); setTab(key) }}>{label}</button>)}</nav>
       <p role="status" aria-live="polite">{notice}</p><button disabled={busy} className="assistant-link" onClick={() => refresh()}>Refresh conversation</button>
       {session?.context?.page?.title && <p>Context: {session.context.page.title}</p>}
+      {session?.commitments_available && <div hidden={tab !== 'activity'}><CommitmentDraft jobs={session.note_jobs || []} load={(job, signal) => api('/commitments/sources?job_id=' + job, 'GET', undefined, signal)} propose={input => api('/commitments', 'POST', input)} list={(view, after, signal) => api('/commitments?' + new URLSearchParams({ view, after: String(after) }), 'GET', undefined, signal)} onPrepared={() => refresh()} /></div>}
       {session?.phone_practice_available && tab === 'phone' && <PhonePractice run={(scenario, uuid, signal) => api('/phone/practice', 'POST', { scenario, request_id: uuid }, signal)} />}
       {session?.attention_available && <div hidden={tab !== 'attention'}><SharedAttention active={tab === 'attention'} load={(view, after, signal) => api('/attention?' + new URLSearchParams({ view, after: String(after) }), 'GET', undefined, signal)} mutate={(item, operation, options, uuid) => api('/attention/' + item.id, 'POST', { operation, version: item.version, request_id: uuid, confirmed: true, ...options })} /></div>}
       {tab === 'reports' && session?.reports_available && <WeeklyReport api={api} audience={session.report_audience || []} printUrl={id => endpoint('/reports/' + encodeURIComponent(id)).href} />}
@@ -172,7 +188,7 @@ function Assistant({ host }) {
       </> : <p>{session?.financial_summary?.reason || 'A permitted report is unavailable.'}</p>}<p>Read only. No accounting transaction is created or changed.</p></section>}
       {tab === 'memory' && <><p>Explicit private preferences stay in this workspace. They cannot grant access.</p>{session?.memories.map(row => <article key={row.id}><p>{row.body}</p><small>Expires {new Date(row.expires_at).toLocaleDateString()}</small><button disabled={busy} onClick={() => updateMemory(row.id)}>Forget</button></article>)}<label>Remember this<textarea value={memory} maxLength={500} onChange={event => setMemory(event.target.value)} /></label><button className="assistant-primary" disabled={busy || !memory.trim()} onClick={() => updateMemory()}>Save private memory</button></>}
       {tab === 'activity' && session?.actions_available && <form onSubmit={proposeNote}><h3>Draft an internal job note</h3><p>Recent permitted jobs only. Preparing a preview adds no note and sends no message.</p><label>Job<select value={jobId} disabled={busy} onChange={event => setJobId(event.target.value)}><option value="">Choose a job</option>{session.note_jobs?.map(job => <option key={job.id} value={job.id}>{job.title}</option>)}</select></label><label>Internal note<textarea maxLength={3000} value={note} disabled={busy} onChange={event => { stopCapture(); setNote(event.target.value) }} /></label><button type="button" disabled={busy} onClick={() => dictate('note')}>{listening ? 'Stop listening' : 'Voice to text'}</button><button className="assistant-primary" disabled={busy || !jobId || !note.trim()}>Prepare note preview</button></form>}
-      {tab === 'activity' && <><p>Review exact changes before approving. Only unchanged internal notes support undo; sent communications cannot be recalled.</p>{session?.actions.map(action => <article key={action.id}><strong>{action.payload.job_title || 'Internal job note'} · {action.status}</strong><p>{action.payload.body}</p>{action.result_id && <small>Receipt: internal note {action.result_id}</small>}{action.can_undo && <><label><input type="checkbox" checked={reviewed.includes(action.id)} onChange={event => setReviewed(event.target.checked ? [...reviewed, action.id] : reviewed.filter(id => id !== action.id))} />Remove this exact unchanged internal note.</label><button disabled={busy || !reviewed.includes(action.id)} onClick={() => decide(action, 'undo')}>Undo note</button></>}{action.status === 'pending' && new Date(action.expires_at) > new Date() && <><label><input type="checkbox" checked={reviewed.includes(action.id)} onChange={event => setReviewed(event.target.checked ? [...reviewed, action.id] : reviewed.filter(id => id !== action.id))} />I reviewed this exact note and job.</label><button disabled={busy || !reviewed.includes(action.id)} onClick={() => decide(action, 'approve')}>Approve note</button><button disabled={busy} onClick={() => decide(action, 'reject')}>Reject</button></>}</article>)}</>}
+      {tab === 'activity' && <><p>Review exact changes before approving. Only unchanged internal notes support undo; sent communications cannot be recalled.</p>{session?.actions.map(action => <article key={action.id} data-assistant-action={action.id}><strong>{action.payload.job_title || 'Internal job note'} · {action.status}</strong><p>{action.payload.body}</p>{action.result_id && <small>Receipt: internal {action.kind === 'internal_commitment_task' ? 'task' : 'note'} {action.result_id}</small>}{action.can_undo && <><label><input type="checkbox" checked={reviewed.includes(action.id)} onChange={event => setReviewed(event.target.checked ? [...reviewed, action.id] : reviewed.filter(id => id !== action.id))} />Remove this exact unchanged internal note.</label><button disabled={busy || !reviewed.includes(action.id)} onClick={() => decide(action, 'undo')}>Undo note</button></>}{action.status === 'pending' && new Date(action.expires_at) > new Date() && <><label><input type="checkbox" checked={reviewed.includes(action.id)} onChange={event => setReviewed(event.target.checked ? [...reviewed, action.id] : reviewed.filter(id => id !== action.id))} />I reviewed this exact {action.kind === 'internal_commitment_task' ? 'task, source, assignee and due time' : 'note and job'}.</label><button disabled={busy || !reviewed.includes(action.id)} onClick={() => decide(action, 'approve')}>{action.kind === 'internal_commitment_task' ? 'Approve task' : 'Approve note'}</button><button disabled={busy} onClick={() => decide(action, 'reject')}>Reject</button></>}</article>)}</>}
     </dialog>
   </>
 }

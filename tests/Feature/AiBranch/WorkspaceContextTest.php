@@ -263,6 +263,83 @@ test('ordinary assistant reads do not consume the separate phone practice limite
     Http::assertNothingSent();
 });
 
+function commitmentFixture(): array
+{
+    [$tenant, $user] = workspaceFixture('fictional-commitment');
+    config()->set(['ai_branch.assistant_enabled' => true, 'ai_branch.assistant_tenant_ids' => [$tenant->id], 'ai_branch.assistant_commitments_enabled' => true, 'ai_branch.actions_enabled' => true]);
+    $job = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'Fictional commitment work', 'status' => 'open']);
+    $note = \App\Models\FieldServiceJobNote::create(['tenant_id' => $tenant->id, 'field_service_job_id' => $job->id, 'body' => 'I will call the customer tomorrow.']);
+    $input = ['job_id' => $job->id, 'note_id' => $note->id, 'quote' => $note->body, 'title' => 'Call the fictional customer', 'assignee_id' => $user->id,
+        'due_local' => '2026-10-20T09:00', 'confirmed_promise' => true, 'request_id' => (string) \Illuminate\Support\Str::uuid()];
+
+    return [$tenant, $user, $job, $note, $input, app(\App\Services\AiBranch\AiCommitments::class)];
+}
+
+test('reviewed commitments create one assigned sourced task and reconcile pending overdue and completed queries', function () {
+    [$tenant, $user, $job, $note, $input, $service] = commitmentFixture();
+    $proposal = $service->propose($tenant, $user, $input);
+    expect($service->propose($tenant, $user, $input)->id)->toBe($proposal->id)->and(FieldServiceTask::count())->toBe(0);
+    $actions = app(\App\Services\AiBranch\AiBranchActions::class);
+    $actions->decide($tenant, $user, $proposal->id, $proposal->digest, true);
+    $actions->decide($tenant, $user, $proposal->id, $proposal->digest, true);
+    $task = FieldServiceTask::sole();
+    expect($task->assigned_user_id)->toBe($user->id)->and($task->due_at->utc()->format('Y-m-d H:i'))->toBe('2026-10-20 13:00')
+        ->and($task->assignees()->pluck('users.id')->all())->toBe([$user->id])->and(FieldServiceTaskEvent::count())->toBe(1)
+        ->and($service->listing($tenant, $user, 'pending')['tasks'])->toHaveCount(1);
+    $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-21T12:00:00Z'));
+    expect($service->listing($tenant, $user, 'overdue')['tasks'])->toHaveCount(1);
+    $task->update(['status' => 'done', 'completed_at' => now()]);
+    expect($service->listing($tenant, $user, 'overdue')['tasks'])->toBe([])->and($service->listing($tenant, $user, 'completed')['tasks'])->toHaveCount(1);
+    Http::assertNothingSent();
+});
+
+test('commitment approval rejects changed sources revoked assignments and changed timezone', function (string $change) {
+    [$tenant, $user, $job, $note, $input, $service] = commitmentFixture();
+    $member = User::factory()->create(['is_active' => true]);
+    $member->tenants()->attach($tenant->id, ['role' => 'member', 'membership_active' => true]);
+    $proposal = $service->propose($tenant, $user, [...$input, 'assignee_id' => $member->id]);
+    if ($change === 'note') {
+        $note->update(['body' => 'Changed after the exact preview.']);
+    } elseif ($change === 'private') {
+        $note->update(['metadata' => ['visibility' => 'owner']]);
+    } elseif ($change === 'assignment') {
+        $member->tenants()->updateExistingPivot($tenant->id, ['membership_active' => false]);
+    } else {
+        TenantAccessProfile::where('tenant_id', $tenant->id)->update(['metadata' => json_encode(['ai_branch' => ['timezone' => 'UTC']])]);
+    }
+    $exception = in_array($change, ['private', 'assignment'], true) ? \Illuminate\Database\Eloquent\ModelNotFoundException::class : HttpException::class;
+    expect(fn () => $service->decide($tenant, $user, $proposal->id, $proposal->digest, true))->toThrow($exception);
+    expect(FieldServiceTask::count())->toBe(0)->and($proposal->fresh()->status)->toBe('pending');
+    Http::assertNothingSent();
+})->with(['note', 'private', 'assignment', 'timezone']);
+
+test('commitment source projection omits private notes and refuses unsupported or foreign promises', function () {
+    [$tenant, $user, $job, $note, $input, $service] = commitmentFixture();
+    $private = \App\Models\FieldServiceJobNote::create(['tenant_id' => $tenant->id, 'field_service_job_id' => $job->id, 'body' => 'I will share OWNER PRIVATE DATA.', 'metadata' => ['visibility' => 'owner']]);
+    $sources = $service->sources($tenant, $user, $job->id);
+    expect(json_encode($sources))->not->toContain('OWNER PRIVATE DATA')->and($sources['notes'])->toHaveCount(1);
+    expect(fn () => $service->propose($tenant, $user, [...$input, 'note_id' => $private->id]))->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+    expect(fn () => $service->propose($tenant, $user, [...$input, 'quote' => 'I will invent an unsourced commitment.']))->toThrow(HttpException::class);
+    $note->update(['body' => 'Maybe we could call tomorrow.']);
+    expect(fn () => $service->propose($tenant, $user, [...$input, 'quote' => $note->body]))->toThrow(HttpException::class);
+    expect(FieldServiceTask::count())->toBe(0);
+});
+
+test('native commitment workflow uses the shared review center and hides proposals when its grant is withdrawn', function () {
+    [$tenant, $user, $job, $note, $input] = commitmentFixture();
+    \Laravel\Sanctum\Sanctum::actingAs($user, ['mobile:read', 'mobile:write']);
+    $base = '/api/mobile/v1/workspaces/'.$tenant->slug.'/ai-assistant';
+    $this->getJson($base.'/commitments/sources?job_id='.$job->id)->assertOk()->assertJsonPath('notes.0.id', $note->id);
+    $proposal = $this->postJson($base.'/commitments', $input)->assertCreated()->json();
+    $this->getJson($base)->assertOk()->assertJsonPath('actions.0.kind', 'internal_commitment_task');
+    $this->postJson($base.'/actions/'.$proposal['action_id'].'/decision', ['digest' => $proposal['digest'], 'decision' => 'approve', 'confirmed' => true])->assertOk()->assertJsonPath('status', 'executed');
+    $this->getJson($base.'/commitments?view=pending')->assertOk()->assertJsonCount(1, 'tasks');
+    config()->set('ai_branch.assistant_commitments_enabled', false);
+    $this->getJson($base)->assertOk()->assertJsonPath('commitments_available', false)->assertJsonCount(0, 'actions');
+    $this->getJson($base.'/commitments')->assertNotFound();
+    Http::assertNothingSent();
+});
+
 test('page descriptors reject arbitrary details and other tenant records', function () {
     [$tenant, $user] = workspaceFixture();
     [$other] = workspaceFixture('other');

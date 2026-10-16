@@ -15,6 +15,11 @@
 - Note undo archives a precisely unchanged internal AI note and records a
   compensating receipt. Any later model edit permanently removes automatic undo.
   Never extend that promise to sent communications or changed evidence.
+- Commitment tasks have an independent gate, team-visible note sources and
+  explicit assignee/due-time review. Keep `WorkspaceWallTime` DST disambiguation,
+  source/version checks and the existing action UUID ledger. Do not quote private
+  sources into shared tasks or turn task approval into notification/accounting
+  dispatch. Phone adapter/practice boundaries are in `everbranch-phone-rails.md`.
 
 ## Stripe and PayPal payment setup (2026-10-16; deployed, Wren setup pilot)
 

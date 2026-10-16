@@ -19,6 +19,10 @@
   signed-form normalizer, pure duplicate-safe call reduction, timezone/holiday
   routing and a local/testing-only fictional practice view. No live phone ingress,
   dispatch, number purchase or billing is implemented. See the phone rails doc.
+- Reviewed commitment tasks can use exact team-visible job-note quotes, an explicit
+  assignee and a workspace-zone due time. Separate immutable approval creates one
+  sourced internal task. DST gaps/repeats and changed sources/assignments fail
+  closed; no accounting write, notification or automatic reminder is introduced.
 
 ## Ask Everbranch voice navigation (2026-10-16; local implementation)
 

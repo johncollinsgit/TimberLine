@@ -18,10 +18,21 @@ const assistantEntry = manifest['resources/js/ai-assistant.jsx']
 const assistantData = { version: 1, workspace: { id: 1, name: 'Fictional Cedar Works' }, context: null, conversation: null, conversations: [], memories: [], actions: [], usage: { responses: 0, provider_micros: 0 } }
 let assistantAllowed = true
 let assistantRequests = 0
+let assistantSessionDelay = 0
 let attentionReceipt = 20
+let nextTaskAction = 3
+let commitmentTasks = []
 let attentionItem = { id: 41, ref: 'followup:41', title: 'Fictional customer follow-up', status: 'suggested', version: '1'.repeat(64), claim: null }
 const assistantResponse = (path, method, body = {}, conversation = false, params = new URLSearchParams()) => {
-  if (path.endsWith('/phone/practice')) {
+  if (path.endsWith('/commitments/sources')) {
+    return { version: 1, timezone: 'America/New_York', notes: [{ id: 7, text: 'I will call the fictional customer.' }], assignees: [{ id: 1, name: 'Fictional Alex' }], coverage: 'Fictional team-visible job notes only.' }
+  } else if (path.endsWith('/commitments') && method === 'POST') {
+    const id = ++nextTaskAction
+    assistantData.actions = [{ id, kind: 'internal_commitment_task', status: 'pending', digest: 'c'.repeat(64), expires_at: new Date(Date.now() + 900_000).toISOString(), payload: { job_id: 1, job_title: 'Fictional panel work', body: body.title + '\nAssigned to Fictional Alex\nDue ' + body.due_local + ' America/New_York\nSource: job note #7\nSource quote: ' + body.quote } }]
+    return { action_id: id, status: 'pending' }
+  } else if (path.endsWith('/commitments')) {
+    return { version: 1, tasks: commitmentTasks, next_cursor: null, coverage: 'Fictional reviewed commitment tasks only.' }
+  } else if (path.endsWith('/phone/practice')) {
     return { version: 1, simulated: true, simulation_id: body.request_id, scenario: body.scenario,
       outcome: body.scenario === 'provider_outage' ? 'unconfirmed' : 'callback_offer',
       disclosure: 'Fictional practice only. No call, message, purchase, recording, provider request, task assignment or billable usage occurred.',
@@ -49,6 +60,7 @@ const assistantResponse = (path, method, body = {}, conversation = false, params
     assistantData.actions = [{ id: 3, kind: 'internal_job_note', status: 'pending', payload: { job_title: 'Fictional panel work', body: body.body }, digest: 'a'.repeat(64), expires_at: new Date(Date.now() + 900_000).toISOString() }]
     return { action_id: 3, status: 'pending' }
   } else if (path.endsWith('/decision')) {
+    if (assistantData.actions[0].kind === 'internal_commitment_task' && body.decision === 'approve') commitmentTasks = [{ id: 42, ref: 'task:42', title: 'Call the fictional customer', status: 'open', due_at: '2026-10-20T13:00:00Z', assignment: 'Fictional Alex' }]
     assistantData.actions[0] = { ...assistantData.actions[0], status: body.decision === 'approve' ? 'executed' : 'rejected', result_id: body.decision === 'approve' ? 3 : undefined }
     return { status: assistantData.actions[0].status }
   } else if (path.endsWith('/undo')) {
@@ -56,7 +68,7 @@ const assistantResponse = (path, method, body = {}, conversation = false, params
     return { action_id: 2, status: 'executed', reversed_action_id: 1 }
   } else if (path.endsWith('/messages')) {
     assistantRequests++
-    assistantData.conversation = { id: 1, pending: false, messages: [{ role: 'user', text: body.question }, { role: 'assistant', text: 'Fictional answer: <img src=x onerror=alert(1)>', sources: [], generated_at: new Date().toISOString() }] }
+    assistantData.conversation = { id: 1, pending: false, messages: [{ role: 'user', text: body.question }, { role: 'assistant', text: 'Fictional answer: <img src=x onerror=alert(1)>', sources: [{ ref: 'job:1', title: 'Fictional source job', url: '/opened-source-job' }], generated_at: new Date().toISOString() }] }
   } else if (path.endsWith('/conversations')) {
     assistantData.conversation = { id: 1, pending: false, messages: [] }
     assistantData.conversations = [{ id: 1, created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 86_400_000).toISOString() }]
@@ -66,6 +78,8 @@ const assistantResponse = (path, method, body = {}, conversation = false, params
   return { ...assistantData, conversation: conversation || path.endsWith('/messages') ? assistantData.conversation : null }
 }
 let revoked = false
+let webNavigationPosts = 0
+let mobileNavigationPosts = 0
 const pageRow = (title, url, exact = false) => ({ type: 'navigation', title, url, meta: { exact_match: exact } })
 const fixture = query => {
   let results = query === 'home' ? [pageRow('Home', '/opened-home', true)] :
@@ -76,6 +90,7 @@ const fixture = query => {
   return { results, groups: { navigation: results }, total: results.length, navigation: { status: query === 'home' && !revoked ? 'matched' : results.length ? 'choose' : 'no_match', destination: results[0] } }
 }
 const web = createServer(async (request, response) => {
+  try {
   const url = new URL(request.url, 'http://localhost')
   if (url.pathname.startsWith('/build/')) {
     const file = resolve(root, 'public', '.' + url.pathname)
@@ -84,9 +99,10 @@ const web = createServer(async (request, response) => {
     response.end(await readFile(file)); return
   }
   if (url.pathname === '/assistant-preview') {
-    response.end('<!doctype html><html><head><meta name="csrf-token" content="fictional-token">' + (assistantEntry.css || []).map(file => '<link rel="stylesheet" href="/build/' + file + '">').join('') + '</head><body><main><h1>Fictional Cedar Works</h1></main><div data-ai-assistant data-base-url="/ai-branch?tenant=fictional-voice" data-workspace="Fictional Cedar Works"></div><script type="module">import {mountAiAssistantNow} from "/build/' + assistantEntry.file + '";mountAiAssistantNow();</script></body></html>'); return
+    response.end('<!doctype html><html><head><meta charset="utf-8"><meta name="csrf-token" content="fictional-token"><style>.hidden{display:none!important}</style>' + (assistantEntry.css || []).map(file => '<link rel="stylesheet" href="/build/' + file + '">').join('') + '</head><body><main><h1>Fictional Cedar Works</h1><label>Page draft<textarea aria-label="Page draft"></textarea></label></main><div data-ai-assistant data-base-url="/ai-branch?tenant=fictional-voice" data-workspace="Fictional Cedar Works"></div>' + markup + '<script>' + script + '</script><script type="module">import {mountAiAssistantNow} from "/build/' + assistantEntry.file + '";mountAiAssistantNow();</script></body></html>'); return
   }
   if (url.pathname.startsWith('/ai-branch')) {
+    if (url.pathname.endsWith('/assistant') && assistantSessionDelay) await new Promise(resolve => setTimeout(resolve, assistantSessionDelay))
     response.setHeader('Content-Type', 'application/json')
     if (!assistantAllowed) { response.writeHead(403); response.end(JSON.stringify({ message: 'Access was revoked.' })); return }
     let body = ''; for await (const chunk of request) body += chunk
@@ -94,8 +110,20 @@ const web = createServer(async (request, response) => {
   }
   if (url.pathname === '/search') {
     response.setHeader('Content-Type', 'application/json')
-    response.end(JSON.stringify(fixture(url.searchParams.get('q') || '')))
-  } else response.end('<!doctype html><html lang="en"><head><style>.hidden{display:none!important}body{font:16px system-ui;margin:30px;background:#f4f7f5}section{background:white;padding:25px;border-radius:20px}a{display:block;padding:10px}button,input,textarea{font:inherit;padding:10px}</style></head><body><button data-command-voice-trigger>Ask Everbranch</button><main><label>Draft<textarea aria-label="Draft"></textarea></label></main>' + markup + '<script>' + script + '</script></body></html>')
+    let body = ''; for await (const chunk of request) body += chunk
+    const payload = body ? JSON.parse(body) : {}
+    if (payload.intent === 'navigate') {
+      assert.equal(request.method, 'POST')
+      assert.equal(url.searchParams.has('q'), false)
+      webNavigationPosts++
+    }
+    response.end(JSON.stringify(fixture(payload.q || url.searchParams.get('q') || '')))
+  } else response.end('<!doctype html><html lang="en"><head><meta charset="utf-8"><style>.hidden{display:none!important}body{font:16px system-ui;margin:30px;background:#f4f7f5}section{background:white;padding:25px;border-radius:20px}a{display:block;padding:10px}button,input,textarea{font:inherit;padding:10px}</style></head><body><button data-command-voice-trigger>Ask Everbranch</button><main><label>Draft<textarea aria-label="Draft"></textarea></label></main>' + markup + '<script>' + script + '</script></body></html>')
+  } catch (error) {
+    if (request.aborted || error.code === 'ECONNRESET') return
+    console.error('Fixture request failed', error)
+    response.writeHead(500); response.end('Fixture error')
+  }
 })
 await new Promise(resolve => web.listen(0, '127.0.0.1', resolve))
 const webUrl = 'http://127.0.0.1:' + web.address().port
@@ -103,7 +131,7 @@ const portProbe = createServer()
 await new Promise(resolve => portProbe.listen(0, '127.0.0.1', resolve))
 const mobilePort = portProbe.address().port
 await new Promise(resolve => portProbe.close(resolve))
-const vite = spawn(process.execPath, [resolve(mobile, 'node_modules/vite/bin/vite.js'), '--host', '127.0.0.1', '--port', String(mobilePort), '--strictPort'], { cwd: mobile, windowsHide: true, stdio: 'ignore' })
+const vite = spawn(process.execPath, [resolve(mobile, 'node_modules/vite/bin/vite.js'), '--host', '127.0.0.1', '--port', String(mobilePort), '--strictPort'], { cwd: mobile, windowsHide: true, stdio: 'ignore', env: { ...process.env, VITE_API_BASE_URL: webUrl + '/api/mobile/v1' } })
 const mobileUrl = 'http://127.0.0.1:' + mobilePort
 let browser
 let page
@@ -167,6 +195,12 @@ try {
 
   await page.route('**/api/mobile/v1/**', route => {
     const url = new URL(route.request().url())
+    if (url.pathname.endsWith('/search/navigation')) {
+      assert.equal(route.request().method(), 'POST')
+      assert.equal(url.searchParams.has('q'), false)
+      assert.equal(typeof route.request().postDataJSON().q, 'string')
+      mobileNavigationPosts++
+    }
     if (!url.pathname.includes('/ai-assistant')) return route.fulfill({ json: { results: [] } })
     if (!assistantAllowed) return route.fulfill({ status: 403, json: { message: 'Access was revoked.' } })
     return route.fulfill({ json: assistantResponse(url.pathname, route.request().method(), route.request().postDataJSON() || {}, url.searchParams.has('conversation'), url.searchParams) })
@@ -175,6 +209,14 @@ try {
   const openMobile = () => page.getByRole('button', { name: 'Ask Everbranch', exact: true }).click()
   const search = async text => { await page.getByRole('textbox', { name: 'Page or record to find' }).fill(text); await page.getByRole('button', { name: 'Find', exact: true }).click() }
   await openMobile()
+  await page.getByRole('button', { name: 'Voice to text', exact: true }).click()
+  await page.getByRole('button', { name: 'Stop voice to text', exact: true }).waitFor()
+  await page.evaluate(() => { window.lateSpeechResult = window.testSpeech.onresult; window.lateSpeechEnd = window.testSpeech.onend })
+  await page.getByRole('textbox', { name: 'Page or record to find' }).fill('Corrected typed page')
+  await page.evaluate(() => { window.lateSpeechResult?.({ results: [[{ transcript: 'work' }]] }); window.lateSpeechEnd?.() })
+  assert.equal(await page.getByRole('textbox', { name: 'Page or record to find' }).inputValue(), 'Corrected typed page')
+  assert.equal(await page.evaluate(() => window.voicePilot.events.length), 0)
+  checks.push('mobile typing cancels capture and ignores a late recognized page')
   await search('advanced reports')
   await page.getByRole('button', { name: /Advanced reports/ }).click()
   await page.getByRole('status').filter({ hasText: 'authenticated website' }).waitFor()
@@ -221,6 +263,7 @@ try {
   assistantData.report_audience = [{ id: 1, name: 'Fictional Alex' }]
   assistantData.attention_available = true
   assistantData.phone_practice_available = true
+  assistantData.commitments_available = true
   await openMobile()
   await page.getByRole('button', { name: 'Ask about my business' }).click()
   await page.getByRole('status').filter({ hasText: 'Nothing is sent' }).waitFor()
@@ -283,6 +326,28 @@ try {
   await page.getByText('Fictional practice only. No call', { exact: false }).waitFor()
   assert.equal(assistantRequests, 1)
   checks.push('mobile phone practice labels provider uncertainty and causes no model dispatch')
+  await page.getByRole('button', { name: 'Activity and approvals', exact: true }).click()
+  await page.getByText('Create a task from a recorded promise', { exact: true }).focus()
+  await page.keyboard.press('Enter')
+  await page.keyboard.press('Tab')
+  assert.equal(await page.getByRole('combobox', { name: 'Commitment job', exact: true }).evaluate(node => node === document.activeElement), true)
+  checks.push('mobile commitment disclosure and form are reachable with the keyboard')
+  await page.getByRole('combobox', { name: 'Commitment job', exact: true }).selectOption('1')
+  await page.getByRole('combobox', { name: 'Source job note', exact: true }).selectOption('7')
+  await page.getByRole('textbox', { name: 'Exact promise quote', exact: true }).fill('I will call the fictional customer.')
+  await page.getByRole('textbox', { name: 'Task title', exact: true }).fill('Call the fictional customer')
+  await page.getByRole('combobox', { name: 'Task assignee', exact: true }).selectOption('1')
+  await page.getByLabel('Due time in America/New_York', { exact: true }).fill('2026-10-20T09:00')
+  await page.getByRole('checkbox', { name: 'This exact quote records a commitment, not a suggestion.' }).check()
+  await page.getByRole('button', { name: 'Prepare task preview', exact: true }).click()
+  await page.getByRole('button', { name: 'Approve task', exact: true }).waitFor()
+  assert.equal(await page.getByRole('button', { name: 'Approve task', exact: true }).isDisabled(), true)
+  await page.getByRole('checkbox', { name: 'I reviewed this exact task, source, assignee and due time.' }).check()
+  await page.getByRole('button', { name: 'Approve task', exact: true }).click()
+  await page.getByText('Find reviewed commitment tasks', { exact: true }).click()
+  await page.getByRole('button', { name: 'Find commitments', exact: true }).click()
+  await page.getByText('Call the fictional customer', { exact: true }).waitFor()
+  checks.push('mobile promise to task requires source assignee due time and a separate exact approval')
   await page.getByRole('button', { name: 'Private memory', exact: true }).click()
   await page.getByRole('textbox', { name: 'Remember this' }).fill('Use brief fictional summaries')
   await page.keyboard.press('Tab')
@@ -300,6 +365,7 @@ try {
   checks.push('mobile assistant revocation clears prior answers')
   assistantAllowed = true
   await page.goto(webUrl + '/assistant-preview')
+  await page.getByRole('textbox', { name: 'Page draft', exact: true }).fill('Preserve this actual page edit')
   await page.getByRole('button', { name: 'Ask Everbranch', exact: true }).click()
   await page.getByRole('status').filter({ hasText: 'Review dictated text' }).waitFor()
   assert.equal(assistantRequests, 1)
@@ -308,6 +374,29 @@ try {
   await page.getByText('Fictional answer:', { exact: false }).waitFor()
   assert.equal(await page.locator('dialog img').count(), 0)
   checks.push('web assistant dispatches only on Ask and escapes generated text')
+  await page.getByText('Sources (1)', { exact: true }).click()
+  page.once('dialog', dialog => dialog.dismiss())
+  await page.getByRole('link', { name: 'Fictional source job', exact: true }).click()
+  await page.getByRole('status').filter({ hasText: 'Stayed on this page. Your drafts' }).waitFor()
+  assert.equal(await page.getByRole('textbox', { name: 'Page draft', exact: true }).inputValue(), 'Preserve this actual page edit')
+  assert.equal(new URL(page.url()).pathname, '/assistant-preview')
+  checks.push('web assistant source links preserve a declined actual-page form draft')
+  await page.getByRole('textbox', { name: 'Page draft', exact: true }).evaluate(node => node.dataset.navigationPending = 'true')
+  await page.getByRole('link', { name: 'Fictional source job', exact: true }).click()
+  await page.getByRole('status').filter({ hasText: 'Wait for the current upload or save' }).first().waitFor()
+  await page.getByRole('textbox', { name: 'Page draft', exact: true }).evaluate(node => delete node.dataset.navigationPending)
+  checks.push('web assistant source links respect pending page uploads')
+  assistantSessionDelay = 200
+  await page.getByRole('link', { name: 'Fictional source job', exact: true }).click()
+  await page.getByRole('button', { name: 'Close assistant', exact: true }).click()
+  await page.waitForTimeout(300)
+  assert.equal(new URL(page.url()).pathname, '/assistant-preview')
+  assistantSessionDelay = 0
+  checks.push('web late source permission response cannot navigate after closing')
+  await page.getByRole('button', { name: 'Ask Everbranch', exact: true }).click()
+  await page.getByRole('status').filter({ hasText: 'Review dictated text' }).waitFor()
+  await page.getByRole('combobox', { name: 'Conversation', exact: true }).selectOption('1')
+  await page.getByText('Fictional answer:', { exact: false }).waitFor()
   await page.screenshot({ path: resolve(output, 'web-assistant.png') })
   await page.getByRole('button', { name: 'Financial snapshot', exact: true }).click()
   await page.getByText('Currency unrecorded', { exact: false }).waitFor()
@@ -337,6 +426,20 @@ try {
   checks.push('web weekly snapshot exposes authenticated same-origin print and coverage')
   await page.setViewportSize({ width: 1360, height: 900 })
   await page.screenshot({ path: resolve(output, 'web-weekly-report.png') })
+  await page.getByRole('button', { name: 'Activity and approvals', exact: true }).click()
+  await page.getByText('Create a task from a recorded promise', { exact: true }).click()
+  await page.getByRole('combobox', { name: 'Commitment job', exact: true }).selectOption('1')
+  await page.getByRole('combobox', { name: 'Source job note', exact: true }).selectOption('7')
+  await page.getByRole('textbox', { name: 'Exact promise quote', exact: true }).fill('I will call the fictional customer.')
+  await page.getByRole('textbox', { name: 'Task title', exact: true }).fill('Review the fictional customer callback')
+  await page.getByRole('combobox', { name: 'Task assignee', exact: true }).selectOption('1')
+  await page.getByLabel('Due time in America/New_York', { exact: true }).fill('2026-10-21T09:00')
+  await page.getByRole('checkbox', { name: 'This exact quote records a commitment, not a suggestion.' }).check()
+  await page.getByRole('button', { name: 'Prepare task preview', exact: true }).click()
+  await page.getByRole('button', { name: 'Approve task', exact: true }).waitFor()
+  assert.equal(await page.getByRole('button', { name: 'Approve task', exact: true }).isDisabled(), true)
+  await page.screenshot({ path: resolve(output, 'web-commitment-preview.png') })
+  checks.push('web task preview discloses exact source assignment and due time before approval')
   await page.getByRole('button', { name: 'Conversation', exact: true }).click()
   await page.getByRole('textbox', { name: 'Question', exact: true }).fill('An unsent question')
   page.once('dialog', dialog => dialog.dismiss())
@@ -348,6 +451,9 @@ try {
   await page.getByRole('status').filter({ hasText: 'Access was revoked' }).waitFor()
   assert.equal(await page.getByText('Fictional answer:', { exact: false }).count(), 0)
   checks.push('web assistant revocation clears prior answers')
+  assert.ok(webNavigationPosts > 0)
+  assert.ok(mobileNavigationPosts > 0)
+  checks.push('web and mobile navigation words travel in POST bodies rather than URLs')
   assert.deepEqual(errors, [])
   console.log(JSON.stringify({ passed: checks.length, checks, output }, null, 2))
 } catch (error) {

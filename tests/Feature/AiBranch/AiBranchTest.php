@@ -336,6 +336,19 @@ test('an unchanged AI internal note has one audited compensating undo', function
     Http::assertNothingSent();
 });
 
+test('legacy review previews and replay receipts honor revoked job access', function (): void {
+    [$tenant, $user] = aiBranchFixture();
+    $job = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'Fictional job', 'status' => 'open']);
+    $actions = app(AiBranchActions::class);
+    $pending = $actions->propose($tenant, $user, $job->id, 'PRIVATE PENDING PREVIEW', (string) Str::uuid());
+    $executed = $actions->propose($tenant, $user, $job->id, 'Reviewed internal note', (string) Str::uuid());
+    $actions->decide($tenant, $user, $executed->id, $executed->digest, true);
+    TenantModuleEntitlement::create(['tenant_id' => $tenant->id, 'module_key' => 'field_service', 'enabled_status' => 'disabled']);
+    $this->actingAs($user)->get(route('ai-branch.index', ['tenant' => $tenant->slug]))->assertOk()->assertDontSee('PRIVATE PENDING PREVIEW');
+    expect(fn () => $actions->decide($tenant, $user, $executed->id, $executed->digest, true))->toThrow(HttpException::class);
+    expect($pending->fresh()->status)->toBe('pending')->and(FieldServiceJobNote::count())->toBe(1);
+});
+
 test('intervening note edits prevent undo even if the text is subsequently restored', function (): void {
     [$tenant, $user] = aiBranchFixture();
     $job = FieldServiceJob::query()->create(['tenant_id' => $tenant->id, 'title' => 'Fictional panel work', 'status' => 'scheduled']);

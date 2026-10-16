@@ -67,7 +67,8 @@ class GlobalSearchCoordinator
                         'provider' => $provider::class,
                         'tenant_id' => is_numeric($context['tenant_id'] ?? null) ? (int) $context['tenant_id'] : null,
                         'surface' => (string) ($context['surface'] ?? 'marketing'),
-                        'message' => $exception->getMessage(),
+                        'message' => empty($context['navigation_only']) ? $exception->getMessage() : 'Navigation provider failed.',
+                        'exception_type' => $exception::class,
                     ]);
 
                     return [];

@@ -232,13 +232,22 @@
                     if (target instanceof HTMLInputElement && ["search", "hidden"].includes(target.type)) return;
                     editedFields.add(target);
                 };
-                const allowVoiceNavigation = () => {
+                const allowVoiceNavigation = (extraDirty = false) => {
                     for (const target of editedFields) if (!target.isConnected) editedFields.delete(target);
                     if (document.querySelector('main [data-navigation-pending="true"]')) { sayStatus("Wait for the current upload or save to finish."); return false; }
-                    if (!editedFields.size && !document.querySelector('main [data-navigation-dirty="true"]')) return true;
+                    if (!extraDirty && !editedFields.size && !document.querySelector('main [data-navigation-dirty="true"]')) return true;
                     if (!window.confirm("Leave this screen? Changes you typed may not have been saved.")) return false;
-                    editedFields.clear();
                     return true;
+                };
+                const checkNavigation = event => {
+                    if (!event.detail || typeof event.detail !== "object") { event.preventDefault(); return; }
+                    event.detail.allowed = allowVoiceNavigation(Boolean(event.detail.hasAssistantDraft));
+                    if (!event.detail.allowed) {
+                        event.detail.message = document.querySelector('main [data-navigation-pending="true"]')
+                            ? "Wait for the current upload or save to finish."
+                            : "Stayed on this page. Your drafts are still here.";
+                        event.preventDefault();
+                    }
                 };
                 const sayStatus = message => { if (voiceStatus) voiceStatus.textContent = message; };
                 const stopVoice = () => {
@@ -281,6 +290,18 @@
                     active.scrollIntoView({block: "nearest"});
                 };
 
+                const fetchSearch = (query, navigateOnly, signal) => {
+                    const url = new URL(endpoint, location.origin);
+                    const headers = { "X-Requested-With": "XMLHttpRequest", Accept: "application/json" };
+                    if (navigateOnly) {
+                        headers["Content-Type"] = "application/json";
+                        headers["X-CSRF-TOKEN"] = document.querySelector('meta[name="csrf-token"]')?.content || "";
+                        return fetch(url, { method: "POST", headers, credentials: "same-origin", signal, cache: "no-store", body: JSON.stringify({ q: query, intent: "navigate" }) });
+                    }
+                    if (query) url.searchParams.set("q", query);
+                    return fetch(url, { headers, credentials: "same-origin", signal, cache: "no-store" });
+                };
+
                 const executeSearch = () => {
                     const query = input.value.trim();
                     const sequence = ++requestSequence;
@@ -288,15 +309,7 @@
                     abortController = new AbortController();
                     renderState(root, query ? "Searching…" : "Loading suggestions…", "Everbranch is checking only what you are allowed to access.", "loading");
 
-                    const url = new URL(endpoint, window.location.origin);
-                    if (query) url.searchParams.set("q", query);
-                    if (voiceMode) url.searchParams.set("intent", "navigate");
-
-                    fetch(url, {
-                        headers: {"X-Requested-With": "XMLHttpRequest", "Accept": "application/json"},
-                        credentials: "same-origin",
-                        signal: abortController.signal,
-                    })
+                    fetchSearch(query, voiceMode, abortController.signal)
                         .then(response => response.ok ? response.json() : Promise.reject(response))
                         .then(payload => {
                             if (sequence !== requestSequence || !isOpen() || !root.isConnected) return;
@@ -305,10 +318,7 @@
                                 if (payload.navigation.control === "back") {
                                     const previous = readHistory().at(-1);
                                     if (!previous || safeHref(previous.url) === "#" || new URL(previous.url).origin !== location.origin) { sayStatus("There is no previous workspace page to open."); return; }
-                                    const check = new URL(endpoint, location.origin);
-                                    check.searchParams.set("q", text(previous.title).slice(0, 120));
-                                    check.searchParams.set("intent", "navigate");
-                                    fetch(check, { credentials: "same-origin", signal: abortController.signal, headers: { Accept: "application/json" }, cache: "no-store" })
+                                    fetchSearch(text(previous.title).slice(0, 120), true, abortController.signal)
                                         .then(response => { if (!response.ok) throw new Error(); return response.json(); })
                                         .then(fresh => {
                                             if (sequence !== requestSequence || !isOpen() || !root.isConnected) return;
@@ -355,7 +365,12 @@
                     panel.classList.remove("hidden");
                     input.setAttribute("aria-expanded", "true");
                     document.documentElement.classList.add("overflow-hidden");
-                    executeSearch();
+                    if (voiceMode && !query.trim()) {
+                        ++requestSequence;
+                        abortController?.abort();
+                        clearTimeout(debounceTimer);
+                        renderState(root, "Find a page", "Say where you want to go, or type a page name.");
+                    } else executeSearch();
                     window.requestAnimationFrame(() => {
                         input.focus();
                         input.setSelectionRange(query.length, query.length);
@@ -382,14 +397,12 @@
                     if (!(row instanceof HTMLAnchorElement)) return;
                     if (voiceMode) {
                         if (row.dataset.commandAction || ["action", "command"].includes(row.dataset.commandType) || row.origin !== window.location.origin) { sayStatus("That destination is unavailable."); return; }
+                        stopVoice();
                         const sequence = ++requestSequence;
                         abortController?.abort();
                         abortController = new AbortController();
-                        const url = new URL(endpoint, window.location.origin);
-                        url.searchParams.set("q", input.value.trim());
-                        url.searchParams.set("intent", "navigate");
                         try {
-                            const response = await fetch(url, { headers: { Accept: "application/json", "X-Requested-With": "XMLHttpRequest" }, credentials: "same-origin", signal: abortController.signal, cache: "no-store" });
+                            const response = await fetchSearch(input.value.trim(), true, abortController.signal);
                             if (!response.ok) throw new Error("Access could not be refreshed.");
                             const payload = await response.json();
                             if (sequence !== requestSequence || !isOpen() || !root.isConnected) return;
@@ -494,6 +507,10 @@
                 const startVoice = () => {
                     if (!Recognition) { voiceMode = true; input.focus(); sayStatus("Voice recognition is unavailable in this browser. Type where you want to go."); return; }
                     if (recognition) { recognition.stop(); return; }
+                    ++requestSequence;
+                    abortController?.abort();
+                    clearTimeout(debounceTimer);
+                    clearTimeout(voiceTimer);
                     voiceMode = true;
                     cancelledVoice = false;
                     recognition = new Recognition();
@@ -510,6 +527,7 @@
                         if (!transcript) return;
                         heard = true;
                         input.value = transcript.slice(0, 120);
+                        stopVoice();
                         sayStatus(`Heard: ${input.value}`);
                         executeSearch();
                     };
@@ -526,6 +544,7 @@
                 document.addEventListener("input", trackEdit, true);
                 document.addEventListener("change", trackEdit, true);
                 document.addEventListener("app-command-palette:open", onCustomOpen);
+                document.addEventListener("everbranch:check-navigation", checkNavigation);
                 input.addEventListener("input", onInput);
                 closeButton.addEventListener("click", close);
                 overlay.addEventListener("click", close);
@@ -541,6 +560,7 @@
                     document.removeEventListener("input", trackEdit, true);
                     document.removeEventListener("change", trackEdit, true);
                     document.removeEventListener("app-command-palette:open", onCustomOpen);
+                    document.removeEventListener("everbranch:check-navigation", checkNavigation);
                     input.removeEventListener("input", onInput);
                     closeButton.removeEventListener("click", close);
                     overlay.removeEventListener("click", close);

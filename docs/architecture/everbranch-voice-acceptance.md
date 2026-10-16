@@ -16,14 +16,14 @@ Evidence references:
   fixture. Includes fake recognition, permission failure, ambiguity, revoked
   destination, unsaved draft/upload cancellation, focus containment/restoration,
   stale responses, safe generated text, memory, approval/undo and weekly pagination.
-- M: mobile lint, 94 unit tests and TypeScript/Vite production build. Physical
+- M: mobile lint, 95 unit tests and TypeScript/Vite production build. Physical
   Android/iOS acceptance is not supplied by a browser build.
 
 | # | Requirement | Implemented evidence and remaining gap |
 |---|---|---|
 | 1 | Buy/configure number | Open: provider provisioning, exact purchase preview and number ownership. No purchase made. |
 | 2 | Port number | Open: eligibility, port lifecycle and status reconciliation. |
-| 3 | Make/receive supported calls | Open: telephony adapters, call lifecycle and physical devices. |
+| 3 | Make/receive supported calls | Pure fake/Twilio callback adapters and call-state reduction are tested. Durable call storage, live dispatch, provider acceptance and physical devices remain open. |
 | 4 | Hours/routing | Pure policy validation/routing covers version, timezone, holidays, DST, authorized available staff, dedupe and known-owned-number forwarding rejection. Live routing, queues and provider acceptance remain open. |
 | 5 | Voicemail | Open: storage, access, delivery and retention. |
 | 6 | Tenant-isolated call/message records | Existing message scope is preserved; new phone record isolation remains open. |
@@ -49,11 +49,11 @@ Evidence references:
 | 26 | Existing platform protections | No provider/accounting/billing/store changes. Broad regression results recorded separately; protected CI and MySQL gates remain required. |
 | 27 | Operational/native acceptance | B proves desktop/browser interaction; M builds. No Java/Android SDK, physical devices or Mac/iOS build evidence here. Device checks are deferred at the user's request. Load/provider failure, restore and monitored pilot remain open. |
 | 28 | Every accessible destination | N/B recursively cover canonical pages/settings and current native renderer inventory, with explicit unsupported states, current access/back/draft guards. Every GET/native screen coverage audit and physical acceptance remain open. |
-| 29 | Source-linked commitments | Open: promise classification, exact timezone/date, reviewed task save/reminders. |
+| 29 | Source-linked commitments | A/B implement exact team-visible job-note quotes, conservative promise-candidate filtering, explicit assignee/due time, DST gap/repeat checks, immutable previews, replay-safe task/assignment/source-event creation and pending/overdue/completed queries. Broader language/channel extraction, reminder scheduling and true MySQL concurrency evidence remain open. |
 | 30 | Shared Needs attention | A/B now cover registered Customer Loop follow-ups with 50-item pages, 5-minute composing claims, assignment, timezone-aware snooze, resolve/reopen, encrypted idempotent receipts and stale-version rejection. Other source adapters, legacy-screen lease enforcement, non-admin grants and real MySQL concurrent transactions remain open. |
 | 31 | Cross-channel relationship search | Existing scoped navigation/record search retained. Cross-mail/message/document evidence and incomplete-coverage search UI remain open. |
 | 32 | Playbook/practice | Seven scripted local/testing-only fictional phone scenarios use a fixed public playbook, pure routing/reduction and zero provider dispatch. Tenant knowledge publication, LLM dialogue, caller sessions and capped live provider use remain open. |
-| 33 | Activity/approval center | A/B implement current scoped internal note preview, review, receipt and version-checked compensating archive. Other action types and uncertain external lifecycle views remain open. |
+| 33 | Activity/approval center | A/B implement scoped note/task previews, exact review, receipts, source/version/grant rechecks and supported note undo. Legacy notes are kept separate from task previews. Other action types and uncertain external lifecycle views remain open. |
 | 34 | Human transfer/callback recovery | Scripted practice distinguishes declined transfers, unconfirmed outages and reviewed callback proposals. Supported live transfer, authorized context, durable callback ownership and follow-up remain open. |
 | 35 | Employee voice/photo closeout | Existing dictated notes/photos and pending-upload navigation protection retained. Reviewed multi-action closeout, offline recovery and new employee grants remain open. |
 

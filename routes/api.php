@@ -76,6 +76,7 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
                 Route::post('/support-tickets/{ticket}/reply', [EverbranchMobileController::class, 'replySupportTicket'])->middleware(['abilities:mobile:write', 'throttle:60,1'])->whereNumber('ticket')->name('workspace.support.reply');
                 Route::post('/bud/questions', [EverbranchMobileController::class, 'askBud'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->name('workspace.bud.questions.store');
                 Route::get('/search', [EverbranchMobileController::class, 'search'])->middleware('abilities:mobile:read')->name('workspace.search');
+                Route::post('/search/navigation', [EverbranchMobileController::class, 'navigateSearch'])->middleware('abilities:mobile:read')->name('workspace.search.navigate');
                 Route::get('/customers', [EverbranchMobileController::class, 'customers'])->middleware('abilities:mobile:read')->name('workspace.customers');
                 Route::post('/customers', [EverbranchMobileController::class, 'storeCustomer'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->name('workspace.customers.store');
                 Route::get('/customers/{customer}', [EverbranchMobileController::class, 'customer'])->middleware('abilities:mobile:read')->whereNumber('customer')->name('workspace.customers.show');
@@ -90,6 +91,9 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
                 Route::get('/class-scheduling/classes/{scheduledClass}', [EverbranchMobileClassSchedulingController::class, 'show'])->middleware('abilities:mobile:read')->whereNumber('scheduledClass')->name('workspace.class-scheduling.show');
                 Route::post('/class-scheduling/enrollments/{enrollment}/reminders', [EverbranchMobileClassSchedulingController::class, 'storeReminder'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->whereNumber('enrollment')->name('workspace.class-scheduling.reminders.store');
                 Route::prefix('ai-assistant')->name('workspace.ai-assistant.')->group(function (): void {
+                    Route::get('/commitments', [\App\Http\Controllers\AiCommitmentController::class, 'index'])->middleware('abilities:mobile:read')->name('commitments.index');
+                    Route::get('/commitments/sources', [\App\Http\Controllers\AiCommitmentController::class, 'sources'])->middleware('abilities:mobile:read')->name('commitments.sources');
+                    Route::post('/commitments', [\App\Http\Controllers\AiCommitmentController::class, 'propose'])->middleware(['abilities:mobile:write', 'throttle:20,1,ai-commitments:'])->name('commitments.propose');
                     Route::post('/phone/practice', [\App\Http\Controllers\AiPhonePracticeController::class, 'run'])->middleware(['abilities:mobile:read', 'throttle:10,1,ai-phone-practice:'])->name('phone.practice');
                     Route::get('/attention', [\App\Http\Controllers\AiAttentionController::class, 'index'])->middleware('abilities:mobile:read')->name('attention.index');
                     Route::post('/attention/{item}', [\App\Http\Controllers\AiAttentionController::class, 'update'])->whereNumber('item')->middleware(['abilities:mobile:write', 'throttle:30,1,ai-attention:'])->name('attention.update');

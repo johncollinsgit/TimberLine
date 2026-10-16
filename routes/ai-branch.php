@@ -7,6 +7,9 @@ Route::middleware(['auth', 'verified', 'tenant.access', 'throttle:20,1'])->prefi
     Route::get('/', [AiBranchController::class, 'index'])->name('index');
     Route::get('/assistant', [\App\Http\Controllers\AiAssistantController::class, 'session'])->name('assistant.session');
     Route::post('/reports', [\App\Http\Controllers\AiReportController::class, 'store'])->middleware('throttle:5,1,ai-reports:')->name('assistant.reports.store');
+    Route::get('/commitments/sources', [\App\Http\Controllers\AiCommitmentController::class, 'sources'])->name('assistant.commitments.sources');
+    Route::get('/commitments', [\App\Http\Controllers\AiCommitmentController::class, 'index'])->name('assistant.commitments.index');
+    Route::post('/commitments', [\App\Http\Controllers\AiCommitmentController::class, 'propose'])->middleware('throttle:20,1,ai-commitments:')->name('assistant.commitments.propose');
     Route::post('/phone/practice', [\App\Http\Controllers\AiPhonePracticeController::class, 'run'])->middleware('throttle:10,1,ai-phone-practice:')->name('assistant.phone.practice');
     Route::get('/attention', [\App\Http\Controllers\AiAttentionController::class, 'index'])->name('assistant.attention.index');
     Route::post('/attention/{item}', [\App\Http\Controllers\AiAttentionController::class, 'webUpdate'])->whereNumber('item')->middleware('throttle:30,1,ai-attention:')->name('assistant.attention.update');
