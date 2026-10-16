@@ -53,9 +53,9 @@ test('Studio uses its existing engine through an owner-only fixed-origin proxy',
     $this->actingAs(User::factory()->create(['is_active' => true, 'email_verified_at' => now()]))->get('http://'.$this->host.'/studio/')->assertForbidden();
     Http::assertSentCount(1);
 });
-test('one managed website offer includes the weekly strategic partnership', function () {
+test('the Retail launch offer retains the weekly strategic partnership', function () {
     $offer = app(EvergroveOffer::class)->presentation();
-    expect($offer['monthly_cents'])->toBe(9900)->and($offer['setup_cents'])->toBe(49900)->and($offer['partnership'][0])->toBe('One-hour video call every week');
+    expect($offer['monthly_cents'])->toBe(8900)->and($offer['ongoing_monthly_cents'])->toBe(14900)->and($offer['introductory_months'])->toBe(6)->and($offer['setup_cents'])->toBe(49900)->and($offer['partnership'][0])->toBe('One-hour video call every week');
     $this->get('http://'.$this->host.'/retail/showroom/pricing')->assertOk();
     $this->getJson('http://'.$this->host.'/retail/showroom/api/bootstrap?merchant=joy-fudge-company')->assertJsonCount(21, 'vendors')->assertJsonPath('offer.setup_cents', 49900);
 });

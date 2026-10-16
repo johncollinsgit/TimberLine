@@ -8,18 +8,18 @@ do not send notifications. Separately approved external outreach is described be
 
 ## Offer and presentation
 
-The showroom headline is **Great Businesses. Your next chapter**. The offer is
-**$499 one-time setup and $99/month**, using the canonical Managed Website pricing.
-There is no separate workspace charge in the presentation. Evergrove includes a
-**one-hour video call each week** as a strategic partner: marketing conversations,
-photo work, and potential prospects and opportunities for the merchant’s business.
-The pricing page explains setup, website/workspace, ongoing care, retail demos,
-launch review, and separately scoped third-party usage/custom work.
+The existing storefront headline is **Great Businesses. Your next chapter**.
+The Retail sales section now uses the canonical **Launch Partner Offer**:
+**$89/month for the first six months, then $149/month from month seven**, plus
+**$499 one-time setup**, for the **first ten qualifying businesses**, subject to
+operator review and written confirmation. A request neither reserves a place nor
+activates billing. Both monthly rates appear together. The separate Managed Website
+add-on remains $99/month; it was not repriced.
 
-`EvergroveOffer` supplies the same offer to every concept and the offline pricing
-page. This does not change existing customer billing or grant commerce entitlements.
-A future customer agreement must implement this combined offer without an extra
-workspace charge; activation is blocked in this build.
+`EvergroveOffer` reads the named offer in `config/module_catalog.php`. Existing
+website/workspace demonstrations and the weekly one-hour strategic partnership
+remain included in the proposed scope. See `SALES_DEMO_UPGRADE.md` for signup,
+OpenAI configuration, browser speech, and physical tablet verification.
 
 ## Source and branches
 

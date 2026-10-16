@@ -15,6 +15,9 @@ if (is_string($host) && $host !== '') {
         Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/showroom', [Retail::class, 'index'])->name('retail.showroom');
             Route::get('/showroom/pricing', [Retail::class, 'index'])->name('retail.pricing');
+            Route::get('/showroom/assistant', [Retail::class, 'index'])->name('retail.assistant');
+            Route::post('/showroom/api/signup', [Retail::class, 'signup'])->middleware('throttle:6,1,retail-signup:');
+            Route::post('/showroom/api/assistant', [Retail::class, 'assistant'])->middleware('throttle:6,1,retail-ai:');
             Route::get('/showroom/outreach', [Retail::class, 'outreach'])->name('retail.outreach');
             Route::get('/showroom/concepts/{slug}', [Retail::class, 'concept']);
             Route::get('/staff/{slug}', [Retail::class, 'concept']);

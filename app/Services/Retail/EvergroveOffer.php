@@ -6,14 +6,14 @@ class EvergroveOffer
 {
     public function presentation(): array
     {
-        // One offer everywhere in the showroom, using the approved Website pricing.
-        $pricing = (array) config('module_catalog.addons.managed_website.pricing', []);
+        $pricing = (array) config('module_catalog.launch_offers.retail_launch_partner');
 
         return [
-            'name' => 'Evergrove Managed Website on Everbranch',
-            'setup_cents' => (int) ($pricing['setup_price_cents'] ?? 49900),
-            'monthly_cents' => (int) ($pricing['recurring_price_cents'] ?? 9900),
-            'currency' => 'USD',
+            ...$pricing,
+            'key' => 'retail_launch_partner',
+            'quote_version' => hash('sha256', json_encode($pricing, JSON_THROW_ON_ERROR)),
+            'monthly_cents' => (int) $pricing['introductory_monthly_cents'],
+            'eligibility_note' => 'First 10 qualifying businesses, subject to eligibility review and written confirmation. A request does not reserve a place or activate a subscription.',
             'included' => [
                 ['title' => 'A website that feels like your business', 'body' => 'A considered design, mobile and tablet layouts, your approved branding, and clear paths for customers to shop or get in touch.'],
                 ['title' => 'Setup with a person who understands the work', 'body' => 'A conversation about your business, a starting catalog or service collection, and a private preview for your approval before launch.'],

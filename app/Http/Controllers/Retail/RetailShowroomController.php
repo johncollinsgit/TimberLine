@@ -81,7 +81,7 @@ class RetailShowroomController extends Controller
         $sawyer = \App\Models\Tenant::where('slug', 'sawyer-naturals')->first();
         $staff = $all || $this->showroom->staffRoleOrNull($r->user(), $slug) !== null;
 
-        return $this->response(['event' => $this->showroom->definitions()['event'], 'offer' => app(\App\Services\Retail\EvergroveOffer::class)->presentation(), 'vendors' => $vendors, 'owner' => $this->showroom->owner($r->user()), 'staff' => $staff, 'sawyer_url' => $sawyer && $this->showroom->owner($r->user()) ? url('/landlord/tenants/'.$sawyer->id) : null]);
+        return $this->response(['event' => $this->showroom->definitions()['event'], 'offer' => app(\App\Services\Retail\EvergroveOffer::class)->presentation(), 'assistant' => ['available' => app(\App\Services\Retail\RetailAssistantService::class)->available(), 'provider' => 'openai'], 'vendors' => $vendors, 'owner' => $this->showroom->owner($r->user()), 'staff' => $staff, 'sawyer_url' => $sawyer && $this->showroom->owner($r->user()) ? url('/landlord/tenants/'.$sawyer->id) : null]);
     }
 
     public function quote(Request $r, string $slug)
@@ -90,6 +90,38 @@ class RetailShowroomController extends Controller
         $data = $r->validate(['lines' => 'required|array|max:40', 'lines.*.product_id' => 'required|string', 'lines.*.variant_id' => 'required|string', 'lines.*.quantity' => 'required|integer|min:1|max:20', 'destination' => 'required|array', 'destination.zip' => 'required|string', 'destination.state' => 'required|string']);
 
         return $this->response($this->showroom->quote($slug, $data['lines'], $data['destination']));
+    }
+
+    public function signup(Request $r)
+    {
+        $this->owner($r);
+        $offer = app(\App\Services\Retail\EvergroveOffer::class)->presentation();
+        $data = $r->validate([
+            'business_name' => 'required|string|max:190', 'contact_name' => 'required|string|max:190',
+            'email' => 'required|email|max:190', 'phone' => ['required', 'string', 'max:40', 'regex:/^\+?[0-9 ()\-.]{7,40}$/'],
+            'subscription' => ['required', \Illuminate\Validation\Rule::in([$offer['key']])],
+            'quote_version' => ['required', \Illuminate\Validation\Rule::in([$offer['quote_version']])],
+            'pricing_accepted' => 'required|accepted', 'tenant_id' => 'prohibited', 'requested_tenant_slug' => 'prohibited',
+            'card_number' => 'prohibited', 'payment_method' => 'prohibited',
+        ]);
+
+        return $this->response(app(\App\Services\Retail\RetailSignupService::class)->submit($r->user(), $data));
+    }
+
+    public function assistant(Request $r)
+    {
+        $this->owner($r);
+        $data = $r->validate([
+            'mode' => 'required|in:voice,email,sms,admin,personal', 'question' => 'required|string|max:1000',
+            'business' => 'required|string|max:120', 'merchant' => 'nullable|string|max:100',
+            'history' => 'sometimes|array|max:4', 'history.*.role' => 'required|in:user,assistant',
+            'history.*.content' => 'required|string|max:1500', 'tenant_id' => 'prohibited',
+        ]);
+        if (filled($data['merchant'] ?? null)) {
+            $this->showroom->merchant($data['merchant']);
+        }
+
+        return $this->response(app(\App\Services\Retail\RetailAssistantService::class)->respond($r->user(), $data));
     }
 
     public function cart(Request $r, string $slug)

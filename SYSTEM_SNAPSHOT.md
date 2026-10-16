@@ -1,5 +1,25 @@
 # SYSTEM SNAPSHOT
 
+## 2026-10-16 — Retail tablet sales upgrade (development)
+
+The existing Retail PWA retains its installed Android identity and all twenty
+storefront concepts. A named canonical Retail Launch Partner offer replaces only
+the showroom offer: $89/month for six months, then $149/month from month seven,
+$499 setup, first ten qualifying businesses subject to operator review. Managed
+Website add-on pricing remains unchanged. Signup uses the existing production
+access-request service and prospect CRM; it creates no tenant membership, paid
+subscription, or reserved launch place. Personal form data is never persisted on
+the tablet. Confirmation delivery is separately gated and truthfully reported.
+
+The owner-only Retail assistant can call the existing server-side OpenAI account
+with bounded fictional business context, no tools, no provider response storage,
+and a request quota. Email/SMS/business drafts require review; it cannot send a
+campaign, grant access, charge a card or read another tenant. Guided examples work
+when live AI is unavailable. Voice input and optional read-aloud use browser
+capabilities. Social Media Marketing remains Coming Soon. Public shell cache v4
+includes the assistant module, with private API responses excluded.
+See `docs/retail/SALES_DEMO_UPGRADE.md` for setup, evidence and limitations.
+
 ## 2026-10-15 — Private four-app retail showroom (development)
 
 Twenty isolated festival retail concepts and a retained Sawyer source-catalog preview

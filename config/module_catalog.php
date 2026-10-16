@@ -1,6 +1,22 @@
 <?php
 
 $catalog = [
+    // A reviewed Retail offer, separate from Managed Website add-on pricing.
+    // Requests do not reserve a place, activate access, or create a billing plan.
+    'launch_offers' => [
+        'retail_launch_partner' => [
+            'name' => 'Everbranch Retail Launch Partner Offer',
+            'currency' => 'USD',
+            'introductory_monthly_cents' => 8900,
+            'introductory_months' => 6,
+            'ongoing_monthly_cents' => 14900,
+            'setup_cents' => 49900,
+            'qualifying_business_limit' => 10,
+            'eligibility' => 'operator_review',
+            'activation' => 'request_only',
+        ],
+    ],
+
     'defaults' => [
         'plan' => env('TENANT_ENTITLEMENTS_DEFAULT_PLAN', 'starter'),
         'operating_mode' => env('TENANT_ENTITLEMENTS_DEFAULT_MODE', 'shopify'),
