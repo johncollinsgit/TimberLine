@@ -184,3 +184,13 @@ test('late checkout and invoice events preserve a verified subscription period',
     $saved = TenantBillingSubscription::withoutGlobalScopes()->sole();
     expect($saved->status)->toBe('active')->and($saved->current_period_ends_at->timestamp)->toBe($end->timestamp);
 });
+
+test('old paid events cannot reopen cancelled or newer failed AI billing', function (bool $cancelled): void {
+    [$tenant] = aiPurchaseFixture();
+    $metadata = ['purpose' => 'addon_checkout', 'checkout_addons_interest' => 'ai_branch_growth'];
+    $ledger = app(\App\Services\Billing\TenantBillingSubscriptionLedger::class);
+    $ledger->recordStripeEvent($tenant->id, 'evt_block', $cancelled ? 'customer.subscription.deleted' : 'invoice.payment_failed', ['status' => $cancelled ? 'canceled' : 'open'], $metadata, 'cus_ai', 'sub_ai', 2000);
+    $ledger->recordStripeEvent($tenant->id, 'evt_old_paid', 'checkout.session.completed', ['status' => 'complete', 'payment_status' => 'paid'], $metadata, 'cus_ai', 'sub_ai', 1000);
+    $ledger->recordStripeEvent($tenant->id, 'evt_same_second_paid', 'invoice.paid', ['status' => 'paid'], $metadata, 'cus_ai', 'sub_ai', 2000);
+    expect(TenantBillingSubscription::withoutGlobalScopes()->sole()->status)->toBe($cancelled ? 'canceled' : 'past_due');
+})->with([false, true]);

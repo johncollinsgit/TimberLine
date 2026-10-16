@@ -22,9 +22,21 @@ class TenantBillingSubscriptionLedger
         array $object,
         array $metadata,
         string $customerReference,
-        string $subscriptionReference
+        string $subscriptionReference,
+        ?int $eventCreatedAt = null
     ): void {
         if ($tenantId < 1 || $subscriptionReference === '' || ! Schema::hasTable('tenant_billing_subscriptions')) {
+            return;
+        }
+
+        $existing = TenantBillingSubscription::withoutGlobalScopes()->where('tenant_id', $tenantId)->where('provider', 'stripe')->where('provider_subscription_reference', $subscriptionReference)->get();
+        $lastCreated = (int) $existing->max(fn ($row) => data_get($row->metadata, 'stripe_event_created_at', 0));
+        $newStatus = $this->status($eventType, $object);
+        // A paid invoice/Checkout can arrive after cancellation or a newer
+        // failed-payment event. It must not reopen access to that subscription.
+        if (($eventCreatedAt !== null && $eventCreatedAt < $lastCreated)
+            || ($newStatus !== 'canceled' && $existing->contains(fn ($row) => $row->status === 'canceled' || $row->ended_at !== null))
+            || ($newStatus === 'active' && $eventCreatedAt !== null && $eventCreatedAt <= $lastCreated && $existing->contains(fn ($row) => in_array($row->status, ['past_due', 'unpaid'], true)))) {
             return;
         }
 
@@ -44,6 +56,7 @@ class TenantBillingSubscriptionLedger
             'metadata' => [
                 'plan_key' => $this->planKey($metadata),
                 'addon_keys' => $this->addonKeys($metadata),
+                'stripe_event_created_at' => $eventCreatedAt ?? $lastCreated,
             ],
         ];
         // Checkout and invoice events need not repeat the subscription period.

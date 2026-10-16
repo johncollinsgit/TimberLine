@@ -400,6 +400,7 @@ class StripeWebhookIngestService
                 metadata: $metadata,
                 customerReference: $stripeCustomer,
                 subscriptionReference: $stripeSubscription,
+                eventCreatedAt: is_numeric($event['created'] ?? null) ? (int) $event['created'] : null,
             );
 
             $agreementChanged = $this->agreementWebhooks->handle(
