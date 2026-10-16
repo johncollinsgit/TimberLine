@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified', 'tenant.access'])->prefix('marketing/desk')->name('marketing.desk.')->group(function (): void {
     Route::get('/', [MarketingDeskController::class, 'index'])->name('index');
+    Route::post('/instagram/{id}/sync', [MarketingDeskController::class, 'syncInstagram'])->middleware('throttle:3,1')->name('instagram.sync');
+    Route::post('/posts/{id}/copy-caption', [MarketingDeskController::class, 'copyCaption'])->name('posts.copy-caption');
     Route::post('/knowledge', [MarketingDeskController::class, 'knowledge'])->name('knowledge');
     Route::post('/knowledge/{id}/approve', [MarketingDeskController::class, 'approveKnowledge'])->name('knowledge.approve');
     Route::post('/chat', [MarketingDeskController::class, 'chat'])->middleware('throttle:20,1')->name('chat');

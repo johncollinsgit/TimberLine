@@ -17,6 +17,7 @@ use App\Models\MarketingSocialPublication;
 use App\Models\MessagingConversation;
 use App\Services\Automation\V2\WorkflowDraftService;
 use App\Services\Marketing\Desk\BrandKnowledgeService;
+use App\Services\Marketing\Desk\InstagramPostSyncService;
 use App\Services\Marketing\Desk\MarketingAiService;
 use App\Services\Marketing\Desk\MarketingDeskAccess;
 use App\Services\Marketing\Desk\MarketingSignalService;
@@ -24,6 +25,7 @@ use App\Services\Marketing\Desk\MarketingWorkflowCatalog;
 use App\Services\Marketing\Desk\ReplyAutomationService;
 use App\Services\Marketing\Desk\SocialPostService;
 use App\Services\Marketing\Desk\SocialPublisher;
+use App\Services\Marketing\Desk\SocialResultsService;
 use App\Services\Marketing\MessagingResponseInboxService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -66,8 +68,13 @@ class MarketingDeskController extends Controller
         $budget = $staff ? [] : app(MarketingAiService::class)->budget($tenantId);
         $recipes = app(MarketingWorkflowCatalog::class)->recipes();
         $tenant = \App\Models\Tenant::findOrFail($tenantId);
+        $ranking = in_array($request->query('ranking'), array_keys(SocialResultsService::METRICS), true) ? $request->query('ranking') : 'reach';
+        $platformFilter = in_array($request->query('platform'), ['instagram', 'facebook'], true) ? $request->query('platform') : 'all';
+        $formatFilter = in_array($request->query('format'), ['image', 'carousel', 'video', 'text'], true) ? $request->query('format') : 'all';
+        $results = app(SocialResultsService::class)->cards($posts, $publications, $ranking, $platformFilter, $formatFilter);
+        $photoPosts = $posts->filter(fn ($post) => filled($post->content['thumbnail_url'] ?? (($post->content['media_type'] ?? '') !== 'video' ? ($post->content['media_urls'][0] ?? null) : null)))->take(4);
 
-        return response()->view('marketing.desk.index', compact('view', 'tenantId', 'tenant', 'staff', 'threads', 'selected', 'messages', 'controls', 'posts', 'publications', 'connections', 'knowledge', 'turns', 'workflows', 'policies', 'budget', 'recipes'))->header('Cache-Control', 'private, no-store');
+        return response()->view('marketing.desk.index', compact('view', 'tenantId', 'tenant', 'staff', 'threads', 'selected', 'messages', 'controls', 'posts', 'publications', 'connections', 'knowledge', 'turns', 'workflows', 'policies', 'budget', 'recipes', 'ranking', 'platformFilter', 'formatFilter', 'results', 'photoPosts'))->header('Cache-Control', 'private, no-store');
     }
 
     public function knowledge(Request $request)
@@ -88,11 +95,12 @@ class MarketingDeskController extends Controller
     public function chat(Request $request)
     {
         $tenantId = $this->tenant($request);
-        $data = $request->validate(['question' => 'required|string|max:3000', 'request_uuid' => 'required|uuid', 'thread_uuid' => 'required|uuid', 'knowledge_id' => 'required|integer']);
-        $knowledge = app(BrandKnowledgeService::class)->approved($tenantId, $data['knowledge_id']);
-        $evidence = ['question' => $data['question'], 'workspace' => \App\Models\Tenant::findOrFail($tenantId)->name, 'knowledge' => [['source_id' => 'knowledge:'.$knowledge->id, ...$knowledge->content]]];
+        $data = $request->validate(['question' => 'required|string|max:3000', 'request_uuid' => 'required|uuid', 'thread_uuid' => 'required|uuid', 'knowledge_id' => 'nullable|integer']);
+        $knowledge = ! empty($data['knowledge_id']) ? app(BrandKnowledgeService::class)->approved($tenantId, $data['knowledge_id']) : null;
+        $source = $knowledge ? 'knowledge:'.$knowledge->id : null;
+        $evidence = ['question' => $data['question'], 'workspace' => \App\Models\Tenant::findOrFail($tenantId)->name, 'knowledge' => $knowledge ? [['source_id' => $source, ...$knowledge->content]] : []];
         // History is private to the operator and supplied as untrusted conversation evidence.
-        $evidence['history'] = MarketingAssistantTurn::forTenantId($tenantId)->where('user_id', $request->user()->id)->where('thread_uuid', $data['thread_uuid'])->where('purpose', 'owner')->where('status', 'completed')->latest('id')->limit(3)->get()->reverse()->filter(fn ($t) => data_get($t->input, 'knowledge.0.source_id') === 'knowledge:'.$knowledge->id)->map(fn ($t) => ['question' => $t->input['question'] ?? '', 'answer' => mb_substr($t->result['answer'] ?? '', 0, 1200)])->all();
+        $evidence['history'] = MarketingAssistantTurn::forTenantId($tenantId)->where('user_id', $request->user()->id)->where('thread_uuid', $data['thread_uuid'])->where('purpose', 'owner')->where('status', 'completed')->latest('id')->limit(3)->get()->reverse()->filter(fn ($t) => data_get($t->input, 'knowledge.0.source_id') === $source)->map(fn ($t) => ['question' => $t->input['question'] ?? '', 'answer' => mb_substr($t->result['answer'] ?? '', 0, 1200)])->all();
         $evidence['recipes'] = array_keys(app(MarketingWorkflowCatalog::class)->recipes());
         $measured = MarketingSocialPublication::forTenantId($tenantId)->where('status', 'published')->whereNotNull('observed_at')->latest('observed_at')->limit(5)->get();
         $measuredPosts = MarketingSocialPost::forTenantId($tenantId)->whereIn('id', $measured->pluck('post_id'))->get()->keyBy('id');
@@ -115,13 +123,38 @@ class MarketingDeskController extends Controller
         if (is_string($input['media_urls'] ?? null)) {
             $input['media_urls'] = array_values(array_filter(array_map('trim', preg_split('/\R/', $input['media_urls']))));
         }
-        $request->validate(['media_files' => 'nullable|array|max:10', 'media_files.*' => 'file|mimetypes:image/jpeg,video/mp4,video/quicktime|max:102400']);
+        $request->validate(['media_files' => 'nullable|array|max:10', 'media_files.*' => 'file|mimetypes:image/jpeg,image/png,image/webp,video/mp4,video/quicktime|max:102400']);
         foreach ($request->file('media_files', []) as $file) {
             $input['media_urls'][] = app(\App\Services\Marketing\Desk\MarketingMediaService::class)->store($tenantId, $file);
         }
         $post = app(SocialPostService::class)->save($tenantId, $request->user(), $input, $id);
 
         return $this->done($request, 'calendar', ['id' => $post->id, 'revision' => $post->revision]);
+    }
+
+    public function syncInstagram(Request $request, int $id)
+    {
+        $tenantId = $this->tenant($request);
+        try {
+            $count = app(InstagramPostSyncService::class)->sync($tenantId, $id, $request->user());
+        } catch (\Illuminate\Http\Client\RequestException $exception) {
+            return $request->expectsJson() ? response()->json(['message' => 'Instagram could not refresh these posts. Check the account permissions and try again.'], 503)
+                : back()->withErrors(['instagram' => 'Instagram could not refresh these posts. Check the account permissions and try again. Saved posts remain available.']);
+        }
+
+        return $request->expectsJson() ? response()->json(['synced' => $count]) : redirect()->route('marketing.desk.index', ['view' => 'insights', 'platform' => 'instagram', 'ranking' => 'likes'])->with('toast', ['style' => 'success', 'message' => $count.' Instagram posts refreshed.']);
+    }
+
+    public function copyCaption(Request $request, int $id)
+    {
+        $tenantId = $this->tenant($request);
+        $data = $request->validate(['platform' => 'nullable|in:instagram,facebook']);
+        $original = MarketingSocialPost::forTenantId($tenantId)->findOrFail($id);
+        $caption = $original->content[($data['platform'] ?? 'instagram').'_caption'] ?? $original->content['caption'];
+        abort_if(trim($caption) === '', 422, 'This post has no caption to copy.');
+        $draft = app(SocialPostService::class)->save($tenantId, $request->user(), ['caption' => $caption, 'media_type' => 'text', 'media_urls' => []]);
+
+        return $this->done($request, 'calendar', ['id' => $draft->id]);
     }
 
     public function approvePost(Request $request, int $id)

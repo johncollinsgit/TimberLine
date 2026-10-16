@@ -17,7 +17,7 @@ try {
  await page.getByRole('button',{name:/log in|sign in/i}).click();
  await page.waitForLoadState('networkidle');
  const checked=[];
- for(const width of [1440,390]) {
+ for(const width of [1920,1440,390]) {
   await page.setViewportSize({width,height:1000});
   for(const view of ['today','chat','calendar','insights','inbox','recipes','knowledge','settings']) {
    const response=await page.goto(base+'/marketing/desk?tenant=marketing-preview&view='+view);
@@ -25,7 +25,13 @@ try {
    await page.getByRole('heading',{name:'Marketing desk',exact:true}).waitFor();
    const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+2);
    assert.equal(overflow,false,`${width} ${view} horizontal overflow`);
-   if(['today','calendar','inbox'].includes(view))await page.screenshot({path:path.join(out,`marketing-${view}-${width}.png`),fullPage:true});
+   if(['today','calendar','insights'].includes(view))await page.screenshot({path:path.join(out,`marketing-${view}-${width}.png`),fullPage:true});
+   if(width===1920 && view==='today') {
+    const fills=await page.evaluate(()=>document.querySelector('.mf-shell-content').getBoundingClientRect().width >= document.querySelector('#app-main').clientWidth-90);
+    assert.equal(fills,true,'Marketing desk uses the full workspace width');
+    const loaded=await page.locator('.md-photo-wall img').evaluateAll(images=>images.every(img=>img.complete && img.naturalWidth>0));
+    assert.equal(loaded,true,'Content photos load');
+   }
    checked.push(`${view}@${width}`);
   }
  }

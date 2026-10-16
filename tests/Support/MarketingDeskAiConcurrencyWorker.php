@@ -8,7 +8,7 @@ $mode = $argv[6] ?? 'owner';
 if (config('database.default') !== 'mysql' || ! preg_match('/(^|_)(ci|test|testing)(_|$)/i', (string) config('database.connections.mysql.database'))) {
     exit(90);
 }
-config(['marketing_desk.enabled' => true, 'marketing_desk.tenant_ids' => [(int) $tenantId], 'bud.ai_enabled' => true, 'bud.provider_configured' => true, 'bud.ai_api_key' => 'fictional-test-only', 'marketing_desk.input_micros_per_million' => 1000000, 'marketing_desk.output_micros_per_million' => 1000000]);
+config(['marketing_desk.enabled' => true, 'marketing_desk.tenant_ids' => [(int) $tenantId], 'bud.ai_enabled' => true, 'bud.provider_configured' => true, 'bud.ai_api_key' => 'fictional-test-only', 'marketing_desk.ai_enabled' => true, 'marketing_desk.api_key' => 'fictional-test-only', 'marketing_desk.owner_input_micros_per_million' => 1000000, 'marketing_desk.owner_output_micros_per_million' => 1000000]);
 Illuminate\Support\Facades\Http::preventStrayRequests();
 Illuminate\Support\Facades\Http::fake(function () use ($counter) {
     file_put_contents($counter, "call\n", FILE_APPEND | LOCK_EX);
