@@ -2,6 +2,7 @@
 
 namespace App\Services\Soccer;
 
+use App\Mail\SoccerSignInCodeMail;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -10,18 +11,19 @@ class SoccerFamilyService
 {
     public function __construct(private SoccerStore $store) {}
 
-    public function code(int $tenant, string $email): void
+    public function code(int $tenant, string $email, string $mode = 'new'): void
     {
         $email = strtolower(trim($email));
+        $this->requireAlumniFamily($tenant, $email, $mode);
         abort_if($this->store->query('challenges', $tenant)->where('email', $email)->where('created_at', '>', now()->subHour())->count() >= 5, 429, 'Please wait before requesting another code.');
         $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         $this->store->insert('challenges', $tenant, ['email' => $email, 'code_hash' => hash_hmac('sha256', $email.':'.$code, config('app.key')), 'expires_at' => now()->addMinutes(10)]);
-        Mail::raw('Your Wren Family Soccer sign-in code is '.$code.'. It expires in 10 minutes.', fn ($m) => $m->to($email)->subject('Your Wren Family Soccer sign-in code'));
+        Mail::to($email)->send(new SoccerSignInCodeMail($code));
     }
 
-    public function verify(int $tenant, string $email, string $code): ?string
+    public function verify(int $tenant, string $email, string $code, string $mode = 'new'): ?string
     {
-        return DB::transaction(function () use ($tenant, $email, $code) {
+        return DB::transaction(function () use ($tenant, $email, $code, $mode) {
             $email = strtolower(trim($email));
             $c = $this->store->query('challenges', $tenant)->where('email', $email)->whereNull('consumed_at')->where('expires_at', '>', now())->latest('created_at')->lockForUpdate()->first();
             if (! $c || $c->attempts >= 5) {
@@ -33,8 +35,8 @@ class SoccerFamilyService
                 return null;
             }
             $this->store->query('challenges', $tenant)->where('id', $c->id)->update(['consumed_at' => now()]);
-            $f = $this->store->query('families', $tenant)->where('email', $email)->first();
-            $f ??= $this->store->query('families', $tenant)->get()->first(fn ($family) => isset($this->store->decrypt($family->profile)['guardians'][$email]));
+            $f = $this->findFamily($tenant, $email);
+            abort_if($mode === 'existing' && ! $f, 422, self::ALUMNI_NOT_FOUND);
             $id = $f?->id ?? $this->store->insert('families', $tenant, ['email' => $email, 'profile' => $this->store->encrypt([])]);
             $this->store->query('families', $tenant)->where('id', $id)->update(['verified_at' => now(), 'updated_at' => now()]);
             $token = Str::random(64);
@@ -42,6 +44,20 @@ class SoccerFamilyService
 
             return $token;
         }, 3);
+    }
+
+    private const ALUMNI_NOT_FOUND = 'We could not find a previous Wren family for this email. Check the address used for your 2026 registration or medical release, or choose New Family.';
+
+    private function requireAlumniFamily(int $tenant, string $email, string $mode): void
+    {
+        abort_if($mode === 'existing' && ! $this->findFamily($tenant, $email), 422, self::ALUMNI_NOT_FOUND);
+    }
+
+    private function findFamily(int $tenant, string $email): ?object
+    {
+        $family = $this->store->query('families', $tenant)->where('email', $email)->first();
+
+        return $family ?? $this->store->query('families', $tenant)->get()->first(fn ($item) => isset($this->store->decrypt($item->profile)['guardians'][$email]));
     }
 
     public function addGuardian(int $tenant, string $familyId, string $email, string $reason, int $actor): void

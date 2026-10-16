@@ -1,5 +1,6 @@
 <?php
 
+use App\Mail\SoccerSignInCodeMail;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantModuleState;
@@ -47,6 +48,24 @@ it('uses verified family sessions without creating backend users or memberships'
     $familyService->code($this->tenant->id, 'parent@example.com');
     expect($this->store->query('challenges', $this->tenant->id)->count())->toBe(1);
     expect(User::count())->toBe($before)->and($this->store->query('families', $this->tenant->id)->count())->toBe(0);
+});
+it('checks alumni emails before sending codes and keeps new families on their own path', function () {
+    Mail::fake();
+    $service = app(SoccerFamilyService::class);
+    expect(fn () => $service->code($this->tenant->id, 'unknown@example.com', 'existing'))
+        ->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class, 'could not find a previous Wren family');
+    Mail::assertNothingSent();
+    expect($this->store->query('challenges', $this->tenant->id)->count())->toBe(0);
+
+    $this->store->insert('families', $this->tenant->id, ['email' => 'primary@example.com', 'profile' => $this->store->encrypt(['guardians' => ['second@example.com' => ['role' => 'guardian']]])]);
+    $service->code($this->tenant->id, 'second@example.com', 'existing');
+    Mail::assertSent(SoccerSignInCodeMail::class, fn ($mail) => $mail->hasTo('second@example.com') && str_contains($mail->render(), 'Wren Family Soccer') && str_contains($mail->render(), '/youth-soccer.jpg') && str_contains($mail->render(), $mail->code));
+
+    $code = '123456';
+    $this->store->insert('challenges', $this->tenant->id, ['email' => 'unknown@example.com', 'code_hash' => hash_hmac('sha256', 'unknown@example.com:'.$code, config('app.key')), 'expires_at' => now()->addMinutes(10)]);
+    expect(fn () => $service->verify($this->tenant->id, 'unknown@example.com', $code, 'existing'))
+        ->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class, 'could not find a previous Wren family');
+    expect($this->store->query('families', $this->tenant->id)->count())->toBe(1);
 });
 it('rejects family access to another household player and release', function () {
     $a = $this->store->insert('families', $this->tenant->id, ['email' => 'a@example.com', 'profile' => $this->store->encrypt([])]);
