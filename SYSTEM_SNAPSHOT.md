@@ -293,6 +293,8 @@ protected GitHub/Forge pipeline. See
 - The landlord console uses five primary groups. Owner-only client presentation
   presets save audited metadata without changing access or billing. Blank owner
   email configuration disables template editing.
+- Administrative workspace status defaults to Active when unset and remains
+  independent of setup/integration Health warnings in the directory and settings.
 - No provider, billing, entitlement, schema, or production activation is included.
   See `docs/ui/everbranch-showcase-polish.md` for scope and verification boundaries.
 

@@ -1,3 +1,11 @@
+## 2026-10-16 - Workspace status independent of integration health
+
+- The landlord client list and client settings share the saved administrative
+  status. Workspaces without an explicit status display Active; setup gaps and
+  unresolved provider errors remain in Health instead of implying Inactive.
+- Explicit Active, Inactive and Suspended settings are preserved. No stored
+  status, membership, billing, entitlement or integration evidence is changed.
+
 ## 2026-10-16 - Shared payment account setup (feature branch; disabled)
 
 - Added a gated owner/admin Payments page with cards/digital-wallet and PayPal

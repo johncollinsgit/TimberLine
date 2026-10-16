@@ -42,6 +42,19 @@ findings are independent of this presentation change and are not certified fixed
 
 ## Owner controls and landlord console
 
+### Workspace status and integration health
+
+This is a core platform display contract, shared by every tenant without a
+tenant-specific override. The existing `TenantAccessProfile` administrative
+metadata is the source for Active, Inactive, or Suspended. Existing workspaces
+without a saved administrative status default to Active, matching client
+creation. The directory and client settings reuse the same controller resolver.
+Setup gaps and unresolved integration events remain visible in the separate
+Health column; they cannot infer an administrative suspension or inactivity.
+No entitlement, billing, membership, provider, schema, or stored status changes
+are needed. Regression checks exercise both pages and preserve explicit statuses
+and unresolved health evidence.
+
 The landlord console shares the accessible sage/ivory controls and full-width
 canvas. Five primary groups replace the earlier flat navigation: Home, Clients,
 Money, Support, and Platform. Detailed client setup guidance is collapsible,

@@ -9,13 +9,13 @@ use App\Models\IntegrationHealthEvent;
 use App\Models\LandlordOperatorAction;
 use App\Models\LandlordProspect;
 use App\Models\MarketingProfile;
+use App\Models\OperatorRecurringCost;
 use App\Models\ShopifyStore;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantModuleAccessRequest;
 use App\Models\TenantModuleState;
 use App\Models\TenantOnboardingJourneyEvent;
-use App\Models\OperatorRecurringCost;
 use App\Models\User;
 use App\Services\Forms\TenantFormProvisioningService;
 use App\Services\Onboarding\OnboardingJourneyDiagnosticsService;
@@ -107,6 +107,7 @@ class LandlordTenantDirectoryController extends Controller
             'cadence' => $data['cadence'], 'source' => $data['source'] ?? 'manual',
             'receipt_reference' => $data['receipt_reference'] ?? null, 'effective_on' => now()->toDateString(), 'active' => true,
         ]);
+
         return redirect()->route('landlord.dashboard')->with('status', 'Recurring cost added to the weekly break-even view.');
     }
 
@@ -652,7 +653,7 @@ class LandlordTenantDirectoryController extends Controller
         $activeTab = $this->resolveTab((string) $request->query('tab', 'overview'));
         $tenantType = $this->resolvedTenantType($hydratedTenant);
         $tenantRole = $this->resolvedTenantRole($hydratedTenant);
-        $tenantStatus = $this->resolvedTenantAdminStatus($hydratedTenant, (string) ($summary['status_label'] ?? 'Healthy'));
+        $tenantStatus = (string) $summary['tenant_status'];
         $primaryContactEmail = $this->tenantPrimaryContactEmail($hydratedTenant);
 
         $moduleResolution = $moduleAccessResolver->resolveForTenant((int) $hydratedTenant->id);
@@ -864,10 +865,7 @@ class LandlordTenantDirectoryController extends Controller
             $tenantRole = 'member';
         }
 
-        $tenantAdminStatus = strtolower(trim((string) ($adminMetadata['status'] ?? '')));
-        if (! array_key_exists($tenantAdminStatus, $this->tenantStatusOptions())) {
-            $tenantAdminStatus = $status === 'healthy' ? 'active' : 'inactive';
-        }
+        $tenantAdminStatus = $this->resolvedTenantAdminStatus($tenant);
 
         $primaryContactEmail = trim((string) ($adminMetadata['primary_contact_email'] ?? ''));
 
@@ -1194,14 +1192,15 @@ class LandlordTenantDirectoryController extends Controller
         return $email !== '' ? $email : null;
     }
 
-    protected function resolvedTenantAdminStatus(Tenant $tenant, string $fallbackStatusLabel): string
+    protected function resolvedTenantAdminStatus(Tenant $tenant): string
     {
         $status = strtolower(trim((string) data_get($tenant->accessProfile?->metadata, 'admin.status', '')));
         if (array_key_exists($status, $this->tenantStatusOptions())) {
             return $status;
         }
 
-        return strtolower(trim($fallbackStatusLabel)) === 'healthy' ? 'active' : 'inactive';
+        // Setup and integration health are independent of administrative status.
+        return 'active';
     }
 
     protected function uniqueTenantSlug(string $base, ?int $ignoreTenantId = null): string
