@@ -40,6 +40,71 @@ class SoccerRegistrationService
         return $teams;
     }
 
+    /** Read-only estimate. register() repeats allocation while holding the season lock. */
+    public function quote(int $tenant, string $familyId, array $input): array
+    {
+        $season = $this->store->row('seasons', $tenant, $input['season_id']);
+        abort_unless($season->starts_on, 422, 'Season dates are not set yet.');
+        $selected = $input['children'];
+        $ids = array_column($selected, 'player_id');
+        if (count($ids) !== count(array_unique($ids))) {
+            throw ValidationException::withMessages(['children' => 'Select each child once.']);
+        }
+        $players = $this->store->query('players', $tenant)->where('family_id', $familyId)->whereIn('id', $ids)->get()->keyBy('id');
+        abort_unless($players->count() === count($ids), 403);
+        $existing = $this->store->query('registrations', $tenant)->where('season_id', $season->id)->where('family_id', $familyId)->get();
+        $newIds = array_diff($ids, $existing->pluck('player_id')->all());
+        $seasonWaivers = $existing->where('waived', true)->where('status', '!=', 'cancelled')->pluck('player_id')->unique()->all();
+        $remainingWaivers = ! empty($input['volunteer']) ? max(0, 2 - count($seasonWaivers)) : 0;
+        $waiverIds = collect($selected)->filter(fn ($child) => in_array($child['player_id'], $newIds, true))
+            ->sortByDesc(fn ($child) => (bool) $child['needs_jersey'])->take($remainingWaivers)->pluck('player_id')->all();
+        $capacity = $this->capacities($season);
+        $queueByTeam = $this->store->query('registrations', $tenant)->where('season_id', $season->id)
+            ->where('status', 'waitlisted')->pluck('team_key')->flip();
+        $pending = [];
+        foreach ($selected as $child) {
+            if (! in_array($child['player_id'], $newIds, true)) {
+                continue;
+            }
+            $player = $players[$child['player_id']];
+            abort_unless($player->birthday, 422, 'Review and complete each player’s birthday.');
+            $team = $this->teamFor($player->birthday, $season->age_as_of ?? $season->starts_on);
+            $seat = ! $queueByTeam->has($team) && $capacity[$team]['public_free'] > 0 ? 'public' : null;
+            if ($seat) {
+                $capacity[$team]['public_free']--;
+            }
+            $waived = in_array($player->id, $waiverIds, true);
+            $pending[] = ['player_id' => $player->id, 'team_key' => $team, 'seat_kind' => $seat,
+                'amount_cents' => $waived ? 0 : ($child['needs_jersey'] ? 5000 : 3000)];
+        }
+        $priorWaiting = $existing->where('status', 'waitlisted');
+        $public = $existing->whereIn('status', ['registered', 'offered'])->where('seat_kind', 'public')->count()
+            + count(array_filter($pending, fn ($row) => $row['seat_kind'] === 'public'));
+        $total = $existing->where('status', '!=', 'cancelled')->count() + count($pending);
+        $rest = array_merge(array_values(array_filter($pending, fn ($row) => ! $row['seat_kind'])), $priorWaiting->map(fn ($row) => (array) $row)->all());
+        $reserved = $total && $public > $total / 2
+            && ! $priorWaiting->contains(fn ($row) => ! $row->auto_eligible)
+            && $this->reservesFit($rest, $capacity);
+        if ($reserved) {
+            foreach ($pending as &$row) {
+                if (! $row['seat_kind']) {
+                    $row['seat_kind'] = 'reserved';
+                }
+            } unset($row);
+        }
+        $children = array_map(fn ($row) => [...$row, 'status' => $row['seat_kind'] ? 'available' : 'waitlisted'], $pending);
+        if ($reserved) {
+            foreach ($priorWaiting as $row) {
+                $children[] = ['player_id' => $row->player_id, 'team_key' => $row->team_key,
+                    'seat_kind' => 'reserved', 'amount_cents' => $row->amount_cents,
+                    'status' => 'available', 'previously_waitlisted' => true];
+            }
+        }
+
+        return ['season_id' => $season->id, 'checked_at' => now()->toIso8601String(), 'children' => $children,
+            'due_today_cents' => collect($children)->where('status', 'available')->sum('amount_cents')];
+    }
+
     public function register(int $tenant, string $familyId, array $input): array
     {
         return DB::transaction(function () use ($tenant, $familyId, $input) {
@@ -143,6 +208,16 @@ class SoccerRegistrationService
                 }
             }
             $waiting = [];
+            if (array_key_exists('expected_due_today_cents', $input)) {
+                $actualPlayers = collect($pending)->filter(fn ($row) => (bool) $row['seat_kind'])->pluck('player_id')
+                    ->merge($reserved ? $priorWaiting->pluck('player_id') : collect())->sort()->values()->all();
+                $expectedPlayers = collect($input['expected_available_player_ids'] ?? [])->sort()->values()->all();
+                $actualDue = collect($pending)->filter(fn ($row) => (bool) $row['seat_kind'])->sum('amount_cents')
+                    + ($reserved ? $priorWaiting->sum('amount_cents') : 0);
+                if ($actualDue !== $input['expected_due_today_cents'] || $actualPlayers !== $expectedPlayers) {
+                    throw ValidationException::withMessages(['availability' => 'Spots changed while you were reviewing. Check the updated availability and total before submitting again.']);
+                }
+            }
             $sequence = (int) $season->next_queue_sequence;
             foreach ($pending as $r) {
                 $r['queue_sequence'] = ++$sequence;
