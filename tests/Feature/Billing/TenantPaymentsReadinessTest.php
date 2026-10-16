@@ -57,5 +57,7 @@ test('live tenant payments require independently verified Connect webhooks', fun
     config()->set('commercial.billing_readiness.tenant_payments.tenant_slugs', ['acme']);
 
     $result = app(TenantPaymentsReadinessService::class)->readinessFor($tenant, false);
-    expect($result['ready'])->toBeFalse()->and($result['blockers'])->toContain('Stripe Connect webhooks have not been verified.');
+    expect($result['ready'])->toBeFalse()->and($result['blockers'])->toContain('Stripe Connect webhooks have not been verified.')
+        ->and(app(TenantPaymentsReadinessService::class)->canStartOnboarding($tenant))->toBeTrue()
+        ->and(app(TenantPaymentsReadinessService::class)->canCollectCustomerPayments($tenant))->toBeFalse();
 });
