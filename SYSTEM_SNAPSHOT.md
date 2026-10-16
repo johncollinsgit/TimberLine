@@ -1,5 +1,11 @@
 # SYSTEM SNAPSHOT
 
+## Modern Forestry Launch Partner AI selection (2026-10-16; billing/AI pending)
+
+- Modern Forestry tenant 1 is now registered as a Launch Partner client (directory record 314, audit 620), at the current $89/month for six cycles then $149/month, plus $99/month AI Branch Growth. Monthly totals are $188 then $248 before tax. This records commercial intent, not an active paid subscription. Setup applicability and provider spending cap still require review/approval.
+- Production checks found no recorded paid agreement/subscription or deployed AI tables/provider configuration. The stored Stripe customer reference is unverified under the current live account. Existing alpha access remains unchanged.
+- The alpha bootstrap now excludes the separate paid `ai_branch` grant; legacy Shopify `ai` and rewards stay protected. Follow `docs/operations/modern-forestry-launch-partner-ai-rollout.md`; review multi-item phase billing before checkout, and retain all normal release/acceptance gates.
+
 ## Workspace-aware AI attention briefings (2026-10-16; disabled)
 
 - Version-2 context now projects permitted operational evidence from the selected workspace, with server-authorized page identity, explicit coverage and bounded samples. On-demand attention briefings share chat reservations and UTC billing limits. Workspace timezone uses existing profile metadata; no tables are added.

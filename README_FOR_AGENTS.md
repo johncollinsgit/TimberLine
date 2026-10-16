@@ -1,3 +1,9 @@
+## Modern Forestry paid Launch Partner and AI intent (2026-10-16)
+
+- The user selected Modern Forestry as the first AI Branch pilot and Launch Partner client. Read `docs/operations/modern-forestry-launch-partner-ai-rollout.md`. Production client record 314 / audit 620 records $89/month for six cycles, $149 thereafter, plus $99/month AI; billing and AI remain pending.
+- Do not treat the client-directory conversion or profile enrollment metadata as paid evidence. Repair/verify the existing Stripe customer association, preserve operational alpha grants, obtain exact accepted billing terms and owner provider cap, then release through GitHub/Forge. The $499 public setup fee is pending existing-client review, not an authorized charge.
+- Exclude paid `ai_branch` from alpha grant upserts while preserving legacy `ai`. Existing single-item promotional schedule code must be reviewed for permanent AI line items before any combined checkout. No client delivery, payment, public purchase activation or AI provider call was triggered by registration.
+
 ## Workspace-aware AI Branch (2026-10-16)
 
 - Continue with `docs/architecture/everbranch-ai-workspace-context.md` and `docs/operations/everbranch-ai-runbook.md`. Preserve the two independent AI/context gates, explicit tenant allowlists, active owner/admin checks and current billing evidence.

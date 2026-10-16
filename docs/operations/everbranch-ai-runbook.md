@@ -143,3 +143,15 @@ For a context-specific rollback, turn off the context flag and clear its allowli
 Version-2 chats become incompatible; they remain privately deletable and old pilot
 chat can start anew. For any provider or tenant-isolation incident, use the global
 AI kill switch as well. Preserve usage and encrypted records for reconciliation.
+
+
+## Named Modern Forestry rollout selection — October 16, 2026
+
+The user selected Modern Forestry for AI Growth at $99/month and the current
+Launch Partner service offer ($89/month for six cycles, then $149/month). See
+`modern-forestry-launch-partner-ai-rollout.md` for exact totals, audited client
+registration, verified production blockers, setup-fee review and phase gates.
+This selection does not itself establish an accepted contract, paid subscription,
+provider spending-cap approval or AI activation. Preserve existing operational
+access. The alpha bootstrap must not grant or rewrite paid `ai_branch` access;
+the existing Shopify assistant `ai` remains separate.
