@@ -70,6 +70,56 @@ it('does not grant reserves for a tied family', function () {
     $out = $this->svc->register($this->t->id, $f, $in);
     expect($out['placed'])->toHaveCount(1)->and($out['waitlisted'])->toHaveCount(1);
 });
+it('quotes available, reserved, and waitlisted children without charging the waitlist', function () {
+    soccerCap($this, ['red-falcons' => ['public' => 0, 'reserved' => 1]]);
+    [$family,$input] = soccerFamily($this, ['2023-01-01', '2021-01-01', '2018-01-01']);
+    $input['children'][1]['needs_jersey'] = true;
+    $input['children'][1]['jersey_size'] = 'Youth M';
+    $quote = $this->svc->quote($this->t->id, $family, $input);
+    expect($quote['due_today_cents'])->toBe(11000)
+        ->and(array_column($quote['children'], 'status'))->toBe(['available', 'available', 'available'])
+        ->and($quote['children'][2]['seat_kind'])->toBe('reserved')
+        ->and($this->store->query('registrations', $this->t->id)->count())->toBe(0);
+    $input['expected_due_today_cents'] = $quote['due_today_cents'];
+    $input['expected_available_player_ids'] = array_column($quote['children'], 'player_id');
+    $this->svc->register($this->t->id, $family, $input);
+    expect((int) $this->store->query('invoices', $this->t->id)->where('family_id', $family)->value('amount_cents'))->toBe(11000);
+});
+it('quotes a waitlist even when a public space opens behind an earlier family', function () {
+    soccerCap($this, ['green-bears' => ['public' => 0, 'reserved' => 0]]);
+    [$first,$firstInput] = soccerFamily($this, ['2023-01-01']);
+    $this->svc->register($this->t->id, $first, $firstInput);
+    soccerCap($this, ['green-bears' => ['public' => 1, 'reserved' => 0]]);
+    [$later,$laterInput] = soccerFamily($this, ['2023-01-01']);
+    $quote = $this->svc->quote($this->t->id, $later, $laterInput);
+    expect($quote['due_today_cents'])->toBe(0)->and($quote['children'][0]['status'])->toBe('waitlisted');
+});
+it('quotes assistant coach waivers in the amount due today', function () {
+    [$family,$input] = soccerFamily($this, ['2023-01-01', '2021-01-01', '2018-01-01']);
+    soccerCoachInterest($input);
+    foreach ($input['children'] as &$child) {
+        $child['needs_jersey'] = true;
+        $child['jersey_size'] = 'Youth M';
+    } unset($child);
+    $quote = $this->svc->quote($this->t->id, $family, $input);
+    expect($quote['due_today_cents'])->toBe(5000)
+        ->and(collect($quote['children'])->where('amount_cents', 0))->toHaveCount(2);
+    $input['expected_due_today_cents'] = $quote['due_today_cents'];
+    $input['expected_available_player_ids'] = array_column($quote['children'], 'player_id');
+    $this->svc->register($this->t->id, $family, $input);
+    expect((int) $this->store->query('invoices', $this->t->id)->where('family_id', $family)->value('amount_cents'))->toBe(5000);
+});
+it('rejects a stale availability quote before creating a charged registration', function () {
+    soccerCap($this, ['green-bears' => ['public' => 1, 'reserved' => 0]]);
+    [$family,$input] = soccerFamily($this, ['2023-01-01']);
+    $quote = $this->svc->quote($this->t->id, $family, $input);
+    [$other,$otherInput] = soccerFamily($this, ['2023-01-01']);
+    $this->svc->register($this->t->id, $other, $otherInput);
+    $input['expected_due_today_cents'] = $quote['due_today_cents'];
+    $input['expected_available_player_ids'] = array_column($quote['children'], 'player_id');
+    expect(fn () => $this->svc->register($this->t->id, $family, $input))->toThrow(ValidationException::class, 'Spots changed');
+    expect($this->store->query('registrations', $this->t->id)->where('family_id', $family)->count())->toBe(0);
+});
 it('keeps remaining siblings together if reserves cannot fit them all', function () {
     soccerCap($this, ['red-falcons' => ['public' => 0, 'reserved' => 1]]);
     [$f,$in] = soccerFamily($this, ['2023-01-01', '2023-02-01', '2021-01-01', '2018-01-01', '2017-01-01']);
