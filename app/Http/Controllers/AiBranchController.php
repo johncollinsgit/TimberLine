@@ -63,7 +63,15 @@ class AiBranchController extends Controller
             'conversations' => AiBranchConversation::query()->where('tenant_id', $tenant->id)->where('user_id', $request->user()->id)
                 ->where('expires_at', '>', now())->latest('id')->limit(30)->get(),
             'memories' => AiBranchMemory::query()->where('tenant_id', $tenant->id)->where('user_id', $request->user()->id)->where('expires_at', '>', now())->get(),
-            'actions' => AiBranchAction::query()->where('tenant_id', $tenant->id)->where('user_id', $request->user()->id)->where('status', 'pending')->where('expires_at', '>', now())->latest()->limit(20)->get(),
+            'actions' => AiBranchAction::query()->where('tenant_id', $tenant->id)->where('user_id', $request->user()->id)->where('kind', 'internal_job_note')->where('status', 'pending')->where('expires_at', '>', now())->latest()->limit(20)->get()->filter(function ($action) use ($tenant, $request): bool {
+                try {
+                    app(AiBranchContext::class)->job($tenant, $request->user(), (int) ($action->payload['job_id'] ?? 0));
+
+                    return true;
+                } catch (HttpException|\Illuminate\Database\Eloquent\ModelNotFoundException) {
+                    return false;
+                }
+            }),
             'jobs' => $account?->enabled ? app(AiBranchContext::class)->sources($tenant, $request->user()) : [],
         ])->header('Cache-Control', 'no-store');
     }
@@ -111,6 +119,9 @@ class AiBranchController extends Controller
             app(AiWorkspacePage::class)->resolve($tenant, $request->user(), $origin);
         }
         $conversation = $this->chat->start($tenant, $request->user());
+        if ($request->expectsJson()) {
+            return response()->json(['conversation_id' => $conversation->id], 201)->header('Cache-Control', 'no-store');
+        }
 
         return redirect()->route('ai-branch.index', ['tenant' => $tenant->slug, 'conversation' => $conversation->id, ...($origin !== [] ? ['origin' => $origin] : [])]);
     }
@@ -165,6 +176,10 @@ class AiBranchController extends Controller
             $row->delete();
         });
 
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true])->header('Cache-Control', 'no-store');
+        }
+
         return back()->with('status', 'Chat deleted.');
     }
 
@@ -179,6 +194,10 @@ class AiBranchController extends Controller
             AiBranchMemory::query()->create(['tenant_id' => $tenant->id, 'user_id' => $request->user()->id, 'body' => $data['body'], 'expires_at' => now()->addDays((int) config('ai_branch.memory_days'))]);
         });
 
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true, 'restart_required' => true], 201)->header('Cache-Control', 'no-store');
+        }
+
         return redirect()->route('ai-branch.index', ['tenant' => $tenant->slug])->with('status', 'Memory saved. Start a new chat to use the updated memory.');
     }
 
@@ -190,6 +209,10 @@ class AiBranchController extends Controller
             AiBranchMemory::query()->where('tenant_id', $tenant->id)->where('user_id', $request->user()->id)->whereKey($memory)->firstOrFail()->delete();
         });
 
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true, 'restart_required' => true])->header('Cache-Control', 'no-store');
+        }
+
         return redirect()->route('ai-branch.index', ['tenant' => $tenant->slug])->with('status', 'Memory deleted. Start a new chat for the updated context.');
     }
 
@@ -197,7 +220,10 @@ class AiBranchController extends Controller
     {
         $tenant = $this->tenant($request);
         $data = $request->validate(['job_id' => ['required', 'integer', 'min:1'], 'body' => ['required', 'string', 'max:3000'], 'request_id' => ['required', 'uuid']]);
-        $actions->propose($tenant, $request->user(), $data['job_id'], $data['body'], $data['request_id']);
+        $proposal = $actions->propose($tenant, $request->user(), $data['job_id'], $data['body'], $data['request_id']);
+        if ($request->expectsJson()) {
+            return response()->json(['action_id' => $proposal->id, 'status' => $proposal->status, 'digest' => $proposal->digest, 'payload' => $proposal->payload], 201)->header('Cache-Control', 'no-store');
+        }
 
         return redirect()->route('ai-branch.index', ['tenant' => $tenant->slug])->with('status', 'Review the exact note before approving it.');
     }
@@ -206,7 +232,10 @@ class AiBranchController extends Controller
     {
         $tenant = $this->tenant($request);
         $data = $request->validate(['digest' => ['required', 'string', 'size:64'], 'decision' => ['required', 'in:approve,reject'], 'confirmed' => ['accepted']]);
-        $actions->decide($tenant, $request->user(), $action, $data['digest'], $data['decision'] === 'approve');
+        $result = $actions->decide($tenant, $request->user(), $action, $data['digest'], $data['decision'] === 'approve');
+        if ($request->expectsJson()) {
+            return response()->json(['action_id' => $result->id, 'status' => $result->status, 'result_id' => $result->result_id])->header('Cache-Control', 'no-store');
+        }
 
         return redirect()->route('ai-branch.index', ['tenant' => $tenant->slug])->with('status', 'Action decision recorded.');
     }

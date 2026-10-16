@@ -9,7 +9,7 @@ use Illuminate\Console\Command;
 
 class AiBranchPrune extends Command
 {
-    protected $signature = 'ai-branch:prune {--apply : Delete expired chat and memory and redact old action text}';
+    protected $signature = 'ai-branch:prune {--apply : Delete expired chat, memory and reports and redact old action text}';
 
     protected $description = 'Preview or apply AI Branch retention without removing usage or approval evidence';
 
@@ -34,6 +34,16 @@ class AiBranchPrune extends Command
             });
         }
 
-        return self::SUCCESS;
+        $reversed = \App\Models\FieldServiceJobNote::withoutGlobalScope('active_ai_note')
+            ->whereNotNull('metadata->ai_branch_reversed_at')->where('metadata->ai_branch_reversed_at', '<=', now()->subDays(30)->toIso8601String())
+            ->where('body', '!=', '[Reversed AI note text expired]');
+        $this->line('Expired reversed-note text: '.$reversed->count());
+        if ($this->option('apply')) {
+            $reversed->chunkById(100, fn ($notes) => $notes->each(fn ($note) => $note->forceFill(['body' => '[Reversed AI note text expired]'])->save()));
+        }
+        $reports = app(\App\Services\AiBranch\AiWeeklyReport::class)->prune((bool) $this->option('apply'));
+        $this->line('Private reports: '.$reports['expired'].' expired; '.$reports['unreadable'].' unreadable records require review');
+
+        return $this->option('apply') && $reports['unreadable'] > 0 ? self::FAILURE : self::SUCCESS;
     }
 }

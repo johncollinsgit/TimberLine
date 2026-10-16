@@ -1,3 +1,26 @@
+## Ask Everbranch (2026-10-16; local, disabled)
+
+- Read `docs/operations/everbranch-voice-runbook.md` and
+  `docs/architecture/everbranch-voice-acceptance.md` before extending the assistant.
+  Navigation uses deterministic authorized search. Business mode reuses AI Branch,
+  requires its current commercial/owner/admin access and an independent exact
+  tenant rollout gate. Landlord status is not a data-access grant.
+- Financial snapshots expose saved QuickBooks totals only; never infer currency,
+  basis or missing totals, combine channel revenue, refresh providers from a GET,
+  inject raw accounting into prompts or add accounting writes.
+- Reports are encrypted private, expiring registered-source snapshots, not a
+  complete business ledger. Selected team scope intersects current job access.
+  Preserve reauthorization on read/print and fail instead of returning partial
+  counts. Prune also works while runtime flags are off.
+- Note undo archives a precisely unchanged internal AI note and records a
+  compensating receipt. Any later model edit permanently removes automatic undo.
+  Never extend that promise to sent communications or changed evidence.
+- Commitment tasks have an independent gate, team-visible note sources and
+  explicit assignee/due-time review. Keep `WorkspaceWallTime` DST disambiguation,
+  source/version checks and the existing action UUID ledger. Do not quote private
+  sources into shared tasks or turn task approval into notification/accounting
+  dispatch. Phone adapter/practice boundaries are in `everbranch-phone-rails.md`.
+
 ## Stripe and PayPal payment setup (2026-10-16; deployed, Wren setup pilot)
 
 - Read `docs/architecture/stripe-paypal-payments-plan.md` and
@@ -260,6 +283,13 @@
   later phases before declaring end-to-end retail shipping ready.
 
 # START HERE
+
+## Ask Everbranch voice navigation (2026-10-16)
+
+Read `docs/operations/everbranch-voice-runbook.md` before extending voice work.
+Reuse canonical access/navigation and server-owned mobile destinations. Preserve
+action exclusion, exact ambiguity, same-origin validation, refreshed permissions,
+scoped back history and cancelled/unsaved-work behavior.
 
 ## 2026-10-15 - Retail shipping weight readiness
 

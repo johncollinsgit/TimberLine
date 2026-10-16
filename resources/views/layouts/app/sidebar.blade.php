@@ -165,6 +165,10 @@
   </button>
 
   <div class="mf-global-actions">
+    <button type="button" data-command-voice-trigger class="mf-global-employee-preview" aria-label="Find a page by voice" title="Find a page by voice">
+      <flux:icon.microphone class="size-4" aria-hidden="true" />
+      <span>Speak</span>
+    </button>
     @foreach($topbarContextPills as $pill)
       <span class="mf-global-context">{{ $pill }}</span>
     @endforeach
@@ -411,6 +415,9 @@
   :context-label="$workspaceLabel"
   :description="$commandSearchDescription"
 />
+@if(!$isLandlordShell && $activeTenant instanceof \App\Models\Tenant && $user && app(\App\Services\AiBranch\AiAssistantAccess::class)->allows($activeTenant, $user))
+  <x-app-ai-assistant :tenant="$activeTenant" />
+@endif
 <script>
   (function () {
     let timeoutId;

@@ -13,8 +13,7 @@ class NavigationSearchProvider implements GlobalSearchProvider
 
     public function __construct(
         protected UnifiedAppNavigationService $navigationService
-    ) {
-    }
+    ) {}
 
     public function search(string $query, array $context = []): array
     {
@@ -27,9 +26,19 @@ class NavigationSearchProvider implements GlobalSearchProvider
         $normalized = trim($query);
         $results = [];
 
-        foreach ($this->searchableNavigationItems((array) ($nav['items'] ?? [])) as $entry) {
+        $items = (array) ($nav['items'] ?? []);
+        foreach (['admin_sub_items' => 'Settings', 'marketing_sub_groups' => 'Marketing', 'birthday_sub_groups' => 'Birthdays', 'wiki_sections' => 'Help'] as $key => $label) {
+            if (! empty($nav[$key])) {
+                $items[] = ['label' => $label, 'children' => $nav[$key]];
+            }
+        }
+        $seen = [];
+        foreach ($this->searchableNavigationItems($items) as $entry) {
             $title = (string) ($entry['title'] ?? '');
             $url = (string) ($entry['url'] ?? '#');
+            if (isset($seen[$url])) {
+                continue;
+            }
             $icon = (string) ($entry['icon'] ?? 'rectangle-stack');
             $subtitle = (string) ($entry['subtitle'] ?? '');
             $badge = (string) ($entry['badge'] ?? 'Page');
@@ -39,9 +48,13 @@ class NavigationSearchProvider implements GlobalSearchProvider
             $scoreBase = is_numeric($entry['score_base'] ?? null) ? (int) $entry['score_base'] : 140;
 
             $score = $this->matchScore($normalized, $haystacks, $scoreBase);
+            $meta['exact_match'] = $normalized !== '' && in_array(mb_strtolower($normalized), array_map('mb_strtolower', $haystacks), true);
+            $meta['aliases'] = $haystacks;
             if ($normalized !== '' && $score === 0) {
                 continue;
             }
+
+            $seen[$url] = true;
 
             $results[] = $this->result([
                 'type' => 'navigation',
@@ -60,14 +73,16 @@ class NavigationSearchProvider implements GlobalSearchProvider
     }
 
     /**
-     * Flatten top-level navigation and ONE level of children into searchable entries.
-     * Explicitly ignores any deeper nesting (no grandchildren).
+     * Index the complete authorized tree, including groups without their own page.
      *
      * @param  array<int,mixed>  $items
      * @return array<int,array<string,mixed>>
      */
-    protected function searchableNavigationItems(array $items): array
+    protected function searchableNavigationItems(array $items, ?array $parent = null, int $depth = 0): array
     {
+        if ($depth > 16) {
+            return [];
+        }
         $entries = [];
 
         foreach ($items as $item) {
@@ -77,68 +92,36 @@ class NavigationSearchProvider implements GlobalSearchProvider
 
             $parentLabel = trim((string) ($item['label'] ?? ''));
             $parentHref = trim((string) ($item['href'] ?? ''));
-            if ($parentLabel === '' || $parentHref === '') {
+            if (($item['hidden'] ?? false) || ($item['disabled'] ?? false)) {
                 continue;
             }
 
-            $parentIcon = (string) ($item['icon'] ?? 'rectangle-stack');
-            $parentAliases = $this->aliasesForNavigationItem($item);
+            $parentIcon = (string) ($item['icon'] ?? $parent['icon'] ?? 'rectangle-stack');
+            $parentAliases = $this->aliasesForNavigationItem($item, $parent);
 
-            $entries[] = [
-                'subtype' => 'page',
-                'title' => $parentLabel,
-                'subtitle' => 'Jump to a primary workspace section.',
-                'url' => $parentHref,
-                'badge' => 'Page',
-                'icon' => $parentIcon,
-                'haystacks' => array_values(array_filter(array_unique([
-                    $parentLabel,
-                    ...$parentAliases,
-                ]))),
-                'score_base' => 140,
-                'meta' => [
-                    'nav_kind' => 'parent',
-                    'nav_key' => (string) ($item['key'] ?? ''),
-                ],
-            ];
-
-            $children = (array) ($item['children'] ?? []);
-            foreach ($children as $child) {
-                if (! is_array($child)) {
-                    continue;
-                }
-
-                $childLabel = trim((string) ($child['label'] ?? ''));
-                $childHref = trim((string) ($child['href'] ?? ''));
-                if ($childLabel === '' || $childHref === '') {
-                    continue;
-                }
-
-                $childIcon = (string) ($child['icon'] ?? $parentIcon);
-                $childAliases = $this->aliasesForNavigationItem($child, $item);
-
+            if ($parentLabel !== '' && $parentHref !== '' && $parentHref !== '#') {
                 $entries[] = [
-                    'subtype' => 'section',
-                    'title' => $childLabel,
-                    'subtitle' => $parentLabel.' workspace',
-                    'url' => $childHref,
-                    'badge' => $parentLabel,
-                    'icon' => $childIcon,
-                    // Child title match should dominate; parent label is context only.
+                    'subtype' => $parent === null ? 'page' : 'section',
+                    'title' => $parentLabel,
+                    'subtitle' => $parent === null ? 'Jump to a primary workspace section.' : ($parent['label'] ?? 'Workspace').' workspace',
+                    'url' => $parentHref,
+                    'badge' => $parent['label'] ?? 'Page',
+                    'icon' => $parentIcon,
                     'haystacks' => array_values(array_filter(array_unique([
-                        $childLabel,
                         $parentLabel,
-                        ...$childAliases,
+                        ...$parentAliases,
                     ]))),
-                    'score_base' => 126,
+                    'score_base' => $parent === null ? 140 : 126,
                     'meta' => [
-                        'nav_kind' => 'child',
-                        'nav_key' => (string) ($child['key'] ?? ''),
-                        'parent_key' => (string) ($item['key'] ?? ''),
-                        'parent_label' => $parentLabel,
+                        'nav_kind' => $parent === null ? 'parent' : 'child',
+                        'nav_key' => (string) ($item['key'] ?? ''),
+                        'parent_key' => $parent['key'] ?? null,
+                        'parent_label' => $parent['label'] ?? null,
                     ],
                 ];
             }
+            $children = (array) ($item['children'] ?? $item['items'] ?? []);
+            $entries = [...$entries, ...$this->searchableNavigationItems($children, [...$item, 'icon' => $parentIcon], $depth + 1)];
         }
 
         return $entries;
@@ -157,11 +140,23 @@ class NavigationSearchProvider implements GlobalSearchProvider
         $key = strtolower(trim((string) ($item['key'] ?? '')));
         $parentKey = $parent ? strtolower(trim((string) ($parent['key'] ?? ''))) : null;
 
-        $aliases = [];
+        $aliases = array_values(array_filter((array) ($item['aliases'] ?? []), 'is_string'));
+        $aliases = [...$aliases, ...match ($key) {
+            'home' => ['dashboard', 'overview'],
+            'users', 'team' => ['team', 'employees', 'people', 'staff', 'team settings'],
+            'settings', 'tenant-settings' => ['settings', 'preferences', 'workspace settings'],
+            'field-service', 'field_service', 'work' => ['jobs', 'work', 'projects'],
+            'class-scheduling', 'class_scheduling' => ['schedule', 'calendar', 'classes'],
+            'branch-mail', 'email' => ['email', 'mail', 'inbox'],
+            'branch-website', 'website' => ['website', 'site editor'],
+            'fleet-tracking', 'fleet_tracking' => ['fleet', 'vehicles', 'vans', 'crew map'],
+            'account-help' => ['help', 'support'],
+            default => [],
+        }];
 
         // Parent aliases (keep short + intentional).
         if ($parentKey === null && $key === 'production') {
-            $aliases = [
+            $aliases = [...$aliases,
                 'operations',
                 'ops',
             ];
@@ -169,13 +164,13 @@ class NavigationSearchProvider implements GlobalSearchProvider
 
         // Child aliases under Production.
         if ($parentKey === 'production') {
-            $aliases = match ($key) {
+            $aliases = [...$aliases, ...match ($key) {
                 'shipping' => ['shipping room'],
                 'pouring' => ['pouring room'],
                 'retail-plan' => ['retail plan', 'retail planner', 'retail planning'],
                 'markets' => ['market lists', 'market pour list', 'market pour lists'],
                 default => [],
-            };
+            }];
         }
 
         return array_values(array_filter(array_map(static function (string $alias): string {

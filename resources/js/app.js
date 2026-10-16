@@ -5,6 +5,12 @@ import "./evergrove-navigation";
 
 const contextualModules = [
   {
+    key: "aiAssistant",
+    selectors: ["[data-ai-assistant]"],
+    load: () => import("./ai-assistant.jsx"),
+    mountExport: "mountAiAssistantNow",
+  },
+  {
     key: "dashboardWidgets",
     selectors: ["[data-dashboard-root]", "[data-widget-root]"],
     load: () => import("./dashboard-widgets"),

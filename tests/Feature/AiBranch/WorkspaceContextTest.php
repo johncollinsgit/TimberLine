@@ -68,6 +68,278 @@ test('workspace context identifies the current workspace without serializing pro
     Http::assertNothingSent();
 });
 
+test('weekly snapshots reconcile more than chat sample limits and remain encrypted and idempotent', function () {
+    [$tenant, $user] = workspaceFixture('fictional-weekly');
+    config()->set(['ai_branch.assistant_enabled' => true, 'ai_branch.assistant_tenant_ids' => [$tenant->id], 'ai_branch.assistant_reports_enabled' => true]);
+    \Illuminate\Support\Facades\Storage::fake('local');
+    $job = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'Fictional weekly work', 'status' => 'open']);
+    $task = FieldServiceTask::create(['tenant_id' => $tenant->id, 'field_service_job_id' => $job->id, 'title' => 'Fictional task', 'status' => 'open']);
+    for ($index = 0; $index < 30; $index++) {
+        $event = FieldServiceTaskEvent::create(['tenant_id' => $tenant->id, 'field_service_task_id' => $task->id, 'event_type' => 'updated', 'note' => 'PRIVATE NOTE']);
+        $event->forceFill(['created_at' => \Carbon\CarbonImmutable::parse('2026-11-02 12:00:00', 'America/New_York')->utc()])->save();
+    }
+    $uuid = (string) \Illuminate\Support\Str::uuid();
+    $reports = app(\App\Services\AiBranch\AiWeeklyReport::class);
+    $report = $reports->capture($tenant, $user, '2026-11-01', 'executive', [], $uuid);
+    expect($report['count'])->toBe(30)->and($report['coverage']['task_events']['count'])->toBe(30)
+        ->and($report['coverage_complete'])->toBeFalse()->and(json_encode($report))->not->toContain('PRIVATE NOTE');
+    expect(\Carbon\CarbonImmutable::parse($report['starts_at'])->diffInHours(\Carbon\CarbonImmutable::parse($report['ends_before'])))->toBe(169.0);
+    expect($reports->capture($tenant, $user, '2026-11-01', 'executive', [], $uuid))->toBe($report);
+    $stored = \Illuminate\Support\Facades\Storage::disk('local')->get('ai-weekly-reports/'.$tenant->id.'/'.$user->id.'/'.$uuid.'.enc');
+    expect($stored)->not->toContain('Fictional task');
+    $user->tenants()->updateExistingPivot($tenant->id, ['role' => 'member']);
+    expect(fn () => $reports->read($tenant, $user, $uuid))->toThrow(HttpException::class);
+    Http::assertNothingSent();
+});
+
+test('team reports exclude private-note existence and recheck changed source visibility', function () {
+    [$tenant, $user] = workspaceFixture('fictional-team-weekly');
+    config()->set(['ai_branch.assistant_enabled' => true, 'ai_branch.assistant_tenant_ids' => [$tenant->id], 'ai_branch.assistant_reports_enabled' => true]);
+    \Illuminate\Support\Facades\Storage::fake('local');
+    $member = User::factory()->create(['role' => 'member', 'is_active' => true]);
+    $member->tenants()->attach($tenant->id, ['role' => 'member', 'membership_active' => true]);
+    $job = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'Fictional shared work', 'status' => 'open']);
+    \App\Models\FieldServiceJobNote::create(['tenant_id' => $tenant->id, 'field_service_job_id' => $job->id, 'body' => 'OWNER SECRET', 'metadata' => ['visibility' => 'owner']]);
+    $shared = \App\Models\FieldServiceJobNote::create(['tenant_id' => $tenant->id, 'field_service_job_id' => $job->id, 'body' => 'Shared note']);
+    $week = \Carbon\CarbonImmutable::now('America/New_York')->startOfWeek()->toDateString();
+    $uuid = (string) \Illuminate\Support\Str::uuid();
+    $reports = app(\App\Services\AiBranch\AiWeeklyReport::class);
+    $report = $reports->capture($tenant, $user, $week, 'team', [$member->id], $uuid);
+    expect($report['count'])->toBe(1)->and($report['coverage']['job_notes']['count'])->toBe(1)
+        ->and(json_encode($report))->not->toContain('OWNER SECRET', 'Shared note');
+    $shared->update(['metadata' => ['visibility' => 'owner']]);
+    expect(fn () => $reports->read($tenant, $user, $uuid))->toThrow(HttpException::class);
+    Http::assertNothingSent();
+});
+
+test('native assistant origin binds the selected permitted job and rejects another workspace record', function () {
+    [$tenant, $user] = workspaceFixture('fictional-origin');
+    [$other] = workspaceFixture('fictional-other-origin');
+    config()->set(['ai_branch.assistant_enabled' => true, 'ai_branch.assistant_tenant_ids' => [$tenant->id]]);
+    $job = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'Fictional selected job', 'status' => 'open']);
+    $foreign = FieldServiceJob::create(['tenant_id' => $other->id, 'title' => 'OTHER TENANT JOB', 'status' => 'open']);
+    \Laravel\Sanctum\Sanctum::actingAs($user, ['mobile:read', 'mobile:write']);
+    $base = '/api/mobile/v1/workspaces/'.$tenant->slug.'/ai-assistant';
+    $this->getJson($base.'?'.http_build_query(['origin' => ['kind' => 'job', 'id' => $job->id]]))->assertOk()->assertJsonPath('context.page.id', $job->id)->assertJsonPath('context.page.title', 'Fictional selected job');
+    $this->getJson($base.'?'.http_build_query(['origin' => ['kind' => 'job', 'id' => $foreign->id]]))->assertNotFound();
+    Http::assertNothingSent();
+});
+
+test('weekly report retention deletes only expired verified private snapshots even with runtime disabled', function () {
+    [$tenant, $user] = workspaceFixture('fictional-report-retention');
+    config()->set(['ai_branch.assistant_enabled' => true, 'ai_branch.assistant_tenant_ids' => [$tenant->id], 'ai_branch.assistant_reports_enabled' => true]);
+    \Illuminate\Support\Facades\Storage::fake('local');
+    $reports = app(\App\Services\AiBranch\AiWeeklyReport::class);
+    $uuid = (string) \Illuminate\Support\Str::uuid();
+    $reports->capture($tenant, $user, now()->startOfWeek()->toDateString(), 'executive', [], $uuid);
+    $this->travel(31)->days();
+    config()->set('ai_branch.assistant_enabled', false);
+    expect($reports->prune(false)['expired'])->toBe(1);
+    expect(\Illuminate\Support\Facades\Storage::disk('local')->allFiles('ai-weekly-reports'))->toHaveCount(1);
+    expect($reports->prune(true)['expired'])->toBe(1);
+    expect(\Illuminate\Support\Facades\Storage::disk('local')->allFiles('ai-weekly-reports'))->toHaveCount(0);
+});
+
+test('weekly JSON and print exports recheck ownership scope and changed audience', function () {
+    [$tenant, $user] = workspaceFixture('fictional-report-routes');
+    [$foreign, $foreignUser] = workspaceFixture('fictional-foreign-report');
+    config()->set(['ai_branch.assistant_enabled' => true, 'ai_branch.assistant_tenant_ids' => [$tenant->id, $foreign->id], 'ai_branch.assistant_reports_enabled' => true]);
+    \Illuminate\Support\Facades\Storage::fake('local');
+    $job = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => '<script>private report</script>', 'status' => 'open']);
+    \App\Models\FieldServiceJobNote::create(['tenant_id' => $tenant->id, 'field_service_job_id' => $job->id, 'body' => 'Private note body']);
+    $uuid = (string) \Illuminate\Support\Str::uuid();
+    $this->actingAs($user)->postJson(route('ai-branch.assistant.reports.store', ['tenant' => $tenant->slug]), ['request_id' => $uuid, 'audience' => 'executive'])->assertCreated()->assertJsonPath('count', 1);
+    $url = route('ai-branch.assistant.reports.print', ['tenant' => $tenant->slug, 'report' => $uuid]);
+    $this->get($url)->assertOk()->assertSee('&lt;script&gt;private report&lt;/script&gt;', false)->assertDontSee('<script>private report</script>', false)->assertDontSee('Private note body');
+    $this->actingAs($foreignUser)->get(route('ai-branch.assistant.reports.print', ['tenant' => $foreign->slug, 'report' => $uuid]))->assertNotFound();
+    $user->tenants()->updateExistingPivot($tenant->id, ['role' => 'member']);
+    $this->actingAs($user)->get($url)->assertForbidden();
+    Http::assertNothingSent();
+});
+
+function sharedAttentionFixture(): array
+{
+    [$tenant, $user] = workspaceFixture('fictional-attention');
+    config()->set(['ai_branch.assistant_enabled' => true, 'ai_branch.assistant_tenant_ids' => [$tenant->id], 'ai_branch.assistant_attention_enabled' => true]);
+    $action = CustomerLoopAction::create(['tenant_id' => $tenant->id, 'title' => 'Fictional follow-up', 'action_type' => 'follow_up', 'reason' => 'Review', 'draft_body' => 'PRIVATE DRAFT', 'status' => 'suggested']);
+
+    return [$tenant, $user, $action, app(\App\Services\AiBranch\AiSharedAttention::class)];
+}
+
+test('shared attention claims use exact versions and one encrypted receipt without sending a draft', function () {
+    [$tenant, $user, $action, $service] = sharedAttentionFixture();
+    $row = $service->listing($tenant, $user, 'open')['items'][0];
+    expect(json_encode($row))->not->toContain('PRIVATE DRAFT');
+    $uuid = (string) \Illuminate\Support\Str::uuid();
+    $claim = $service->transition($tenant, $user, $action->id, 'claim', $row['version'], $uuid);
+    expect($claim['item']['claim']['user_id'])->toBe($user->id)
+        ->and($service->transition($tenant, $user, $action->id, 'claim', $row['version'], $uuid)['receipt_id'])->toBe($claim['receipt_id']);
+    expect(fn () => $service->transition($tenant, $user, $action->id, 'resolve', $row['version'], (string) \Illuminate\Support\Str::uuid(), ['resolution' => 'Finished']))->toThrow(HttpException::class);
+    $resolved = $service->transition($tenant, $user, $action->id, 'resolve', $claim['item']['version'], (string) \Illuminate\Support\Str::uuid(), ['resolution' => 'PRIVATE RESOLUTION']);
+    expect($resolved['item']['status'])->toBe('completed')->and($service->listing($tenant, $user, 'open')['items'])->toBe([])
+        ->and($service->listing($tenant, $user, 'resolved')['items'])->toHaveCount(1);
+    expect(\Illuminate\Support\Facades\DB::table('customer_loop_actions')->value('safe_context'))->not->toContain('PRIVATE RESOLUTION');
+    expect(\Illuminate\Support\Facades\DB::table('ai_branch_actions')->pluck('payload')->implode(' '))->not->toContain('PRIVATE RESOLUTION');
+    Http::assertNothingSent();
+});
+
+test('concurrent attention owners cannot overwrite another claim and expired leases require a fresh claim', function () {
+    [$tenant, $user, $action, $service] = sharedAttentionFixture();
+    $other = User::factory()->tenantAdmin()->create();
+    $other->tenants()->attach($tenant->id, ['role' => 'admin', 'membership_active' => true]);
+    $version = $service->listing($tenant, $user, 'open')['items'][0]['version'];
+    $claim = $service->transition($tenant, $user, $action->id, 'claim', $version, (string) \Illuminate\Support\Str::uuid());
+    expect(fn () => $service->transition($tenant, $other, $action->id, 'claim', $version, (string) \Illuminate\Support\Str::uuid()))->toThrow(HttpException::class);
+    expect(fn () => $service->transition($tenant, $other, $action->id, 'claim', $claim['item']['version'], (string) \Illuminate\Support\Str::uuid()))->toThrow(HttpException::class);
+    $this->travel(6)->minutes();
+    expect(fn () => $service->transition($tenant, $user, $action->id, 'resolve', $claim['item']['version'], (string) \Illuminate\Support\Str::uuid(), ['resolution' => 'Late']))->toThrow(HttpException::class);
+    $new = $service->transition($tenant, $other, $action->id, 'claim', $claim['item']['version'], (string) \Illuminate\Support\Str::uuid());
+    expect($new['item']['claim']['user_id'])->toBe($other->id);
+});
+
+test('attention assignment snooze reopen and legacy changes retain authoritative state', function () {
+    [$tenant, $user, $action, $service] = sharedAttentionFixture();
+    $operate = fn ($operation, $options = []) => $service->transition($tenant, $user, $action->id, $operation, $service->version($action->fresh()), (string) \Illuminate\Support\Str::uuid(), $options);
+    $operate('claim');
+    $operate('assign', ['assignee_id' => $user->id]);
+    expect($action->fresh()->assigned_to_user_id)->toBe($user->id);
+    $operate('claim');
+    $operate('snooze', ['until' => now()->addDay()->toIso8601String()]);
+    expect($service->listing($tenant, $user, 'open')['items'])->toBe([])->and($service->listing($tenant, $user, 'snoozed')['items'])->toHaveCount(1);
+    $operate('claim');
+    $operate('resolve', ['resolution' => 'Fictional review done']);
+    $operate('claim');
+    $operate('reopen');
+    expect($action->fresh()->status)->toBe('suggested')->and($action->fresh()->completed_at)->toBeNull();
+    $claim = $operate('claim');
+    $action->fresh()->update(['title' => 'Changed from the existing Customer Loop screen']);
+    expect(fn () => $service->transition($tenant, $user, $action->id, 'resolve', $claim['item']['version'], (string) \Illuminate\Support\Str::uuid(), ['resolution' => 'Stale']))->toThrow(HttpException::class);
+    Http::assertNothingSent();
+});
+
+test('attention API rejects missing grants foreign sources and uncertain repeat identity', function () {
+    [$tenant, $user, $action, $service] = sharedAttentionFixture();
+    [$foreign] = workspaceFixture('foreign-attention');
+    $otherAction = CustomerLoopAction::create(['tenant_id' => $foreign->id, 'title' => 'FOREIGN FOLLOWUP', 'action_type' => 'follow_up', 'reason' => 'Review', 'status' => 'suggested']);
+    \Laravel\Sanctum\Sanctum::actingAs($user, ['mobile:read', 'mobile:write']);
+    $base = '/api/mobile/v1/workspaces/'.$tenant->slug.'/ai-assistant/attention';
+    $row = $this->getJson($base)->assertOk()->assertDontSee('PRIVATE DRAFT')->assertDontSee('FOREIGN FOLLOWUP')->json('items.0');
+    $payload = ['operation' => 'claim', 'version' => $row['version'], 'request_id' => (string) \Illuminate\Support\Str::uuid(), 'confirmed' => true];
+    $this->postJson($base.'/'.$otherAction->id, $payload)->assertNotFound();
+    $this->postJson($base.'/'.$action->id, $payload)->assertOk();
+    $this->postJson($base.'/'.$action->id, [...$payload, 'operation' => 'release'])->assertConflict();
+    $user->tenants()->updateExistingPivot($tenant->id, ['role' => 'member']);
+    $this->getJson($base)->assertForbidden();
+    $this->postJson($base.'/'.$action->id, $payload)->assertForbidden();
+    Http::assertNothingSent();
+});
+
+test('phone practice is fictional scoped and unavailable in production regardless of its flag', function (string $scenario) {
+    [$tenant, $user] = workspaceFixture('fictional-phone');
+    config()->set(['ai_branch.assistant_enabled' => true, 'ai_branch.assistant_tenant_ids' => [$tenant->id], 'ai_branch.assistant_phone_practice_enabled' => true]);
+    \Laravel\Sanctum\Sanctum::actingAs($user, ['mobile:read']);
+    $url = '/api/mobile/v1/workspaces/'.$tenant->slug.'/ai-assistant/phone/practice';
+    $this->postJson($url, ['scenario' => $scenario, 'request_id' => (string) \Illuminate\Support\Str::uuid()])->assertOk()->assertJsonPath('simulated', true)
+        ->assertJsonPath('call.tenant_id', $tenant->id)->assertJsonPath('call.simulated', true)->assertJsonPath('provider_capabilities.live_dispatch', false);
+    expect(\App\Models\TenantAiUsageEvent::count())->toBe(0)->and(\App\Models\AiBranchAction::count())->toBe(0);
+    $this->app->detectEnvironment(fn () => 'production');
+    try {
+        $this->postJson($url, ['scenario' => 'open_hours', 'request_id' => (string) \Illuminate\Support\Str::uuid()])->assertNotFound();
+    } finally {
+        $this->app->detectEnvironment(fn () => 'testing');
+    }
+    Http::assertNothingSent();
+})->with(\App\Services\Voice\PhonePractice::SCENARIOS);
+
+test('ordinary assistant reads do not consume the separate phone practice limiter', function () {
+    [$tenant, $user] = workspaceFixture('fictional-phone-limit');
+    config()->set(['ai_branch.assistant_enabled' => true, 'ai_branch.assistant_tenant_ids' => [$tenant->id], 'ai_branch.assistant_phone_practice_enabled' => true]);
+    \Laravel\Sanctum\Sanctum::actingAs($user, ['mobile:read']);
+    $base = '/api/mobile/v1/workspaces/'.$tenant->slug.'/ai-assistant';
+    foreach (range(1, 12) as $index) {
+        $this->getJson($base)->assertOk();
+    }
+    $this->postJson($base.'/phone/practice', ['scenario' => 'provider_outage', 'request_id' => (string) \Illuminate\Support\Str::uuid()])->assertOk()->assertJsonPath('outcome', 'unconfirmed');
+    Http::assertNothingSent();
+});
+
+function commitmentFixture(): array
+{
+    [$tenant, $user] = workspaceFixture('fictional-commitment');
+    config()->set(['ai_branch.assistant_enabled' => true, 'ai_branch.assistant_tenant_ids' => [$tenant->id], 'ai_branch.assistant_commitments_enabled' => true, 'ai_branch.actions_enabled' => true]);
+    $job = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'Fictional commitment work', 'status' => 'open']);
+    $note = \App\Models\FieldServiceJobNote::create(['tenant_id' => $tenant->id, 'field_service_job_id' => $job->id, 'body' => 'I will call the customer tomorrow.']);
+    $input = ['job_id' => $job->id, 'note_id' => $note->id, 'quote' => $note->body, 'title' => 'Call the fictional customer', 'assignee_id' => $user->id,
+        'due_local' => '2026-10-20T09:00', 'confirmed_promise' => true, 'request_id' => (string) \Illuminate\Support\Str::uuid()];
+
+    return [$tenant, $user, $job, $note, $input, app(\App\Services\AiBranch\AiCommitments::class)];
+}
+
+test('reviewed commitments create one assigned sourced task and reconcile pending overdue and completed queries', function () {
+    [$tenant, $user, $job, $note, $input, $service] = commitmentFixture();
+    $proposal = $service->propose($tenant, $user, $input);
+    expect($service->propose($tenant, $user, $input)->id)->toBe($proposal->id)->and(FieldServiceTask::count())->toBe(0);
+    $actions = app(\App\Services\AiBranch\AiBranchActions::class);
+    $actions->decide($tenant, $user, $proposal->id, $proposal->digest, true);
+    $actions->decide($tenant, $user, $proposal->id, $proposal->digest, true);
+    $task = FieldServiceTask::sole();
+    expect($task->assigned_user_id)->toBe($user->id)->and($task->due_at->utc()->format('Y-m-d H:i'))->toBe('2026-10-20 13:00')
+        ->and($task->assignees()->pluck('users.id')->all())->toBe([$user->id])->and(FieldServiceTaskEvent::count())->toBe(1)
+        ->and($service->listing($tenant, $user, 'pending')['tasks'])->toHaveCount(1);
+    $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-21T12:00:00Z'));
+    expect($service->listing($tenant, $user, 'overdue')['tasks'])->toHaveCount(1);
+    $task->update(['status' => 'done', 'completed_at' => now()]);
+    expect($service->listing($tenant, $user, 'overdue')['tasks'])->toBe([])->and($service->listing($tenant, $user, 'completed')['tasks'])->toHaveCount(1);
+    Http::assertNothingSent();
+});
+
+test('commitment approval rejects changed sources revoked assignments and changed timezone', function (string $change) {
+    [$tenant, $user, $job, $note, $input, $service] = commitmentFixture();
+    $member = User::factory()->create(['is_active' => true]);
+    $member->tenants()->attach($tenant->id, ['role' => 'member', 'membership_active' => true]);
+    $proposal = $service->propose($tenant, $user, [...$input, 'assignee_id' => $member->id]);
+    if ($change === 'note') {
+        $note->update(['body' => 'Changed after the exact preview.']);
+    } elseif ($change === 'private') {
+        $note->update(['metadata' => ['visibility' => 'owner']]);
+    } elseif ($change === 'assignment') {
+        $member->tenants()->updateExistingPivot($tenant->id, ['membership_active' => false]);
+    } else {
+        TenantAccessProfile::where('tenant_id', $tenant->id)->update(['metadata' => json_encode(['ai_branch' => ['timezone' => 'UTC']])]);
+    }
+    $exception = in_array($change, ['private', 'assignment'], true) ? \Illuminate\Database\Eloquent\ModelNotFoundException::class : HttpException::class;
+    expect(fn () => $service->decide($tenant, $user, $proposal->id, $proposal->digest, true))->toThrow($exception);
+    expect(FieldServiceTask::count())->toBe(0)->and($proposal->fresh()->status)->toBe('pending');
+    Http::assertNothingSent();
+})->with(['note', 'private', 'assignment', 'timezone']);
+
+test('commitment source projection omits private notes and refuses unsupported or foreign promises', function () {
+    [$tenant, $user, $job, $note, $input, $service] = commitmentFixture();
+    $private = \App\Models\FieldServiceJobNote::create(['tenant_id' => $tenant->id, 'field_service_job_id' => $job->id, 'body' => 'I will share OWNER PRIVATE DATA.', 'metadata' => ['visibility' => 'owner']]);
+    $sources = $service->sources($tenant, $user, $job->id);
+    expect(json_encode($sources))->not->toContain('OWNER PRIVATE DATA')->and($sources['notes'])->toHaveCount(1);
+    expect(fn () => $service->propose($tenant, $user, [...$input, 'note_id' => $private->id]))->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+    expect(fn () => $service->propose($tenant, $user, [...$input, 'quote' => 'I will invent an unsourced commitment.']))->toThrow(HttpException::class);
+    $note->update(['body' => 'Maybe we could call tomorrow.']);
+    expect(fn () => $service->propose($tenant, $user, [...$input, 'quote' => $note->body]))->toThrow(HttpException::class);
+    expect(FieldServiceTask::count())->toBe(0);
+});
+
+test('native commitment workflow uses the shared review center and hides proposals when its grant is withdrawn', function () {
+    [$tenant, $user, $job, $note, $input] = commitmentFixture();
+    \Laravel\Sanctum\Sanctum::actingAs($user, ['mobile:read', 'mobile:write']);
+    $base = '/api/mobile/v1/workspaces/'.$tenant->slug.'/ai-assistant';
+    $this->getJson($base.'/commitments/sources?job_id='.$job->id)->assertOk()->assertJsonPath('notes.0.id', $note->id);
+    $proposal = $this->postJson($base.'/commitments', $input)->assertCreated()->json();
+    $this->getJson($base)->assertOk()->assertJsonPath('actions.0.kind', 'internal_commitment_task');
+    $this->postJson($base.'/actions/'.$proposal['action_id'].'/decision', ['digest' => $proposal['digest'], 'decision' => 'approve', 'confirmed' => true])->assertOk()->assertJsonPath('status', 'executed');
+    $this->getJson($base.'/commitments?view=pending')->assertOk()->assertJsonCount(1, 'tasks');
+    config()->set('ai_branch.assistant_commitments_enabled', false);
+    $this->getJson($base)->assertOk()->assertJsonPath('commitments_available', false)->assertJsonCount(0, 'actions');
+    $this->getJson($base.'/commitments')->assertNotFound();
+    Http::assertNothingSent();
+});
+
 test('page descriptors reject arbitrary details and other tenant records', function () {
     [$tenant, $user] = workspaceFixture();
     [$other] = workspaceFixture('other');

@@ -1,5 +1,38 @@
 # SYSTEM SNAPSHOT
 
+## Ask Everbranch assistant (2026-10-16; local fictional acceptance)
+
+- A default-off, tenant-allowlisted web panel/native sheet reuses AI Branch chat,
+  private memory, context, actions and usage. Reading the panel does not dispatch
+  a provider request. Owner/admin authorization remains unchanged.
+- Additional independent flags expose saved QuickBooks report totals and private
+  weekly snapshots of registered task events, current notes and customer activity.
+  Reports disclose incomplete sources and recheck scope before JSON/print export.
+- Internal note previews require exact approval. Unchanged AI notes support one
+  audited compensating archive; intervening edits invalidate undo permanently.
+- No new schema or activation. See the voice runbook and acceptance matrix for
+  evidence and open customer, triage, mail, phone, receptionist and device work.
+- A separate default-off shared attention rail now coordinates Customer Loop
+  follow-ups with leases, exact versions, assignment/snooze/resolution and
+  encrypted UUID receipts. It does not dispatch drafts or replace legacy screens.
+- Phone foundations now include provider-neutral call events, a strict Twilio
+  signed-form normalizer, pure duplicate-safe call reduction, timezone/holiday
+  routing and a local/testing-only fictional practice view. No live phone ingress,
+  dispatch, number purchase or billing is implemented. See the phone rails doc.
+- Reviewed commitment tasks can use exact team-visible job-note quotes, an explicit
+  assignee and a workspace-zone due time. Separate immutable approval creates one
+  sourced internal task. DST gaps/repeats and changed sources/assignments fail
+  closed; no accounting write, notification or automatic reminder is introduced.
+
+## Ask Everbranch voice navigation (2026-10-16; local implementation)
+
+- Verified Mac restoration now has navigation-only action filtering, exact
+  matching, canonical nested destinations and a versioned mobile voice inventory.
+  Choices refresh access; stale/cancelled requests and unsaved forms retain
+  truthful state. No migration or production activation.
+- See `docs/operations/everbranch-voice-runbook.md` for contracts, verification
+  and remaining device/coverage gaps. The combined AI/phone release is incomplete.
+
 ## Stripe and PayPal connection setup (2026-10-16; deployed, Wren setup pilot)
 
 - A shared default-off, exact-tenant-allowlisted Payments page supports Stripe

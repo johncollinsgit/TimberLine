@@ -24,6 +24,13 @@ beforeEach(function () {
     $this->store = app(SoccerStore::class);
     $this->season = $this->store->insert('seasons', $this->tenant->id, ['season_key' => 'spring-2027', 'name' => 'Spring 2027', 'teams' => json_encode(config('soccer.teams'))]);
 });
+it('voice navigation uses canonical nested soccer destinations without operational action suggestions', function () {
+    $response = $this->actingAs($this->admin)->getJson(route('app.search', ['tenant' => $this->tenant->slug, 'q' => 'Open the Green Bears page', 'intent' => 'navigate']))->assertOk();
+    $response->assertJsonPath('navigation.status', 'matched');
+    expect($response->json('navigation.destination.url'))->toContain('team=green-bears')
+        ->and(collect($response->json('results'))->pluck('type'))->not->toContain('action');
+});
+
 it('renders focused admin tools and blocks unrelated Wren customer routes', function () {
     $this->actingAs($this->admin)->get('/soccer?tenant=wren-family-soccer')->assertOk()->assertSeeText('A new season starts here.')->assertSeeText('Parents')->assertSeeText('Green Bears')->assertDontSee('data-sidebar-key="trajectory"', false)->assertDontSee('data-sidebar-key="branches"', false)->assertDontSee('data-sidebar-key="customers"', false);
     $this->get('/website/products?tenant=wren-family-soccer')->assertRedirect(route('soccer.workspace', ['tenant' => 'wren-family-soccer']));

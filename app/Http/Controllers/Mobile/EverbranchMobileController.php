@@ -77,6 +77,8 @@ class EverbranchMobileController extends Controller
         $appVersion = trim((string) ($request->header('X-Everbranch-App-Version') ?: $request->query('app_version', '')));
         $manifest = collect($mobileModules->manifest((int) $tenant->id, $user, $appVersion !== '' ? $appVersion : null))->values()->all();
         $fieldOperations = (array) ($moduleAccess->resolveForTenant((int) $tenant->id, ['field_service', 'time_tracking', 'team_communication', 'field_inventory', 'fleet', 'fleet_tracking', 'documents', 'quickbooks'])['modules'] ?? []);
+        $primaryNavigation = $this->primaryNavigation($role, $fieldOperations, $this->canViewClients($user, $tenant));
+        $branding = $this->brandingPayload($tenant, $role);
 
         return response()->json([
             'contract_version' => TenantMobileModuleRegistry::CONTRACT_VERSION,
@@ -88,10 +90,12 @@ class EverbranchMobileController extends Controller
                 'slug' => (string) $tenant->slug,
                 'role' => $role,
             ],
-            'branding' => $this->brandingPayload($tenant, $role),
+            'branding' => $branding,
+            'ai_assistant' => ['available' => app(\App\Services\AiBranch\AiAssistantAccess::class)->allows($tenant, $user), 'context_available' => app(\App\Services\AiBranch\AiWorkspaceContext::class)->enabled($tenant)],
+            'voice_navigation' => app(\App\Services\Navigation\VoiceNavigationRegistry::class)->mobile($request, $user, $primaryNavigation, $manifest, $branding),
             'experience_profile' => $experienceProfiles->forTenant((int) $tenant->id, $user, $tenant),
             'work_profile' => $workProfiles->forTenant($tenant),
-            'primary_navigation' => $this->primaryNavigation($role, $fieldOperations, $this->canViewClients($user, $tenant)),
+            'primary_navigation' => $primaryNavigation,
             'dashboard' => $dashboard->forRequest($request, $user),
             'workspace_insights' => $this->workspaceInsights($tenant, count($manifest)),
             'branches' => $manifest,
@@ -545,15 +549,25 @@ class EverbranchMobileController extends Controller
         $validated = $request->validate([
             'q' => ['nullable', 'string', 'max:200'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:20'],
+            'intent' => ['nullable', 'in:navigate'],
         ]);
 
         $tenant = $this->tenant($request);
         $query = (string) ($validated['q'] ?? '');
+        $navigationOnly = ($validated['intent'] ?? null) === 'navigate';
+        $navigation = app(\App\Services\Navigation\NavigationQuery::class);
+        if ($navigationOnly && ($control = $navigation->control($query))) {
+            return response()->json(['query' => $query, 'results' => [], 'groups' => [], 'total' => 0, 'navigation' => ['status' => 'control', 'control' => $control]]);
+        }
+        if ($navigationOnly) {
+            $query = $navigation->normalize($query);
+        }
         $payload = $search->search($query, [
             'tenant_id' => (int) $tenant->id,
             'user' => $this->user($request),
             'request' => $request,
             'surface' => 'mobile',
+            'navigation_only' => $navigationOnly,
             'limit' => (int) ($validated['limit'] ?? 10),
         ]);
         $results = collect((array) ($payload['results'] ?? []))->map(function (array $result): array {
@@ -590,7 +604,23 @@ class EverbranchMobileController extends Controller
             $payload['empty_state'] = ['title' => 'No matches', 'subtitle' => 'Try a job, module, or team destination.'];
         }
 
+        if ($navigationOnly) {
+            $payload['results'] = array_values(array_filter($payload['results'], fn (array $row): bool => empty($row['action']) && ! in_array($row['type'] ?? '', ['action', 'command'], true)));
+            $payload['total'] = count($payload['results']);
+            $payload['groups'] = collect($payload['results'])->groupBy('type')->all();
+            // Native record destinations always require the user to choose.
+            $payload['navigation'] = ['status' => $payload['total'] ? 'choose' : 'no_match'];
+        }
+
         return response()->json($payload);
+    }
+
+    /** Body-based navigation keeps recognized words out of request URLs. */
+    public function navigateSearch(Request $request, GlobalSearchCoordinator $search, TenantMobileResourceService $resources): JsonResponse
+    {
+        $request->merge(['intent' => 'navigate']);
+
+        return $this->search($request, $search, $resources);
     }
 
     public function branches(Request $request, TenantModuleCatalogService $catalog): JsonResponse

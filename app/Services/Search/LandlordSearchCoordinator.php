@@ -47,18 +47,22 @@ class LandlordSearchCoordinator
                 } catch (\Throwable $exception) {
                     Log::warning('landlord_search.provider_failed_closed', [
                         'provider' => $provider::class,
-                        'message' => $exception->getMessage(),
+                        'message' => empty($context['navigation_only']) ? $exception->getMessage() : 'Navigation provider failed.',
+                        'exception_type' => $exception::class,
                     ]);
 
                     return [];
                 }
             })
             ->filter(fn (array $row): bool => $normalized === '' || (int) ($row['score'] ?? 0) > 0)
+            ->filter(fn (array $row): bool => empty($context['navigation_only']) || app(\App\Services\Navigation\NavigationQuery::class)->isDestination($row))
             ->sortByDesc(fn (array $row): int => (int) ($row['score'] ?? 0))
-            ->take($limit)
             ->values();
+        $navigation = ! empty($context['navigation_only']) ? app(\App\Services\Navigation\NavigationQuery::class)->resolution($results->all()) : null;
+        $results = $results->take($limit)->values();
 
         return [
+            ...($navigation !== null ? ['navigation' => $navigation] : []),
             'query' => $normalized,
             'context' => 'landlord',
             'total' => $results->count(),
