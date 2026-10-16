@@ -64,6 +64,7 @@ $catalog = [
     ],
 
     'capabilities' => [
+        'ai_branch.chat' => ['display_name' => 'AI Branch chat', 'description' => 'Private, metered workspace assistance.', 'module_key' => 'ai_branch'],
         'trajectory.personal' => ['display_name' => 'Personal trajectory', 'module_key' => 'trajectory'],
         'trajectory.business' => ['display_name' => 'Business trajectory', 'module_key' => 'trajectory'],
         'dashboard.overview' => [
@@ -1636,6 +1637,16 @@ $catalog = [
             'cta_routing' => 'contact_sales',
             'capabilities' => ['mobile.connection'],
         ],
+        'ai_branch' => [
+            'display_name' => 'AI Branch',
+            'description' => 'Optional private workspace chat with cited context and reviewed actions.',
+            'status' => 'beta', 'market_state' => 'INTERNAL_ONLY', 'channels' => ['both'],
+            'classification' => 'add-on', 'included_in_plans' => [], 'default_enabled' => false,
+            'default_setup_status' => 'configured', 'dependencies' => [], 'billing_mode' => 'add_on',
+            'visibility' => ['public_site' => false, 'app_store' => false, 'mobile_store' => false],
+            'cta_routing' => 'contact_sales', 'activation_policy' => 'operator_only',
+            'capabilities' => ['ai_branch.chat'],
+        ],
         'ai' => [
             'display_name' => 'AI Assistant',
             'description' => 'Tenant-aware AI assistant workspace for guided opportunities and human-reviewed campaign drafts.',
@@ -1866,6 +1877,7 @@ $catalog = [
                 'settings',
             ],
             'eligible_addons' => [
+                'ai_branch_starter', 'ai_branch_growth', 'ai_branch_pro',
                 'sms',
                 'messaging',
                 'order_calendar',
@@ -1904,6 +1916,7 @@ $catalog = [
                 'square',
             ],
             'eligible_addons' => [
+                'ai_branch_starter', 'ai_branch_growth', 'ai_branch_pro',
                 'referrals',
                 'sms',
                 'messaging',
@@ -1949,6 +1962,7 @@ $catalog = [
                 'ai',
             ],
             'eligible_addons' => [
+                'ai_branch_starter', 'ai_branch_growth', 'ai_branch_pro',
                 'referrals',
                 'sms',
                 'messaging',
@@ -1996,6 +2010,7 @@ $catalog = [
                 'ai',
             ],
             'eligible_addons' => [
+                'ai_branch_starter', 'ai_branch_growth', 'ai_branch_pro',
                 'referrals',
                 'sms',
                 'messaging',
@@ -2010,6 +2025,30 @@ $catalog = [
     ],
 
     'addons' => [
+        'ai_branch_pro' => [
+            'display_name' => 'AI Branch Pro', 'label' => 'AI Branch Pro',
+            'purchase_key' => 'addon.ai_branch_pro', 'billing_mode' => 'add_on', 'is_public' => false, 'purchase_enabled' => false,
+            'pricing' => ['currency' => 'USD', 'recurring_price_cents' => 19900, 'setup_price_cents' => 0],
+            'stripe' => ['product_lookup_key' => 'addon_ai_branch_pro', 'recurring_price_lookup_key' => 'addon_ai_branch_pro_monthly'],
+            'modules' => ['ai_branch'], 'legacy_grants' => [],
+            'ai_limits' => ['responses' => 3000, 'provider_budget_cents' => 3500, 'actions' => true],
+        ],
+        'ai_branch_growth' => [
+            'display_name' => 'AI Branch Growth', 'label' => 'AI Branch Growth',
+            'purchase_key' => 'addon.ai_branch_growth', 'billing_mode' => 'add_on', 'is_public' => false, 'purchase_enabled' => false,
+            'pricing' => ['currency' => 'USD', 'recurring_price_cents' => 9900, 'setup_price_cents' => 0],
+            'stripe' => ['product_lookup_key' => 'addon_ai_branch_growth', 'recurring_price_lookup_key' => 'addon_ai_branch_growth_monthly'],
+            'modules' => ['ai_branch'], 'legacy_grants' => [],
+            'ai_limits' => ['responses' => 1000, 'provider_budget_cents' => 1500, 'actions' => true],
+        ],
+        'ai_branch_starter' => [
+            'display_name' => 'AI Branch Starter', 'label' => 'AI Branch Starter',
+            'purchase_key' => 'addon.ai_branch_starter', 'billing_mode' => 'add_on', 'is_public' => false, 'purchase_enabled' => false,
+            'pricing' => ['currency' => 'USD', 'recurring_price_cents' => 4900, 'setup_price_cents' => 0],
+            'stripe' => ['product_lookup_key' => 'addon_ai_branch_starter', 'recurring_price_lookup_key' => 'addon_ai_branch_starter_monthly'],
+            'modules' => ['ai_branch'], 'legacy_grants' => [],
+            'ai_limits' => ['responses' => 300, 'provider_budget_cents' => 500, 'actions' => false],
+        ],
         'referrals' => [
             'display_name' => 'Referrals',
             'label' => 'Referrals',

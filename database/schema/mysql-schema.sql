@@ -407,6 +407,76 @@ CREATE TABLE `agreements` (
   CONSTRAINT `agreements_updated_by_foreign` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `ai_branch_accounts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ai_branch_accounts` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `enabled` tinyint(1) NOT NULL DEFAULT '0',
+  `budget_cents` int unsigned NOT NULL DEFAULT '0',
+  `approved_by` bigint unsigned DEFAULT NULL,
+  `approved_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `aib_account_tenant_uq` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `ai_branch_actions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ai_branch_actions` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `client_uuid` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `kind` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `digest` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `expires_at` timestamp NOT NULL,
+  `decided_at` timestamp NULL DEFAULT NULL,
+  `result_id` bigint unsigned DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `aib_action_request_uq` (`tenant_id`,`client_uuid`),
+  KEY `aib_action_scope_idx` (`tenant_id`,`user_id`,`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `ai_branch_conversations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ai_branch_conversations` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `context_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `messages` longtext COLLATE utf8mb4_unicode_ci,
+  `pending_uuid` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `expires_at` timestamp NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `aib_conversation_scope_idx` (`tenant_id`,`user_id`,`expires_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `ai_branch_memories`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ai_branch_memories` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `body` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `expires_at` timestamp NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `aib_memory_scope_idx` (`tenant_id`,`user_id`,`expires_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `automation_workflow_action_receipts`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -10168,16 +10238,16 @@ CREATE TABLE `website_catalog_source_mappings` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `tenant_id` bigint unsigned NOT NULL,
   `tenant_site_id` bigint unsigned NOT NULL,
-  `provider` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `source_shop` varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `source_type` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `source_gid` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `source_shop` varchar(253) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `source_type` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `source_gid` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `website_product_id` bigint unsigned DEFAULT NULL,
   `website_product_variant_id` bigint unsigned DEFAULT NULL,
   `website_collection_id` bigint unsigned DEFAULT NULL,
-  `source_fingerprint` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `target_fingerprint` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `provenance` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `source_fingerprint` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `target_fingerprint` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provenance` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -10449,17 +10519,17 @@ CREATE TABLE `website_order_notifications` (
   `tenant_id` bigint unsigned NOT NULL,
   `website_order_id` bigint unsigned NOT NULL,
   `website_shipment_id` bigint unsigned DEFAULT NULL,
-  `transition_key` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `kind` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
-  `snapshot` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `transition_key` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `kind` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `snapshot` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `attempts` smallint unsigned NOT NULL DEFAULT '0',
   `next_attempt_at` timestamp NULL DEFAULT NULL,
-  `lease_token` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `lease_token` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `lease_expires_at` timestamp NULL DEFAULT NULL,
   `accepted_at` timestamp NULL DEFAULT NULL,
-  `provider_message_id` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `failure_code` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `provider_message_id` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `failure_code` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -11472,3 +11542,7 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (277,'2026_10_13_22
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (278,'2026_10_15_220000_reconcile_reviewed_schema_drift',23);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (279,'2026_10_15_210000_create_website_order_notifications',24);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (280,'2026_10_15_230000_create_website_catalog_source_mappings',24);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (281,'2026_10_16_000000_create_ai_branch_accounts',25);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (282,'2026_10_16_000001_create_ai_branch_conversations',25);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (283,'2026_10_16_000002_create_ai_branch_memories',25);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (284,'2026_10_16_000003_create_ai_branch_actions',25);

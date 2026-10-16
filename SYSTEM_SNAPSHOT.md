@@ -1,5 +1,12 @@
 # SYSTEM SNAPSHOT
 
+## Optional Everbranch AI Branch development 2026-10-15
+
+- A hidden default-off `ai_branch` add-on now provides owner/admin chat with sampled tenant job evidence, encrypted private conversations, explicit personal memory, durable usage reservations, and exact-preview approvals for internal owner-visible job notes. Bud Core and the Shopify AI Assistant retain their existing behavior.
+- Canonical Starter/Growth/Pro add-ons preserve $49/$99/$199 monthly pricing; response/provider caps are proposed pilot defaults. New purchases remain blocked by `purchase_enabled=false`. Runtime requires global and tenant rollout flags, canonical access, exactly one confirmed tier and active billing ledger, and owner opt-in. No automatic overage, live Stripe setup, voice or phone transport is activated.
+- Read `docs/architecture/everbranch-ai-implementation.md` and `docs/operations/everbranch-ai-runbook.md` before continuing. Additive schema, daily retention, an audited usage reconciliation command and AI-specific tests are included. Provider and commercial activation still require a named approved pilot.
+
+
 ## Subscriptions Phase 1 foundation (2026-10-15; isolated review branch)
 
 - Canonical subscription entitlements cover admin, customer/mobile, public polls,

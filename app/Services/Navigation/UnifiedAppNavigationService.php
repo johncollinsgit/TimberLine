@@ -302,6 +302,10 @@ class UnifiedAppNavigationService
             $items[] = ['key' => 'account-help', 'icon' => 'lifebuoy', 'href' => route('account-help.index'), 'label' => 'Account Help', 'current' => request()->routeIs('account-help.*')];
         }
 
+        if ($user && app(\App\Services\AiBranch\AiBranchAccess::class)->visible($tenant, $user)) {
+            $items[] = ['key' => 'ai-branch', 'icon' => 'sparkles', 'href' => route('ai-branch.index', ['tenant' => $tenant->slug]), 'label' => 'AI Branch', 'current' => request()->routeIs('ai-branch.*')];
+        }
+
         $items = $this->normalizeNavigationItems($items);
 
         $prefs = is_array($user?->ui_preferences ?? null) ? $user->ui_preferences : [];

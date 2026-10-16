@@ -1,5 +1,12 @@
 ## Subscriptions Phase 1 foundation (2026-10-15; isolated review branch)
 
+## Everbranch AI Branch development 2026-10-15
+
+- Restart with `docs/architecture/everbranch-ai-implementation.md` and `docs/operations/everbranch-ai-runbook.md`. Preserve included deterministic Bud and the existing Shopify AI Assistant.
+- The optional branch remains hidden and globally/tenant disabled. Pricing and proposed pilot allowances live only in the canonical catalog. Purchases are blocked until commercial approval; tenant settings cannot create or change subscriptions. Every AI call requires current active paid billing evidence and owner/admin membership.
+- Keep tenant/user scope, encrypted text, pre-dispatch usage reservation and exact action approval gates. Never auto-refund ambiguous provider failures or retry their UUID. Reconcile only using the preview-first operator command with provider evidence. Keep voice and phone transports unimplemented until their separate acceptance gates pass.
+
+
 - Canonical subscription entitlements cover admin, customer/mobile, public polls,
   webhook evidence and CLI apply paths. Active tenant managers require a separate
   Everbranch sign-in; Shopify launch/session context alone is insufficient.

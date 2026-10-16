@@ -3,6 +3,22 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_16_000000_create_ai_branch_accounts.php' => [
+        'test' => 'tests/Integration/AiBranchMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['completed table and encrypted sentinel retained before migration bookkeeping'],
+    ],
+    '2026_10_16_000001_create_ai_branch_conversations.php' => [
+        'test' => 'tests/Integration/AiBranchMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['completed table and encrypted sentinel retained before migration bookkeeping'],
+    ],
+    '2026_10_16_000002_create_ai_branch_memories.php' => [
+        'test' => 'tests/Integration/AiBranchMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['completed table and encrypted sentinel retained before migration bookkeeping'],
+    ],
+    '2026_10_16_000003_create_ai_branch_actions.php' => [
+        'test' => 'tests/Integration/AiBranchMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['completed table and encrypted sentinel retained before migration bookkeeping'],
+    ],
     '2026_10_15_220000_reconcile_reviewed_schema_drift.php' => [
         'test' => 'tests/Integration/ReviewedSchemaDriftRecoveryTest.php',
         'scenarios' => ['exact observed production DDL with historical rows and unowned development notes', 'earlier repairs retained before missing unique and foreign key repair', 'archival column retained after an atomic delivery-reference copy rolls back', 'conflicting evidence and unrelated duplicate/orphan conflicts stop before DDL', 'clean and observed schemas converge without production name or column-order rewrites'],

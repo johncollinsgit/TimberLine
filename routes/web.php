@@ -2542,3 +2542,5 @@ Route::post('/email/unsubscribe', [\App\Http\Controllers\Marketing\MarketingEmai
     ->name('marketing.email.unsubscribe.store');
 
 require __DIR__.'/soccer.php';
+
+require __DIR__.'/ai-branch.php';
