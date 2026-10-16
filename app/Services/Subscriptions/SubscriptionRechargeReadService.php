@@ -92,8 +92,10 @@ class SubscriptionRechargeReadService
                     'scopes' => $identity['scopes'], 'verified_at' => now(), 'expires_at' => $source->expires_at]);
             }
             $revision->forceFill(['scopes' => $identity['scopes'], 'verified_at' => now()])->save();
-            $connection->forceFill(['status' => 'verified', 'active_credential_revision_id' => $revision->id, 'verified_at' => now(), 'scopes' => $identity['scopes'],
-                'evidence' => ['store' => $identity['store'], 'verified_at' => now()->toISOString(), 'verification_attempt_uuid' => $verificationAttempt, 'api_version' => SubscriptionRechargeTransport::API_VERSION]])->save();
+            // The freshly locked envelope may also contain immutable manual settings
+            // observations. Verification owns only its provider identity keys.
+            $evidence = array_replace($connection->evidence ?? [], ['store' => $identity['store'], 'verified_at' => now()->toISOString(), 'verification_attempt_uuid' => $verificationAttempt, 'api_version' => SubscriptionRechargeTransport::API_VERSION]);
+            $connection->forceFill(['status' => 'verified', 'active_credential_revision_id' => $revision->id, 'verified_at' => now(), 'scopes' => $identity['scopes'], 'evidence' => $evidence])->save();
             $operation = $this->operations->record($tenantId, $connection->id, $actor, 'verify_connection', $requestUuid, $verificationRequest, $revision->id);
             $claimed = $this->operations->claim($tenantId, $operation->id, $actor);
             if ($claimed && ! $this->operations->complete($tenantId, $operation->id, $claimed->lease_token, 'completed', ['identity_verified' => true, 'scopes_ready' => ! array_diff(self::SCOPES, $identity['scopes']), 'scopes' => $identity['scopes'], 'store' => $identity['store']])) {

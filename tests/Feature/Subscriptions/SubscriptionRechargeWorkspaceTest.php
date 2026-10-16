@@ -154,3 +154,27 @@ test('read gate prevents forged capture and verify requests before any provider 
     $this->post(($this->postUrl)('verify'), ['source_id' => $source->id, 'request_uuid' => (string) Str::uuid()])->assertStatus(409);
     Http::assertNothingSent();
 });
+
+test('manual settings comparison is private offline exact and never live configuration', function () {
+    $connection = rechargeWorkspaceCapture($this);
+    $beforeRequests = count(Http::recorded());
+    $manual = app(\App\Services\Subscriptions\SubscriptionRechargeManualSettingsService::class);
+    $document = ['schema_version' => 1, 'expected_identity' => rechargeExpected(),
+        'expected_merchant_origin' => 'https://fictional-source.admin.rechargeapps.com',
+        'category' => 'payment_vault', 'source_url' => 'https://fictional-source.admin.rechargeapps.com/merchant/settings/payment',
+        'observed_at' => '2026-10-16T02:00:00-04:00', 'expected_previous_version_id' => null,
+        'fields' => ['legacy_payment_processor' => 'Braintree/Paypal', 'sandbox_mode' => false, 'recalculate_next_charge_date' => true, 'migration_status' => null],
+        'required_fields' => ['legacy_payment_processor', 'sandbox_mode', 'recalculate_next_charge_date', 'migration_status', 'vault_ownership_evidence']];
+    $receipt = $manual->record($this->tenant->id, $this->actor, $connection->id, (string) Str::uuid(), $document);
+    expect($receipt['live_ready'])->toBeFalse()->and($receipt['missing_fields'])->toBe(['vault_ownership_evidence']);
+    $this->get($this->url)->assertOk()->assertSeeText('Settings source and draft history')->assertSeeText('Compare saved settings');
+    $path = 'https://app.theeverbranch.com/subscriptions/recharge/settings/payment_vault?connection='.$connection->id.'&tenant=';
+    $this->get($path.$this->tenant->slug)->assertOk()->assertSeeText('Braintree/Paypal')->assertSeeText('false')->assertSeeText('true')->assertSeeText('null')
+        ->assertSeeText('Same value')->assertSeeText('vault_ownership_evidence')->assertSeeText('migration_status')->assertSeeText('rollout is off');
+    $other = Tenant::query()->create(['name' => 'Other settings', 'slug' => 'other-settings-review']);
+    TenantModuleEntitlement::query()->create(['tenant_id' => $other->id, 'module_key' => 'subscriptions', 'availability_status' => 'available', 'enabled_status' => 'enabled', 'billing_status' => 'add_on_comped', 'entitlement_source' => 'test_explicit', 'price_source' => 'test']);
+    $this->actor->tenants()->attach($other->id, ['role' => 'manager', 'membership_active' => true]);
+    $this->get($path.$other->slug)->assertNotFound()->assertDontSee('Braintree/Paypal');
+    $this->get(str_replace('payment_vault', 'legal', $path).$this->tenant->slug)->assertNotFound();
+    expect(count(Http::recorded()))->toBe($beforeRequests)->and(DB::table('subscription_customers')->count())->toBe(0);
+});

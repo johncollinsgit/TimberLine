@@ -12,6 +12,10 @@
   rendering is offline. Read flags default false/empty independently of all live
   operations. Source credentials and expected Recharge store identity are required;
   no configured production credential or actual source reconciliation was found.
+- Versioned manual settings observations and exact isolated drafts retain source
+  provenance, missing fields and nulls; tenant managers can compare them privately.
+  Recharge reports an incomplete Shopify Checkout conversion with legacy
+  Braintree/PayPal subscribers. No source setting was changed.
 - Full settings/history/vault parity remains unverified. API store facts do not
   prove notification, dunning, portal, shipping/tax or workflow equivalence; absent
   resource families remain coverage gaps. See

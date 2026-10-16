@@ -103,6 +103,29 @@
             </section>
         @endif
 
+        @if($manualSettings)
+            <section class="rounded-2xl border border-zinc-200 bg-white p-5">
+                <h2 class="text-lg font-semibold">Settings source and draft history</h2>
+                <p class="mt-2 text-sm leading-6 text-zinc-600">A setup operator can record reviewed Recharge settings in private versioned drafts. Captured values are preserved for comparison; runtime behavior and full coverage still need verification.</p>
+                <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                    @foreach($manualSettings['categories'] as $category => $entry)
+                        <div class="min-w-0 rounded-xl bg-zinc-50 p-4">
+                            <h3 class="font-medium">{{ ucfirst(str_replace('_', ' ', $category)) }}</h3>
+                            @if($entry['latest_version_id'])
+                                <p class="mt-2 text-sm text-zinc-700">{{ $entry['field_count'] }} source fields preserved · {{ $entry['version_count'] }} saved versions</p>
+                                <p class="mt-1 break-words text-xs text-zinc-600">Observed {{ $entry['observed_at'] }}</p>
+                                <p class="mt-1 text-xs text-amber-900">{{ count($entry['missing_fields'] ?? []) }} missing fields · {{ count($entry['null_fields'] ?? []) }} explicit nulls · Coverage unverified</p>
+                                <a class="mt-3 inline-block text-sm font-semibold text-emerald-900 underline" href="{{ route('subscriptions.recharge.settings', ['tenant'=>$tenant->id,'connection'=>$connection->id,'category'=>$category]) }}">Compare saved settings</a>
+                            @else
+                                <p class="mt-2 text-sm text-amber-900">Source observation required</p>
+                            @endif
+                        </div>
+                    @endforeach
+                </div>
+                <p class="mt-4 text-xs leading-5 text-zinc-600">Manual page attribution is merchant-reviewed evidence. It is separate from API-verified store identity, and no saved draft is connected to live configuration.</p>
+            </section>
+        @endif
+
         <section class="grid gap-5 lg:grid-cols-2">
             <div class="rounded-2xl border border-zinc-200 bg-white p-5"><h2 class="text-lg font-semibold">Settings requiring source review</h2><p class="mt-2 text-sm leading-6 text-zinc-600">Store currency/timezone can be captured through the API. These settings need source evidence and a matching Everbranch configuration draft before one-to-one readiness can be claimed.</p><ul class="mt-4 space-y-3 text-sm text-zinc-700">@foreach(\App\Services\Subscriptions\SubscriptionRechargeReadinessService::SETTINGS_GAPS as $label)<li class="rounded-xl bg-zinc-50 p-3">{{ $label }} <span class="block text-xs text-amber-900">Unverified</span></li>@endforeach</ul></div>
             <div class="rounded-2xl border border-zinc-200 bg-white p-5"><h2 class="text-lg font-semibold">Remaining coverage checks</h2><ul class="mt-4 space-y-3 text-sm text-zinc-700">@foreach(\App\Services\Subscriptions\SubscriptionRechargeReadinessService::COVERAGE_GAPS as $label)<li class="rounded-xl bg-zinc-50 p-3">{{ $label }} <span class="block text-xs text-amber-900">Source evidence required</span></li>@endforeach</ul><p class="mt-4 text-sm leading-6 text-zinc-600">Recharge limits processed-charge history to 90 days, and delivery projections cover at most 365 days. Full historical parity needs additional source evidence. Saved-card references stay bound to their provider vault.</p></div>

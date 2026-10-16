@@ -798,6 +798,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware(['tenant.access', 'module:subscriptions'])->prefix('subscriptions/recharge')->name('subscriptions.recharge.')->group(function (): void {
         Route::get('/', [\App\Http\Controllers\SubscriptionRechargeController::class, 'index'])->name('index');
         Route::get('/records/{resource}', [\App\Http\Controllers\SubscriptionRechargeController::class, 'show'])->whereNumber('resource')->name('show');
+        Route::get('/settings/{category}', [\App\Http\Controllers\SubscriptionRechargeController::class, 'settings'])->whereIn('category', array_keys(\App\Services\Subscriptions\SubscriptionRechargeManualSettingsService::SOURCE_PATHS))->name('settings');
         Route::post('/source', [\App\Http\Controllers\SubscriptionRechargeController::class, 'source'])->middleware('throttle:10,1')->name('source');
         Route::post('/verify', [\App\Http\Controllers\SubscriptionRechargeController::class, 'verify'])->middleware('throttle:10,1')->name('verify');
         Route::post('/capture', [\App\Http\Controllers\SubscriptionRechargeController::class, 'capture'])->middleware('throttle:20,1')->name('capture');

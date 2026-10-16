@@ -8,6 +8,9 @@
   and encrypted evidence. Masked payment references never become adopted tokens.
   Source hashes/processor tokens are stripped before persistence. Page rendering
   is offline; explicit source GETs require their default-off tenant read gates.
+- Reviewed manual settings use `subscriptions:recharge-settings` and bounded
+  append-only encrypted source/draft versions; private comparisons stay offline.
+  Merchant origin attribution is manual, never API proof.
 - Manual settings and missing resource-family/history coverage remain blockers,
   not defaults or checkbox approval. Local field matching never proves functional
   parity. Billing, messaging, servicing, purchasing and cutover stay disabled.

@@ -1600,7 +1600,10 @@ PHP;
         {
             public function assertManager(int $id, ?\App\Models\User $actor): void {}
 
-            public function entitled(int $id): bool { return true; }
+            public function entitled(int $id): bool
+            {
+                return true;
+            }
         };
         $service = new \App\Services\Subscriptions\SubscriptionRechargeOperationService($access);
         $actor = \App\Models\User::query()->findOrFail($actorId);

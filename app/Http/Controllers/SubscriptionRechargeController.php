@@ -7,6 +7,7 @@ use App\Models\SubscriptionRechargeConnection;
 use App\Models\SubscriptionRechargeResource;
 use App\Models\Tenant;
 use App\Services\Subscriptions\SubscriptionAccessService;
+use App\Services\Subscriptions\SubscriptionRechargeManualSettingsService;
 use App\Services\Subscriptions\SubscriptionRechargeReadinessService;
 use App\Services\Subscriptions\SubscriptionRechargeReadService;
 use Illuminate\Contracts\View\View;
@@ -19,7 +20,7 @@ use Illuminate\Validation\Rule;
 
 class SubscriptionRechargeController extends Controller
 {
-    public function index(Request $request, SubscriptionRechargeReadService $reads, SubscriptionRechargeReadinessService $drafts): View
+    public function index(Request $request, SubscriptionRechargeReadService $reads, SubscriptionRechargeReadinessService $drafts, SubscriptionRechargeManualSettingsService $manual): View
     {
         $tenant = $this->tenant($request);
         $filters = $request->validate(['connection' => ['nullable', 'integer', 'min:1'],
@@ -39,6 +40,7 @@ class SubscriptionRechargeController extends Controller
 
         return view('subscriptions.recharge', ['tenant' => $tenant, 'connections' => $connections, 'connection' => $connection,
             'summary' => $summary, 'readiness' => $readiness, 'type' => $type, 'filters' => $filters,
+            'manualSettings' => $connection ? $manual->summary($tenant->id, $request->user(), $connection->id) : null,
             'resources' => $resources->orderBy('id')->paginate(25)->withQueryString(), 'readsEnabled' => $reads->readsEnabled($tenant->id),
             'sources' => IntegrationConnection::query()->where('tenant_id', $tenant->id)->where('provider', 'recharge')
                 ->where('metadata->subscription_shadow_setup', true)->orderByDesc('id')->limit(20)->get(),
@@ -118,6 +120,17 @@ class SubscriptionRechargeController extends Controller
         $result = $drafts->prepareBatch($tenant->id, $request->user(), (int) $data['connection_id'], $data['generation_id']);
 
         return $this->back($tenant, (int) $data['connection_id'])->with('recharge_notice', $result['prepared_count'].' local drafts prepared; '.$result['remaining_count'].' remain. This does not activate billing or prove full settings parity.');
+    }
+
+    public function settings(Request $request, string $category, SubscriptionRechargeManualSettingsService $manual): View
+    {
+        $tenant = $this->tenant($request);
+        $data = $request->validate(['connection' => ['required', 'integer', 'min:1']]);
+        $record = $manual->latestForReview($tenant->id, $request->user(), (int) $data['connection'], $category);
+        abort_unless($record, 404);
+
+        return view('subscriptions.recharge-settings', ['tenant' => $tenant, 'record' => $record,
+            'backUrl' => route('subscriptions.recharge.index', ['tenant' => $tenant->id, 'connection' => $data['connection']])]);
     }
 
     public function show(Request $request, int $resource, SubscriptionRechargeReadinessService $drafts): View

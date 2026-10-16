@@ -52,6 +52,27 @@ production inventory found no Recharge IntegrationConnection for Modern
 Forestry and no credential in its legacy Recharge settings. That inspection
 performed no authenticated provider call and printed no secret values.
 
+## Observed Modern Forestry source configuration
+
+On October 16, an authenticated read-only merchant-portal inspection at
+`https://modernforestry-sp.admin.rechargeapps.com` showed an incomplete conversion
+to Shopify Checkout-Integrated: the merchant is in the migration queue and some
+subscribers remain billed through a legacy Recharge gateway. The dashboard
+showed 54 active subscribers for its selected September 16–October 15 period;
+this dashboard number is not a reconciled all-customer inventory.
+
+The payment settings page displayed Braintree/PayPal as the current legacy
+processor, PayPal for Braintree enabled, sandbox mode disabled, and automatic
+next-charge-date recalculation enabled when subscription frequency changes.
+Its own notice limits these settings to subscriptions billed by Recharge; they
+do not apply to addresses whose gateway is Shopify payments. Preserve this
+split in the future payment/recovery design. Gateway keys are excluded from
+source comparison evidence. No setting was saved or changed.
+
+A secure read credential, complete customer/resource capture and the remaining
+manual settings observations are still required. Browser access alone does not
+establish a complete source inventory, supported vault transfer or 1:1 readiness.
+
 ## Durable source preparation
 
 Four additive tables retain verified immutable store bindings, append-only
@@ -118,6 +139,41 @@ prepared**. The detailed comparison is private to the same authorized tenant
 manager. Exact source values are a data-preservation check, not proof that a
 future Everbranch runtime behaves identically. `one_to_one_verified`,
 `live_ready`, billing, servicing, messages and cutover remain false.
+
+## Manual settings drafts
+
+Settings that lack a documented complete API export can be retained through the
+local operator command, after merchant observation and source identity review:
+
+```sh
+php artisan subscriptions:recharge-settings summary --tenant=ID --actor=ID --connection=ID
+php artisan subscriptions:recharge-settings import --tenant=ID --actor=ID --connection=ID --request=UUID --file=/absolute/private/settings.json
+```
+
+The input must be an owned regular file with permissions `0600`, no symlink,
+and at most 64 KiB. The complete version-1 envelope contains
+`expected_identity` (the exact provider store/platform/identifier tuple), an
+explicit `expected_merchant_origin`, a known category `source_url`, an ISO
+`observed_at` with offset, `expected_previous_version_id` (null only for the
+first category observation), typed `fields` and explicit `required_fields`.
+Supported categories are notifications, dunning, customer portal, workflows,
+shipping/tax, payment/vault configuration, order processing and legal terms.
+Use exact source values; absent fields must not be invented.
+
+The first reviewed merchant origin is retained as manual attribution; the API
+does not verify it. Requests append immutable source/draft versions inside the
+connection's encrypted evidence, with source digest, actor, observation time,
+missing required fields and explicit nulls. Replays converge; conflicting UUIDs
+or stale previous versions fail. Credential reverification preserves settings
+history. Retention bounds (20 versions/category, 1 MiB total) fail closed and
+never silently discard earlier evidence.
+
+Credentials, card data and customer identity fields are rejected. Explicit
+merchant sender/reply-to/support contacts remain private settings values.
+Summary and CLI receipts show provenance/counts only. The authorized settings
+comparison page shows the source beside its exact isolated draft. No draft
+changes operational configuration; full coverage and runtime parity remain
+unverified even when every retained field matches.
 
 ## Required evidence before one-to-one rollout readiness
 
