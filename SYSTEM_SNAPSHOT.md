@@ -12,6 +12,9 @@
   audited compensating archive; intervening edits invalidate undo permanently.
 - No new schema or activation. See the voice runbook and acceptance matrix for
   evidence and open customer, triage, mail, phone, receptionist and device work.
+- A separate default-off shared attention rail now coordinates Customer Loop
+  follow-ups with leases, exact versions, assignment/snooze/resolution and
+  encrypted UUID receipts. It does not dispatch drafts or replace legacy screens.
 
 ## Ask Everbranch voice navigation (2026-10-16; local implementation)
 

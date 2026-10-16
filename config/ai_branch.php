@@ -4,6 +4,7 @@ return [
     'assistant_enabled' => (bool) env('EVERBRANCH_AI_ASSISTANT_ENABLED', false),
     'assistant_finance_enabled' => (bool) env('EVERBRANCH_AI_ASSISTANT_FINANCE_ENABLED', false),
     'assistant_reports_enabled' => (bool) env('EVERBRANCH_AI_ASSISTANT_REPORTS_ENABLED', false),
+    'assistant_attention_enabled' => (bool) env('EVERBRANCH_AI_ASSISTANT_ATTENTION_ENABLED', false),
     'assistant_tenant_ids' => array_values(array_filter(array_map('intval', explode(',', (string) env('EVERBRANCH_AI_ASSISTANT_TENANT_IDS', ''))))),
     'purchase_enabled' => (bool) env('EVERBRANCH_AI_PURCHASE_ENABLED', false),
     'purchase_tenant_ids' => array_values(array_filter(array_map('intval', explode(',', (string) env('EVERBRANCH_AI_PURCHASE_TENANT_IDS', ''))))),

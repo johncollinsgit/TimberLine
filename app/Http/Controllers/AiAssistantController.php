@@ -69,6 +69,7 @@ class AiAssistantController extends Controller
         }
         unset($message);
         $payload = [
+            'attention_available' => (bool) config('ai_branch.assistant_attention_enabled') && $context->enabled($tenant) && $context->permissions($tenant, $user)['followups'],
             'actions_available' => (bool) $actionsAvailable,
             'note_jobs' => $actionsAvailable ? app(AiBranchContext::class)->sources($tenant, $user) : [],
             'reports_available' => (bool) config('ai_branch.assistant_reports_enabled') && $context->enabled($tenant),

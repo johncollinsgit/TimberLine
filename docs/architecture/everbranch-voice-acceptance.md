@@ -1,7 +1,7 @@
 # Everbranch AI Voice acceptance evidence
 
 Local implementation checkpoint, October 16, 2026. Source: the restored product
-and implementation plan, criteria 1â€“35. This matrix distinguishes implemented
+and implementation plan, criteria 1–35. This matrix distinguishes implemented
 paths from combined release acceptance. No production activation is authorized
 by these results. Fictional fixtures and fake providers are used throughout.
 
@@ -50,7 +50,7 @@ Evidence references:
 | 27 | Operational/native acceptance | B proves desktop/browser interaction; M builds. No Java/Android SDK, physical devices or Mac/iOS build evidence here. Device checks are deferred at the user's request. Load/provider failure, restore and monitored pilot remain open. |
 | 28 | Every accessible destination | N/B recursively cover canonical pages/settings and current native renderer inventory, with explicit unsupported states, current access/back/draft guards. Every GET/native screen coverage audit and physical acceptance remain open. |
 | 29 | Source-linked commitments | Open: promise classification, exact timezone/date, reviewed task save/reminders. |
-| 30 | Shared Needs attention | Existing read-only sampled attention briefing retained. Claim/assignment/snooze/resolve/reopen, composing state and stale-item concurrency remain open. |
+| 30 | Shared Needs attention | A/B now cover registered Customer Loop follow-ups with 50-item pages, 5-minute composing claims, assignment, timezone-aware snooze, resolve/reopen, encrypted idempotent receipts and stale-version rejection. Other source adapters, legacy-screen lease enforcement, non-admin grants and real MySQL concurrent transactions remain open. |
 | 31 | Cross-channel relationship search | Existing scoped navigation/record search retained. Cross-mail/message/document evidence and incomplete-coverage search UI remain open. |
 | 32 | Playbook/practice | Open: approved version publication, restricted practice sessions, no-side-effect scenarios and provider caps. |
 | 33 | Activity/approval center | A/B implement current scoped internal note preview, review, receipt and version-checked compensating archive. Other action types and uncertain external lifecycle views remain open. |

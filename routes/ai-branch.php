@@ -7,6 +7,8 @@ Route::middleware(['auth', 'verified', 'tenant.access', 'throttle:20,1'])->prefi
     Route::get('/', [AiBranchController::class, 'index'])->name('index');
     Route::get('/assistant', [\App\Http\Controllers\AiAssistantController::class, 'session'])->name('assistant.session');
     Route::post('/reports', [\App\Http\Controllers\AiReportController::class, 'store'])->name('assistant.reports.store');
+    Route::get('/attention', [\App\Http\Controllers\AiAttentionController::class, 'index'])->name('assistant.attention.index');
+    Route::post('/attention/{item}', [\App\Http\Controllers\AiAttentionController::class, 'webUpdate'])->whereNumber('item')->name('assistant.attention.update');
     Route::get('/reports/{report}', [\App\Http\Controllers\AiReportController::class, 'print'])->whereUuid('report')->name('assistant.reports.print');
     Route::post('/actions/{action}/undo', [\App\Http\Controllers\AiAssistantController::class, 'webUndo'])->whereNumber('action')->name('assistant.undo');
     Route::post('/briefings', [AiBranchController::class, 'briefing'])->name('briefings');

@@ -157,6 +157,83 @@ test('weekly JSON and print exports recheck ownership scope and changed audience
     Http::assertNothingSent();
 });
 
+function sharedAttentionFixture(): array
+{
+    [$tenant, $user] = workspaceFixture('fictional-attention');
+    config()->set(['ai_branch.assistant_enabled' => true, 'ai_branch.assistant_tenant_ids' => [$tenant->id], 'ai_branch.assistant_attention_enabled' => true]);
+    $action = CustomerLoopAction::create(['tenant_id' => $tenant->id, 'title' => 'Fictional follow-up', 'action_type' => 'follow_up', 'reason' => 'Review', 'draft_body' => 'PRIVATE DRAFT', 'status' => 'suggested']);
+
+    return [$tenant, $user, $action, app(\App\Services\AiBranch\AiSharedAttention::class)];
+}
+
+test('shared attention claims use exact versions and one encrypted receipt without sending a draft', function () {
+    [$tenant, $user, $action, $service] = sharedAttentionFixture();
+    $row = $service->listing($tenant, $user, 'open')['items'][0];
+    expect(json_encode($row))->not->toContain('PRIVATE DRAFT');
+    $uuid = (string) \Illuminate\Support\Str::uuid();
+    $claim = $service->transition($tenant, $user, $action->id, 'claim', $row['version'], $uuid);
+    expect($claim['item']['claim']['user_id'])->toBe($user->id)
+        ->and($service->transition($tenant, $user, $action->id, 'claim', $row['version'], $uuid)['receipt_id'])->toBe($claim['receipt_id']);
+    expect(fn () => $service->transition($tenant, $user, $action->id, 'resolve', $row['version'], (string) \Illuminate\Support\Str::uuid(), ['resolution' => 'Finished']))->toThrow(HttpException::class);
+    $resolved = $service->transition($tenant, $user, $action->id, 'resolve', $claim['item']['version'], (string) \Illuminate\Support\Str::uuid(), ['resolution' => 'PRIVATE RESOLUTION']);
+    expect($resolved['item']['status'])->toBe('completed')->and($service->listing($tenant, $user, 'open')['items'])->toBe([])
+        ->and($service->listing($tenant, $user, 'resolved')['items'])->toHaveCount(1);
+    expect(\Illuminate\Support\Facades\DB::table('customer_loop_actions')->value('safe_context'))->not->toContain('PRIVATE RESOLUTION');
+    expect(\Illuminate\Support\Facades\DB::table('ai_branch_actions')->pluck('payload')->implode(' '))->not->toContain('PRIVATE RESOLUTION');
+    Http::assertNothingSent();
+});
+
+test('concurrent attention owners cannot overwrite another claim and expired leases require a fresh claim', function () {
+    [$tenant, $user, $action, $service] = sharedAttentionFixture();
+    $other = User::factory()->tenantAdmin()->create();
+    $other->tenants()->attach($tenant->id, ['role' => 'admin', 'membership_active' => true]);
+    $version = $service->listing($tenant, $user, 'open')['items'][0]['version'];
+    $claim = $service->transition($tenant, $user, $action->id, 'claim', $version, (string) \Illuminate\Support\Str::uuid());
+    expect(fn () => $service->transition($tenant, $other, $action->id, 'claim', $version, (string) \Illuminate\Support\Str::uuid()))->toThrow(HttpException::class);
+    expect(fn () => $service->transition($tenant, $other, $action->id, 'claim', $claim['item']['version'], (string) \Illuminate\Support\Str::uuid()))->toThrow(HttpException::class);
+    $this->travel(6)->minutes();
+    expect(fn () => $service->transition($tenant, $user, $action->id, 'resolve', $claim['item']['version'], (string) \Illuminate\Support\Str::uuid(), ['resolution' => 'Late']))->toThrow(HttpException::class);
+    $new = $service->transition($tenant, $other, $action->id, 'claim', $claim['item']['version'], (string) \Illuminate\Support\Str::uuid());
+    expect($new['item']['claim']['user_id'])->toBe($other->id);
+});
+
+test('attention assignment snooze reopen and legacy changes retain authoritative state', function () {
+    [$tenant, $user, $action, $service] = sharedAttentionFixture();
+    $operate = fn ($operation, $options = []) => $service->transition($tenant, $user, $action->id, $operation, $service->version($action->fresh()), (string) \Illuminate\Support\Str::uuid(), $options);
+    $operate('claim');
+    $operate('assign', ['assignee_id' => $user->id]);
+    expect($action->fresh()->assigned_to_user_id)->toBe($user->id);
+    $operate('claim');
+    $operate('snooze', ['until' => now()->addDay()->toIso8601String()]);
+    expect($service->listing($tenant, $user, 'open')['items'])->toBe([])->and($service->listing($tenant, $user, 'snoozed')['items'])->toHaveCount(1);
+    $operate('claim');
+    $operate('resolve', ['resolution' => 'Fictional review done']);
+    $operate('claim');
+    $operate('reopen');
+    expect($action->fresh()->status)->toBe('suggested')->and($action->fresh()->completed_at)->toBeNull();
+    $claim = $operate('claim');
+    $action->fresh()->update(['title' => 'Changed from the existing Customer Loop screen']);
+    expect(fn () => $service->transition($tenant, $user, $action->id, 'resolve', $claim['item']['version'], (string) \Illuminate\Support\Str::uuid(), ['resolution' => 'Stale']))->toThrow(HttpException::class);
+    Http::assertNothingSent();
+});
+
+test('attention API rejects missing grants foreign sources and uncertain repeat identity', function () {
+    [$tenant, $user, $action, $service] = sharedAttentionFixture();
+    [$foreign] = workspaceFixture('foreign-attention');
+    $otherAction = CustomerLoopAction::create(['tenant_id' => $foreign->id, 'title' => 'FOREIGN FOLLOWUP', 'action_type' => 'follow_up', 'reason' => 'Review', 'status' => 'suggested']);
+    \Laravel\Sanctum\Sanctum::actingAs($user, ['mobile:read', 'mobile:write']);
+    $base = '/api/mobile/v1/workspaces/'.$tenant->slug.'/ai-assistant/attention';
+    $row = $this->getJson($base)->assertOk()->assertDontSee('PRIVATE DRAFT')->assertDontSee('FOREIGN FOLLOWUP')->json('items.0');
+    $payload = ['operation' => 'claim', 'version' => $row['version'], 'request_id' => (string) \Illuminate\Support\Str::uuid(), 'confirmed' => true];
+    $this->postJson($base.'/'.$otherAction->id, $payload)->assertNotFound();
+    $this->postJson($base.'/'.$action->id, $payload)->assertOk();
+    $this->postJson($base.'/'.$action->id, [...$payload, 'operation' => 'release'])->assertConflict();
+    $user->tenants()->updateExistingPivot($tenant->id, ['role' => 'member']);
+    $this->getJson($base)->assertForbidden();
+    $this->postJson($base.'/'.$action->id, $payload)->assertForbidden();
+    Http::assertNothingSent();
+});
+
 test('page descriptors reject arbitrary details and other tenant records', function () {
     [$tenant, $user] = workspaceFixture();
     [$other] = workspaceFixture('other');

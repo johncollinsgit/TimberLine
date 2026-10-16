@@ -149,6 +149,35 @@ Shared triage, connected customer workflows, comprehensive activity reconciliati
 mail/phone, receptionist and physical native acceptance remain separate increments.
 The combined release is not complete or approved for activation.
 
+## Shared attention increment
+
+`EVERBRANCH_AI_ASSISTANT_ATTENTION_ENABLED` defaults off and requires all
+assistant/context gates plus canonical customer/marketing access. The first
+registered mutable source is Customer Loop follow-ups. Open, snoozed and resolved
+views page 50 records at a time and disclose source coverage. Selected active
+owner/admin members with marketing access are the only assignment targets; no
+new employee or landlord grants are inferred.
+
+A claim is an explicit five-minute coordination lease. Claim/release, assignment,
+snooze (explicit timezone, at most 90 days), resolve (review reason) and reopen
+check an exact content version and serialize through the existing workspace
+account and source row. UUID receipts reuse encrypted `AiBranchAction` evidence;
+replay cannot execute twice and changed UUID inputs conflict. Resolution text is
+encrypted in the receipt; the source's safe context stores only its hash. All
+transitions create a content-free audit record and never send the draft.
+
+The paired component polls the visible page every 15 seconds, preserves unsent
+resolution drafts across assistant tabs, checks dismissal, and refreshes after
+each mutation. Unknown request outcomes require a read refresh. Existing Customer
+Loop screens remain available and do not enforce these composing leases; their
+changes invalidate the version checked by the new attention interface. This is
+not yet universal cross-source claim/execution protection. Real MySQL concurrent
+transactions and broader role grants remain release evidence requirements.
+
+Latest increment checks: 169 focused backend tests / 1,493 assertions, 94 mobile
+tests, lint, both builds and 29 paired browser scenarios pass. The previous
+3,563-pass full-suite result predates this increment; it is not a new full run.
+
 
 ## Native capture rail (device acceptance deferred)
 

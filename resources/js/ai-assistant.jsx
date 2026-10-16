@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './ai-assistant.css'
 import { formatReportCents } from './ai-report-money'
 import WeeklyReport from './ai-weekly-report'
+import SharedAttention from './ai-shared-attention'
 
 function Assistant({ host }) {
   const dialog = useRef(null)
@@ -32,7 +33,7 @@ function Assistant({ host }) {
   try { const value = JSON.parse(host.dataset.origin || '{}'); if (value && ['workspace', 'job', 'customer', 'class'].includes(value.kind)) origin = value } catch {}
   const stopSpeech = () => window.speechSynthesis?.cancel()
   const stopCapture = () => { const current = recognition.current; recognition.current = null; clearTimeout(recognitionTimer.current); current?.abort(); setListening(false) }
-  const endpoint = (path) => { const url = new URL(base); url.pathname = url.pathname.replace(/\/$/, '') + path; return url }
+  const endpoint = (path) => { const url = new URL(base); const [pathname, query] = path.split('?', 2); url.pathname = url.pathname.replace(/\/$/, '') + pathname; if (query) for (const [key, value] of new URLSearchParams(query)) url.searchParams.set(key, value); return url }
   const api = async (path, method = 'GET', body, signal) => {
     if (base.origin !== location.origin) throw new Error('Assistant endpoint is unavailable.')
     const payload = body && (path === '/conversations' || path.endsWith('/messages')) ? { ...body, ...(Object.keys(origin).length ? { origin } : {}) } : body
@@ -65,7 +66,7 @@ function Assistant({ host }) {
     return () => { ++sequence.current; abort.current?.abort(); stopCapture(); stopSpeech(); document.removeEventListener('visibilitychange', hidden) }
   }, [open])
   const close = () => {
-    if ((draft.trim() || memory.trim() || note.trim()) && !window.confirm('Discard the assistant draft you have not sent?')) return false
+    if ((draft.trim() || memory.trim() || note.trim() || dialog.current?.querySelector('[data-assistant-dirty="true"]')) && !window.confirm('Discard the assistant draft you have not sent?')) return false
     dialog.current?.close(); setOpen(false); setDraft(''); setMemory(''); setNote(''); noteRequest.current = null; setSession(null); setConversation(null); requestId.current = null; setUncertain(false); trigger.current?.focus()
     return true
   }
@@ -149,9 +150,10 @@ function Assistant({ host }) {
     <dialog ref={dialog} className="everbranch-assistant-panel" aria-labelledby="everbranch-assistant-title" onCancel={event => { event.preventDefault(); close() }}>
       <header><div><small>{host.dataset.workspace}</small><h2 id="everbranch-assistant-title">Ask Everbranch</h2></div><button onClick={close} aria-label="Close assistant">×</button></header>
       <button className="assistant-link" onClick={() => { if (close()) document.dispatchEvent(new CustomEvent('app-command-palette:open', { detail: { voice: true, query: '' } })) }}>Find a page</button>
-      <nav aria-label="Assistant views">{[['chat', 'Conversation'], ['memory', 'Private memory'], ['activity', 'Activity and approvals'], ...(session?.financial_summary ? [['finance', 'Financial snapshot']] : []), ...(session?.reports_available ? [['reports', 'Weekly report']] : [])].map(([key, label]) => <button key={key} aria-pressed={tab === key} onClick={() => { stopCapture(); stopSpeech(); setTab(key) }}>{label}</button>)}</nav>
+      <nav aria-label="Assistant views">{[['chat', 'Conversation'], ['memory', 'Private memory'], ['activity', 'Activity and approvals'], ...(session?.financial_summary ? [['finance', 'Financial snapshot']] : []), ...(session?.reports_available ? [['reports', 'Weekly report']] : []), ...(session?.attention_available ? [['attention', 'Needs attention']] : [])].map(([key, label]) => <button key={key} aria-pressed={tab === key} onClick={() => { stopCapture(); stopSpeech(); setTab(key) }}>{label}</button>)}</nav>
       <p role="status" aria-live="polite">{notice}</p><button disabled={busy} className="assistant-link" onClick={() => refresh()}>Refresh conversation</button>
       {session?.context?.page?.title && <p>Context: {session.context.page.title}</p>}
+      {session?.attention_available && <div hidden={tab !== 'attention'}><SharedAttention active={tab === 'attention'} load={(view, after, signal) => api('/attention?' + new URLSearchParams({ view, after: String(after) }), 'GET', undefined, signal)} mutate={(item, operation, options, uuid) => api('/attention/' + item.id, 'POST', { operation, version: item.version, request_id: uuid, confirmed: true, ...options })} /></div>}
       {tab === 'reports' && session?.reports_available && <WeeklyReport api={api} audience={session.report_audience || []} printUrl={id => endpoint('/reports/' + encodeURIComponent(id)).href} />}
       {tab === 'chat' && <>
         <label>Conversation<select disabled={busy} value={conversation || ''} onChange={event => { if (draft.trim() && !window.confirm('Discard the question you have not sent?')) return; setDraft(''); setSession(null); requestId.current = null; stopSpeech(); refresh(Number(event.target.value) || null) }}><option value="">New private conversation</option>{session?.conversations.map(row => <option key={row.id} value={row.id}>Conversation {row.id}</option>)}</select></label>

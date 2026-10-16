@@ -18,8 +18,25 @@ const assistantEntry = manifest['resources/js/ai-assistant.jsx']
 const assistantData = { version: 1, workspace: { id: 1, name: 'Fictional Cedar Works' }, context: null, conversation: null, conversations: [], memories: [], actions: [], usage: { responses: 0, provider_micros: 0 } }
 let assistantAllowed = true
 let assistantRequests = 0
-const assistantResponse = (path, method, body = {}, conversation = false) => {
-  if (path.endsWith('/reports') && method === 'POST') {
+let attentionReceipt = 20
+let attentionItem = { id: 41, ref: 'followup:41', title: 'Fictional customer follow-up', status: 'suggested', version: '1'.repeat(64), claim: null }
+const assistantResponse = (path, method, body = {}, conversation = false, params = new URLSearchParams()) => {
+  if (path.includes('/attention/') && method === 'POST') {
+    attentionReceipt++
+    attentionItem = { ...attentionItem, version: attentionReceipt.toString(16).padStart(64, '0') }
+    if (body.operation === 'claim') attentionItem.claim = { user_id: 1, name: 'Fictional Alex', until: new Date(Date.now() + 300_000).toISOString() }
+    else {
+      attentionItem.claim = null
+      if (body.operation === 'resolve') attentionItem.status = 'completed'
+      else if (body.operation === 'reopen') { attentionItem.status = 'suggested'; attentionItem.snoozed_until = null }
+      else if (body.operation === 'snooze') { attentionItem.status = 'snoozed'; attentionItem.snoozed_until = body.until }
+    }
+    return { receipt_id: attentionReceipt, replayed: false, item: attentionItem }
+  } else if (path.endsWith('/attention')) {
+    const view = params.get('view') || 'open'
+    const visible = view === 'resolved' ? attentionItem.status === 'completed' : view === 'snoozed' ? attentionItem.status === 'snoozed' : attentionItem.status === 'suggested'
+    return { version: 1, viewer_id: 1, items: visible ? [attentionItem] : [], next_cursor: null, assignees: [{ id: 1, name: 'Fictional Alex' }], coverage: 'Fictional Customer Loop follow-ups only. No messages are sent.', generated_at: new Date().toISOString() }
+  } else if (path.endsWith('/reports') && method === 'POST') {
     return { request_id: body.request_id, audience: body.audience, starts_at: '2026-10-12T00:00:00Z', ends_before: '2026-10-19T00:00:00Z', timezone: 'UTC', generated_at: '2026-10-16T12:00:00Z', count: 60, coverage_complete: false, coverage_notice: 'Fictional registered task events only. Mail, calls and finance are not included.', entries: Array.from({ length: 60 }, (_, index) => ({ ref: 'task_event:' + index, event: 'Task completed', title: 'Fictional task ' + index, occurred_at: '2026-10-16T12:00:00Z' })) }
   } else if (path.endsWith('/actions') && method === 'POST') {
     assistantData.actions = [{ id: 3, kind: 'internal_job_note', status: 'pending', payload: { job_title: 'Fictional panel work', body: body.body }, digest: 'a'.repeat(64), expires_at: new Date(Date.now() + 900_000).toISOString() }]
@@ -66,7 +83,7 @@ const web = createServer(async (request, response) => {
     response.setHeader('Content-Type', 'application/json')
     if (!assistantAllowed) { response.writeHead(403); response.end(JSON.stringify({ message: 'Access was revoked.' })); return }
     let body = ''; for await (const chunk of request) body += chunk
-    response.end(JSON.stringify(assistantResponse(url.pathname, request.method, body ? JSON.parse(body) : {}, url.searchParams.has('conversation')))); return
+    response.end(JSON.stringify(assistantResponse(url.pathname, request.method, body ? JSON.parse(body) : {}, url.searchParams.has('conversation'), url.searchParams))); return
   }
   if (url.pathname === '/search') {
     response.setHeader('Content-Type', 'application/json')
@@ -82,6 +99,8 @@ await new Promise(resolve => portProbe.close(resolve))
 const vite = spawn(process.execPath, [resolve(mobile, 'node_modules/vite/bin/vite.js'), '--host', '127.0.0.1', '--port', String(mobilePort), '--strictPort'], { cwd: mobile, windowsHide: true, stdio: 'ignore' })
 const mobileUrl = 'http://127.0.0.1:' + mobilePort
 let browser
+let page
+const errors = []
 const checks = []
 try {
   for (let attempt = 0; attempt < 60; attempt++) {
@@ -89,8 +108,8 @@ try {
     await new Promise(resolve => setTimeout(resolve, 100))
   }
   browser = await chromium.launch({ headless: true, ...(process.env.VOICE_BROWSER_CHANNEL ? { channel: process.env.VOICE_BROWSER_CHANNEL } : {}) })
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
-  const errors = []
+  page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+  page.setDefaultTimeout(10_000)
   page.on('pageerror', error => errors.push(error.message))
   await page.route('**/*', route => {
     const host = new URL(route.request().url()).hostname
@@ -106,10 +125,12 @@ try {
   })
   await page.goto(webUrl)
   await page.getByRole('button', { name: 'Ask Everbranch', exact: true }).click()
+  await page.getByRole('status').filter({ hasText: 'Listening.' }).waitFor()
   await page.evaluate(() => window.testSpeech.onend())
   await page.getByRole('status').filter({ hasText: 'No speech' }).waitFor()
   checks.push('web no-speech completion')
   await page.locator('[data-command-voice]').click()
+  await page.getByRole('status').filter({ hasText: 'Listening.' }).waitFor()
   await page.evaluate(() => { window.testSpeech.onerror({ error: 'not-allowed' }); window.testSpeech.onend() })
   await page.getByRole('status').filter({ hasText: 'permission was denied' }).waitFor()
   checks.push('web microphone denial')
@@ -141,7 +162,7 @@ try {
     const url = new URL(route.request().url())
     if (!url.pathname.includes('/ai-assistant')) return route.fulfill({ json: { results: [] } })
     if (!assistantAllowed) return route.fulfill({ status: 403, json: { message: 'Access was revoked.' } })
-    return route.fulfill({ json: assistantResponse(url.pathname, route.request().method(), route.request().postDataJSON() || {}, url.searchParams.has('conversation')) })
+    return route.fulfill({ json: assistantResponse(url.pathname, route.request().method(), route.request().postDataJSON() || {}, url.searchParams.has('conversation'), url.searchParams) })
   })
   await page.goto(mobileUrl + '/tests/browser/voice-navigation.html')
   const openMobile = () => page.getByRole('button', { name: 'Ask Everbranch', exact: true }).click()
@@ -191,6 +212,7 @@ try {
   assistantData.note_jobs = [{ id: 1, title: 'Fictional panel work' }]
   assistantData.reports_available = true
   assistantData.report_audience = [{ id: 1, name: 'Fictional Alex' }]
+  assistantData.attention_available = true
   await openMobile()
   await page.getByRole('button', { name: 'Ask about my business' }).click()
   await page.getByRole('status').filter({ hasText: 'Nothing is sent' }).waitFor()
@@ -231,6 +253,21 @@ try {
   await page.getByRole('button', { name: 'Show more (10 remaining)', exact: true }).click()
   await page.getByText('Fictional task 59', { exact: true }).waitFor()
   checks.push('mobile weekly snapshots require team audience and disclose reconciled coverage with full pagination')
+  await page.getByRole('button', { name: 'Needs attention', exact: true }).click()
+  await page.getByRole('button', { name: 'Claim follow-up', exact: true }).click()
+  await page.getByRole('button', { name: 'Resolve follow-up', exact: true }).waitFor()
+  await page.screenshot({ path: resolve(output, 'mobile-attention.png') })
+  await page.getByRole('textbox', { name: 'Resolution', exact: true }).fill('Fictional callback reviewed')
+  page.once('dialog', dialog => dialog.dismiss())
+  await page.getByRole('button', { name: 'Close assistant', exact: true }).click()
+  assert.equal(await page.getByRole('textbox', { name: 'Resolution', exact: true }).inputValue(), 'Fictional callback reviewed')
+  await page.getByRole('button', { name: 'Resolve follow-up', exact: true }).click()
+  await page.getByRole('status').filter({ hasText: 'Change recorded. Receipt' }).waitFor()
+  await page.getByRole('combobox', { name: 'Follow-up view', exact: true }).selectOption('resolved')
+  await page.getByRole('button', { name: 'Claim follow-up', exact: true }).click()
+  await page.getByRole('button', { name: 'Reopen follow-up', exact: true }).click()
+  await page.getByRole('status').filter({ hasText: 'Change recorded. Receipt' }).waitFor()
+  checks.push('mobile attention claim resolution and reopen require explicit changes and retain a declined draft')
   await page.getByRole('button', { name: 'Private memory', exact: true }).click()
   await page.getByRole('textbox', { name: 'Remember this' }).fill('Use brief fictional summaries')
   await page.keyboard.press('Tab')
@@ -262,6 +299,15 @@ try {
   await page.getByText('1,050.01', { exact: true }).waitFor()
   checks.push('web saved financial totals preserve currency and period disclosure')
   await page.screenshot({ path: resolve(output, 'web-financial-snapshot.png') })
+  await page.getByRole('button', { name: 'Needs attention', exact: true }).click()
+  await page.getByRole('button', { name: 'Claim follow-up', exact: true }).click()
+  await page.getByRole('button', { name: 'Snooze 24 hours', exact: true }).click()
+  await page.getByRole('status').filter({ hasText: 'Change recorded. Receipt' }).waitFor()
+  await page.getByRole('combobox', { name: 'Follow-up view', exact: true }).selectOption('snoozed')
+  await page.getByText('Fictional customer follow-up', { exact: true }).waitFor()
+  checks.push('web attention shows the shared follow-up and a truthful snooze receipt')
+  await page.setViewportSize({ width: 1360, height: 900 })
+  await page.screenshot({ path: resolve(output, 'web-attention.png') })
   await page.getByRole('button', { name: 'Weekly report', exact: true }).click()
   await page.getByRole('button', { name: 'Save weekly snapshot', exact: true }).click()
   await page.getByText('Executive edition · 60 activity entries', { exact: true }).waitFor()
@@ -282,6 +328,10 @@ try {
   checks.push('web assistant revocation clears prior answers')
   assert.deepEqual(errors, [])
   console.log(JSON.stringify({ passed: checks.length, checks, output }, null, 2))
+} catch (error) {
+  console.error({ checks, errors, page: await page?.locator('body').innerText().catch(() => '') })
+  await page?.screenshot({ path: resolve(output, 'last-failure.png') }).catch(() => undefined)
+  throw error
 } finally {
   await browser?.close()
   vite.kill()

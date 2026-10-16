@@ -90,6 +90,8 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
                 Route::get('/class-scheduling/classes/{scheduledClass}', [EverbranchMobileClassSchedulingController::class, 'show'])->middleware('abilities:mobile:read')->whereNumber('scheduledClass')->name('workspace.class-scheduling.show');
                 Route::post('/class-scheduling/enrollments/{enrollment}/reminders', [EverbranchMobileClassSchedulingController::class, 'storeReminder'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->whereNumber('enrollment')->name('workspace.class-scheduling.reminders.store');
                 Route::prefix('ai-assistant')->name('workspace.ai-assistant.')->group(function (): void {
+                    Route::get('/attention', [\App\Http\Controllers\AiAttentionController::class, 'index'])->middleware('abilities:mobile:read')->name('attention.index');
+                    Route::post('/attention/{item}', [\App\Http\Controllers\AiAttentionController::class, 'update'])->whereNumber('item')->middleware(['abilities:mobile:write', 'throttle:30,1'])->name('attention.update');
                     Route::get('/', [AiAssistantController::class, 'session'])->middleware('abilities:mobile:read')->name('session');
                     Route::post('/reports', [\App\Http\Controllers\AiReportController::class, 'store'])->middleware(['abilities:mobile:write', 'throttle:5,1'])->name('reports.store');
                     Route::get('/reports/{report}', [\App\Http\Controllers\AiReportController::class, 'show'])->middleware('abilities:mobile:read')->whereUuid('report')->name('reports.show');
