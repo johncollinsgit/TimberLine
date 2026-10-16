@@ -18,14 +18,14 @@ class SoccerPortalController extends Controller
         $t = $r->attributes->get('soccer_tenant');
         $tenant = (int) $t->id;
         if ($action === 'code') {
-            $d = $r->validate(['email' => 'required|email|max:254']);
-            $this->families->code($tenant, $d['email']);
+            $d = $r->validate(['email' => 'required|email|max:254', 'mode' => 'sometimes|in:new,existing']);
+            $this->families->code($tenant, $d['email'], $d['mode'] ?? 'new');
 
             return response()->json(['ok' => true]);
         }
         if ($action === 'verify') {
-            $d = $r->validate(['email' => 'required|email|max:254', 'code' => 'required|digits:6']);
-            $token = $this->families->verify($tenant, $d['email'], $d['code']);
+            $d = $r->validate(['email' => 'required|email|max:254', 'code' => 'required|digits:6', 'mode' => 'sometimes|in:new,existing']);
+            $token = $this->families->verify($tenant, $d['email'], $d['code'], $d['mode'] ?? 'new');
             abort_unless($token, 422, 'That code is invalid or expired.');
 
             return response()->json(['token' => $token]);
