@@ -126,10 +126,10 @@ test('post comparison ranks actual zeros above missing metrics and respects form
 test('an imported caption becomes a new unapproved draft without copying expiring media', function (): void {
     [$tenant, $actor] = deskWorkspace();
     $original = deskPost($tenant->id, $actor);
-    $original->update(['status' => 'published']);
-    $response = $this->actingAs($actor)->postJson(route('marketing.desk.posts.copy-caption', ['id' => $original->id, 'tenant' => $tenant->slug]))->assertOk();
+    $original->update(['status' => 'published', 'content' => array_replace($original->content, ['facebook_caption' => 'The Facebook version'])]);
+    $response = $this->actingAs($actor)->postJson(route('marketing.desk.posts.copy-caption', ['id' => $original->id, 'tenant' => $tenant->slug]), ['platform' => 'facebook'])->assertOk();
     $draft = MarketingSocialPost::findOrFail($response->json('id'));
-    expect($draft->id)->not->toBe($original->id)->and($draft->status)->toBe('draft')->and($draft->approved_by)->toBeNull()->and($draft->content['media_urls'])->toBe([])->and($original->fresh()->status)->toBe('published');
+    expect($draft->id)->not->toBe($original->id)->and($draft->status)->toBe('draft')->and($draft->approved_by)->toBeNull()->and($draft->content['media_urls'])->toBe([])->and($draft->content['caption'])->toBe('The Facebook version')->and($original->fresh()->status)->toBe('published');
     Http::assertNothingSent();
 });
 

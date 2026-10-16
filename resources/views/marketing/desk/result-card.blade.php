@@ -8,6 +8,6 @@
     @endunless
     <div class="md-actions">@if($card['permalink'])<a href="{{ $card['permalink'] }}" target="_blank" rel="noopener noreferrer">View original ↗</a>@endif
     @unless($compact ?? false)<form method="POST" action="{{ route('marketing.desk.insights',$card['publication']->id) }}">@csrf<button class="md-text-button">Refresh metrics</button></form>@endunless</div>
-    @unless($compact ?? false)<form method="POST" action="{{ route('marketing.desk.posts.copy-caption',$card['post']->id) }}">@csrf<button class="eb-secondary-button">Use caption in a new draft</button><small class="md-caption-note">Add your photo and review before scheduling.</small></form>@endunless
+    @unless($compact ?? false)<form method="POST" action="{{ route('marketing.desk.posts.copy-caption',$card['post']->id) }}">@csrf<input type="hidden" name="platform" value="{{ $card['publication']->platform }}"><button class="eb-secondary-button">Use caption in a new draft</button><small class="md-caption-note">Add your photo and review before scheduling.</small></form>@endunless
     </div>
 </article>

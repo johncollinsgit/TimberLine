@@ -148,8 +148,9 @@ class MarketingDeskController extends Controller
     public function copyCaption(Request $request, int $id)
     {
         $tenantId = $this->tenant($request);
+        $data = $request->validate(['platform' => 'nullable|in:instagram,facebook']);
         $original = MarketingSocialPost::forTenantId($tenantId)->findOrFail($id);
-        $caption = $original->content['instagram_caption'] ?? $original->content['caption'];
+        $caption = $original->content[($data['platform'] ?? 'instagram').'_caption'] ?? $original->content['caption'];
         abort_if(trim($caption) === '', 422, 'This post has no caption to copy.');
         $draft = app(SocialPostService::class)->save($tenantId, $request->user(), ['caption' => $caption, 'media_type' => 'text', 'media_urls' => []]);
 
