@@ -23,9 +23,11 @@ test('voice navigation recognizes only explicit back and cancel controls', funct
 
 test('voice navigation asks when destinations are ambiguous or refer to records', function (): void {
     $query = new NavigationQuery;
-    $page = ['type' => 'navigation', 'title' => 'Mail', 'url' => '/mail', 'score' => 260];
+    $page = ['type' => 'navigation', 'title' => 'Mail', 'url' => '/mail', 'score' => 260, 'meta' => ['exact_match' => true]];
     expect($query->resolution([$page])['status'])->toBe('matched')
         ->and($query->resolution([$page, [...$page, 'url' => '/other-mail']])['status'])->toBe('choose')
         ->and($query->resolution([['type' => 'customer', 'score' => 400]])['status'])->toBe('choose')
         ->and($query->resolution([])['status'])->toBe('no_match');
+    expect($query->resolution([[...$page, 'meta' => ['exact_match' => false]]])['status'])->toBe('choose')
+        ->and($query->isDestination(['type' => 'action', 'url' => '/create']))->toBeFalse();
 });

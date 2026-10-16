@@ -77,6 +77,8 @@ class EverbranchMobileController extends Controller
         $appVersion = trim((string) ($request->header('X-Everbranch-App-Version') ?: $request->query('app_version', '')));
         $manifest = collect($mobileModules->manifest((int) $tenant->id, $user, $appVersion !== '' ? $appVersion : null))->values()->all();
         $fieldOperations = (array) ($moduleAccess->resolveForTenant((int) $tenant->id, ['field_service', 'time_tracking', 'team_communication', 'field_inventory', 'fleet', 'fleet_tracking', 'documents', 'quickbooks'])['modules'] ?? []);
+        $primaryNavigation = $this->primaryNavigation($role, $fieldOperations, $this->canViewClients($user, $tenant));
+        $branding = $this->brandingPayload($tenant, $role);
 
         return response()->json([
             'contract_version' => TenantMobileModuleRegistry::CONTRACT_VERSION,
@@ -88,10 +90,11 @@ class EverbranchMobileController extends Controller
                 'slug' => (string) $tenant->slug,
                 'role' => $role,
             ],
-            'branding' => $this->brandingPayload($tenant, $role),
+            'branding' => $branding,
+            'voice_navigation' => app(\App\Services\Navigation\VoiceNavigationRegistry::class)->mobile($request, $user, $primaryNavigation, $manifest, $branding),
             'experience_profile' => $experienceProfiles->forTenant((int) $tenant->id, $user, $tenant),
             'work_profile' => $workProfiles->forTenant($tenant),
-            'primary_navigation' => $this->primaryNavigation($role, $fieldOperations, $this->canViewClients($user, $tenant)),
+            'primary_navigation' => $primaryNavigation,
             'dashboard' => $dashboard->forRequest($request, $user),
             'workspace_insights' => $this->workspaceInsights($tenant, count($manifest)),
             'branches' => $manifest,
@@ -598,6 +601,14 @@ class EverbranchMobileController extends Controller
             ->map(fn ($items): array => $items->values()->all())->all();
         if ($payload['total'] === 0 && ! $this->canViewClients($this->user($request), $tenant)) {
             $payload['empty_state'] = ['title' => 'No matches', 'subtitle' => 'Try a job, module, or team destination.'];
+        }
+
+        if ($navigationOnly) {
+            $payload['results'] = array_values(array_filter($payload['results'], fn (array $row): bool => empty($row['action']) && ! in_array($row['type'] ?? '', ['action', 'command'], true)));
+            $payload['total'] = count($payload['results']);
+            $payload['groups'] = collect($payload['results'])->groupBy('type')->all();
+            // Native record destinations always require the user to choose.
+            $payload['navigation'] = ['status' => $payload['total'] ? 'choose' : 'no_match'];
         }
 
         return response()->json($payload);

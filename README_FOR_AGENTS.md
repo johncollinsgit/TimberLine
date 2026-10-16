@@ -261,6 +261,13 @@
 
 # START HERE
 
+## Ask Everbranch voice navigation (2026-10-16)
+
+Read `docs/operations/everbranch-voice-runbook.md` before extending voice work.
+Reuse canonical access/navigation and server-owned mobile destinations. Preserve
+action exclusion, exact ambiguity, same-origin validation, refreshed permissions,
+scoped back history and cancelled/unsaved-work behavior.
+
 ## 2026-10-15 - Retail shipping weight readiness
 
 Native Website shipping weights are catalog readiness, not a vendor launch

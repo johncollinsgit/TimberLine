@@ -36,13 +36,18 @@ class NavigationQuery
             return ['status' => 'no_match'];
         }
 
-        $next = $results[1] ?? null;
-        $clearPage = ($first['type'] ?? null) === 'navigation'
-            && (int) ($first['score'] ?? 0) >= 220
-            && ($next === null || (int) $first['score'] - (int) ($next['score'] ?? 0) >= 30);
+        $exact = array_values(array_filter($results, fn (array $row): bool => ($row['type'] ?? null) === 'navigation' && ($row['meta']['exact_match'] ?? false) === true));
+        $clearPage = count($exact) === 1 && $this->isDestination($exact[0]);
 
         return $clearPage
-            ? ['status' => 'matched', 'destination' => $first]
+            ? ['status' => 'matched', 'destination' => $exact[0]]
             : ['status' => 'choose'];
+    }
+
+    /** Action rows sometimes have no action field. Check both representations. */
+    public function isDestination(array $row): bool
+    {
+        return empty($row['action']) && ! in_array($row['type'] ?? '', ['action', 'command'], true)
+            && is_string($row['url'] ?? null) && trim($row['url']) !== '' && $row['url'] !== '#';
     }
 }

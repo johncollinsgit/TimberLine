@@ -43,15 +43,21 @@ class GlobalSearchCoordinator
         $limit = is_numeric($context['limit'] ?? null) ? max(1, min(20, (int) $context['limit'])) : 10;
 
         $tenantId = is_numeric($context['tenant_id'] ?? null) ? (int) $context['tenant_id'] : null;
-        if (app(\App\Services\Tenancy\TenantExperienceProfileService::class)->workspaceFocusForTenant($tenantId) === 'soccer') {
+        $navigationOnly = (bool) ($context['navigation_only'] ?? false);
+        $soccer = app(\App\Services\Tenancy\TenantExperienceProfileService::class)->workspaceFocusForTenant($tenantId) === 'soccer';
+        if ($soccer && ! $navigationOnly) {
             return app(\App\Services\Soccer\SoccerWorkspaceService::class)->search($normalized, $context);
         }
         $websiteSales = app(\App\Services\Tenancy\TenantExperienceProfileService::class)->workspaceFocusForTenant($tenantId) === 'website_sales';
         $navigationOnly = (bool) ($context['navigation_only'] ?? false);
+        $extra = $soccer && $navigationOnly
+            ? array_values(array_filter(app(\App\Services\Soccer\SoccerWorkspaceService::class)->search($normalized, $context)['results'], fn ($row) => ($row['type'] ?? '') !== 'navigation'))
+            : [];
 
         /** @var Collection<int,array<string,mixed>> $results */
         $results = collect($this->providers)
             ->reject(fn (GlobalSearchProvider $provider): bool => $navigationOnly && $provider instanceof ActionsSearchProvider)
+            ->filter(fn (GlobalSearchProvider $provider): bool => ! $soccer || $provider instanceof NavigationSearchProvider)
             ->filter(fn (GlobalSearchProvider $provider): bool => ! $websiteSales || $provider instanceof NavigationSearchProvider || $provider instanceof ActionsSearchProvider || $provider instanceof ModulesSearchProvider)
             ->flatMap(function (GlobalSearchProvider $provider) use ($normalized, $context): array {
                 try {
@@ -67,6 +73,7 @@ class GlobalSearchCoordinator
                     return [];
                 }
             })
+            ->concat($extra)
             ->filter(function (array $row) use ($normalized): bool {
                 if ($normalized === '') {
                     return true;
@@ -74,10 +81,11 @@ class GlobalSearchCoordinator
 
                 return (int) ($row['score'] ?? 0) > 0;
             })
-            ->filter(fn (array $row): bool => ! $navigationOnly || empty($row['action']))
+            ->filter(fn (array $row): bool => ! $navigationOnly || app(\App\Services\Navigation\NavigationQuery::class)->isDestination($row))
             ->sortByDesc(fn (array $row): int => (int) ($row['score'] ?? 0))
-            ->take($limit)
             ->values();
+        $navigation = $navigationOnly ? app(\App\Services\Navigation\NavigationQuery::class)->resolution($results->all()) : null;
+        $results = $results->take($limit)->values();
 
         $grouped = $results
             ->groupBy(fn (array $row): string => (string) ($row['type'] ?? 'other'))
@@ -85,6 +93,7 @@ class GlobalSearchCoordinator
             ->all();
 
         return [
+            ...($navigationOnly ? ['navigation' => $navigation] : []),
             'query' => $normalized,
             'total' => $results->count(),
             'results' => $results->all(),

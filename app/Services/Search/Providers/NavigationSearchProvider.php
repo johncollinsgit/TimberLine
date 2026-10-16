@@ -48,6 +48,8 @@ class NavigationSearchProvider implements GlobalSearchProvider
             $scoreBase = is_numeric($entry['score_base'] ?? null) ? (int) $entry['score_base'] : 140;
 
             $score = $this->matchScore($normalized, $haystacks, $scoreBase);
+            $meta['exact_match'] = $normalized !== '' && in_array(mb_strtolower($normalized), array_map('mb_strtolower', $haystacks), true);
+            $meta['aliases'] = $haystacks;
             if ($normalized !== '' && $score === 0) {
                 continue;
             }

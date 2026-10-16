@@ -1,5 +1,14 @@
 # SYSTEM SNAPSHOT
 
+## Ask Everbranch voice navigation (2026-10-16; local implementation)
+
+- Verified Mac restoration now has navigation-only action filtering, exact
+  matching, canonical nested destinations and a versioned mobile voice inventory.
+  Choices refresh access; stale/cancelled requests and unsaved forms retain
+  truthful state. No migration or production activation.
+- See `docs/operations/everbranch-voice-runbook.md` for contracts, verification
+  and remaining device/coverage gaps. The combined AI/phone release is incomplete.
+
 ## Stripe and PayPal connection setup (2026-10-16; deployed, Wren setup pilot)
 
 - A shared default-off, exact-tenant-allowlisted Payments page supports Stripe

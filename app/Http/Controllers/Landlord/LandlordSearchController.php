@@ -24,13 +24,13 @@ class LandlordSearchController extends Controller
                 'user' => $request->user(),
                 'request' => $request,
                 'limit' => $request->validated('limit', 12),
+                'navigation_only' => $navigationOnly,
             ]
         );
         if ($navigationOnly) {
-            $payload['results'] = array_values(array_filter($payload['results'], fn (array $row): bool => empty($row['action'])));
             $payload['total'] = count($payload['results']);
             $payload['groups'] = collect($payload['results'])->groupBy('type')->all();
-            $payload['navigation'] = $navigation->resolution($payload['results']);
+            $payload['navigation'] ??= $navigation->resolution($payload['results']);
         }
 
         return response()->json($payload);

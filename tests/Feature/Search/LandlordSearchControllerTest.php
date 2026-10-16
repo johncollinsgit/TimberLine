@@ -79,6 +79,12 @@ function landlordSearchTenant(): array
     return [$tenant, $ticket, $creator];
 }
 
+test('landlord navigation never returns action typed rows without an action field', function (): void {
+    $operator = User::factory()->platformAdmin()->create();
+    $response = $this->actingAs($operator)->getJson(route('landlord.search', ['q' => 'Create workspace', 'intent' => 'navigate', 'limit' => 1]))->assertOk();
+    expect(collect($response->json('results'))->pluck('type'))->not->toContain('action');
+});
+
 test('landlord search returns control plane workspaces tickets and phrase actions', function (): void {
     [$tenant, $ticket] = landlordSearchTenant();
     $operator = User::factory()->platformAdmin()->create();

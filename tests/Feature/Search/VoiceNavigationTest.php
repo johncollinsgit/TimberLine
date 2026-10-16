@@ -30,3 +30,14 @@ test('voice page finding cannot switch into another tenant or accept an executio
     $this->actingAs($this->voiceUser)->getJson(route('app.search', ['q' => 'Home', 'intent' => 'navigate', 'tenant' => $other->id]))->assertForbidden();
     $this->getJson(route('app.search', ['q' => 'Home', 'intent' => 'execute']))->assertUnprocessable();
 });
+
+test('a result limit cannot turn two exact page aliases into a unique match', function (): void {
+    $this->mock(\App\Services\Navigation\UnifiedAppNavigationService::class)->shouldReceive('build')->andReturn([
+        'items' => [
+            ['key' => 'a', 'label' => 'First calendar', 'aliases' => ['schedule'], 'href' => '/first'],
+            ['key' => 'b', 'label' => 'Second calendar', 'aliases' => ['schedule'], 'href' => '/second'],
+        ],
+    ]);
+    $this->actingAs($this->voiceUser)->getJson(route('app.search', ['q' => 'schedule', 'intent' => 'navigate', 'limit' => 1]))
+        ->assertOk()->assertJsonPath('navigation.status', 'choose')->assertJsonCount(1, 'results');
+});

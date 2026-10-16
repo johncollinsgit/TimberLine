@@ -40,7 +40,7 @@ class GlobalSearchController extends Controller
             ]
         );
         if ($navigationOnly) {
-            $payload['navigation'] = $navigation->resolution($payload['results']);
+            $payload['navigation'] ??= $navigation->resolution($payload['results']);
         }
 
         return response()->json($payload);
