@@ -80,7 +80,6 @@ it('keeps remaining siblings together if reserves cannot fit them all', function
 it('charges 30 or 50 and waives two children including jerseys', function () {
     [$f,$in] = soccerFamily($this, ['2023-01-01', '2021-01-01', '2018-01-01']);
     soccerCoachInterest($in);
-    $in['waived_player_ids'] = array_column(array_slice($in['children'], 0, 2), 'player_id');
     foreach ($in['children'] as &$c) {
         $c['needs_jersey'] = true;
         $c['jersey_size'] = 'Youth M';
@@ -95,25 +94,37 @@ it('requires complete assistant coach interest before granting a free registrati
     [$family,$input] = soccerFamily($this, ['2023-01-01']);
     $input['volunteer'] = true;
     $input['coach_jersey_size'] = 'Adult L';
-    $input['waived_player_ids'] = [$input['children'][0]['player_id']];
     expect(fn () => $this->svc->register($this->t->id, $family, $input))->toThrow(ValidationException::class);
     expect($this->store->query('registrations', $this->t->id)->count())->toBe(0);
     soccerCoachInterest($input);
     $this->svc->register($this->t->id, $family, $input);
     expect($this->store->query('registrations', $this->t->id)->where('waived', true)->count())->toBe(1);
 });
-it('caps waivers across later submissions even when a previously waived child is selected again', function () {
+it('applies at most two waivers across later submissions without a child waiver choice', function () {
     [$family,$input] = soccerFamily($this, ['2023-01-01', '2021-01-01', '2018-01-01']);
     soccerCoachInterest($input);
     $children = $input['children'];
     $input['children'] = array_slice($children, 0, 2);
-    $input['waived_player_ids'] = array_column($input['children'], 'player_id');
     $this->svc->register($this->t->id, $family, $input);
     $input['children'] = [$children[0], $children[2]];
-    $input['waived_player_ids'] = [$children[0]['player_id'], $children[2]['player_id']];
-    expect(fn () => $this->svc->register($this->t->id, $family, $input))->toThrow(ValidationException::class);
+    $input['waived_player_ids'] = [$children[2]['player_id']];
+    $this->svc->register($this->t->id, $family, $input);
     expect($this->store->query('registrations', $this->t->id)->where('waived', true)->count())->toBe(2);
-    expect($this->store->query('registrations', $this->t->id)->count())->toBe(2);
+    expect($this->store->query('registrations', $this->t->id)->count())->toBe(3);
+    expect((bool) $this->store->query('registrations', $this->t->id)->where('player_id', $children[2]['player_id'])->value('waived'))->toBeFalse();
+});
+it('automatically waives higher-cost jersey registrations first', function () {
+    [$family,$input] = soccerFamily($this, ['2023-01-01', '2021-01-01', '2018-01-01']);
+    soccerCoachInterest($input);
+    foreach (array_slice($input['children'], 1) as $child) {
+        $index = array_search($child['player_id'], array_column($input['children'], 'player_id'), true);
+        $input['children'][$index]['needs_jersey'] = true;
+        $input['children'][$index]['jersey_size'] = 'Youth M';
+    }
+    $this->svc->register($this->t->id, $family, $input);
+    expect((bool) $this->store->query('registrations', $this->t->id)->where('player_id', $input['children'][0]['player_id'])->value('waived'))->toBeFalse();
+    expect($this->store->query('registrations', $this->t->id)->where('waived', true)->pluck('player_id')->sort()->values()->all())
+        ->toBe(collect(array_slice(array_column($input['children'], 'player_id'), 1))->sort()->values()->all());
 });
 it('replays registration without creating duplicate children seats or invoices', function () {
     [$f,$in] = soccerFamily($this, ['2023-01-01']);
@@ -225,7 +236,6 @@ it('keeps player registered after a full manual refund and rejects excess refund
 it('confirms waived siblings immediately and holds only the unpaid child', function () {
     [$family,$input] = soccerFamily($this, ['2023-01-01', '2021-01-01', '2018-01-01']);
     soccerCoachInterest($input);
-    $input['waived_player_ids'] = array_column(array_slice($input['children'], 0, 2), 'player_id');
     $this->svc->register($this->t->id, $family, $input);
     expect($this->store->query('registrations', $this->t->id)->where('status', 'registered')->count())->toBe(2);
     $this->travel(49)->hours();

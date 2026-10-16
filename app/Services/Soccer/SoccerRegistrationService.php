@@ -56,14 +56,7 @@ class SoccerRegistrationService
             }
             $players = $this->store->query('players', $tenant)->where('family_id', $familyId)->whereIn('id', $ids)->get()->keyBy('id');
             abort_unless($players->count() === count($ids), 403);
-            $waiverIds = $input['waived_player_ids'] ?? [];
-            if (count($waiverIds) > 2 || count($waiverIds) !== count(array_unique($waiverIds)) || array_diff($waiverIds, $ids)) {
-                throw ValidationException::withMessages(['waived_player_ids' => 'Choose up to two selected children.']);
-            }
             $volunteer = (bool) ($input['volunteer'] ?? false);
-            if (! $volunteer && $waiverIds) {
-                throw ValidationException::withMessages(['volunteer' => 'The coaching checkbox is required for a waiver.']);
-            }
             if ($volunteer && empty($input['coach_jersey_size'])) {
                 throw ValidationException::withMessages(['coach_jersey_size' => 'Enter your coach jersey size.']);
             }
@@ -76,10 +69,11 @@ class SoccerRegistrationService
             }
             $existing = $this->store->query('registrations', $tenant)->where('season_id', $season->id)->where('family_id', $familyId)->get();
             $newIds = array_diff($ids, $existing->pluck('player_id')->all());
-            $seasonWaivers = $existing->where('waived', true)->where('status', '!=', 'cancelled')->pluck('player_id')->all();
-            if (count(array_unique([...$seasonWaivers, ...$waiverIds])) > 2) {
-                throw ValidationException::withMessages(['waived_player_ids' => 'This household already used its two season waivers.']);
-            }
+            $seasonWaivers = $existing->where('waived', true)->where('status', '!=', 'cancelled')->pluck('player_id')->unique()->all();
+            $remainingWaivers = $volunteer ? max(0, 2 - count($seasonWaivers)) : 0;
+            $waiverIds = collect($selected)->filter(fn ($child) => in_array($child['player_id'], $newIds, true))
+                ->sortByDesc(fn ($child) => (bool) $child['needs_jersey'])->take($remainingWaivers)
+                ->pluck('player_id')->all();
             $profile = $this->store->decrypt($family->profile);
             $profile['coaching_by_season'][$season->season_key] = [
                 'volunteer' => $volunteer,

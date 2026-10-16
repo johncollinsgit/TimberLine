@@ -105,11 +105,13 @@ identify Mom or Dad, give the coach name and adult jersey size, select all
 preferred age groups, and confirm availability for at least 8 of 10 weeks.
 Their season interest appears in the admin Coaches tab. Up to two child
 registrations can use coach waivers; backend validation requires complete
-coaching interest before applying a waiver. The two-waiver limit counts unique
-children already waived in this season together with newly selected children,
-so a later submission cannot claim a third waiver by reselecting an earlier
-waived child. The family form shows the $30 registration fee, optional $20
-jersey add-on, and resulting per-child total separately.
+coaching interest before applying a waiver. Parents choose a jersey for each
+child; they do not choose which child gets the waiver. The backend applies
+available waivers automatically to new registrations with the higher fees
+first, counting children already waived in the season toward the two-child
+limit. A later submission cannot claim a third waiver by reselecting an
+earlier waived child. The family form shows the $30 registration fee, optional
+$20 jersey add-on, and resulting per-child total separately.
 The help assistant answers common questions with local rules while
 an AI key is absent. To enable broader AI replies, a Wren admin can save an
 OpenAI API key in Season settings (stored encrypted), or an operator can set
