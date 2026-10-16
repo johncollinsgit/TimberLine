@@ -162,6 +162,13 @@ derived from token creation alone.
 
 ## Phase 3 — confirmed contract servicing
 
+October 16 steering: the owner confirmed Recharge billing and prioritized
+one-to-one customer/settings preparation **without activation** before servicing.
+The isolated Recharge source/candidate workflow is described in
+`everbranch-recharge-rollout-preparation.md`. It does not migrate vaults, edit
+customers, send messages or enable the financial executor. Provider capture and
+manual settings acceptance must precede any claim of full rollout readiness.
+
 Implement one reviewed operation at a time: pause/resume/cancel, future shipping
 address, product/quantity swap, skip/reschedule/billing date, and Shopify secure
 payment-update email. Use fresh owned contract/payment-method reads, explicit
