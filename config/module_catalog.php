@@ -296,6 +296,13 @@ $catalog = [
             'description' => 'Squarespace commerce connector and setup state.',
             'module_key' => 'squarespace',
         ],
+        'marketing.desk' => [
+            'display_name' => 'Marketing desk',
+            'description' => 'Plan approved content, marketing workflows and customer conversations.',
+            'module_key' => 'messaging',
+            'minimum_plan' => 'growth',
+            'status' => 'beta',
+        ],
         'workflow.automations' => [
             'display_name' => 'Workflow automations',
             'description' => 'Zap-style trigger/action automations powered by the first-party scheduler and queue.',

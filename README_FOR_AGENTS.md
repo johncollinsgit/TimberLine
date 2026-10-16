@@ -1,3 +1,20 @@
+## 2026-10-16 — Marketing Desk and Automation Studio (implemented, disabled)
+
+- Shared `/marketing/desk` adds Today, Bud, a social calendar, measured best posts,
+  a four-channel inbox, recipes, versioned approved knowledge and owner settings.
+- Marketing reuses canonical profiles, campaign delivery/consent, the tenant AI
+  ledger and Workflow Studio v2. New execution requires explicit tenant allowlists,
+  independent delivery/AI/Meta flags and recorded approvals. No production
+  activation, provider send, published post or billing change was performed.
+- Studio gains a wider directory, connection summaries, Overview/Build/Activity/
+  Settings, an outline, fit to view and clearer draft/live/test states. Existing
+  workflow versions and operational Asana/Calendar behavior remain compatible.
+- Eleven additive tables retain approvals, enrollment, cost-only usage references,
+  social attempts and exclusive account binding. Unknown external outcomes never
+  automatically resend. Profile merges cannot transfer marketing permission.
+- Read `docs/operations/marketing-desk.md` for setup, exact boundaries, verification
+  and rollback. Real Meta review/provider tests and merchant acceptance gate launch.
+
 ## Subscriptions Phase 2 provider evidence (2026-10-15; staged)
 
 - Read `docs/operations/everbranch-subscriptions-provider-reads.md` before setup.

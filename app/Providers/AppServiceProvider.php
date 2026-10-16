@@ -51,6 +51,7 @@ class AppServiceProvider extends ServiceProvider
         // Holds the tenant the current request/job acts for, read by the enforced
         // TenantScope. `scoped` so it is flushed between requests/jobs.
         $this->app->scoped(TenantContext::class);
+        $this->app->scoped(\App\Services\Marketing\Desk\MarketingReplyContext::class);
     }
 
     /**
@@ -65,6 +66,9 @@ class AppServiceProvider extends ServiceProvider
     {
         MarketingReviewHistory::observe(MarketingReviewHistoryObserver::class);
         MarketingProfile::observe(MarketingProfileWorkflowObserver::class);
+        \App\Models\MessagingConversationMessage::observe(\App\Observers\MarketingDeskObserver::class);
+        \App\Models\CustomerExternalProfile::observe(\App\Observers\MarketingDeskObserver::class);
+        MarketingProfile::observe(\App\Observers\MarketingDeskObserver::class);
         FieldServiceJob::observe(FieldServiceJobWorkflowObserver::class);
         FieldServiceTask::observe(FieldServiceTaskWorkflowObserver::class);
 

@@ -1,6 +1,7 @@
 <?php
 
 require __DIR__.'/highlevel.php';
+require __DIR__.'/marketing-desk.php';
 
 use App\Http\Controllers\AccountingCommandCenterController;
 use App\Http\Controllers\AdminMasterDataController;
@@ -974,6 +975,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->prefix('workspaces/{tenant:slug}/integrations/instagram')
         ->name('integrations.instagram.')
         ->group(function (): void {
+            Route::post('/subscribe', [InstagramConnectionController::class, 'subscribe'])->name('subscribe');
             Route::get('/connect', [InstagramConnectionController::class, 'connect'])->name('connect');
         });
 

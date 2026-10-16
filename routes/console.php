@@ -308,3 +308,5 @@ Schedule::command('soccer:process')->everyMinute()->withoutOverlapping(5)->runIn
 Schedule::command('website:reconcile-payments')->everyFiveMinutes()->withoutOverlapping(10)->runInBackground();
 Schedule::command('website:reconcile-shipments')->everyFiveMinutes()->withoutOverlapping(10)->runInBackground();
 Schedule::command('website:dispatch-order-notifications')->everyMinute()->withoutOverlapping(10)->runInBackground();
+
+\Illuminate\Support\Facades\Schedule::command('marketing:dispatch-desk')->everyMinute()->withoutOverlapping();

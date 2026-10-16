@@ -4214,6 +4214,70 @@ CREATE TABLE `market_pour_lists` (
   CONSTRAINT `market_pour_lists_event_id_foreign` FOREIGN KEY (`event_id`) REFERENCES `events` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketing_assistant_turns`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketing_assistant_turns` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned DEFAULT NULL,
+  `request_uuid` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `thread_uuid` varchar(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `purpose` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'reserved',
+  `input` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `result` longtext COLLATE utf8mb4_unicode_ci,
+  `usage_event_id` bigint unsigned DEFAULT NULL,
+  `context_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `md_assistant_request_unique` (`tenant_id`,`request_uuid`),
+  KEY `md_5_tenant_idx` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketing_audience_permissions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketing_audience_permissions` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `marketing_profile_id` bigint unsigned NOT NULL,
+  `audience` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `channel` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `store_key` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `proof_key` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `granted_at` timestamp NOT NULL,
+  `revoked_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `md_audience_permission_unique` (`tenant_id`,`marketing_profile_id`,`audience`,`channel`,`store_key`),
+  KEY `md_6_tenant_idx` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketing_automation_enrollments`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketing_automation_enrollments` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `workflow_id` bigint unsigned NOT NULL,
+  `workflow_version_id` bigint unsigned NOT NULL,
+  `marketing_profile_id` bigint unsigned NOT NULL,
+  `event_key` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `audience` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `store_key` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active',
+  `stop_reason` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `started_at` timestamp NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `md_enrollment_event_unique` (`workflow_id`,`marketing_profile_id`,`event_key`),
+  KEY `md_7_tenant_idx` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `marketing_automation_events`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -4243,6 +4307,24 @@ CREATE TABLE `marketing_automation_events` (
   KEY `marketing_automation_events_processed_at_index` (`processed_at`),
   CONSTRAINT `marketing_automation_events_marketing_profile_id_foreign` FOREIGN KEY (`marketing_profile_id`) REFERENCES `marketing_profiles` (`id`) ON DELETE SET NULL,
   CONSTRAINT `marketing_automation_events_tenant_id_foreign` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketing_brand_knowledge_versions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketing_brand_knowledge_versions` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `audience` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `title` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `content` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `approved_by` bigint unsigned DEFAULT NULL,
+  `approved_at` timestamp NULL DEFAULT NULL,
+  `expires_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `md_1_tenant_idx` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `marketing_campaign_conversions`;
@@ -4476,6 +4558,67 @@ CREATE TABLE `marketing_consent_requests` (
   KEY `marketing_consent_requests_tenant_id_index` (`tenant_id`),
   CONSTRAINT `marketing_consent_requests_marketing_profile_id_foreign` FOREIGN KEY (`marketing_profile_id`) REFERENCES `marketing_profiles` (`id`) ON DELETE SET NULL,
   CONSTRAINT `marketing_consent_requests_tenant_id_foreign` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketing_conversation_controls`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketing_conversation_controls` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `conversation_id` bigint unsigned NOT NULL,
+  `policy_id` bigint unsigned DEFAULT NULL,
+  `mode` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'human',
+  `revision` int unsigned NOT NULL DEFAULT '1',
+  `last_message_id` bigint unsigned DEFAULT NULL,
+  `reason` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `md_conversation_control_unique` (`tenant_id`,`conversation_id`),
+  KEY `md_10_tenant_idx` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketing_delivery_attempts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketing_delivery_attempts` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `marketing_profile_id` bigint unsigned NOT NULL,
+  `workflow_id` bigint unsigned DEFAULT NULL,
+  `idempotency_key` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `channel` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `reason` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `campaign_id` bigint unsigned DEFAULT NULL,
+  `recipient_id` bigint unsigned DEFAULT NULL,
+  `sent_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `md_delivery_attempt_unique` (`tenant_id`,`idempotency_key`),
+  KEY `md_9_tenant_idx` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketing_delivery_authorizations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketing_delivery_authorizations` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `workflow_id` bigint unsigned NOT NULL,
+  `definition_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `audience` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `store_key` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `approved_by` bigint unsigned NOT NULL,
+  `approved_at` timestamp NOT NULL,
+  `active` tinyint(1) NOT NULL DEFAULT '1',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `md_delivery_approval_unique` (`workflow_id`,`definition_hash`),
+  KEY `md_8_tenant_idx` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `marketing_delivery_events`;
@@ -5398,6 +5541,26 @@ CREATE TABLE `marketing_recommendations` (
   CONSTRAINT `marketing_recommendations_reviewed_by_foreign` FOREIGN KEY (`reviewed_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketing_reply_policies`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketing_reply_policies` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `channel` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `audience` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `store_key` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '',
+  `knowledge_version_id` bigint unsigned NOT NULL,
+  `enabled` tinyint(1) NOT NULL DEFAULT '0',
+  `approved_by` bigint unsigned NOT NULL,
+  `approved_at` timestamp NOT NULL,
+  `revision` int unsigned NOT NULL DEFAULT '1',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `md_2_tenant_idx` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `marketing_review_histories`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -5616,6 +5779,65 @@ CREATE TABLE `marketing_short_links` (
   KEY `marketing_short_links_created_by_foreign` (`created_by`),
   KEY `marketing_short_links_last_used_at_index` (`last_used_at`),
   CONSTRAINT `marketing_short_links_created_by_foreign` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketing_social_account_bindings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketing_social_account_bindings` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `provider` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `fingerprint` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `md_social_binding_unique` (`provider`,`fingerprint`),
+  KEY `md_binding_tenant_idx` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketing_social_posts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketing_social_posts` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `created_by` bigint unsigned NOT NULL,
+  `revision` int unsigned NOT NULL DEFAULT '1',
+  `content` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'draft',
+  `approved_hash` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `approved_by` bigint unsigned DEFAULT NULL,
+  `approved_at` timestamp NULL DEFAULT NULL,
+  `scheduled_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `md_3_tenant_idx` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketing_social_publications`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketing_social_publications` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `post_id` bigint unsigned NOT NULL,
+  `revision` int unsigned NOT NULL,
+  `connection_id` bigint unsigned NOT NULL,
+  `platform` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `external_id` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `container_id` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `attempt_uuid` varchar(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `failure_code` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `insights` json DEFAULT NULL,
+  `observed_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `md_publication_revision_unique` (`post_id`,`revision`,`platform`),
+  KEY `md_4_tenant_idx` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `marketing_social_share_claims`;
@@ -7846,14 +8068,14 @@ CREATE TABLE `subscription_credential_revisions` (
   `tenant_id` bigint unsigned NOT NULL,
   `installation_id` bigint unsigned NOT NULL,
   `revision` int unsigned NOT NULL,
-  `status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending_verification',
-  `credentials` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
-  `credential_fingerprint` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `digest_key_id` char(16) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `grant_type` varchar(40) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `app_secret_reference` varchar(190) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `app_secret_revision` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `app_secret` longtext COLLATE utf8mb4_unicode_ci,
+  `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending_verification',
+  `credentials` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `credential_fingerprint` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `digest_key_id` char(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `grant_type` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `app_secret_reference` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `app_secret_revision` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `app_secret` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `app_secret_expires_at` timestamp(6) NULL DEFAULT NULL,
   `expires_at` timestamp(6) NULL DEFAULT NULL,
   `refresh_expires_at` timestamp(6) NULL DEFAULT NULL,
@@ -7904,24 +8126,24 @@ DROP TABLE IF EXISTS `subscription_installations`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `subscription_installations` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `public_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `public_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
   `shopify_store_id` bigint unsigned NOT NULL,
-  `shop_domain` varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `shop_gid` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `app_gid` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `app_installation_gid` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `public_client_id` varchar(128) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `api_version` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '2026-10',
-  `status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending_verification',
+  `shop_domain` varchar(253) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `shop_gid` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `app_gid` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `app_installation_gid` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `public_client_id` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `api_version` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '2026-10',
+  `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending_verification',
   `active_credential_revision_id` bigint unsigned DEFAULT NULL,
   `scopes` json DEFAULT NULL,
-  `shop_timezone` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `shop_timezone` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `verified_at` timestamp(6) NULL DEFAULT NULL,
   `last_synced_at` timestamp(6) NULL DEFAULT NULL,
-  `read_pause_reason` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `evidence` longtext COLLATE utf8mb4_unicode_ci,
-  `sync_state` longtext COLLATE utf8mb4_unicode_ci,
+  `read_pause_reason` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `evidence` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `sync_state` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `created_at` timestamp(6) NULL DEFAULT NULL,
   `updated_at` timestamp(6) NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -8048,19 +8270,19 @@ CREATE TABLE `subscription_operations` (
   `installation_id` bigint unsigned NOT NULL,
   `credential_revision_id` bigint unsigned NOT NULL,
   `actor_user_id` bigint unsigned DEFAULT NULL,
-  `request_uuid` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `kind` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `request_fingerprint` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `digest_key_id` char(16) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'queued',
-  `request` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
-  `result` longtext COLLATE utf8mb4_unicode_ci,
+  `request_uuid` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `kind` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `request_fingerprint` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `digest_key_id` char(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'queued',
+  `request` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `result` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `attempts` int unsigned NOT NULL DEFAULT '0',
-  `lease_token` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `lease_token` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `lease_expires_at` timestamp(6) NULL DEFAULT NULL,
   `next_attempt_at` timestamp(6) NULL DEFAULT NULL,
   `completed_at` timestamp(6) NULL DEFAULT NULL,
-  `failure_code` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `failure_code` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` timestamp(6) NULL DEFAULT NULL,
   `updated_at` timestamp(6) NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -8154,17 +8376,17 @@ CREATE TABLE `subscription_provider_resources` (
   `tenant_id` bigint unsigned NOT NULL,
   `installation_id` bigint unsigned NOT NULL,
   `sync_operation_id` bigint unsigned NOT NULL,
-  `resource_type` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `provider_gid` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `parent_contract_gid` varchar(190) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `customer_gid` varchar(190) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `resource_type` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider_gid` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `parent_contract_gid` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `customer_gid` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `provider_revision` decimal(20,0) DEFAULT NULL,
   `provider_updated_at` timestamp(6) NULL DEFAULT NULL,
-  `status` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `completeness` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'complete',
+  `status` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `completeness` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'complete',
   `observed_at` timestamp(6) NOT NULL,
-  `stale_reason` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `snapshot` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `stale_reason` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `snapshot` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` timestamp(6) NULL DEFAULT NULL,
   `updated_at` timestamp(6) NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -8244,21 +8466,21 @@ CREATE TABLE `subscription_webhook_inboxes` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `tenant_id` bigint unsigned NOT NULL,
   `installation_id` bigint unsigned NOT NULL,
-  `delivery_id` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `event_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `topic` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `api_version` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `body_fingerprint` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `digest_key_id` char(16) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `raw_body` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
-  `headers` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
-  `verification` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
-  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
-  `quarantine_reason` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `conflict_evidence` longtext COLLATE utf8mb4_unicode_ci,
+  `delivery_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `event_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `topic` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `api_version` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `body_fingerprint` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `digest_key_id` char(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `raw_body` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `headers` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `verification` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `quarantine_reason` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `conflict_evidence` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `conflict_count` int unsigned NOT NULL DEFAULT '0',
   `attempts` int unsigned NOT NULL DEFAULT '0',
-  `lease_token` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `lease_token` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `lease_expires_at` timestamp(6) NULL DEFAULT NULL,
   `next_attempt_at` timestamp(6) NULL DEFAULT NULL,
   `completed_at` timestamp(6) NULL DEFAULT NULL,
@@ -11646,3 +11868,14 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (278,'2026_10_15_22
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (279,'2026_10_15_210000_create_website_order_notifications',24);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (280,'2026_10_15_230000_create_website_catalog_source_mappings',24);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (281,'2026_10_15_235000_create_subscription_provider_evidence',25);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (282,'2026_10_16_100000_create_marketing_brand_knowledge_versions',26);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (283,'2026_10_16_100001_create_marketing_reply_policies',26);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (284,'2026_10_16_100002_create_marketing_social_posts',26);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (285,'2026_10_16_100003_create_marketing_social_publications',26);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (286,'2026_10_16_100004_create_marketing_assistant_turns',26);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (287,'2026_10_16_100005_create_marketing_audience_permissions',26);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (288,'2026_10_16_100006_create_marketing_automation_enrollments',26);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (289,'2026_10_16_100007_create_marketing_delivery_authorizations',26);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (290,'2026_10_16_100008_create_marketing_delivery_attempts',26);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (291,'2026_10_16_100009_create_marketing_conversation_controls',26);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (292,'2026_10_16_100010_create_marketing_social_account_bindings',26);

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   CheckIcon,
   DelayIcon,
@@ -57,7 +57,7 @@ function stepStatus(testState: Record<string, unknown>, step: WorkflowStep): "pa
 function mappedSummary(value: unknown): string {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     const mapped = value as Record<string, unknown>;
-    if (mapped.type === "mapping") return String(mapped.path ?? "");
+    if (mapped.type === "mapping") return "Customer or earlier step value";
     if (mapped.type === "literal") return String(mapped.value ?? "");
   }
   return String(value ?? "");
@@ -87,7 +87,7 @@ function configSummary(step: WorkflowStep, component: CatalogComponent | null): 
   });
   if (configuredField) {
     const option = configuredField.options?.find((item) => item.value === String(step.config[configuredField.key]));
-    return option?.label ?? String(step.config[configuredField.key]);
+    return option?.label ?? mappedSummary(step.config[configuredField.key]);
   }
   if (step.connection_id) return "Account selected";
   return component?.connection_required ? "Needs setup" : "Ready to configure";
@@ -356,6 +356,7 @@ export function WorkflowCanvas({
   onReorderStep,
 }: WorkflowCanvasProps) {
   const [zoom, setZoom] = useState(100);
+  const canvasRef = useRef<HTMLElement>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const triggerComponent = useMemo(
     () => componentForStep(components, definition.trigger),
@@ -364,6 +365,7 @@ export function WorkflowCanvas({
 
   return (
     <section
+      ref={canvasRef}
       className="eb-workflow-canvas"
       role="region"
       aria-label="Workflow canvas"
@@ -471,6 +473,14 @@ export function WorkflowCanvas({
       </div>
 
       <div className="eb-canvas-zoom" aria-label="Canvas zoom">
+        <button type="button" onClick={() => {
+          const canvas = canvasRef.current;
+          const flow = canvas?.querySelector<HTMLElement>(".eb-workflow-flow");
+          if (canvas && flow) {
+            setZoom(Math.max(30, Math.min(100, Math.floor(Math.min((canvas.clientWidth - 48) / flow.scrollWidth, (canvas.clientHeight - 100) / flow.scrollHeight) * 100))));
+            canvas.scrollTo({top: 0, left: 0});
+          }
+        }}>Fit to view</button>
         <button type="button" aria-label="Zoom out" onClick={() => setZoom((value) => Math.max(70, value - 10))}>
           <ZoomOutIcon size={16} />
         </button>

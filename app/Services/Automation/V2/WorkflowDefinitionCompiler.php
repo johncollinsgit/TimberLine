@@ -286,6 +286,9 @@ class WorkflowDefinitionCompiler
             $this->actionCount++;
         }
 
+        if (str_starts_with($componentKey, 'everbranch.marketing.') && ! app(\App\Services\Marketing\Desk\MarketingDeskAccess::class)->available($tenantId)) {
+            $this->addError($path.'.component_key', 'Marketing desk is not available in this workspace.');
+        }
         $connectionId = $this->normalizeConnectionId(
             $rawStep['connection_id'] ?? null,
             $component,

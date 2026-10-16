@@ -1,3 +1,14 @@
+## 2026-10-16 — Marketing Desk and workflow usability
+
+- Marketing Desk uses the shared dashboard/list/detail/form shapes and restrained
+  workspace tokens. Daily actions, approval states and real source freshness stay
+  visible; unrelated import diagnostics do not occupy the desk.
+- Studio retains its real canvas/inspector and gains an outline, fit, four views,
+  visible publication guidance and connection summaries. Small screens keep a
+  readable step flow and existing inspector drawer.
+- Desktop/phone browser checks use a clearly fictional local workspace. Provider
+  execution and production rollout remain disabled.
+
 ## 2026-10-15 - Native shipping lifecycle and printer setup
 
 - Order fulfillment separates saved postage, packing, label output, handoff,

@@ -71,6 +71,23 @@ class WorkflowAutomationReadinessService
         return ['ready' => collect($checks)->every(fn (array $check): bool => $check['ready']), 'checks' => $checks];
     }
 
+    public function evaluateForProviders(array $providers): array
+    {
+        $result = $this->evaluate();
+        if (! in_array('asana', $providers, true)) {
+            unset($result['checks']['asana_oauth_registration']);
+        }
+        if (! in_array('google_calendar', $providers, true)) {
+            unset($result['checks']['google_oauth_registration']);
+        }
+        $redirectReady = (! in_array('asana', $providers, true) || $this->validRedirect(config('services.asana.redirect_uri')))
+            && (! in_array('google_calendar', $providers, true) || $this->validRedirect(config('services.google_calendar.redirect_uri')));
+        $result['checks']['redirect_uris'] = $this->check($redirectReady, 'Required provider callbacks are configured.', 'Configure callbacks for the providers used by this workflow.');
+        $result['ready'] = collect($result['checks'])->every(fn (array $check): bool => $check['ready']);
+
+        return $result;
+    }
+
     public function pulseQueue(): void
     {
         Cache::forever(self::QUEUE_HEARTBEAT_KEY, now()->toIso8601String());

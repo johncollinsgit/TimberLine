@@ -50,6 +50,7 @@ class WorkflowAutomationController extends Controller
             'providers' => $catalog->providers(),
             'studioComponents' => $studioCatalog->components(),
             'studioEnabled' => $studioEnabled,
+            'workflowConnections' => IntegrationConnection::forTenantId($tenantId)->get(['id', 'external_account_label'])->keyBy('id'),
         ]);
     }
 
