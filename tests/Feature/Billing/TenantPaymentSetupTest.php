@@ -216,6 +216,21 @@ it('stops old ambiguous Stripe account requests before the idempotency window ex
     Http::assertNothingSent();
 });
 
+it('explains the platform profile blocker and preserves its immutable Stripe retry', function () {
+    Http::fake(['https://api.stripe.com/v1/accounts' => Http::response(['error' => ['message' => 'You must complete your platform profile to use Connect and create live connected accounts. private-provider-context']], 400)]);
+    $this->actingAs($this->owner)->postJson(paymentSetupUrl($this, '/stripe/start'), ['email' => 'owner@example.com'])
+        ->assertStatus(502)->assertJsonPath('message', 'Everbranch must complete its Stripe Connect platform profile before your business can connect. Your email address is not the problem.')
+        ->assertDontSee('private-provider-context');
+    expect($this->tenant->paymentAccount()->exists())->toBeFalse();
+    $attempt = IntegrationConnection::where('provider', 'tenant_stripe_onboarding')->sole();
+    $frozen = json_decode($attempt->external_account_secret, true);
+    Http::fake(['https://api.stripe.com/v1/accounts' => Http::response(['id' => 'acct_fictional']),
+        'https://api.stripe.com/v1/account_links' => Http::response(['url' => 'https://connect.stripe.com/setup/example'])]);
+    $this->post(paymentSetupUrl($this, '/stripe/start'), ['email' => 'changed@example.com'])->assertRedirect();
+    Http::assertSent(fn ($request) => str_ends_with($request->url(), '/accounts')
+        && $request->header('Idempotency-Key')[0] === $frozen['key'] && $request->data() === $frozen['payload']);
+});
+
 it('returns an owner-scoped noncacheable Stripe embedded session without storing the client secret', function () {
     config()->set('tenant_payments.stripe_embedded_enabled', true);
     config()->set('services.stripe.publishable_key', 'pk_test_fictional');

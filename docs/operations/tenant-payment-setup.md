@@ -53,8 +53,10 @@ Never delete the reservation or issue a new key to recover an ambiguous result.
 Locate the original account using Stripe evidence/tenant metadata and reconcile
 the local record first. A completed local account is reused.
 
-An explicit `signed up for Connect` provider error is shown as a platform
-activation problem rather than a bad email. No raw provider response is displayed.
+Explicit `signed up for Connect` and `complete your platform profile` provider
+errors are shown as platform setup problems rather than bad emails. No raw
+provider response is displayed. The latter may require the platform owner to
+complete identity verification directly in Stripe.
 
 ## Release and proof
 
@@ -92,3 +94,32 @@ release. Existing native commerce, subscription and Wren launch blockers remain.
 Rollback: disable `TENANT_PAYMENT_SETUP_ENABLED` and `TENANT_PAYPAL_ENABLED`;
 retain all account/attempt evidence. The existing Wren Stripe hosted route uses
 the corrected retry service independently of the new page flag.
+
+## Production pilot release, 2026-10-16
+
+- PR #410 passed quality, full CI and MySQL migration recovery, then deployed
+  through protected run `38904619886`. Public `/ready` confirmed exact release
+  `cb133ecfea1ef8afc6b54152a58f357518500df7`.
+- Enabled only `TENANT_PAYMENT_SETUP_ENABLED=true` and
+  `TENANT_PAYMENT_SETUP_TENANTS=wren-family-soccer`, with an operator audit and
+  owner-only environment backup. Embedded onboarding and PayPal stay off. No
+  customer-payment, registration, subscription, SMS or other tenant gate changed.
+- Selected Platform in Stripe's sandbox and used Stripe's built-in fictional
+  account/payment demo. The sandbox payment succeeded for its default $100.
+  Its sample $3 platform fee is demo data only; Everbranch's actual platform fee
+  remains zero. This is provider-demo evidence, not the soccer checkout or signed
+  webhook acceptance test. The fictional account still has verification tasks.
+- The live Wren onboarding request was rejected before an account was created:
+  Stripe requires the platform profile. The signed-in live dashboard specifically
+  requests John Collins's identity document. The owner must complete this directly
+  in Stripe. The existing immutable request reservation remains in place; retry
+  it after verification, without replacing the key or creating a different account.
+- A Wren-owned connected account, verified callbacks and the controlled
+  payment/refund smoke test remain necessary before collection. Registration stays
+  behind its existing readiness checks.
+
+## Shop Pay diagnostic preparation
+
+See `docs/operations/shop-pay-wallet-readiness.md`. The operator command verifies
+explicit merchant-owned credentials and can create an unpaid fictional session.
+It does not connect a tenant, submit a payment or expose a buyer checkout option.

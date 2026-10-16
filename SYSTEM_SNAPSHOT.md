@@ -1,6 +1,6 @@
 # SYSTEM SNAPSHOT
 
-## Stripe and PayPal connection setup (2026-10-16; feature branch only)
+## Stripe and PayPal connection setup (2026-10-16; deployed, Wren setup pilot)
 
 - A shared default-off, exact-tenant-allowlisted Payments page supports Stripe
   embedded onboarding/hosted fallback and PayPal Partner Referrals account setup.
@@ -10,9 +10,15 @@
   changing an email cannot invalidate the idempotency payload. Platform Connect
   activation errors are distinguished from email problems. No migration.
 - PayPal checkout, webhooks, refunds and subscription billing are still later
-  phases. No provider rollout, customer charge or entitlement change is activated.
+  phases. Only Wren payment setup is enabled; collection, PayPal and other
+  tenants stay gated.
   See `docs/architecture/stripe-paypal-payments-plan.md` and
   `docs/operations/tenant-payment-setup.md` before continuing.
+
+- PR #410 deployed at `cb133ecf` through protected run `38904619886`. Live
+  Connect is blocked on the platform owner identity document; keep the saved
+  immutable retry. Shop Pay unpaid-session diagnostics and remaining checkout
+  work are documented in `docs/operations/shop-pay-wallet-readiness.md`.
 
 ## 2026-10-16 — Marketing Desk photos, Instagram history and planning AI
 

@@ -1,8 +1,8 @@
 # Stripe and PayPal support
 
 Approved direction: 2026-10-16. Stripe and PayPal are the primary payment
-options. Shop Pay remains a separate later integration. ACH is not part of
-this work.
+options. The owner resumed Shop Pay integration on 2026-10-16 while PayPal
+partner review is pending. ACH is not part of this work.
 
 ## Customer experience
 
@@ -19,7 +19,7 @@ a failed or uncertain payment.
 
 ## Delivery sequence
 
-1. **Connection setup (implemented on feature branch, not production).** One
+1. **Connection setup (deployed; Wren setup page enabled).** One
    gated Payments page; Stripe embedded onboarding plus hosted fallback;
    existing-account PayPal Partner Referrals flow; server verification; clear
    connection/checkout separation. Fix Wren's Stripe retry/email error. No new
