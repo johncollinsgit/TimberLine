@@ -28,6 +28,8 @@
   require approved knowledge/policies. The existing shared $50 cap and usage
   reservations remain enforced. Legacy Bud/voice and AI Branch billing stay separate.
 - PNG/WebP uploads normalize to workspace-owned JPEGs. No schema changes.
+- Composer creates the public storage link in each candidate release so uploaded
+  marketing photos keep working after atomic deployment. See the Forge runbook.
   See `docs/operations/marketing-desk.md` for setup and verification.
 
 ## Recharge customer/settings rollout preparation (2026-10-16; disabled)

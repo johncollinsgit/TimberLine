@@ -48,6 +48,12 @@ Keep the release macros in this order. Do not run `git reset`, `git clean`,
 release. This application needs dynamic routes available; `route:cache` is not
 part of the release process.
 
+Composer's `post-autoload-dump` hook runs Laravel's `storage:link` in each
+candidate release. Forge shares `storage` but does not create `public/storage`
+automatically; without this link uploaded marketing photos return 404 after an
+otherwise healthy deployment. Existing links are preserved. Never replace an
+existing public directory or copy uploads into a release's tracked assets.
+
 ## GitHub Actions handoff
 
 The handoff is complete.
