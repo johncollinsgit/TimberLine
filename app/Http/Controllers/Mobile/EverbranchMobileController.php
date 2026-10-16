@@ -545,15 +545,25 @@ class EverbranchMobileController extends Controller
         $validated = $request->validate([
             'q' => ['nullable', 'string', 'max:200'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:20'],
+            'intent' => ['nullable', 'in:navigate'],
         ]);
 
         $tenant = $this->tenant($request);
         $query = (string) ($validated['q'] ?? '');
+        $navigationOnly = ($validated['intent'] ?? null) === 'navigate';
+        $navigation = app(\App\Services\Navigation\NavigationQuery::class);
+        if ($navigationOnly && ($control = $navigation->control($query))) {
+            return response()->json(['query' => $query, 'results' => [], 'groups' => [], 'total' => 0, 'navigation' => ['status' => 'control', 'control' => $control]]);
+        }
+        if ($navigationOnly) {
+            $query = $navigation->normalize($query);
+        }
         $payload = $search->search($query, [
             'tenant_id' => (int) $tenant->id,
             'user' => $this->user($request),
             'request' => $request,
             'surface' => 'mobile',
+            'navigation_only' => $navigationOnly,
             'limit' => (int) ($validated['limit'] ?? 10),
         ]);
         $results = collect((array) ($payload['results'] ?? []))->map(function (array $result): array {

@@ -37,14 +37,16 @@
                         type="search"
                         autocomplete="off"
                         placeholder="{{ $placeholder }}"
-                        class="w-full rounded-2xl border border-zinc-300 bg-zinc-50 py-3 pl-10 pr-4 text-sm text-zinc-900 placeholder:text-zinc-500 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/15"
+                        class="w-full rounded-2xl border border-zinc-300 bg-zinc-50 py-3 pl-10 pr-24 text-sm text-zinc-900 placeholder:text-zinc-500 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/15"
                         role="combobox"
                         aria-autocomplete="list"
                         aria-expanded="false"
                         aria-controls="app-command-results"
                         data-command-input
                     />
+                    <button type="button" data-command-voice class="absolute right-2 top-1/2 min-h-9 -translate-y-1/2 rounded-xl border border-zinc-300 bg-white px-3 text-xs font-semibold text-zinc-700" aria-label="Find a page by voice" aria-pressed="false">Speak</button>
                 </div>
+                <p data-command-voice-status role="status" class="mt-2 text-xs text-zinc-600">Say where you want to go, or type a page name.</p>
                 <div class="mt-2 flex items-center justify-between text-[10px] text-zinc-500">
                     <span>Type to search · ↑↓ to move · Enter to open</span>
                     <span>⌘K</span>
@@ -162,13 +164,13 @@
                 return link;
             };
 
-            const renderResults = (root, payload, query = "") => {
+            const renderResults = (root, payload, query = "", includeRecents = true) => {
                 const container = root.querySelector("[data-command-results]");
                 if (!container) return;
                 container.replaceChildren();
 
                 let groups = groupEntries(payload);
-                if (query === "") {
+                if (query === "" && includeRecents) {
                     const recents = readRecents();
                     if (recents.length) groups = [["recent", recents], ...groups.filter(([name]) => name !== "recent")];
                 }
@@ -200,6 +202,9 @@
                 const panel = root.querySelector("[data-command-panel]");
                 const input = root.querySelector("[data-command-input]");
                 const closeButton = root.querySelector("[data-command-close]");
+                const voiceButton = root.querySelector("[data-command-voice]");
+                const voiceStatus = root.querySelector("[data-command-voice-status]");
+                const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
                 const endpoint = root.dataset.searchEndpoint || "";
                 if (!overlay || !panel || !input || !closeButton || !endpoint) return;
 
@@ -208,6 +213,32 @@
                 let requestSequence = 0;
                 let abortController;
                 let returnFocus = null;
+                let recognition = null;
+                let voiceTimer;
+                let voiceMode = false;
+                let cancelledVoice = false;
+                const editedFields = new Set();
+                const trackEdit = event => {
+                    const target = event.target;
+                    if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) || root.contains(target) || !target.closest("main")) return;
+                    if (target instanceof HTMLInputElement && ["search", "file", "hidden"].includes(target.type)) return;
+                    editedFields.add(target);
+                };
+                const allowVoiceNavigation = () => {
+                    for (const target of editedFields) if (!target.isConnected) editedFields.delete(target);
+                    if (!editedFields.size) return true;
+                    if (!window.confirm("Leave this screen? Changes you typed may not have been saved.")) return false;
+                    editedFields.clear();
+                    return true;
+                };
+                const sayStatus = message => { if (voiceStatus) voiceStatus.textContent = message; };
+                const stopVoice = () => {
+                    clearTimeout(voiceTimer);
+                    const active = recognition;
+                    recognition = null;
+                    if (active) active.abort();
+                    if (voiceButton) { voiceButton.textContent = Recognition ? "Speak" : "Type"; voiceButton.setAttribute("aria-pressed", "false"); }
+                };
 
                 const isOpen = () => !panel.classList.contains("hidden");
                 const results = () => Array.from(root.querySelectorAll("[data-command-result]"));
@@ -250,6 +281,7 @@
 
                     const url = new URL(endpoint, window.location.origin);
                     if (query) url.searchParams.set("q", query);
+                    if (voiceMode) url.searchParams.set("intent", "navigate");
 
                     fetch(url, {
                         headers: {"X-Requested-With": "XMLHttpRequest", "Accept": "application/json"},
@@ -259,8 +291,25 @@
                         .then(response => response.ok ? response.json() : Promise.reject(response))
                         .then(payload => {
                             if (sequence !== requestSequence) return;
-                            renderResults(root, payload, query);
+                            if (!isOpen()) return;
+                            if (voiceMode && payload.navigation?.status === "control") {
+                                if (payload.navigation.control === "back") {
+                                    if (!allowVoiceNavigation()) { sayStatus("Stayed on this page so you can save your changes."); return; }
+                                    close();
+                                    if (window.history.length > 1) window.history.back();
+                                } else close();
+                                return;
+                            }
+                            renderResults(root, payload, query, !voiceMode);
                             selectIndex(-1);
+                            if (voiceMode && payload.navigation?.status === "matched") {
+                                const href = safeHref(payload.navigation.destination?.url);
+                                if (href !== "#" && new URL(href).origin === window.location.origin) {
+                                    if (!allowVoiceNavigation()) { sayStatus("Stayed on this page so you can save your changes."); return; }
+                                    sayStatus(`Opening ${text(payload.navigation.destination?.title)}…`);
+                                    window.location.assign(href);
+                                }
+                            } else if (voiceMode) sayStatus(payload.total ? "Choose the page you meant. You can also say its full name." : "No accessible page matched. Try another name or use the menus.");
                         })
                         .catch(error => {
                             if (error && error.name === "AbortError") return;
@@ -271,6 +320,7 @@
 
                 const open = (options = {}) => {
                     const detail = options && typeof options === "object" ? options : {};
+                    voiceMode = detail.voice === true;
                     const query = typeof detail.query === "string" ? detail.query : input.value;
                     returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
                     input.value = query;
@@ -287,6 +337,8 @@
                 };
 
                 const close = () => {
+                    stopVoice();
+                    cancelledVoice = true;
                     if (!isOpen()) return;
                     abortController?.abort();
                     overlay.classList.add("hidden");
@@ -300,6 +352,7 @@
 
                 const navigate = row => {
                     if (!(row instanceof HTMLAnchorElement)) return;
+                    if (voiceMode && !allowVoiceNavigation()) return;
                     saveRecent({
                         title: row.dataset.commandTitle,
                         subtitle: row.dataset.commandSubtitle,
@@ -311,10 +364,16 @@
                 };
 
                 const onKeydown = event => {
-                    const commandKey = (event.metaKey || event.ctrlKey) && String(event.key).toLowerCase() === "k";
+                    const commandKey = (event.metaKey || event.ctrlKey) && !event.shiftKey && String(event.key).toLowerCase() === "k";
                     if (commandKey) {
                         event.preventDefault();
                         isOpen() ? close() : open();
+                        return;
+                    }
+                    if ((event.metaKey || event.ctrlKey) && event.shiftKey && String(event.key).toLowerCase() === "k") {
+                        event.preventDefault();
+                        if (!isOpen()) open({voice: true, query: ""});
+                        startVoice();
                         return;
                     }
                     if (!isOpen()) return;
@@ -349,6 +408,13 @@
                     const target = event.target;
                     if (!(target instanceof HTMLElement)) return;
                     const trigger = target.closest("[data-command-trigger]");
+                    const voiceTrigger = target.closest("[data-command-voice-trigger]");
+                    if (voiceTrigger) {
+                        event.preventDefault();
+                        open({voice: true, query: ""});
+                        startVoice();
+                        return;
+                    }
                     if (trigger) {
                         event.preventDefault();
                         open();
@@ -356,6 +422,7 @@
                     }
                     const row = target.closest("[data-command-result]");
                     if (row instanceof HTMLAnchorElement) {
+                        if (voiceMode) { event.preventDefault(); navigate(row); return; }
                         saveRecent({
                             title: row.dataset.commandTitle,
                             subtitle: row.dataset.commandSubtitle,
@@ -367,15 +434,44 @@
                 };
 
                 const onInput = () => {
+                    stopVoice();
                     externalFields().forEach(field => { field.value = input.value; });
                     clearTimeout(debounceTimer);
                     debounceTimer = window.setTimeout(executeSearch, 170);
                 };
 
                 const onCustomOpen = event => open(event instanceof CustomEvent ? event.detail : {});
+                const startVoice = () => {
+                    if (!Recognition) { voiceMode = true; input.focus(); sayStatus("Voice recognition is unavailable in this browser. Type where you want to go."); return; }
+                    if (recognition) { recognition.stop(); return; }
+                    voiceMode = true;
+                    cancelledVoice = false;
+                    recognition = new Recognition();
+                    const active = recognition;
+                    active.lang = document.documentElement.lang || navigator.language || "en-US";
+                    active.continuous = false;
+                    active.interimResults = false;
+                    active.onstart = () => { if (active !== recognition) return; voiceButton?.setAttribute("aria-pressed", "true"); if (voiceButton) voiceButton.textContent = "Stop"; sayStatus("Listening. Say the page you want to open."); };
+                    active.onresult = event => {
+                        if (active !== recognition || cancelledVoice || !isOpen()) return;
+                        const transcript = text(event.results?.[0]?.[0]?.transcript).trim();
+                        if (!transcript) return;
+                        input.value = transcript.slice(0, 120);
+                        sayStatus(`Heard: ${input.value}`);
+                        executeSearch();
+                    };
+                    active.onerror = () => { if (active !== recognition || cancelledVoice) return; sayStatus("Could not hear that. Check microphone permission, try again, or type the page name."); };
+                    active.onend = () => { if (active !== recognition) return; recognition = null; clearTimeout(voiceTimer); if (voiceButton) { voiceButton.textContent = "Speak"; voiceButton.setAttribute("aria-pressed", "false"); } };
+                    try { active.start(); voiceTimer = window.setTimeout(() => { if (recognition === active) active.stop(); }, 15000); }
+                    catch { stopVoice(); sayStatus("Microphone unavailable. Type where you want to go."); }
+                };
+                if (voiceButton && !Recognition) voiceButton.textContent = "Type";
+                voiceButton?.addEventListener("click", startVoice);
 
                 document.addEventListener("keydown", onKeydown);
                 document.addEventListener("click", onDocumentClick);
+                document.addEventListener("input", trackEdit, true);
+                document.addEventListener("change", trackEdit, true);
                 document.addEventListener("app-command-palette:open", onCustomOpen);
                 input.addEventListener("input", onInput);
                 closeButton.addEventListener("click", close);
@@ -384,13 +480,18 @@
 
                 window.__appCommandPaletteCleanup = () => {
                     abortController?.abort();
+                    stopVoice();
+                    cancelledVoice = true;
                     clearTimeout(debounceTimer);
                     document.removeEventListener("keydown", onKeydown);
                     document.removeEventListener("click", onDocumentClick);
+                    document.removeEventListener("input", trackEdit, true);
+                    document.removeEventListener("change", trackEdit, true);
                     document.removeEventListener("app-command-palette:open", onCustomOpen);
                     input.removeEventListener("input", onInput);
                     closeButton.removeEventListener("click", close);
                     overlay.removeEventListener("click", close);
+                    voiceButton?.removeEventListener("click", startVoice);
                     delete root.dataset.commandPaletteBound;
                 };
             };

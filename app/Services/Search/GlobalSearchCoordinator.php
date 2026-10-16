@@ -47,9 +47,11 @@ class GlobalSearchCoordinator
             return app(\App\Services\Soccer\SoccerWorkspaceService::class)->search($normalized, $context);
         }
         $websiteSales = app(\App\Services\Tenancy\TenantExperienceProfileService::class)->workspaceFocusForTenant($tenantId) === 'website_sales';
+        $navigationOnly = (bool) ($context['navigation_only'] ?? false);
 
         /** @var Collection<int,array<string,mixed>> $results */
         $results = collect($this->providers)
+            ->reject(fn (GlobalSearchProvider $provider): bool => $navigationOnly && $provider instanceof ActionsSearchProvider)
             ->filter(fn (GlobalSearchProvider $provider): bool => ! $websiteSales || $provider instanceof NavigationSearchProvider || $provider instanceof ActionsSearchProvider || $provider instanceof ModulesSearchProvider)
             ->flatMap(function (GlobalSearchProvider $provider) use ($normalized, $context): array {
                 try {
@@ -72,6 +74,7 @@ class GlobalSearchCoordinator
 
                 return (int) ($row['score'] ?? 0) > 0;
             })
+            ->filter(fn (array $row): bool => ! $navigationOnly || empty($row['action']))
             ->sortByDesc(fn (array $row): int => (int) ($row['score'] ?? 0))
             ->take($limit)
             ->values();
