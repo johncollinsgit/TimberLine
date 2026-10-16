@@ -48,7 +48,7 @@
 @endif
 
 @if($section==='parents')<section class="section"><h2>{{ $families->count() }} families</h2>
-@forelse($families as $f)<details id="family-{{ $f['id'] }}"><summary>{{ $f['profile']['parentName']??$f['email'] }} <small class="muted">{{ $f['email'] }}</small></summary><div class="form-grid"><div><p>{{ $f['profile']['phone']??'Phone missing' }}</p><p class="muted">{{ $f['profile']['address']??'' }}</p></div><div>
+@forelse($families as $f)<details id="family-{{ $f['id'] }}"><summary>{{ $f['profile']['parentName']??$f['email'] }} <small class="muted">{{ $f['email'] }}</small></summary><div class="form-grid"><div><p>{{ $f['profile']['phone']??'Phone missing' }}</p>@if(!empty($f['profile']['spouseName'])||!empty($f['profile']['spousePhone']))<p>Spouse: {{ $f['profile']['spouseName']??'' }} · {{ $f['profile']['spousePhone']??'' }}</p>@endif<p class="muted">{{ $f['profile']['address']??'' }}</p></div><div>
 @foreach($players->where('family_id',$f['id']) as $p)<p>{{ $p['name'] }} <small class="muted">{{ $p['birthday'] }}</small></p>
 @endforeach</div></div><p class="muted">{{ $f['verified_at']?'Email verified':'Awaiting account claim' }} · {{ $f['sms_consent_at']?'Soccer SMS consent recorded':'SMS consent not recorded' }}</p><form method="post" action="{{ $actionUrl('guardian') }}" class="form-grid">
 @csrf<input type="hidden" name="family_id" value="{{ $f['id'] }}"><label>Verified additional / changed guardian email<input required type="email" name="email"></label><label>Evidence for household access<input name="reason" required></label><button>Link guardian email</button></form></details>

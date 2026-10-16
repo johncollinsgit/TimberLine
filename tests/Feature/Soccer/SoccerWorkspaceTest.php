@@ -232,7 +232,7 @@ it('links an admin-verified additional guardian without granting backend members
     expect($svc->family($this->tenant->id, $token)->id)->toBe($family)->and(User::count())->toBe($before);
 });
 it('renders populated family, refund, import-review, and coaching screens', function () {
-    $family = $this->store->insert('families', $this->tenant->id, ['email' => 'fictional@example.com', 'profile' => $this->store->encrypt(['parentName' => 'Example Parent', 'coaching_by_season' => ['spring-2027' => ['volunteer' => true, 'jersey_size' => 'Adult L']]])]);
+    $family = $this->store->insert('families', $this->tenant->id, ['email' => 'fictional@example.com', 'profile' => $this->store->encrypt(['parentName' => 'Example Parent', 'spouseName' => 'Example Spouse', 'spousePhone' => '8645550102', 'coaching_by_season' => ['spring-2027' => ['volunteer' => true, 'jersey_size' => 'Adult L']]])]);
     $player = $this->store->insert('players', $this->tenant->id, ['family_id' => $family, 'name' => 'Example Child', 'birthday' => '2020-01-01', 'profile' => $this->store->encrypt(['allergies' => 'No'])]);
     $release = $this->store->insert('releases', $this->tenant->id, ['family_id' => $family, 'player_id' => $player, 'season_key' => 'spring-2027', 'source_key' => 'test', 'form_version' => 'test', 'answers' => $this->store->encrypt([]), 'sha256' => str_repeat('a', 64), 'signed_at' => now()]);
     $this->store->insert('registrations', $this->tenant->id, ['season_id' => $this->season, 'family_id' => $family, 'player_id' => $player, 'release_id' => $release, 'team_key' => 'blue-dragons', 'status' => 'registered', 'seat_kind' => 'public', 'needs_jersey' => false, 'amount_cents' => 3000, 'payment_status' => 'paid', 'queued_at' => now()]);
@@ -242,6 +242,7 @@ it('renders populated family, refund, import-review, and coaching screens', func
     foreach (['parents', 'players', 'coaches', 'settings', 'messages'] as $section) {
         $this->actingAs($this->admin)->get('/soccer/'.$section.'?tenant=wren-family-soccer')->assertOk();
     }
+    $this->actingAs($this->admin)->get('/soccer/parents?tenant=wren-family-soccer')->assertSeeText('Example Spouse')->assertSeeText('8645550102');
 });
 it('focuses an explicit Wren login without capturing unrelated multi-workspace home redirects', function () {
     expect(\App\Support\Auth\HomeRedirect::pathFor($this->admin, $this->tenant))->toContain('/soccer');
