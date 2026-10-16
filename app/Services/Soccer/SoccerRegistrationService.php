@@ -57,7 +57,7 @@ class SoccerRegistrationService
             $players = $this->store->query('players', $tenant)->where('family_id', $familyId)->whereIn('id', $ids)->get()->keyBy('id');
             abort_unless($players->count() === count($ids), 403);
             $waiverIds = $input['waived_player_ids'] ?? [];
-            if (count($waiverIds) > 2 || array_diff($waiverIds, $ids)) {
+            if (count($waiverIds) > 2 || count($waiverIds) !== count(array_unique($waiverIds)) || array_diff($waiverIds, $ids)) {
                 throw ValidationException::withMessages(['waived_player_ids' => 'Choose up to two selected children.']);
             }
             $volunteer = (bool) ($input['volunteer'] ?? false);
@@ -76,7 +76,8 @@ class SoccerRegistrationService
             }
             $existing = $this->store->query('registrations', $tenant)->where('season_id', $season->id)->where('family_id', $familyId)->get();
             $newIds = array_diff($ids, $existing->pluck('player_id')->all());
-            if ($existing->where('waived', true)->whereNotIn('player_id', $ids)->where('status', '!=', 'cancelled')->count() + count($waiverIds) > 2) {
+            $seasonWaivers = $existing->where('waived', true)->where('status', '!=', 'cancelled')->pluck('player_id')->all();
+            if (count(array_unique([...$seasonWaivers, ...$waiverIds])) > 2) {
                 throw ValidationException::withMessages(['waived_player_ids' => 'This household already used its two season waivers.']);
             }
             $profile = $this->store->decrypt($family->profile);

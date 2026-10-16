@@ -102,6 +102,19 @@ it('requires complete assistant coach interest before granting a free registrati
     $this->svc->register($this->t->id, $family, $input);
     expect($this->store->query('registrations', $this->t->id)->where('waived', true)->count())->toBe(1);
 });
+it('caps waivers across later submissions even when a previously waived child is selected again', function () {
+    [$family,$input] = soccerFamily($this, ['2023-01-01', '2021-01-01', '2018-01-01']);
+    soccerCoachInterest($input);
+    $children = $input['children'];
+    $input['children'] = array_slice($children, 0, 2);
+    $input['waived_player_ids'] = array_column($input['children'], 'player_id');
+    $this->svc->register($this->t->id, $family, $input);
+    $input['children'] = [$children[0], $children[2]];
+    $input['waived_player_ids'] = [$children[0]['player_id'], $children[2]['player_id']];
+    expect(fn () => $this->svc->register($this->t->id, $family, $input))->toThrow(ValidationException::class);
+    expect($this->store->query('registrations', $this->t->id)->where('waived', true)->count())->toBe(2);
+    expect($this->store->query('registrations', $this->t->id)->count())->toBe(2);
+});
 it('replays registration without creating duplicate children seats or invoices', function () {
     [$f,$in] = soccerFamily($this, ['2023-01-01']);
     $this->svc->register($this->t->id, $f, $in);
