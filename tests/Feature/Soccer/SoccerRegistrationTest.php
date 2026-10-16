@@ -126,6 +126,18 @@ it('automatically waives higher-cost jersey registrations first', function () {
     expect($this->store->query('registrations', $this->t->id)->where('waived', true)->pluck('player_id')->sort()->values()->all())
         ->toBe(collect(array_slice(array_column($input['children'], 'player_id'), 1))->sort()->values()->all());
 });
+it('keeps prior coach interest when a later paid child is registered', function () {
+    [$family,$input] = soccerFamily($this, ['2023-01-01', '2021-01-01']);
+    soccerCoachInterest($input);
+    $second = $input['children'][1];
+    $input['children'] = [$input['children'][0]];
+    $this->svc->register($this->t->id, $family, $input);
+    $input = ['season_id' => $this->season, 'volunteer' => false, 'children' => [$second]];
+    $this->svc->register($this->t->id, $family, $input);
+    $profile = $this->store->decrypt($this->store->query('families', $this->t->id)->where('id', $family)->value('profile'));
+    expect($profile['coaching_by_season']['spring-2027']['name'])->toBe('Example Mom');
+    expect($this->store->query('registrations', $this->t->id)->where('waived', true)->count())->toBe(1);
+});
 it('replays registration without creating duplicate children seats or invoices', function () {
     [$f,$in] = soccerFamily($this, ['2023-01-01']);
     $this->svc->register($this->t->id, $f, $in);

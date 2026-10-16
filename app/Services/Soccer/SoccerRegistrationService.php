@@ -75,15 +75,17 @@ class SoccerRegistrationService
                 ->sortByDesc(fn ($child) => (bool) $child['needs_jersey'])->take($remainingWaivers)
                 ->pluck('player_id')->all();
             $profile = $this->store->decrypt($family->profile);
-            $profile['coaching_by_season'][$season->season_key] = [
-                'volunteer' => $volunteer,
-                'role' => $volunteer ? 'assistant' : null,
-                'parent' => $volunteer ? $input['coach_parent'] : null,
-                'name' => $volunteer ? trim($input['coach_name']) : null,
-                'teams' => $volunteer ? array_values(array_unique($input['coach_teams'])) : [],
-                'available_8_of_10' => $volunteer && $input['coach_available_8_of_10'],
-                'jersey_size' => $volunteer ? $input['coach_jersey_size'] : null,
-            ];
+            if ($volunteer || empty($profile['coaching_by_season'][$season->season_key]['volunteer'])) {
+                $profile['coaching_by_season'][$season->season_key] = [
+                    'volunteer' => $volunteer,
+                    'role' => $volunteer ? 'assistant' : null,
+                    'parent' => $volunteer ? $input['coach_parent'] : null,
+                    'name' => $volunteer ? trim($input['coach_name']) : null,
+                    'teams' => $volunteer ? array_values(array_unique($input['coach_teams'])) : [],
+                    'available_8_of_10' => $volunteer && $input['coach_available_8_of_10'],
+                    'jersey_size' => $volunteer ? $input['coach_jersey_size'] : null,
+                ];
+            }
             $profile['volunteer'] = $volunteer || ($profile['volunteer'] ?? false);
             if ($volunteer) {
                 $profile['coach_jersey_size'] = $input['coach_jersey_size'];
