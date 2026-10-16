@@ -199,6 +199,11 @@ coaches receive assigned-team backend access. Historical evidence is immutable,
 imports are replayable, and Spring 2027 stays closed behind season/provider
 readiness. Wren-only SMS provisioning uses an explicit tenant-ID allowlist;
 Settings collects encrypted operator details without activating an unapproved sender.
+The family portal checks Alumni emails before sending codes and can show age-based
+team guidance. Signed-in help keeps encrypted conversations and routes unknown
+questions to admin Messages. Parent-confirmed birthday corrections are audited;
+signed releases remain unchanged. Broader AI replies need a server-side key,
+which Wren admins may save encrypted in Settings.
 Follow `docs/operations/wren-soccer.md` for release, setup, and rollback.
 
 Evergrove `/book` has consultation briefs and a short business-hurdle form using

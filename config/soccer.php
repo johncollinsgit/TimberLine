@@ -8,6 +8,8 @@ return [
     'bridge_secret' => env('WREN_SOCCER_BRIDGE_SECRET'),
     'stripe_webhook_secret' => env('WREN_SOCCER_STRIPE_WEBHOOK_SECRET'),
     'sms_enabled' => (bool) env('WREN_SOCCER_SMS_ENABLED', false),
+    'help_ai_enabled' => (bool) env('WREN_SOCCER_HELP_AI_ENABLED', true),
+    'help_ai_model' => env('WREN_SOCCER_HELP_AI_MODEL', 'gpt-6-luna'),
     'sms_recipient' => '+16786441829',
     'venmo' => '@SarahCollins0503',
     'teams' => [

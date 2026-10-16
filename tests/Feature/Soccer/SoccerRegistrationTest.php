@@ -32,10 +32,30 @@ function soccerCap($test, array $caps): void
         $ts[$k] = [...$ts[$k], ...$v];
     }$test->store->query('seasons', $test->t->id)->where('id', $test->season)->update(['teams' => json_encode($ts)]);
 }
+function soccerCoachInterest(array &$input): void
+{
+    $input['volunteer'] = true;
+    $input['coach_jersey_size'] = 'Adult L';
+    $input['coach_parent'] = 'mother';
+    $input['coach_name'] = 'Example Mom';
+    $input['coach_teams'] = ['green-bears', 'blue-dragons'];
+    $input['coach_available_8_of_10'] = true;
+}
 it('uses birthday on season start at each age boundary', function () {
     foreach (['2024-03-01' => 'green-bears', '2023-03-01' => 'green-bears', '2022-03-01' => 'blue-dragons', '2020-03-01' => 'blue-dragons', '2019-03-01' => 'red-falcons', '2005-03-01' => 'red-falcons'] as $dob => $team) {
         expect($this->svc->teamFor($dob, '2027-03-01'))->toBe($team);
     }expect(fn () => $this->svc->teamFor('2024-03-02', '2027-03-01'))->toThrow(ValidationException::class);
+});
+it('requires a fresh matching release after a birthday correction', function () {
+    [$family,$input] = soccerFamily($this, ['2020-02-21']);
+    $player = $input['children'][0]['player_id'];
+    $old = $this->store->query('releases', $this->t->id)->where('player_id', $player)->first();
+    $this->store->query('releases', $this->t->id)->where('id', $old->id)->update(['answers' => $this->store->encrypt(['child1Birthday' => '2020-02-21'])]);
+    $this->store->query('players', $this->t->id)->where('id', $player)->update(['birthday' => '2019-02-21']);
+    expect(fn () => $this->svc->register($this->t->id, $family, $input))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class, 'current birthday');
+    $new = $this->store->insert('releases', $this->t->id, ['family_id' => $family, 'player_id' => $player, 'season_key' => 'spring-2027', 'source_key' => (string) \Illuminate\Support\Str::uuid(), 'form_version' => 'test', 'answers' => $this->store->encrypt(['child1Birthday' => '2019-02-21']), 'sha256' => str_repeat('b', 64), 'signed_at' => now()]);
+    $this->svc->register($this->t->id, $family, $input);
+    expect($this->store->query('registrations', $this->t->id)->where('player_id', $player)->value('release_id'))->toBe($new);
 });
 it('uses reserves for all siblings only after a strict public majority', function () {
     soccerCap($this, ['red-falcons' => ['public' => 0, 'reserved' => 1]]);
@@ -59,8 +79,7 @@ it('keeps remaining siblings together if reserves cannot fit them all', function
 });
 it('charges 30 or 50 and waives two children including jerseys', function () {
     [$f,$in] = soccerFamily($this, ['2023-01-01', '2021-01-01', '2018-01-01']);
-    $in['volunteer'] = true;
-    $in['coach_jersey_size'] = 'Adult L';
+    soccerCoachInterest($in);
     $in['waived_player_ids'] = array_column(array_slice($in['children'], 0, 2), 'player_id');
     foreach ($in['children'] as &$c) {
         $c['needs_jersey'] = true;
@@ -69,6 +88,19 @@ it('charges 30 or 50 and waives two children including jerseys', function () {
     $this->svc->register($this->t->id, $f, $in);
     $r = $this->store->query('registrations', $this->t->id)->get();
     expect($r->where('waived', true))->toHaveCount(2)->and($r->sum('amount_cents'))->toBe(5000);
+    $profile = $this->store->decrypt($this->store->query('families', $this->t->id)->where('id', $f)->value('profile'));
+    expect($profile['coaching_by_season']['spring-2027'])->toMatchArray(['role' => 'assistant', 'parent' => 'mother', 'name' => 'Example Mom', 'teams' => ['green-bears', 'blue-dragons'], 'available_8_of_10' => true]);
+});
+it('requires complete assistant coach interest before granting a free registration', function () {
+    [$family,$input] = soccerFamily($this, ['2023-01-01']);
+    $input['volunteer'] = true;
+    $input['coach_jersey_size'] = 'Adult L';
+    $input['waived_player_ids'] = [$input['children'][0]['player_id']];
+    expect(fn () => $this->svc->register($this->t->id, $family, $input))->toThrow(ValidationException::class);
+    expect($this->store->query('registrations', $this->t->id)->count())->toBe(0);
+    soccerCoachInterest($input);
+    $this->svc->register($this->t->id, $family, $input);
+    expect($this->store->query('registrations', $this->t->id)->where('waived', true)->count())->toBe(1);
 });
 it('replays registration without creating duplicate children seats or invoices', function () {
     [$f,$in] = soccerFamily($this, ['2023-01-01']);
@@ -179,8 +211,7 @@ it('keeps player registered after a full manual refund and rejects excess refund
 });
 it('confirms waived siblings immediately and holds only the unpaid child', function () {
     [$family,$input] = soccerFamily($this, ['2023-01-01', '2021-01-01', '2018-01-01']);
-    $input['volunteer'] = true;
-    $input['coach_jersey_size'] = 'Adult L';
+    soccerCoachInterest($input);
     $input['waived_player_ids'] = array_column(array_slice($input['children'], 0, 2), 'player_id');
     $this->svc->register($this->t->id, $family, $input);
     expect($this->store->query('registrations', $this->t->id)->where('status', 'registered')->count())->toBe(2);

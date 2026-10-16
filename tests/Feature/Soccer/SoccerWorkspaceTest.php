@@ -5,6 +5,7 @@ use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
 use App\Models\TenantModuleState;
 use App\Models\User;
+use App\Services\Soccer\SoccerFamilyHelpService;
 use App\Services\Soccer\SoccerFamilyService;
 use App\Services\Soccer\SoccerStore;
 use Illuminate\Support\Facades\Http;
@@ -66,6 +67,72 @@ it('checks alumni emails before sending codes and keeps new families on their ow
     expect(fn () => $service->verify($this->tenant->id, 'unknown@example.com', $code, 'existing'))
         ->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class, 'could not find a previous Wren family');
     expect($this->store->query('families', $this->tenant->id)->count())->toBe(1);
+});
+it('answers family team questions and audits confirmed birthday corrections without changing signed releases', function () {
+    $this->store->query('seasons', $this->tenant->id)->where('id', $this->season)->update(['starts_on' => '2027-03-15', 'age_as_of' => '2027-03-15']);
+    $familyId = $this->store->insert('families', $this->tenant->id, ['email' => 'parent@example.com', 'profile' => $this->store->encrypt([])]);
+    $playerId = $this->store->insert('players', $this->tenant->id, ['family_id' => $familyId, 'name' => 'Selah Example', 'birthday' => '2020-02-21', 'profile' => $this->store->encrypt([])]);
+    $releaseId = $this->store->insert('releases', $this->tenant->id, ['family_id' => $familyId, 'player_id' => $playerId, 'season_key' => 'fall-2026', 'source_key' => 'test-release', 'form_version' => 'test', 'answers' => $this->store->encrypt(['child1Birthday' => '2020-02-21']), 'sha256' => str_repeat('a', 64), 'signed_at' => now()]);
+    $family = $this->store->row('families', $this->tenant->id, $familyId);
+    $help = app(SoccerFamilyHelpService::class);
+
+    expect($help->ask($this->tenant->id, $family, 'Which team is my child on?')['answer'])->toContain('Blue Dragons');
+    expect($help->ask($this->tenant->id, $family, 'My kid’s age is wrong')['action'])->toBe('correct_birthday');
+    $help->correctBirthday($this->tenant->id, $family, $playerId, '2019-02-21');
+
+    expect($this->store->row('players', $this->tenant->id, $playerId)->birthday)->toBe('2019-02-21');
+    expect($this->store->decrypt($this->store->row('releases', $this->tenant->id, $releaseId)->answers)['child1Birthday'])->toBe('2020-02-21');
+    expect($help->ask($this->tenant->id, $family, 'Which team is my child on?')['answer'])->toContain('Red Falcons');
+    expect($this->store->query('events', $this->tenant->id)->where('action', 'player_birthdate_corrected')->count())->toBe(1);
+});
+it('saves unanswered family conversations for Wren and lets admins review them', function () {
+    config()->set('services.openai.api_key', '');
+    $familyId = $this->store->insert('families', $this->tenant->id, ['email' => 'parent@example.com', 'profile' => $this->store->encrypt([])]);
+    $family = $this->store->row('families', $this->tenant->id, $familyId);
+    $help = app(SoccerFamilyHelpService::class);
+    $help->ask($this->tenant->id, $family, 'How much is registration?');
+    $answer = $help->ask($this->tenant->id, $family, 'Will there be a tournament?');
+
+    expect($answer['needs_review'])->toBeTrue();
+    expect($answer['messages'])->toHaveCount(2);
+    $question = $this->store->query('events', $this->tenant->id)->where('action', 'family_help_unanswered')->sole();
+    expect($this->store->decrypt($question->data)['transcript'])->toHaveCount(2);
+    $this->actingAs($this->admin)->get('/soccer/messages?tenant=wren-family-soccer')->assertOk()->assertSeeText('Will there be a tournament?')->assertSeeText('Mark reviewed');
+    $this->actingAs($this->admin)->post('/soccer/actions/help-reviewed?tenant=wren-family-soccer', ['event_id' => $question->id])->assertRedirect();
+    $this->actingAs($this->admin)->get('/soccer/messages?tenant=wren-family-soccer')->assertOk()->assertDontSeeText('Mark reviewed');
+});
+it('uses a structured AI answer when configured and keeps the provider away from birthday edits', function () {
+    config()->set('services.openai.api_key', 'test-key');
+    config()->set('soccer.help_ai_enabled', true);
+    Http::fake(['api.openai.com/v1/responses' => Http::response(['status' => 'completed', 'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => json_encode(['can_answer' => true, 'answer' => 'Ask Wren about tournament plans.'])]]]]])]);
+    $familyId = $this->store->insert('families', $this->tenant->id, ['email' => 'parent@example.com', 'profile' => $this->store->encrypt([])]);
+    $family = $this->store->row('families', $this->tenant->id, $familyId);
+    $help = app(SoccerFamilyHelpService::class);
+    expect($help->ask($this->tenant->id, $family, 'Is there a tournament this season?')['answer'])->toBe('Ask Wren about tournament plans.');
+    expect($help->ask($this->tenant->id, $family, 'My child’s birthday is wrong')['action'])->toBe('correct_birthday');
+    Http::assertSentCount(1);
+    Http::assertSent(fn ($request) => $request['store'] === false && ! str_contains(json_encode($request->data()), 'parent@example.com'));
+});
+it('keeps the Wren AI credential encrypted and limited to admins', function () {
+    $key = 'sk-test-'.str_repeat('x', 24);
+    $this->actingAs($this->admin)->post('/soccer/actions/help-ai-settings?tenant=wren-family-soccer', ['help_ai_key' => $key, 'enabled' => '1'])->assertRedirect();
+    expect($this->store->settings($this->tenant->id)['help_ai_key'])->toBe($key);
+    $this->actingAs($this->admin)->get('/soccer/settings?tenant=wren-family-soccer')->assertOk()->assertDontSee($key);
+    $coach = User::factory()->create(['role' => 'member', 'is_active' => true, 'email_verified_at' => now()]);
+    $coach->tenants()->attach($this->tenant, ['role' => 'member', 'membership_active' => true]);
+    $this->actingAs($coach)->post('/soccer/actions/help-ai-settings?tenant=wren-family-soccer', ['enabled' => '0'])->assertForbidden();
+});
+it('blocks chat birthday changes across families or after season placement', function () {
+    $familyId = $this->store->insert('families', $this->tenant->id, ['email' => 'first@example.com', 'profile' => $this->store->encrypt([])]);
+    $otherId = $this->store->insert('families', $this->tenant->id, ['email' => 'other@example.com', 'profile' => $this->store->encrypt([])]);
+    $playerId = $this->store->insert('players', $this->tenant->id, ['family_id' => $familyId, 'name' => 'First Child', 'birthday' => '2020-02-21', 'profile' => $this->store->encrypt([])]);
+    $help = app(SoccerFamilyHelpService::class);
+    expect(fn () => $help->correctBirthday($this->tenant->id, $this->store->row('families', $this->tenant->id, $otherId), $playerId, '2019-02-21'))
+        ->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+    $this->store->insert('registrations', $this->tenant->id, ['season_id' => $this->season, 'family_id' => $familyId, 'player_id' => $playerId, 'team_key' => 'blue-dragons', 'status' => 'waitlisted', 'needs_jersey' => false, 'amount_cents' => 3000, 'queued_at' => now()]);
+    expect(fn () => $help->correctBirthday($this->tenant->id, $this->store->row('families', $this->tenant->id, $familyId), $playerId, '2019-02-21'))
+        ->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class, 'review the birthday and team assignment together');
+    expect($this->store->row('players', $this->tenant->id, $playerId)->birthday)->toBe('2020-02-21');
 });
 it('rejects family access to another household player and release', function () {
     $a = $this->store->insert('families', $this->tenant->id, ['email' => 'a@example.com', 'profile' => $this->store->encrypt([])]);

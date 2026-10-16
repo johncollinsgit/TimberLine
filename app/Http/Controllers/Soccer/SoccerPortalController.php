@@ -31,6 +31,20 @@ class SoccerPortalController extends Controller
             return response()->json(['token' => $token]);
         }
         $f = $this->families->family($tenant, $r->header('X-Wren-Session'));
+        if ($action === 'help-history') {
+            return response()->json(['messages' => app(\App\Services\Soccer\SoccerFamilyHelpService::class)->history($tenant, $f->id)]);
+        }
+        if ($action === 'help') {
+            $d = $r->validate(['message' => 'required|string|min:2|max:1000']);
+
+            return response()->json(app(\App\Services\Soccer\SoccerFamilyHelpService::class)->ask($tenant, $f, $d['message']));
+        }
+        if ($action === 'birthday-correction') {
+            $d = $r->validate(['player_id' => 'required|uuid', 'birthday' => 'required|date_format:Y-m-d|before:today', 'confirmed' => 'required|accepted']);
+            app(\App\Services\Soccer\SoccerFamilyHelpService::class)->correctBirthday($tenant, $f, $d['player_id'], $d['birthday']);
+
+            return response()->json($this->families->profile($tenant, $this->store->row('families', $tenant, $f->id)));
+        }
         if ($action === 'logout') {
             $this->store->query('sessions', $tenant)->where('token_hash', hash('sha256', $r->header('X-Wren-Session')))->delete();
 
@@ -58,7 +72,7 @@ class SoccerPortalController extends Controller
             return response()->json($this->families->profile($tenant, $f));
         }
         if ($action === 'profile') {
-            $d = $r->validate(['parentName' => 'required|string|max:160', 'phone' => 'required|string|max:40', 'secondaryPhone' => 'nullable|string|max:40', 'address' => 'nullable|string|max:300', 'city' => 'nullable|string|max:160', 'state' => 'nullable|string|max:50', 'zip' => 'nullable|string|max:20', 'motherName' => 'nullable|string|max:160', 'motherPhone' => 'nullable|string|max:40', 'fatherName' => 'nullable|string|max:160', 'fatherPhone' => 'nullable|string|max:40', 'pickupPerson' => 'nullable|string|max:160', 'pickupPhone' => 'nullable|string|max:40', 'emergencyContact' => 'nullable|string|max:160', 'emergencyPhone' => 'nullable|string|max:40', 'sms_consent' => 'required|boolean']);
+            $d = $r->validate(['parentName' => 'required|string|max:160', 'phone' => 'required|string|max:40', 'spouseName' => 'nullable|string|max:160', 'spousePhone' => 'nullable|string|max:40', 'address' => 'nullable|string|max:300', 'city' => 'nullable|string|max:160', 'state' => 'nullable|string|max:50', 'zip' => 'nullable|string|max:20', 'motherName' => 'nullable|string|max:160', 'motherPhone' => 'nullable|string|max:40', 'fatherName' => 'nullable|string|max:160', 'fatherPhone' => 'nullable|string|max:40', 'pickupPerson' => 'nullable|string|max:160', 'emergencyContact' => 'nullable|string|max:160', 'emergencyPhone' => 'nullable|string|max:40', 'sms_consent' => 'required|boolean']);
             $this->families->saveProfile($tenant, $f, $d);
         } elseif ($action === 'player') {
             $d = $r->validate(['id' => 'nullable|uuid', 'name' => 'required|string|max:160', 'birthday' => 'required|date_format:Y-m-d|before:today', 'profile' => 'nullable|array', 'profile.*' => 'nullable|string|max:1000']);
@@ -69,7 +83,7 @@ class SoccerPortalController extends Controller
 
             return response()->json(['id' => $this->families->release($tenant, $f, $d)]);
         } elseif ($action === 'register') {
-            $d = $r->validate(['season_id' => 'required|uuid', 'volunteer' => 'required|boolean', 'coach_jersey_size' => 'nullable|string|max:30', 'waived_player_ids' => 'array|max:2', 'waived_player_ids.*' => 'uuid', 'children' => 'required|array|min:1|max:12', 'children.*.player_id' => 'required|uuid', 'children.*.needs_jersey' => 'required|boolean', 'children.*.jersey_size' => 'nullable|string|max:30']);
+            $d = $r->validate(['season_id' => 'required|uuid', 'volunteer' => 'required|boolean', 'coach_parent' => 'exclude_unless:volunteer,true|required|in:mother,father', 'coach_name' => 'exclude_unless:volunteer,true|required|string|max:160', 'coach_teams' => 'exclude_unless:volunteer,true|required|array|min:1|max:3', 'coach_teams.*' => 'in:green-bears,blue-dragons,red-falcons', 'coach_available_8_of_10' => 'exclude_unless:volunteer,true|required|accepted', 'coach_jersey_size' => 'nullable|string|max:30', 'waived_player_ids' => 'array|max:2', 'waived_player_ids.*' => 'uuid', 'children' => 'required|array|min:1|max:12', 'children.*.player_id' => 'required|uuid', 'children.*.needs_jersey' => 'required|boolean', 'children.*.jersey_size' => 'nullable|string|max:30']);
             app(SoccerRegistrationService::class)->register($tenant, $f->id, $d);
         } elseif ($action === 'checkout') {
             $d = $r->validate(['invoice_id' => 'required|uuid']);
