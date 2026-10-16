@@ -24,11 +24,11 @@ Evidence references:
 | 1 | Buy/configure number | Open: provider provisioning, exact purchase preview and number ownership. No purchase made. |
 | 2 | Port number | Open: eligibility, port lifecycle and status reconciliation. |
 | 3 | Make/receive supported calls | Open: telephony adapters, call lifecycle and physical devices. |
-| 4 | Hours/routing | Open: versioned rules, timezone/holiday and fallback tests. |
+| 4 | Hours/routing | Pure policy validation/routing covers version, timezone, holidays, DST, authorized available staff, dedupe and known-owned-number forwarding rejection. Live routing, queues and provider acceptance remain open. |
 | 5 | Voicemail | Open: storage, access, delivery and retention. |
 | 6 | Tenant-isolated call/message records | Existing message scope is preserved; new phone record isolation remains open. |
 | 7 | Accurate usage/billing | A proves existing AI reservation/replay boundaries. New call/SMS usage reconciliation remains open; no billing changes. |
-| 8 | Provider outage visibility | A proves uncertain AI allowance, no automatic retry. Phone/mail health and outage paths remain open. |
+| 8 | Provider outage visibility | A proves uncertain AI allowance, no automatic retry. Scripted phone practice labels provider outage unconfirmed; live phone/mail monitoring and outage recovery remain open. |
 | 9 | Emergency calling | Open: geography/configuration, behavior and disclosure. No real calling enabled. |
 | 10 | Authorized shared conversations | Existing messaging retained. New phone/mail shared grants and customer linkage remain open. |
 | 11 | Consent/recording/AI permissions | Explicit browser/native capture and existing AI opt-in retained. Phone recording/consent remains open. |
@@ -45,16 +45,16 @@ Evidence references:
 | 22 | Native phone handoff truth | Existing behavior retained. Dedicated service-versus-device messaging outcome acceptance remains open. |
 | 23 | Adversarial isolation | N/A/B cover navigation, records, native API, report print, memory and in-flight revocation. New mailbox/websocket/background phone/export surfaces remain open. |
 | 24 | Untrusted content boundaries | Existing provider has no tools; A proves minimal context/no secrets and B text escaping. New mail/web/caller tool adversarial tests remain open. |
-| 25 | Duplicate/cap/uncertain execution | A proves AI UUID reservation, caps, timeout uncertainty, exact note approval and compensating undo. New communications webhook/billing cases remain open. |
+| 25 | Duplicate/cap/uncertain execution | A proves AI UUID reservation, caps, timeout uncertainty, exact note approval and compensating undo. Pure call reduction tests cover duplicate/stale/conflicting callbacks without inferred charges. Durable communications webhook/billing cases remain open. |
 | 26 | Existing platform protections | No provider/accounting/billing/store changes. Broad regression results recorded separately; protected CI and MySQL gates remain required. |
 | 27 | Operational/native acceptance | B proves desktop/browser interaction; M builds. No Java/Android SDK, physical devices or Mac/iOS build evidence here. Device checks are deferred at the user's request. Load/provider failure, restore and monitored pilot remain open. |
 | 28 | Every accessible destination | N/B recursively cover canonical pages/settings and current native renderer inventory, with explicit unsupported states, current access/back/draft guards. Every GET/native screen coverage audit and physical acceptance remain open. |
 | 29 | Source-linked commitments | Open: promise classification, exact timezone/date, reviewed task save/reminders. |
 | 30 | Shared Needs attention | A/B now cover registered Customer Loop follow-ups with 50-item pages, 5-minute composing claims, assignment, timezone-aware snooze, resolve/reopen, encrypted idempotent receipts and stale-version rejection. Other source adapters, legacy-screen lease enforcement, non-admin grants and real MySQL concurrent transactions remain open. |
 | 31 | Cross-channel relationship search | Existing scoped navigation/record search retained. Cross-mail/message/document evidence and incomplete-coverage search UI remain open. |
-| 32 | Playbook/practice | Open: approved version publication, restricted practice sessions, no-side-effect scenarios and provider caps. |
+| 32 | Playbook/practice | Seven scripted local/testing-only fictional phone scenarios use a fixed public playbook, pure routing/reduction and zero provider dispatch. Tenant knowledge publication, LLM dialogue, caller sessions and capped live provider use remain open. |
 | 33 | Activity/approval center | A/B implement current scoped internal note preview, review, receipt and version-checked compensating archive. Other action types and uncertain external lifecycle views remain open. |
-| 34 | Human transfer/callback recovery | Open: supported live call transfer, permitted context, rejection/timeout and callback ownership. |
+| 34 | Human transfer/callback recovery | Scripted practice distinguishes declined transfers, unconfirmed outages and reviewed callback proposals. Supported live transfer, authorized context, durable callback ownership and follow-up remain open. |
 | 35 | Employee voice/photo closeout | Existing dictated notes/photos and pending-upload navigation protection retained. Reviewed multi-action closeout, offline recovery and new employee grants remain open. |
 
 ## Increment boundaries

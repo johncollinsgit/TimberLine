@@ -15,6 +15,10 @@
 - A separate default-off shared attention rail now coordinates Customer Loop
   follow-ups with leases, exact versions, assignment/snooze/resolution and
   encrypted UUID receipts. It does not dispatch drafts or replace legacy screens.
+- Phone foundations now include provider-neutral call events, a strict Twilio
+  signed-form normalizer, pure duplicate-safe call reduction, timezone/holiday
+  routing and a local/testing-only fictional practice view. No live phone ingress,
+  dispatch, number purchase or billing is implemented. See the phone rails doc.
 
 ## Ask Everbranch voice navigation (2026-10-16; local implementation)
 

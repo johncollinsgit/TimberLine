@@ -90,15 +90,16 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
                 Route::get('/class-scheduling/classes/{scheduledClass}', [EverbranchMobileClassSchedulingController::class, 'show'])->middleware('abilities:mobile:read')->whereNumber('scheduledClass')->name('workspace.class-scheduling.show');
                 Route::post('/class-scheduling/enrollments/{enrollment}/reminders', [EverbranchMobileClassSchedulingController::class, 'storeReminder'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->whereNumber('enrollment')->name('workspace.class-scheduling.reminders.store');
                 Route::prefix('ai-assistant')->name('workspace.ai-assistant.')->group(function (): void {
+                    Route::post('/phone/practice', [\App\Http\Controllers\AiPhonePracticeController::class, 'run'])->middleware(['abilities:mobile:read', 'throttle:10,1,ai-phone-practice:'])->name('phone.practice');
                     Route::get('/attention', [\App\Http\Controllers\AiAttentionController::class, 'index'])->middleware('abilities:mobile:read')->name('attention.index');
-                    Route::post('/attention/{item}', [\App\Http\Controllers\AiAttentionController::class, 'update'])->whereNumber('item')->middleware(['abilities:mobile:write', 'throttle:30,1'])->name('attention.update');
+                    Route::post('/attention/{item}', [\App\Http\Controllers\AiAttentionController::class, 'update'])->whereNumber('item')->middleware(['abilities:mobile:write', 'throttle:30,1,ai-attention:'])->name('attention.update');
                     Route::get('/', [AiAssistantController::class, 'session'])->middleware('abilities:mobile:read')->name('session');
-                    Route::post('/reports', [\App\Http\Controllers\AiReportController::class, 'store'])->middleware(['abilities:mobile:write', 'throttle:5,1'])->name('reports.store');
+                    Route::post('/reports', [\App\Http\Controllers\AiReportController::class, 'store'])->middleware(['abilities:mobile:write', 'throttle:5,1,ai-reports:'])->name('reports.store');
                     Route::get('/reports/{report}', [\App\Http\Controllers\AiReportController::class, 'show'])->middleware('abilities:mobile:read')->whereUuid('report')->name('reports.show');
-                    Route::post('/conversations', [AiAssistantController::class, 'start'])->middleware(['abilities:mobile:write', 'throttle:20,1'])->name('start');
+                    Route::post('/conversations', [AiAssistantController::class, 'start'])->middleware(['abilities:mobile:write', 'throttle:20,1,ai-start:'])->name('start');
                     Route::delete('/conversations/{conversation}', [AiAssistantController::class, 'deleteConversation'])->middleware('abilities:mobile:write')->whereNumber('conversation')->name('delete');
                     Route::post('/actions', [AiAssistantController::class, 'propose'])->middleware('abilities:mobile:write')->name('propose');
-                    Route::post('/conversations/{conversation}/messages', [AiAssistantController::class, 'ask'])->middleware(['abilities:mobile:write', 'throttle:20,1'])->whereNumber('conversation')->name('ask');
+                    Route::post('/conversations/{conversation}/messages', [AiAssistantController::class, 'ask'])->middleware(['abilities:mobile:write', 'throttle:20,1,ai-ask:'])->whereNumber('conversation')->name('ask');
                     Route::post('/memories', [AiAssistantController::class, 'memory'])->middleware('abilities:mobile:write')->name('memory');
                     Route::delete('/memories/{memory}', [AiAssistantController::class, 'forget'])->middleware('abilities:mobile:write')->whereNumber('memory')->name('forget');
                     Route::post('/actions/{action}/decision', [AiAssistantController::class, 'decide'])->middleware('abilities:mobile:write')->whereNumber('action')->name('decide');

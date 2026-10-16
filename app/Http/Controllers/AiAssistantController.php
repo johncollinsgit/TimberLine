@@ -69,6 +69,7 @@ class AiAssistantController extends Controller
         }
         unset($message);
         $payload = [
+            'phone_practice_available' => app(\App\Services\Voice\PhonePractice::class)->available($tenant, $user),
             'attention_available' => (bool) config('ai_branch.assistant_attention_enabled') && $context->enabled($tenant) && $context->permissions($tenant, $user)['followups'],
             'actions_available' => (bool) $actionsAvailable,
             'note_jobs' => $actionsAvailable ? app(AiBranchContext::class)->sources($tenant, $user) : [],

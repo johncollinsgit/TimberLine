@@ -21,7 +21,14 @@ let assistantRequests = 0
 let attentionReceipt = 20
 let attentionItem = { id: 41, ref: 'followup:41', title: 'Fictional customer follow-up', status: 'suggested', version: '1'.repeat(64), claim: null }
 const assistantResponse = (path, method, body = {}, conversation = false, params = new URLSearchParams()) => {
-  if (path.includes('/attention/') && method === 'POST') {
+  if (path.endsWith('/phone/practice')) {
+    return { version: 1, simulated: true, simulation_id: body.request_id, scenario: body.scenario,
+      outcome: body.scenario === 'provider_outage' ? 'unconfirmed' : 'callback_offer',
+      disclosure: 'Fictional practice only. No call, message, purchase, recording, provider request, task assignment or billable usage occurred.',
+      coverage: 'Scripted routing and call-state practice only.', steps: ['A fictional human declined the transfer. Offer voicemail or an agreed callback.'],
+      routing: { route: 'ring_group', policy_version: 1 }, call: { status: body.scenario === 'provider_outage' ? 'failed' : 'unanswered', requires_review: false, needs_follow_up: true },
+      knowledge: { name: 'Fictional Cedar Works public playbook', version: 1, fictional: true }, provider_capabilities: { live_dispatch: false } }
+  } else if (path.includes('/attention/') && method === 'POST') {
     attentionReceipt++
     attentionItem = { ...attentionItem, version: attentionReceipt.toString(16).padStart(64, '0') }
     if (body.operation === 'claim') attentionItem.claim = { user_id: 1, name: 'Fictional Alex', until: new Date(Date.now() + 300_000).toISOString() }
@@ -213,6 +220,7 @@ try {
   assistantData.reports_available = true
   assistantData.report_audience = [{ id: 1, name: 'Fictional Alex' }]
   assistantData.attention_available = true
+  assistantData.phone_practice_available = true
   await openMobile()
   await page.getByRole('button', { name: 'Ask about my business' }).click()
   await page.getByRole('status').filter({ hasText: 'Nothing is sent' }).waitFor()
@@ -268,6 +276,13 @@ try {
   await page.getByRole('button', { name: 'Reopen follow-up', exact: true }).click()
   await page.getByRole('status').filter({ hasText: 'Change recorded. Receipt' }).waitFor()
   checks.push('mobile attention claim resolution and reopen require explicit changes and retain a declined draft')
+  await page.getByRole('button', { name: 'Phone practice', exact: true }).click()
+  await page.getByRole('combobox', { name: 'Fictional phone scenario', exact: true }).selectOption('provider_outage')
+  await page.getByRole('button', { name: 'Run fictional practice', exact: true }).click()
+  await page.getByText('Practice outcome: unconfirmed', { exact: true }).waitFor()
+  await page.getByText('Fictional practice only. No call', { exact: false }).waitFor()
+  assert.equal(assistantRequests, 1)
+  checks.push('mobile phone practice labels provider uncertainty and causes no model dispatch')
   await page.getByRole('button', { name: 'Private memory', exact: true }).click()
   await page.getByRole('textbox', { name: 'Remember this' }).fill('Use brief fictional summaries')
   await page.keyboard.press('Tab')
@@ -308,6 +323,13 @@ try {
   checks.push('web attention shows the shared follow-up and a truthful snooze receipt')
   await page.setViewportSize({ width: 1360, height: 900 })
   await page.screenshot({ path: resolve(output, 'web-attention.png') })
+  await page.getByRole('button', { name: 'Phone practice', exact: true }).click()
+  await page.getByRole('combobox', { name: 'Fictional phone scenario', exact: true }).selectOption('transfer_declined')
+  await page.getByRole('button', { name: 'Run fictional practice', exact: true }).click()
+  await page.getByText('Practice outcome: callback offer', { exact: true }).waitFor()
+  await page.getByText('Call state (simulated): unanswered', { exact: true }).waitFor()
+  checks.push('web phone practice does not label a declined transfer as connected')
+  await page.screenshot({ path: resolve(output, 'web-phone-practice.png') })
   await page.getByRole('button', { name: 'Weekly report', exact: true }).click()
   await page.getByRole('button', { name: 'Save weekly snapshot', exact: true }).click()
   await page.getByText('Executive edition · 60 activity entries', { exact: true }).waitFor()

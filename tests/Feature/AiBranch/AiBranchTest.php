@@ -120,6 +120,15 @@ test('native assistant rollout revocation during dispatch suppresses the answer 
     Http::assertSentCount(1);
 });
 
+test('revoked email verification blocks a refreshed assistant authorization', function (): void {
+    [$tenant, $user] = aiBranchFixture('fictional-verification');
+    config()->set(['ai_branch.assistant_enabled' => true, 'ai_branch.assistant_tenant_ids' => [$tenant->id]]);
+    User::whereKey($user->id)->update(['email_verified_at' => null]);
+    expect($user->hasVerifiedEmail())->toBeTrue();
+    expect(fn () => app(\App\Services\AiBranch\AiAssistantAccess::class)->authorize($tenant, $user))->toThrow(HttpException::class);
+    Http::assertNothingSent();
+});
+
 test('native note preview approval and undo keep one receipt and reject another tenant job', function (): void {
     [$tenant, $user] = aiBranchFixture('fictional-note');
     [$other] = aiBranchFixture('fictional-other-note');

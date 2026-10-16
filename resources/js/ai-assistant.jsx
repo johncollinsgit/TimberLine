@@ -4,6 +4,7 @@ import './ai-assistant.css'
 import { formatReportCents } from './ai-report-money'
 import WeeklyReport from './ai-weekly-report'
 import SharedAttention from './ai-shared-attention'
+import PhonePractice from './ai-phone-practice'
 
 function Assistant({ host }) {
   const dialog = useRef(null)
@@ -150,9 +151,10 @@ function Assistant({ host }) {
     <dialog ref={dialog} className="everbranch-assistant-panel" aria-labelledby="everbranch-assistant-title" onCancel={event => { event.preventDefault(); close() }}>
       <header><div><small>{host.dataset.workspace}</small><h2 id="everbranch-assistant-title">Ask Everbranch</h2></div><button onClick={close} aria-label="Close assistant">×</button></header>
       <button className="assistant-link" onClick={() => { if (close()) document.dispatchEvent(new CustomEvent('app-command-palette:open', { detail: { voice: true, query: '' } })) }}>Find a page</button>
-      <nav aria-label="Assistant views">{[['chat', 'Conversation'], ['memory', 'Private memory'], ['activity', 'Activity and approvals'], ...(session?.financial_summary ? [['finance', 'Financial snapshot']] : []), ...(session?.reports_available ? [['reports', 'Weekly report']] : []), ...(session?.attention_available ? [['attention', 'Needs attention']] : [])].map(([key, label]) => <button key={key} aria-pressed={tab === key} onClick={() => { stopCapture(); stopSpeech(); setTab(key) }}>{label}</button>)}</nav>
+      <nav aria-label="Assistant views">{[['chat', 'Conversation'], ['memory', 'Private memory'], ['activity', 'Activity and approvals'], ...(session?.financial_summary ? [['finance', 'Financial snapshot']] : []), ...(session?.reports_available ? [['reports', 'Weekly report']] : []), ...(session?.attention_available ? [['attention', 'Needs attention']] : []), ...(session?.phone_practice_available ? [['phone', 'Phone practice']] : [])].map(([key, label]) => <button key={key} aria-pressed={tab === key} onClick={() => { stopCapture(); stopSpeech(); setTab(key) }}>{label}</button>)}</nav>
       <p role="status" aria-live="polite">{notice}</p><button disabled={busy} className="assistant-link" onClick={() => refresh()}>Refresh conversation</button>
       {session?.context?.page?.title && <p>Context: {session.context.page.title}</p>}
+      {session?.phone_practice_available && tab === 'phone' && <PhonePractice run={(scenario, uuid, signal) => api('/phone/practice', 'POST', { scenario, request_id: uuid }, signal)} />}
       {session?.attention_available && <div hidden={tab !== 'attention'}><SharedAttention active={tab === 'attention'} load={(view, after, signal) => api('/attention?' + new URLSearchParams({ view, after: String(after) }), 'GET', undefined, signal)} mutate={(item, operation, options, uuid) => api('/attention/' + item.id, 'POST', { operation, version: item.version, request_id: uuid, confirmed: true, ...options })} /></div>}
       {tab === 'reports' && session?.reports_available && <WeeklyReport api={api} audience={session.report_audience || []} printUrl={id => endpoint('/reports/' + encodeURIComponent(id)).href} />}
       {tab === 'chat' && <>

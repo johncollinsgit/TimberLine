@@ -200,6 +200,26 @@ Apple SFSpeechRecognitionTask
 (https://developer.apple.com/documentation/speech/sfspeechrecognitiontask),
 and Capacitor plugin events (https://capacitorjs.com/docs/plugins/android).
 
+## Phone event/routing foundations
+
+See `docs/architecture/everbranch-phone-rails.md`. A replaceable event-adapter
+contract, strict Twilio form signature/identity normalization, a pure call-state
+reducer, versioned timezone/holiday routing and a fake adapter are implemented.
+No live ingress, dispatch, owned-number persistence or billing path exists yet.
+Do not interpret adapter capability declarations as live provider readiness.
+
+`EVERBRANCH_AI_ASSISTANT_PHONE_PRACTICE_ENABLED` is independently default-off and
+local/testing-only, including when a production flag is accidentally enabled.
+Web/native practice explicitly runs one of seven fixed fictional scenarios,
+discloses scripted coverage and never contacts a provider. Normal assistant reads
+do not consume its namespaced rate limit. Report, attention, start and ask limits
+also have separate namespaces to avoid collisions with the shared API limiter.
+
+The latest focused run is 183 backend tests / 1,605 assertions; both builds,
+mobile lint / 94 tests and 31 paired browser scenarios pass. Twilio has not been
+connected; real calling, porting, voicemail, consent and device acceptance remain
+open. Email-verification revocation is rechecked after refreshing the user record.
+
 ## Verified checkpoint results (Windows, October 16)
 
 - Restoration: 12 package checksums, 20 transferred source hashes and both

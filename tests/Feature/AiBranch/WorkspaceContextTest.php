@@ -234,6 +234,35 @@ test('attention API rejects missing grants foreign sources and uncertain repeat 
     Http::assertNothingSent();
 });
 
+test('phone practice is fictional scoped and unavailable in production regardless of its flag', function (string $scenario) {
+    [$tenant, $user] = workspaceFixture('fictional-phone');
+    config()->set(['ai_branch.assistant_enabled' => true, 'ai_branch.assistant_tenant_ids' => [$tenant->id], 'ai_branch.assistant_phone_practice_enabled' => true]);
+    \Laravel\Sanctum\Sanctum::actingAs($user, ['mobile:read']);
+    $url = '/api/mobile/v1/workspaces/'.$tenant->slug.'/ai-assistant/phone/practice';
+    $this->postJson($url, ['scenario' => $scenario, 'request_id' => (string) \Illuminate\Support\Str::uuid()])->assertOk()->assertJsonPath('simulated', true)
+        ->assertJsonPath('call.tenant_id', $tenant->id)->assertJsonPath('call.simulated', true)->assertJsonPath('provider_capabilities.live_dispatch', false);
+    expect(\App\Models\TenantAiUsageEvent::count())->toBe(0)->and(\App\Models\AiBranchAction::count())->toBe(0);
+    $this->app->detectEnvironment(fn () => 'production');
+    try {
+        $this->postJson($url, ['scenario' => 'open_hours', 'request_id' => (string) \Illuminate\Support\Str::uuid()])->assertNotFound();
+    } finally {
+        $this->app->detectEnvironment(fn () => 'testing');
+    }
+    Http::assertNothingSent();
+})->with(\App\Services\Voice\PhonePractice::SCENARIOS);
+
+test('ordinary assistant reads do not consume the separate phone practice limiter', function () {
+    [$tenant, $user] = workspaceFixture('fictional-phone-limit');
+    config()->set(['ai_branch.assistant_enabled' => true, 'ai_branch.assistant_tenant_ids' => [$tenant->id], 'ai_branch.assistant_phone_practice_enabled' => true]);
+    \Laravel\Sanctum\Sanctum::actingAs($user, ['mobile:read']);
+    $base = '/api/mobile/v1/workspaces/'.$tenant->slug.'/ai-assistant';
+    foreach (range(1, 12) as $index) {
+        $this->getJson($base)->assertOk();
+    }
+    $this->postJson($base.'/phone/practice', ['scenario' => 'provider_outage', 'request_id' => (string) \Illuminate\Support\Str::uuid()])->assertOk()->assertJsonPath('outcome', 'unconfirmed');
+    Http::assertNothingSent();
+});
+
 test('page descriptors reject arbitrary details and other tenant records', function () {
     [$tenant, $user] = workspaceFixture();
     [$other] = workspaceFixture('other');
