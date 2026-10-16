@@ -112,6 +112,14 @@ first, counting children already waived in the season toward the two-child
 limit. A later submission cannot claim a third waiver by reselecting an
 earlier waived child. The family form shows the $30 registration fee, optional
 $20 jersey add-on, and resulting per-child total separately.
+The review page requests a read-only, family-scoped availability quote using
+current team capacity, earlier waitlist entries, sibling reserve rules, and
+remaining coach waivers. It displays available and waitlisted children and
+"Due Today" only for places that can be offered. Registration repeats allocation
+under the season lock and rejects a changed set of offered children or amount
+before inserting new admissions; the family must review the refreshed quote.
+When registration is closed, no payment is due or spot held. A quote is never a
+reservation, and the final invoice remains the payment authority.
 The help assistant answers common questions with local rules while
 an AI key is absent. To enable broader AI replies, a Wren admin can save an
 OpenAI API key in Season settings (stored encrypted), or an operator can set
