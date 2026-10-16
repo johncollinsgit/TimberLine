@@ -74,9 +74,14 @@ activation problem rather than a bad email. No raw provider response is displaye
   passed the sandbox PayPal host allowlist. This is link generation evidence;
   completed seller onboarding, revocation, capture/refund, webhooks and recurring
   billing are still unverified/unimplemented as described in the plan.
-- The owner estimated combined PayPal tenant-customer volume at USD 10,000/year
-  for the platform application. Submission/contact consent is a separate approval;
-  no platform application has been submitted by this change.
+- Submitted the PayPal platform application on 2026-10-16 after the owner
+  explicitly approved submission and contact consent. The form identified
+  Evergrove Software LLC, theeverbranch.com, United States, company type Platform,
+  tenant-owned seller payments, and Stripe as the existing card processor. The
+  owner estimated combined tenant-customer PayPal volume at USD 10,000/year; the
+  form offered the range Less than $10 Million. PayPal displayed: "Thank you"
+  and "We are reviewing your request. A PayPal representative will contact you
+  as soon as possible." Review remains pending; this is not partner approval.
 
 No migrations. Use normal GitHub test/build and Forge readiness release gates.
 Leave both rollout flags off until the pilot owner is named and provider setup
