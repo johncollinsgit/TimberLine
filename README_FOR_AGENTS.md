@@ -19,6 +19,10 @@
   immutable retry. Shop Pay unpaid-session diagnostics and remaining checkout
   work are documented in `docs/operations/shop-pay-wallet-readiness.md`.
 
+- Soccer Stripe Checkout explicitly names the connected soccer business as
+  `on_behalf_of` as well as the transfer destination, matching native storefront
+  settlement. No prices, platform fees or collection gates change.
+
 ## 2026-10-16 — Marketing Desk photos, Instagram history and planning AI
 
 - The desk uses the full workspace canvas, explains the daily workflow and shows

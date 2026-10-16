@@ -200,6 +200,25 @@ it('does not invoice waitlisted players', function () {
     $this->svc->register($this->t->id, $f, $in);
     expect($this->store->query('invoices', $this->t->id)->count())->toBe(0);
 });
+
+it('uses the soccer merchant for both settlement and payout with card wallets only', function () {
+    config()->set('services.stripe.secret', 'sk_test_fictional');
+    config()->set('commercial.billing_readiness.tenant_payments', ['enabled' => true, 'tenant_slugs' => [$this->t->slug], 'connect_webhooks_verified' => true]);
+    \App\Models\TenantPaymentAccount::create(['tenant_id' => $this->t->id, 'provider' => 'stripe_connect',
+        'provider_account_id' => 'acct_wrenfictional', 'status' => 'ready', 'charges_enabled' => true,
+        'payouts_enabled' => true, 'details_submitted' => true]);
+    [$family, $input] = soccerFamily($this, ['2020-02-21']);
+    $input['children'][0]['needs_jersey'] = true;
+    $input['children'][0]['jersey_size'] = 'Youth M';
+    $this->svc->register($this->t->id, $family, $input);
+    $invoice = $this->store->query('invoices', $this->t->id)->first();
+    \Illuminate\Support\Facades\Http::preventStrayRequests();
+    \Illuminate\Support\Facades\Http::fake(['https://api.stripe.com/v1/checkout/sessions' => \Illuminate\Support\Facades\Http::response(['id' => 'cs_fictional', 'url' => 'https://checkout.stripe.com/c/pay/fictional'])]);
+    expect(app(SoccerPaymentService::class)->checkout($this->t->id, $invoice->id))->toBe('https://checkout.stripe.com/c/pay/fictional');
+    \Illuminate\Support\Facades\Http::assertSent(fn ($request) => $request['payment_intent_data']['on_behalf_of'] === 'acct_wrenfictional'
+        && $request['payment_intent_data']['transfer_data']['destination'] === 'acct_wrenfictional'
+        && $request['payment_method_types'] === ['card'] && $request['line_items'][0]['price_data']['unit_amount'] === 5000);
+});
 it('blocks queue bypass and promotes an entire waiting family atomically', function () {
     soccerCap($this, ['green-bears' => ['public' => 0, 'reserved' => 0], 'blue-dragons' => ['public' => 0, 'reserved' => 0]]);
     [$f,$in] = soccerFamily($this, ['2023-01-01', '2021-01-01']);
