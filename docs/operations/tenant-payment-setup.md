@@ -58,6 +58,26 @@ activation problem rather than a bad email. No raw provider response is displaye
 
 ## Release and proof
 
+### Observed provider setup, 2026-10-16
+
+- The owner completed a separate Evergrove PayPal Business account. Its UI showed
+  the Evergrove business name, a linked bank account, and the online-checkout
+  activation confirmation. This is merchant-account setup, not platform approval.
+- Created PayPal's sandbox Platform Partner App with a separate automatically
+  generated fictional business account and sandbox BN code. Credentials are in
+  the git-ignored local environment, with owner-only permissions; none were
+  installed on production or added to source/chat. Keep production secrets in
+  the server secret environment when live approval is complete.
+- Genuine sandbox OAuth returned HTTP 200. The implemented referral service then
+  returned HTTP 201 from `POST /v2/customer/partner-referrals` for a fictional
+  tenant in a disposable local SQLite testing database. The returned signup link
+  passed the sandbox PayPal host allowlist. This is link generation evidence;
+  completed seller onboarding, revocation, capture/refund, webhooks and recurring
+  billing are still unverified/unimplemented as described in the plan.
+- The owner estimated combined PayPal tenant-customer volume at USD 10,000/year
+  for the platform application. Submission/contact consent is a separate approval;
+  no platform application has been submitted by this change.
+
 No migrations. Use normal GitHub test/build and Forge readiness release gates.
 Leave both rollout flags off until the pilot owner is named and provider setup
 is complete. Test genuine sandbox verification, embedded authentication, browser
