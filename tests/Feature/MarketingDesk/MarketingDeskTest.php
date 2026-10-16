@@ -27,7 +27,7 @@ beforeEach(function (): void {
     Http::preventStrayRequests();
     Queue::fake();
     config(['marketing_desk.enabled' => true, 'marketing_desk.meta.execution_enabled' => true, 'marketing_desk.delivery_enabled' => true, 'marketing_desk.media_hosts' => ['media.example.test'],
-        'bud.ai_enabled' => true, 'bud.ai_api_key' => 'test-only', 'marketing_desk.input_micros_per_million' => 1000000, 'marketing_desk.output_micros_per_million' => 1000000]);
+        'bud.ai_enabled' => true, 'bud.ai_api_key' => 'test-only', 'marketing_desk.ai_enabled' => true, 'marketing_desk.api_key' => 'test-only', 'marketing_desk.owner_input_micros_per_million' => 1000000, 'marketing_desk.owner_output_micros_per_million' => 1000000, 'marketing_desk.reply_input_micros_per_million' => 1000000, 'marketing_desk.reply_output_micros_per_million' => 1000000]);
 });
 
 function deskWorkspace(string $slug = 'pilot'): array
@@ -60,6 +60,98 @@ test('desk is default-off and tenant allowlist never expands when empty', functi
     [$tenant,$actor] = deskWorkspace();
     config(['marketing_desk.tenant_ids' => []]);
     $this->actingAs($actor)->get(route('marketing.desk.index', ['tenant' => $tenant->slug]))->assertForbidden();
+});
+
+test('Instagram refresh imports existing photos once while publishing remains off', function (): void {
+    [$tenant, $actor] = deskWorkspace();
+    $connection = deskConnection($tenant->id, 'instagram');
+    $connection->update(['scopes' => ['instagram_business_basic']]);
+    config(['marketing_desk.social_read_enabled' => true, 'marketing_desk.meta.execution_enabled' => false, 'marketing_desk.delivery_enabled' => false]);
+    Http::fake(['graph.instagram.com/*' => Http::response(['data' => [['id' => '12345678', 'caption' => 'An existing post', 'media_type' => 'IMAGE', 'media_url' => 'https://scontent.cdninstagram.com/photo.jpg', 'permalink' => 'https://www.instagram.com/p/real-post/', 'timestamp' => '2026-09-10T14:00:00+0000', 'like_count' => 42, 'comments_count' => 0]]])]);
+    for ($i = 0; $i < 2; $i++) {
+        $this->actingAs($actor)->postJson(route('marketing.desk.instagram.sync', ['id' => $connection->id, 'tenant' => $tenant->slug]))->assertOk()->assertJson(['synced' => 1]);
+    }
+    expect(MarketingSocialPost::forTenantId($tenant->id)->count())->toBe(1)->and(MarketingSocialPublication::forTenantId($tenant->id)->count())->toBe(1);
+    $post = MarketingSocialPost::first();
+    $publication = MarketingSocialPublication::first();
+    expect($post->status)->toBe('published')->and($post->approved_by)->toBeNull()->and($post->content['source'])->toBe('instagram_import')->and($publication->observed_at)->toBeNull()
+        ->and($publication->insights['likes'])->toBe(42)->and($publication->insights['comments'])->toBe(0)->and($publication->insights['reach'] ?? null)->toBeNull();
+    $this->actingAs($actor)->get(route('marketing.desk.index', ['tenant' => $tenant->slug, 'view' => 'insights', 'ranking' => 'likes']))->assertOk()->assertSee('An existing post')->assertSee('https://scontent.cdninstagram.com/photo.jpg', false)->assertSee('Lifetime total');
+    Http::assertSentCount(2);
+    Http::assertSent(fn ($request) => $request->method() === 'GET' && str_ends_with(parse_url($request->url(), PHP_URL_PATH), '/media'));
+    expect(fn () => app(\App\Services\Marketing\Desk\MetaMarketingClient::class)->connection($tenant->id, $connection->id, 'instagram', 'publish'))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+    Queue::assertNotPushed(\App\Jobs\MarketingDesk\PublishSocialPost::class);
+});
+
+test('Instagram refresh rejects foreign ownership and rolls back a revoked connection', function (): void {
+    [$tenant, $actor] = deskWorkspace();
+    [$other] = deskWorkspace('foreign-instagram');
+    $foreign = deskConnection($other->id, 'instagram');
+    $this->actingAs($actor)->postJson(route('marketing.desk.instagram.sync', ['id' => $foreign->id, 'tenant' => $tenant->slug]))->assertNotFound();
+    Http::assertNothingSent();
+    $connection = deskConnection($tenant->id, 'instagram');
+    $connection->update(['scopes' => ['instagram_business_basic']]);
+    Http::fake(function () use ($connection) {
+        $connection->update(['status' => 'disconnected']);
+
+        return Http::response(['data' => [['id' => '12345678', 'caption' => 'Must not persist', 'media_type' => 'IMAGE', 'timestamp' => '2026-09-10T14:00:00Z']]]);
+    });
+    $this->actingAs($actor)->postJson(route('marketing.desk.instagram.sync', ['id' => $connection->id, 'tenant' => $tenant->slug]))->assertNotFound();
+    expect(MarketingSocialPost::forTenantId($tenant->id)->count())->toBe(0);
+});
+
+test('Instagram refresh preserves accepted posts when provider data is invalid', function (): void {
+    [$tenant, $actor] = deskWorkspace();
+    $connection = deskConnection($tenant->id, 'instagram');
+    $connection->update(['scopes' => ['instagram_business_basic']]);
+    deskPost($tenant->id, $actor);
+    Http::fake(['graph.instagram.com/*' => Http::response(['data' => [['id' => '12345678', 'caption' => 'Invalid date', 'media_type' => 'IMAGE', 'timestamp' => '']]])]);
+    $this->actingAs($actor)->postJson(route('marketing.desk.instagram.sync', ['id' => $connection->id, 'tenant' => $tenant->slug]))->assertStatus(502);
+    expect(MarketingSocialPost::forTenantId($tenant->id)->count())->toBe(1)->and(MarketingSocialPublication::count())->toBe(0);
+});
+
+test('post comparison ranks actual zeros above missing metrics and respects format', function (): void {
+    [$tenant, $actor] = deskWorkspace();
+    $first = deskPost($tenant->id, $actor);
+    $second = deskPost($tenant->id, $actor);
+    $publications = collect([
+        new MarketingSocialPublication(['post_id' => $first->id, 'platform' => 'instagram', 'status' => 'published', 'insights' => ['likes' => 0]]),
+        new MarketingSocialPublication(['post_id' => $second->id, 'platform' => 'instagram', 'status' => 'published', 'insights' => ['likes' => null]]),
+    ]);
+    $service = app(\App\Services\Marketing\Desk\SocialResultsService::class);
+    $cards = $service->cards(collect([$first, $second]), $publications, 'likes', 'instagram', 'image');
+    expect($cards->first()['post']->id)->toBe($first->id)->and($cards->last()['score'])->toBeNull()->and($service->cards(collect([$first, $second]), $publications, 'likes', 'instagram', 'video'))->toBeEmpty();
+});
+
+test('an imported caption becomes a new unapproved draft without copying expiring media', function (): void {
+    [$tenant, $actor] = deskWorkspace();
+    $original = deskPost($tenant->id, $actor);
+    $original->update(['status' => 'published']);
+    $response = $this->actingAs($actor)->postJson(route('marketing.desk.posts.copy-caption', ['id' => $original->id, 'tenant' => $tenant->slug]))->assertOk();
+    $draft = MarketingSocialPost::findOrFail($response->json('id'));
+    expect($draft->id)->not->toBe($original->id)->and($draft->status)->toBe('draft')->and($draft->approved_by)->toBeNull()->and($draft->content['media_urls'])->toBe([])->and($original->fresh()->status)->toBe('published');
+    Http::assertNothingSent();
+});
+
+test('owner can plan without approving draft knowledge and without enabling legacy Bud', function (): void {
+    [$tenant, $actor] = deskWorkspace();
+    config(['bud.ai_enabled' => false, 'bud.ai_api_key' => '']);
+    TenantBudSetting::create(['tenant_id' => $tenant->id, 'status' => 'approved', 'ai_status' => 'approved', 'ai_monthly_budget_cents' => 5000]);
+    MarketingBrandKnowledgeVersion::create(['tenant_id' => $tenant->id, 'title' => 'Unapproved', 'audience' => 'general', 'content' => ['facts' => 'PRIVATE DRAFT CLAIM'], 'expires_at' => now()->addMonth()]);
+    Http::fake(['api.openai.com/*' => Http::response(['id' => 'resp-test', 'status' => 'completed', 'usage' => ['input_tokens' => 200, 'output_tokens' => 50], 'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => json_encode(['answer' => 'Here is a general weekly plan. Confirm brand details first.', 'handoff' => false, 'sources' => [], 'suggested_caption' => '', 'suggested_recipe' => ''])]]]]])]);
+    $this->actingAs($actor)->postJson(route('marketing.desk.chat', ['tenant' => $tenant->slug]), ['question' => 'Help me plan this week.', 'request_uuid' => (string) Str::uuid(), 'thread_uuid' => (string) Str::uuid()])->assertOk()->assertJson(['status' => 'completed']);
+    Http::assertSent(fn ($request) => $request['model'] === 'gpt-6.1-sol' && ! str_contains($request->body(), 'PRIVATE DRAFT CLAIM') && json_decode($request['input'][0]['content'], true)['knowledge'] === []);
+    expect(MarketingBrandKnowledgeVersion::first()->approved_at)->toBeNull()->and(MarketingSocialPost::count())->toBe(0);
+});
+
+test('PNG uploads become workspace-owned JPEG photos for Instagram', function (): void {
+    [$tenant, $actor] = deskWorkspace();
+    \Illuminate\Support\Facades\Storage::fake('public');
+    $photo = \Illuminate\Http\UploadedFile::fake()->image('photo.png', 60, 80);
+    $url = app(\App\Services\Marketing\Desk\MarketingMediaService::class)->store($tenant->id, $photo);
+    expect($url)->toEndWith('.jpg')->and(app(\App\Services\Marketing\Desk\MarketingMediaService::class)->ownedUrl($tenant->id, $url))->toBeTrue();
+    $files = \Illuminate\Support\Facades\Storage::disk('public')->allFiles('marketing-media/'.$tenant->id);
+    expect(getimagesize(\Illuminate\Support\Facades\Storage::disk('public')->path($files[0]))['mime'])->toBe('image/jpeg');
 });
 
 test('a marketing usage reservation cannot be replayed as a voice request', function (): void {

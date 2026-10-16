@@ -1,8 +1,8 @@
 <form class="md-form" enctype="multipart/form-data" method="POST" action="{{ $editing ? route('marketing.desk.posts.update',$editing->id) : route('marketing.desk.posts') }}">@csrf @if($editing)@method('PUT')<input type="hidden" name="revision" value="{{ $editing->revision }}">@endif
 <label>Caption<textarea name="caption" rows="4" required maxlength="2200">{{ $editing?->content['caption'] ?? '' }}</textarea></label>
 <label>Format<select name="media_type">@foreach(['text'=>'Facebook text or link','image'=>'Image','carousel'=>'Image carousel','video'=>'Uploaded video / Reel'] as $format=>$label)<option value="{{ $format }}" @selected(($editing?->content['media_type'] ?? 'text')===$format)>{{ $label }}</option>@endforeach</select></label>
-<label>Choose photos or video<input type="file" name="media_files[]" accept="image/jpeg,video/mp4,video/quicktime" multiple></label>
-<label>Existing media URLs, one per line<textarea name="media_urls" rows="3">{{ implode("\n",$editing?->content['media_urls'] ?? []) }}</textarea></label>
+<label>Choose photos or video<input type="file" name="media_files[]" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" multiple><small>JPEG, PNG or WebP photos. MP4 or MOV for video / Reels.</small></label>
+<details><summary>Use existing media links</summary><label>Media URLs, one per line<textarea name="media_urls" rows="3">{{ implode("\n",$editing?->content['media_urls'] ?? []) }}</textarea></label></details>
 <details><summary>Customize each platform</summary><label>Facebook caption<textarea name="facebook_caption" rows="3" maxlength="5000">{{ $editing?->content['facebook_caption'] ?? '' }}</textarea></label><label>Instagram caption<textarea name="instagram_caption" rows="3" maxlength="2200">{{ $editing?->content['instagram_caption'] ?? '' }}</textarea></label></details>
 <button class="eb-secondary-button">{{ $editing ? 'Save new draft revision' : 'Save draft' }}</button>
 </form>

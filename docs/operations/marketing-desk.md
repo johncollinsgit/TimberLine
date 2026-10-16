@@ -33,7 +33,9 @@ view, readable summaries, visible publication guidance, and a wider directory.
    knowledge and audiences. Approved versions are immutable; changes create a new
    draft. Pausing a reply policy remains a separate explicit action.
 5. For paid AI, retain existing Bud activation review and AI module access. Set
-   `EVERBRANCH_BUD_AI_ENABLED`, its provider key, and verified input/output rates.
+   `MARKETING_DESK_AI_ENABLED`, `MARKETING_DESK_OPENAI_API_KEY`, and verified
+   `MARKETING_DESK_OWNER_*` / `MARKETING_DESK_REPLY_*` input/output rates.
+   This gate is independent of legacy Bud and voice activation.
    The owner must additionally approve a marketing AI cap of at most 5,000 cents
    in Settings. The effective cap is the lower of that cap and the existing Bud
    workspace cap. This does not reset usage or activate a subscription.
@@ -56,11 +58,11 @@ cannot turn AI back on, approve campaigns, or edit knowledge.
 
 ## Content and provider contracts
 
-Draft creation and editing never publish. Uploaded JPEG/MP4/MOV media lives in the
+Draft creation and editing never publish. Uploaded JPEG/PNG/WebP/MP4/MOV media lives in the
 workspace's public `marketing-media/{tenant}` namespace; configure the storage disk
 for public HTTPS delivery and its normal storage link/CDN. Other external URLs
 require an exact approved `MARKETING_DESK_MEDIA_HOSTS` entry. Meta must be able to
-fetch the media. Images are JPEG for Instagram compatibility. Up to ten carousel
+fetch the media. PNG/WebP normalize to JPEG on a white background (GD required); images over 20 MB or 25 megapixels are rejected before decoding. JPEG output supports Instagram compatibility. Up to ten carousel
 images are supported; Stories, live broadcasts and generated video are excluded.
 
 Single and batch approval freeze each revision, content hash, account choices and publish time. A batch is atomic: any invalid or changed draft prevents every approval in that batch.
@@ -207,3 +209,47 @@ production evidence.
   also cover outline collapse, fitting the real canvas and error-to-field focus.
 - Changed PHP files pass Pint. The repository-wide check reports 604 existing
   formatting failures, all in files this change leaves untouched.
+
+## Existing Instagram posts and planning activation
+
+The Today view explains plan/create, review/approve, and learn/reply. It uses real
+workspace draft/imported photos; empty states contain no invented posts or results.
+The shell is full-width only on Marketing Desk routes, including the flagship.
+
+`MARKETING_DESK_SOCIAL_READ_ENABLED` permits explicit, authenticated GET-only media
+refresh and insights through owned connections while publishing/Messenger remain
+paused. `/marketing/desk/instagram/{id}/sync` reads at most fifty recent posts with
+`instagram_business_basic`; it never publishes, subscribes webhooks, or schedules
+automatic provider access. Reach/saves/shares require the recorded insights scope.
+Meta permissions remain an external gate; configure and authorize the correct
+professional account through the existing Instagram connector.
+
+Provider media are encrypted in existing social-post content. A connection row
+lock serializes imports; existing external IDs are reused. The transaction checks
+current user role, connection ownership, credential revision and account again.
+Invalid data, revoked connections or provider failures preserve accepted snapshots.
+Photos use only provider CDN HTTPS URLs without credentials; links use Instagram.
+URLs may expire; explicitly refresh posts to renew them. Existing publications
+created in Everbranch retain their content/approvals. Imported posts are already
+published provider history and cannot enter the outgoing scheduler.
+
+Best posts filters platform/format and ranks an explicitly chosen lifetime metric.
+Unavailable values sort after actual zero. Post basics and detailed insights show
+separate observation times; old posts have had longer to accumulate results.
+Copying a caption creates an unapproved text draft and asks for a new photo,
+without copying an expiring provider URL or any publication approval.
+
+Marketing Bud can do general owner planning with no knowledge selected. Unapproved
+knowledge never enters prompts; business claims still need an approved version.
+Customer policies and delivery flags remain separate. The owner model stays
+`gpt-6.1-sol`, routine replies `gpt-6-luna`; verified standard rates on 2026-10-16
+were respectively $2/$10 and $0.10/$0.50 per million input/output tokens. Sources:
+https://developers.openai.com/api/docs/models/gpt-6.1-sol and
+https://developers.openai.com/api/docs/models/gpt-6-luna . Set rates as USD micros
+per million tokens (2000000/10000000 and 100000/500000). Provider model availability
+must be checked for the installed credential. No subscription is activated here.
+
+Production activation needs an audited owner-approved tenant Bud setting and
+marketing budget. Preserve recorded usage and the current billing period; do not
+use the legacy review helper to reset usage. Never copy credentials into source,
+logs or browser payloads. Retain the global legacy Bud/voice flags unchanged.

@@ -6,7 +6,8 @@
 
 @php
   $prefs = is_array(auth()->user()?->ui_preferences ?? null) ? auth()->user()->ui_preferences : [];
-  $wideLayout = !empty($prefs['wide_layout']);
+  $marketingDeskSurface = request()->routeIs('marketing.desk.*');
+  $wideLayout = !empty($prefs['wide_layout']) || $marketingDeskSurface;
   $compactTables = !empty($prefs['compact_tables']);
 @endphp
 @php
@@ -125,7 +126,7 @@
   data-tenant-display="{{ ($isLandlordShell || $isNeutralTenantSurface) ? 'classic' : $tenantBrand['display_style'] }}"
   data-tenant-corners="{{ ($isLandlordShell || $isNeutralTenantSurface) ? 'soft' : $tenantBrand['corner_style'] }}"
   style="{{ ($isLandlordShell || $isNeutralTenantSurface) ? '' : $tenantThemeStyle }}"
-  class="min-h-screen antialiased mf-app-shell {{ $wideLayout ? 'mf-wide' : '' }} {{ $compactTables ? 'mf-compact' : '' }} {{ $isLandlordShell ? 'mf-landlord-shell' : '' }} {{ (! $isLandlordShell && ! $isNeutralTenantSurface) ? 'mf-tenant-themed' : '' }} {{ $isCollinsWorkspace ? 'mf-collins-full-canvas' : '' }}"
+  class="min-h-screen antialiased mf-app-shell {{ $wideLayout ? 'mf-wide' : '' }} {{ $marketingDeskSurface ? 'mf-marketing-desk' : '' }} {{ $compactTables ? 'mf-compact' : '' }} {{ $isLandlordShell ? 'mf-landlord-shell' : '' }} {{ (! $isLandlordShell && ! $isNeutralTenantSurface) ? 'mf-tenant-themed' : '' }} {{ $isCollinsWorkspace ? 'mf-collins-full-canvas' : '' }}"
 >
 
 @if($useShowcaseStyle)

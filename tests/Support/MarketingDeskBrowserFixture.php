@@ -31,13 +31,19 @@ TenantBudSetting::updateOrCreate(['tenant_id' => $tenant->id], ['status' => 'app
 MarketingBrandKnowledgeVersion::firstOrCreate(['tenant_id' => $tenant->id, 'title' => 'Our values and voice'], ['audience' => 'general', 'content' => ['values' => 'Time with family. Thoughtful craftsmanship. Honest answers.', 'voice' => 'Warm, useful, relaxed, and direct.', 'facts' => 'Fictional preview data only. We hand-pour small-batch candles.'], 'approved_by' => $user->id, 'approved_at' => now(), 'expires_at' => now()->addMonth()]);
 if (! MarketingSocialPost::where('tenant_id', $tenant->id)->exists()) {
     foreach ([['A small ritual for a quieter evening. What helps you slow down at the end of the day?', 'draft', null], ['Behind every candle is a little care. A look inside our pouring room this week.', 'scheduled', now()->addDay()->setTime(15, 0)], ['A little light for the moments that matter most.', 'published', now()->subDays(3)]] as [$caption,$status,$when]) {
-        $post = MarketingSocialPost::create(['tenant_id' => $tenant->id, 'created_by' => $user->id, 'revision' => 1, 'status' => $status, 'content' => ['caption' => $caption, 'media_type' => 'text', 'media_urls' => []], 'scheduled_at' => $when]);
+        $post = MarketingSocialPost::create(['tenant_id' => $tenant->id, 'created_by' => $user->id, 'revision' => 1, 'status' => $status, 'content' => ['caption' => $caption, 'media_type' => 'image', 'media_urls' => [url('/images/marketing/birthday-mountain-candle-hero.png')]], 'scheduled_at' => $when]);
         if ($status === 'published') {
             MarketingSocialPublication::create(['tenant_id' => $tenant->id, 'post_id' => $post->id, 'revision' => 1, 'connection_id' => 999, 'platform' => 'facebook', 'status' => 'published', 'external_id' => 'fictional', 'insights' => ['post_impressions_unique' => 1230, 'post_clicks' => 42], 'observed_at' => now()->subHour()]);
         }
     }
     $conversation = MessagingConversation::create(['tenant_id' => $tenant->id, 'channel' => 'email', 'email' => 'fictional-customer@example.test', 'subject' => 'A question about our next order', 'status' => 'open']);
     app(App\Services\Marketing\MessagingConversationService::class)->appendMessage($conversation, ['direction' => 'inbound', 'provider' => 'preview', 'provider_message_id' => 'fictional-inbound-1', 'body' => 'We loved our last order. Could someone help us choose scents for our shop this fall?', 'received_at' => now()->subMinutes(35), 'delivery_status' => 'received']);
+}
+// Repeatable photo fixtures are restricted by the disposable-database guard above.
+foreach (MarketingSocialPost::forTenantId($tenant->id)->get() as $post) {
+    if (empty($post->content['media_urls'])) {
+        $post->update(['content' => array_replace($post->content, ['media_type' => 'image', 'media_urls' => [url('/images/marketing/birthday-mountain-candle-hero.png')]])]);
+    }
 }
 config(['marketing_desk.enabled' => true, 'marketing_desk.tenant_ids' => [$tenant->id], 'automation_workflows.v2_enabled' => true, 'automation_workflows.v2_tenant_ids' => [$tenant->id]]);
 if (! App\Models\AutomationWorkflow::where('tenant_id', $tenant->id)->exists()) {
