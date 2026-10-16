@@ -253,3 +253,8 @@ Production activation needs an audited owner-approved tenant Bud setting and
 marketing budget. Preserve recorded usage and the current billing period; do not
 use the legacy review helper to reset usage. Never copy credentials into source,
 logs or browser payloads. Retain the global legacy Bud/voice flags unchanged.
+
+Public media delivery is part of release setup: Composer runs `storage:link` in
+every candidate release. Verify a saved photo returns HTTP 200 and image/jpeg;
+`/ready` alone does not exercise static uploaded files. See the Forge atomic
+release runbook.
