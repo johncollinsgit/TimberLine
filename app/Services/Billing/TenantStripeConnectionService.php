@@ -130,9 +130,12 @@ class TenantStripeConnectionService
 
     private function assertSuccess(Response $response): void
     {
-        $message = str_contains((string) $response->json('error.message'), 'signed up for Connect')
-            ? 'Everbranch must activate Stripe Connect before your business can connect. Your email address is not the problem.'
-            : 'Stripe could not complete payment setup. Please try again or contact Everbranch support.';
+        $providerMessage = (string) $response->json('error.message');
+        $message = match (true) {
+            str_contains($providerMessage, 'signed up for Connect') => 'Everbranch must activate Stripe Connect before your business can connect. Your email address is not the problem.',
+            str_contains($providerMessage, 'complete your platform profile') => 'Everbranch must complete its Stripe Connect platform profile before your business can connect. Your email address is not the problem.',
+            default => 'Stripe could not complete payment setup. Please try again or contact Everbranch support.',
+        };
         abort_unless($response->successful(), 502, $message);
     }
 }

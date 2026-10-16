@@ -2886,3 +2886,12 @@
 - Added tenant-scoped inbox, sent, draft, and trash views; search, compose, read/unread, stars, and admin controls for addresses and member access.
 - Cloudflare setup accepts a one-use zone-scoped token. It adds ownership proof and changes MX only after transport readiness and a conflict check. Other DNS providers can use the manual records.
 - No production mail server or customer domain is activated by this change.
+
+
+## 2026-10-16 - Payment setup pilot release
+
+- Enabled the shared Payments page for Wren only after protected deployment.
+  Stripe platform-profile failures now explain that Everbranch must complete
+  setup; changing the owner's email does not resolve that provider blocker.
+- No Shop Pay buyer button, PayPal checkout, registration opening or additional
+  tenant activation is included.

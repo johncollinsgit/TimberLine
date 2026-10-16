@@ -1,4 +1,4 @@
-## Stripe and PayPal payment setup (2026-10-16; feature branch only)
+## Stripe and PayPal payment setup (2026-10-16; deployed, Wren setup pilot)
 
 - Read `docs/architecture/stripe-paypal-payments-plan.md` and
   `docs/operations/tenant-payment-setup.md`. This first phase provides connection
@@ -13,6 +13,11 @@
 - PayPal never trusts browser merchant IDs or permission flags. A connection
   cannot open checkout, create a subscription, grant a module or reroute refunds.
   Signed revocation/payment events and genuine sandbox acceptance remain gates.
+
+- PR #410 deployed at `cb133ecf` through protected run `38904619886`. Live
+  Connect is blocked on the platform owner identity document; keep the saved
+  immutable retry. Shop Pay unpaid-session diagnostics and remaining checkout
+  work are documented in `docs/operations/shop-pay-wallet-readiness.md`.
 
 ## 2026-10-16 — Marketing Desk photos, Instagram history and planning AI
 
