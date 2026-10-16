@@ -1,5 +1,19 @@
 # SYSTEM SNAPSHOT
 
+## Stripe and PayPal connection setup (2026-10-16; feature branch only)
+
+- A shared default-off, exact-tenant-allowlisted Payments page supports Stripe
+  embedded onboarding/hosted fallback and PayPal Partner Referrals account setup.
+  Active verified owners/admins with an eligible canonical Branch can manage it.
+  PayPal status comes from server-owned tracking and partner grants, not callbacks.
+- Wren delegates Stripe setup to the shared immutable-request retry service;
+  changing an email cannot invalidate the idempotency payload. Platform Connect
+  activation errors are distinguished from email problems. No migration.
+- PayPal checkout, webhooks, refunds and subscription billing are still later
+  phases. No provider rollout, customer charge or entitlement change is activated.
+  See `docs/architecture/stripe-paypal-payments-plan.md` and
+  `docs/operations/tenant-payment-setup.md` before continuing.
+
 ## 2026-10-16 — Marketing Desk photos, Instagram history and planning AI
 
 - The desk uses the full workspace canvas, explains the daily workflow and shows

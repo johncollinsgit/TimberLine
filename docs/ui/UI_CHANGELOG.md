@@ -1,3 +1,13 @@
+## 2026-10-16 - Shared payment account setup (feature branch; disabled)
+
+- Added a gated owner/admin Payments page with cards/digital-wallet and PayPal
+  account sections. Known Stripe details are prefilled; embedded verification has
+  a hosted fallback. PayPal uses explicit sharing consent and existing-account
+  sign-in, with test mode and connection status shown separately from checkout.
+- Gated navigation covers standard, Website & sales and Wren settings. The page
+  clearly states that Everbranch billing is separate and PayPal checkout is not
+  active. No customer-facing checkout option is introduced in this phase.
+
 ## 2026-10-16 — Marketing Desk and workflow usability
 
 - Marketing Desk uses the shared dashboard/list/detail/form shapes and restrained

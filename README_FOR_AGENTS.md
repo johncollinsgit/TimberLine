@@ -1,3 +1,19 @@
+## Stripe and PayPal payment setup (2026-10-16; feature branch only)
+
+- Read `docs/architecture/stripe-paypal-payments-plan.md` and
+  `docs/operations/tenant-payment-setup.md`. This first phase provides connection
+  setup only; PayPal checkout and landlord subscription support remain unbuilt.
+- Preserve exact tenant allowlists, active owner/admin membership and canonical
+  Branch access. No platform-admin membership bypass. Sandbox/live credentials,
+  merchant identities and account-create reservations must stay separate.
+- Wren and the shared page use `TenantStripeConnectionService`. Never rotate a
+  pending request's key/payload to recover an ambiguous account-create response.
+  Provider identity and test/live mode bind the reservation; stop after 23 hours
+  for reconciliation before a new account could be created.
+- PayPal never trusts browser merchant IDs or permission flags. A connection
+  cannot open checkout, create a subscription, grant a module or reroute refunds.
+  Signed revocation/payment events and genuine sandbox acceptance remain gates.
+
 ## 2026-10-16 — Marketing Desk photos, Instagram history and planning AI
 
 - The desk uses the full workspace canvas, explains the daily workflow and shows

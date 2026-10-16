@@ -28,6 +28,7 @@
     "@shopify/polaris-icons": "^9.3.1",
     "@shopify/shopify_function": "~2.0.0",
     "@shopify/web-pixels-extension": "^2.18.0",
+    "@stripe/connect-js": "^3.4.6",
     "@tailwindcss/vite": "^4.1.11",
     "autoprefixer": "^10.4.20",
     "axios": "^1.7.4",
