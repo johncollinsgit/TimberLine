@@ -11,14 +11,15 @@
     <div class="eb-workflow-home">
         <header class="eb-workflow-home__header">
             <div>
-                <span class="eb-workflow-home__eyebrow">Workflow Automations</span>
                 <h1>Workflows</h1>
                 <p>Build, publish, and monitor the automations running this workspace.</p>
             </div>
+            <div class="md-actions">
+            @if(app(\App\Services\Marketing\Desk\MarketingDeskAccess::class)->available((int) request()->attributes->get('current_tenant_id')))<a class="eb-secondary-button" href="{{ route('marketing.desk.index',['view'=>'recipes']) }}">Marketing recipes</a>@endif
             <a href="{{ route('workflows.create') }}" wire:navigate class="eb-primary-button">
                 <span aria-hidden="true">＋</span>
                 New workflow
-            </a>
+            </a></div>
         </header>
 
         @unless($studioEnabled)
@@ -176,15 +177,17 @@
                             <span>
                                 <strong>{{ $workflow->name }}</strong>
                                 <small>{{ $triggerLabel }} → {{ $actionLabel }}</small>
+                                <small>{{ $workflowConnections->get((int) data_get($definition,'trigger.connection_id'))?->external_account_label ?? '' }} {{ $workflowConnections->get((int) ($firstAction['connection_id'] ?? 0))?->external_account_label ?? '' }}</small>
                             </span>
                         </span>
                         <span>
                             <span class="eb-workflow-status is-{{ $workflow->status }}">
                                 <i></i>
-                                {{ $workflow->status === 'active' ? 'On' : str($workflow->status)->headline() }}
+                                {{ $workflow->status === 'active' ? 'Live' : str($workflow->status)->headline() }}
                             </span>
                         </span>
                         <span>
+                            @if(in_array($lastRun?->status,['failed','partial'],true))<strong>Needs attention</strong><br>@endif
                             <strong class="eb-mobile-column-label">Last run</strong>
                             {{ $lastRun?->finished_at?->diffForHumans() ?? 'Not run yet' }}
                         </span>

@@ -99,6 +99,7 @@ export type WorkflowRecord = {
   status: "draft" | "active" | "paused" | string;
   draft_revision: number;
   published_version?: number | null;
+  has_unpublished_changes?: boolean;
 };
 
 export type WorkflowEndpoints = {

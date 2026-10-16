@@ -23,6 +23,11 @@ class BudWorkspaceContextService
             $summary['customers'] = MarketingProfile::query()->forTenantId($tenant->id)->count();
         }
 
-        return ['capabilities' => $this->capabilities->all(), 'workspace_summary' => $summary];
+        $capabilities = $this->capabilities->all();
+        if (! app(\App\Services\Marketing\Desk\MarketingDeskAccess::class)->available((int) $tenant->id)) {
+            unset($capabilities['marketing_desk']);
+        }
+
+        return ['capabilities' => $capabilities, 'workspace_summary' => $summary];
     }
 }

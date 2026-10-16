@@ -1,3 +1,20 @@
+## 2026-10-16 — Marketing Desk and Automation Studio (implemented, disabled)
+
+- Shared `/marketing/desk` adds Today, Bud, a social calendar, measured best posts,
+  a four-channel inbox, recipes, versioned approved knowledge and owner settings.
+- Marketing reuses canonical profiles, campaign delivery/consent, the tenant AI
+  ledger and Workflow Studio v2. New execution requires explicit tenant allowlists,
+  independent delivery/AI/Meta flags and recorded approvals. No production
+  activation, provider send, published post or billing change was performed.
+- Studio gains a wider directory, connection summaries, Overview/Build/Activity/
+  Settings, an outline, fit to view and clearer draft/live/test states. Existing
+  workflow versions and operational Asana/Calendar behavior remain compatible.
+- Eleven additive tables retain approvals, enrollment, cost-only usage references,
+  social attempts and exclusive account binding. Unknown external outcomes never
+  automatically resend. Profile merges cannot transfer marketing permission.
+- Read `docs/operations/marketing-desk.md` for setup, exact boundaries, verification
+  and rollback. Real Meta review/provider tests and merchant acceptance gate launch.
+
 ## Modern Forestry paid Launch Partner and AI intent (2026-10-16)
 
 - The user subsequently authorized a genuine **AI-only $99/month checkout** and one fictional provider diagnostic capped at $0.10, and asked Codex to install the key. A dedicated OpenAI project/service key is installed in the server secret environment (expires November 14, 2026); one diagnostic completed using 39 input/18 output tokens, with a conservative $0.000024 cost ceiling. This is not a paid Stripe subscription, production tenant opt-in or final provider invoice reconciliation.

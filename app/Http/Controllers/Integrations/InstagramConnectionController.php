@@ -80,10 +80,21 @@ class InstagramConnectionController extends Controller
             ->with('status', 'Instagram is connected to '.$tenant->name.'. Incoming DMs will appear in the response inbox once the Meta webhook is configured.');
     }
 
+    public function subscribe(Request $request, Tenant $tenant, InstagramConnector $connector, TenantModuleAccessResolver $modules): RedirectResponse
+    {
+        $this->authorizeTenantAdmin($request, $tenant);
+        abort_unless($modules->canAccess((int) $tenant->id, 'integrations'), 403);
+        $connections = IntegrationConnection::forTenantId($tenant->id)->where('provider', 'instagram')->where('status', 'connected')->get();
+        abort_unless($connections->count() === 1, 422, 'Choose a single connected Instagram account before subscribing.');
+        $connector->subscribe($connections->first());
+
+        return redirect()->route('integrations.instagram.index')->with('status', 'Instagram webhook subscription verified.');
+    }
+
     protected function authorizeTenantAdmin(Request $request, Tenant $tenant): void
     {
         $user = $request->user();
-        $membership = $user?->tenants()->whereKey((int) $tenant->id)->first();
+        $membership = $user?->tenants()->whereKey((int) $tenant->id)->wherePivot('membership_active', true)->first();
         $role = strtolower(trim((string) ($membership?->pivot->role ?? '')));
 
         abort_unless($user && in_array($role, ['admin', 'owner', 'tenant_owner'], true), 403);

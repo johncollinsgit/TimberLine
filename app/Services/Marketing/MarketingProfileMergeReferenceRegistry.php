@@ -79,12 +79,23 @@ class MarketingProfileMergeReferenceRegistry
         ];
     }
 
+    /** Immutable delivery evidence and grants never transfer permission to a merged identity. */
+    public function immutableReferences(): array
+    {
+        return [
+            'marketing_audience_permissions' => ['marketing_profile_id'],
+            'marketing_automation_enrollments' => ['marketing_profile_id'],
+            'marketing_delivery_attempts' => ['marketing_profile_id'],
+        ];
+    }
+
     /** @return array<int,string> */
     public function handledTables(): array
     {
         return array_values(array_unique(array_merge(
             array_keys($this->directReferences()),
             array_keys($this->conflictReferences()),
+            array_keys($this->immutableReferences()),
             ['candle_cash_transactions', 'candle_cash_balances', 'customer_birthday_profiles']
         )));
     }

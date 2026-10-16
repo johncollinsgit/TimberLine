@@ -309,5 +309,7 @@ Schedule::command('website:reconcile-payments')->everyFiveMinutes()->withoutOver
 Schedule::command('website:reconcile-shipments')->everyFiveMinutes()->withoutOverlapping(10)->runInBackground();
 Schedule::command('website:dispatch-order-notifications')->everyMinute()->withoutOverlapping(10)->runInBackground();
 
+\Illuminate\Support\Facades\Schedule::command('marketing:dispatch-desk')->everyMinute()->withoutOverlapping();
+
 // Retention also applies while the paid AI runtime is disabled.
 Schedule::command('ai-branch:prune --apply')->dailyAt('03:40')->withoutOverlapping(20);
