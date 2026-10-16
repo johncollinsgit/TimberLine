@@ -190,6 +190,7 @@ test('add-on checkout preserves the active plan and other separately billed add-
         'plan_key' => 'growth',
         'operating_mode' => 'shopify',
         'source' => 'stripe_fulfillment',
+        'metadata' => ['ai_branch' => ['timezone' => 'America/New_York'], 'launch_partner_enrollment' => ['status' => 'pending'], 'ai_branch_purchase' => ['request_id' => 'retain-checkout-evidence']],
     ]);
     TenantAccessAddon::query()->create([
         'tenant_id' => (int) $tenant->id,
@@ -232,6 +233,9 @@ test('add-on checkout preserves the active plan and other separately billed add-
     ], $completed)->assertOk();
 
     expect((string) TenantAccessProfile::query()->where('tenant_id', (int) $tenant->id)->value('plan_key'))->toBe('growth')
+        ->and(data_get(TenantAccessProfile::query()->where('tenant_id', $tenant->id)->first()->metadata, 'ai_branch.timezone'))->toBe('America/New_York')
+        ->and(data_get(TenantAccessProfile::query()->where('tenant_id', $tenant->id)->first()->metadata, 'launch_partner_enrollment.status'))->toBe('pending')
+        ->and(data_get(TenantAccessProfile::query()->where('tenant_id', $tenant->id)->first()->metadata, 'ai_branch_purchase.request_id'))->toBe('retain-checkout-evidence')
         ->and(TenantAccessAddon::query()->where('tenant_id', (int) $tenant->id)->where('enabled', true)->pluck('addon_key')->sort()->values()->all())
         ->toBe(['order_calendar', 'sms']);
 

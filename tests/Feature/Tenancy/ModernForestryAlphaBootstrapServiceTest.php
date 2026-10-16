@@ -3,9 +3,9 @@
 require_once dirname(__DIR__).'/ShopifyEmbeddedTestHelpers.php';
 
 use App\Models\Tenant;
-use App\Models\TenantMarketingSetting;
 use App\Models\TenantDiscoveryPage;
 use App\Models\TenantDiscoveryProfile;
+use App\Models\TenantMarketingSetting;
 use App\Models\TenantModuleEntitlement;
 use App\Models\TenantModuleState;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
@@ -96,3 +96,26 @@ test('modern forestry alpha bootstrap reenables messaging, sendgrid, and twilio 
         ->and($aiModule['has_access'])->toBeTrue()
         ->and($aiModule['ui_state'])->toBe('active');
 });
+
+test('modern forestry alpha bootstrap does not grant the paid AI Branch for free', function () {
+    $tenant = Tenant::create(['name' => 'Modern Forestry', 'slug' => 'modern-forestry']);
+    configureEmbeddedRetailStore($tenant->id);
+    app(ModernForestryAlphaBootstrapService::class)->ensureForTenant($tenant->id, 'retail', force: true);
+    expect(TenantModuleEntitlement::where('tenant_id', $tenant->id)->where('module_key', 'ai_branch')->exists())->toBeFalse();
+    expect(TenantModuleEntitlement::where('tenant_id', $tenant->id)->where('module_key', 'ai')->value('enabled_status'))->toBe('enabled');
+    expect(TenantModuleEntitlement::where('tenant_id', $tenant->id)->where('module_key', 'rewards')->value('enabled_status'))->toBe('enabled');
+});
+
+test('modern forestry alpha bootstrap preserves verified paid AI grants and revocations', function (string $enabled) {
+    $tenant = Tenant::create(['name' => 'Modern Forestry', 'slug' => 'modern-forestry']);
+    configureEmbeddedRetailStore($tenant->id);
+    $entitlement = TenantModuleEntitlement::create(['tenant_id' => $tenant->id, 'module_key' => 'ai_branch',
+        'enabled_status' => $enabled, 'billing_status' => 'add_on_paid', 'price_override_cents' => 9900,
+        'currency' => 'USD', 'entitlement_source' => 'stripe_fulfillment', 'price_source' => 'accepted_agreement',
+        'metadata' => ['provider_verified' => true],
+    ]);
+    $before = $entitlement->fresh()->toArray();
+    $this->travel(1)->minutes();
+    app(ModernForestryAlphaBootstrapService::class)->ensureForTenant($tenant->id, 'retail', force: true);
+    expect($entitlement->fresh()->toArray())->toBe($before);
+})->with(['enabled', 'disabled']);

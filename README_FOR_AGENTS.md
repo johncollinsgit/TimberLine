@@ -1,3 +1,25 @@
+## Modern Forestry paid Launch Partner and AI intent (2026-10-16)
+
+- The user subsequently authorized a genuine **AI-only $99/month checkout** and one fictional provider diagnostic capped at $0.10, and asked Codex to install the key. A dedicated OpenAI project/service key is installed in the server secret environment (expires November 14, 2026); one diagnostic completed using 39 input/18 output tokens, with a conservative $0.000024 cost ceiling. This is not a paid Stripe subscription, production tenant opt-in or final provider invoice reconciliation.
+- `ai-branch:prepare-purchase` is a preview-first, platform-operator-only Growth pilot preparation command with its own default-off flag and tenant allowlist. It keeps an idempotent reservation in existing profile metadata, verifies exact Stripe price/customer ownership, and returns a customer-present checkout. Public catalog purchasing stays disabled. Preserve profile metadata during add-on fulfillment and normalize Checkout/invoice statuses separately from subscription statuses.
+- The user selected Modern Forestry as the first AI Branch pilot and Launch Partner client. Read `docs/operations/modern-forestry-launch-partner-ai-rollout.md`. Production client record 314 / audit 620 records $89/month for six cycles, $149 thereafter, plus $99/month AI; billing and AI remain pending.
+- Do not treat the client-directory conversion or profile enrollment metadata as paid evidence. Repair/verify the existing Stripe customer association, preserve operational alpha grants, obtain exact accepted billing terms and owner provider cap, then release through GitHub/Forge. The $499 public setup fee is pending existing-client review, not an authorized charge.
+- Exclude paid `ai_branch` from alpha grant upserts while preserving legacy `ai`. Existing single-item promotional schedule code must be reviewed for permanent AI line items before any combined checkout. No client delivery, payment, public purchase activation or AI provider call was triggered by registration.
+
+## Workspace-aware AI Branch (2026-10-16)
+
+- Continue with `docs/architecture/everbranch-ai-workspace-context.md` and `docs/operations/everbranch-ai-runbook.md`. Preserve the two independent AI/context gates, explicit tenant allowlists, active owner/admin checks and current billing evidence.
+- Read-only attention briefings and chat share one account-locked usage ledger, spending cap and UUID protections. Never auto-retry or refund uncertain provider attempts. Source projections are scalar allowlists; limits are five/family and twenty overall. Never add raw tenant/customer/integration metadata to prompts.
+- Refresh context every request; version/module/role/memory changes and inaccessible source records invalidate history or in-flight delivery. Default timezone is UTC; validated workspace timezone changes calendar boundaries, never UTC billing periods. Preserve scoped deletion of incompatible chats.
+- Standard and Website & sales launchers accept server-resolved page identities only. Keep dedicated Shopify and soccer surfaces unchanged. Voice, phone, financial summaries and workflow agents remain later phases. Local fake acceptance does not authorize a live tenant or deployment.
+
+## Everbranch AI Branch development 2026-10-15
+
+- Restart with `docs/architecture/everbranch-ai-implementation.md` and `docs/operations/everbranch-ai-runbook.md`. Preserve included deterministic Bud and the existing Shopify AI Assistant.
+- The optional branch remains hidden and globally/tenant disabled. Pricing and proposed pilot allowances live only in the canonical catalog. Purchases are blocked until commercial approval; tenant settings cannot create or change subscriptions. Every AI call requires current active paid billing evidence and owner/admin membership.
+- Keep tenant/user scope, encrypted text, pre-dispatch usage reservation and exact action approval gates. Never auto-refund ambiguous provider failures or retry their UUID. Reconcile only using the preview-first operator command with provider evidence. Keep voice and phone transports unimplemented until their separate acceptance gates pass.
+
+
 ## Subscriptions Phase 2 provider evidence (2026-10-15; staged)
 
 - Read `docs/operations/everbranch-subscriptions-provider-reads.md` before setup.

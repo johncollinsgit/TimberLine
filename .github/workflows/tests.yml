@@ -162,7 +162,7 @@ jobs:
         run: php scripts/ci/lint-migrations.php --base="${{ steps.migration-base.outputs.sha }}"
 
       - name: Verify clean and partial migration paths
-        run: php ./vendor/bin/pest tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php tests/Integration/HighLevelFleetMySqlMigrationRecoveryTest.php tests/Integration/TenantMailMySqlMigrationRecoveryTest.php tests/Integration/FleetOperationsMySqlMigrationRecoveryTest.php tests/Integration/SoccerMySqlMigrationRecoveryTest.php tests/Integration/SoccerAllocationConcurrencyTest.php tests/Integration/ReviewedSchemaDriftRecoveryTest.php --compact
+        run: php ./vendor/bin/pest tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php tests/Integration/HighLevelFleetMySqlMigrationRecoveryTest.php tests/Integration/TenantMailMySqlMigrationRecoveryTest.php tests/Integration/FleetOperationsMySqlMigrationRecoveryTest.php tests/Integration/SoccerMySqlMigrationRecoveryTest.php tests/Integration/SoccerAllocationConcurrencyTest.php tests/Integration/ReviewedSchemaDriftRecoveryTest.php tests/Integration/AiBranchMySqlMigrationRecoveryTest.php --compact
 
       - name: Rehearse prior production schema upgrade
         run: scripts/ci/rehearse-migrations.sh "${{ steps.migration-base.outputs.sha }}"
@@ -173,6 +173,9 @@ jobs:
 
       - name: Verify committed MySQL schema baseline
         run: scripts/ci/verify-mysql-schema-baseline.sh
+
+      - name: Verify AI chat, briefing replay and approval concurrency on MySQL
+        run: php ./vendor/bin/pest tests/Integration/AiBranchMySqlConcurrencyTest.php --compact
 
       - name: Upload MySQL schema baseline candidate
         if: always() && hashFiles('database/schema/mysql-schema.sql') && hashFiles('database/schema/mysql-schema.sha256')

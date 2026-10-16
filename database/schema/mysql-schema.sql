@@ -407,6 +407,76 @@ CREATE TABLE `agreements` (
   CONSTRAINT `agreements_updated_by_foreign` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `ai_branch_accounts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ai_branch_accounts` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `enabled` tinyint(1) NOT NULL DEFAULT '0',
+  `budget_cents` int unsigned NOT NULL DEFAULT '0',
+  `approved_by` bigint unsigned DEFAULT NULL,
+  `approved_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `aib_account_tenant_uq` (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `ai_branch_actions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ai_branch_actions` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `client_uuid` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `kind` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `digest` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `expires_at` timestamp NOT NULL,
+  `decided_at` timestamp NULL DEFAULT NULL,
+  `result_id` bigint unsigned DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `aib_action_request_uq` (`tenant_id`,`client_uuid`),
+  KEY `aib_action_scope_idx` (`tenant_id`,`user_id`,`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `ai_branch_conversations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ai_branch_conversations` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `context_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `messages` longtext COLLATE utf8mb4_unicode_ci,
+  `pending_uuid` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `expires_at` timestamp NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `aib_conversation_scope_idx` (`tenant_id`,`user_id`,`expires_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `ai_branch_memories`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ai_branch_memories` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `body` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `expires_at` timestamp NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `aib_memory_scope_idx` (`tenant_id`,`user_id`,`expires_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `automation_workflow_action_receipts`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -7846,14 +7916,14 @@ CREATE TABLE `subscription_credential_revisions` (
   `tenant_id` bigint unsigned NOT NULL,
   `installation_id` bigint unsigned NOT NULL,
   `revision` int unsigned NOT NULL,
-  `status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending_verification',
-  `credentials` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
-  `credential_fingerprint` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `digest_key_id` char(16) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `grant_type` varchar(40) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `app_secret_reference` varchar(190) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `app_secret_revision` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `app_secret` longtext COLLATE utf8mb4_unicode_ci,
+  `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending_verification',
+  `credentials` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `credential_fingerprint` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `digest_key_id` char(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `grant_type` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `app_secret_reference` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `app_secret_revision` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `app_secret` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `app_secret_expires_at` timestamp(6) NULL DEFAULT NULL,
   `expires_at` timestamp(6) NULL DEFAULT NULL,
   `refresh_expires_at` timestamp(6) NULL DEFAULT NULL,
@@ -7904,24 +7974,24 @@ DROP TABLE IF EXISTS `subscription_installations`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `subscription_installations` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `public_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `public_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
   `shopify_store_id` bigint unsigned NOT NULL,
-  `shop_domain` varchar(253) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `shop_gid` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `app_gid` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `app_installation_gid` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `public_client_id` varchar(128) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `api_version` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '2026-10',
-  `status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending_verification',
+  `shop_domain` varchar(253) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `shop_gid` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `app_gid` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `app_installation_gid` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `public_client_id` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `api_version` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '2026-10',
+  `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending_verification',
   `active_credential_revision_id` bigint unsigned DEFAULT NULL,
   `scopes` json DEFAULT NULL,
-  `shop_timezone` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `shop_timezone` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `verified_at` timestamp(6) NULL DEFAULT NULL,
   `last_synced_at` timestamp(6) NULL DEFAULT NULL,
-  `read_pause_reason` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `evidence` longtext COLLATE utf8mb4_unicode_ci,
-  `sync_state` longtext COLLATE utf8mb4_unicode_ci,
+  `read_pause_reason` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `evidence` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `sync_state` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `created_at` timestamp(6) NULL DEFAULT NULL,
   `updated_at` timestamp(6) NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -8048,19 +8118,19 @@ CREATE TABLE `subscription_operations` (
   `installation_id` bigint unsigned NOT NULL,
   `credential_revision_id` bigint unsigned NOT NULL,
   `actor_user_id` bigint unsigned DEFAULT NULL,
-  `request_uuid` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `kind` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `request_fingerprint` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `digest_key_id` char(16) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'queued',
-  `request` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
-  `result` longtext COLLATE utf8mb4_unicode_ci,
+  `request_uuid` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `kind` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `request_fingerprint` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `digest_key_id` char(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'queued',
+  `request` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `result` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `attempts` int unsigned NOT NULL DEFAULT '0',
-  `lease_token` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `lease_token` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `lease_expires_at` timestamp(6) NULL DEFAULT NULL,
   `next_attempt_at` timestamp(6) NULL DEFAULT NULL,
   `completed_at` timestamp(6) NULL DEFAULT NULL,
-  `failure_code` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `failure_code` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` timestamp(6) NULL DEFAULT NULL,
   `updated_at` timestamp(6) NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -8154,17 +8224,17 @@ CREATE TABLE `subscription_provider_resources` (
   `tenant_id` bigint unsigned NOT NULL,
   `installation_id` bigint unsigned NOT NULL,
   `sync_operation_id` bigint unsigned NOT NULL,
-  `resource_type` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `provider_gid` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `parent_contract_gid` varchar(190) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `customer_gid` varchar(190) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `resource_type` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider_gid` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `parent_contract_gid` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `customer_gid` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `provider_revision` decimal(20,0) DEFAULT NULL,
   `provider_updated_at` timestamp(6) NULL DEFAULT NULL,
-  `status` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `completeness` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'complete',
+  `status` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `completeness` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'complete',
   `observed_at` timestamp(6) NOT NULL,
-  `stale_reason` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `snapshot` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `stale_reason` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `snapshot` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` timestamp(6) NULL DEFAULT NULL,
   `updated_at` timestamp(6) NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -8244,21 +8314,21 @@ CREATE TABLE `subscription_webhook_inboxes` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `tenant_id` bigint unsigned NOT NULL,
   `installation_id` bigint unsigned NOT NULL,
-  `delivery_id` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `event_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `topic` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `api_version` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `body_fingerprint` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `digest_key_id` char(16) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `raw_body` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
-  `headers` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
-  `verification` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
-  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
-  `quarantine_reason` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `conflict_evidence` longtext COLLATE utf8mb4_unicode_ci,
+  `delivery_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `event_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `topic` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `api_version` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `body_fingerprint` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `digest_key_id` char(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `raw_body` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `headers` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `verification` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `quarantine_reason` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `conflict_evidence` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `conflict_count` int unsigned NOT NULL DEFAULT '0',
   `attempts` int unsigned NOT NULL DEFAULT '0',
-  `lease_token` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `lease_token` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `lease_expires_at` timestamp(6) NULL DEFAULT NULL,
   `next_attempt_at` timestamp(6) NULL DEFAULT NULL,
   `completed_at` timestamp(6) NULL DEFAULT NULL,
@@ -11646,3 +11716,7 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (278,'2026_10_15_22
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (279,'2026_10_15_210000_create_website_order_notifications',24);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (280,'2026_10_15_230000_create_website_catalog_source_mappings',24);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (281,'2026_10_15_235000_create_subscription_provider_evidence',25);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (282,'2026_10_16_000000_create_ai_branch_accounts',26);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (283,'2026_10_16_000001_create_ai_branch_conversations',26);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (284,'2026_10_16_000002_create_ai_branch_memories',26);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (285,'2026_10_16_000003_create_ai_branch_actions',26);
