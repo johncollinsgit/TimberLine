@@ -198,6 +198,9 @@
                 <h2>Setup and review mode</h2>
                 <p>{{ data_get($payload, 'readiness.message') }}</p>
                 <p class="eg-subscriptions-muted">Local snapshots may be out of date. No provider-confirmed sync or payment retry is enabled.</p>
+                @if(!empty($workspaceSubscriptionsUrl))
+                    <p><a href="{{ $workspaceSubscriptionsUrl }}" target="_blank" rel="noopener" style="text-decoration: underline;">View verified contract history in Everbranch</a></p>
+                @endif
             </article>
             <nav class="eg-subscriptions-tabs" aria-label="Subscription sections">
                 @foreach($tabs as $tab)

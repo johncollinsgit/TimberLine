@@ -772,6 +772,9 @@ Route::get('/checkout/website/success', [WebsiteCommerceController::class, 'succ
 Route::get('/orders/track', [\App\Http\Controllers\WebsiteOrderTrackingController::class, 'show'])->middleware('throttle:60,1')->name('managed-website.store.tracking');
 Route::post('/webhooks/website-stripe', [WebsiteCommerceController::class, 'webhook'])->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:120,1')->name('managed-website.store.webhook');
 Route::post('/webhooks/website-easypost', [WebsiteCommerceController::class, 'shippingWebhook'])->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:120,1')->name('managed-website.store.shipping-webhook');
+Route::post('/webhooks/subscriptions/{publicId}', \App\Http\Controllers\SubscriptionProviderWebhookController::class)
+    ->whereUuid('publicId')->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:120,1')
+    ->name('subscriptions.provider.webhook');
 Route::post('/webhooks/bouncie', [FleetTrackingWebhookController::class, 'bouncie'])->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:120,1')->name('fleet-tracking.webhooks.bouncie');
 
 Route::prefix('signup/classes/{tenant:slug}')
@@ -786,6 +789,10 @@ Route::prefix('signup/classes/{tenant:slug}')
     });
 
 Route::middleware(['auth', 'verified'])->group(function () {
+
+    Route::middleware(['tenant.access', 'module:subscriptions'])
+        ->get('/subscriptions', [\App\Http\Controllers\SubscriptionWorkspaceController::class, 'index'])
+        ->name('subscriptions.workspace.index');
 
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
         ->get('/sales-channels', [SalesChannelController::class, 'index'])

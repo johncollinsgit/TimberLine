@@ -14,7 +14,7 @@ use App\Models\TenantPaymentAccount;
 class TenantPaymentsReadinessService
 {
     /** @return array{ready:bool, blockers:array<int,string>, account:?TenantPaymentAccount} */
-    public function readinessFor(Tenant $tenant, bool $requireConnectedAccount = true): array
+    public function readinessFor(Tenant $tenant, bool $requireConnectedAccount = true, bool $requireVerifiedLiveWebhooks = true): array
     {
         $blockers = [];
         $settings = (array) config('commercial.billing_readiness.tenant_payments', []);
@@ -32,7 +32,7 @@ class TenantPaymentsReadinessService
         if (! str_starts_with($secret, 'sk_test_') && ! str_starts_with($secret, 'sk_live_')) {
             $blockers[] = 'Stripe is not configured.';
         }
-        if (str_starts_with($secret, 'sk_live_') && ! (bool) ($settings['connect_webhooks_verified'] ?? false)) {
+        if ($requireVerifiedLiveWebhooks && str_starts_with($secret, 'sk_live_') && ! (bool) ($settings['connect_webhooks_verified'] ?? false)) {
             $blockers[] = 'Stripe Connect webhooks have not been verified.';
         }
         if ((bool) ($settings['automatic_tax_enabled'] ?? false) && ! (bool) ($settings['tax_decision_confirmed'] ?? false)) {
@@ -51,7 +51,9 @@ class TenantPaymentsReadinessService
 
     public function canStartOnboarding(Tenant $tenant): bool
     {
-        return $this->readinessFor($tenant, requireConnectedAccount: false)['ready'];
+        // An account must exist before a live payment/refund can verify webhooks.
+        // Keep collection gated separately by the full readiness check.
+        return $this->readinessFor($tenant, requireConnectedAccount: false, requireVerifiedLiveWebhooks: false)['ready'];
     }
 
     public function canCollectCustomerPayments(Tenant $tenant): bool

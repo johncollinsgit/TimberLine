@@ -103,6 +103,12 @@ class UnifiedAppNavigationService
         // Enabled branches are collected and rendered together near Settings.
         // Core work remains the first scanning destination in the sidebar.
         $branchChildren = [];
+        if ($tenantId !== null && Route::has('subscriptions.workspace.index')
+            && app(\App\Services\Subscriptions\SubscriptionAccessService::class)->canManage($tenantId, $user)) {
+            $branchChildren[] = ['key' => 'branch-subscriptions', 'icon' => 'arrow-path',
+                'href' => route('subscriptions.workspace.index', ['tenant' => $tenantId]), 'label' => 'Subscriptions',
+                'current' => $request->routeIs('subscriptions.workspace.*')];
+        }
         if ($emailEnabled && $tenantId !== null && Route::has('mail.index')) {
             $branchChildren[] = ['key' => 'branch-mail', 'icon' => 'envelope', 'href' => route('mail.index'), 'label' => 'Mail', 'current' => request()->routeIs('mail.*')];
         } elseif ($tenantId !== null && $isAdmin && Route::has('mail.setup')) {
@@ -363,6 +369,10 @@ class UnifiedAppNavigationService
         }
         if (app(\App\Services\AiBranch\AiBranchAccess::class)->visible($tenant, $user)) {
             $items[] = ['key' => 'ai-branch', 'icon' => 'sparkles', 'href' => app(\App\Services\AiBranch\AiWorkspacePage::class)->launcherUrl($request, $tenant), 'label' => 'AI Branch', 'current' => $request->routeIs('ai-branch.*')];
+        }
+        if (Route::has('subscriptions.workspace.index')
+            && app(\App\Services\Subscriptions\SubscriptionAccessService::class)->canManage((int) $tenant->id, $user)) {
+            $add('subscriptions', 'Subscriptions', 'subscriptions.workspace.index', 'arrow-path');
         }
         $add('account-help', 'Account Help', 'account-help.index', 'lifebuoy');
         $quickActions = array_map(fn (array $item): array => [

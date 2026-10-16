@@ -56,24 +56,36 @@ class SoccerRegistrationService
             }
             $players = $this->store->query('players', $tenant)->where('family_id', $familyId)->whereIn('id', $ids)->get()->keyBy('id');
             abort_unless($players->count() === count($ids), 403);
-            $waiverIds = $input['waived_player_ids'] ?? [];
-            if (count($waiverIds) > 2 || array_diff($waiverIds, $ids)) {
-                throw ValidationException::withMessages(['waived_player_ids' => 'Choose up to two selected children.']);
-            }
             $volunteer = (bool) ($input['volunteer'] ?? false);
-            if (! $volunteer && $waiverIds) {
-                throw ValidationException::withMessages(['volunteer' => 'The coaching checkbox is required for a waiver.']);
-            }
             if ($volunteer && empty($input['coach_jersey_size'])) {
                 throw ValidationException::withMessages(['coach_jersey_size' => 'Enter your coach jersey size.']);
             }
+            if ($volunteer && (! in_array($input['coach_parent'] ?? null, ['mother', 'father'], true)
+                || ! is_string($input['coach_name'] ?? null) || trim($input['coach_name']) === ''
+                || ! is_array($input['coach_teams'] ?? null) || ! $input['coach_teams']
+                || array_diff($input['coach_teams'], array_keys(config('soccer.teams')))
+                || ($input['coach_available_8_of_10'] ?? false) !== true)) {
+                throw ValidationException::withMessages(['volunteer' => 'Choose the coaching parent and teams, and confirm availability for 8 of 10 weeks.']);
+            }
             $existing = $this->store->query('registrations', $tenant)->where('season_id', $season->id)->where('family_id', $familyId)->get();
             $newIds = array_diff($ids, $existing->pluck('player_id')->all());
-            if ($existing->where('waived', true)->whereNotIn('player_id', $ids)->where('status', '!=', 'cancelled')->count() + count($waiverIds) > 2) {
-                throw ValidationException::withMessages(['waived_player_ids' => 'This household already used its two season waivers.']);
-            }
+            $seasonWaivers = $existing->where('waived', true)->where('status', '!=', 'cancelled')->pluck('player_id')->unique()->all();
+            $remainingWaivers = $volunteer ? max(0, 2 - count($seasonWaivers)) : 0;
+            $waiverIds = collect($selected)->filter(fn ($child) => in_array($child['player_id'], $newIds, true))
+                ->sortByDesc(fn ($child) => (bool) $child['needs_jersey'])->take($remainingWaivers)
+                ->pluck('player_id')->all();
             $profile = $this->store->decrypt($family->profile);
-            $profile['coaching_by_season'][$season->season_key] = ['volunteer' => $volunteer, 'jersey_size' => $volunteer ? $input['coach_jersey_size'] : null];
+            if ($volunteer || empty($profile['coaching_by_season'][$season->season_key]['volunteer'])) {
+                $profile['coaching_by_season'][$season->season_key] = [
+                    'volunteer' => $volunteer,
+                    'role' => $volunteer ? 'assistant' : null,
+                    'parent' => $volunteer ? $input['coach_parent'] : null,
+                    'name' => $volunteer ? trim($input['coach_name']) : null,
+                    'teams' => $volunteer ? array_values(array_unique($input['coach_teams'])) : [],
+                    'available_8_of_10' => $volunteer && $input['coach_available_8_of_10'],
+                    'jersey_size' => $volunteer ? $input['coach_jersey_size'] : null,
+                ];
+            }
             $profile['volunteer'] = $volunteer || ($profile['volunteer'] ?? false);
             if ($volunteer) {
                 $profile['coach_jersey_size'] = $input['coach_jersey_size'];
@@ -92,8 +104,12 @@ class SoccerRegistrationService
                 if ($jersey && empty($child['jersey_size'])) {
                     throw ValidationException::withMessages(['jersey_size' => 'Choose a size for each new jersey.']);
                 }
-                $release = $this->store->query('releases', $tenant)->where('player_id', $p->id)->where('family_id', $familyId)->where('season_key', $season->season_key)->whereNotNull('signed_at')->latest('signed_at')->first();
-                abort_unless($release, 422, 'Sign this season’s release for every selected player.');
+                $releases = $this->store->query('releases', $tenant)->where('player_id', $p->id)->where('family_id', $familyId)->where('season_key', $season->season_key)->whereNotNull('signed_at')->latest('signed_at')->get();
+                $datedReleases = $releases->filter(fn ($row) => ! empty($this->store->decrypt($row->answers)['child1Birthday']));
+                $release = $datedReleases->isNotEmpty()
+                    ? $datedReleases->first(fn ($row) => $this->store->decrypt($row->answers)['child1Birthday'] === $p->birthday)
+                    : $releases->first();
+                abort_unless($release, 422, 'Review and sign this season’s release with the current birthday for every selected player.');
                 $hasQueue = $this->store->query('registrations', $tenant)->where('season_id', $season->id)->where('team_key', $team)->where('status', 'waitlisted')->exists();
                 $seat = ! $hasQueue && $capacity[$team]['public_free'] > 0 ? 'public' : null;
                 if ($seat) {
@@ -174,7 +190,7 @@ class SoccerRegistrationService
             $this->store->query('registrations', $season->tenant_id)->where('id', $r->id)->update(['status' => $r->waived ? 'registered' : 'offered', 'offer_group' => $group, 'offer_expires_at' => $r->waived ? null : $expires, 'payment_status' => $r->waived ? 'waived' : 'unpaid', 'updated_at' => now()]);
         }
         $invoice = $this->store->insert('invoices', $season->tenant_id, ['season_id' => $season->id, 'family_id' => $family, 'offer_group' => $group, 'registration_ids' => json_encode($ids), 'amount_cents' => $amount, 'status' => $amount === 0 ? 'waived' : 'unpaid', 'expires_at' => $expires, 'paid_at' => $amount === 0 ? now() : null]);
-        $text = $amount === 0 ? 'Wren Soccer: your children have places; your registration fees are waived.' : 'Wren Soccer: places are reserved for your children. Pay $'.number_format($amount / 100, 2).' by '.$expires->timezone('America/New_York')->format('M j, g:i A T').'. Sign in: '.config('soccer.origin').'/spring';
+        $text = $amount === 0 ? 'Wren Soccer: your children have places; your registration fees are waived.' : 'Wren Soccer: places are reserved for your children. Pay $'.number_format($amount / 100, 2).' by '.$expires->timezone('America/New_York')->format('M j, g:i A T').': '.config('soccer.origin').'/spring?pay='.$invoice;
 
         $this->events->record($season->tenant_id, $season->id, $family, $action, ['summary' => $rows->count().' children offered places.', 'invoice_id' => $invoice], $actor, waitlist: $action !== 'initial_registration', familyText: $text);
 
@@ -323,7 +339,7 @@ class SoccerRegistrationService
                 } else {
                     foreach ([24, 2] as $hours) {
                         if ($expires->lte(now()->addHours($hours))) {
-                            $this->events->record($tenant, $seasonId, $i->family_id, 'payment_reminder', ['summary' => 'Payment deadline reminder.', 'invoice_id' => $i->id], key: 'reminder:'.$i->id.':'.$hours, familyText: 'Wren Soccer: pay your registration invoice before '.$expires->timezone('America/New_York')->format('M j, g:i A T').' to keep the reserved spots. '.config('soccer.origin').'/spring');
+                            $this->events->record($tenant, $seasonId, $i->family_id, 'payment_reminder', ['summary' => 'Payment deadline reminder.', 'invoice_id' => $i->id], key: 'reminder:'.$i->id.':'.$hours, familyText: 'Wren Soccer: pay your registration invoice before '.$expires->timezone('America/New_York')->format('M j, g:i A T').' to keep the reserved spots: '.config('soccer.origin').'/spring?pay='.$i->id);
                         }
                     }
                 }
