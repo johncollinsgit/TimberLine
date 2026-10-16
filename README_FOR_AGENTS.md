@@ -1,3 +1,19 @@
+## 2026-10-16 — Marketing Desk photos, Instagram history and planning AI
+
+- The desk uses the full workspace canvas, explains the daily workflow and shows
+  real draft/imported photos. Existing Instagram posts can be explicitly refreshed
+  (latest 50); photo cards compare lifetime metrics with missing values and
+  separate post-sync/insights freshness. No scheduled scrape or publication occurs.
+- Read-only social access has its own default-off gate. Account ownership and
+  credentials are rechecked after provider reads; repeated imports are serialized
+  and reuse existing publications. Reach/saves need separate insights permission.
+- Marketing Bud has independent provider activation and per-role model rates.
+  Owners can plan without approving draft brand claims; customer replies still
+  require approved knowledge/policies. The existing shared $50 cap and usage
+  reservations remain enforced. Legacy Bud/voice and AI Branch billing stay separate.
+- PNG/WebP uploads normalize to workspace-owned JPEGs. No schema changes.
+  See `docs/operations/marketing-desk.md` for setup and verification.
+
 ## Recharge customer/settings rollout preparation (2026-10-16)
 
 - Continue with `docs/operations/everbranch-recharge-rollout-preparation.md`.

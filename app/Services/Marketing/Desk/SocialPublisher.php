@@ -131,7 +131,7 @@ class SocialPublisher
         $client = app(MetaMarketingClient::class);
         $connection = $client->connection($tenantId, $publication->connection_id, $publication->platform, 'insights');
         $metricNames = $publication->platform === 'instagram' ? ['reach', 'likes', 'comments', 'saved', 'shares'] : ['post_impressions_unique', 'post_clicks', 'post_reactions_by_type_total'];
-        $metrics = array_intersect_key((array) $publication->insights, array_flip(['_reconciliation']));
+        $metrics = array_intersect_key((array) $publication->insights, array_flip(['_reconciliation', '_permalink', '_media_observed_at', '_thumbnail_url', '_published_at']));
         foreach ($metricNames as $metric) {
             try {
                 $data = $client->request($connection, 'GET', $publication->external_id.'/insights', ['metric' => $metric]);

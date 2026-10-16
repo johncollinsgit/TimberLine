@@ -9,10 +9,12 @@ class MetaMarketingClient
 {
     public function connection(int $tenantId, int $id, string $platform, string $capability): IntegrationConnection
     {
-        abort_unless(config('marketing_desk.meta.execution_enabled'), 503, 'Meta publishing, insights and Messenger are awaiting provider review and pilot verification.');
+        $reading = in_array($capability, ['media', 'insights'], true);
+        abort_unless(config('marketing_desk.meta.execution_enabled') || ($reading && config('marketing_desk.social_read_enabled')), 503, $reading ? 'Instagram post sync is awaiting connection setup.' : 'Meta publishing and Messenger are awaiting provider review and pilot verification.');
         $connection = IntegrationConnection::forTenantId($tenantId)->where('provider', $platform)->where('status', 'connected')->findOrFail($id);
         abort_if($connection->isExpired() || blank($connection->access_token) || blank($connection->external_account_secret), 422, 'Reconnect this social account.');
         $scope = match ([$platform, $capability]) {
+            ['instagram', 'media'] => 'instagram_business_basic',
             ['instagram', 'publish'] => 'instagram_business_content_publish',
             ['instagram', 'reply'] => 'instagram_business_manage_messages',
             ['instagram', 'insights'] => 'instagram_business_manage_insights',
