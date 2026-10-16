@@ -1,11 +1,11 @@
-<details class="rounded-xl border border-zinc-200 p-4" @if($current ?? false) open @endif>
+<details class="rounded-xl border border-zinc-200 p-4">
     <summary class="cursor-pointer font-semibold">{{ ($current ?? false) ? 'Context used' : 'Context used for this answer' }}</summary>
     <div class="mt-3 space-y-3 break-words text-sm">
-        <p>{{ $context['workspace']['name'] }} · {{ $context['workspace']['role'] }} · {{ $context['workspace']['business_template'] }} · {{ $context['workspace']['operating_mode'] }}</p>
+        <p>{{ $context['workspace']['name'] }} · {{ ucfirst($context['workspace']['role']) }} · {{ Illuminate\Support\Str::headline($context['workspace']['business_template']) }} · {{ Illuminate\Support\Str::headline($context['workspace']['operating_mode']) }}</p>
         <p>Checked {{ \Carbon\CarbonImmutable::parse($context['generated_at'])->setTimezone($context['workspace']['timezone'])->format('M j, Y g:i a') }} ({{ $context['workspace']['timezone'] }}).</p>
         <p>Opened from: {{ $context['page']['title'] }}.</p>
         <p>Enabled Branches: {{ implode(', ', array_column($context['workspace']['branches'], 'name')) ?: 'None' }}.</p>
-        <p>Permitted capabilities: {{ implode(', ', $context['workspace']['capabilities']) ?: 'None' }}.</p>
+        <p>Permitted capabilities: {{ implode(', ', array_map(fn ($capability) => Illuminate\Support\Str::headline(str_replace('.', ' / ', $capability)), $context['workspace']['capabilities'])) ?: 'None' }}.</p>
         @foreach($context['connections'] as $connection)
             <p>{{ $connection['title'] }}: {{ $connection['status'] }}. Last successful sync: {{ $connection['last_synced_at'] ? \Carbon\CarbonImmutable::parse($connection['last_synced_at'])->setTimezone($context['workspace']['timezone'])->format('M j, Y g:i a') : 'Not recorded' }} · {{ $connection['freshness'] }}.</p>
         @endforeach

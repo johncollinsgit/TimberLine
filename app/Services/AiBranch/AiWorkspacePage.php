@@ -52,6 +52,7 @@ class AiWorkspacePage
 
     public function resolve(Tenant $tenant, User $user, array $origin): array
     {
+        app(AiWorkspaceContext::class)->authorize($tenant, $user);
         $origin = $this->normalize($origin);
         if ($origin['kind'] === 'workspace') {
             return ['page' => ['kind' => 'workspace', 'title' => 'Workspace'], 'record' => null];
@@ -76,6 +77,7 @@ class AiWorkspacePage
 
     public function assertHistory(Tenant $tenant, User $user, array $messages): void
     {
+        app(AiWorkspaceContext::class)->authorize($tenant, $user);
         $sources = app(AiWorkspaceSources::class);
         foreach (collect($messages)->flatMap(fn ($message) => $message['sources'] ?? [])->unique('ref') as $source) {
             $id = (int) $source['id'];

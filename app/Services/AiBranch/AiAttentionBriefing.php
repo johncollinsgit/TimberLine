@@ -6,7 +6,7 @@ use Carbon\CarbonImmutable;
 
 class AiAttentionBriefing
 {
-    public const QUESTION = 'What needs my attention? Summarize the server-ordered attention list, with source references and practical suggestions. Explain coverage limitations. Do not take any action.';
+    public const QUESTION = 'What needs my attention?';
 
     public function rank(array $source, string $timezone): int
     {

@@ -41,6 +41,9 @@ it('serializes independent MySQL processes at the final quota slot and at note a
                 $conversation = app(AiBranchChat::class)->start($tenant, $user);
                 $requests[] = ['conversation' => $conversation->id];
             }
+        } elseif (str_starts_with($mode, 'briefing')) {
+            $uuid = (string) Illuminate\Support\Str::uuid();
+            $requests = [['uuid' => $uuid], ['uuid' => $mode === 'briefing_replay' ? $uuid : (string) Illuminate\Support\Str::uuid()]];
         } else {
             $job = FieldServiceJob::query()->create(['tenant_id' => $tenant->id, 'title' => 'Fictional job', 'status' => 'open']);
             $action = app(AiBranchActions::class)->propose($tenant, $user, $job->id, 'Reviewed fictional note', (string) Illuminate\Support\Str::uuid());
@@ -52,8 +55,10 @@ $app = require 'bootstrap/app.php';
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 $d = json_decode(stream_get_contents(STDIN), true);
 config()->set(['ai_branch.enabled' => true, 'ai_branch.actions_enabled' => true, 'ai_branch.tenant_ids' => [$d['tenant']], 'ai_branch.api_key' => 'fake', 'ai_branch.model' => 'fake', 'ai_branch.input_micros_per_million' => 1000000, 'ai_branch.output_micros_per_million' => 4000000, 'module_catalog.addons.ai_branch_growth.ai_limits.responses' => 1]);
+config()->set(['ai_branch.workspace_context_enabled' => str_starts_with($d['mode'], 'briefing'), 'ai_branch.workspace_context_tenant_ids' => [$d['tenant']]]);
 Illuminate\Support\Facades\Http::preventStrayRequests();
-Illuminate\Support\Facades\Http::fake(function () {
+Illuminate\Support\Facades\Http::fake(function () use ($d) {
+    file_put_contents($d['calls'], "dispatch\n", FILE_APPEND | LOCK_EX);
     usleep(500000);
     return Illuminate\Support\Facades\Http::response(['id' => 'fake', 'status' => 'completed', 'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => 'Fictional answer']]]], 'usage' => ['input_tokens' => 100, 'output_tokens' => 30]]);
 });
@@ -63,19 +68,22 @@ $user = App\Models\User::findOrFail($d['user']);
 try {
     if ($d['mode'] === 'quota') {
         app(App\Services\AiBranch\AiBranchChat::class)->ask($tenant, $user, $d['conversation'], 'Fictional question', (string) Illuminate\Support\Str::uuid());
+    } elseif (str_starts_with($d['mode'], 'briefing')) {
+        app(App\Services\AiBranch\AiBranchChat::class)->briefing($tenant, $user, $d['uuid']);
     } else {
         app(App\Services\AiBranch\AiBranchActions::class)->decide($tenant, $user, $d['action'], $d['digest'], true);
     }
     echo 'ok';
 } catch (Symfony\Component\HttpKernel\Exception\HttpException $e) {
-    if ($e->getStatusCode() !== 429) { throw $e; }
-    echo 'quota_blocked';
+    if ($e->getStatusCode() === 409 && $d['mode'] === 'briefing_replay') { echo 'pending'; }
+    elseif ($e->getStatusCode() === 429) { echo 'quota_blocked'; }
+    else { throw $e; }
 }
 PHP;
         $cfg = config('database.connections.mysql');
         $env = ['APP_ENV' => 'testing', 'APP_KEY' => config('app.key'), 'DB_CONNECTION' => 'mysql', 'DB_HOST' => $cfg['host'], 'DB_PORT' => (string) $cfg['port'], 'DB_DATABASE' => $cfg['database'], 'DB_USERNAME' => $cfg['username'], 'DB_PASSWORD' => $cfg['password'], 'CACHE_STORE' => 'array', 'LOG_CHANNEL' => 'null'];
         foreach ($requests as $request) {
-            $process = new Process([PHP_BINARY, '-r', $code], base_path(), $env, json_encode([...$request, 'mode' => $mode, 'tenant' => $tenant->id, 'user' => $user->id, 'barrier' => $dir.'/go']), 20);
+            $process = new Process([PHP_BINARY, '-r', $code], base_path(), $env, json_encode([...$request, 'mode' => $mode, 'tenant' => $tenant->id, 'user' => $user->id, 'barrier' => $dir.'/go', 'calls' => $dir.'/calls']), 20);
             $process->start();
             $processes[] = $process;
         }
@@ -87,12 +95,19 @@ PHP;
             $results[] = $process->getOutput();
         }
         sort($results);
-        if ($mode === 'quota') {
+        if (in_array($mode, ['quota', 'briefing_quota'], true)) {
             expect($results)->toBe(['ok', 'quota_blocked'])
+                ->and(TenantAiUsageEvent::query()->where('tenant_id', $tenant->id)->count())->toBe(1);
+        } elseif ($mode === 'briefing_replay') {
+            expect($results)->toBeIn([['ok', 'ok'], ['ok', 'pending']])
                 ->and(TenantAiUsageEvent::query()->where('tenant_id', $tenant->id)->count())->toBe(1);
         } else {
             expect($results)->toBe(['ok', 'ok'])
                 ->and(FieldServiceJobNote::query()->where('tenant_id', $tenant->id)->count())->toBe(1);
+        }
+        if (str_starts_with($mode, 'briefing')) {
+            expect(AiBranchConversation::query()->where('tenant_id', $tenant->id)->count())->toBe(1)
+                ->and(file($dir.'/calls'))->toHaveCount(1);
         }
     } finally {
         foreach ($processes as $process) {
@@ -108,6 +123,9 @@ PHP;
         if (file_exists($dir.'/go')) {
             unlink($dir.'/go');
         }
+        if (file_exists($dir.'/calls')) {
+            unlink($dir.'/calls');
+        }
         rmdir($dir);
     }
-})->with(['quota', 'approval']);
+})->with(['quota', 'approval', 'briefing_quota', 'briefing_replay']);

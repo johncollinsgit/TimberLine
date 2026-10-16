@@ -1,3 +1,9 @@
+## 2026-10-16 - Workspace-aware AI attention briefings
+
+- Added the gated What needs attention? request, collapsible Context used panels, ordered evidence links, source coverage and generation time with workspace timezone. Viewing context consumes no AI allowance.
+- Standard and Website & sales launchers pass allowlisted page identity. Private chat/memory scope follows the selected workspace. Changed permissions or context versions show a restart explanation with private deletion controls.
+- Added validated workspace timezone to existing AI settings. Briefings share chat limits and provider spending caps. No financial summaries, external calendar retrieval or automated actions are introduced; rollout remains disabled.
+
 ## 2026-10-15 - Native shipping lifecycle and printer setup
 
 ## 2026-10-15 AI Branch pilot workspace

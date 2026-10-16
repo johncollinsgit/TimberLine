@@ -227,6 +227,8 @@ test('workspace briefings block staff managers and inactive members', function (
     [$tenant, $user] = workspaceFixture();
     $user->tenants()->updateExistingPivot($tenant->id, ['role' => $role, 'membership_active' => $active]);
     $this->actingAs($user)->postJson(route('ai-branch.briefings', ['tenant' => $tenant->slug]), ['request_id' => (string) Illuminate\Support\Str::uuid()])->assertForbidden();
+    expect(fn () => app(App\Services\AiBranch\AiWorkspaceSources::class)->collect($tenant, $user, ['page' => ['kind' => 'workspace'], 'record' => null], 'briefing'))->toThrow(HttpException::class);
+    expect(fn () => app(AiWorkspacePage::class)->resolve($tenant, $user, []))->toThrow(HttpException::class);
     Http::assertNothingSent();
 })->with([['staff', true], ['manager', true], ['owner', false]]);
 
@@ -276,7 +278,10 @@ test('briefing UI escapes generated text links evidence and GET context never ca
     $this->actingAs($user)->get($url)->assertOk()->assertSee('Context used')->assertSee('What needs attention?')->assertSee('Opened from: Fixture attention job');
     Http::assertNothingSent();
     Http::fake(['api.openai.com/*' => Http::response(workspaceResponse('<script>alert("unsafe")</script>'))]);
-    $result = $this->postJson(route('ai-branch.briefings', ['tenant' => $tenant->slug]), ['request_id' => (string) Illuminate\Support\Str::uuid(), 'origin' => ['kind' => 'job', 'id' => $job->id]])->assertOk()->json();
+    $uuid = (string) Illuminate\Support\Str::uuid();
+    $payload = ['request_id' => $uuid, 'origin' => ['kind' => 'job', 'id' => $job->id]];
+    $result = $this->postJson(route('ai-branch.briefings', ['tenant' => $tenant->slug]), $payload)->assertOk()->json();
+    $this->post(route('ai-branch.briefings', ['tenant' => $tenant->slug]), $payload)->assertRedirect(route('ai-branch.index', ['tenant' => $tenant->slug, 'conversation' => $result['conversation_id'], 'origin' => $payload['origin']]));
     $page = $this->get(route('ai-branch.index', ['tenant' => $tenant->slug, 'conversation' => $result['conversation_id']]))->assertOk();
     $page->assertSee('&lt;script&gt;', false)->assertDontSee('<script>alert', false)->assertSee('America/New_York')->assertSee('Attention evidence, in priority order')->assertSee(route('field-service.jobs.show', ['tenant' => $tenant->slug, 'job' => $job->id], false));
     $this->get(route('field-service.jobs.show', ['tenant' => $tenant->slug, 'job' => $job->id]))->assertOk();
@@ -381,4 +386,36 @@ test('the message endpoint accepts authorized page context and rejects a changed
     $this->actingAs($user)->postJson($url, ['request_id' => $uuid, 'question' => 'Describe this work', 'origin' => ['kind' => 'job', 'id' => $job->id]])->assertOk()->assertJsonPath('workspace_context.page.title', 'Selected job');
     $this->postJson($url, ['request_id' => $uuid, 'question' => 'Describe this work', 'origin' => ['kind' => 'workspace']])->assertConflict();
     Http::assertSentCount(1);
+});
+
+test('combined adapter families obey the twenty record ceiling including activity and classes', function () {
+    [$tenant, $user] = workspaceFixture();
+    for ($i = 0; $i < 7; $i++) {
+        $customer = MarketingProfile::create(['tenant_id' => $tenant->id, 'first_name' => 'Sample '.$i]);
+        $job = FieldServiceJob::create(['tenant_id' => $tenant->id, 'marketing_profile_id' => $customer->id, 'title' => 'Job '.$i, 'status' => 'blocked']);
+        $task = FieldServiceTask::create(['tenant_id' => $tenant->id, 'field_service_job_id' => $job->id, 'title' => 'Task '.$i, 'status' => 'open', 'due_at' => now()->subDay()]);
+        FieldServiceTaskEvent::create(['tenant_id' => $tenant->id, 'field_service_task_id' => $task->id, 'event_type' => 'created']);
+        CustomerLoopActivity::create(['tenant_id' => $tenant->id, 'marketing_profile_id' => $customer->id, 'source_type' => 'manual', 'event_key' => 'created:'.$i, 'title' => 'Private raw activity', 'occurred_at' => now()]);
+        CustomerLoopAction::create(['tenant_id' => $tenant->id, 'marketing_profile_id' => $customer->id, 'title' => 'Follow up '.$i, 'status' => 'suggested', 'action_type' => 'follow_up', 'reason' => 'Fixture', 'due_at' => now()->subDay()]);
+        ScheduledClass::create(['tenant_id' => $tenant->id, 'title' => 'Class '.$i, 'slug' => 'class-'.$i, 'starts_at' => now()->addHour(), 'ends_at' => now()->addHours(2), 'capacity' => 10, 'status' => 'published']);
+    }
+    $context = app(AiWorkspaceContext::class)->capture($tenant, $user, [], 'briefing');
+    expect($context['sources'])->toHaveCount(20)->and(array_sum(array_column($context['coverage'], 'returned')))->toBe(20);
+    foreach ($context['coverage'] as $family) {
+        expect($family['returned'])->toBeLessThanOrEqual(5);
+    }
+    expect(collect($context['coverage'])->contains(fn ($family) => $family['truncated'] ?? false))->toBeTrue();
+});
+
+test('workspace daylight savings boundaries do not change UTC billing windows', function () {
+    $this->travelTo(\Carbon\CarbonImmutable::parse('2026-11-01T05:30:00Z'));
+    [$tenant, $user] = workspaceFixture();
+    $class = ScheduledClass::create(['tenant_id' => $tenant->id, 'title' => 'Late local class', 'slug' => 'late-local', 'starts_at' => '2026-11-02 04:30:00', 'ends_at' => '2026-11-02 04:50:00', 'capacity' => 10, 'status' => 'published']);
+    $snapshot = app(AiWorkspaceContext::class)->capture($tenant, $user, [], 'briefing');
+    expect(collect($snapshot['attention'])->pluck('ref')->all())->toContain('class:'.$class->id)
+        ->and(app(AiAttentionBriefing::class)->rank($snapshot['attention'][0], 'America/New_York'))->toBe(2);
+    foreach (['2026-10-31 23:59:59', '2026-11-01 00:00:00'] as $time) {
+        App\Models\TenantAiUsageEvent::create(['tenant_id' => $tenant->id, 'user_id' => $user->id, 'client_uuid' => (string) Illuminate\Support\Str::uuid(), 'feature' => 'ai_branch_chat', 'context' => 'workspace', 'model' => 'fake', 'status' => 'settled', 'duration_seconds' => 0, 'provider_cost_micros' => 50, 'buyer_charge_micros' => 0, 'occurred_at' => $time]);
+    }
+    expect(app(App\Services\AiBranch\AiBranchChat::class)->usage($tenant))->toBe(['responses' => 1, 'provider_micros' => 50]);
 });

@@ -171,6 +171,7 @@ class AiWorkspaceSources
     public function collect(Tenant $tenant, User $user, array $page, string $purpose): array
     {
         $context = app(AiWorkspaceContext::class);
+        $context->authorize($tenant, $user);
         $permissions = $context->permissions($tenant, $user);
         $zone = $context->timezone($tenant);
         $now = CarbonImmutable::now($zone);

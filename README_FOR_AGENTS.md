@@ -1,3 +1,10 @@
+## Workspace-aware AI Branch (2026-10-16)
+
+- Continue with `docs/architecture/everbranch-ai-workspace-context.md` and `docs/operations/everbranch-ai-runbook.md`. Preserve the two independent AI/context gates, explicit tenant allowlists, active owner/admin checks and current billing evidence.
+- Read-only attention briefings and chat share one account-locked usage ledger, spending cap and UUID protections. Never auto-retry or refund uncertain provider attempts. Source projections are scalar allowlists; limits are five/family and twenty overall. Never add raw tenant/customer/integration metadata to prompts.
+- Refresh context every request; version/module/role/memory changes and inaccessible source records invalidate history or in-flight delivery. Default timezone is UTC; validated workspace timezone changes calendar boundaries, never UTC billing periods. Preserve scoped deletion of incompatible chats.
+- Standard and Website & sales launchers accept server-resolved page identities only. Keep dedicated Shopify and soccer surfaces unchanged. Voice, phone, financial summaries and workflow agents remain later phases. Local fake acceptance does not authorize a live tenant or deployment.
+
 ## Subscriptions Phase 1 foundation (2026-10-15; isolated review branch)
 
 ## Everbranch AI Branch development 2026-10-15

@@ -174,7 +174,7 @@ jobs:
       - name: Verify committed MySQL schema baseline
         run: scripts/ci/verify-mysql-schema-baseline.sh
 
-      - name: Verify AI quota and approval concurrency on MySQL
+      - name: Verify AI chat, briefing replay and approval concurrency on MySQL
         run: php ./vendor/bin/pest tests/Integration/AiBranchMySqlConcurrencyTest.php --compact
 
       - name: Upload MySQL schema baseline candidate

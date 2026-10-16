@@ -1,5 +1,11 @@
 # SYSTEM SNAPSHOT
 
+## Workspace-aware AI attention briefings (2026-10-16; disabled)
+
+- Version-2 context now projects permitted operational evidence from the selected workspace, with server-authorized page identity, explicit coverage and bounded samples. On-demand attention briefings share chat reservations and UTC billing limits. Workspace timezone uses existing profile metadata; no tables are added.
+- Context has an independent default-off flag and tenant allowlist. Active owner/admin, canonical access, current paid AI billing and owner cap remain mandatory. History and in-flight answers recheck permissions and record access; incompatible chats retain private deletion and a restart explanation.
+- Read `docs/architecture/everbranch-ai-workspace-context.md` and the updated AI runbook. Fictional acceptance uses a guarded local fake-provider harness. No production tenant is enrolled; remote staging, real provider quality/billing and a named approved production tenant remain release gates.
+
 ## Optional Everbranch AI Branch development 2026-10-15
 
 - A hidden default-off `ai_branch` add-on now provides owner/admin chat with sampled tenant job evidence, encrypted private conversations, explicit personal memory, durable usage reservations, and exact-preview approvals for internal owner-visible job notes. Bud Core and the Shopify AI Assistant retain their existing behavior.

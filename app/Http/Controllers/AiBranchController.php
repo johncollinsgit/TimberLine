@@ -138,8 +138,9 @@ class AiBranchController extends Controller
     {
         $tenant = $this->tenant($request);
         $data = $request->validate(['request_id' => ['required', 'uuid']]);
+        $origin = $this->origin($request);
         try {
-            $result = $this->chat->briefing($tenant, $request->user(), $data['request_id'], $this->origin($request));
+            $result = $this->chat->briefing($tenant, $request->user(), $data['request_id'], $origin);
         } catch (HttpException $exception) {
             $id = $exception->getHeaders()['X-AI-Conversation'] ?? null;
             if (! $id || $request->expectsJson()) {
@@ -152,7 +153,7 @@ class AiBranchController extends Controller
             return response()->json($result)->header('Cache-Control', 'no-store');
         }
 
-        return redirect()->route('ai-branch.index', ['tenant' => $tenant->slug, 'conversation' => $result['conversation_id']]);
+        return redirect()->route('ai-branch.index', ['tenant' => $tenant->slug, 'conversation' => $result['conversation_id'], ...($origin !== [] ? ['origin' => $origin] : [])]);
     }
 
     public function deleteConversation(Request $request, int $conversation)
