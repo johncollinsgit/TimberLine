@@ -112,6 +112,7 @@ it('requires actual GroupMe membership even when a group API returns a successfu
     expect(fn () => $svc->group($this->tenant->id, $this->admin, '1'))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
 });
 it('rechecks withdrawn family SMS consent before sending an already queued reminder', function () {
+    $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-20 12:00:00', 'America/New_York'));
     config()->set('soccer.sms_enabled', true);
     $family = $this->store->insert('families', $this->tenant->id, ['email' => 'parent@example.com', 'profile' => $this->store->encrypt(['phone' => '8645550100']), 'sms_consent_at' => now()]);
     app(\App\Services\Soccer\SoccerEvents::class)->record($this->tenant->id, null, $family, 'payment_reminder', [], familyText: 'Fictional reminder');
