@@ -1,3 +1,19 @@
+## Stripe and PayPal payment setup (2026-10-16; feature branch only)
+
+- Read `docs/architecture/stripe-paypal-payments-plan.md` and
+  `docs/operations/tenant-payment-setup.md`. This first phase provides connection
+  setup only; PayPal checkout and landlord subscription support remain unbuilt.
+- Preserve exact tenant allowlists, active owner/admin membership and canonical
+  Branch access. No platform-admin membership bypass. Sandbox/live credentials,
+  merchant identities and account-create reservations must stay separate.
+- Wren and the shared page use `TenantStripeConnectionService`. Never rotate a
+  pending request's key/payload to recover an ambiguous account-create response.
+  Provider identity and test/live mode bind the reservation; stop after 23 hours
+  for reconciliation before a new account could be created.
+- PayPal never trusts browser merchant IDs or permission flags. A connection
+  cannot open checkout, create a subscription, grant a module or reroute refunds.
+  Signed revocation/payment events and genuine sandbox acceptance remain gates.
+
 ## Modern Forestry paid Launch Partner and AI intent (2026-10-16)
 
 - The user subsequently authorized a genuine **AI-only $99/month checkout** and one fictional provider diagnostic capped at $0.10, and asked Codex to install the key. A dedicated OpenAI project/service key is installed in the server secret environment (expires November 14, 2026); one diagnostic completed using 39 input/18 output tokens, with a conservative $0.000024 cost ceiling. This is not a paid Stripe subscription, production tenant opt-in or final provider invoice reconciliation.

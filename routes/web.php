@@ -1030,6 +1030,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->get('/internal/onboarding/harness', [OnboardingHarnessController::class, 'show'])
         ->name('onboarding.harness');
 
+    Route::middleware(['tenant.access'])->prefix('payments')->name('tenant-payments.')->group(function (): void {
+        Route::get('/', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'index'])->name('index');
+        Route::post('/stripe/start', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'stripeStart'])->middleware('throttle:5,1')->name('stripe.start');
+        Route::post('/stripe/session', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'stripeSession'])->middleware('throttle:10,1')->name('stripe.session');
+        Route::post('/stripe/refresh', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'stripeRefresh'])->middleware('throttle:5,1')->name('stripe.refresh');
+        Route::post('/paypal/start', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'paypalStart'])->middleware('throttle:5,1')->name('paypal.start');
+        Route::get('/paypal/return', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'paypalReturn'])->middleware('throttle:10,1')->name('paypal.return');
+        Route::post('/paypal/refresh', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'paypalRefresh'])->middleware('throttle:5,1')->name('paypal.refresh');
+        Route::post('/paypal/disconnect', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'paypalDisconnect'])->name('paypal.disconnect');
+    });
+
     // Canonical onboarding wizard UI (authenticated, tenant-aware). Uses the onboarding API seams; no redirects.
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
         ->get('/onboarding', \App\Livewire\Onboarding\Wizard::class)

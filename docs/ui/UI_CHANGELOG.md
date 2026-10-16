@@ -1,3 +1,13 @@
+## 2026-10-16 - Shared payment account setup (feature branch; disabled)
+
+- Added a gated owner/admin Payments page with cards/digital-wallet and PayPal
+  account sections. Known Stripe details are prefilled; embedded verification has
+  a hosted fallback. PayPal uses explicit sharing consent and existing-account
+  sign-in, with test mode and connection status shown separately from checkout.
+- Gated navigation covers standard, Website & sales and Wren settings. The page
+  clearly states that Everbranch billing is separate and PayPal checkout is not
+  active. No customer-facing checkout option is introduced in this phase.
+
 ## 2026-10-16 - Workspace-aware AI attention briefings
 
 - Added the gated What needs attention? request, collapsible Context used panels, ordered evidence links, source coverage and generation time with workspace timezone. Viewing context consumes no AI allowance.
