@@ -62,6 +62,22 @@ test('desk is default-off and tenant allowlist never expands when empty', functi
     $this->actingAs($actor)->get(route('marketing.desk.index', ['tenant' => $tenant->slug]))->assertForbidden();
 });
 
+test('a marketing usage reservation cannot be replayed as a voice request', function (): void {
+    [$tenant, $actor] = deskWorkspace();
+    config(['bud.provider_configured' => true]);
+    TenantBudSetting::create(['tenant_id' => $tenant->id, 'status' => 'approved', 'ai_status' => 'approved', 'ai_monthly_budget_cents' => 5000]);
+    $uuid = (string) Str::uuid();
+    $event = TenantAiUsageEvent::create(['tenant_id' => $tenant->id, 'user_id' => $actor->id, 'client_uuid' => $uuid, 'duration_seconds' => 0, 'feature' => 'marketing_owner', 'context' => 'marketing_owner', 'model' => 'test', 'status' => 'reserved', 'buyer_charge_micros' => 1000, 'provider_cost_micros' => 1000, 'occurred_at' => now()]);
+    try {
+        app(\App\Services\Billing\TenantAiUsageService::class)->reserveVoice($tenant, $actor, $uuid, 'job_note', 'voice-test', 90);
+        $this->fail('A different AI action must not reuse a marketing reservation.');
+    } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
+        expect($exception->getStatusCode())->toBe(409);
+    }
+    expect($event->fresh()->feature)->toBe('marketing_owner')->and($event->fresh()->buyer_charge_micros)->toBe(1000);
+    Http::assertNothingSent();
+});
+
 test('all marketing desk destinations render from local data without provider requests', function (): void {
     [$tenant,$actor] = deskWorkspace();
     deskKnowledge($tenant->id, $actor->id);

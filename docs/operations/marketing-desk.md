@@ -3,8 +3,9 @@
 ## Status and ownership
 
 Implemented as a shared, tenant-owned product on the current production baseline
-`6acaea0f`, with all new execution gates disabled by default. Modern Forestry is
-the intended retail/wholesale pilot, not a separate implementation. No production
+`5adeb70a` (rebased from `6acaea0f`), with all new execution gates disabled by
+default. Modern Forestry is the intended retail/wholesale pilot, not a separate
+implementation. No production
 settings, credentials, live workflows, posts, customer messages, or billing were
 changed by this build. The separate AI Branch work remains independent; this
 feature extends Bud and reuses the canonical tenant AI usage ledger, marketing
@@ -167,7 +168,8 @@ or plan mutation is enabled.
 - Application: full Pest suite, existing Modern Forestry regression command,
   Workflow Studio, inbox, provider and customer-merge tests.
 - New tests: `tests/Feature/MarketingDesk`, real MySQL recovery and concurrent
-  reservation/idempotency tests. CI's existing mandatory MySQL job includes them.
+  reservation/idempotency tests, including simultaneous voice and marketing
+  reservations against their shared budget. CI's mandatory MySQL job includes them.
 - Migrations: eleven additive guarded table creates, concise indexes, registered
   recovery scenarios, data-free baseline generated only through the disposable
   MySQL workflow, prior-release upgrade rehearsal and dump/fingerprint verification.
@@ -190,12 +192,17 @@ production evidence.
 
 ### Local acceptance evidence (2026-10-16)
 
-- Full application suite: 3,278 passed, one existing skip; 23,172 assertions.
+- Full application suite after the production rebase: 3,295 passed, one existing
+  skip; 23,252 assertions.
 - Latest focused desk/Studio/Instagram/inbox/billing checks: 53 passed.
+- Final shared-meter, desk and voice regressions: 38 passed, including rejection
+  of a marketing reservation reused as a voice request.
 - Modern Forestry regression command: 156 passed.
-- Real MySQL recovery plus concurrency: two passed, 37 assertions, including
-  missing-index repair and retained rows. Prior-release upgrade and committed
-  schema dump/fingerprint verification passed in the disposable database.
+- Exact CI MySQL recovery sequence: 42 passed, 271 assertions, including
+  missing-index repair and retained rows. Separate budget/idempotency concurrency
+  check: passed, 21 assertions, including mixed voice/marketing requests.
+  Prior-release upgrade and committed schema dump/fingerprint verification passed
+  in the disposable database.
 - Build/type checks and sixteen desktop/phone desk views passed. Studio checks
   also cover outline collapse, fitting the real canvas and error-to-field focus.
 - Changed PHP files pass Pint. The repository-wide check reports 604 existing
