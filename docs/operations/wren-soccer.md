@@ -82,6 +82,11 @@ records. Durable encrypted SMS deliveries summarize the family action for Sarah
 and appear with delivery results/replies in Messages. Opt-out is rechecked before
 family delivery; failed sends retry up to five times. Ambiguous in-flight sends
 remain visible for review and are not blindly resent.
+Soccer SMS starts only from 08:00 through 19:59 America/New_York; messages
+queued overnight wait until 08:00. Offer and reminder texts include a link to
+the family's specific invoice. The website requires verified family sign-in
+before opening Stripe Checkout, and queued payment links are suppressed after
+the invoice is paid or expires. GroupMe remains the team conversation channel.
 
 Stripe payment-intent and provider IDs deduplicate confirmations. Late or
 mismatched transfers are recorded for admin review without allocating seats.

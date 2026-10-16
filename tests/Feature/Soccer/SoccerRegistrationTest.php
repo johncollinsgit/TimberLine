@@ -112,6 +112,43 @@ it('deduplicates reminders and Sarah alerts', function () {
     $this->svc->tick($this->t->id, $this->season);
     expect($this->store->query('deliveries', $this->t->id)->count())->toBe($n);
 });
+it('queues a payment link and sends soccer texts only from 8 a.m. to 8 p.m. Eastern', function () {
+    config()->set('soccer.sms_enabled', true);
+    $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-20 07:59:00', 'America/New_York'));
+    [$family, $input] = soccerFamily($this, ['2023-01-01']);
+    $this->svc->register($this->t->id, $family, $input);
+    $invoice = $this->store->query('invoices', $this->t->id)->firstOrFail();
+    $familyDelivery = $this->store->query('deliveries', $this->t->id)->get()->first(fn ($d) => ($this->store->decrypt($d->payload)['invoice_id'] ?? null) === $invoice->id);
+    expect($familyDelivery)->not->toBeNull();
+    expect($this->store->decrypt($familyDelivery->payload)['body'])->toContain('/spring?pay='.$invoice->id);
+
+    $deliveries = app(\App\Services\Soccer\SoccerDeliveryService::class);
+    $deliveries->run($this->t->id);
+    expect($this->store->query('deliveries', $this->t->id)->where('attempts', '>', 0)->count())->toBe(0);
+    $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-20 08:00:00', 'America/New_York'));
+    \Illuminate\Support\Facades\Http::preventStrayRequests();
+    $deliveries->run($this->t->id);
+    expect($this->store->query('deliveries', $this->t->id)->where('attempts', '>', 0)->count())->toBeGreaterThan(0);
+
+    $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-20 20:00:00', 'America/New_York'));
+    app(\App\Services\Soccer\SoccerEvents::class)->record($this->t->id, $this->season, $family, 'hours_boundary', ['summary' => 'Boundary check.'], waitlist: true);
+    $pending = $this->store->query('deliveries', $this->t->id)->where('status', 'pending')->firstOrFail();
+    $deliveries->run($this->t->id);
+    expect($this->store->row('deliveries', $this->t->id, $pending->id)->attempts)->toBe(0);
+});
+it('suppresses a queued payment link once its invoice is no longer payable', function () {
+    config()->set('soccer.sms_enabled', true);
+    $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-20 12:00:00', 'America/New_York'));
+    [$family, $input] = soccerFamily($this, ['2023-01-01']);
+    $this->svc->register($this->t->id, $family, $input);
+    $invoice = $this->store->query('invoices', $this->t->id)->firstOrFail();
+    $familyDelivery = $this->store->query('deliveries', $this->t->id)->get()->first(fn ($d) => ($this->store->decrypt($d->payload)['invoice_id'] ?? null) === $invoice->id);
+    $this->store->query('invoices', $this->t->id)->where('id', $invoice->id)->update(['status' => 'paid']);
+    \Illuminate\Support\Facades\Http::preventStrayRequests();
+    app(\App\Services\Soccer\SoccerDeliveryService::class)->run($this->t->id);
+    $delivery = $this->store->row('deliveries', $this->t->id, $familyDelivery->id);
+    expect($delivery->status)->toBe('suppressed')->and($delivery->error)->toBe('invoice_closed')->and($delivery->attempts)->toBe(0);
+});
 it('confirms verified Venmo once without trusting parent declarations', function () {
     [$f,$in] = soccerFamily($this, ['2023-01-01']);
     $this->svc->register($this->t->id, $f, $in);

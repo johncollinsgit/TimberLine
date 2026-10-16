@@ -174,7 +174,7 @@ class SoccerRegistrationService
             $this->store->query('registrations', $season->tenant_id)->where('id', $r->id)->update(['status' => $r->waived ? 'registered' : 'offered', 'offer_group' => $group, 'offer_expires_at' => $r->waived ? null : $expires, 'payment_status' => $r->waived ? 'waived' : 'unpaid', 'updated_at' => now()]);
         }
         $invoice = $this->store->insert('invoices', $season->tenant_id, ['season_id' => $season->id, 'family_id' => $family, 'offer_group' => $group, 'registration_ids' => json_encode($ids), 'amount_cents' => $amount, 'status' => $amount === 0 ? 'waived' : 'unpaid', 'expires_at' => $expires, 'paid_at' => $amount === 0 ? now() : null]);
-        $text = $amount === 0 ? 'Wren Soccer: your children have places; your registration fees are waived.' : 'Wren Soccer: places are reserved for your children. Pay $'.number_format($amount / 100, 2).' by '.$expires->timezone('America/New_York')->format('M j, g:i A T').'. Sign in: '.config('soccer.origin').'/spring';
+        $text = $amount === 0 ? 'Wren Soccer: your children have places; your registration fees are waived.' : 'Wren Soccer: places are reserved for your children. Pay $'.number_format($amount / 100, 2).' by '.$expires->timezone('America/New_York')->format('M j, g:i A T').': '.config('soccer.origin').'/spring?pay='.$invoice;
 
         $this->events->record($season->tenant_id, $season->id, $family, $action, ['summary' => $rows->count().' children offered places.', 'invoice_id' => $invoice], $actor, waitlist: $action !== 'initial_registration', familyText: $text);
 
@@ -323,7 +323,7 @@ class SoccerRegistrationService
                 } else {
                     foreach ([24, 2] as $hours) {
                         if ($expires->lte(now()->addHours($hours))) {
-                            $this->events->record($tenant, $seasonId, $i->family_id, 'payment_reminder', ['summary' => 'Payment deadline reminder.', 'invoice_id' => $i->id], key: 'reminder:'.$i->id.':'.$hours, familyText: 'Wren Soccer: pay your registration invoice before '.$expires->timezone('America/New_York')->format('M j, g:i A T').' to keep the reserved spots. '.config('soccer.origin').'/spring');
+                            $this->events->record($tenant, $seasonId, $i->family_id, 'payment_reminder', ['summary' => 'Payment deadline reminder.', 'invoice_id' => $i->id], key: 'reminder:'.$i->id.':'.$hours, familyText: 'Wren Soccer: pay your registration invoice before '.$expires->timezone('America/New_York')->format('M j, g:i A T').' to keep the reserved spots: '.config('soccer.origin').'/spring?pay='.$i->id);
                         }
                     }
                 }
