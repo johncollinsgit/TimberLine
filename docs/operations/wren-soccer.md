@@ -127,6 +127,13 @@ OpenAI API key in Season settings (stored encrypted), or an operator can set
 `gpt-6-luna`, overrideable with `WREN_SOCCER_HELP_AI_MODEL`. Provider requests
 set `store=false` and never receive a family profile or release.
 
+Soccer Stripe Checkout uses the verified connected account for both
+`payment_intent_data.on_behalf_of` and `transfer_data.destination`, matching the
+native storefront settlement pattern. This identifies the connected soccer
+business as the settlement merchant without changing pricing, platform fees or
+the existing destination-charge refund/reconciliation model. Verify the merchant
+statement details in the controlled payment/refund smoke test before opening.
+
 Stripe payment-intent and provider IDs deduplicate confirmations. Late or
 mismatched transfers are recorded for admin review without allocating seats.
 Refunds operate against a selected recorded payment and its remaining refundable

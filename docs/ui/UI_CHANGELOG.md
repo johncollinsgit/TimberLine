@@ -2903,3 +2903,11 @@
   setup; changing the owner's email does not resolve that provider blocker.
 - No Shop Pay buyer button, PayPal checkout, registration opening or additional
   tenant activation is included.
+
+
+## 2026-10-16 - Soccer Stripe settlement identity
+
+- Soccer Checkout identifies its verified connected business as the settlement
+  merchant and payout destination, matching native storefront payments. Card
+  wallets, registration/jersey totals, zero platform fees and launch gates stay
+  unchanged. No live charge or registration opening is performed.
