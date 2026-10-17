@@ -11,6 +11,13 @@ class AiBranchProvider
 
     public function settings(): array
     {
+        if (is_array(config('ai_branch.fictional_request'))) {
+            $scope = app(AiFictionalPilot::class)->current();
+            abort_unless($scope, 403, 'Fictional pilot access changed.');
+
+            return ['model' => 'fictional-scripted-v1', 'input_rate' => 0, 'output_rate' => 0,
+                'max_input' => 24000, 'max_output' => 1024, 'fictional_scope' => $scope];
+        }
         $settings = [
             'model' => (string) config('ai_branch.model'),
             'input_rate' => (int) config('ai_branch.input_micros_per_million'),
@@ -26,6 +33,10 @@ class AiBranchProvider
 
     public function complete(array $input, array $settings, string $purpose = 'chat'): array
     {
+        // A revoked/expired grant must never fall through to a paid provider.
+        if (isset($settings['fictional_scope']) || is_array(config('ai_branch.fictional_request'))) {
+            return app(AiFictionalPilot::class)->response($input, $settings);
+        }
         // Deliberately no retry: a timeout may already have incurred cost.
         $response = Http::withToken(config('ai_branch.api_key'))->acceptJson()->connectTimeout(5)->timeout(40)
             ->post('https://api.openai.com/v1/responses', [

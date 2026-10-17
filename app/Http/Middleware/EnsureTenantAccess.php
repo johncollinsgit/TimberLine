@@ -64,7 +64,7 @@ class EnsureTenantAccess
             abort(403, 'Use the soccer workspace for Wren operations.');
         }
 
-        return $next($request);
+        return app(\App\Services\AiBranch\AiFictionalPilot::class)->during($tenant, $user, fn () => $next($request));
     }
 
     protected function assertStoreAccess(Request $request, int $tenantId): void

@@ -1,5 +1,15 @@
 # SYSTEM SNAPSHOT
 
+## Fictional voice pilot (2026-10-16; provisioning increment)
+
+- A privileged, audited seven-day grant can prepare `everbranch-voice-pilot` for
+  one existing verified owner. It uses a deterministic scripted provider with
+  zero tokens/cost and no subscription records or external dispatch. Real tenant
+  paid gates stay unchanged; revoked/expired pilots cannot fall through to them.
+- Request-local configuration restores after responses/errors. Existing reviewed
+  note/task/report services operate only on the synthetic tenant. See
+  `docs/operations/everbranch-fictional-voice-pilot.md` for setup and revocation.
+
 ## Ask Everbranch assistant (2026-10-16; local fictional acceptance)
 
 - A default-off, tenant-allowlisted web panel/native sheet reuses AI Branch chat,

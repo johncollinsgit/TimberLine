@@ -14,6 +14,18 @@ class AiBranchAccess
 
     public function authorize(Tenant $tenant, User $user, bool $optedIn = true): array
     {
+        $pilot = app(AiFictionalPilot::class);
+        if ($pilot->reserved($tenant)) {
+            abort_unless($pilot->grant($tenant, $user) && $pilot->current()
+                && (int) $pilot->current()['tenant_id'] === (int) $tenant->id, 404);
+            $this->member($tenant, $user);
+            abort_unless($this->modules->canAccess($tenant->id, 'ai_branch'), 403);
+            if ($optedIn) {
+                abort_unless(AiBranchAccount::where('tenant_id', $tenant->id)->where('enabled', true)->exists(), 403);
+            }
+
+            return config('module_catalog.addons.ai_branch_growth');
+        }
         abort_unless(config('ai_branch.enabled') && in_array((int) $tenant->id, config('ai_branch.tenant_ids', []), true), 404);
         $this->member($tenant, $user);
         abort_unless(app(TenantModuleAccessResolver::class)->canAccess($tenant->id, 'ai_branch'), 403);

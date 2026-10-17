@@ -1,5 +1,11 @@
 ## Ask Everbranch (2026-10-16; local, disabled)
 
+- The separately audited fictional pilot uses the fixed `everbranch-voice-pilot`
+  slug, one existing verified owner, expiring grants and scripted zero-cost answers.
+  Read `docs/operations/everbranch-fictional-voice-pilot.md`. Never replace that
+  grant with fabricated paid billing, grant other tenants a provider bypass, or
+  remove request-local restoration / revoke-before-provider checks.
+
 - Read `docs/operations/everbranch-voice-runbook.md` and
   `docs/architecture/everbranch-voice-acceptance.md` before extending the assistant.
   Navigation uses deterministic authorized search. Business mode reuses AI Branch,
