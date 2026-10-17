@@ -215,7 +215,10 @@ No live ingress, dispatch, owned-number persistence or billing path exists yet.
 Do not interpret adapter capability declarations as live provider readiness.
 
 `EVERBRANCH_AI_ASSISTANT_PHONE_PRACTICE_ENABLED` is independently default-off and
-local/testing-only, including when a production flag is accidentally enabled.
+local/testing-only for ordinary tenants, including when a production flag is
+accidentally enabled. The separately audited fictional web pilot is the sole
+production practice exception; it requires its current expiring owner grant and
+scripted provider scope. See `everbranch-fictional-voice-pilot.md`.
 Web/native practice explicitly runs one of seven fixed fictional scenarios,
 discloses scripted coverage and never contacts a provider. Normal assistant reads
 do not consume its namespaced rate limit. Report, attention, start and ask limits

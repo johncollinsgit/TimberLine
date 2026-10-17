@@ -38,8 +38,10 @@ queue, emergency calling, real voicemail or live-transfer acceptance.
 ## Fictional practice
 
 `EVERBRANCH_AI_ASSISTANT_PHONE_PRACTICE_ENABLED` defaults false. It additionally
-requires every assistant gate and a `local` or `testing` environment. Production
-cannot expose it even with that flag true. The paired web/native view explicitly
+requires every assistant gate and a `local` or `testing` environment for ordinary
+tenants. A production flag alone cannot expose it. The separately audited
+fictional web pilot may practice only inside its current scripted owner grant;
+see `../operations/everbranch-fictional-voice-pilot.md`. The paired view explicitly
 runs a selected scenario; opening the view sends no provider request.
 
 Seven scripted scenarios cover open/closed hours, unavailable staff, declined
