@@ -1,5 +1,5 @@
-const VERSION='everbranch-retail-v5';
-const CORE=['/retail/offline.html','/retail/app.mjs','/retail/commerce.mjs','/retail/sales.mjs','/retail/app.css','/retail/manifest.webmanifest','/retail/photos.json','/retail/assets/icon.svg','/retail/assets/icon.svg?v=4','/retail/assets/icon-192.png?v=4','/retail/assets/icon-512.png?v=4','/retail/assets/icon-maskable-192.png?v=4','/retail/assets/icon-maskable-512.png?v=4'];
+const VERSION='everbranch-retail-v6';
+const CORE=['/retail/offline.html','/retail/app.mjs','/retail/commerce.mjs','/retail/sales.mjs','/retail/voice.mjs','/retail/app.css','/retail/manifest.webmanifest','/retail/photos.json','/retail/assets/icon.svg','/retail/assets/icon.svg?v=4','/retail/assets/icon-192.png?v=4','/retail/assets/icon-512.png?v=4','/retail/assets/icon-maskable-192.png?v=4','/retail/assets/icon-maskable-512.png?v=4'];
 // An update may retire the previous cache only after its replacement contains
 // every public demo photo, including images not visited on this device yet.
 self.addEventListener('install',e=>e.waitUntil((async()=>{

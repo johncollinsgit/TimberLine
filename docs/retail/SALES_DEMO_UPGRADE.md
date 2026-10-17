@@ -85,12 +85,13 @@ history is transient and limited to four turns; closing/navigation clears it.
 The provider request uses `store: false`. This setting is not a promise about
 provider-wide abuse-monitoring retention.
 
-Voice input uses browser speech recognition with a typed fallback. The user reviews
-the transcript before submitting. Explicit commands can open permitted demo pages;
-AI page suggestions use an allowlist and require a click. Optional **Read aloud**
-uses browser speech synthesis. No ambient microphone or Realtime voice session is
-started. Email/SMS outputs are drafts only; sending, audience consent, sender
-readiness and live customer activation retain their existing controls.
+The **Talk with AI** mode now adds an explicit, context-aware Realtime audio
+conversation. It checks internet/server/provider readiness before microphone access
+and ends audio on close, backgrounding, connection loss or its five-minute limit.
+See [VOICE_DEMO.md](VOICE_DEMO.md) for configuration, privacy and verification.
+The separate typed/browser-speech fallback retains reviewed input, allowlisted page
+navigation and optional read-aloud. Email/SMS outputs remain drafts only; sending,
+audience consent and live activation retain their existing controls.
 
 Guided examples are clearly labeled and remain usable when live AI is unavailable.
 Provider failures never masquerade as live AI. A genuine OpenAI draft was verified
@@ -100,7 +101,7 @@ application settings or production files were changed.
 
 ## Offline and tablet operation
 
-Cache v4 includes the public sales module and removes prior shell caches. Use
+Cache v6 includes the public sales and voice modules and removes prior shell caches. Use
 **Prepare offline demos / Refresh offline demos** to refresh the sanitized pack.
 Only public shell/assets and fictional sample data are cached; signup, AI and other
 private APIs remain excluded. The updated assistant and pricing reopen offline;

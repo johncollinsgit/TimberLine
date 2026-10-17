@@ -141,3 +141,46 @@ sample-cart/activity hash was unchanged.
 Bootstrap and public navigation use a four-second connection bound; prepared
 public modules/photos load locally. Live permission failures continue to fail
 closed rather than falling back to an offline permission grant.
+
+## Conversational voice verification — 2026-10-17
+
+- Retail PHP suite: **67 passed, 756 assertions**. Voice-specific tests: **8 passed,
+  123 assertions**, including owner/verification checks, unknown or private input
+  rejection, no-store responses, missing configuration, model readiness vs network
+  failure, bounded public context, multipart negotiation, restored SDP CRLF, quotas
+  and masked provider failures. Scoped Pint passed for five PHP files.
+- Voice browser regression: **9 scenario groups passed**, zero page errors. It uses
+  mocked audio/WebRTC and validates readiness without
+  recording, selected merchant/page, transcript escaping/order, follow-up turns,
+  interruption state, track mute/end, offline recovery without automatic recording,
+  authentication and microphone-permission failures, delayed permission cleanup,
+  active close/background cleanup, failed WebRTC cleanup, five-minute expiry, typed
+  navigation and transient transcripts. Portrait/landscape screenshots inspected.
+- An opted-in **real OpenAI Realtime** session passed with two synthetic spoken
+  questions and spoken replies. The first reply named Joy Fudge Company; the follow-up
+  referred back to its sample fudge choices. **2,604 inbound audio packets** were
+  received and playback was active. End closed the peer and stopped all tracks.
+  No Mac physical microphone was used. The initial failed attempts exposed Laravel
+  trimming the SDP's required terminating CRLF; the server now restores it.
+- Actual installed Galaxy SM-T577U: standalone mode, ready connection screen, real
+  microphone permission/track creation immediately muted before transport, live
+  provider reply with **596 inbound audio packets**, active playback, End cleanup,
+  portrait/landscape layout and unchanged cart/sample-activity hash. No ambient
+  microphone audio was sent. A visitor's spoken input through the Galaxy microphone
+  and audibility in the festival environment still need a human check.
+- With the Galaxy's Mac reverse connection removed, the prepared storefront/photos
+  reopened, voice Start stayed disabled, and cache v6 retained **all 75 photos** with
+  no private API cache entries. Reverse forwarding, automatic rotation and the
+  original 30-second timeout were restored. No uninstall or data clearing occurred.
+- Repeated offline photo regression: **75 photos, 21 storefronts, 182 product cards
+  and 21 detail photos**, upgrade carry-forward with fresh image requests blocked,
+  weak-network fallback and zero page errors. Sales regression: **9 scenario groups
+  passed**, zero page errors; real signup submission remained intercepted.
+
+Exact reports and screenshots are in ignored `output/retail/voice/`, including
+`browser-results.json`, `live-results.json`, `galaxy-results.json`,
+`galaxy-offline-results.json`, `live-conversation.png`, `galaxy-live-muted.png` and
+`galaxy-ready-portrait.png`. The local server holds the existing authorized key in
+process memory only. Voice needs internet and the local Mac server for session
+startup; it has no web search. No production release/settings change was performed.
+Lenovo work remains on hold. Setup and limits: [VOICE_DEMO.md](VOICE_DEMO.md).

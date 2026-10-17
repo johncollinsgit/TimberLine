@@ -58,7 +58,7 @@ if(live){assert.equal(bootstrap.assistant.available,true);await page.locator('#a
 else {if(await page.locator('[data-sales-action="guided"]').count())await page.locator('[data-sales-action="guided"]').click();await page.locator('#assistant-query').fill('A weekend collection');await page.locator('#retail-assistant-form button[type="submit"]').click();await page.waitForSelector('#assistant-result pre');assert.match(await page.locator('#assistant-result h3').innerText(),/Sample draft/);checks.push('Guided fallback clearly labeled as a sample');}
 await page.screenshot({path:output+(device?'/galaxy-ai-draft.png':'/ai-draft.png')});
 await page.locator('[data-action="close"]').first().click();
-await page.locator('[data-sales-action="assistant"][data-mode="voice"]').click();await page.locator('#assistant-query').fill('Open pricing');await page.locator('#retail-assistant-form button[type="submit"]').click();await page.waitForSelector('.launch-price-grid');checks.push('Voice-assistant typed fallback opens the requested pricing page');
+await page.locator('[data-sales-action="assistant"][data-mode="voice"]').click();await page.locator('[data-sales-action="typed-voice"]').click();await page.locator('#assistant-query').fill('Open pricing');await page.locator('#retail-assistant-form button[type="submit"]').click();await page.waitForSelector('.launch-price-grid');checks.push('Voice-assistant typed fallback opens the requested pricing page');
 assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'No horizontal overflow');
 if(!device){
  await page.locator('[data-action="home"]').first().click();
@@ -66,10 +66,10 @@ if(!device){
  await page.locator('[data-action="offline"]').first().click();
  await page.waitForFunction(old=>JSON.parse(localStorage.getItem('retail-offline-pack')||'null')?.expires>old,previous,{timeout:60000});
  await page.evaluate(()=>navigator.serviceWorker.ready);
- const privateCached=await page.evaluate(async()=>{const c=await caches.open('everbranch-retail-v5');return (await c.keys()).some(r=>new URL(r.url).pathname.includes('/api/'));});assert.equal(privateCached,false);
+ const privateCached=await page.evaluate(async()=>{const c=await caches.open('everbranch-retail-v6');return (await c.keys()).some(r=>new URL(r.url).pathname.includes('/api/'));});assert.equal(privateCached,false);
  await context.setOffline(true);await page.goto(base+'/retail/showroom/assistant');await page.waitForSelector('.assistant-grid');assert.match(await page.locator('.assistant-hero').innerText(),/live AI unavailable/);
  await page.locator('[data-action="pricing"]').first().click();await page.locator('[data-sales-action="signup"]').first().click();assert.equal(await page.locator('#retail-signup-details').count(),0);
- await context.setOffline(false);await page.reload();await page.waitForSelector('.assistant-grid');checks.push('Cache v4 reopens assistant offline, excludes private APIs and blocks offline signup');
+ await context.setOffline(false);await page.reload();await page.waitForSelector('.assistant-grid');checks.push('Cache v6 reopens assistant offline, excludes private APIs and blocks offline signup');
 }
 assert.deepEqual(errors,[]);
 fs.writeFileSync(output+(device?'/galaxy-results.json':'/browser-results.json'),JSON.stringify({checks,errors,liveOpenAiVerified:live,device,signupSubmission:device?'reviewed only; never submitted':'intercepted fixture; no real registration'},null,2));

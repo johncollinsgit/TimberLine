@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Retail\RetailShowroomController as Retail;
+use App\Http\Controllers\Retail\RetailVoiceController;
 use Illuminate\Support\Facades\Route;
 
 $host = config('tenancy.landlord.primary_host');
@@ -18,6 +19,8 @@ if (is_string($host) && $host !== '') {
             Route::get('/showroom/assistant', [Retail::class, 'index'])->name('retail.assistant');
             Route::post('/showroom/api/signup', [Retail::class, 'signup'])->middleware('throttle:6,1,retail-signup:');
             Route::post('/showroom/api/assistant', [Retail::class, 'assistant'])->middleware('throttle:6,1,retail-ai:');
+            Route::get('/showroom/api/voice/status', [RetailVoiceController::class, 'status'])->middleware('throttle:15,1,retail-voice-status:');
+            Route::post('/showroom/api/voice/session', [RetailVoiceController::class, 'session'])->middleware('throttle:6,1,retail-voice-session:');
             Route::get('/showroom/outreach', [Retail::class, 'outreach'])->name('retail.outreach');
             Route::get('/showroom/concepts/{slug}', [Retail::class, 'concept']);
             Route::get('/staff/{slug}', [Retail::class, 'concept']);

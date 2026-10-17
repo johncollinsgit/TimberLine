@@ -19,7 +19,9 @@ add-on remains $99/month; it was not repriced.
 `EvergroveOffer` reads the named offer in `config/module_catalog.php`. Existing
 website/workspace demonstrations and the weekly one-hour strategic partnership
 remain included in the proposed scope. See `SALES_DEMO_UPGRADE.md` for signup,
-OpenAI configuration, browser speech, and physical tablet verification.
+OpenAI configuration and physical tablet verification. **Talk with AI** adds live
+voice conversations when connected; see `VOICE_DEMO.md`. Offline storefronts and
+photos remain available when voice cannot connect.
 
 ## Source and branches
 

@@ -1,4 +1,5 @@
 import {money} from './commerce.mjs';
+import {createRetailVoice} from './voice.mjs';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const features = [
@@ -12,6 +13,7 @@ const features = [
 
 export function createRetailSales({context, openModal, closeModal, toast, api, navigate}) {
   let draft = null, recognition = null, speechTimer = null, thread = [], lastReply = "";
+  const voice = createRetailVoice({context,openModal});
   const live = () => context().owner && !context().offline && navigator.onLine && context().pack?.assistant?.available;
   const currentOffer = () => context().pack?.offer;
   const validOffer = o => o?.key === 'retail_launch_partner' && o.quote_version && Number.isInteger(o.introductory_months);
@@ -25,7 +27,7 @@ export function createRetailSales({context, openModal, closeModal, toast, api, n
   }
 
   function assistantPage() {
-    return `<main class="wrap assistant-page"><section class="assistant-hero"><div class="eyebrow">MEET YOUR AI BUSINESS ASSISTANT</div><h1>Good help.<br>Right where you work.</h1><p>Your business has a lot of moving parts. Everbranch helps you manage them.</p><div class="pill">${live()?'Live OpenAI · demo business':'Guided examples · live AI unavailable'}</div><p class="compact-info">${live()?'Ask questions and create drafts with OpenAI using the demonstration business.':'Try guided examples while the live AI connection is unavailable.'} No campaign is sent and no private customer information is accessed.</p></section><section class="assistant-grid" aria-label="Business assistant capabilities">${features.map(([key,title,body,icon])=>`<article class="assistant-card"><span class="assistant-symbol" aria-hidden="true">${icon}</span><span class="eyebrow">${key==='social'?'COMING SOON':live()?'ASK EVERBRANCH':'TRY A GUIDED EXAMPLE'}</span><h2>${title}</h2><p>${body}</p>${key==='social'?'<span class="pill">Coming Soon</span>':`<button class="button light" data-sales-action="assistant" data-mode="${key}">Try ${key==='voice'?'voice navigation':'an example'} →</button>`}</article>`).join('')}</section><section class="assistant-next"><div><h2>Picture it working for your business.</h2><p>Explore the offer, then request a private setup review.</p></div><button class="button" data-action="pricing">See launch pricing →</button></section></main>`;
+    return `<main class="wrap assistant-page"><section class="assistant-hero"><div class="eyebrow">MEET YOUR AI BUSINESS ASSISTANT</div><h1>Good help.<br>Right where you work.</h1><p>Your business has a lot of moving parts. Everbranch helps you manage them.</p><div class="pill">${live()?'Live OpenAI · demo business':'Guided examples · live AI unavailable'}</div><p class="compact-info">${live()?'Ask questions and create drafts with OpenAI using the demonstration business.':'Try guided examples while the live AI connection is unavailable.'} No campaign is sent and no private customer information is accessed.</p></section><section class="assistant-grid" aria-label="Business assistant capabilities">${features.map(([key,title,body,icon])=>`<article class="assistant-card"><span class="assistant-symbol" aria-hidden="true">${icon}</span><span class="eyebrow">${key==='social'?'COMING SOON':live()?'ASK EVERBRANCH':'TRY A GUIDED EXAMPLE'}</span><h2>${title}</h2><p>${body}</p>${key==='social'?'<span class="pill">Coming Soon</span>':`<button class="button light" data-sales-action="assistant" data-mode="${key}">Try ${key==='voice'?'a conversation':'an example'} →</button>`}</article>`).join('')}</section><section class="assistant-next"><div><h2>Picture it working for your business.</h2><p>Explore the offer, then request a private setup review.</p></div><button class="button" data-action="pricing">See launch pricing →</button></section></main>`;
   }
 
   function signup() {
@@ -44,6 +46,7 @@ export function createRetailSales({context, openModal, closeModal, toast, api, n
   }
 
   function clear() {
+    voice.clear();
     draft = null; thread=[]; lastReply=""; window.speechSynthesis?.cancel();
     clearTimeout(speechTimer);
     if (recognition) { recognition.onresult = recognition.onerror = recognition.onend = null; recognition.abort(); recognition = null; }
@@ -68,8 +71,10 @@ export function createRetailSales({context, openModal, closeModal, toast, api, n
     if (!button) return;
     event.preventDefault();
     if (button.dataset.salesAction==='signup') signup();
-    if (button.dataset.salesAction==='assistant') assistant(button.dataset.mode);
+    if (button.dataset.salesAction==='assistant') { if(button.dataset.mode==='voice')voice.open(); else assistant(button.dataset.mode); }
     if (button.dataset.salesAction==='speak') speak();
+    if (button.dataset.salesAction==='voice') voice.open();
+    if (button.dataset.salesAction==='typed-voice') assistant('voice',true);
     if (button.dataset.salesAction==='guided') assistant(button.dataset.mode,true);
     if (button.dataset.salesAction==='navigate' && ['home','pricing','assistant','customers','rewards','team'].includes(button.dataset.destination)){closeModal();navigate(button.dataset.destination);}
     if (button.dataset.salesAction==='read' && lastReply && 'speechSynthesis' in window){window.speechSynthesis.cancel();window.speechSynthesis.speak(new SpeechSynthesisUtterance(lastReply));}

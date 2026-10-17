@@ -1,5 +1,17 @@
 # SYSTEM SNAPSHOT
 
+## 2026-10-17 — Retail conversational voice (development)
+
+The installed Retail PWA adds **Talk with AI**, an owner-authenticated OpenAI
+Realtime conversation using the selected public demo catalog and canonical offer.
+Readiness checks precede microphone access; follow-up turns and interruptions share
+one session. Mute/end, navigation, backgrounding, network loss and the five-minute
+client limit clean up audio. Returning online never restarts the microphone.
+Voice is default-off; its server key stays private. There are no action tools,
+private customer records or web search. Cache v6 adds the public voice module and
+retains the full 75-photo offline pack. See `docs/retail/VOICE_DEMO.md` for local
+configuration, provider/privacy boundaries and verification. No production release.
+
 ## 2026-10-17 — Retail offline photo repair (development)
 
 Retail cache v5 preloads the public shell and all 75 bundled demo photographs
