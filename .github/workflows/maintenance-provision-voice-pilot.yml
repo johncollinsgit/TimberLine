@@ -1,0 +1,90 @@
+name: Provision Fictional Ask Everbranch Pilot
+
+on:
+  workflow_dispatch:
+    inputs:
+      owner_email:
+        description: Existing verified account receiving the fictional workspace
+        required: true
+        type: string
+      confirm_provision:
+        description: Apply the isolated seven-day scripted grant (no paid provider or subscription)
+        required: true
+        default: false
+        type: boolean
+      revoke:
+        description: Revoke the existing fictional grant instead of provisioning
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fictional-voice-pilot-maintenance
+  cancel-in-progress: false
+
+jobs:
+  provision:
+    name: Provision audited scripted pilot
+    if: ${{ inputs.confirm_provision == true && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - name: Validate access and exact deployed release
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          OWNER_EMAIL: ${{ inputs.owner_email }}
+          EXPECTED_RELEASE: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          for var in DEPLOY_HOST DEPLOY_USER DEPLOY_PORT DEPLOY_PATH DEPLOY_SSH_KEY; do
+            if [ -z "${!var}" ]; then
+              echo "::error::Missing required secret: $var"
+              exit 1
+            fi
+          done
+          if ! printf '%s' "$OWNER_EMAIL" | grep -Eiq '^[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}$'; then
+            echo "::error::Invalid owner email."
+            exit 1
+          fi
+          ready="$(curl --fail --silent --show-error --max-time 20 https://app.theeverbranch.com/ready)"
+          printf '%s' "$ready" | grep --fixed-strings --quiet "\"release\":\"$EXPECTED_RELEASE\""
+
+      - name: Configure SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Preview and apply the approved fictional workspace grant
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          OWNER_EMAIL: ${{ inputs.owner_email }}
+          REVOKE: ${{ inputs.revoke }}
+        run: |
+          set -euo pipefail
+          extra=""
+          if [ "$REVOKE" = "true" ]; then extra="--revoke"; fi
+          ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "set -euo pipefail; cd '$DEPLOY_PATH'; php artisan everbranch:prepare-voice-pilot --owner-email='$OWNER_EMAIL'; php artisan everbranch:prepare-voice-pilot --owner-email='$OWNER_EMAIL' --authorization='approved-fictional-pilot-run-$GITHUB_RUN_ID' --force-production --apply $extra"
+          if [ "$REVOKE" != "true" ]; then
+            ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+              "set -euo pipefail; cd '$DEPLOY_PATH'; php artisan everbranch:prepare-voice-pilot --owner-email='$OWNER_EMAIL' --verify"
+          fi

@@ -71,6 +71,7 @@ class AiAssistantController extends Controller
         }
         unset($message);
         $payload = [
+            'fictional_pilot' => app(\App\Services\AiBranch\AiFictionalPilot::class)->current() !== null,
             'commitments_available' => $commitmentsAvailable,
             'phone_practice_available' => app(\App\Services\Voice\PhonePractice::class)->available($tenant, $user),
             'attention_available' => (bool) config('ai_branch.assistant_attention_enabled') && $context->enabled($tenant) && $context->permissions($tenant, $user)['followups'],

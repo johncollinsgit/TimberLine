@@ -14,7 +14,7 @@ class PhonePractice
 
     public function available(Tenant $tenant, User $user): bool
     {
-        return app()->environment(['local', 'testing']) && config('ai_branch.assistant_phone_practice_enabled')
+        return (app()->environment(['local', 'testing']) || app(\App\Services\AiBranch\AiFictionalPilot::class)->current()) && config('ai_branch.assistant_phone_practice_enabled')
             && app(AiAssistantAccess::class)->allows($tenant, $user);
     }
 

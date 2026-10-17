@@ -1,6 +1,8 @@
 <?php
 
 return [
+    // No grant means disabled; this emergency switch also revokes existing pilot grants.
+    'fictional_pilot_disabled' => (bool) env('EVERBRANCH_AI_FICTIONAL_PILOT_DISABLED', false),
     'assistant_enabled' => (bool) env('EVERBRANCH_AI_ASSISTANT_ENABLED', false),
     'assistant_finance_enabled' => (bool) env('EVERBRANCH_AI_ASSISTANT_FINANCE_ENABLED', false),
     'assistant_reports_enabled' => (bool) env('EVERBRANCH_AI_ASSISTANT_REPORTS_ENABLED', false),

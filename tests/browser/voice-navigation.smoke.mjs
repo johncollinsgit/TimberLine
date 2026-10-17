@@ -15,7 +15,7 @@ const markup = blade.slice(blade.indexOf('<div'), blade.indexOf('@once')).replac
 const script = blade.match(/<script>([\s\S]*?)<\/script>/)[1]
 const manifest = JSON.parse(await readFile(resolve(root, 'public/build/manifest.json'), 'utf8'))
 const assistantEntry = manifest['resources/js/ai-assistant.jsx']
-const assistantData = { version: 1, workspace: { id: 1, name: 'Fictional Cedar Works' }, context: null, conversation: null, conversations: [], memories: [], actions: [], usage: { responses: 0, provider_micros: 0 } }
+const assistantData = { version: 1, fictional_pilot: true, workspace: { id: 1, name: 'Fictional Cedar Works' }, context: null, conversation: null, conversations: [], memories: [], actions: [], usage: { responses: 0, provider_micros: 0 } }
 let assistantAllowed = true
 let assistantRequests = 0
 let assistantSessionDelay = 0
@@ -374,6 +374,8 @@ try {
   await page.getByText('Fictional answer:', { exact: false }).waitFor()
   assert.equal(await page.locator('dialog img').count(), 0)
   checks.push('web assistant dispatches only on Ask and escapes generated text')
+  await page.getByRole('note').filter({ hasText: 'Fictional pilot' }).waitFor()
+  checks.push('web fictional pilot persistently discloses scripted zero-dispatch behavior')
   await page.getByText('Sources (1)', { exact: true }).click()
   page.once('dialog', dialog => dialog.dismiss())
   await page.getByRole('link', { name: 'Fictional source job', exact: true }).click()

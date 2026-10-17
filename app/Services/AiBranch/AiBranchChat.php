@@ -129,7 +129,7 @@ class AiBranchChat
                     'context' => 'workspace', 'model' => $settings['model'], 'status' => 'reserved', 'duration_seconds' => 0,
                     'provider_cost_micros' => $reservedMicros, 'buyer_charge_micros' => 0, 'occurred_at' => now('UTC'),
                     'metadata' => ['request_hash' => $fingerprint, 'conversation_id' => $conversation->id, 'settings' => $settings,
-                        'billing_scope' => 'included_subscription', 'purpose' => $purpose, 'context_version' => $snapshot['version'] ?? 1, 'adapter_counts' => $counts],
+                        'billing_scope' => isset($settings['fictional_scope']) ? 'fictional_no_charge' : 'included_subscription', 'purpose' => $purpose, 'context_version' => $snapshot['version'] ?? 1, 'adapter_counts' => $counts],
                 ]);
                 $conversation->forceFill(['pending_uuid' => $uuid])->save();
 
