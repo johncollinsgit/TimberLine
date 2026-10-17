@@ -1,0 +1,1417 @@
+{
+  "schema_version": 1,
+  "private_research": true,
+  "researched_at": "2026-10-15",
+  "festival": {
+    "name": "Woolly Worm Festival 2026",
+    "dates": [
+      "2026-10-17",
+      "2026-10-18"
+    ],
+    "source": "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026"
+  },
+  "notes": [
+    "Thirteen roster-verified additional candidate concepts. No merchant approved these concepts or their stock, variant names, synthetic measurements or demonstration prices.",
+    "Observed public website facts are separated from proposed website/customer-relationship opportunities. Strong existing sites are not described as broken.",
+    "Existing vendor marketplace links may establish merchant-domain identity, but only the published 2026 roster establishes the festival year.",
+    "Draft outreach and public recipient evidence do not authorize sending messages before the user reviews vendor-specific text."
+  ],
+  "vendors": [
+    {
+      "slug": "appalachian-divinitea",
+      "name": "Appalachian DiviniTEA",
+      "booth": "Row 2 C",
+      "website": "https://appalachiandivinitea.com/",
+      "checked_at": "2026-10-15",
+      "attendance": {
+        "source": "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "published_year": 2026,
+        "dates": [
+          "2026-10-17",
+          "2026-10-18"
+        ],
+        "roster_name": "Appalachian DiviniTEA",
+        "booth": "Row 2 C",
+        "evidence_note": "Listed in the published 2026 Woolly Worm Gazette vendor roster. The prior festival marketplace is used only for merchant-domain identity, not attendance."
+      },
+      "site_review": {
+        "observation": "The mobile homepage offers many tea categories, a market finder, and a free-shipping code that excludes canned drinks.",
+        "opportunity": "Guide shoppers to a tea they like and clarify eligible shipping baskets.",
+        "evidence_type": "live_mobile_review",
+        "url": "https://appalachiandivinitea.com/",
+        "checked_at": "2026-10-15",
+        "screenshot": "output/retail/screenshots/research-appalachian-divinitea-mobile.png",
+        "strengths": [
+          "An established online shop, market finder and product categories are already present."
+        ],
+        "questions": [
+          "Actual tea sizes and prices",
+          "Current promotion and canned-drink exclusions",
+          "Canned beverage packing and dispatch limits",
+          "Fulfillment origin and pickup arrangements",
+          "Permission to reuse blend names, descriptions and photos"
+        ],
+        "interpretation_note": "The observation is evidence from the review; the opportunity is an Evergrove proposal, not a merchant-approved diagnosis."
+      },
+      "price_provenance": [
+        {
+          "product_id": "p1",
+          "name": "Rose Chai Organic Tea",
+          "identity_verified": true,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p2",
+          "name": "Mellow Mood Organic Tea",
+          "identity_verified": true,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p3",
+          "name": "Tea discovery sampler · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p4",
+          "name": "Mountain morning black tea · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p5",
+          "name": "Iced tea four-pack · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p6",
+          "name": "Steep & sip gift set · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        }
+      ],
+      "shipping": {
+        "mode": "example_only",
+        "policy_observations": [
+          "Homepage observed: $75+ free-shipping code with canned-drink exclusion; retained as research, not activated."
+        ],
+        "measurements": "Synthetic sample weights and packed dimensions. Origins unknown. No live quote or dispatch promise.",
+        "questions": [
+          "Actual tea sizes and prices",
+          "Current promotion and canned-drink exclusions",
+          "Canned beverage packing and dispatch limits",
+          "Fulfillment origin and pickup arrangements",
+          "Permission to reuse blend names, descriptions and photos"
+        ]
+      },
+      "image_rights_note": "Uses generic original Evergrove demonstration photography, not copied merchant product photos or artwork. Ask permission before using actual assets or branding in any production storefront."
+    },
+    {
+      "slug": "avery-knifeworks",
+      "name": "Avery KnifeWorks",
+      "booth": "Row 4 A-B",
+      "website": "https://www.averyknifeworks.com/",
+      "checked_at": "2026-10-15",
+      "attendance": {
+        "source": "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "published_year": 2026,
+        "dates": [
+          "2026-10-17",
+          "2026-10-18"
+        ],
+        "roster_name": "Avery KnifeWorks",
+        "booth": "Row 4 A-B",
+        "evidence_note": "Listed in the published 2026 Woolly Worm Gazette vendor roster. The prior festival marketplace is used only for merchant-domain identity, not attendance."
+      },
+      "site_review": {
+        "observation": "Mobile review found horizontal overflow; the site promotes kitchen/outdoor knives and lifetime support.",
+        "opportunity": "Improve the mobile buying path and connect purchases with care and service history.",
+        "evidence_type": "live_mobile_review",
+        "url": "https://www.averyknifeworks.com/",
+        "checked_at": "2026-10-15",
+        "screenshot": "output/retail/screenshots/research-avery-knifeworks-mobile.png",
+        "strengths": [
+          "The existing site presents kitchen and outdoor collections, maker story and lifetime support."
+        ],
+        "questions": [
+          "Actual knife catalog and piece-specific prices",
+          "Mobile layout across actual devices",
+          "Secure blade packaging and carrier restrictions",
+          "Approved product and care photography",
+          "Care/guarantee workflow and customer history permissions"
+        ],
+        "interpretation_note": "The observation is evidence from the review; the opportunity is an Evergrove proposal, not a merchant-approved diagnosis."
+      },
+      "price_provenance": [
+        {
+          "product_id": "p1",
+          "name": "Chef’s knife · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p2",
+          "name": "Paring knife · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p3",
+          "name": "Kitchen utility knife · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p4",
+          "name": "Outdoor camp knife · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p5",
+          "name": "Leather sheath · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p6",
+          "name": "Blade care kit · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        }
+      ],
+      "shipping": {
+        "mode": "example_only",
+        "policy_observations": [],
+        "measurements": "Synthetic sample weights and packed dimensions. Origins unknown. No live quote or dispatch promise.",
+        "questions": [
+          "Actual knife catalog and piece-specific prices",
+          "Mobile layout across actual devices",
+          "Secure blade packaging and carrier restrictions",
+          "Approved product and care photography",
+          "Care/guarantee workflow and customer history permissions"
+        ]
+      },
+      "image_rights_note": "Uses generic original Evergrove demonstration photography, not copied merchant product photos or artwork. Ask permission before using actual assets or branding in any production storefront."
+    },
+    {
+      "slug": "boone-barndog",
+      "name": "Boone Barndog Art & Books",
+      "booth": "Row 6 A",
+      "website": "https://www.boonebarndog.com/",
+      "checked_at": "2026-10-15",
+      "attendance": {
+        "source": "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "published_year": 2026,
+        "dates": [
+          "2026-10-17",
+          "2026-10-18"
+        ],
+        "roster_name": "Boone Barndog Art & Books",
+        "booth": "Row 6 A",
+        "evidence_note": "Listed in the published 2026 Woolly Worm Gazette vendor roster. The prior festival marketplace is used only for merchant-domain identity, not attendance."
+      },
+      "site_review": {
+        "observation": "The shop includes print-at-home posters, physical ColorParty packs and books. The artist explicitly emphasizes hand-drawn work.",
+        "opportunity": "Make physical versus downloadable choices clearer and nurture repeat group orders.",
+        "evidence_type": "live_mobile_review",
+        "url": "https://www.boonebarndog.com/",
+        "checked_at": "2026-10-15",
+        "screenshot": "output/retail/screenshots/research-boone-barndog-mobile.png",
+        "strengths": [
+          "Existing ecommerce already distinguishes print-at-home posters and physical ColorParty packs and includes the maker’s story."
+        ],
+        "questions": [
+          "Permission to reproduce artwork or book covers",
+          "Physical versus digital catalog and delivery licensing",
+          "Print sizes, paper, quantities and prices",
+          "Group-order and classroom terms",
+          "Mailers, rolled-poster packaging and origin"
+        ],
+        "interpretation_note": "The observation is evidence from the review; the opportunity is an Evergrove proposal, not a merchant-approved diagnosis."
+      },
+      "price_provenance": [
+        {
+          "product_id": "p1",
+          "name": "Mountain-town coloring poster · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p2",
+          "name": "ColorParty Poster Packs",
+          "identity_verified": true,
+          "price_verified": true,
+          "source": "https://www.boonebarndog.com/",
+          "checked_at": "2026-10-15",
+          "note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant."
+        },
+        {
+          "product_id": "p3",
+          "name": "Nature coloring book · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p4",
+          "name": "Poetry collection · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p5",
+          "name": "Classroom printed bundle · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p6",
+          "name": "Creative gift envelope · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        }
+      ],
+      "shipping": {
+        "mode": "example_only",
+        "policy_observations": [],
+        "measurements": "Synthetic sample weights and packed dimensions. Origins unknown. No live quote or dispatch promise.",
+        "questions": [
+          "Permission to reproduce artwork or book covers",
+          "Physical versus digital catalog and delivery licensing",
+          "Print sizes, paper, quantities and prices",
+          "Group-order and classroom terms",
+          "Mailers, rolled-poster packaging and origin"
+        ]
+      },
+      "image_rights_note": "Artist’s website explicitly says Hand Drawn. No AI. Generic unbranded workstation imagery does not imitate or reproduce the artist’s drawings. Obtain explicit artist consent before any use of actual artwork; no generated artwork is attributed to the artist."
+    },
+    {
+      "slug": "britts-leather",
+      "name": "Britt’s Leather Co.",
+      "booth": "Row 14 A-B",
+      "website": "https://brittsleatherco.com/",
+      "checked_at": "2026-10-15",
+      "attendance": {
+        "source": "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "published_year": 2026,
+        "dates": [
+          "2026-10-17",
+          "2026-10-18"
+        ],
+        "roster_name": "Britt’s Leather Co.",
+        "booth": "Row 14 A-B",
+        "evidence_note": "Listed in the published 2026 Woolly Worm Gazette vendor roster. The prior festival marketplace is used only for merchant-domain identity, not attendance."
+      },
+      "site_review": {
+        "observation": "The homepage introduces custom-fit belts and several leather collections.",
+        "opportunity": "Guide belt sizing and personalization, then save preferences for repeat purchases.",
+        "evidence_type": "live_mobile_review",
+        "url": "https://brittsleatherco.com/",
+        "checked_at": "2026-10-15",
+        "screenshot": "output/retail/screenshots/research-britts-leather-mobile.png",
+        "strengths": [
+          "The site already introduces the family business and has collection navigation for belts, bags, wallets, journals and hats."
+        ],
+        "questions": [
+          "Approved product names, images and prices",
+          "Belt measurement and size guide",
+          "Personalization fields, proofs and lead times",
+          "Return policy for custom-fit items",
+          "Packaging and fulfillment origin"
+        ],
+        "interpretation_note": "The observation is evidence from the review; the opportunity is an Evergrove proposal, not a merchant-approved diagnosis."
+      },
+      "price_provenance": [
+        {
+          "product_id": "p1",
+          "name": "Custom-fit leather belt · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p2",
+          "name": "Folded leather wallet · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p3",
+          "name": "Leather journal cover · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p4",
+          "name": "Everyday leather tote · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p5",
+          "name": "Leather patch hat · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p6",
+          "name": "Personalized key fob · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        }
+      ],
+      "shipping": {
+        "mode": "example_only",
+        "policy_observations": [],
+        "measurements": "Synthetic sample weights and packed dimensions. Origins unknown. No live quote or dispatch promise.",
+        "questions": [
+          "Approved product names, images and prices",
+          "Belt measurement and size guide",
+          "Personalization fields, proofs and lead times",
+          "Return policy for custom-fit items",
+          "Packaging and fulfillment origin"
+        ]
+      },
+      "image_rights_note": "Uses generic original Evergrove demonstration photography, not copied merchant product photos or artwork. Ask permission before using actual assets or branding in any production storefront."
+    },
+    {
+      "slug": "datil-sensation",
+      "name": "Datil Sensation",
+      "booth": "Row 8 D",
+      "website": "https://datilsensations.com/",
+      "checked_at": "2026-10-15",
+      "attendance": {
+        "source": "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "published_year": 2026,
+        "dates": [
+          "2026-10-17",
+          "2026-10-18"
+        ],
+        "roster_name": "Datil Sensation",
+        "booth": "Row 8 D",
+        "evidence_note": "Listed in the published 2026 Woolly Worm Gazette vendor roster. The prior festival marketplace is used only for merchant-domain identity, not attendance."
+      },
+      "site_review": {
+        "observation": "The mobile homepage contains visible theme placeholder text. Larger-order and special-shipping assistance is directed to phone support.",
+        "opportunity": "Clean up placeholder content and provide a clear heat/bulk-order journey.",
+        "evidence_type": "live_mobile_review",
+        "url": "https://datilsensations.com/",
+        "checked_at": "2026-10-15",
+        "screenshot": "output/retail/screenshots/research-datil-sensation-mobile.png",
+        "strengths": [
+          "An established shop, festival schedule, recipes and human order assistance already exist."
+        ],
+        "questions": [
+          "Current bottle sizes and verified heat guide",
+          "Ingredients, allergens and shelf stability",
+          "Remove or replace visible theme placeholder content",
+          "Bulk-order and special-shipping workflow",
+          "Glass packing, dispatch days and origin"
+        ],
+        "interpretation_note": "The observation is evidence from the review; the opportunity is an Evergrove proposal, not a merchant-approved diagnosis."
+      },
+      "price_provenance": [
+        {
+          "product_id": "p1",
+          "name": "Indian Summer",
+          "identity_verified": true,
+          "price_verified": true,
+          "source": "https://datilsensations.com/",
+          "checked_at": "2026-10-15",
+          "note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant."
+        },
+        {
+          "product_id": "p2",
+          "name": "Tears",
+          "identity_verified": true,
+          "price_verified": true,
+          "source": "https://datilsensations.com/",
+          "checked_at": "2026-10-15",
+          "note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant."
+        },
+        {
+          "product_id": "p3",
+          "name": "Scorch",
+          "identity_verified": true,
+          "price_verified": true,
+          "source": "https://datilsensations.com/",
+          "checked_at": "2026-10-15",
+          "note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant."
+        },
+        {
+          "product_id": "p4",
+          "name": "Viper",
+          "identity_verified": true,
+          "price_verified": true,
+          "source": "https://datilsensations.com/",
+          "checked_at": "2026-10-15",
+          "note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant."
+        },
+        {
+          "product_id": "p5",
+          "name": "Festival salsa jar · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p6",
+          "name": "Sweet-heat preserve · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        }
+      ],
+      "shipping": {
+        "mode": "example_only",
+        "policy_observations": [],
+        "measurements": "Synthetic sample weights and packed dimensions. Origins unknown. No live quote or dispatch promise.",
+        "questions": [
+          "Current bottle sizes and verified heat guide",
+          "Ingredients, allergens and shelf stability",
+          "Remove or replace visible theme placeholder content",
+          "Bulk-order and special-shipping workflow",
+          "Glass packing, dispatch days and origin"
+        ]
+      },
+      "image_rights_note": "Uses generic original Evergrove demonstration photography, not copied merchant product photos or artwork. Ask permission before using actual assets or branding in any production storefront."
+    },
+    {
+      "slug": "gw-watts-sauce",
+      "name": "GW Watts Sauce",
+      "booth": "Row 13 A",
+      "website": "https://www.wattssauce.com/",
+      "checked_at": "2026-10-15",
+      "attendance": {
+        "source": "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "published_year": 2026,
+        "dates": [
+          "2026-10-17",
+          "2026-10-18"
+        ],
+        "roster_name": "GW Watts Sauce",
+        "booth": "Row 13 A",
+        "evidence_note": "Listed in the published 2026 Woolly Worm Gazette vendor roster. The prior festival marketplace is used only for merchant-domain identity, not attendance."
+      },
+      "site_review": {
+        "observation": "The homepage presents many sampler packs with abbreviated product codes.",
+        "opportunity": "Make sampler differences clearer and retain tasting preferences for reorders.",
+        "evidence_type": "live_mobile_review",
+        "url": "https://www.wattssauce.com/",
+        "checked_at": "2026-10-15",
+        "screenshot": "output/retail/screenshots/research-gw-watts-sauce-mobile.png",
+        "strengths": [
+          "The current shop includes sauce, mustard, seasoning and sampler collections plus recipes."
+        ],
+        "questions": [
+          "Exact sampler contents and consumer-friendly names",
+          "Current ingredients, allergens and prices",
+          "Shipping threshold and eligible destinations",
+          "Glass packaging, dispatch schedule and origin",
+          "Approved photos and product stories"
+        ],
+        "interpretation_note": "The observation is evidence from the review; the opportunity is an Evergrove proposal, not a merchant-approved diagnosis."
+      },
+      "price_provenance": [
+        {
+          "product_id": "p1",
+          "name": "Honey Bourbon Hot Sauce",
+          "identity_verified": true,
+          "price_verified": true,
+          "source": "https://www.wattssauce.com/",
+          "checked_at": "2026-10-15",
+          "note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant."
+        },
+        {
+          "product_id": "p2",
+          "name": "Honey Hot Sauce Gift Pack",
+          "identity_verified": true,
+          "price_verified": true,
+          "source": "https://www.wattssauce.com/",
+          "checked_at": "2026-10-15",
+          "note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant."
+        },
+        {
+          "product_id": "p3",
+          "name": "Watts Barbecue Sauce Sampler – Smoky Mountain - MHBH",
+          "identity_verified": true,
+          "price_verified": true,
+          "source": "https://www.wattssauce.com/",
+          "checked_at": "2026-10-15",
+          "note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant."
+        },
+        {
+          "product_id": "p4",
+          "name": "Carolina barbecue bottle · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p5",
+          "name": "Table mustard jar · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p6",
+          "name": "Grill seasoning blend · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        }
+      ],
+      "shipping": {
+        "mode": "example_only",
+        "policy_observations": [
+          "Homepage observed: free shipping on $45 or more; not activated in the demo."
+        ],
+        "measurements": "Synthetic sample weights and packed dimensions. Origins unknown. No live quote or dispatch promise.",
+        "questions": [
+          "Exact sampler contents and consumer-friendly names",
+          "Current ingredients, allergens and prices",
+          "Shipping threshold and eligible destinations",
+          "Glass packaging, dispatch schedule and origin",
+          "Approved photos and product stories"
+        ]
+      },
+      "image_rights_note": "Uses generic original Evergrove demonstration photography, not copied merchant product photos or artwork. Ask permission before using actual assets or branding in any production storefront."
+    },
+    {
+      "slug": "honest-elderberry-company",
+      "name": "Honest Elderberry Company",
+      "booth": "Row 15 E",
+      "website": "https://honestelderberryco.com/",
+      "checked_at": "2026-10-15",
+      "attendance": {
+        "source": "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "published_year": 2026,
+        "dates": [
+          "2026-10-17",
+          "2026-10-18"
+        ],
+        "roster_name": "Honest Elderberry Company",
+        "booth": "Row 15 E",
+        "evidence_note": "Listed in the published 2026 Woolly Worm Gazette vendor roster. The prior festival marketplace is used only for merchant-domain identity, not attendance."
+      },
+      "site_review": {
+        "observation": "The shop mixes syrups, tea, honey, body products and wholesale navigation.",
+        "opportunity": "Clarify product types and connect household favorites with appropriate fulfillment and follow-up.",
+        "evidence_type": "live_mobile_review",
+        "url": "https://honestelderberryco.com/",
+        "checked_at": "2026-10-15",
+        "screenshot": "output/retail/screenshots/research-honest-elderberry-company-mobile.png",
+        "strengths": [
+          "Existing ecommerce has distinct product categories, FAQs and wholesale access."
+        ],
+        "questions": [
+          "Actual food safety, refrigeration and shelf-life requirements",
+          "Approved product language without unverified health claims",
+          "Food versus body-care packaging",
+          "Ingredients, allergens, sizes and prices",
+          "Retail versus wholesale catalog access",
+          "Permission and consent for customer follow-up"
+        ],
+        "interpretation_note": "The observation is evidence from the review; the opportunity is an Evergrove proposal, not a merchant-approved diagnosis."
+      },
+      "price_provenance": [
+        {
+          "product_id": "p1",
+          "name": "Elderberry syrup selection · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p2",
+          "name": "Pantry honey jar · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p3",
+          "name": "Loose-leaf tea pouch · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p4",
+          "name": "At-home pantry kit · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p5",
+          "name": "Body-care jar · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p6",
+          "name": "Tea & honey gift selection · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        }
+      ],
+      "shipping": {
+        "mode": "example_only",
+        "policy_observations": [],
+        "measurements": "Synthetic sample weights and packed dimensions. Origins unknown. No live quote or dispatch promise.",
+        "questions": [
+          "Actual food safety, refrigeration and shelf-life requirements",
+          "Approved product language without unverified health claims",
+          "Food versus body-care packaging",
+          "Ingredients, allergens, sizes and prices",
+          "Retail versus wholesale catalog access",
+          "Permission and consent for customer follow-up"
+        ]
+      },
+      "image_rights_note": "Uses generic original Evergrove demonstration photography, not copied merchant product photos or artwork. Ask permission before using actual assets or branding in any production storefront."
+    },
+    {
+      "slug": "jc-wicks",
+      "name": "JC Wicks",
+      "booth": "Row 18 E",
+      "website": "https://jcwicks.com/",
+      "checked_at": "2026-10-15",
+      "attendance": {
+        "source": "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "published_year": 2026,
+        "dates": [
+          "2026-10-17",
+          "2026-10-18"
+        ],
+        "roster_name": "JC Wicks",
+        "booth": "Row 18 E",
+        "evidence_note": "Listed in the published 2026 Woolly Worm Gazette vendor roster. The prior festival marketplace is used only for merchant-domain identity, not attendance."
+      },
+      "site_review": {
+        "observation": "The site offers multiple scent product types and announces Friday shipping and a free-shipping threshold.",
+        "opportunity": "Link a preferred scent across products and make dispatch timing clearer.",
+        "evidence_type": "live_mobile_review",
+        "url": "https://jcwicks.com/",
+        "checked_at": "2026-10-15",
+        "screenshot": "output/retail/screenshots/research-jc-wicks-mobile.png",
+        "strengths": [
+          "Existing catalog spans candles, sprays, melts, body care, gift boxes and warmers."
+        ],
+        "questions": [
+          "Actual scents and cross-product availability",
+          "Friday dispatch cutoff and holiday handling",
+          "Current free-shipping threshold and exclusions",
+          "Liquid transport and wax temperature limits",
+          "Electrical product compliance and packing",
+          "Approved ingredients, prices and photos"
+        ],
+        "interpretation_note": "The observation is evidence from the review; the opportunity is an Evergrove proposal, not a merchant-approved diagnosis."
+      },
+      "price_provenance": [
+        {
+          "product_id": "p1",
+          "name": "Signature candle · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p2",
+          "name": "Wax melt collection · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p3",
+          "name": "Room & linen spray · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p4",
+          "name": "Hand & body cream · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p5",
+          "name": "Candle & melt gift box · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p6",
+          "name": "Electric wax warmer · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        }
+      ],
+      "shipping": {
+        "mode": "example_only",
+        "policy_observations": [
+          "Homepage observed: all orders ship Friday; free shipping on $60 and up. Research only; not activated."
+        ],
+        "measurements": "Synthetic sample weights and packed dimensions. Origins unknown. No live quote or dispatch promise.",
+        "questions": [
+          "Actual scents and cross-product availability",
+          "Friday dispatch cutoff and holiday handling",
+          "Current free-shipping threshold and exclusions",
+          "Liquid transport and wax temperature limits",
+          "Electrical product compliance and packing",
+          "Approved ingredients, prices and photos"
+        ]
+      },
+      "image_rights_note": "Uses generic original Evergrove demonstration photography, not copied merchant product photos or artwork. Ask permission before using actual assets or branding in any production storefront."
+    },
+    {
+      "slug": "little-elk-candle-company",
+      "name": "Little Elk Candle Company",
+      "booth": "Row 15 B",
+      "website": "https://www.littleelkcandles.com/",
+      "checked_at": "2026-10-15",
+      "attendance": {
+        "source": "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "published_year": 2026,
+        "dates": [
+          "2026-10-17",
+          "2026-10-18"
+        ],
+        "roster_name": "Little Elk Candle Company",
+        "booth": "Row 15 B",
+        "evidence_note": "Listed in the published 2026 Woolly Worm Gazette vendor roster. The prior festival marketplace is used only for merchant-domain identity, not attendance."
+      },
+      "site_review": {
+        "observation": "The homepage lists over twenty scents across candles, diffusers, melts and home fragrance.",
+        "opportunity": "Guide scent and format choices and keep customer favorites for reorders.",
+        "evidence_type": "live_mobile_review",
+        "url": "https://www.littleelkcandles.com/",
+        "checked_at": "2026-10-15",
+        "screenshot": "output/retail/screenshots/research-little-elk-candle-company-mobile.png",
+        "strengths": [
+          "The site already states format prices and invites scent discovery with more than twenty scents."
+        ],
+        "questions": [
+          "Complete scent list and scent-to-format availability",
+          "Current prices and product-content sizes",
+          "Liquid ingredients and transport restrictions",
+          "Safe-use text approved by merchant",
+          "Glass, powder and heat-sensitive packing",
+          "Origin and actual dispatch policy"
+        ],
+        "interpretation_note": "The observation is evidence from the review; the opportunity is an Evergrove proposal, not a merchant-approved diagnosis."
+      },
+      "price_provenance": [
+        {
+          "product_id": "p1",
+          "name": "8 oz. soy blend candle",
+          "identity_verified": true,
+          "price_verified": true,
+          "source": "https://www.littleelkcandles.com/",
+          "checked_at": "2026-10-15",
+          "note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant."
+        },
+        {
+          "product_id": "p2",
+          "name": "Car diffuser",
+          "identity_verified": true,
+          "price_verified": true,
+          "source": "https://www.littleelkcandles.com/",
+          "checked_at": "2026-10-15",
+          "note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant."
+        },
+        {
+          "product_id": "p3",
+          "name": "Room/linen spray · 4 oz.",
+          "identity_verified": true,
+          "price_verified": true,
+          "source": "https://www.littleelkcandles.com/",
+          "checked_at": "2026-10-15",
+          "note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant."
+        },
+        {
+          "product_id": "p4",
+          "name": "Wax melts · 2.75 oz.",
+          "identity_verified": true,
+          "price_verified": true,
+          "source": "https://www.littleelkcandles.com/",
+          "checked_at": "2026-10-15",
+          "note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant."
+        },
+        {
+          "product_id": "p5",
+          "name": "Laundry booster · 12 oz. pouch",
+          "identity_verified": true,
+          "price_verified": true,
+          "source": "https://www.littleelkcandles.com/",
+          "checked_at": "2026-10-15",
+          "note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant."
+        },
+        {
+          "product_id": "p6",
+          "name": "Rug freshener · 10 oz. pouch",
+          "identity_verified": true,
+          "price_verified": true,
+          "source": "https://www.littleelkcandles.com/",
+          "checked_at": "2026-10-15",
+          "note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant."
+        }
+      ],
+      "shipping": {
+        "mode": "example_only",
+        "policy_observations": [],
+        "measurements": "Synthetic sample weights and packed dimensions. Origins unknown. No live quote or dispatch promise.",
+        "questions": [
+          "Complete scent list and scent-to-format availability",
+          "Current prices and product-content sizes",
+          "Liquid ingredients and transport restrictions",
+          "Safe-use text approved by merchant",
+          "Glass, powder and heat-sensitive packing",
+          "Origin and actual dispatch policy"
+        ]
+      },
+      "image_rights_note": "Uses generic original Evergrove demonstration photography, not copied merchant product photos or artwork. Ask permission before using actual assets or branding in any production storefront."
+    },
+    {
+      "slug": "lonon-pottery",
+      "name": "Lonon Pottery",
+      "booth": "Row 12 C",
+      "website": "https://www.lononpottery.com/shop",
+      "checked_at": "2026-10-15",
+      "attendance": {
+        "source": "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "published_year": 2026,
+        "dates": [
+          "2026-10-17",
+          "2026-10-18"
+        ],
+        "roster_name": "Lonon Pottery",
+        "booth": "Row 12 C",
+        "evidence_note": "Listed in the published 2026 Woolly Worm Gazette vendor roster. The prior festival marketplace is used only for merchant-domain identity, not attendance."
+      },
+      "site_review": {
+        "observation": "The live mobile shop review found many products marked sold out.",
+        "opportunity": "Offer restock interest and commission follow-up when a shopper’s preferred piece is unavailable.",
+        "evidence_type": "live_mobile_review",
+        "url": "https://www.lononpottery.com/shop",
+        "checked_at": "2026-10-15",
+        "screenshot": "output/retail/screenshots/research-lonon-pottery-mobile.png",
+        "strengths": [
+          "The existing shop has prices and clear sold-out labels, with gallery, story, events and wholesale navigation."
+        ],
+        "questions": [
+          "Restock versus made-to-order versus commission workflow",
+          "Actual stock: selected source listings were sold out on review",
+          "Glaze/shape variation and approved product photos",
+          "Protective packing, breakage policy and origin",
+          "Whether customers may opt into restock contact"
+        ],
+        "interpretation_note": "The observation is evidence from the review; the opportunity is an Evergrove proposal, not a merchant-approved diagnosis."
+      },
+      "price_provenance": [
+        {
+          "product_id": "p1",
+          "name": "Coffee Mug",
+          "identity_verified": true,
+          "price_verified": true,
+          "source": "https://www.lononpottery.com/shop",
+          "checked_at": "2026-10-15",
+          "note": "Source price observed 2026-10-15; source listing sold out. Stock, glazes and packed measurements here are fictional."
+        },
+        {
+          "product_id": "p2",
+          "name": "Tumbler with Straw",
+          "identity_verified": true,
+          "price_verified": true,
+          "source": "https://www.lononpottery.com/shop",
+          "checked_at": "2026-10-15",
+          "note": "Source price observed 2026-10-15; source listing sold out. Stock, glazes and packed measurements here are fictional."
+        },
+        {
+          "product_id": "p3",
+          "name": "Tiny Vase",
+          "identity_verified": true,
+          "price_verified": true,
+          "source": "https://www.lononpottery.com/shop",
+          "checked_at": "2026-10-15",
+          "note": "Source price observed 2026-10-15; source listing sold out. Stock, glazes and packed measurements here are fictional."
+        },
+        {
+          "product_id": "p4",
+          "name": "Spoon Rest-Plain",
+          "identity_verified": true,
+          "price_verified": true,
+          "source": "https://www.lononpottery.com/shop",
+          "checked_at": "2026-10-15",
+          "note": "Source price observed 2026-10-15; source listing sold out. Stock, glazes and packed measurements here are fictional."
+        },
+        {
+          "product_id": "p5",
+          "name": "Bowl-Small",
+          "identity_verified": true,
+          "price_verified": true,
+          "source": "https://www.lononpottery.com/shop",
+          "checked_at": "2026-10-15",
+          "note": "Source price observed 2026-10-15; source listing sold out. Stock, glazes and packed measurements here are fictional."
+        },
+        {
+          "product_id": "p6",
+          "name": "Jewelry Holder",
+          "identity_verified": true,
+          "price_verified": true,
+          "source": "https://www.lononpottery.com/shop",
+          "checked_at": "2026-10-15",
+          "note": "Source price observed 2026-10-15; source listing sold out. Stock, glazes and packed measurements here are fictional."
+        }
+      ],
+      "shipping": {
+        "mode": "example_only",
+        "policy_observations": [],
+        "measurements": "Synthetic sample weights and packed dimensions. Origins unknown. No live quote or dispatch promise.",
+        "questions": [
+          "Restock versus made-to-order versus commission workflow",
+          "Actual stock: selected source listings were sold out on review",
+          "Glaze/shape variation and approved product photos",
+          "Protective packing, breakage policy and origin",
+          "Whether customers may opt into restock contact"
+        ]
+      },
+      "image_rights_note": "Uses generic original Evergrove demonstration photography, not copied merchant product photos or artwork. Ask permission before using actual assets or branding in any production storefront."
+    },
+    {
+      "slug": "michaels-exotic-peppers",
+      "name": "Michael’s Exotic Peppers",
+      "booth": "Row 11 D",
+      "website": "https://michaelsexoticpeppers.com/",
+      "checked_at": "2026-10-15",
+      "attendance": {
+        "source": "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "published_year": 2026,
+        "dates": [
+          "2026-10-17",
+          "2026-10-18"
+        ],
+        "roster_name": "Michael’s Exotic Peppers",
+        "booth": "Row 11 D",
+        "evidence_note": "Listed in the published 2026 Woolly Worm Gazette vendor roster. The prior festival marketplace is used only for merchant-domain identity, not attendance."
+      },
+      "site_review": {
+        "observation": "The shop presents many pepper/flavor combinations and amplified versions.",
+        "opportunity": "Guide heat-level selection and remember tasting preferences for repeat purchases.",
+        "evidence_type": "live_mobile_review",
+        "url": "https://michaelsexoticpeppers.com/",
+        "checked_at": "2026-10-15",
+        "screenshot": "output/retail/screenshots/research-michaels-exotic-peppers-mobile.png",
+        "strengths": [
+          "The current shop already carries detailed flavor combinations, collection packs, retailer locations and a discount club."
+        ],
+        "questions": [
+          "Bottle sizes matching each starting price",
+          "Merchant-approved heat guide and safe handling",
+          "Actual sampler contents and prices",
+          "Allergens, food handling and glass packing",
+          "Favorites/reorder consent and wholesale scope",
+          "Origin and shipping destinations"
+        ],
+        "interpretation_note": "The observation is evidence from the review; the opportunity is an Evergrove proposal, not a merchant-approved diagnosis."
+      },
+      "price_provenance": [
+        {
+          "product_id": "p1",
+          "name": "Grilled Pineapple Mango & Carolina Reaper Hot Sauce",
+          "identity_verified": true,
+          "price_verified": true,
+          "source": "https://michaelsexoticpeppers.com/",
+          "checked_at": "2026-10-15",
+          "note": "Homepage starting price observed 2026-10-15; size mapping and sample availability need confirmation."
+        },
+        {
+          "product_id": "p2",
+          "name": "Black Garlic & Ghost Pepper Hot Sauce",
+          "identity_verified": true,
+          "price_verified": true,
+          "source": "https://michaelsexoticpeppers.com/",
+          "checked_at": "2026-10-15",
+          "note": "Homepage starting price observed 2026-10-15; size mapping and sample availability need confirmation."
+        },
+        {
+          "product_id": "p3",
+          "name": "Grilled Banana & Trinidad Scorpion Hot Sauce",
+          "identity_verified": true,
+          "price_verified": true,
+          "source": "https://michaelsexoticpeppers.com/",
+          "checked_at": "2026-10-15",
+          "note": "Homepage starting price observed 2026-10-15; size mapping and sample availability need confirmation."
+        },
+        {
+          "product_id": "p4",
+          "name": "Grilled Pineapple Mango & Carolina Reaper - Amplification Hot Sauce",
+          "identity_verified": true,
+          "price_verified": true,
+          "source": "https://michaelsexoticpeppers.com/",
+          "checked_at": "2026-10-15",
+          "note": "Source-observed on 2026-10-15; sample availability only. Confirm with merchant."
+        },
+        {
+          "product_id": "p5",
+          "name": "Watermelon & Red Scotch Bonnet Pepper Hot Sauce",
+          "identity_verified": true,
+          "price_verified": true,
+          "source": "https://michaelsexoticpeppers.com/",
+          "checked_at": "2026-10-15",
+          "note": "Homepage starting price observed 2026-10-15; size mapping and sample availability need confirmation."
+        },
+        {
+          "product_id": "p6",
+          "name": "Tasting discovery set · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        }
+      ],
+      "shipping": {
+        "mode": "example_only",
+        "policy_observations": [],
+        "measurements": "Synthetic sample weights and packed dimensions. Origins unknown. No live quote or dispatch promise.",
+        "questions": [
+          "Bottle sizes matching each starting price",
+          "Merchant-approved heat guide and safe handling",
+          "Actual sampler contents and prices",
+          "Allergens, food handling and glass packing",
+          "Favorites/reorder consent and wholesale scope",
+          "Origin and shipping destinations"
+        ]
+      },
+      "image_rights_note": "Uses generic original Evergrove demonstration photography, not copied merchant product photos or artwork. Ask permission before using actual assets or branding in any production storefront."
+    },
+    {
+      "slug": "noodlecakes",
+      "name": "NoodleCakes",
+      "booth": "Row 4 D",
+      "website": "https://noodlecakes.com/",
+      "checked_at": "2026-10-15",
+      "attendance": {
+        "source": "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "published_year": 2026,
+        "dates": [
+          "2026-10-17",
+          "2026-10-18"
+        ],
+        "roster_name": "NoodleCakes",
+        "booth": "Row 4 D",
+        "evidence_note": "Listed in the published 2026 Woolly Worm Gazette vendor roster. The prior festival marketplace is used only for merchant-domain identity, not attendance."
+      },
+      "site_review": {
+        "observation": "The homepage spans beadwork, stained glass, cat toys and local stockists.",
+        "opportunity": "Give each product family a clear path and retain custom gift preferences.",
+        "evidence_type": "live_mobile_review",
+        "url": "https://noodlecakes.com/",
+        "checked_at": "2026-10-15",
+        "screenshot": "output/retail/screenshots/research-noodlecakes-mobile.png",
+        "strengths": [
+          "The current site presents beadwork and stained glass, links to a shop and identifies local stockists."
+        ],
+        "questions": [
+          "Actual piece photos and permission to reproduce designs",
+          "One-of-a-kind inventory and color variants",
+          "Jewelry materials and relevant disclosures",
+          "Pet-toy construction and approved safety text",
+          "Fragile glass packing and origin",
+          "Custom gift lead times and customer contact consent"
+        ],
+        "interpretation_note": "The observation is evidence from the review; the opportunity is an Evergrove proposal, not a merchant-approved diagnosis."
+      },
+      "price_provenance": [
+        {
+          "product_id": "p1",
+          "name": "Beaded drop earrings · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p2",
+          "name": "Beaded bracelet · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p3",
+          "name": "Small glass suncatcher · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p4",
+          "name": "Window color charm · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p5",
+          "name": "Cat play pouch · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p6",
+          "name": "Handmade gift pairing · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        }
+      ],
+      "shipping": {
+        "mode": "example_only",
+        "policy_observations": [],
+        "measurements": "Synthetic sample weights and packed dimensions. Origins unknown. No live quote or dispatch promise.",
+        "questions": [
+          "Actual piece photos and permission to reproduce designs",
+          "One-of-a-kind inventory and color variants",
+          "Jewelry materials and relevant disclosures",
+          "Pet-toy construction and approved safety text",
+          "Fragile glass packing and origin",
+          "Custom gift lead times and customer contact consent"
+        ]
+      },
+      "image_rights_note": "Uses generic original Evergrove demonstration photography, not copied merchant product photos or artwork. Ask permission before using actual assets or branding in any production storefront."
+    },
+    {
+      "slug": "pillowsak",
+      "name": "PillowSak",
+      "booth": "Row 13 D",
+      "website": "https://pillowsak.com/",
+      "checked_at": "2026-10-15",
+      "attendance": {
+        "source": "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "published_year": 2026,
+        "dates": [
+          "2026-10-17",
+          "2026-10-18"
+        ],
+        "roster_name": "PillowSak",
+        "booth": "Row 13 D",
+        "evidence_note": "Listed in the published 2026 Woolly Worm Gazette vendor roster. The prior festival marketplace is used only for merchant-domain identity, not attendance."
+      },
+      "site_review": {
+        "observation": "The homepage foregrounds fabric designs; the travel-pillow purpose is explained below the best sellers.",
+        "opportunity": "Lead with the travel-use story and guide fit/fabric choices.",
+        "evidence_type": "live_mobile_review",
+        "url": "https://pillowsak.com/",
+        "checked_at": "2026-10-15",
+        "screenshot": "output/retail/screenshots/research-pillowsak-mobile.png",
+        "strengths": [
+          "Existing ecommerce already has product collections, testimonials, an FAQ and wholesale information."
+        ],
+        "questions": [
+          "Fit dimensions and included items for Original/Premium",
+          "Current prices and fabric inventory",
+          "Licensed-fabric permissions; no copied licensed artwork in demo",
+          "Care instructions and returns",
+          "Travel-use photography permission",
+          "Packing origin and shipping policy"
+        ],
+        "interpretation_note": "The observation is evidence from the review; the opportunity is an Evergrove proposal, not a merchant-approved diagnosis."
+      },
+      "price_provenance": [
+        {
+          "product_id": "p1",
+          "name": "Original travel pillow carrier · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p2",
+          "name": "Premium fabric carrier · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p3",
+          "name": "Weekend travel carrier · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p4",
+          "name": "Reading retreat carrier · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p5",
+          "name": "Travel gift pair · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        },
+        {
+          "product_id": "p6",
+          "name": "Guest-room gift selection · sample",
+          "identity_verified": false,
+          "price_verified": false,
+          "source": null,
+          "checked_at": "2026-10-15",
+          "note": "Illustrative demo price — not a merchant offer."
+        }
+      ],
+      "shipping": {
+        "mode": "example_only",
+        "policy_observations": [],
+        "measurements": "Synthetic sample weights and packed dimensions. Origins unknown. No live quote or dispatch promise.",
+        "questions": [
+          "Fit dimensions and included items for Original/Premium",
+          "Current prices and fabric inventory",
+          "Licensed-fabric permissions; no copied licensed artwork in demo",
+          "Care instructions and returns",
+          "Travel-use photography permission",
+          "Packing origin and shipping policy"
+        ]
+      },
+      "image_rights_note": "Generic unbranded textiles only. No merchant fabric patterns, licensed characters or proprietary print designs are copied. Obtain permission for merchant product photos and licensed fabrics before production."
+    }
+  ]
+}

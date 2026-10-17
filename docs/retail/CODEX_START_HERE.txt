@@ -1,0 +1,7 @@
+CODEX: Please implement the attached handoff, not just plan it.
+Read evergrove_woolly_worm_7_storefronts_codex_handoff.md first.
+Read evergrove_woolly_worm_vendor_research.json as its verified-source seed.
+Build seven DISTINCT private, functional Everbranch Retail storefront demos, each with cart and accurate merchant-specific SHIPPING DEMO behavior, plus a Galaxy Tab showroom PWA.
+Inspect the actual Evergrove and Everbranch repositories before changing code.
+Keep all real merchant payments, orders, label purchases, and production shipping DISABLED without merchant authorization. The beef/pork vendor must remain pickup-first until cold chain and interstate permissions are verified.
+Run automated and visual tests, provide all seven launch URLs/screenshots and tablet installation instructions, and list any limitations.

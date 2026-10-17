@@ -1,0 +1,143 @@
+{
+  "event": {
+    "name": "Woolly Worm Festival 2026",
+    "dates": ["2026-10-17", "2026-10-18"],
+    "place": "Banner Elk, North Carolina",
+    "source": "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+    "research_date": "2026-10-15"
+  },
+  "important": [
+    "Data is a public-source research seed for an INDEPENDENT Evergrove demonstration, not an approved merchant catalog.",
+    "No public consumer checkout, production payment processing, shipping label purchases, or live orders are authorized.",
+    "Verified website features and policies can change; verify with each merchant before any commercial deployment.",
+    "Null prices, product measurements and shipping origins must be completed with merchant permission; do not silently invent them.",
+    "Merchant trademarks and original product photos must not be copied to a public production site without permission."
+  ],
+  "vendors": [
+    {
+      "slug": "joy-fudge-company",
+      "name": "Joy Fudge Company",
+      "booth": "Row 3 A",
+      "website": "https://www.joyfudgecompany.com/",
+      "web_presence": "Informational site with flavors, catering, retailer locator and contact. Public online checkout not verified.",
+      "sources": ["https://www.joyfudgecompany.com/", "https://www.joyfudgecompany.com/retail-locations"],
+      "confirmed_catalog_examples": [
+        {"name": "Chocolate fudge", "price_usd": null},
+        {"name": "Chocolate walnut fudge", "price_usd": null},
+        {"name": "Chocolate peanut butter fudge", "price_usd": null},
+        {"name": "Maple walnut fudge", "price_usd": null},
+        {"name": "Pumpkin pie fudge", "price_usd": null}
+      ],
+      "concept": "Rich confectionery/gifting: assortment box builder, seasonal collections, corporate gifts, catering and wholesale enquiry.",
+      "shipping_profile": "Ambient-food shipping candidate. Heat-sensitive packaging, destination/season review, shelf-life and allergen checks required. No official shipping policy/rates verified.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": ["Prices", "portion weights", "ingredients/allergens", "shelf life", "heat protection", "ship days", "carrier/service", "fulfillment address", "permission to ship"]
+    },
+    {
+      "slug": "old-beech-mountain-farms",
+      "name": "Old Beech Mountain Farms",
+      "booth": "Row 2 E",
+      "website": null,
+      "primary_public_profile": "https://highcountryfoodhub.localfoodmarketplace.com/Producer/3f9b5846-d06d-40e5-9e01-789afbf98c6f",
+      "facebook": "https://www.facebook.com/oldbeechmtnfarm/",
+      "web_presence": "High Country Food Hub producer page links to Facebook; no standalone retail site verified.",
+      "sources": ["https://highcountryfoodhub.localfoodmarketplace.com/Producer/3f9b5846-d06d-40e5-9e01-789afbf98c6f", "https://www.fsis.usda.gov/inspection/state-inspection-programs"],
+      "confirmed_catalog_examples": [
+        {"name": "Farm-raised beef", "price_usd": null},
+        {"name": "Farm-raised pork", "price_usd": null}
+      ],
+      "concept": "Farm-direct preorder and pickup reservations, meat cuts or bulk custom request, pickup schedule, farm story.",
+      "shipping_profile": "PICKUP-FIRST: disable consumer meat shipping. Refrigerated/frozen shipping must remain gated pending confirmation of inspection status, interstate commerce eligibility, food safety, insulation, cold-chain, carriers and delivery regions.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": ["Product/cut list", "weight-based prices", "availability", "pickup location/schedule", "local delivery zones", "inspection and interstate shipping eligibility", "cold-chain SOP", "carrier options"]
+    },
+    {
+      "slug": "4-pelicans-woodworking",
+      "name": "4 Pelicans Woodworking",
+      "booth": "Row 5 A",
+      "website": null,
+      "facebook": "https://www.facebook.com/4pelicanswoodworking",
+      "web_presence": "A 2026 artisan biography lists Facebook and email, not a dedicated commerce domain.",
+      "sources": ["https://www.oldebeaufortfarmersmarket.org/aritsanbios", "https://woollyworm.com/vendor-marketplace/"],
+      "confirmed_catalog_examples": [
+        {"name": "One-of-a-kind wood and hand-colored epoxy home piece", "price_usd": null}
+      ],
+      "concept": "Design-gallery ecommerce for one-of-a-kind pieces; product availability=1, sold-out states, commission inquiries, custom finish requests.",
+      "shipping_profile": "Dimension/weight-based parcel shipping for small pieces; oversized pieces require manually approved delivery or shipping quote. Actual measurements/rates unverified.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": ["Catalog photos and rights", "prices", "parcel dimensions", "oversized thresholds", "shipping regions", "packaging/insurance", "lead times"]
+    },
+    {
+      "slug": "leather-link-studio",
+      "name": "Leather Link Studio",
+      "booth": "Row 20 D-E",
+      "website": "https://leatherlinkstudio.com/",
+      "web_presence": "Existing ecommerce catalog with custom work, bags, totes, duffles, wholesale inquiries and a shipping FAQ.",
+      "sources": ["https://leatherlinkstudio.com/", "https://leatherlinkstudio.com/faq/", "https://leatherlinkstudio.com/story/"],
+      "confirmed_catalog_examples": [
+        {"name": "Leather purses", "price_usd": null},
+        {"name": "Leather market totes", "price_usd": null},
+        {"name": "Leather duffles", "price_usd": null},
+        {"name": "Leather wine totes", "price_usd": null}
+      ],
+      "concept": "Refined leather goods store with personalization requests, one-off inventory, custom orders and a wholesale application; demonstrate operational improvements, not a nonexistent website problem.",
+      "shipping_profile": "Published FAQ: small packages below 13 oz use USPS Priority Mail; larger boxes use USPS Ground; most in-stock items ship in 1-3 days. Verify current carrier/service terminology before implementation.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": ["Current products/prices", "weights/dimensions", "carrier service nomenclature", "shipping origin", "custom lead time", "wholesale rules", "permission to use assets"]
+    },
+    {
+      "slug": "mcneills-pottery",
+      "name": "McNeill's Pottery",
+      "booth": "Row 23 B-C",
+      "website": "https://www.mcneillspottery.com/",
+      "web_presence": "Functional catalog/store built with Weebly. Detailed product pricing and color options published; shipping rates/policy not confirmed.",
+      "sources": ["https://www.mcneillspottery.com/shop.html", "https://www.mcneillspottery.com/about-us.html"],
+      "confirmed_catalog_examples": [
+        {"name": "Coffee Mug (W)", "price_usd": 18.0},
+        {"name": "Large Serving Bowl", "price_usd": 54.0},
+        {"name": "Square Serving Tray with Dragonfly", "price_usd": 48.0},
+        {"name": "Candle Lantern with Bumble Bee", "price_usd": 25.0}
+      ],
+      "concept": "Warm artisan ceramics storefront with glaze/color variations, care guidance, gifts, and robust fragile-order handling.",
+      "shipping_profile": "Fragile ceramic parcel shipping: configurable protective packaging, multi-item packing rules, insurance and dimensional weight. No public rate policy verified.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": ["Inventory counts", "color availability", "actual packed weights/dimensions", "breakage policy", "shipping charges", "origin ZIP", "photos/rights"]
+    },
+    {
+      "slug": "highland-croft-candle-company",
+      "name": "Highland Croft Candle Company",
+      "booth": "Row 22 D",
+      "website": "https://www.highcountryhighlandcroft.com/",
+      "web_presence": "Existing shoppable site with candles, loose-leaf tea and Celtic-inspired jewelry; also farm shop and events.",
+      "sources": ["https://www.highcountryhighlandcroft.com/shop", "https://www.highcountryhighlandcroft.com/product-page/kitchen-garden"],
+      "confirmed_catalog_examples": [
+        {"name": "Kitchen Garden wood wick candle", "price_usd": 30.0},
+        {"name": "Peat Hearth wood wick candle", "price_usd": 30.0},
+        {"name": "Crofter's Chai tea", "price_usd": 15.0},
+        {"name": "Thistle Ring", "price_usd": 45.0}
+      ],
+      "concept": "Appalachian-Scottish brand, fragrance storytelling, candles/tea/gifts in one cart, local farm-shop pickup, gift bundles and retention.",
+      "shipping_profile": "Product pages state shipping costs are determined by local USPS or UPS branch; no fixed customer-facing tariff verified. Candle packaging must account for glass/heat as applicable.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": ["Packed weights", "USPS/UPS service and account", "shipping origin", "local pickup eligibility", "bundle inventory", "discount rules", "photos/rights"]
+    },
+    {
+      "slug": "mountain-momma-organics",
+      "name": "Mountain Momma Organics",
+      "booth": "Rows 22-23 A",
+      "website": "https://mountainmommaorganics.com/",
+      "web_presence": "Large functional ecommerce catalog including soups, granola, herbal products and variants.",
+      "sources": ["https://mountainmommaorganics.com/", "https://mountainmommaorganics.com/product/seven-bean/", "https://mountainmommaorganics.com/product/just-over-yonder-taco-soup-kit/", "https://mountainmommaorganics.com/product/cream-tater-soup-mix-potato-soup/"],
+      "confirmed_catalog_examples": [
+        {"name": "Seven Bean Soup Kit", "price_usd": null, "price_note": "Published price range $19-$20 based on variants"},
+        {"name": "Just Over Yonder Taco Soup Kit", "price_usd": 22.0},
+        {"name": "Cream of Tater Soup Mix", "price_usd": 19.0},
+        {"name": "Curried Lentil Soup Kit", "price_usd": null, "price_note": "Published price range $19-$20 based on variants"}
+      ],
+      "concept": "Clean and efficient organic pantry storefront with category filtering, variants, bundles, subscriptions and transparent fulfillment.",
+      "shipping_profile": "Home page advertises free shipping for online orders over $175; says current shipments are 1-3 weeks, but this timing and dated holiday notice should be reconfirmed. Restrict all health/organic/allergen claims to source-verified statements with merchant approval.",
+      "demo_live_shipping_enabled": false,
+      "requires_merchant_confirmation": ["Current shipping threshold", "processing window", "eligibility rules for free shipping", "weights/dimensions", "product claims and allergen details", "subscription terms", "photos/rights"]
+    }
+  ]
+}

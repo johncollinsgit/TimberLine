@@ -1,0 +1,83 @@
+{
+  "generator": "built-in image_gen",
+  "created": "2026-10-15",
+  "usage": "Original generic category photographs. Not merchant product photos or endorsements.",
+  "sources": {
+    "fudge": "/Users/johncollins/.codex/generated_images/01a14074-471f-7dd2-9f74-4385dcbe21ff/exec-b7ac6062-16d7-4963-8d26-e3cdb942ea3d.png",
+    "farm": "/Users/johncollins/.codex/generated_images/01a14074-471f-7dd2-9f74-4385dcbe21ff/exec-0938f19a-8253-423a-8e64-29e0af5dda5a.png",
+    "wood": "/Users/johncollins/.codex/generated_images/01a14074-471f-7dd2-9f74-4385dcbe21ff/exec-315abb5d-ed11-4b75-b68a-86853d564fac.png",
+    "leather": "/Users/johncollins/.codex/generated_images/01a14074-471f-7dd2-9f74-4385dcbe21ff/exec-2cc8cc32-fca0-493e-ae95-30accb4d11b3.png",
+    "pottery": "/Users/johncollins/.codex/generated_images/01a14074-471f-7dd2-9f74-4385dcbe21ff/exec-832e87b4-bf28-4feb-8e63-ca0fb4c33e1f.png",
+    "croft": "/Users/johncollins/.codex/generated_images/01a14074-471f-7dd2-9f74-4385dcbe21ff/exec-5bb6a1da-a165-4194-b04a-29ffa317e5c5.png",
+    "pantry": "/Users/johncollins/.codex/generated_images/01a14074-471f-7dd2-9f74-4385dcbe21ff/exec-fdb16f53-497f-4ce2-8744-a180de31f845.png",
+    "books": "/Users/johncollins/.codex/generated_images/01a14074-471f-7dd2-9f74-4385dcbe21ff/exec-5dd08309-7409-41b8-8880-94d79a89a981.png",
+    "tea": "/Users/johncollins/.codex/generated_images/01a14142-27f0-7f60-920f-14906e77275a/exec-14dd68a2-ae36-4e50-9d7f-d098519f01c0.png",
+    "forge": "/Users/johncollins/.codex/generated_images/01a14142-27f0-7f60-920f-14906e77275a/exec-05ab444c-08c5-4572-b802-2375c57d4403.png",
+    "art": "/Users/johncollins/.codex/generated_images/01a14142-27f0-7f60-920f-14906e77275a/exec-a24277fc-69e6-46a6-af47-e4ff3a4a5185.png",
+    "sauce": "/Users/johncollins/.codex/generated_images/01a14142-27f0-7f60-920f-14906e77275a/exec-eae266a6-fe01-4377-a826-2f2790a9ad2b.png",
+    "beads": "/Users/johncollins/.codex/generated_images/01a14142-27f0-7f60-920f-14906e77275a/exec-240dee9e-d0b3-488e-94c1-7f506fb61802.png",
+    "textiles": "/Users/johncollins/.codex/generated_images/01a14142-27f0-7f60-920f-14906e77275a/exec-6dc13f68-88fc-44b3-b5d7-4fc2e088b786.png"
+  },
+  "additional_assets": {
+    "created": "2026-10-15",
+    "generator": "built-in image_gen",
+    "optimization": "cwebp quality 78, width 1500px; only format conversion/downscaling; no content edits",
+    "usage": "Original generic illustrative category photography, not actual merchant products or endorsement. Art scene shows blank paper and generic supplies; no artist artwork is depicted or imitated.",
+    "assets": [
+      {
+        "key": "tea",
+        "path": "/Users/johncollins/Code/everbranch-retail-showroom/public/retail/assets/tea.webp",
+        "bytes": 82254,
+        "dimensions": [
+          1500,
+          1000
+        ]
+      },
+      {
+        "key": "forge",
+        "path": "/Users/johncollins/Code/everbranch-retail-showroom/public/retail/assets/forge.webp",
+        "bytes": 78734,
+        "dimensions": [
+          1500,
+          1000
+        ]
+      },
+      {
+        "key": "art",
+        "path": "/Users/johncollins/Code/everbranch-retail-showroom/public/retail/assets/art.webp",
+        "bytes": 87652,
+        "dimensions": [
+          1500,
+          1000
+        ]
+      },
+      {
+        "key": "sauce",
+        "path": "/Users/johncollins/Code/everbranch-retail-showroom/public/retail/assets/sauce.webp",
+        "bytes": 124412,
+        "dimensions": [
+          1500,
+          1000
+        ]
+      },
+      {
+        "key": "beads",
+        "path": "/Users/johncollins/Code/everbranch-retail-showroom/public/retail/assets/beads.webp",
+        "bytes": 148342,
+        "dimensions": [
+          1500,
+          1000
+        ]
+      },
+      {
+        "key": "textiles",
+        "path": "/Users/johncollins/Code/everbranch-retail-showroom/public/retail/assets/textiles.webp",
+        "bytes": 81372,
+        "dimensions": [
+          1500,
+          1000
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,417 @@
+{
+  "campaign": "Woolly Worm 2026 · Modern Forestry / Evergrove introductions",
+  "status": "drafts_only",
+  "sent_count": 0,
+  "drafts": [
+    {
+      "slug": "joy-fudge-company",
+      "name": "Joy Fudge Company",
+      "booth": "Row 3 A",
+      "website": "https://www.joyfudgecompany.com/",
+      "observed": "The existing research describes flavors, gifting, catering and retailer information. Online checkout was not verified.",
+      "opportunity": "A flavor assortment journey and a way for festival customers to remember and reorder their favorites.",
+      "message": "Hi Holly! I’m John from Modern Forestry. We’ll also be selling at Woolly Worm this weekend. I also run Evergrove, a one-stop shop for all things tech, and I built Everbranch. Your fudge assortment would be a great fit for a simple build-a-box experience, with customer favorites saved so people can reorder after the festival. I’ll have a tablet at booth 11 A with an example website and back-end workspace. If you’re interested, I can show you how it works and how it could free you up to focus on the parts of the business you enjoy. Rewards and customer relationship tools can help grow online sales, with point of sale coming soon. Would you be open to a quick look at the festival?",
+      "status": "draft_for_user_review",
+      "instagram_url": null,
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://www.joyfudgecompany.com/"
+      ],
+      "checked_at": "2026-10-15",
+      "original": true,
+      "greeting_name": "Holly",
+      "owner_name_evidence": [
+        "https://www.joyfudgecompany.com/"
+      ]
+    },
+    {
+      "slug": "old-beech-mountain-farms",
+      "name": "Old Beech Mountain Farms",
+      "booth": "Row 2 E",
+      "website": "https://highcountryfoodhub.localfoodmarketplace.com/Producer/3f9b5846-d06d-40e5-9e01-789afbf98c6f",
+      "observed": "The supplied research identifies a Food Hub producer page and Facebook presence.",
+      "opportunity": "A farm-owned pickup and reservation experience with customer preferences and repeat-order follow-up.",
+      "message": "Hi Rodney and Tracie! I’m John from Modern Forestry. We’ll also be selling at Woolly Worm this weekend. I also run Evergrove, a one-stop shop for all things tech, and I built Everbranch. For your farm, I’m working on a pickup-first concept that keeps cut preferences and customer notes together, making it easier for festival customers to order from you again. I’ll have a tablet at booth 11 A with an example website and back-end workspace. If you’re interested, I can show you how it works and how it could free you up to focus on the parts of the business you enjoy. Rewards and customer relationship tools can help grow online sales, with point of sale coming soon. Would you be open to a quick look at the festival?",
+      "status": "draft_for_user_review",
+      "instagram_url": null,
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://highcountryfoodhub.localfoodmarketplace.com/Producer/3f9b5846-d06d-40e5-9e01-789afbf98c6f"
+      ],
+      "checked_at": "2026-10-15",
+      "original": true,
+      "greeting_name": "Rodney and Tracie",
+      "owner_name_evidence": [
+        "https://highcountryfoodhub.localfoodmarketplace.com/Producer/3f9b5846-d06d-40e5-9e01-789afbf98c6f"
+      ]
+    },
+    {
+      "slug": "4-pelicans-woodworking",
+      "name": "4 Pelicans Woodworking",
+      "booth": "Row 5 A",
+      "website": "https://www.facebook.com/4pelicanswoodworking",
+      "observed": "The supplied research identifies Facebook as the public showcase.",
+      "opportunity": "A browsable gallery of available pieces and organized commission follow-up.",
+      "message": "Hi Jeff and Sarah! I’m John from Modern Forestry. We’ll also be selling at Woolly Worm this weekend. I also run Evergrove, a one-stop shop for all things tech, and I built Everbranch. Your one-of-a-kind woodworking is a good fit for a gallery that shows what’s available and makes custom requests easy, with follow-up notes that keep those customer relationships going. I’ll have a tablet at booth 11 A with an example website and back-end workspace. If you’re interested, I can show you how it works and how it could free you up to focus on the parts of the business you enjoy. Rewards and customer relationship tools can help grow online sales, with point of sale coming soon. Would you be open to a quick look at the festival?",
+      "status": "draft_for_user_review",
+      "instagram_url": null,
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://www.facebook.com/4pelicanswoodworking"
+      ],
+      "checked_at": "2026-10-15",
+      "original": true,
+      "greeting_name": "Jeff and Sarah",
+      "owner_name_evidence": [
+        "https://www.oldebeaufortfarmersmarket.org/aritsanbios"
+      ]
+    },
+    {
+      "slug": "leather-link-studio",
+      "name": "Leather Link Studio",
+      "booth": "Row 20 D-E",
+      "website": "https://leatherlinkstudio.com/",
+      "observed": "Existing ecommerce includes custom leather work and wholesale inquiries.",
+      "opportunity": "Connect personalization preferences, custom-order conversations and repeat purchases.",
+      "message": "Hi Randy! I’m John from Modern Forestry. We’ll also be selling at Woolly Worm this weekend. I also run Evergrove, a one-stop shop for all things tech, and I built Everbranch. With your leather goods and custom work, I see an opportunity to keep personalization preferences and customer conversations connected to orders, so the next purchase feels personal rather than starting over. I’ll have a tablet at booth 11 A with an example website and back-end workspace. If you’re interested, I can show you how it works and how it could free you up to focus on the parts of the business you enjoy. Rewards and customer relationship tools can help grow online sales, with point of sale coming soon. Would you be open to a quick look at the festival?",
+      "status": "draft_for_user_review",
+      "instagram_url": null,
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://leatherlinkstudio.com/"
+      ],
+      "checked_at": "2026-10-15",
+      "original": true,
+      "greeting_name": "Randy",
+      "owner_name_evidence": [
+        "https://leatherlinkstudio.com/story/"
+      ]
+    },
+    {
+      "slug": "mcneills-pottery",
+      "name": "McNeill’s Pottery",
+      "booth": "Row 23 B-C",
+      "website": "https://www.mcneillspottery.com/",
+      "observed": "The supplied research records a shoppable pottery catalog with glaze/color options.",
+      "opportunity": "Remember favorite glazes and simplify gifts, restocks and repeat orders.",
+      "message": "Hi Windy and Garrett! I’m John from Modern Forestry. We’ll also be selling at Woolly Worm this weekend. I also run Evergrove, a one-stop shop for all things tech, and I built Everbranch. For your pottery, I’m putting together a concept around glaze choices, gifting and remembering customers’ favorite pieces, so people who meet you at the festival can find their next piece online. I’ll have a tablet at booth 11 A with an example website and back-end workspace. If you’re interested, I can show you how it works and how it could free you up to focus on the parts of the business you enjoy. Rewards and customer relationship tools can help grow online sales, with point of sale coming soon. Would you be open to a quick look at the festival?",
+      "status": "draft_for_user_review",
+      "instagram_url": null,
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://www.mcneillspottery.com/"
+      ],
+      "checked_at": "2026-10-15",
+      "original": true,
+      "greeting_name": "Windy and Garrett",
+      "owner_name_evidence": [
+        "https://www.mcneillspottery.com/about-us.html"
+      ]
+    },
+    {
+      "slug": "highland-croft-candle-company",
+      "name": "Highland Croft Candle Company",
+      "booth": "Row 22 D",
+      "website": "https://www.highcountryhighlandcroft.com/",
+      "observed": "The existing shop spans candles, tea and Celtic-inspired jewelry.",
+      "opportunity": "Help customers rediscover favorite scents and teas and explore related gifts.",
+      "message": "Hi Highland Croft Candle Company! I’m John from Modern Forestry. We’ll also be selling at Woolly Worm this weekend. I also run Evergrove, a one-stop shop for all things tech, and I built Everbranch. Your mix of candles, teas and Celtic-inspired gifts gives customers a lot to come back for. I’m working on a concept that remembers their favorites and makes a repeat order or thoughtful gift easier. I’ll have a tablet at booth 11 A with an example website and back-end workspace. If you’re interested, I can show you how it works and how it could free you up to focus on the parts of the business you enjoy. Rewards and customer relationship tools can help grow online sales, with point of sale coming soon. Would you be open to a quick look at the festival?",
+      "status": "draft_for_user_review",
+      "instagram_url": null,
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://www.highcountryhighlandcroft.com/"
+      ],
+      "checked_at": "2026-10-15",
+      "original": true,
+      "greeting_name": "Highland Croft Candle Company",
+      "owner_name_evidence": []
+    },
+    {
+      "slug": "mountain-momma-organics",
+      "name": "Mountain Momma Organics",
+      "booth": "Rows 22-23 A",
+      "website": "https://mountainmommaorganics.com/",
+      "observed": "Existing ecommerce includes soups, granola and other pantry products.",
+      "opportunity": "Carry festival purchases into easy pantry reorders and relevant follow-up.",
+      "message": "Hi Kim and Keith! I’m John from Modern Forestry. We’ll also be selling at Woolly Worm this weekend. I also run Evergrove, a one-stop shop for all things tech, and I built Everbranch. With your soups, granola and pantry products, I see a useful opportunity to turn a festival purchase into an easy online reorder, while keeping each customer’s favorites and preferences together. I’ll have a tablet at booth 11 A with an example website and back-end workspace. If you’re interested, I can show you how it works and how it could free you up to focus on the parts of the business you enjoy. Rewards and customer relationship tools can help grow online sales, with point of sale coming soon. Would you be open to a quick look at the festival?",
+      "status": "draft_for_user_review",
+      "instagram_url": null,
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://mountainmommaorganics.com/"
+      ],
+      "checked_at": "2026-10-15",
+      "original": true,
+      "greeting_name": "Kim and Keith",
+      "owner_name_evidence": [
+        "https://mountainmommaorganics.com/story/",
+        "https://festivalinthepark.org/kim-and-keith-finger/"
+      ]
+    },
+    {
+      "slug": "appalachian-divinitea",
+      "name": "Appalachian DiviniTEA",
+      "booth": "Row 2 C",
+      "website": "https://appalachiandivinitea.com/",
+      "observed": "The mobile homepage offers many tea categories, a market finder, and a free-shipping code that excludes canned drinks.",
+      "opportunity": "Guide shoppers to a tea they like and clarify eligible shipping baskets.",
+      "message": "Hi Ricky and Nikki! I’m John from Modern Forestry. We’ll also be selling at Woolly Worm this weekend. I also run Evergrove, a one-stop shop for all things tech, and I built Everbranch. Your tea range gives people a lot to explore. I’m working on a simple find-your-tea concept that helps someone remember the blend they tried at your booth and come back for it online. I’ll have a tablet at booth 11 A with an example website and back-end workspace. If you’re interested, I can show you how it works and how it could free you up to focus on the parts of the business you enjoy. Rewards and customer relationship tools can help grow online sales, with point of sale coming soon. Would you be open to a quick look at the festival?",
+      "status": "draft_for_user_review",
+      "instagram_url": null,
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://appalachiandivinitea.com/"
+      ],
+      "checked_at": "2026-10-15",
+      "original": false,
+      "greeting_name": "Ricky and Nikki",
+      "owner_name_evidence": [
+        "https://appalachiandivinitea.com/"
+      ]
+    },
+    {
+      "slug": "avery-knifeworks",
+      "name": "Avery KnifeWorks",
+      "booth": "Row 4 A-B",
+      "website": "https://www.averyknifeworks.com/",
+      "observed": "Mobile review found horizontal overflow; the site promotes kitchen/outdoor knives and lifetime support.",
+      "opportunity": "Improve the mobile buying path and connect purchases with care and service history.",
+      "message": "Hi Raleigh! I’m John from Modern Forestry. We’ll also be selling at Woolly Worm this weekend. I also run Evergrove, a one-stop shop for all things tech, and I built Everbranch. For your handmade knives, I’m working on a clearer mobile shopping concept that connects each piece with its customer and care history, making follow-up, gifts and future purchases easier. I’ll have a tablet at booth 11 A with an example website and back-end workspace. If you’re interested, I can show you how it works and how it could free you up to focus on the parts of the business you enjoy. Rewards and customer relationship tools can help grow online sales, with point of sale coming soon. Would you be open to a quick look at the festival?",
+      "status": "draft_for_user_review",
+      "instagram_url": null,
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://www.averyknifeworks.com/"
+      ],
+      "checked_at": "2026-10-15",
+      "original": false,
+      "greeting_name": "Raleigh",
+      "owner_name_evidence": [
+        "https://www.averyknifeworks.com/"
+      ]
+    },
+    {
+      "slug": "boone-barndog",
+      "name": "Boone Barndog Art & Books",
+      "booth": "Row 6 A",
+      "website": "https://www.boonebarndog.com/",
+      "observed": "The shop includes print-at-home posters, physical ColorParty packs and books. The artist explicitly emphasizes hand-drawn work.",
+      "opportunity": "Make physical versus downloadable choices clearer and nurture repeat group orders.",
+      "message": "Hi Mar! I’m John from Modern Forestry. We’ll also be selling at Woolly Worm this weekend. I also run Evergrove, a one-stop shop for all things tech, and I built Everbranch. Your ColorParty packs and posters could be a great way to keep the festival connection going. I’m working on a concept that makes choosing printed versus downloadable items clearer and helps groups come back for their next order. I’ll have a tablet at booth 11 A with an example website and back-end workspace. If you’re interested, I can show you how it works and how it could free you up to focus on the parts of the business you enjoy. Rewards and customer relationship tools can help grow online sales, with point of sale coming soon. Would you be open to a quick look at the festival?",
+      "status": "draft_for_user_review",
+      "instagram_url": null,
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://www.boonebarndog.com/"
+      ],
+      "checked_at": "2026-10-15",
+      "original": false,
+      "greeting_name": "Mar",
+      "owner_name_evidence": [
+        "https://www.boonebarndog.com/"
+      ]
+    },
+    {
+      "slug": "britts-leather",
+      "name": "Britt’s Leather Co.",
+      "booth": "Row 14 A-B",
+      "website": "https://brittsleatherco.com/",
+      "observed": "The homepage introduces custom-fit belts and several leather collections.",
+      "opportunity": "Guide belt sizing and personalization, then save preferences for repeat purchases.",
+      "message": "Hi Britt’s Leather Co.! I’m John from Modern Forestry. We’ll also be selling at Woolly Worm this weekend. I also run Evergrove, a one-stop shop for all things tech, and I built Everbranch. Your custom-fit belts and personalized leather goods are a good fit for a guided sizing and personalization experience, with those details saved so a returning customer can order confidently. I’ll have a tablet at booth 11 A with an example website and back-end workspace. If you’re interested, I can show you how it works and how it could free you up to focus on the parts of the business you enjoy. Rewards and customer relationship tools can help grow online sales, with point of sale coming soon. Would you be open to a quick look at the festival?",
+      "status": "draft_for_user_review",
+      "instagram_url": null,
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://brittsleatherco.com/"
+      ],
+      "checked_at": "2026-10-15",
+      "original": false,
+      "greeting_name": "Britt’s Leather Co.",
+      "owner_name_evidence": []
+    },
+    {
+      "slug": "datil-sensation",
+      "name": "Datil Sensation",
+      "booth": "Row 8 D",
+      "website": "https://datilsensations.com/",
+      "observed": "The mobile homepage contains visible theme placeholder text. Larger-order and special-shipping assistance is directed to phone support.",
+      "opportunity": "Clean up placeholder content and provide a clear heat/bulk-order journey.",
+      "message": "Hi Datil Sensation! I’m John from Modern Forestry. We’ll also be selling at Woolly Worm this weekend. I also run Evergrove, a one-stop shop for all things tech, and I built Everbranch. Your sauces have a strong repeat-purchase story. I’m working on a concept that helps shoppers choose their heat level and makes larger-order or special-shipping requests easier to follow up on after the festival. I’ll have a tablet at booth 11 A with an example website and back-end workspace. If you’re interested, I can show you how it works and how it could free you up to focus on the parts of the business you enjoy. Rewards and customer relationship tools can help grow online sales, with point of sale coming soon. Would you be open to a quick look at the festival?",
+      "status": "draft_for_user_review",
+      "instagram_url": null,
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://datilsensations.com/"
+      ],
+      "checked_at": "2026-10-15",
+      "original": false,
+      "greeting_name": "Datil Sensation",
+      "owner_name_evidence": []
+    },
+    {
+      "slug": "gw-watts-sauce",
+      "name": "GW Watts Sauce",
+      "booth": "Row 13 A",
+      "website": "https://www.wattssauce.com/",
+      "observed": "The homepage presents many sampler packs with abbreviated product codes.",
+      "opportunity": "Make sampler differences clearer and retain tasting preferences for reorders.",
+      "message": "Hi GW Watts Sauce! I’m John from Modern Forestry. We’ll also be selling at Woolly Worm this weekend. I also run Evergrove, a one-stop shop for all things tech, and I built Everbranch. With your sauce and sampler range, I’m working on a simpler way to compare packs and remember what someone enjoyed tasting, so a festival customer can easily find that favorite again online. I’ll have a tablet at booth 11 A with an example website and back-end workspace. If you’re interested, I can show you how it works and how it could free you up to focus on the parts of the business you enjoy. Rewards and customer relationship tools can help grow online sales, with point of sale coming soon. Would you be open to a quick look at the festival?",
+      "status": "draft_for_user_review",
+      "instagram_url": null,
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://www.wattssauce.com/"
+      ],
+      "checked_at": "2026-10-15",
+      "original": false,
+      "greeting_name": "GW Watts Sauce",
+      "owner_name_evidence": []
+    },
+    {
+      "slug": "honest-elderberry-company",
+      "name": "Honest Elderberry Company",
+      "booth": "Row 15 E",
+      "website": "https://honestelderberryco.com/",
+      "observed": "The shop mixes syrups, tea, honey, body products and wholesale navigation.",
+      "opportunity": "Clarify product types and connect household favorites with appropriate fulfillment and follow-up.",
+      "message": "Hi Meghan! I’m John from Modern Forestry. We’ll also be selling at Woolly Worm this weekend. I also run Evergrove, a one-stop shop for all things tech, and I built Everbranch. Your range spans elderberry products, tea, honey and body care. I’m working on a concept that helps customers find the right collection and keeps their favorites together for easier online reorders. I’ll have a tablet at booth 11 A with an example website and back-end workspace. If you’re interested, I can show you how it works and how it could free you up to focus on the parts of the business you enjoy. Rewards and customer relationship tools can help grow online sales, with point of sale coming soon. Would you be open to a quick look at the festival?",
+      "status": "draft_for_user_review",
+      "instagram_url": null,
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://honestelderberryco.com/"
+      ],
+      "checked_at": "2026-10-15",
+      "original": false,
+      "greeting_name": "Meghan",
+      "owner_name_evidence": [
+        "https://honestelderberryco.com/pages/about-us"
+      ]
+    },
+    {
+      "slug": "jc-wicks",
+      "name": "JC Wicks",
+      "booth": "Row 18 E",
+      "website": "https://jcwicks.com/",
+      "observed": "The site offers multiple scent product types and announces Friday shipping and a free-shipping threshold.",
+      "opportunity": "Link a preferred scent across products and make dispatch timing clearer.",
+      "message": "Hi JC Wicks! I’m John from Modern Forestry. We’ll also be selling at Woolly Worm this weekend. I also run Evergrove, a one-stop shop for all things tech, and I built Everbranch. For your candles, melts and sprays, I’m working on a shop-by-scent concept so someone can find the scent they loved at your booth across different products, with clear shipping timing and easy repeat orders. I’ll have a tablet at booth 11 A with an example website and back-end workspace. If you’re interested, I can show you how it works and how it could free you up to focus on the parts of the business you enjoy. Rewards and customer relationship tools can help grow online sales, with point of sale coming soon. Would you be open to a quick look at the festival?",
+      "status": "draft_for_user_review",
+      "instagram_url": null,
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://jcwicks.com/"
+      ],
+      "checked_at": "2026-10-15",
+      "original": false,
+      "greeting_name": "JC Wicks",
+      "owner_name_evidence": []
+    },
+    {
+      "slug": "little-elk-candle-company",
+      "name": "Little Elk Candle Company",
+      "booth": "Row 15 B",
+      "website": "https://www.littleelkcandles.com/",
+      "observed": "The homepage lists over twenty scents across candles, diffusers, melts and home fragrance.",
+      "opportunity": "Guide scent and format choices and keep customer favorites for reorders.",
+      "message": "Hi Little Elk Candle Company! I’m John from Modern Forestry. We’ll also be selling at Woolly Worm this weekend. I also run Evergrove, a one-stop shop for all things tech, and I built Everbranch. With more than twenty scents and several home-fragrance formats, I’m working on a scent-first concept that helps customers find a favorite, explore it in other products and come back to reorder. I’ll have a tablet at booth 11 A with an example website and back-end workspace. If you’re interested, I can show you how it works and how it could free you up to focus on the parts of the business you enjoy. Rewards and customer relationship tools can help grow online sales, with point of sale coming soon. Would you be open to a quick look at the festival?",
+      "status": "draft_for_user_review",
+      "instagram_url": null,
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://www.littleelkcandles.com/"
+      ],
+      "checked_at": "2026-10-15",
+      "original": false,
+      "greeting_name": "Little Elk Candle Company",
+      "owner_name_evidence": []
+    },
+    {
+      "slug": "lonon-pottery",
+      "name": "Lonon Pottery",
+      "booth": "Row 12 C",
+      "website": "https://www.lononpottery.com/shop",
+      "observed": "The live mobile shop review found many products marked sold out.",
+      "opportunity": "Offer restock interest and commission follow-up when a shopper’s preferred piece is unavailable.",
+      "message": "Hi Matthew and Nikki! I’m John from Modern Forestry. We’ll also be selling at Woolly Worm this weekend. I also run Evergrove, a one-stop shop for all things tech, and I built Everbranch. For your pottery, I’m working on a concept that gives customers a useful next step when a favorite piece is sold out, such as restock interest or a custom request, and keeps that conversation connected to future purchases. I’ll have a tablet at booth 11 A with an example website and back-end workspace. If you’re interested, I can show you how it works and how it could free you up to focus on the parts of the business you enjoy. Rewards and customer relationship tools can help grow online sales, with point of sale coming soon. Would you be open to a quick look at the festival?",
+      "status": "draft_for_user_review",
+      "instagram_url": null,
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://www.lononpottery.com/shop"
+      ],
+      "checked_at": "2026-10-15",
+      "original": false,
+      "greeting_name": "Matthew and Nikki",
+      "owner_name_evidence": [
+        "https://www.lononpottery.com/our-story"
+      ]
+    },
+    {
+      "slug": "michaels-exotic-peppers",
+      "name": "Michael’s Exotic Peppers",
+      "booth": "Row 11 D",
+      "website": "https://michaelsexoticpeppers.com/",
+      "observed": "The shop presents many pepper/flavor combinations and amplified versions.",
+      "opportunity": "Guide heat-level selection and remember tasting preferences for repeat purchases.",
+      "message": "Hi Michael’s Exotic Peppers! I’m John from Modern Forestry. We’ll also be selling at Woolly Worm this weekend. I also run Evergrove, a one-stop shop for all things tech, and I built Everbranch. Your different pepper, fruit and amplified sauce combinations would work well with a guided heat-and-flavor finder. I’m building a concept that helps festival tasters remember their favorite and find it again online. I’ll have a tablet at booth 11 A with an example website and back-end workspace. If you’re interested, I can show you how it works and how it could free you up to focus on the parts of the business you enjoy. Rewards and customer relationship tools can help grow online sales, with point of sale coming soon. Would you be open to a quick look at the festival?",
+      "status": "draft_for_user_review",
+      "instagram_url": null,
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://michaelsexoticpeppers.com/"
+      ],
+      "checked_at": "2026-10-15",
+      "original": false,
+      "greeting_name": "Michael’s Exotic Peppers",
+      "owner_name_evidence": []
+    },
+    {
+      "slug": "noodlecakes",
+      "name": "NoodleCakes",
+      "booth": "Row 4 D",
+      "website": "https://noodlecakes.com/",
+      "observed": "The homepage spans beadwork, stained glass, cat toys and local stockists.",
+      "opportunity": "Give each product family a clear path and retain custom gift preferences.",
+      "message": "Hi Amber and Ashley! I’m John from Modern Forestry. We’ll also be selling at Woolly Worm this weekend. I also run Evergrove, a one-stop shop for all things tech, and I built Everbranch. Your beadwork, stained glass and cat toys each have a different shopper. I’m working on a concept with clearer collection paths and a way to remember custom requests and gift preferences for the next visit. I’ll have a tablet at booth 11 A with an example website and back-end workspace. If you’re interested, I can show you how it works and how it could free you up to focus on the parts of the business you enjoy. Rewards and customer relationship tools can help grow online sales, with point of sale coming soon. Would you be open to a quick look at the festival?",
+      "status": "draft_for_user_review",
+      "instagram_url": null,
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://noodlecakes.com/"
+      ],
+      "checked_at": "2026-10-15",
+      "original": false,
+      "greeting_name": "Amber and Ashley",
+      "owner_name_evidence": [
+        "https://noodlecakes.com/about",
+        "https://linktr.ee/noodlecakesshop",
+        "https://www.etsy.com/listing/1158616224/crochet-catnip-takeout-cat-toys-taco"
+      ]
+    },
+    {
+      "slug": "pillowsak",
+      "name": "PillowSak",
+      "booth": "Row 13 D",
+      "website": "https://pillowsak.com/",
+      "observed": "The homepage foregrounds fabric designs; the travel-pillow purpose is explained below the best sellers.",
+      "opportunity": "Lead with the travel-use story and guide fit/fabric choices.",
+      "message": "Hi Debby! I’m John from Modern Forestry. We’ll also be selling at Woolly Worm this weekend. I also run Evergrove, a one-stop shop for all things tech, and I built Everbranch. For PillowSak, I’m working on a concept that brings the travel-use story forward and guides shoppers through fit and fabric choices, then keeps those preferences handy for gifts and repeat orders. I’ll have a tablet at booth 11 A with an example website and back-end workspace. If you’re interested, I can show you how it works and how it could free you up to focus on the parts of the business you enjoy. Rewards and customer relationship tools can help grow online sales, with point of sale coming soon. Would you be open to a quick look at the festival?",
+      "status": "draft_for_user_review",
+      "instagram_url": null,
+      "sources": [
+        "https://embed-rech-01.dialog.cm/mtimes/docs/woolly_worm_2026",
+        "https://pillowsak.com/"
+      ],
+      "checked_at": "2026-10-15",
+      "original": false,
+      "greeting_name": "Debby",
+      "owner_name_evidence": [
+        "https://pillowsak.com/pages/2026",
+        "https://www.connectsavannah.com/community/introductions-meet-deborah-mcincrow-19420441"
+      ]
+    }
+  ]
+}

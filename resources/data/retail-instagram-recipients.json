@@ -1,0 +1,1040 @@
+{
+  "schema_version": 1,
+  "checked_at": "2026-10-15",
+  "purpose": "Public recipient evidence for user-reviewed Instagram outreach drafts. No messages sent.",
+  "sending_status": "blocked_pending_user_review",
+  "recipients": [
+    {
+      "slug": "joy-fudge-company",
+      "name": "Joy Fudge Company",
+      "website": "https://www.joyfudgecompany.com/",
+      "checked_at": "2026-10-15",
+      "instagram_url": null,
+      "status": "not_verified",
+      "evidence": [],
+      "notes": "The homepage Instagram icon links to the site builder Wix, not this merchant. This is not a valid recipient; never message that account. Merchant-specific handle remains unverified.",
+      "http_status": 200,
+      "resolved_url": "https://www.joyfudgecompany.com/",
+      "candidate_links": [
+        "https://www.instagram.com/wix"
+      ],
+      "follow_up_search": {
+        "checked_at": "2026-10-15",
+        "queries": [
+          "\"joyfudgecompany\" Instagram",
+          "\"Joy Fudge Company\" social media Holly Smith",
+          "\"Joy Fudge Company\" \"Holly\" Instagram Facebook"
+        ],
+        "sources_reviewed": [
+          {
+            "url": "https://www.joyfudgecompany.com/",
+            "outcome": "Merchant identity and maker name confirmed; Instagram icon points to Wix, which is not the merchant."
+          },
+          {
+            "url": "https://www.joyfudgecompany.com/events",
+            "outcome": "Merchant-published 2026 schedule names Wooly Worm October 17/18 in Banner Elk. No valid merchant Instagram account identified."
+          }
+        ],
+        "result": "No additional Instagram account met verification requirements."
+      },
+      "unverified_reason": "No merchant-specific Instagram account verified. The homepage template link to Wix is explicitly excluded.",
+      "alternative_public_profile": null,
+      "attendance_corroboration": {
+        "source": "https://www.joyfudgecompany.com/events",
+        "year": 2026,
+        "dates": [
+          "2026-10-17",
+          "2026-10-18"
+        ],
+        "event": "Wooly Worm, Banner Elk",
+        "checked_at": "2026-10-15"
+      },
+      "greeting_name": "Holly",
+      "owner_name": "Holly “Joy” Smith",
+      "owner_name_evidence": [
+        "https://www.joyfudgecompany.com/"
+      ],
+      "owner_name_evidence_note": "Merchant homepage identifies the chocolatier and describes how she started Joy Fudge Company.",
+      "owner_name_checked_at": "2026-10-15",
+      "email": "orders@joyfudgecompany.com",
+      "email_evidence": "https://www.joyfudgecompany.com/",
+      "email_verification_date": "2026-10-15",
+      "email_verified_at": "2026-10-15",
+      "email_status": "public_business_email_verified",
+      "email_evidence_note": "Merchant homepage Contact Me section publicly lists this business address.",
+      "email_verification_scope": "Verified as a publicly listed merchant business contact; inbox deliverability has not been tested."
+    },
+    {
+      "slug": "old-beech-mountain-farms",
+      "name": "Old Beech Mountain Farms",
+      "website": "https://highcountryfoodhub.localfoodmarketplace.com/Producer/3f9b5846-d06d-40e5-9e01-789afbf98c6f",
+      "checked_at": "2026-10-15",
+      "instagram_url": null,
+      "status": "not_verified",
+      "evidence": [],
+      "notes": "No Instagram profile link found in fetched merchant page. Search/merchant confirmation needed before sending.",
+      "http_status": 200,
+      "resolved_url": "https://highcountryfoodhub.localfoodmarketplace.com/Producer/3f9b5846-d06d-40e5-9e01-789afbf98c6f",
+      "candidate_links": [],
+      "follow_up_search": {
+        "checked_at": "2026-10-15",
+        "queries": [
+          "\"Old Beech\" \"Instagram\"",
+          "\"oldbeechmtnfarm\"",
+          "\"Old Beech Mountain Farms\" social media"
+        ],
+        "sources_reviewed": [
+          {
+            "url": "https://highcountryfoodhub.localfoodmarketplace.com/Producer/3f9b5846-d06d-40e5-9e01-789afbf98c6f",
+            "outcome": "Confirms farm identity, Banner Elk location and Facebook profile; no Instagram link."
+          },
+          {
+            "url": "https://www.brwia.org/ksm-414847-987846.html",
+            "outcome": "Farm entry links its Facebook page, not an Instagram account."
+          },
+          {
+            "url": "https://www.facebook.com/oldbeechmtnfarm/",
+            "outcome": "Public renderer displayed a temporary-block notice; no merchant profile details or Instagram identity could be verified."
+          }
+        ],
+        "result": "No additional Instagram account met verification requirements."
+      },
+      "unverified_reason": "Public farm sources verify Facebook only. No Instagram handle established; public Facebook access was blocked.",
+      "alternative_public_profile": "https://www.facebook.com/oldbeechmtnfarm/",
+      "greeting_name": "Rodney and Tracie",
+      "owner_name": "Rodney and Tracie Presnell",
+      "owner_name_evidence": [
+        "https://highcountryfoodhub.localfoodmarketplace.com/Producer/3f9b5846-d06d-40e5-9e01-789afbf98c6f"
+      ],
+      "owner_name_evidence_note": "Producer-authored farm profile identifies Rodney and Tracie as the family farm operators.",
+      "owner_name_checked_at": "2026-10-15",
+      "email": "presnellfarms@yahoo.com",
+      "email_evidence": "https://highcountryfoodhub.localfoodmarketplace.com/Producer/3f9b5846-d06d-40e5-9e01-789afbf98c6f",
+      "email_verification_date": "2026-10-15",
+      "email_verified_at": "2026-10-15",
+      "email_status": "public_business_email_verified",
+      "email_evidence_note": "Merchant-authored producer profile publicly lists this farm contact email and names Rodney and Tracie Presnell.",
+      "email_verification_scope": "Verified as a publicly listed merchant business contact; inbox deliverability has not been tested."
+    },
+    {
+      "slug": "4-pelicans-woodworking",
+      "name": "4 Pelicans Woodworking",
+      "website": "https://www.facebook.com/4pelicanswoodworking",
+      "checked_at": "2026-10-15",
+      "instagram_url": null,
+      "status": "not_verified",
+      "evidence": [],
+      "notes": "No Instagram profile link found in fetched merchant page. Search/merchant confirmation needed before sending.",
+      "http_status": 200,
+      "resolved_url": "https://www.facebook.com/4pelicanswoodworking",
+      "candidate_links": [],
+      "follow_up_search": {
+        "checked_at": "2026-10-15",
+        "queries": [
+          "\"4 Pelicans Woodworking\" \"instagram\"",
+          "\"4pelicanswoodworking\" instagram"
+        ],
+        "sources_reviewed": [
+          {
+            "url": "https://www.oldebeaufortfarmersmarket.org/aritsanbios",
+            "outcome": "Artisan bio identifies Jeff and Sarah Morris and the 4pelicanswoodworking Facebook profile; no merchant Instagram account."
+          },
+          {
+            "url": "https://www.carync.gov/recreation-enjoyment/events/festivals/lazy-daze-arts-and-crafts-festival/artists/wood",
+            "outcome": "Artist directory identifies Jeff Morris, Newport NC, and the same merchant Facebook profile."
+          },
+          {
+            "url": "https://www.facebook.com/4pelicanswoodworking",
+            "outcome": "Public fetch was throttled; no Instagram identity verified."
+          }
+        ],
+        "result": "No additional Instagram account met verification requirements."
+      },
+      "unverified_reason": "Matching maker identity and location verified, but only Facebook linked. No Instagram handle guessed.",
+      "alternative_public_profile": "https://www.facebook.com/4pelicanswoodworking",
+      "greeting_name": "Jeff and Sarah",
+      "owner_name": "Jeff and Sarah Morris",
+      "owner_name_evidence": [
+        "https://www.oldebeaufortfarmersmarket.org/aritsanbios"
+      ],
+      "owner_name_evidence_note": "Market artisan biography identifies Jeff and Sarah Morris as the makers behind 4 Pelicans Woodworking.",
+      "owner_name_checked_at": "2026-10-15",
+      "email": "Jeffnsarah97@gmail.com",
+      "email_evidence": "https://www.oldebeaufortfarmersmarket.org/aritsanbios",
+      "email_verification_date": "2026-10-15",
+      "email_verified_at": "2026-10-15",
+      "email_status": "public_business_email_verified",
+      "email_evidence_note": "Merchant artisan biography publicly lists this address for 4 Pelicans Woodworking, Jeff and Sarah Morris.",
+      "email_verification_scope": "Verified as a publicly listed merchant business contact; inbox deliverability has not been tested."
+    },
+    {
+      "slug": "leather-link-studio",
+      "name": "Leather Link Studio",
+      "website": "https://leatherlinkstudio.com/",
+      "checked_at": "2026-10-15",
+      "instagram_url": "https://www.instagram.com/leatherlinkstudio/",
+      "status": "merchant_site_link_verified",
+      "evidence": [
+        {
+          "type": "merchant_website_link",
+          "source": "https://leatherlinkstudio.com/",
+          "linked_url": "https://www.instagram.com/leatherlinkstudio/",
+          "checked_at": "2026-10-15"
+        }
+      ],
+      "notes": "Do not send until the user has reviewed the vendor-specific message and recipient.",
+      "http_status": 200,
+      "resolved_url": "https://leatherlinkstudio.com/",
+      "candidate_links": [
+        "https://www.instagram.com/leatherlinkstudio/"
+      ],
+      "greeting_name": "Randy",
+      "owner_name": "Randall Kent (Randy) Davis",
+      "owner_name_evidence": [
+        "https://leatherlinkstudio.com/story/"
+      ],
+      "owner_name_evidence_note": "Merchant story explicitly identifies Randall Kent Davis as owner and signs the page Randy Davis; son Dustin is also a named business contact.",
+      "owner_name_checked_at": "2026-10-15",
+      "facebook_url": "https://www.facebook.com/Leatherlinkstudio/",
+      "facebook_evidence": "https://leatherlinkstudio.com/",
+      "facebook_status": "merchant_site_link_verified",
+      "facebook_verified_at": "2026-10-15",
+      "facebook_evidence_note": "Official merchant website links this Facebook page. The sending agent should confirm the destination page identity and messaging availability in the open account.",
+      "email": "leatherlinkstudio@gmail.com",
+      "email_evidence": "https://leatherlinkstudio.com/",
+      "email_verification_date": "2026-10-15",
+      "email_verified_at": "2026-10-15",
+      "email_status": "public_business_email_verified",
+      "email_evidence_note": "Official homepage contact section and footer list this business email.",
+      "email_verification_scope": "Verified as a publicly listed merchant business contact; inbox deliverability has not been tested."
+    },
+    {
+      "slug": "mcneills-pottery",
+      "name": "McNeill’s Pottery",
+      "website": "https://www.mcneillspottery.com/",
+      "checked_at": "2026-10-15",
+      "instagram_url": null,
+      "status": "not_verified",
+      "evidence": [],
+      "notes": "No Instagram profile link found in fetched merchant page. Search/merchant confirmation needed before sending.",
+      "http_status": 200,
+      "resolved_url": "https://www.mcneillspottery.com/",
+      "candidate_links": [],
+      "follow_up_search": {
+        "checked_at": "2026-10-15",
+        "queries": [
+          "\"McNeill’s Pottery\" \"instagram\"",
+          "\"McNeill's Pottery\" \"instagram.com\"",
+          "\"McNeill’s Pottery\" Seagrove social"
+        ],
+        "sources_reviewed": [
+          {
+            "url": "https://www.mcneillspottery.com/",
+            "outcome": "Merchant site confirms Seagrove business and contact details; no Instagram link found."
+          },
+          {
+            "url": "https://discoverseagrove.com/potters/mcneills-pottery-3/",
+            "outcome": "Trade-association listing confirms Garrett McNeill/Windy Wallace, Seagrove location and the merchant website, but does not supply a merchant Instagram link."
+          }
+        ],
+        "result": "No additional Instagram account met verification requirements."
+      },
+      "unverified_reason": "Matching business identity verified through merchant site and trade association, but no Instagram account linked.",
+      "alternative_public_profile": null,
+      "greeting_name": "Windy and Garrett",
+      "owner_name": "Windy and Garrett",
+      "owner_name_evidence": [
+        "https://www.mcneillspottery.com/about-us.html"
+      ],
+      "owner_name_evidence_note": "Merchant About page explicitly states that the business is now owned by Windy and Garrett.",
+      "owner_name_checked_at": "2026-10-15",
+      "email": "mcneillspottery@yahoo.com",
+      "email_evidence": "https://www.mcneillspottery.com/contact.html",
+      "email_verification_date": "2026-10-15",
+      "email_verified_at": "2026-10-15",
+      "email_status": "public_business_email_verified",
+      "email_evidence_note": "Fresh rendered merchant Contact page has this mailto link; rendered homepage also displays the same business email.",
+      "email_verification_scope": "Verified as a publicly listed merchant business contact; inbox deliverability has not been tested."
+    },
+    {
+      "slug": "highland-croft-candle-company",
+      "name": "Highland Croft Candle Company",
+      "website": "https://www.highcountryhighlandcroft.com/",
+      "checked_at": "2026-10-15",
+      "instagram_url": null,
+      "status": "not_verified",
+      "evidence": [],
+      "notes": "No Instagram link verified. @HighlandCroft on the site is a Venmo payment reference, not Instagram evidence. Do not infer an Instagram account from it.",
+      "http_status": 200,
+      "resolved_url": "https://www.highcountryhighlandcroft.com/",
+      "candidate_links": [],
+      "follow_up_search": {
+        "checked_at": "2026-10-15",
+        "queries": [
+          "\"Highland Croft\" \"instagram.com\"",
+          "\"Highland Croft Candle\" social",
+          "Highland Croft Candle Company Instagram"
+        ],
+        "sources_reviewed": [
+          {
+            "url": "https://www.highcountryhighlandcroft.com/",
+            "outcome": "Merchant site confirms Elk Park farm shop; @HighlandCroft is explicitly a Venmo reference, not Instagram evidence."
+          },
+          {
+            "url": "https://www.charlestonscottishgames.com/vendors/",
+            "outcome": "Festival merchandise list confirms the company name; does not establish an Instagram identity."
+          }
+        ],
+        "result": "No additional Instagram account met verification requirements."
+      },
+      "unverified_reason": "No Instagram link verified. Do not mistake the Venmo name or the unrelated Highlands Candle Company for this merchant.",
+      "alternative_public_profile": null,
+      "greeting_name": "Highland Croft Candle Company",
+      "owner_name": null,
+      "owner_name_evidence": [],
+      "owner_name_evidence_note": "The merchant story describes a founding couple but does not name them. No public owner name was sufficiently verified.",
+      "owner_name_checked_at": "2026-10-15",
+      "owner_name_research": {
+        "checked_at": "2026-10-15",
+        "sources": [
+          "https://www.highcountryhighlandcroft.com/our-story",
+          "https://www.highcountryhighlandcroft.com/"
+        ],
+        "result": "The merchant story describes a founding couple but does not name them. No public owner name was sufficiently verified."
+      },
+      "email": "HighCountryHighlandCroft@gmail.com",
+      "email_evidence": "https://www.highcountryhighlandcroft.com/",
+      "email_verification_date": "2026-10-15",
+      "email_verified_at": "2026-10-15",
+      "email_status": "public_business_email_verified",
+      "email_evidence_note": "Merchant website footer Contact Us section and event contact text publicly list this address.",
+      "email_verification_scope": "Verified as a publicly listed merchant business contact; inbox deliverability has not been tested."
+    },
+    {
+      "slug": "mountain-momma-organics",
+      "name": "Mountain Momma Organics",
+      "website": "https://mountainmommaorganics.com/",
+      "checked_at": "2026-10-15",
+      "instagram_url": null,
+      "status": "not_verified",
+      "evidence": [],
+      "notes": "No Instagram profile link found in fetched merchant page. Search/merchant confirmation needed before sending.",
+      "http_status": 200,
+      "resolved_url": "https://mountainmommaorganics.com/",
+      "candidate_links": [],
+      "follow_up_search": {
+        "checked_at": "2026-10-15",
+        "queries": [
+          "\"Mountain Momma Organics\" \"Instagram\"",
+          "\"mountainmommaorganics\" social",
+          "\"Mountain Momma Organics\" Instagram Keith Kim"
+        ],
+        "sources_reviewed": [
+          {
+            "url": "https://mountainmommaorganics.com/story/",
+            "outcome": "Merchant story names Keith and Kim and directs readers to the Mountain Momma Organics Facebook page, not Instagram."
+          },
+          {
+            "url": "https://festivalinthepark.org/kim-and-keith-finger/",
+            "outcome": "Festival artist entry confirms Keith/Kim Finger, Macfarlan WV, and the merchant website."
+          },
+          {
+            "url": "https://bigfourbridgeartsfestival.com/keith-finger/",
+            "outcome": "Artist entry confirms business identity and links the MountainMommaOrganics Facebook profile."
+          },
+          {
+            "url": "https://www.facebook.com/MountainMommaOrganics/",
+            "outcome": "Public fetch was throttled; no Instagram identity verified."
+          }
+        ],
+        "result": "No additional Instagram account met verification requirements."
+      },
+      "unverified_reason": "Matching owners, West Virginia location and website verified. Public sources establish Facebook only; Instagram remains unresolved.",
+      "alternative_public_profile": "https://www.facebook.com/MountainMommaOrganics/",
+      "greeting_name": "Kim and Keith",
+      "owner_name": "Kim and Keith Finger",
+      "owner_name_evidence": [
+        "https://mountainmommaorganics.com/story/",
+        "https://festivalinthepark.org/kim-and-keith-finger/"
+      ],
+      "owner_name_evidence_note": "Merchant story names Kim and Keith; festival artist profile confirms their surname and business identity.",
+      "owner_name_checked_at": "2026-10-15",
+      "email": "MountainMommaOrganics@gmail.com",
+      "email_evidence": "https://mountainmommaorganics.com/contact/",
+      "email_verification_date": "2026-10-15",
+      "email_verified_at": "2026-10-15",
+      "email_status": "public_business_email_verified",
+      "email_evidence_note": "Official Contact Us page publicly lists this business email.",
+      "email_verification_scope": "Verified as a publicly listed merchant business contact; inbox deliverability has not been tested."
+    },
+    {
+      "slug": "appalachian-divinitea",
+      "name": "Appalachian DiviniTEA",
+      "website": "https://appalachiandivinitea.com/",
+      "checked_at": "2026-10-15",
+      "instagram_url": "https://www.instagram.com/appalachiandivinitea/",
+      "status": "merchant_site_link_verified",
+      "evidence": [
+        {
+          "type": "merchant_website_link",
+          "source": "https://appalachiandivinitea.com/",
+          "linked_url": "https://instagram.com/appalachiandivinitea",
+          "checked_at": "2026-10-15"
+        }
+      ],
+      "notes": "Do not send until the user has reviewed the vendor-specific message and recipient.",
+      "http_status": 200,
+      "resolved_url": "https://appalachiandivinitea.com/",
+      "candidate_links": [
+        "https://instagram.com/appalachiandivinitea"
+      ],
+      "greeting_name": "Ricky and Nikki",
+      "owner_name": "Ricky and Nikki",
+      "owner_name_evidence": [
+        "https://appalachiandivinitea.com/"
+      ],
+      "owner_name_evidence_note": "Merchant homepage identifies founders/owners Ricky and Nikki and signs its welcome message with those names.",
+      "owner_name_checked_at": "2026-10-15",
+      "facebook_url": "https://www.facebook.com/appalachiandivinitea/",
+      "facebook_evidence": "https://appalachiandivinitea.com/",
+      "facebook_status": "merchant_published_handle_verified",
+      "facebook_verified_at": "2026-10-15",
+      "facebook_evidence_note": "Official homepage explicitly identifies both its IG/FB pages with the public handle @appalachiandivinitea.",
+      "email": "appalachiandivinitea@gmail.com",
+      "email_evidence": "https://appalachiandivinitea.com/contact/",
+      "email_verification_date": "2026-10-15",
+      "email_verified_at": "2026-10-15",
+      "email_status": "public_business_email_verified",
+      "email_evidence_note": "Official Contact page lists the general business inquiry email and founder Ricky Van Warner.",
+      "email_verification_scope": "Verified as a publicly listed merchant business contact; inbox deliverability has not been tested."
+    },
+    {
+      "slug": "avery-knifeworks",
+      "name": "Avery KnifeWorks",
+      "website": "https://www.averyknifeworks.com/",
+      "checked_at": "2026-10-15",
+      "instagram_url": "https://www.instagram.com/averyknifeworks/",
+      "status": "merchant_site_link_verified",
+      "evidence": [
+        {
+          "type": "merchant_website_link",
+          "source": "https://www.averyknifeworks.com/",
+          "linked_url": "https://www.instagram.com/averyknifeworks/?hl=en",
+          "checked_at": "2026-10-15"
+        }
+      ],
+      "notes": "Do not send until the user has reviewed the vendor-specific message and recipient.",
+      "http_status": 200,
+      "resolved_url": "https://www.averyknifeworks.com/",
+      "candidate_links": [
+        "https://www.instagram.com/averyknifeworks/?hl=en"
+      ],
+      "greeting_name": "Raleigh",
+      "owner_name": "Raleigh Avery",
+      "owner_name_evidence": [
+        "https://www.averyknifeworks.com/"
+      ],
+      "owner_name_evidence_note": "Merchant homepage presents Raleigh Avery’s first-person maker story.",
+      "owner_name_checked_at": "2026-10-15",
+      "facebook_url": "https://www.facebook.com/averyknifeworks/",
+      "facebook_evidence": "https://www.averyknifeworks.com/",
+      "facebook_status": "merchant_site_link_verified",
+      "facebook_verified_at": "2026-10-15",
+      "facebook_evidence_note": "Official merchant website links this Facebook page. The sending agent should confirm the destination page identity and messaging availability in the open account.",
+      "email": "averyknifeworks@gmail.com",
+      "email_evidence": "https://www.averyknifeworks.com/contact-us",
+      "email_verification_date": "2026-10-15",
+      "email_verified_at": "2026-10-15",
+      "email_status": "public_business_email_verified",
+      "email_evidence_note": "Official Contact Us page publishes this general business address and a separate named business contact, malea@averyknifeworks.com.",
+      "email_verification_scope": "Verified as a publicly listed merchant business contact; inbox deliverability has not been tested.",
+      "alternate_public_business_email": {
+        "email": "malea@averyknifeworks.com",
+        "source": "https://www.averyknifeworks.com/contact-us",
+        "checked_at": "2026-10-15",
+        "note": "Alternate named business contact; do not email both addresses for this introduction."
+      }
+    },
+    {
+      "slug": "boone-barndog",
+      "name": "Boone Barndog Art & Books",
+      "website": "https://www.boonebarndog.com/",
+      "checked_at": "2026-10-15",
+      "instagram_url": "https://www.instagram.com/boonebarndog/",
+      "status": "merchant_site_link_verified",
+      "evidence": [
+        {
+          "type": "merchant_website_link",
+          "source": "https://www.boonebarndog.com/",
+          "linked_url": "https://www.instagram.com/boonebarndog",
+          "checked_at": "2026-10-15"
+        }
+      ],
+      "notes": "Do not send until the user has reviewed the vendor-specific message and recipient.",
+      "http_status": 200,
+      "resolved_url": "https://www.boonebarndog.com/",
+      "candidate_links": [
+        "https://www.instagram.com/boonebarndog"
+      ],
+      "greeting_name": "Mar",
+      "owner_name": "Mar Startari-Stegall",
+      "owner_name_evidence": [
+        "https://www.boonebarndog.com/"
+      ],
+      "owner_name_evidence_note": "Merchant homepage identifies the artist and creator by name.",
+      "owner_name_checked_at": "2026-10-15",
+      "facebook_url": null,
+      "facebook_evidence": null,
+      "facebook_status": "not_verified",
+      "facebook_verified_at": null,
+      "facebook_research_date": "2026-10-15",
+      "facebook_evidence_note": "Official site and 2026 Watauga market profile link Instagram only. No Facebook page verified; no handle guessed.",
+      "email": "boonebarndog@gmail.com",
+      "email_evidence": "https://www.boonebarndog.com/colorparties",
+      "email_verification_date": "2026-10-15",
+      "email_verified_at": "2026-10-15",
+      "email_status": "public_business_email_verified",
+      "email_evidence_note": "Official ColorParties page publicly lists this address for business requests.",
+      "email_verification_scope": "Verified as a publicly listed merchant business contact; inbox deliverability has not been tested."
+    },
+    {
+      "slug": "britts-leather",
+      "name": "Britt’s Leather Co.",
+      "website": "https://brittsleatherco.com/",
+      "checked_at": "2026-10-15",
+      "instagram_url": "https://www.instagram.com/brittsleatherco/",
+      "status": "merchant_site_link_verified",
+      "evidence": [
+        {
+          "type": "merchant_website_link",
+          "source": "https://brittsleatherco.com/",
+          "linked_url": "https://instagram.com/brittsleatherco?utm_source=ig_profile_share&igshid=8tm733gdkz65",
+          "checked_at": "2026-10-15"
+        }
+      ],
+      "notes": "Do not send until the user has reviewed the vendor-specific message and recipient.",
+      "http_status": 200,
+      "resolved_url": "https://brittsleatherco.com/",
+      "candidate_links": [
+        "https://instagram.com/brittsleatherco?utm_source=ig_profile_share&igshid=8tm733gdkz65"
+      ],
+      "greeting_name": "Britt’s Leather Co.",
+      "owner_name": null,
+      "owner_name_evidence": [],
+      "owner_name_evidence_note": "The merchant site identifies an Alabama husband-and-wife business without names. Older directory contacts do not establish the current owners of this exact storefront.",
+      "owner_name_checked_at": "2026-10-15",
+      "owner_name_research": {
+        "checked_at": "2026-10-15",
+        "sources": [
+          "https://brittsleatherco.com/",
+          "https://unicoicountyapplefestival.com/wp-content/uploads/2023/08/2023-Apple-Festival-Vendors-PDF.pdf"
+        ],
+        "result": "The merchant site identifies an Alabama husband-and-wife business without names. Older directory contacts do not establish the current owners of this exact storefront."
+      },
+      "facebook_url": "https://www.facebook.com/BrittsLeatherCo/",
+      "facebook_evidence": "https://brittsleatherco.com/",
+      "facebook_status": "merchant_site_link_verified",
+      "facebook_verified_at": "2026-10-15",
+      "facebook_evidence_note": "Official merchant website links this Facebook page. The sending agent should confirm the destination page identity and messaging availability in the open account.",
+      "email": "courtneydobbins24@yahoo.com",
+      "email_evidence": "https://brittsleatherco.com/policies/refund-policy",
+      "email_verification_date": "2026-10-15",
+      "email_verified_at": "2026-10-15",
+      "email_status": "public_business_email_verified",
+      "email_evidence_note": "Merchant-published Refund Policy expressly uses this address for customer return/refund questions. It is publicly offered as a business contact, despite its personal-style mailbox name.",
+      "email_verification_scope": "Verified as a publicly listed merchant business contact; inbox deliverability has not been tested."
+    },
+    {
+      "slug": "datil-sensation",
+      "name": "Datil Sensation",
+      "website": "https://datilsensations.com/",
+      "checked_at": "2026-10-15",
+      "instagram_url": "https://www.instagram.com/datil_sensation/",
+      "status": "merchant_site_link_verified",
+      "evidence": [
+        {
+          "type": "merchant_website_link",
+          "source": "https://datilsensations.com/",
+          "linked_url": "http://instagram.com/datil_sensation",
+          "checked_at": "2026-10-15"
+        }
+      ],
+      "notes": "Do not send until the user has reviewed the vendor-specific message and recipient.",
+      "http_status": 200,
+      "resolved_url": "https://datilsensations.com/",
+      "candidate_links": [
+        "http://instagram.com/datil_sensation"
+      ],
+      "greeting_name": "Datil Sensation",
+      "owner_name": null,
+      "owner_name_evidence": [],
+      "owner_name_evidence_note": "Merchant site names David King for order support; matching public professional profile links the company. These sources do not explicitly establish current ownership, so use the business-name greeting.",
+      "owner_name_checked_at": "2026-10-15",
+      "owner_name_research": {
+        "checked_at": "2026-10-15",
+        "sources": [
+          "https://datilsensations.com/",
+          "https://www.linkedin.com/in/david-king-6b5b267"
+        ],
+        "public_business_contact": "David King",
+        "ownership_verified": false,
+        "result": "Merchant site names David King for order support; matching public professional profile links the company. These sources do not explicitly establish current ownership, so use the business-name greeting."
+      },
+      "facebook_url": "https://facebook.com/datilsensation",
+      "facebook_evidence": "https://datilsensations.com/",
+      "facebook_status": "merchant_site_link_verified",
+      "facebook_verified_at": "2026-10-15",
+      "facebook_evidence_note": "Official merchant website links this Facebook page. The sending agent should confirm the destination page identity and messaging availability in the open account.",
+      "email": "datilsensation@outlook.com",
+      "email_evidence": "https://datilsensations.com/policies/contact-information",
+      "email_verification_date": "2026-10-15",
+      "email_verified_at": "2026-10-15",
+      "email_status": "public_business_email_verified",
+      "email_evidence_note": "Official Contact Information page explicitly lists this business email; merchant privacy and refund policies repeat it.",
+      "email_verification_scope": "Verified as a publicly listed merchant business contact; inbox deliverability has not been tested."
+    },
+    {
+      "slug": "gw-watts-sauce",
+      "name": "GW Watts Sauce",
+      "website": "https://www.wattssauce.com/",
+      "checked_at": "2026-10-15",
+      "instagram_url": "https://www.instagram.com/gwwattsinc/",
+      "status": "merchant_site_link_verified",
+      "evidence": [
+        {
+          "type": "merchant_website_link",
+          "source": "https://www.wattssauce.com/",
+          "linked_url": "https://www.instagram.com/gwwattsinc",
+          "checked_at": "2026-10-15"
+        }
+      ],
+      "notes": "Do not send until the user has reviewed the vendor-specific message and recipient.",
+      "http_status": 200,
+      "resolved_url": "https://www.wattssauce.com/",
+      "candidate_links": [
+        "https://www.instagram.com/gwwattsinc"
+      ],
+      "greeting_name": "GW Watts Sauce",
+      "owner_name": null,
+      "owner_name_evidence": [],
+      "owner_name_evidence_note": "Business interview, professional profile and official awards directory establish Greg Watts as a company contact/creator, but none reviewed explicitly labels current ownership. Retained as a contact lead; business-name greeting remains the conservative fallback.",
+      "owner_name_checked_at": "2026-10-15",
+      "owner_name_research": {
+        "checked_at": "2026-10-15",
+        "sources": [
+          "https://www.wattssauce.com/about",
+          "https://voyageraleigh.com/interview/daily-inspiration-meet-gw-watts-sauce/",
+          "https://www.scovieawards.com/wp-content/uploads/2025/11/2026ScovieWinnerDirectory2026.pdf",
+          "https://www.linkedin.com/in/gwwatts"
+        ],
+        "public_business_contact": "Greg Watts",
+        "ownership_verified": false,
+        "result": "Business interview, professional profile and official awards directory establish Greg Watts as a company contact/creator, but none reviewed explicitly labels current ownership. Retained as a contact lead; business-name greeting remains the conservative fallback."
+      },
+      "facebook_url": "https://www.facebook.com/wattssauce",
+      "facebook_evidence": "https://www.wattssauce.com/",
+      "facebook_status": "merchant_site_link_verified",
+      "facebook_verified_at": "2026-10-15",
+      "facebook_evidence_note": "Official merchant website links this Facebook page. The sending agent should confirm the destination page identity and messaging availability in the open account.",
+      "email": "sauceboss@wattssauce.com",
+      "email_evidence": "https://www.wattssauce.com/",
+      "email_verification_date": "2026-10-15",
+      "email_verified_at": "2026-10-15",
+      "email_status": "public_business_email_verified",
+      "email_evidence_note": "Current official merchant homepage footer lists this email; prefer it to historical gwwatts.com addresses.",
+      "email_verification_scope": "Verified as a publicly listed merchant business contact; inbox deliverability has not been tested."
+    },
+    {
+      "slug": "honest-elderberry-company",
+      "name": "Honest Elderberry Company",
+      "website": "https://honestelderberryco.com/",
+      "checked_at": "2026-10-15",
+      "instagram_url": "https://www.instagram.com/honestelderberryco/",
+      "status": "merchant_site_link_verified",
+      "evidence": [
+        {
+          "type": "merchant_website_link",
+          "source": "https://honestelderberryco.com/",
+          "linked_url": "https://www.instagram.com/honestelderberryco",
+          "checked_at": "2026-10-15"
+        }
+      ],
+      "notes": "Do not send until the user has reviewed the vendor-specific message and recipient.",
+      "http_status": 200,
+      "resolved_url": "https://honestelderberryco.com/",
+      "candidate_links": [
+        "https://www.instagram.com/honestelderberryco"
+      ],
+      "greeting_name": "Meghan",
+      "owner_name": "Meghan",
+      "owner_name_evidence": [
+        "https://honestelderberryco.com/pages/about-us"
+      ],
+      "owner_name_evidence_note": "Merchant About page introduces Meghan explicitly as the owner; husband Ishmael is described as helping at markets and with packing.",
+      "owner_name_checked_at": "2026-10-15",
+      "exclude_outreach": true,
+      "exclude_outreach_reason": "User explicitly requested excluding Honest Elderberry Company from outreach.",
+      "exclude_outreach_date": "2026-10-15"
+    },
+    {
+      "slug": "jc-wicks",
+      "name": "JC Wicks",
+      "website": "https://jcwicks.com/",
+      "checked_at": "2026-10-15",
+      "instagram_url": null,
+      "status": "not_verified",
+      "evidence": [],
+      "notes": "The homepage Instagram icon links to instagram.com with no account path. No recipient verified; do not infer a handle.",
+      "http_status": 200,
+      "resolved_url": "https://jcwicks.com/",
+      "candidate_links": [
+        "http://instagram.com/"
+      ],
+      "follow_up_search": {
+        "checked_at": "2026-10-15",
+        "queries": [
+          "\"JC Wicks\" \"Instagram\"",
+          "\"JC Wicks\" social",
+          "\"jcwicks.com\" instagram.com",
+          "\"JC wicks\" candles facebook"
+        ],
+        "sources_reviewed": [
+          {
+            "url": "https://jcwicks.com/",
+            "outcome": "Merchant site identifies the candle business. Its Instagram link and structured social data contain only http://instagram.com/ with no account path; this is not a valid recipient."
+          },
+          {
+            "url": "https://facebook.com/105834064794710",
+            "outcome": "Merchant website links this Facebook page; public fetch was throttled and did not establish an Instagram account."
+          }
+        ],
+        "result": "No additional Instagram account met verification requirements."
+      },
+      "unverified_reason": "No account path in the merchant Instagram link. Similar names such as Jwicks are not sufficient to identify this business.",
+      "alternative_public_profile": "https://facebook.com/105834064794710",
+      "greeting_name": "JC Wicks",
+      "owner_name": null,
+      "owner_name_evidence": [],
+      "owner_name_evidence_note": "Merchant homepage has an unnamed Faces behind JC Wicks section. No owner name sufficiently verified; no identity inferred from a photograph.",
+      "owner_name_checked_at": "2026-10-15",
+      "owner_name_research": {
+        "checked_at": "2026-10-15",
+        "sources": [
+          "https://jcwicks.com/"
+        ],
+        "result": "Merchant homepage has an unnamed Faces behind JC Wicks section. No owner name sufficiently verified; no identity inferred from a photograph."
+      },
+      "email": "jcwicksllc@gmail.com",
+      "email_evidence": "https://www.facebook.com/profile.php?id=100063775163541",
+      "email_verification_date": "2026-10-15",
+      "email_verified_at": "2026-10-15",
+      "email_status": "public_business_email_verified",
+      "email_research_date": "2026-10-15",
+      "email_evidence_note": "Root agent inspected the merchant Facebook Page in Safari: Page name JCwicks, candle business description, official jcwicks.com website and public Contact info mailto jcwicksllc@gmail.com. Merchant website Facebook footer link redirects to this Page.",
+      "email_research_sources": [
+        "https://jcwicks.com/",
+        "https://jcwicks.com/policies/terms-of-service",
+        "https://jcwicks.com/sitemap.xml",
+        "https://jcwicks.com/products.json?limit=100"
+      ],
+      "email_next_step": "Obtain the merchant’s public business email directly or use an authorized verified merchant contact channel; do not substitute unrelated JC Wicks people or guessed addresses.",
+      "facebook_url": "https://www.facebook.com/profile.php?id=100063775163541",
+      "facebook_evidence": "https://www.facebook.com/profile.php?id=100063775163541",
+      "facebook_status": "merchant_link_and_destination_identity_verified",
+      "facebook_verified_at": "2026-10-15",
+      "facebook_evidence_note": "Root agent followed the official merchant website Facebook link, which redirects to this Page, and visually matched Page name JCwicks, candle business and official jcwicks.com link. No Message button was visible to EverGrove at that time.",
+      "email_verification_scope": "Verified in publicly displayed merchant Facebook Contact info; inbox deliverability has not been tested.",
+      "facebook_original_merchant_link": "https://facebook.com/105834064794710"
+    },
+    {
+      "slug": "little-elk-candle-company",
+      "name": "Little Elk Candle Company",
+      "website": "https://www.littleelkcandles.com/",
+      "checked_at": "2026-10-15",
+      "instagram_url": "https://www.instagram.com/elk_candles/",
+      "status": "merchant_site_profile_verified",
+      "evidence": [
+        {
+          "type": "merchant_published_social_configuration",
+          "source": "https://www.littleelkcandles.com/",
+          "observed_value": {
+            "icon": "instagram",
+            "user": "elk_candles",
+            "selected": true
+          },
+          "checked_at": "2026-10-15"
+        }
+      ],
+      "notes": "Merchant’s published Square site social configuration names elk_candles; the prior rendered homepage audit also displayed @elk_candles. Review account and vendor-specific text before sending.",
+      "http_status": 200,
+      "resolved_url": "https://www.littleelkcandles.com/",
+      "candidate_links": [],
+      "greeting_name": "Little Elk Candle Company",
+      "owner_name": null,
+      "owner_name_evidence": [],
+      "owner_name_evidence_note": "Public professional profile associates Kerry McKinney with Little Elk Candle Co. in Elk Park, but reviewed material does not establish an ownership role.",
+      "owner_name_checked_at": "2026-10-15",
+      "owner_name_research": {
+        "checked_at": "2026-10-15",
+        "sources": [
+          "https://www.littleelkcandles.com/",
+          "https://www.linkedin.com/in/kerry-mckinney-aa738b99"
+        ],
+        "public_business_contact": "Kerry McKinney",
+        "ownership_verified": false,
+        "result": "Public professional profile associates Kerry McKinney with Little Elk Candle Co. in Elk Park, but reviewed material does not establish an ownership role."
+      },
+      "facebook_url": "https://www.facebook.com/profile.php?id=100091660867739",
+      "facebook_evidence": [
+        {
+          "source": "https://www.facebook.com/profile.php?id=100091660867739",
+          "type": "public_page_identity",
+          "checked_at": "2026-10-15",
+          "note": "Public Little Elk Candle Co. page links littleelkcandles.com, Elk Park NC, and a current Woolly Worm vendor post. Original configured website Facebook link was unavailable."
+        }
+      ],
+      "facebook_status": "merchant_page_identity_verified",
+      "facebook_verified_at": null,
+      "facebook_research_date": "2026-10-15",
+      "facebook_evidence_note": "Official Square site published social configuration selects Facebook username littleelkcandleco. (including the final period). This is the configured target, not an inferred handle; destination identity must be checked in Facebook before sending.",
+      "email": "littleelkcandles@gmail.com",
+      "email_evidence": [
+        {
+          "source": "https://www.facebook.com/profile.php?id=100091660867739&sk=directory_contact_info",
+          "type": "public_merchant_contact_info",
+          "checked_at": "2026-10-15",
+          "observed": "Little Elk Candle Co. Contact info displays littleelkcandles@gmail.com under Email."
+        }
+      ],
+      "email_verified_at": "2026-10-15",
+      "email_verification_date": null,
+      "email_status": "public_business_contact_verified",
+      "email_research_date": "2026-10-15",
+      "email_evidence_note": "No public business email found on merchant homepage or partner site; published sitemap has126 pages but no Contact/About/policy page. No private account metadata or guessed email used. Public Facebook About may provide a business contact.",
+      "email_research_sources": [
+        "https://www.littleelkcandles.com/",
+        "https://www.littleelkcandles.com/sitemap.xml",
+        "https://elkmountain.fun/"
+      ]
+    },
+    {
+      "slug": "lonon-pottery",
+      "name": "Lonon Pottery",
+      "website": "https://www.lononpottery.com/shop",
+      "checked_at": "2026-10-15",
+      "instagram_url": "https://www.instagram.com/lononpottery/",
+      "status": "merchant_site_link_verified",
+      "evidence": [
+        {
+          "type": "merchant_website_footer_link",
+          "source": "https://www.lononpottery.com/",
+          "linked_url": "https://www.instagram.com/lononpottery/",
+          "checked_at": "2026-10-15"
+        }
+      ],
+      "notes": "The root homepage footer links to this account, although the shop page did not expose it. Review recipient and vendor-specific text before sending.",
+      "http_status": 200,
+      "resolved_url": "https://www.lononpottery.com/shop",
+      "candidate_links": [],
+      "greeting_name": "Matthew and Nikki",
+      "owner_name": "Matthew and Nikki Lonon",
+      "owner_name_evidence": [
+        "https://www.lononpottery.com/our-story"
+      ],
+      "owner_name_evidence_note": "Merchant’s first-person story identifies Matthew and Nikki Lonon as the pottery makers.",
+      "owner_name_checked_at": "2026-10-15",
+      "facebook_url": "https://www.facebook.com/lononpottery",
+      "facebook_evidence": "https://www.lononpottery.com/",
+      "facebook_status": "merchant_site_link_verified",
+      "facebook_verified_at": "2026-10-15",
+      "facebook_evidence_note": "Official merchant website links this Facebook page. The sending agent should confirm the destination page identity and messaging availability in the open account.",
+      "email": "lononpottery@gmail.com",
+      "email_evidence": "https://www.lononpottery.com/contact",
+      "email_verification_date": "2026-10-15",
+      "email_verified_at": "2026-10-15",
+      "email_status": "public_business_email_verified",
+      "email_evidence_note": "Official merchant Contact page lists this business email.",
+      "email_verification_scope": "Verified as a publicly listed merchant business contact; inbox deliverability has not been tested."
+    },
+    {
+      "slug": "michaels-exotic-peppers",
+      "name": "Michael’s Exotic Peppers",
+      "website": "https://michaelsexoticpeppers.com/",
+      "checked_at": "2026-10-15",
+      "instagram_url": "https://www.instagram.com/michaelsexoticpeppers/",
+      "status": "merchant_site_link_verified",
+      "evidence": [
+        {
+          "type": "merchant_website_link",
+          "source": "https://michaelsexoticpeppers.com/",
+          "linked_url": "https://www.instagram.com/michaelsexoticpeppers/",
+          "checked_at": "2026-10-15"
+        }
+      ],
+      "notes": "Do not send until the user has reviewed the vendor-specific message and recipient.",
+      "http_status": 200,
+      "resolved_url": "https://michaelsexoticpeppers.com/",
+      "candidate_links": [
+        "https://www.instagram.com/michaelsexoticpeppers/"
+      ],
+      "greeting_name": "Michael’s Exotic Peppers",
+      "owner_name": null,
+      "owner_name_evidence": [],
+      "owner_name_evidence_note": "Merchant contact details and matching professional profile support business association. An unconfirmed third-party directory calls him founding president; no merchant-authored ownership statement was verified, so the greeting remains the business name.",
+      "owner_name_checked_at": "2026-10-15",
+      "owner_name_research": {
+        "checked_at": "2026-10-15",
+        "sources": [
+          "https://michaelsexoticpeppers.com/",
+          "https://www.linkedin.com/in/michaelpatrickflint"
+        ],
+        "public_business_contact": "Michael Flint",
+        "ownership_verified": false,
+        "result": "Merchant contact details and matching professional profile support business association. An unconfirmed third-party directory calls him founding president; no merchant-authored ownership statement was verified, so the greeting remains the business name."
+      },
+      "facebook_url": "https://www.facebook.com/michaelspeppers/",
+      "facebook_evidence": "https://michaelsexoticpeppers.com/",
+      "facebook_status": "merchant_site_link_verified",
+      "facebook_verified_at": "2026-10-15",
+      "facebook_evidence_note": "Official merchant website links this Facebook page. The sending agent should confirm the destination page identity and messaging availability in the open account.",
+      "email": "michael@michaelsexoticpeppers.com",
+      "email_evidence": "https://michaelsexoticpeppers.com/",
+      "email_verification_date": "2026-10-15",
+      "email_verified_at": "2026-10-15",
+      "email_status": "public_business_email_verified",
+      "email_evidence_note": "Official merchant header/footer publicly lists this business contact email.",
+      "email_verification_scope": "Verified as a publicly listed merchant business contact; inbox deliverability has not been tested."
+    },
+    {
+      "slug": "noodlecakes",
+      "name": "NoodleCakes",
+      "website": "https://noodlecakes.com/",
+      "checked_at": "2026-10-15",
+      "instagram_url": "https://www.instagram.com/noodlecakesshop/",
+      "status": "merchant_site_link_verified",
+      "evidence": [
+        {
+          "type": "merchant_website_link",
+          "source": "https://noodlecakes.com/",
+          "linked_url": "https://instagram.com/noodlecakesshop",
+          "checked_at": "2026-10-15"
+        }
+      ],
+      "notes": "Do not send until the user has reviewed the vendor-specific message and recipient.",
+      "http_status": 200,
+      "resolved_url": "https://noodlecakes.com/",
+      "candidate_links": [
+        "https://instagram.com/noodlecakesshop"
+      ],
+      "greeting_name": "Amber and Ashley",
+      "owner_name": "Amber and Ashley Moretz-Elks",
+      "owner_name_evidence": [
+        "https://noodlecakes.com/about",
+        "https://linktr.ee/noodlecakesshop",
+        "https://www.etsy.com/listing/1158616224/crochet-catnip-takeout-cat-toys-taco"
+      ],
+      "owner_name_evidence_note": "Official site links the merchant Linktree, which links its Etsy shop. Merchant Etsy listing identifies Amber and Ashley Moretz-Elks as owners.",
+      "owner_name_checked_at": "2026-10-15",
+      "facebook_url": "https://facebook.com/NoodleCakesShop",
+      "facebook_evidence": "https://noodlecakes.com/",
+      "facebook_status": "merchant_site_link_verified",
+      "facebook_verified_at": "2026-10-15",
+      "facebook_evidence_note": "Official merchant website links this Facebook page. The sending agent should confirm the destination page identity and messaging availability in the open account.",
+      "email": "noodlecakes.shop@gmail.com",
+      "email_evidence": "https://www.etsy.com/listing/1158616224/crochet-catnip-takeout-cat-toys-taco",
+      "email_verification_date": "2026-10-15",
+      "email_verified_at": "2026-10-15",
+      "email_status": "public_business_email_verified",
+      "email_evidence_note": "Merchant-authored Etsy listing explicitly offers email noodlecakes.shop [!at] gmail.com for custom projects. Official NoodleCakes site links its Linktree, which links this Etsy shop. This is the North Carolina Amber/Ashley business, not unrelated Noodlecake Studios.",
+      "email_verification_scope": "Verified as a publicly listed merchant business contact; inbox deliverability has not been tested."
+    },
+    {
+      "slug": "pillowsak",
+      "name": "PillowSak",
+      "website": "https://pillowsak.com/",
+      "checked_at": "2026-10-15",
+      "instagram_url": "https://www.instagram.com/theoriginalpillowsak/",
+      "status": "merchant_site_link_verified",
+      "evidence": [
+        {
+          "type": "merchant_website_link",
+          "source": "https://pillowsak.com/",
+          "linked_url": "https://www.instagram.com/theoriginalpillowsak/",
+          "checked_at": "2026-10-15"
+        }
+      ],
+      "notes": "Do not send until the user has reviewed the vendor-specific message and recipient.",
+      "http_status": 200,
+      "resolved_url": "https://pillowsak.com/",
+      "candidate_links": [
+        "https://www.instagram.com/theoriginalpillowsak/"
+      ],
+      "greeting_name": "Debby",
+      "owner_name": "Deborah (Debby) McIncrow",
+      "owner_name_evidence": [
+        "https://pillowsak.com/pages/2026",
+        "https://www.connectsavannah.com/community/introductions-meet-deborah-mcincrow-19420441"
+      ],
+      "owner_name_evidence_note": "Current merchant news page identifies founder Debby. Founder interview corroborates the full name Deborah McIncrow and same product/site.",
+      "owner_name_checked_at": "2026-10-15",
+      "facebook_url": "https://www.facebook.com/TheOriginalPillowSak",
+      "facebook_evidence": "https://pillowsak.com/",
+      "facebook_status": "merchant_site_link_verified",
+      "facebook_verified_at": "2026-10-15",
+      "facebook_evidence_note": "Official merchant website links this Facebook page. The sending agent should confirm the destination page identity and messaging availability in the open account.",
+      "email": "debby@pillowsak.com",
+      "email_evidence": "https://pillowsak.com/pages/contact",
+      "email_verification_date": "2026-10-15",
+      "email_verified_at": "2026-10-15",
+      "email_status": "public_business_email_verified",
+      "email_evidence_note": "Official merchant Contact page publishes this email under Get in Touch.",
+      "email_verification_scope": "Verified as a publicly listed merchant business contact; inbox deliverability has not been tested."
+    }
+  ],
+  "verified_count": 13,
+  "unverified_count": 7,
+  "follow_up_summary": {
+    "checked_at": "2026-10-15",
+    "additional_verified": 0,
+    "verified_total": 13,
+    "unresolved_total": 7,
+    "limitation": "Targeted web and primary/public social-source checks did not verify the remaining seven. Public Facebook views were blocked or throttled; no restriction was bypassed and no account names were guessed. All outreach remains drafts pending user review."
+  },
+  "owner_name_verified_count": 13,
+  "business_name_greeting_count": 7,
+  "owner_greeting_summary": {
+    "checked_at": "2026-10-15",
+    "verified_owner_or_creator_greetings": 13,
+    "business_name_fallbacks": 7,
+    "rule": "Use verified public owner/founder/maker names; otherwise greet the business by its name without adding team. Business association alone does not establish ownership.",
+    "no_messages_sent": true
+  },
+  "instagram_unverified_email_research": {
+    "checked_at": "2026-10-15",
+    "requested": 7,
+    "public_business_emails_verified": 7,
+    "pending": [],
+    "sender_requested_by_user": "john@evergrovesoftware.com",
+    "research_only_no_messages_sent": true
+  },
+  "remaining_outreach_contact_research": {
+    "checked_at": "2026-10-15",
+    "requested": 13,
+    "new_email_addresses_verified": 12,
+    "facebook_official_links_or_explicit_handles_verified": 11,
+    "facebook_published_configuration_pending_page_check": [
+      "little-elk-candle-company"
+    ],
+    "facebook_not_verified": [
+      "boone-barndog"
+    ],
+    "excluded": [
+      "honest-elderberry-company"
+    ],
+    "research_only_no_sends_by_research_agent": true,
+    "email_pending": [
+      "little-elk-candle-company"
+    ],
+    "no_duplicate_emails": "Prior six emailed businesses are outside this13merchant follow-up set; root owns send audit and duplicate prevention."
+  }
+}

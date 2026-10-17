@@ -1,0 +1,22 @@
+{
+  "source": "/Users/johncollins/Documents/ChatGPT/Barrel/level-foundations-studio/public/studio",
+  "hashes": {
+    "transcriber.mjs": "923dfd20c6f3150421055fc8b38f18d0222ebd442634d82f609d7305f21257d7",
+    "index.html": "1fc8ca127c7105bb43837f1ef67246fa28f9fe1bc535d7a40bd1951cbfef7f30",
+    "studio.css": "d5e908b0e5ffcabf25c06c6921163c8444a8490f3fbdd230de400fd5766d0499",
+    "icon-192.png": "e298ea1c0828a79f5fe5fd10fd311a8614a3edfe7a46bac8847f3e1ae5258df3",
+    "TRANSFORMERS-LICENSE.txt": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "transformers.web.js": "ca697cc102b304de065fbbbd7f3714084d18531509741066ea0bb0326a8ac815",
+    "icon.svg": "080ea1e6b85f865351a53e014f5fc0d9b0bd03e6dd4e2766d2f768d351aad877",
+    "follow.mjs": "017a232574571af0a4c872a0b9be9d5f2bc23da1f446460c03d39358219eb3c5",
+    "manifest.json": "71ea161a17976b5b535f42d7867e66decb488fdb7b6e36071e3d0748e5efa6b0",
+    "studio.mjs": "d3deb8d817b638aa441a4861daf5d63e02d57bab4bc700e3114cf5d117107afd",
+    "sw.js": "db8346d6f35f937a2f2e05f70c0233489e8a77df8f4b345d0d057ff068b57778",
+    "icon-512.png": "a70cd5b093cab8704ab406ba811c3238963157a20b3a9c2381d5454fb67213c0",
+    "vendor/quill.js": "f6157c72ac9b3f51cdead426335688a027b12405d9d6a4daadd38a676b2d7ff2",
+    "vendor/quill.snow.css": "1c7948cd13aa92fac6390319bc1e5e461823da171519d3a768db56164f871636",
+    "vendor/QUILL-LICENSE.txt": "395c12b616d6f58238b4be39284d4d9221b58dd6e1f1e34d9ab537e34abbb022"
+  },
+  "book_namespace": "renfrow-studio-demo",
+  "seeding": "Add-only; existing drafts and all audio takes are retained."
+}

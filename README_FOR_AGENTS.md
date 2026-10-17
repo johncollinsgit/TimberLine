@@ -1,5 +1,76 @@
 # START HERE
 
+## 2026-10-17 — Retail conversational voice (development)
+
+The installed Retail PWA adds **Talk with AI**, an owner-authenticated OpenAI
+Realtime conversation using the selected demo catalog, canonical offer and a
+read-only snapshot of fictional customers, orders, rewards and sample staff notes.
+Profile/workspace entry buttons preserve the selected customer and staff section.
+Connected snapshots resolve only the marked demo tenant; tablet activity is
+strictly validated and kept separate. Real customers and private prospect notes
+remain excluded.
+Readiness checks precede microphone access; follow-up turns and interruptions share
+one session. Mute/end, navigation, backgrounding, network loss and the five-minute
+client limit clean up audio. Returning online never restarts the microphone.
+Voice is default-off; its server key stays private. There are no action tools,
+real customer records or web search. Cache v7 adds the public voice module and
+retains the full 75-photo offline pack. See `docs/retail/VOICE_DEMO.md` for local
+configuration, provider/privacy boundaries and verification. No production release.
+
+## 2026-10-17 — Retail offline photo repair (development)
+
+Retail cache v5 preloads the public shell and all 75 bundled demo photographs
+before activating an update or retiring the previous cache, reusing already saved
+public photos. A static public photo
+manifest covers every WebP under `public/retail/assets`; offline preparation uses
+the same list. Saved images are served from the device immediately, including
+when Wi-Fi is connected but the server cannot be reached. Private APIs and
+authenticated HTML remain excluded. See `docs/retail/VERIFICATION.md`.
+
+## 2026-10-16 — Retail tablet sales upgrade (development)
+
+The existing Retail PWA retains its installed Android identity and all twenty
+storefront concepts. A named canonical Retail Launch Partner offer replaces only
+the showroom offer: $89/month for six months, then $149/month from month seven,
+$499 setup, first ten qualifying businesses subject to operator review. Managed
+Website add-on pricing remains unchanged. Signup uses the existing production
+access-request service and prospect CRM; it creates no tenant membership, paid
+subscription, or reserved launch place. Personal form data is never persisted on
+the tablet. Confirmation delivery is separately gated and truthfully reported.
+
+The owner-only Retail assistant can call the existing server-side OpenAI account
+with bounded fictional business context, no tools, no provider response storage,
+and a request quota. Email/SMS/business drafts require review; it cannot send a
+campaign, grant access, charge a card or read another tenant. Guided examples work
+when live AI is unavailable. Voice input and optional read-aloud use browser
+capabilities. Social Media Marketing remains Coming Soon. Public shell cache v4
+includes the assistant module, with private API responses excluded.
+See `docs/retail/SALES_DEMO_UPGRADE.md` for setup, evidence and limitations.
+
+## 2026-10-15 — Private four-app retail showroom (development)
+
+Twenty isolated festival retail concepts and a retained Sawyer source-catalog preview
+share the existing Website Commerce catalog/cart lane. Owner-only routes, scoped
+team access, revocable previews, draft prospect/onboarding records, demo-only
+receipts/rewards, deterministic offline shipping, and test-only EasyPost rates stay
+separate from live payments, fulfillment, notifications, Shopify and Modern Forestry.
+The showroom is disabled by default; no merchant or production activation occurred.
+Twenty vendor-specific message templates, site observations and recipient evidence
+are owner-only. The review page has no send path. Separately approved external
+Facebook/email outreach records actual receipts in ignored private storage; reusable
+template draft metadata does not describe current delivery state. Honest Elderberry
+is excluded from outreach while its storefront remains. Private research and delivery
+records stay out of public/offline data.
+
+Retail and the separate Renfrow Studio are installable PWAs; Field retains live
+authentication and adds the bundled offline sample, alongside existing Showcase.
+The offer uses Managed Website pricing ($499 setup / $99 monthly) and a one-hour
+weekly strategic video call. Retail cache v3 refreshes public CORE/assets and retires
+the stale seven-concept shell; prepare the full twenty-concept pack on each device.
+Vector-derived PWA/native icons preserve app identities, and Android auth fallbacks
+keep the sign-in layout/heading readable. See `docs/retail/SHOWROOM_RUNBOOK.md` and
+`docs/retail/VERIFICATION.md` for device setup, scope, checks and release limitations.
+
 ## 2026-10-15 — Everbranch Showcase workspace and landlord presentation
 
 - Shared Everbranch web workspaces adopt the approved Showcase palette, readable

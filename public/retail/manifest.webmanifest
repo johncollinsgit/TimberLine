@@ -1,0 +1,43 @@
+{
+  "id": "/retail/showroom",
+  "name": "Everbranch Retail",
+  "short_name": "Retail",
+  "start_url": "/retail/showroom",
+  "scope": "/retail/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#214a36",
+  "background_color": "#f2f2e9",
+  "icons": [
+    {
+      "src": "/retail/assets/icon.svg?v=4",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/retail/assets/icon-192.png?v=4",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/retail/assets/icon-512.png?v=4",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/retail/assets/icon-maskable-192.png?v=4",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/retail/assets/icon-maskable-512.png?v=4",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
