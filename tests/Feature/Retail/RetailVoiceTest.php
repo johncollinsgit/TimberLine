@@ -101,9 +101,12 @@ test('voice rejects injected context unknown merchants invalid pages and invalid
 });
 
 test('voice sends a valid server-key multipart call with bounded public demo context and canonical pricing', function () {
+    $this->mock(\App\Services\Retail\RetailVoiceDemoContext::class, function ($mock) {
+        $mock->shouldReceive('records')->once()->andReturn(['source' => 'none', 'as_of' => '2026-10-17T00:00:00Z', 'customers' => [], 'orders' => [], 'focused_customer' => null]);
+    });
     $this->partialMock(RetailShowroomService::class, function ($mock) {
         $mock->shouldReceive('catalog')->once()->with('joy-fudge-company')->andReturn([
-            'name' => 'Joy Fudge Company', 'category_label' => 'Sample fudge', 'intro' => 'An independent sample storefront.',
+            'slug' => 'joy-fudge-company', 'name' => 'Joy Fudge Company', 'category_label' => 'Sample fudge', 'intro' => 'An independent sample storefront.',
             'private_notes' => 'PRIVATE CUSTOMER NOTE', 'crm' => ['email' => 'private@example.invalid'],
             'site_review' => ['observation' => 'PRIVATE SALES RESEARCH'],
             'shipping' => ['kind' => 'fudge', 'pickup' => true, 'origin' => ['address' => 'PRIVATE WAREHOUSE ADDRESS']],
@@ -113,7 +116,7 @@ test('voice sends a valid server-key multipart call with bounded public demo con
     });
     Http::fake(['api.openai.com/v1/realtime/calls' => Http::response($this->sdp, 201, ['Content-Type' => 'application/sdp', 'Location' => '/v1/realtime/calls/private-call-id'])]);
     $response = $this->postJson($this->url.'/session', [...$this->input, 'merchant' => 'joy-fudge-company', 'page' => 'store'])
-        ->assertOk()->assertExactJson(['sdp' => $this->sdp, 'business' => 'Joy Fudge Company', 'max_duration_seconds' => 300]);
+        ->assertOk()->assertJsonPath('sdp', $this->sdp)->assertJsonPath('business', 'Joy Fudge Company')->assertJsonPath('max_duration_seconds', 300)->assertJsonPath('context_summary.customers', 0);
     expect($response->headers->get('Cache-Control'))->toContain('no-store');
     expect($response->getContent())->not->toContain('synthetic-voice-credential', 'private-call-id', 'PRIVATE');
     Http::assertSent(function ($request) {

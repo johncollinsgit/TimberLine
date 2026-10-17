@@ -184,3 +184,38 @@ Exact reports and screenshots are in ignored `output/retail/voice/`, including
 process memory only. Voice needs internet and the local Mac server for session
 startup; it has no web search. No production release/settings change was performed.
 Lenovo work remains on hold. Setup and limits: [VOICE_DEMO.md](VOICE_DEMO.md).
+
+## Demo customer and order voice context - 2026-10-17
+
+Voice sessions now include read-only records from the selected marked demo tenant,
+or validated tablet-only sample activity when that is the workspace being shown.
+Customer profile and staff workspace buttons preserve focus. The snapshot reports
+its source, customer/order counts and start time. Restart after changing records.
+All retained Sawyer products can be discussed; its real customer workspace is
+never queried. Private prospect notes and real contact records stay excluded.
+
+- Retail PHP: **71 passed, 812 assertions**. Focused voice/context tests:
+  **12 passed, 179 assertions**. Covers same-tenant demo orders/customer joins,
+  purchase/reward/note inclusion, read-only behavior, real-contact and staff-identity
+  exclusions, foreign IDs and nested private-field injection, invalid totals and
+  product lines, source separation and the complete 62-product Sawyer catalog.
+- Existing voice lifecycle regression: **9 scenario groups passed**, zero page
+  errors. New records browser flow passed profile entry, focused customer, tablet
+  orders/rewards/notes, contact/actor exclusions, and fresh isolated context after
+  switching merchants. Both use mocked transport for UI/lifecycle verification.
+- Sales regression: **9 scenario groups passed**, zero page errors. Offline photo
+  regression: cache **v7**, **75 photos, 21 storefronts, 182 product cards and 21
+  details**, retained images during update, weak-network fallback, no private API
+  cache entries and zero page errors.
+- A real Realtime session answered two spoken questions about Avery Morgan’s
+  sample Chocolate fudge order, its **$12 total**, **162 reward points** and
+  chocolate-gift preference note. **2,324 inbound audio packets**, active playback,
+  no browser errors and successful End cleanup. Synthetic speech and fictional
+  records stayed in a fresh QA browser; no customer database records were created.
+- Scoped Pint, JavaScript syntax and diff checks passed. No schema changes, live
+  commerce side effects, production publication or hosted settings changes.
+
+The latest customer-context UI has not been refreshed on Galaxy: ADB and mDNS show
+no connected tablet, and a wake/unlock request is pending. Earlier Galaxy voice and
+offline verification above applies to the prior build. Lenovo remains on hold.
+Evidence for this revision is under ignored `output/retail/voice/records-*`.

@@ -73,7 +73,7 @@ export function createRetailSales({context, openModal, closeModal, toast, api, n
     if (button.dataset.salesAction==='signup') signup();
     if (button.dataset.salesAction==='assistant') { if(button.dataset.mode==='voice')voice.open(); else assistant(button.dataset.mode); }
     if (button.dataset.salesAction==='speak') speak();
-    if (button.dataset.salesAction==='voice') voice.open();
+    if (button.dataset.salesAction==='voice') voice.open({customer:button.dataset.voiceCustomer||null});
     if (button.dataset.salesAction==='typed-voice') assistant('voice',true);
     if (button.dataset.salesAction==='guided') assistant(button.dataset.mode,true);
     if (button.dataset.salesAction==='navigate' && ['home','pricing','assistant','customers','rewards','team'].includes(button.dataset.destination)){closeModal();navigate(button.dataset.destination);}

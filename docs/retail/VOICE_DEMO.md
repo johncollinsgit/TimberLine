@@ -9,11 +9,29 @@ Returning online checks readiness but never restarts the microphone automaticall
 
 ## Context and connection
 
-The owner-authenticated server supplies a bounded public catalog sample for the
-selected demo plus the canonical Evergrove offer. Conversation state stays within
+The owner-authenticated server supplies the selected demo catalog (up to 100
+products, including all 62 Sawyer source products), canonical Evergrove offer, and
+a read-only snapshot of fictional customers, sample orders, reward activity and
+sample staff notes. **Ask AI about this customer** opens voice with that profile
+selected; **Ask AI about this workspace** preserves the current staff section.
+Conversation state stays within
 the current Realtime session. Changing businesses starts a fresh conversation.
-Private CRM notes, customer records, research, credentials and live tenant data are
-not attached. No action tools, live search, messages, purchases or account mutations
+The connected snapshot resolves only the selected `ww-demo-*` tenant with a
+verified showroom marker. Customers require both `is_demo=true` and an `.invalid`
+email address. Only simulated orders for those customers or anonymous demo shoppers
+are included. Emails, phone/address fields, staff identities, actor IDs and request
+keys are excluded. The snapshot is bounded to 50 customers, 30 recent orders, six
+notes per customer and twenty reward entries, with truncation indicated.
+
+Tablet-only sample activity uses the selected business storage key. It sends only
+allowlisted fields; the server derives the two canonical fictional names, validates
+merchant/customer IDs, catalog line identities and integer-cent totals, and rejects
+extra/private fields. Connected and tablet sources are never merged. Sawyer never
+queries its real customer workspace; it can use only fictional tablet profiles.
+Private prospect/CRM notes, research, credentials and real customer/tenant records
+are not attached. The UI shows the source, customer/order counts and focused
+profile. Data is captured at Start; end and restart after changing notes or sales.
+No action tools, live search, messages, purchases or account mutations
 are available. In-person point of sale and social marketing remain Coming Soon.
 Demo prices and shipping are illustrative. The voice introduces itself as AI.
 
@@ -47,14 +65,16 @@ allowlisted merchant slug and page. The server exchanges the offer through the
 [OpenAI Realtime WebRTC calls interface](https://developers.openai.com/api/docs/guides/voice-webrtc?voice-api=realtime).
 The browser receives only the SDP answer. The server restores the terminating CRLF
 removed by Laravel's string normalization before forwarding SDP. Provider bodies,
-call IDs and keys are not returned or logged. Voice APIs are owner-only, verified,
-CSRF protected, rate limited, no-store and noindex.
+call IDs and keys are not returned or logged. Session input also accepts a validated
+`sample_activity` snapshot and optional
+`focus_customer`; raw tenant IDs and arbitrary model instructions are rejected.
+Voice APIs are owner-only, verified, CSRF protected, rate limited, no-store and noindex.
 
 WebRTC carries audio directly to OpenAI. The app keeps a short, escaped transcript
 only in dialog memory and clears it when closed/backgrounded or the business
 changes. It does not save audio/transcripts to the application database, local
 storage, offline queue or service worker cache. This is not a claim about provider
-retention. Session tracing is disabled. Cache v6 includes only the public voice
+retention. Session tracing is disabled. Cache v7 includes only the public voice
 module and existing public shell/photos, preserving the complete 75-photo pack.
 
 For this local demonstration the existing authorized hosted credential was loaded
@@ -67,6 +87,7 @@ Do not add a production key to a committed file or copy production configuration
 ```sh
 php artisan test --compact tests/Feature/Retail
 node scripts/retail/voice-check.mjs
+node scripts/retail/voice-records-check.mjs
 node scripts/retail/photo-offline-check.mjs
 node scripts/retail/sales-upgrade-check.mjs
 ```
@@ -99,3 +120,10 @@ verified Galaxy Chrome DevTools forward on port 9224. It creates a real micropho
 track but mutes it before transport, verifies a provider reply and track cleanup,
 and preserves sample data. It does not validate a visitor's spoken microphone input
 or speaker audibility in festival noise. Keep Lenovo on hold.
+
+The additional opted-in `voice-records-live-check.mjs` uses
+`qa-records-question.wav` and `qa-records-followup.wav` in the same output directory.
+Its synthetic questions ask what Avery Morgan bought and the total, then her reward
+balance and staff note. It creates sample activity only in a fresh QA browser,
+opens voice from the fictional customer profile, and verifies spoken answers.
+Use `RETAIL_QA_LIVE_VOICE=1 node scripts/retail/voice-records-live-check.mjs`.

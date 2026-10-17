@@ -20,7 +20,8 @@ add-on remains $99/month; it was not repriced.
 website/workspace demonstrations and the weekly one-hour strategic partnership
 remain included in the proposed scope. See `SALES_DEMO_UPGRADE.md` for signup,
 OpenAI configuration and physical tablet verification. **Talk with AI** adds live
-voice conversations when connected; see `VOICE_DEMO.md`. Offline storefronts and
+voice conversations when connected, including read-only demo customer/order/reward
+lookups and fictional staff notes; see `VOICE_DEMO.md`. Offline storefronts and
 photos remain available when voice cannot connect.
 
 ## Source and branches
