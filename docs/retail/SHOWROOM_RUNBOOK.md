@@ -260,3 +260,25 @@ merchant captures use compact JPEGs; eight `all-twenty-*.webp` sheets cover ever
 merchant in portrait/landscape. Capture-format/crop mappings preserve provenance
 when older generated evidence is compressed. No private credentials,
 cookies, or generated sign-in links belong in version control.
+
+## Offline photo repair — 2026-10-17
+
+Cache v5 includes all 75 public demo photographs in its install transaction. An
+update cannot retire the previous cache until the complete replacement shell and
+photos are saved. Existing public photos carry forward without another download.
+Assets load from the device without waiting for weak Wi-Fi; initial navigation
+and catalog connection attempts fall back after four seconds when unreachable.
+`public/retail/photos.json` must list every bundled WebP, including Sawyer catalog
+assets; add newly introduced files to that manifest. Offline preparation downloads
+the same complete set and reports success only after all requests succeed.
+
+Reopen the installed Retail app while the Mac server and wireless ADB reverse are
+connected, sign in if required, and choose **Refresh offline demos**. Keep the app
+open until it reports **Offline pack ready**. The saved storefronts, product
+photos, carts and fictional staff tools then work if that connection drops. Live
+AI, signup, CRM saves, real sign-ins and carrier calls still require their online
+services. Never clear browser storage to repair photographs.
+
+Run `node scripts/retail/photo-offline-check.mjs` to verify a v4-to-v5 cache upgrade
+without another prepare click, all twenty concept storefronts and Sawyer's
+62-product preview with networking disabled, and exclusion of private cache data.

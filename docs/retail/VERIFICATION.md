@@ -116,3 +116,28 @@ were visually inspected. Generated dialog captures were cropped around the dialo
 without resizing text, and older generated PNGs were preserved as verified JPEGs
 to recover disk space. `screenshot-crops.json` and `screenshot-format-mapping.json`
 record those transformations; named final physical proofs were retained.
+
+## Offline photo regression — 2026-10-17
+
+`node scripts/retail/photo-offline-check.mjs` passed: all **75 public photos**
+were present after replacing a simulated installed v4 cache without pressing
+Refresh, even when fresh photo requests were blocked. A stalled bootstrap request
+with Wi-Fi still on fell back to the saved pack within the bounded wait. With networking disabled, **20 homepage photos, 21 storefronts, 182
+product cards and 21 product-detail photos** loaded with positive natural widths;
+zero page errors occurred. Private API/HTML poison entries from the old cache did
+not enter v5. Galaxy-size portrait/landscape captures and exact results are under
+ignored `output/retail/photo-repair/`. Cart calculation tests remain **7 passed**.
+
+The Galaxy was reached using the default ADB server, which had its existing paired
+transport; the older separate5038 server had no Galaxy transport. Its installed
+Retail PWA had21 saved catalogs and cachev4, but the farm images had zero natural
+width. This confirms the reported missing-photo state. Physical repair passed on the installed Galaxy PWA: all **75 images decoded**,
+all **20 homepage photographs** loaded, and **21 catalogs** remained available
+with the Mac reverse connection removed. Standalone mode remained true and the
+sample-cart/activity hash was unchanged.
+`output/retail/photo-repair/galaxy-results.json` and
+`galaxy-retail-offline-photos.png` record the actual device check.
+
+Bootstrap and public navigation use a four-second connection bound; prepared
+public modules/photos load locally. Live permission failures continue to fail
+closed rather than falling back to an offline permission grant.

@@ -1,5 +1,15 @@
 # SYSTEM SNAPSHOT
 
+## 2026-10-17 — Retail offline photo repair (development)
+
+Retail cache v5 preloads the public shell and all 75 bundled demo photographs
+before activating an update or retiring the previous cache, reusing already saved
+public photos. A static public photo
+manifest covers every WebP under `public/retail/assets`; offline preparation uses
+the same list. Saved images are served from the device immediately, including
+when Wi-Fi is connected but the server cannot be reached. Private APIs and
+authenticated HTML remain excluded. See `docs/retail/VERIFICATION.md`.
+
 ## 2026-10-16 — Retail tablet sales upgrade (development)
 
 The existing Retail PWA retains its installed Android identity and all twenty
