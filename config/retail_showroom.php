@@ -1,6 +1,9 @@
 <?php
 
 return [
+    'avery_pin_enabled' => (bool) env('RETAIL_AVERY_PIN_ENABLED', false),
+    'avery_pin_hash' => env('RETAIL_AVERY_PIN_HASH', ''),
+    'avery_guest_email' => 'avery-demo-visitor@everbranch-demo.invalid',
     'enabled' => (bool) env('RETAIL_SHOWROOM_ENABLED', false),
     'owner_email' => strtolower(trim((string) env('RETAIL_SHOWROOM_OWNER_EMAIL', ''))),
     'sandbox_key' => env('RETAIL_SHOWROOM_EASYPOST_TEST_KEY'),

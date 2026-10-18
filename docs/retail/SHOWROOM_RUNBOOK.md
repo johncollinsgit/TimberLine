@@ -285,3 +285,33 @@ services. Never clear browser storage to repair photographs.
 Run `node scripts/retail/photo-offline-check.mjs` to verify a v4-to-v5 cache upgrade
 without another prepare click, all twenty concept storefronts and Sawyer's
 62-product preview with networking disabled, and exclusion of private cache data.
+
+
+## Avery-only shared entry (v20)
+
+The isolated HTTPS preview offers `/avery` with the user-selected access code.
+Set `RETAIL_AVERY_PIN_ENABLED=true`, a server-generated
+`RETAIL_AVERY_PIN_HASH` and the exact `RETAIL_PRESENTER_HOST` only in its staging
+environment. Create the configured `avery-demo-visitor@everbranch-demo.invalid`
+user as verified, active and `pouring`, with a random undisclosed password and
+no tenant memberships. The default flag is false; production cannot enable this
+entry. The hash never enters public JSON or source. Rotate it to revoke grants.
+
+Guests receive a 12-hour session limited to Avery's catalog, fictional workspace,
+AI, service preferences and current prepared agreement/payment links. Other
+merchants, administrative routes, Studio, research and real SMS/email dispatch
+fail closed. AI may draft messages, but actual delivery uses the existing
+presenter login and recipient confirmation. Guest sessions do not register a
+service worker or save other-business offline packs. Existing presenter offline
+packs and login remain intact. `/avery/presenter` removes only the guest grant;
+an existing presenter login regains all concepts, while a visitor gains no
+platform authentication. The normal `/login` remains available in a separate
+browser/session. The agreement retains its independent access code, displayed
+inside the PIN-protected handoff. Opening either external link never accepts
+an agreement or takes payment automatically.
+
+Publish an exact GitHub-gated SHA to a new isolated preview release, set its
+versioned environment and atomically switch only that preview's `current` link.
+Verify fresh desktop/mobile entry, rejected foreign scopes, agreement links,
+AI availability and presenter restoration. Roll back the preview pointer to the
+previous release; preserve its shared storage and owner cookies.

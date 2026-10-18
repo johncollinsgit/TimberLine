@@ -31,6 +31,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
         // Runs after the response (terminate), throttled — detects a stopped scheduler cron.
         $middleware->web(append: [
+            \App\Http\Middleware\RestrictAveryGuest::class,
             \App\Http\Middleware\PreventSensitiveResponseCaching::class,
             \App\Http\Middleware\EvaluateSchedulerHeartbeat::class,
         ]);
@@ -46,6 +47,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->redirectUsersTo(function (Request $request): string {
             return HomeRedirect::pathFor($request->user());
         });
+
+        $middleware->appendToPriorityList(
+            \Illuminate\Session\Middleware\StartSession::class,
+            \App\Http\Middleware\RestrictAveryGuest::class,
+        );
 
         $middleware->alias([
             'role' => \App\Http\Middleware\EnsureUserRole::class,

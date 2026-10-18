@@ -97,13 +97,14 @@ class RetailShowroomController extends Controller
 
     public function bootstrap(Request $r)
     {
-        $slug = (string) $r->query('merchant', '');
+        $guest = $r->attributes->get('avery_guest') === true;
+        $slug = $guest ? 'avery-knifeworks' : (string) $r->query('merchant', '');
         if ($slug !== '') {
             $this->preview($r, $slug);
         } else {
             $this->owner($r);
         }
-        $all = $slug === '' || $this->showroom->owner($r->user());
+        $all = ! $guest && ($slug === '' || $this->showroom->owner($r->user()));
         $vendors = $all ? array_map(fn ($v) => $this->showroom->catalog($v['slug']), $this->showroom->definitions()['vendors']) : [$this->showroom->catalog($slug)];
         if ($all) {
             $vendors[] = $this->showroom->catalog('sawyer-naturals');
@@ -111,7 +112,7 @@ class RetailShowroomController extends Controller
         $sawyer = \App\Models\Tenant::where('slug', 'sawyer-naturals')->first();
         $staff = $all || $this->showroom->staffRoleOrNull($r->user(), $slug) !== null;
 
-        return $this->response(['event' => $this->showroom->definitions()['event'], 'offer' => app(\App\Services\Retail\EvergroveOffer::class)->presentation(), 'assistant' => ['available' => app(\App\Services\Retail\RetailAssistantService::class)->available(), 'provider' => 'openai'], 'vendors' => $vendors, 'owner' => $this->showroom->owner($r->user()), 'staff' => $staff, 'sawyer_url' => $sawyer && $this->showroom->owner($r->user()) ? url('/landlord/tenants/'.$sawyer->id) : null]);
+        return $this->response(['event' => $this->showroom->definitions()['event'], 'offer' => app(\App\Services\Retail\EvergroveOffer::class)->presentation(), 'assistant' => ['available' => app(\App\Services\Retail\RetailAssistantService::class)->available(), 'provider' => 'openai'], 'vendors' => $vendors, 'restricted' => $guest, 'owner' => ! $guest && $this->showroom->owner($r->user()), 'staff' => ! $guest && $staff, 'sawyer_url' => ! $guest && $sawyer && $this->showroom->owner($r->user()) ? url('/landlord/tenants/'.$sawyer->id) : null]);
     }
 
     public function quote(Request $r, string $slug)
@@ -181,6 +182,7 @@ class RetailShowroomController extends Controller
             && str_starts_with($data['payment_url'] ?? '', 'https://invoice.stripe.com/'), 503, 'The prepared handoff needs review.');
 
         return $this->response([...array_intersect_key($data, array_flip(['agreement_url', 'payment_url', 'payment_mode', 'amount_cents'])),
+            'agreement_password' => $r->attributes->get('avery_guest') ? ($data['agreement_password'] ?? null) : null,
             'feature_selection' => data_get(LandlordProspect::where('source_snapshot->showroom->slug', 'avery-knifeworks')->first()?->source_snapshot, 'standard_feature_selection')]);
     }
 

@@ -7,7 +7,7 @@ export function refreshRetailSession() {
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
   try {
    const response=await fetch('/retail/showroom/api/session',{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'},signal:controller.signal});
-   if([401,403,419].includes(response.status))throw Error('Sign in as the showroom owner, then reopen voice.');
+   if([401,403,419].includes(response.status))throw Error(document.body.dataset.averyOnly==='true'?'Reopen the Avery link and enter your access code again.':'Sign in as the showroom owner, then reopen voice.');
    if(!response.ok)throw Error(response.status===429?'Please wait a moment, then recheck the connection.':'The demo server is unavailable. Recheck when your connection returns.');
    const result=await response.json();
    if(typeof result.csrf_token!=='string'||!/^[A-Za-z0-9]{40}$/.test(result.csrf_token))throw Error('The demo session could not be refreshed. Sign in again.');

@@ -9,11 +9,16 @@ if (app()->environment('local')) {
     Route::get('/retail/local-review/{token}', \App\Http\Controllers\Retail\LocalReviewController::class)->where('token', '[A-Za-z0-9]{48}')->middleware(['signed', 'throttle:5,1'])->name('retail.local-review');
 }
 if (is_string($host) && $host !== '') {
+    Route::domain($host)->group(function () {
+        Route::get('/avery', [\App\Http\Controllers\Retail\AveryGuestController::class, 'show']);
+        Route::post('/avery', [\App\Http\Controllers\Retail\AveryGuestController::class, 'unlock'])->middleware('throttle:5,1,avery-pin:');
+        Route::get('/avery/presenter', [\App\Http\Controllers\Retail\AveryGuestController::class, 'presenter']);
+    });
     Route::domain($host)->prefix('retail')->middleware('throttle:120,1')->group(function () {
         Route::get('/preview/{slug}/{token}', [Retail::class, 'shared'])->where('token', '[A-Za-z0-9]{48}');
         Route::get('/showroom/api/bootstrap', [Retail::class, 'bootstrap']);
         Route::post('/showroom/api/{slug}/quote', [Retail::class, 'quote']);
-        Route::middleware(['auth', 'verified'])->group(function () {
+        Route::middleware([\App\Http\Middleware\RetailPresenterAccess::class, 'verified'])->group(function () {
             Route::get('/showroom', [Retail::class, 'index'])->name('retail.showroom');
             Route::get('/showroom/pricing', [Retail::class, 'index'])->name('retail.pricing');
             Route::get('/showroom/assistant', [Retail::class, 'index'])->name('retail.assistant');

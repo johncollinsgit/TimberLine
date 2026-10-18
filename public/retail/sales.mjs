@@ -42,6 +42,7 @@ export function createRetailSales({context, openModal, closeModal, toast, api, n
   }
 
   function signup() {
+    if(context().pack?.restricted){document.dispatchEvent(new CustomEvent('avery:handoff'));return;}
     if (!context().owner || context().offline || !navigator.onLine) return toast('Connect with the showroom owner before entering personal information. Offline signup is unavailable.');
     const o = currentOffer();
     if (!validOffer(o)) return toast('Reconnect and reload to review the current offer.');

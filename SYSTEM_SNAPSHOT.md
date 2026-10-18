@@ -1,3 +1,15 @@
+## October 18, 2026 — Avery-only shared demo entry
+
+Retail v20 adds `/avery`, a CSRF-protected PIN entry enabled only on the exact
+isolated staging host. The visitor sees one Avery concept, fictional workspace,
+context-aware AI, feature preferences and prepared agreement/payment links.
+A request-local unprivileged demo identity never authenticates the platform guard;
+server route/method/merchant restrictions block other businesses, Studio, private
+research and real message dispatch. Existing presenter login remains intact and
+`/avery/presenter` exits guest mode. The guest grant lasts 12 hours and changing
+its configured code hash invalidates existing grants. No production flags change.
+See `docs/retail/SHOWROOM_RUNBOOK.md` for setup and recovery.
+
 ## October 18, 2026 — Untethered Retail demo recovery and voice reliability
 
 The tablet's old localhost install loses live access when ADB/USB disconnects.
