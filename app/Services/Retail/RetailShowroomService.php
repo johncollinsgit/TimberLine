@@ -142,6 +142,9 @@ class RetailShowroomService
         $merchant = $this->merchant($slug);
         if ($slug === 'sawyer-naturals') {
             return $merchant;
+        }
+        if ($slug === 'avery-knifeworks') {
+            return array_intersect_key($merchant, array_flip(['slug', 'name', 'booth', 'website', 'image', 'headline', 'tagline', 'cta', 'theme', 'colors', 'shipping', 'products', 'category_label', 'intro', 'shopping_journey', 'read_only_source', 'catalog_observed_at']));
         } $site = $this->site($slug);
         foreach ($merchant['products'] as &$product) {
             $row = WebsiteProduct::where('tenant_id', $site->tenant_id)->where('tenant_site_id', $site->id)->where('handle', $product['id'])->with('variants')->firstOrFail();

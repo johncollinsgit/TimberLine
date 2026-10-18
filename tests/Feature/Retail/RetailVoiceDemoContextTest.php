@@ -67,7 +67,7 @@ test('voice reads only selected tenant fictional customers notes orders and rewa
     expect($context['demo_records']['orders'][0]['customer_id'])->toBe((string) $customer->id);
     expect($context['demo_records']['focused_customer']['reward_activity'][0])->toMatchArray(['earned' => 7, 'redeemed' => 100]);
     expect(json_encode($context))->not->toContain('REAL PERSON SECRET', 'REAL NOTE SECRET', 'NONDEMO PERSON SECRET', 'OTHER TENANT', '@', 'request_key', 'actor_id', 'PRIVATE STAFF IDENTITY');
-    expect($session['tools'])->toBe([]);
+    expect(array_column($session['tools'], 'name'))->toContain('get_demo_context', 'show_demo_view', 'create_demo_customer', 'create_demo_invoice', 'prepare_demo_marketing')->not->toContain('send_email', 'send_sms', 'charge_card');
     expect([$site->fresh()->settings, $customer->fresh()->notes])->toBe($before);
 });
 

@@ -92,11 +92,11 @@
           "id": "p1",
           "name": "Chocolate fudge",
           "category": "Classic flavors",
-          "description": "Chocolate fudge. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "description": "Chocolate fudge. A product name observed on the merchant\u2019s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
           "identity_verified": true,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 8,
           "dimensions_inches": [
             9,
@@ -120,11 +120,11 @@
           "id": "p2",
           "name": "Chocolate walnut fudge",
           "category": "Classic flavors",
-          "description": "Chocolate walnut fudge. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "description": "Chocolate walnut fudge. A product name observed on the merchant\u2019s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
           "identity_verified": true,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 8,
           "dimensions_inches": [
             10,
@@ -148,11 +148,11 @@
           "id": "p3",
           "name": "Chocolate peanut butter fudge",
           "category": "Classic flavors",
-          "description": "Chocolate peanut butter fudge. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "description": "Chocolate peanut butter fudge. A product name observed on the merchant\u2019s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
           "identity_verified": true,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 8,
           "dimensions_inches": [
             9,
@@ -176,11 +176,11 @@
           "id": "p4",
           "name": "Maple walnut fudge",
           "category": "Seasonal flavors",
-          "description": "Maple walnut fudge. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "description": "Maple walnut fudge. A product name observed on the merchant\u2019s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
           "identity_verified": true,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 8,
           "dimensions_inches": [
             10,
@@ -204,11 +204,11 @@
           "id": "p5",
           "name": "Pumpkin pie fudge",
           "category": "Seasonal flavors",
-          "description": "Pumpkin pie fudge. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "description": "Pumpkin pie fudge. A product name observed on the merchant\u2019s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
           "identity_verified": true,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 8,
           "dimensions_inches": [
             9,
@@ -232,11 +232,11 @@
           "id": "p6",
           "name": "Choose-your-flavors gift box",
           "category": "Gifts",
-          "description": "Choose-your-flavors gift box. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "description": "Choose-your-flavors gift box. An illustrative sample to show this shopping experience. This is not a claim about the merchant\u2019s actual inventory.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 20,
           "dimensions_inches": [
             10,
@@ -324,11 +324,11 @@
           "id": "p1",
           "name": "Beef cut reservation",
           "category": "Beef",
-          "description": "Beef cut reservation. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "description": "Beef cut reservation. An illustrative sample to show this shopping experience. This is not a claim about the merchant\u2019s actual inventory.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 16,
           "dimensions_inches": [
             9,
@@ -352,11 +352,11 @@
           "id": "p2",
           "name": "Pork cut reservation",
           "category": "Pork",
-          "description": "Pork cut reservation. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "description": "Pork cut reservation. An illustrative sample to show this shopping experience. This is not a claim about the merchant\u2019s actual inventory.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 16,
           "dimensions_inches": [
             10,
@@ -380,11 +380,11 @@
           "id": "p3",
           "name": "Family freezer bundle request",
           "category": "Bundles",
-          "description": "Family freezer bundle request. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "description": "Family freezer bundle request. An illustrative sample to show this shopping experience. This is not a claim about the merchant\u2019s actual inventory.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 80,
           "dimensions_inches": [
             9,
@@ -408,11 +408,11 @@
           "id": "p4",
           "name": "Weekend grill selection",
           "category": "Bundles",
-          "description": "Weekend grill selection. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "description": "Weekend grill selection. An illustrative sample to show this shopping experience. This is not a claim about the merchant\u2019s actual inventory.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 48,
           "dimensions_inches": [
             10,
@@ -436,11 +436,11 @@
           "id": "p5",
           "name": "Farm pantry pickup box",
           "category": "Pickup boxes",
-          "description": "Farm pantry pickup box. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "description": "Farm pantry pickup box. An illustrative sample to show this shopping experience. This is not a claim about the merchant\u2019s actual inventory.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 48,
           "dimensions_inches": [
             9,
@@ -464,11 +464,11 @@
           "id": "p6",
           "name": "Custom bulk order inquiry",
           "category": "Custom requests",
-          "description": "Custom bulk order inquiry. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "description": "Custom bulk order inquiry. An illustrative sample to show this shopping experience. This is not a claim about the merchant\u2019s actual inventory.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 0,
           "dimensions_inches": [
             10,
@@ -548,11 +548,11 @@
           "id": "p1",
           "name": "Walnut & sea-glass serving board",
           "category": "Boards",
-          "description": "Walnut & sea-glass serving board. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "description": "Walnut & sea-glass serving board. An illustrative sample to show this shopping experience. This is not a claim about the merchant\u2019s actual inventory.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 28,
           "dimensions_inches": [
             9,
@@ -576,11 +576,11 @@
           "id": "p2",
           "name": "River-inspired catchall",
           "category": "Home accents",
-          "description": "River-inspired catchall. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "description": "River-inspired catchall. An illustrative sample to show this shopping experience. This is not a claim about the merchant\u2019s actual inventory.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 16,
           "dimensions_inches": [
             10,
@@ -604,11 +604,11 @@
           "id": "p3",
           "name": "Hand-turned keepsake bowl",
           "category": "Bowls",
-          "description": "Hand-turned keepsake bowl. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "description": "Hand-turned keepsake bowl. An illustrative sample to show this shopping experience. This is not a claim about the merchant\u2019s actual inventory.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 24,
           "dimensions_inches": [
             9,
@@ -632,11 +632,11 @@
           "id": "p4",
           "name": "Epoxy accent tray",
           "category": "Home accents",
-          "description": "Epoxy accent tray. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "description": "Epoxy accent tray. An illustrative sample to show this shopping experience. This is not a claim about the merchant\u2019s actual inventory.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 30,
           "dimensions_inches": [
             10,
@@ -660,11 +660,11 @@
           "id": "p5",
           "name": "Statement console commission",
           "category": "Commissions",
-          "description": "Statement console commission. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "description": "Statement console commission. An illustrative sample to show this shopping experience. This is not a claim about the merchant\u2019s actual inventory.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 800,
           "dimensions_inches": [
             9,
@@ -688,11 +688,11 @@
           "id": "p6",
           "name": "Small oak gift board",
           "category": "Boards",
-          "description": "Small oak gift board. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "description": "Small oak gift board. An illustrative sample to show this shopping experience. This is not a claim about the merchant\u2019s actual inventory.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 18,
           "dimensions_inches": [
             10,
@@ -784,11 +784,11 @@
           "id": "p1",
           "name": "Everyday leather tote",
           "category": "Bags",
-          "description": "Everyday leather tote. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "description": "Everyday leather tote. An illustrative sample to show this shopping experience. This is not a claim about the merchant\u2019s actual inventory.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 38,
           "dimensions_inches": [
             9,
@@ -812,11 +812,11 @@
           "id": "p2",
           "name": "Compact leather purse",
           "category": "Bags",
-          "description": "Compact leather purse. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "description": "Compact leather purse. An illustrative sample to show this shopping experience. This is not a claim about the merchant\u2019s actual inventory.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 24,
           "dimensions_inches": [
             10,
@@ -840,11 +840,11 @@
           "id": "p3",
           "name": "Weekend leather duffle",
           "category": "Travel",
-          "description": "Weekend leather duffle. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "description": "Weekend leather duffle. An illustrative sample to show this shopping experience. This is not a claim about the merchant\u2019s actual inventory.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 64,
           "dimensions_inches": [
             9,
@@ -868,11 +868,11 @@
           "id": "p4",
           "name": "Leather wine tote",
           "category": "Gifting",
-          "description": "Leather wine tote. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "description": "Leather wine tote. An illustrative sample to show this shopping experience. This is not a claim about the merchant\u2019s actual inventory.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 22,
           "dimensions_inches": [
             10,
@@ -896,11 +896,11 @@
           "id": "p5",
           "name": "Personalized travel pouch",
           "category": "Travel",
-          "description": "Personalized travel pouch. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "description": "Personalized travel pouch. An illustrative sample to show this shopping experience. This is not a claim about the merchant\u2019s actual inventory.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 12,
           "dimensions_inches": [
             9,
@@ -924,11 +924,11 @@
           "id": "p6",
           "name": "Market tote",
           "category": "Bags",
-          "description": "Market tote. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "description": "Market tote. An illustrative sample to show this shopping experience. This is not a claim about the merchant\u2019s actual inventory.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 34,
           "dimensions_inches": [
             10,
@@ -963,19 +963,19 @@
       "confirmed_catalog_examples": [
         {
           "name": "Coffee Mug (W)",
-          "price_usd": 18.0
+          "price_usd": 18
         },
         {
           "name": "Large Serving Bowl",
-          "price_usd": 54.0
+          "price_usd": 54
         },
         {
           "name": "Square Serving Tray with Dragonfly",
-          "price_usd": 48.0
+          "price_usd": 48
         },
         {
           "name": "Candle Lantern with Bumble Bee",
-          "price_usd": 25.0
+          "price_usd": 25
         }
       ],
       "concept": "Warm artisan ceramics storefront with glaze/color variations, care guidance, gifts, and robust fragile-order handling.",
@@ -1019,7 +1019,7 @@
           "id": "p1",
           "name": "Coffee Mug (W)",
           "category": "Mugs",
-          "description": "Coffee Mug (W). A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "description": "Coffee Mug (W). A product name observed on the merchant\u2019s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.mcneillspottery.com/shop.html",
@@ -1043,7 +1043,7 @@
             },
             {
               "id": "earth",
-              "title": "Earth glaze · sample color",
+              "title": "Earth glaze \u00b7 sample color",
               "price_cents": 1800,
               "stock": 8
             }
@@ -1053,7 +1053,7 @@
           "id": "p2",
           "name": "Large Serving Bowl",
           "category": "Serving",
-          "description": "Large Serving Bowl. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "description": "Large Serving Bowl. A product name observed on the merchant\u2019s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.mcneillspottery.com/shop.html",
@@ -1077,7 +1077,7 @@
             },
             {
               "id": "earth",
-              "title": "Earth glaze · sample color",
+              "title": "Earth glaze \u00b7 sample color",
               "price_cents": 5400,
               "stock": 8
             }
@@ -1087,7 +1087,7 @@
           "id": "p3",
           "name": "Square Serving Tray with Dragonfly",
           "category": "Serving",
-          "description": "Square Serving Tray with Dragonfly. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "description": "Square Serving Tray with Dragonfly. A product name observed on the merchant\u2019s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.mcneillspottery.com/shop.html",
@@ -1111,7 +1111,7 @@
             },
             {
               "id": "earth",
-              "title": "Earth glaze · sample color",
+              "title": "Earth glaze \u00b7 sample color",
               "price_cents": 4800,
               "stock": 8
             }
@@ -1121,7 +1121,7 @@
           "id": "p4",
           "name": "Candle Lantern with Bumble Bee",
           "category": "Home",
-          "description": "Candle Lantern with Bumble Bee. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "description": "Candle Lantern with Bumble Bee. A product name observed on the merchant\u2019s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.mcneillspottery.com/shop.html",
@@ -1145,7 +1145,7 @@
             },
             {
               "id": "earth",
-              "title": "Earth glaze · sample color",
+              "title": "Earth glaze \u00b7 sample color",
               "price_cents": 2500,
               "stock": 8
             }
@@ -1155,7 +1155,7 @@
           "id": "p5",
           "name": "Coffee Mug (G)",
           "category": "Mugs",
-          "description": "Coffee Mug (G). A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "description": "Coffee Mug (G). A product name observed on the merchant\u2019s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.mcneillspottery.com/shop.html",
@@ -1179,7 +1179,7 @@
             },
             {
               "id": "earth",
-              "title": "Earth glaze · sample color",
+              "title": "Earth glaze \u00b7 sample color",
               "price_cents": 1800,
               "stock": 8
             }
@@ -1189,7 +1189,7 @@
           "id": "p6",
           "name": "Soup Mug",
           "category": "Mugs",
-          "description": "Soup Mug. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "description": "Soup Mug. A product name observed on the merchant\u2019s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.mcneillspottery.com/shop.html",
@@ -1213,7 +1213,7 @@
             },
             {
               "id": "earth",
-              "title": "Earth glaze · sample color",
+              "title": "Earth glaze \u00b7 sample color",
               "price_cents": 1800,
               "stock": 8
             }
@@ -1234,19 +1234,19 @@
       "confirmed_catalog_examples": [
         {
           "name": "Kitchen Garden wood wick candle",
-          "price_usd": 30.0
+          "price_usd": 30
         },
         {
           "name": "Peat Hearth wood wick candle",
-          "price_usd": 30.0
+          "price_usd": 30
         },
         {
           "name": "Crofter's Chai tea",
-          "price_usd": 15.0
+          "price_usd": 15
         },
         {
           "name": "Thistle Ring",
-          "price_usd": 45.0
+          "price_usd": 45
         }
       ],
       "concept": "Appalachian-Scottish brand, fragrance storytelling, candles/tea/gifts in one cart, local farm-shop pickup, gift bundles and retention.",
@@ -1290,7 +1290,7 @@
           "id": "p1",
           "name": "Kitchen Garden",
           "category": "Candles",
-          "description": "Kitchen Garden. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "description": "Kitchen Garden. A product name observed on the merchant\u2019s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.highcountryhighlandcroft.com/shop",
@@ -1318,7 +1318,7 @@
           "id": "p2",
           "name": "Peat Hearth",
           "category": "Candles",
-          "description": "Peat Hearth. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "description": "Peat Hearth. A product name observed on the merchant\u2019s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.highcountryhighlandcroft.com/shop",
@@ -1344,9 +1344,9 @@
         },
         {
           "id": "p3",
-          "name": "Crofter’s Chai",
+          "name": "Crofter\u2019s Chai",
           "category": "Tea",
-          "description": "Crofter’s Chai. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "description": "Crofter\u2019s Chai. A product name observed on the merchant\u2019s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.highcountryhighlandcroft.com/shop",
@@ -1374,7 +1374,7 @@
           "id": "p4",
           "name": "Thistle Ring",
           "category": "Jewelry",
-          "description": "Thistle Ring. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "description": "Thistle Ring. A product name observed on the merchant\u2019s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.highcountryhighlandcroft.com/shop",
@@ -1402,7 +1402,7 @@
           "id": "p5",
           "name": "Highland Breakfast Tea",
           "category": "Tea",
-          "description": "Highland Breakfast Tea. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "description": "Highland Breakfast Tea. A product name observed on the merchant\u2019s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.highcountryhighlandcroft.com/shop",
@@ -1430,7 +1430,7 @@
           "id": "p6",
           "name": "Feather Brooch",
           "category": "Jewelry",
-          "description": "Feather Brooch. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "description": "Feather Brooch. A product name observed on the merchant\u2019s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.highcountryhighlandcroft.com/shop",
@@ -1476,11 +1476,11 @@
         },
         {
           "name": "Just Over Yonder Taco Soup Kit",
-          "price_usd": 22.0
+          "price_usd": 22
         },
         {
           "name": "Cream of Tater Soup Mix",
-          "price_usd": 19.0
+          "price_usd": 19
         },
         {
           "name": "Curried Lentil Soup Kit",
@@ -1529,7 +1529,7 @@
           "id": "p1",
           "name": "Just Over Yonder Taco Soup Kit",
           "category": "Soup kits",
-          "description": "Just Over Yonder Taco Soup Kit. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "description": "Just Over Yonder Taco Soup Kit. A product name observed on the merchant\u2019s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://mountainmommaorganics.com/",
@@ -1557,7 +1557,7 @@
           "id": "p2",
           "name": "Cream of Tater Soup Mix",
           "category": "Soup kits",
-          "description": "Cream of Tater Soup Mix. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "description": "Cream of Tater Soup Mix. A product name observed on the merchant\u2019s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://mountainmommaorganics.com/",
@@ -1585,11 +1585,11 @@
           "id": "p3",
           "name": "Seven Bean Soup Kit",
           "category": "Soup kits",
-          "description": "Seven Bean Soup Kit. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "description": "Seven Bean Soup Kit. A product name observed on the merchant\u2019s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
           "identity_verified": true,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 18,
           "dimensions_inches": [
             9,
@@ -1603,13 +1603,13 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · example variant",
+              "title": "Standard \u00b7 example variant",
               "price_cents": 1900,
               "stock": 24
             },
             {
               "id": "large",
-              "title": "Larger pack · example variant",
+              "title": "Larger pack \u00b7 example variant",
               "price_cents": 2000,
               "stock": 18
             }
@@ -1619,11 +1619,11 @@
           "id": "p4",
           "name": "Curried Lentil Soup Kit",
           "category": "Soup kits",
-          "description": "Curried Lentil Soup Kit. A product name observed on the merchant’s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
+          "description": "Curried Lentil Soup Kit. A product name observed on the merchant\u2019s public website. The picture is illustrative; availability and shipping require merchant confirmation.",
           "identity_verified": true,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 18,
           "dimensions_inches": [
             10,
@@ -1637,13 +1637,13 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · example variant",
+              "title": "Standard \u00b7 example variant",
               "price_cents": 1900,
               "stock": 24
             },
             {
               "id": "large",
-              "title": "Larger pack · example variant",
+              "title": "Larger pack \u00b7 example variant",
               "price_cents": 2000,
               "stock": 18
             }
@@ -1653,11 +1653,11 @@
           "id": "p5",
           "name": "Pantry granola selection",
           "category": "Breakfast",
-          "description": "Pantry granola selection. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "description": "Pantry granola selection. An illustrative sample to show this shopping experience. This is not a claim about the merchant\u2019s actual inventory.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 16,
           "dimensions_inches": [
             9,
@@ -1681,11 +1681,11 @@
           "id": "p6",
           "name": "Soup-night gift box",
           "category": "Gifts",
-          "description": "Soup-night gift box. An illustrative sample to show this shopping experience. This is not a claim about the merchant’s actual inventory.",
+          "description": "Soup-night gift box. An illustrative sample to show this shopping experience. This is not a claim about the merchant\u2019s actual inventory.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 48,
           "dimensions_inches": [
             10,
@@ -1770,11 +1770,11 @@
           "id": "p1",
           "name": "Rose Chai Organic Tea",
           "category": "Tea blends",
-          "description": "Rose Chai Organic Tea. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Rose Chai Organic Tea. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": true,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 4,
           "dimensions_inches": [
             9,
@@ -1788,13 +1788,13 @@
           "variants": [
             {
               "id": "pouch",
-              "title": "Small pouch · sample size",
+              "title": "Small pouch \u00b7 sample size",
               "price_cents": 1400,
               "stock": 12
             },
             {
               "id": "large",
-              "title": "Large pouch · sample size",
+              "title": "Large pouch \u00b7 sample size",
               "price_cents": 2400,
               "stock": 12
             }
@@ -1804,11 +1804,11 @@
           "id": "p2",
           "name": "Mellow Mood Organic Tea",
           "category": "Tea blends",
-          "description": "Mellow Mood Organic Tea. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Mellow Mood Organic Tea. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": true,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 4,
           "dimensions_inches": [
             9,
@@ -1822,13 +1822,13 @@
           "variants": [
             {
               "id": "pouch",
-              "title": "Small pouch · sample size",
+              "title": "Small pouch \u00b7 sample size",
               "price_cents": 1400,
               "stock": 12
             },
             {
               "id": "large",
-              "title": "Large pouch · sample size",
+              "title": "Large pouch \u00b7 sample size",
               "price_cents": 2400,
               "stock": 12
             }
@@ -1836,13 +1836,13 @@
         },
         {
           "id": "p3",
-          "name": "Tea discovery sampler · sample",
+          "name": "Tea discovery sampler \u00b7 sample",
           "category": "Discovery",
-          "description": "Tea discovery sampler · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Tea discovery sampler \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 8,
           "dimensions_inches": [
             9,
@@ -1856,7 +1856,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 2200,
               "stock": 12
             }
@@ -1864,13 +1864,13 @@
         },
         {
           "id": "p4",
-          "name": "Mountain morning black tea · sample",
+          "name": "Mountain morning black tea \u00b7 sample",
           "category": "Black teas",
-          "description": "Mountain morning black tea · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Mountain morning black tea \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 4,
           "dimensions_inches": [
             9,
@@ -1884,7 +1884,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 1400,
               "stock": 12
             }
@@ -1892,13 +1892,13 @@
         },
         {
           "id": "p5",
-          "name": "Iced tea four-pack · sample",
+          "name": "Iced tea four-pack \u00b7 sample",
           "category": "Canned drinks",
-          "description": "Iced tea four-pack · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Iced tea four-pack \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 52,
           "dimensions_inches": [
             8,
@@ -1912,7 +1912,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 1600,
               "stock": 12
             }
@@ -1920,13 +1920,13 @@
         },
         {
           "id": "p6",
-          "name": "Steep & sip gift set · sample",
+          "name": "Steep & sip gift set \u00b7 sample",
           "category": "Teawares",
-          "description": "Steep & sip gift set · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Steep & sip gift set \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 18,
           "dimensions_inches": [
             9,
@@ -1940,7 +1940,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 3200,
               "stock": 12
             }
@@ -1975,8 +1975,8 @@
       "cta": "Explore the collection",
       "theme": "gallery",
       "category_label": "Kitchen & outdoor craft",
-      "intro": "A quiet gallery for practical handmade kitchen and outdoor tools, with clear sample availability and a path back for care.",
-      "shopping_journey": "Compare ordinary kitchen and outdoor tool formats, inspect a single-piece stock limit, and keep sample customer care preferences connected to a purchase.",
+      "intro": "Real public knife and handle photography, with a fictional connected workshop and lifetime care demonstration.",
+      "shopping_journey": "Find a knife by use, budget and handle. Save an exact offered combination, then follow its fictional customer and care history.",
       "colors": {
         "ink": "#282d2b",
         "accent": "#b17b46",
@@ -1999,14 +1999,13 @@
       },
       "products": [
         {
-          "id": "p1",
-          "name": "Chef’s knife · sample",
+          "id": "sheepsfoot-chefs-knife",
+          "name": "Sheepsfoot Chef's Knife",
           "category": "Kitchen",
-          "description": "Chef’s knife · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
-          "identity_verified": false,
-          "price_verified": false,
-          "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "description": "Meal preparation and controlled chopping. Public catalog snapshot from 2026-10-17. Stock counts, packing measurements and any tablet sale are fictional; recheck availability in Avery\u2019s shop.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_note": "Public catalog price observed 2026-10-17; verify current price and stock with Avery.",
           "weight_oz": 16,
           "dimensions_inches": [
             9,
@@ -2019,160 +2018,789 @@
           "oversized": false,
           "variants": [
             {
-              "id": "standard",
-              "title": "Standard · sample availability",
-              "price_cents": 18500,
-              "stock": 1
-            }
-          ]
-        },
-        {
-          "id": "p2",
-          "name": "Paring knife · sample",
-          "category": "Kitchen",
-          "description": "Paring knife · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
-          "identity_verified": false,
-          "price_verified": false,
-          "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
-          "weight_oz": 8,
-          "dimensions_inches": [
-            9,
-            7,
-            4
-          ],
-          "measurements_verified": false,
-          "group": "tools",
-          "quote_only": false,
-          "oversized": false,
-          "variants": [
-            {
-              "id": "standard",
-              "title": "Standard · sample availability",
-              "price_cents": 8500,
-              "stock": 1
-            }
-          ]
-        },
-        {
-          "id": "p3",
-          "name": "Kitchen utility knife · sample",
-          "category": "Kitchen",
-          "description": "Kitchen utility knife · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
-          "identity_verified": false,
-          "price_verified": false,
-          "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
-          "weight_oz": 12,
-          "dimensions_inches": [
-            9,
-            7,
-            4
-          ],
-          "measurements_verified": false,
-          "group": "tools",
-          "quote_only": false,
-          "oversized": false,
-          "variants": [
-            {
-              "id": "standard",
-              "title": "Standard · sample availability",
-              "price_cents": 12500,
-              "stock": 1
-            }
-          ]
-        },
-        {
-          "id": "p4",
-          "name": "Outdoor camp knife · sample",
-          "category": "Outdoor",
-          "description": "Outdoor camp knife · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
-          "identity_verified": false,
-          "price_verified": false,
-          "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
-          "weight_oz": 16,
-          "dimensions_inches": [
-            9,
-            7,
-            4
-          ],
-          "measurements_verified": false,
-          "group": "tools",
-          "quote_only": false,
-          "oversized": false,
-          "variants": [
-            {
-              "id": "standard",
-              "title": "Standard · sample availability",
-              "price_cents": 15500,
-              "stock": 1
-            }
-          ]
-        },
-        {
-          "id": "p5",
-          "name": "Leather sheath · sample",
-          "category": "Care & accessories",
-          "description": "Leather sheath · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
-          "identity_verified": false,
-          "price_verified": false,
-          "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
-          "weight_oz": 6,
-          "dimensions_inches": [
-            9,
-            7,
-            4
-          ],
-          "measurements_verified": false,
-          "group": "leather",
-          "quote_only": false,
-          "oversized": false,
-          "variants": [
-            {
-              "id": "brown",
-              "title": "Brown · sample",
-              "price_cents": 3500,
-              "stock": 12
+              "id": "46558546067619",
+              "title": "Royal Blue/Maple Burl",
+              "price_cents": 42500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43753692168355.webp"
             },
             {
-              "id": "black",
-              "title": "Black · sample",
-              "price_cents": 3500,
-              "stock": 12
+              "id": "46558545969315",
+              "title": "Walnut",
+              "price_cents": 42500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43753708716195.webp"
+            },
+            {
+              "id": "46558546002083",
+              "title": "Maple Burl",
+              "price_cents": 42500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43753706127523.webp"
+            },
+            {
+              "id": "46559192711331",
+              "title": "Pearl/Maple Burl",
+              "price_cents": 42500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43753693577379.webp"
+            },
+            {
+              "id": "46559134843043",
+              "title": "Pinecone/Green Resin",
+              "price_cents": 42500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43753694757027.webp"
+            },
+            {
+              "id": "46590912168099",
+              "title": "Bocote",
+              "price_cents": 42500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43858751815843.webp"
+            },
+            {
+              "id": "46590912200867",
+              "title": "Zebrawood",
+              "price_cents": 42500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43858774261923.webp"
+            },
+            {
+              "id": "46590912233635",
+              "title": "Pinecone/Black Resin",
+              "price_cents": 42500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43858783469731.webp"
+            },
+            {
+              "id": "46590912266403",
+              "title": "Pinecone/White Resin",
+              "price_cents": 42500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43858785239203.webp"
             }
-          ]
+          ],
+          "image": "/retail/assets/avery-43753692168355.webp",
+          "price_source": "https://avery-knifeworks.myshopify.com/products/sheepsfoot-chefs-knife"
         },
         {
-          "id": "p6",
-          "name": "Blade care kit · sample",
-          "category": "Care & accessories",
-          "description": "Blade care kit · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
-          "identity_verified": false,
-          "price_verified": false,
-          "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
-          "weight_oz": 10,
+          "id": "sheepsfoot-paring-knife",
+          "name": "Sheepsfoot Paring Knife",
+          "category": "Kitchen",
+          "description": "Small, precise preparation and utility cuts. Public catalog snapshot from 2026-10-17. Stock counts, packing measurements and any tablet sale are fictional; recheck availability in Avery\u2019s shop.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_note": "Public catalog price observed 2026-10-17; verify current price and stock with Avery.",
+          "weight_oz": 16,
           "dimensions_inches": [
             9,
             7,
             4
           ],
           "measurements_verified": false,
-          "group": "care",
+          "group": "tools",
           "quote_only": false,
           "oversized": false,
           "variants": [
             {
-              "id": "standard",
-              "title": "Standard · sample availability",
-              "price_cents": 2400,
-              "stock": 12
+              "id": "46558655774883",
+              "title": "Walnut",
+              "price_cents": 16500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43704011849891.webp"
+            },
+            {
+              "id": "46559233048739",
+              "title": "Bocote",
+              "price_cents": 16500,
+              "stock": 1,
+              "available_snapshot": true,
+              "image": "/retail/assets/avery-43704083284131.webp"
+            },
+            {
+              "id": "46559233081507",
+              "title": "Zebra",
+              "price_cents": 16500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43704111497379.webp"
+            },
+            {
+              "id": "46559235080355",
+              "title": "Red Resin/Maple Burl",
+              "price_cents": 16500,
+              "stock": 1,
+              "available_snapshot": true,
+              "image": "/retail/assets/avery-43704217632931.webp"
+            },
+            {
+              "id": "47368604582051",
+              "title": "Purple Heart",
+              "price_cents": 16500,
+              "stock": 1,
+              "available_snapshot": true,
+              "image": "/retail/assets/avery-45545483960483.webp"
+            },
+            {
+              "id": "47368606515363",
+              "title": "Maple Burl",
+              "price_cents": 16500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-45545487958179.webp"
+            },
+            {
+              "id": "47368606548131",
+              "title": "Nebula Resin/Maple Burl",
+              "price_cents": 16500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-45545492185251.webp"
+            },
+            {
+              "id": "47368606580899",
+              "title": "Carolina Blue Resin/Spalted Maple",
+              "price_cents": 16500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-45545496445091.webp"
+            },
+            {
+              "id": "47368606613667",
+              "title": "White Resin/Blue Curly Maple",
+              "price_cents": 16500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-45545508274339.webp"
+            },
+            {
+              "id": "47368606646435",
+              "title": "Pearl Resin/Maple Burl",
+              "price_cents": 16500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-45545513910435.webp"
             }
-          ]
+          ],
+          "image": "/retail/assets/avery-43704011849891.webp",
+          "price_source": "https://avery-knifeworks.myshopify.com/products/sheepsfoot-paring-knife"
+        },
+        {
+          "id": "woodsman-knife",
+          "name": "Woodsman Knife",
+          "category": "Hunting",
+          "description": "Camp chores, woodcraft and general outdoor tasks. Public catalog snapshot from 2026-10-17. Stock counts, packing measurements and any tablet sale are fictional; recheck availability in Avery\u2019s shop.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_note": "Public catalog price observed 2026-10-17; verify current price and stock with Avery.",
+          "weight_oz": 16,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "tools",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "46558758895779",
+              "title": "Pinecone/Pearl Resin",
+              "price_cents": 38500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43753614016675.webp"
+            },
+            {
+              "id": "46558758928547",
+              "title": "Pinecone/Black Resin",
+              "price_cents": 38500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43753611722915.webp"
+            },
+            {
+              "id": "46558758863011",
+              "title": "Maple Burl",
+              "price_cents": 38500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43753609658531.webp"
+            },
+            {
+              "id": "46586789396643",
+              "title": "Red Resin/Maple Burl",
+              "price_cents": 38500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-8943255355555.webp"
+            },
+            {
+              "id": "46586789822627",
+              "title": "Blue Curly Maple",
+              "price_cents": 38500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-8943255355555.webp"
+            },
+            {
+              "id": "46586790183075",
+              "title": "Wenge",
+              "price_cents": 38500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-8943255355555.webp"
+            },
+            {
+              "id": "46586790379683",
+              "title": "Walnut",
+              "price_cents": 38500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-8943255355555.webp"
+            }
+          ],
+          "image": "/retail/assets/avery-43753614016675.webp",
+          "price_source": "https://avery-knifeworks.myshopify.com/products/woodsman-knife"
+        },
+        {
+          "id": "field-knife",
+          "name": "Field Knife",
+          "category": "Hunting",
+          "description": "A compact outdoor option for field and utility work. Public catalog snapshot from 2026-10-17. Stock counts, packing measurements and any tablet sale are fictional; recheck availability in Avery\u2019s shop.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_note": "Public catalog price observed 2026-10-17; verify current price and stock with Avery.",
+          "weight_oz": 16,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "tools",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "46558744150179",
+              "title": "Walnut",
+              "price_cents": 33500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43701966405795.webp"
+            },
+            {
+              "id": "46558744117411",
+              "title": "Maple Burl",
+              "price_cents": 33500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43752848556195.webp"
+            },
+            {
+              "id": "46558744182947",
+              "title": "Pinecone/Black Resin",
+              "price_cents": 33500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-45342778196131.webp"
+            },
+            {
+              "id": "46559156764835",
+              "title": "Pinecone/Orange Resin",
+              "price_cents": 33500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43701959590051.webp"
+            },
+            {
+              "id": "46559156797603",
+              "title": "Blue Maple Burl",
+              "price_cents": 33500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43701962703011.webp"
+            },
+            {
+              "id": "46559156830371",
+              "title": "Royal Blue/Maple Burl",
+              "price_cents": 33500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43701970337955.webp"
+            },
+            {
+              "id": "46559156863139",
+              "title": "Pearl/Maple Burl",
+              "price_cents": 33500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43701972730019.webp"
+            },
+            {
+              "id": "46559223218339",
+              "title": "Bolivian Rosewood",
+              "price_cents": 33500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43703856267427.webp"
+            },
+            {
+              "id": "47334214893731",
+              "title": "Pinecone/Pearl Resin",
+              "price_cents": 33500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-45342761779363.webp"
+            },
+            {
+              "id": "47334215745699",
+              "title": "Pinecone/Teal Resin",
+              "price_cents": 33500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-8943252275363.webp"
+            }
+          ],
+          "image": "/retail/assets/avery-43701966405795.webp",
+          "price_source": "https://avery-knifeworks.myshopify.com/products/field-knife"
+        },
+        {
+          "id": "bird-and-trout",
+          "name": "Bird and Trout",
+          "category": "Fishing",
+          "description": "A smaller blade for bird and trout preparation. Public catalog snapshot from 2026-10-17. Stock counts, packing measurements and any tablet sale are fictional; recheck availability in Avery\u2019s shop.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_note": "Public catalog price observed 2026-10-17; verify current price and stock with Avery.",
+          "weight_oz": 16,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "tools",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "46558949736611",
+              "title": "Maple Burl",
+              "price_cents": 28500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43700164198563.webp"
+            },
+            {
+              "id": "46558949802147",
+              "title": "Paduak",
+              "price_cents": 28500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43700187758755.webp"
+            },
+            {
+              "id": "46559181144227",
+              "title": "Zebra",
+              "price_cents": 28500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43702822666403.webp"
+            },
+            {
+              "id": "46558949769379",
+              "title": "Walnut",
+              "price_cents": 28500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43858837078179.webp"
+            },
+            {
+              "id": "46590918525091",
+              "title": "Blue Resin/Maple Burl",
+              "price_cents": 28500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43858847727779.webp"
+            },
+            {
+              "id": "46614946185379",
+              "title": "Blue Maple Burl",
+              "price_cents": 28500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43933302653091.webp"
+            },
+            {
+              "id": "46614949658787",
+              "title": "Pinecone/Turquoise Resin",
+              "price_cents": 28500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43933303898275.webp"
+            },
+            {
+              "id": "46614960308387",
+              "title": "Pinecone/Hunter Orange Resin",
+              "price_cents": 28500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43933326540963.webp"
+            },
+            {
+              "id": "47357772005539",
+              "title": "Pinecone/Blue Resin",
+              "price_cents": 28500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-45480831156387.webp"
+            },
+            {
+              "id": "47357773840547",
+              "title": "Red Resin/Maple Burl",
+              "price_cents": 28500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-45480840790179.webp"
+            },
+            {
+              "id": "47357775904931",
+              "title": "Pinecone/Red Resin",
+              "price_cents": 28500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-45480845770915.webp"
+            },
+            {
+              "id": "47357778198691",
+              "title": "Pinecone/White Resin",
+              "price_cents": 28500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-45480850358435.webp"
+            }
+          ],
+          "image": "/retail/assets/avery-43700164198563.webp",
+          "price_source": "https://avery-knifeworks.myshopify.com/products/bird-and-trout"
+        },
+        {
+          "id": "brookie-filet-knife",
+          "name": "Brookie Fillet Knife",
+          "category": "Fishing",
+          "description": "A compact fillet knife for smaller fish. Public catalog snapshot from 2026-10-17. Stock counts, packing measurements and any tablet sale are fictional; recheck availability in Avery\u2019s shop.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_note": "Public catalog price observed 2026-10-17; verify current price and stock with Avery.",
+          "weight_oz": 16,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "tools",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "46558662394019",
+              "title": "Walnut",
+              "price_cents": 28500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43702368567459.webp"
+            },
+            {
+              "id": "46558662361251",
+              "title": "Maple Burl",
+              "price_cents": 28500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43753630826659.webp"
+            },
+            {
+              "id": "46558662426787",
+              "title": "Bocote",
+              "price_cents": 28500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43753633710243.webp"
+            },
+            {
+              "id": "46559169675427",
+              "title": "Padauk",
+              "price_cents": 28500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43753639411875.webp"
+            },
+            {
+              "id": "46578984911011",
+              "title": "Zebra",
+              "price_cents": 28500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43753643475107.webp"
+            }
+          ],
+          "image": "/retail/assets/avery-43702368567459.webp",
+          "price_source": "https://avery-knifeworks.myshopify.com/products/brookie-filet-knife"
+        },
+        {
+          "id": "elk-river-filet-knife",
+          "name": "Elk River Fillet Knife",
+          "category": "Fishing",
+          "description": "A longer fillet option for fish preparation. Public catalog snapshot from 2026-10-17. Stock counts, packing measurements and any tablet sale are fictional; recheck availability in Avery\u2019s shop.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_note": "Public catalog price observed 2026-10-17; verify current price and stock with Avery.",
+          "weight_oz": 16,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "tools",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "46559168692387",
+              "title": "Padauk",
+              "price_cents": 30000,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43753753051299.webp"
+            },
+            {
+              "id": "46558523162787",
+              "title": "Walnut",
+              "price_cents": 30000,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43753766158499.webp"
+            },
+            {
+              "id": "46558613242019",
+              "title": "Bocote",
+              "price_cents": 30000,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43753730900131.webp"
+            },
+            {
+              "id": "46579035209891",
+              "title": "Zebra",
+              "price_cents": 30000,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43753846735011.webp"
+            },
+            {
+              "id": "46613271150755",
+              "title": "Red Resin/Maple Burl",
+              "price_cents": 30000,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43928908955811.webp"
+            },
+            {
+              "id": "46613271773347",
+              "title": "Maple Burl",
+              "price_cents": 30000,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43928921407651.webp"
+            },
+            {
+              "id": "46613272002723",
+              "title": "Pearl Resin/Maple Burl",
+              "price_cents": 30000,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43928925634723.webp"
+            },
+            {
+              "id": "46613272658083",
+              "title": "Seafoam Resin/Maple Burl",
+              "price_cents": 30000,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43928928387235.webp"
+            },
+            {
+              "id": "46613273280675",
+              "title": "Royal Blue Resin/Maple Burl",
+              "price_cents": 30000,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43928934056099.webp"
+            },
+            {
+              "id": "46613273378979",
+              "title": "Pinecone/White Resin",
+              "price_cents": 30000,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43928938676387.webp"
+            },
+            {
+              "id": "46613274001571",
+              "title": "Blue Maple Burl",
+              "price_cents": 30000,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43928943526051.webp"
+            },
+            {
+              "id": "46613274493091",
+              "title": "Pinecone/Hunter Orange Resin",
+              "price_cents": 30000,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43928948703395.webp"
+            },
+            {
+              "id": "46613281407139",
+              "title": "Pinecone/Teal Resin",
+              "price_cents": 30000,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43928957845667.webp"
+            }
+          ],
+          "image": "/retail/assets/avery-43753753051299.webp",
+          "price_source": "https://avery-knifeworks.myshopify.com/products/elk-river-filet-knife"
+        },
+        {
+          "id": "paring-knife",
+          "name": "Paring Knife",
+          "category": "Kitchen",
+          "description": "A small kitchen blade for peeling and detailed preparation. Public catalog snapshot from 2026-10-17. Stock counts, packing measurements and any tablet sale are fictional; recheck availability in Avery\u2019s shop.",
+          "identity_verified": true,
+          "price_verified": true,
+          "price_note": "Public catalog price observed 2026-10-17; verify current price and stock with Avery.",
+          "weight_oz": 16,
+          "dimensions_inches": [
+            9,
+            7,
+            4
+          ],
+          "measurements_verified": false,
+          "group": "tools",
+          "quote_only": false,
+          "oversized": false,
+          "variants": [
+            {
+              "id": "46558494458019",
+              "title": "Walnut",
+              "price_cents": 17500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43706643939491.webp"
+            },
+            {
+              "id": "46558494490787",
+              "title": "Maple Burl",
+              "price_cents": 17500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43693345407139.webp"
+            },
+            {
+              "id": "46558537154723",
+              "title": "Padauk",
+              "price_cents": 17500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-43693353336995.webp"
+            },
+            {
+              "id": "46579033702563",
+              "title": "Red/Maple Burl",
+              "price_cents": 17500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-8943157313699.webp"
+            },
+            {
+              "id": "46836993392803",
+              "title": "Pearl Resin/Maple Burl",
+              "price_cents": 17500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-8943157313699.webp"
+            },
+            {
+              "id": "47334226460835",
+              "title": "Bocote",
+              "price_cents": 17500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-8943157313699.webp"
+            },
+            {
+              "id": "47334226493603",
+              "title": "Blue Maple Burl",
+              "price_cents": 17500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-8943157313699.webp"
+            },
+            {
+              "id": "47334226526371",
+              "title": "Wenge",
+              "price_cents": 17500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-8943157313699.webp"
+            },
+            {
+              "id": "47334226559139",
+              "title": "Bolivian Rosewood",
+              "price_cents": 17500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-8943157313699.webp"
+            },
+            {
+              "id": "47334226591907",
+              "title": "Seafoam Resin & Maple Burl",
+              "price_cents": 17500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-8943157313699.webp"
+            },
+            {
+              "id": "47579424260259",
+              "title": "Zebrawood",
+              "price_cents": 17500,
+              "stock": 1,
+              "available_snapshot": false,
+              "image": "/retail/assets/avery-8943157313699.webp"
+            }
+          ],
+          "image": "/retail/assets/avery-43706643939491.webp",
+          "price_source": "https://avery-knifeworks.myshopify.com/products/paring-knife"
         }
-      ]
+      ],
+      "read_only_source": true,
+      "catalog_observed_at": "2026-10-17"
     },
     {
       "slug": "boone-barndog",
@@ -2187,10 +2815,10 @@
       "confirmed_catalog_examples": [
         {
           "name": "ColorParty Poster Packs",
-          "price_usd": 38.0
+          "price_usd": 38
         }
       ],
-      "concept": "Choose a sample printed format or group pack, compare quantities and save a group’s preferences for a future event. Download handling remains a merchant discovery question.",
+      "concept": "Choose a sample printed format or group pack, compare quantities and save a group\u2019s preferences for a future event. Download handling remains a merchant discovery question.",
       "shipping_profile": "All cartable products in this concept are physical print/book examples. Actual downloadable files are not copied or delivered. Flat mailers, rolled posters, sizes and origin need approval.",
       "demo_live_shipping_enabled": false,
       "requires_merchant_confirmation": [
@@ -2206,8 +2834,8 @@
       "cta": "Explore the collection",
       "theme": "editorial",
       "category_label": "Coloring, art & books",
-      "intro": "A print-first concept for coloring, gathering and thoughtful books. The imagery shows an unbranded workstation, not the artist’s actual work.",
-      "shopping_journey": "Choose a sample printed format or group pack, compare quantities and save a group’s preferences for a future event. Download handling remains a merchant discovery question.",
+      "intro": "A print-first concept for coloring, gathering and thoughtful books. The imagery shows an unbranded workstation, not the artist\u2019s actual work.",
+      "shopping_journey": "Choose a sample printed format or group pack, compare quantities and save a group\u2019s preferences for a future event. Download handling remains a merchant discovery question.",
       "colors": {
         "ink": "#263752",
         "accent": "#c8663d",
@@ -2231,13 +2859,13 @@
       "products": [
         {
           "id": "p1",
-          "name": "Mountain-town coloring poster · sample",
+          "name": "Mountain-town coloring poster \u00b7 sample",
           "category": "Printed posters",
-          "description": "Mountain-town coloring poster · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Mountain-town coloring poster \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 5,
           "dimensions_inches": [
             9,
@@ -2251,13 +2879,13 @@
           "variants": [
             {
               "id": "letter",
-              "title": "Letter format · sample",
+              "title": "Letter format \u00b7 sample",
               "price_cents": 1200,
               "stock": 12
             },
             {
               "id": "large",
-              "title": "Large format · sample",
+              "title": "Large format \u00b7 sample",
               "price_cents": 1800,
               "stock": 12
             }
@@ -2267,7 +2895,7 @@
           "id": "p2",
           "name": "ColorParty Poster Packs",
           "category": "Group creativity",
-          "description": "ColorParty Poster Packs. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "ColorParty Poster Packs. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.boonebarndog.com/",
@@ -2285,7 +2913,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 3800,
               "stock": 12
             }
@@ -2293,13 +2921,13 @@
         },
         {
           "id": "p3",
-          "name": "Nature coloring book · sample",
+          "name": "Nature coloring book \u00b7 sample",
           "category": "Coloring books",
-          "description": "Nature coloring book · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Nature coloring book \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 12,
           "dimensions_inches": [
             9,
@@ -2313,7 +2941,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 1600,
               "stock": 12
             }
@@ -2321,13 +2949,13 @@
         },
         {
           "id": "p4",
-          "name": "Poetry collection · sample",
+          "name": "Poetry collection \u00b7 sample",
           "category": "Books",
-          "description": "Poetry collection · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Poetry collection \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 10,
           "dimensions_inches": [
             9,
@@ -2341,7 +2969,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 1800,
               "stock": 12
             }
@@ -2349,13 +2977,13 @@
         },
         {
           "id": "p5",
-          "name": "Classroom printed bundle · sample",
+          "name": "Classroom printed bundle \u00b7 sample",
           "category": "Group creativity",
-          "description": "Classroom printed bundle · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Classroom printed bundle \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 36,
           "dimensions_inches": [
             9,
@@ -2369,7 +2997,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 4200,
               "stock": 12
             }
@@ -2377,13 +3005,13 @@
         },
         {
           "id": "p6",
-          "name": "Creative gift envelope · sample",
+          "name": "Creative gift envelope \u00b7 sample",
           "category": "Gifts",
-          "description": "Creative gift envelope · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Creative gift envelope \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 10,
           "dimensions_inches": [
             9,
@@ -2397,7 +3025,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 2200,
               "stock": 12
             }
@@ -2407,7 +3035,7 @@
     },
     {
       "slug": "britts-leather",
-      "name": "Britt’s Leather Co.",
+      "name": "Britt\u2019s Leather Co.",
       "booth": "Row 14 A-B",
       "website": "https://brittsleatherco.com/",
       "web_presence": "The homepage introduces custom-fit belts and several leather collections.",
@@ -2457,13 +3085,13 @@
       "products": [
         {
           "id": "p1",
-          "name": "Custom-fit leather belt · sample",
+          "name": "Custom-fit leather belt \u00b7 sample",
           "category": "Belts",
-          "description": "Custom-fit leather belt · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Custom-fit leather belt \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 12,
           "dimensions_inches": [
             9,
@@ -2477,13 +3105,13 @@
           "variants": [
             {
               "id": "medium",
-              "title": "Medium · sample sizing",
+              "title": "Medium \u00b7 sample sizing",
               "price_cents": 6500,
               "stock": 12
             },
             {
               "id": "large",
-              "title": "Large · sample sizing",
+              "title": "Large \u00b7 sample sizing",
               "price_cents": 6500,
               "stock": 12
             }
@@ -2491,13 +3119,13 @@
         },
         {
           "id": "p2",
-          "name": "Folded leather wallet · sample",
+          "name": "Folded leather wallet \u00b7 sample",
           "category": "Wallets",
-          "description": "Folded leather wallet · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Folded leather wallet \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 6,
           "dimensions_inches": [
             9,
@@ -2511,13 +3139,13 @@
           "variants": [
             {
               "id": "cognac",
-              "title": "Cognac · sample",
+              "title": "Cognac \u00b7 sample",
               "price_cents": 5500,
               "stock": 12
             },
             {
               "id": "dark",
-              "title": "Dark brown · sample",
+              "title": "Dark brown \u00b7 sample",
               "price_cents": 5500,
               "stock": 12
             }
@@ -2525,13 +3153,13 @@
         },
         {
           "id": "p3",
-          "name": "Leather journal cover · sample",
+          "name": "Leather journal cover \u00b7 sample",
           "category": "Journals",
-          "description": "Leather journal cover · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Leather journal cover \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 12,
           "dimensions_inches": [
             9,
@@ -2545,7 +3173,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 4800,
               "stock": 12
             }
@@ -2553,13 +3181,13 @@
         },
         {
           "id": "p4",
-          "name": "Everyday leather tote · sample",
+          "name": "Everyday leather tote \u00b7 sample",
           "category": "Bags",
-          "description": "Everyday leather tote · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Everyday leather tote \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 32,
           "dimensions_inches": [
             9,
@@ -2573,7 +3201,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 14500,
               "stock": 3
             }
@@ -2581,13 +3209,13 @@
         },
         {
           "id": "p5",
-          "name": "Leather patch hat · sample",
+          "name": "Leather patch hat \u00b7 sample",
           "category": "Patch hats",
-          "description": "Leather patch hat · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Leather patch hat \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 7,
           "dimensions_inches": [
             9,
@@ -2601,7 +3229,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 3000,
               "stock": 12
             }
@@ -2609,13 +3237,13 @@
         },
         {
           "id": "p6",
-          "name": "Personalized key fob · sample",
+          "name": "Personalized key fob \u00b7 sample",
           "category": "Accessories",
-          "description": "Personalized key fob · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Personalized key fob \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 3,
           "dimensions_inches": [
             9,
@@ -2629,7 +3257,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 1800,
               "stock": 12
             }
@@ -2658,11 +3286,11 @@
         },
         {
           "name": "Scorch",
-          "price_usd": 12.0
+          "price_usd": 12
         },
         {
           "name": "Viper",
-          "price_usd": 15.0
+          "price_usd": 15
         }
       ],
       "concept": "Browse sauce families, compare sample heat labels, build a tasting basket and demonstrate a saved customer favorite. Larger requests remain a human conversation.",
@@ -2677,7 +3305,7 @@
       ],
       "image": "sauce",
       "headline": "Choose a little sweet heat.",
-      "tagline": "Find the bottle you’ll come back for.",
+      "tagline": "Find the bottle you\u2019ll come back for.",
       "cta": "Explore the collection",
       "theme": "cocoa",
       "category_label": "Sauces, salsa & preserves",
@@ -2708,7 +3336,7 @@
           "id": "p1",
           "name": "Indian Summer",
           "category": "Hot sauces",
-          "description": "Indian Summer. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Indian Summer. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://datilsensations.com/",
@@ -2726,7 +3354,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 850,
               "stock": 12
             }
@@ -2736,7 +3364,7 @@
           "id": "p2",
           "name": "Tears",
           "category": "Hot sauces",
-          "description": "Tears. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Tears. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://datilsensations.com/",
@@ -2754,7 +3382,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 850,
               "stock": 12
             }
@@ -2764,7 +3392,7 @@
           "id": "p3",
           "name": "Scorch",
           "category": "Hot sauces",
-          "description": "Scorch. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Scorch. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://datilsensations.com/",
@@ -2782,7 +3410,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 1200,
               "stock": 12
             }
@@ -2792,7 +3420,7 @@
           "id": "p4",
           "name": "Viper",
           "category": "Hot sauces",
-          "description": "Viper. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Viper. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://datilsensations.com/",
@@ -2810,7 +3438,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 1500,
               "stock": 12
             }
@@ -2818,13 +3446,13 @@
         },
         {
           "id": "p5",
-          "name": "Festival salsa jar · sample",
+          "name": "Festival salsa jar \u00b7 sample",
           "category": "Salsas",
-          "description": "Festival salsa jar · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Festival salsa jar \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 22,
           "dimensions_inches": [
             9,
@@ -2838,13 +3466,13 @@
           "variants": [
             {
               "id": "mild",
-              "title": "Mild · sample recipe",
+              "title": "Mild \u00b7 sample recipe",
               "price_cents": 1000,
               "stock": 12
             },
             {
               "id": "hot",
-              "title": "Hot · sample recipe",
+              "title": "Hot \u00b7 sample recipe",
               "price_cents": 1000,
               "stock": 12
             }
@@ -2852,13 +3480,13 @@
         },
         {
           "id": "p6",
-          "name": "Sweet-heat preserve · sample",
+          "name": "Sweet-heat preserve \u00b7 sample",
           "category": "Preserves",
-          "description": "Sweet-heat preserve · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Sweet-heat preserve \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 20,
           "dimensions_inches": [
             9,
@@ -2872,7 +3500,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 1000,
               "stock": 12
             }
@@ -2893,18 +3521,18 @@
       "confirmed_catalog_examples": [
         {
           "name": "Honey Bourbon Hot Sauce",
-          "price_usd": 15.0
+          "price_usd": 15
         },
         {
           "name": "Honey Hot Sauce Gift Pack",
-          "price_usd": 25.0
+          "price_usd": 25
         },
         {
-          "name": "Watts Barbecue Sauce Sampler – Smoky Mountain - MHBH",
-          "price_usd": 20.0
+          "name": "Watts Barbecue Sauce Sampler \u2013 Smoky Mountain - MHBH",
+          "price_usd": 20
         }
       ],
-      "concept": "Compare sample flavor families, browse an observed sampler, create a gift basket and keep a customer’s tasting preferences for an easier reorder.",
+      "concept": "Compare sample flavor families, browse an observed sampler, create a gift basket and keep a customer\u2019s tasting preferences for an easier reorder.",
       "shipping_profile": "Example glass and dry-spice package groups. The observed $45-or-more shipping offer is research only; the concept does not activate that rule.",
       "demo_live_shipping_enabled": false,
       "requires_merchant_confirmation": [
@@ -2915,13 +3543,13 @@
         "Approved photos and product stories"
       ],
       "image": "sauce",
-      "headline": "Find your table’s favorite.",
+      "headline": "Find your table\u2019s favorite.",
       "tagline": "A little smoky. A little bold.",
       "cta": "Explore the collection",
       "theme": "farm",
       "category_label": "BBQ sauces & tasting sets",
       "intro": "A sampler-led concept that puts pack contents and flavor differences ahead of internal product codes.",
-      "shopping_journey": "Compare sample flavor families, browse an observed sampler, create a gift basket and keep a customer’s tasting preferences for an easier reorder.",
+      "shopping_journey": "Compare sample flavor families, browse an observed sampler, create a gift basket and keep a customer\u2019s tasting preferences for an easier reorder.",
       "colors": {
         "ink": "#313c2b",
         "accent": "#a94e2e",
@@ -2947,7 +3575,7 @@
           "id": "p1",
           "name": "Honey Bourbon Hot Sauce",
           "category": "Hot sauces",
-          "description": "Honey Bourbon Hot Sauce. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Honey Bourbon Hot Sauce. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.wattssauce.com/",
@@ -2965,7 +3593,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 1500,
               "stock": 12
             }
@@ -2975,7 +3603,7 @@
           "id": "p2",
           "name": "Honey Hot Sauce Gift Pack",
           "category": "Gift packs",
-          "description": "Honey Hot Sauce Gift Pack. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Honey Hot Sauce Gift Pack. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.wattssauce.com/",
@@ -2993,7 +3621,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 2500,
               "stock": 12
             }
@@ -3001,9 +3629,9 @@
         },
         {
           "id": "p3",
-          "name": "Watts Barbecue Sauce Sampler – Smoky Mountain - MHBH",
+          "name": "Watts Barbecue Sauce Sampler \u2013 Smoky Mountain - MHBH",
           "category": "Samplers",
-          "description": "Watts Barbecue Sauce Sampler – Smoky Mountain - MHBH. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Watts Barbecue Sauce Sampler \u2013 Smoky Mountain - MHBH. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.wattssauce.com/",
@@ -3021,7 +3649,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 2000,
               "stock": 12
             }
@@ -3029,13 +3657,13 @@
         },
         {
           "id": "p4",
-          "name": "Carolina barbecue bottle · sample",
+          "name": "Carolina barbecue bottle \u00b7 sample",
           "category": "BBQ sauces",
-          "description": "Carolina barbecue bottle · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Carolina barbecue bottle \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 20,
           "dimensions_inches": [
             9,
@@ -3049,13 +3677,13 @@
           "variants": [
             {
               "id": "tangy",
-              "title": "Tangy · sample style",
+              "title": "Tangy \u00b7 sample style",
               "price_cents": 1000,
               "stock": 12
             },
             {
               "id": "smoky",
-              "title": "Smoky · sample style",
+              "title": "Smoky \u00b7 sample style",
               "price_cents": 1000,
               "stock": 12
             }
@@ -3063,13 +3691,13 @@
         },
         {
           "id": "p5",
-          "name": "Table mustard jar · sample",
+          "name": "Table mustard jar \u00b7 sample",
           "category": "Mustards",
-          "description": "Table mustard jar · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Table mustard jar \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 18,
           "dimensions_inches": [
             9,
@@ -3083,7 +3711,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 900,
               "stock": 12
             }
@@ -3091,13 +3719,13 @@
         },
         {
           "id": "p6",
-          "name": "Grill seasoning blend · sample",
+          "name": "Grill seasoning blend \u00b7 sample",
           "category": "Seasonings",
-          "description": "Grill seasoning blend · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Grill seasoning blend \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 8,
           "dimensions_inches": [
             9,
@@ -3111,7 +3739,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 800,
               "stock": 12
             }
@@ -3172,13 +3800,13 @@
       "products": [
         {
           "id": "p1",
-          "name": "Elderberry syrup selection · sample",
+          "name": "Elderberry syrup selection \u00b7 sample",
           "category": "Elderberry",
-          "description": "Elderberry syrup selection · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Elderberry syrup selection \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 20,
           "dimensions_inches": [
             9,
@@ -3192,13 +3820,13 @@
           "variants": [
             {
               "id": "small",
-              "title": "Small bottle · sample",
+              "title": "Small bottle \u00b7 sample",
               "price_cents": 2200,
               "stock": 12
             },
             {
               "id": "large",
-              "title": "Large bottle · sample",
+              "title": "Large bottle \u00b7 sample",
               "price_cents": 3400,
               "stock": 12
             }
@@ -3206,13 +3834,13 @@
         },
         {
           "id": "p2",
-          "name": "Pantry honey jar · sample",
+          "name": "Pantry honey jar \u00b7 sample",
           "category": "Honey",
-          "description": "Pantry honey jar · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Pantry honey jar \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 20,
           "dimensions_inches": [
             9,
@@ -3226,7 +3854,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 1400,
               "stock": 12
             }
@@ -3234,13 +3862,13 @@
         },
         {
           "id": "p3",
-          "name": "Loose-leaf tea pouch · sample",
+          "name": "Loose-leaf tea pouch \u00b7 sample",
           "category": "Tea",
-          "description": "Loose-leaf tea pouch · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Loose-leaf tea pouch \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 4,
           "dimensions_inches": [
             9,
@@ -3254,7 +3882,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 1200,
               "stock": 12
             }
@@ -3262,13 +3890,13 @@
         },
         {
           "id": "p4",
-          "name": "At-home pantry kit · sample",
+          "name": "At-home pantry kit \u00b7 sample",
           "category": "Kits",
-          "description": "At-home pantry kit · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "At-home pantry kit \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 16,
           "dimensions_inches": [
             9,
@@ -3282,7 +3910,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 2400,
               "stock": 12
             }
@@ -3290,13 +3918,13 @@
         },
         {
           "id": "p5",
-          "name": "Body-care jar · sample",
+          "name": "Body-care jar \u00b7 sample",
           "category": "Body care",
-          "description": "Body-care jar · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Body-care jar \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 10,
           "dimensions_inches": [
             9,
@@ -3310,7 +3938,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 1800,
               "stock": 12
             }
@@ -3318,13 +3946,13 @@
         },
         {
           "id": "p6",
-          "name": "Tea & honey gift selection · sample",
+          "name": "Tea & honey gift selection \u00b7 sample",
           "category": "Gifts",
-          "description": "Tea & honey gift selection · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Tea & honey gift selection \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 28,
           "dimensions_inches": [
             9,
@@ -3338,7 +3966,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 3200,
               "stock": 12
             }
@@ -3358,7 +3986,7 @@
       ],
       "confirmed_catalog_examples": [],
       "concept": "Choose a fictional scent family, compare candle and melt formats, build a gift basket and show sample dispatch information without promising a real ship date.",
-      "shipping_profile": "Candles, liquids and electrical accessories are separate illustrative groups. The site’s Friday dispatch and $60+ free-shipping notices are recorded as research, not activated promises.",
+      "shipping_profile": "Candles, liquids and electrical accessories are separate illustrative groups. The site\u2019s Friday dispatch and $60+ free-shipping notices are recorded as research, not activated promises.",
       "demo_live_shipping_enabled": false,
       "requires_merchant_confirmation": [
         "Actual scents and cross-product availability",
@@ -3399,13 +4027,13 @@
       "products": [
         {
           "id": "p1",
-          "name": "Signature candle · sample",
+          "name": "Signature candle \u00b7 sample",
           "category": "Candles",
-          "description": "Signature candle · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Signature candle \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 22,
           "dimensions_inches": [
             9,
@@ -3419,13 +4047,13 @@
           "variants": [
             {
               "id": "fresh",
-              "title": "Fresh linen · sample fragrance",
+              "title": "Fresh linen \u00b7 sample fragrance",
               "price_cents": 2000,
               "stock": 12
             },
             {
               "id": "warm",
-              "title": "Warm woods · sample fragrance",
+              "title": "Warm woods \u00b7 sample fragrance",
               "price_cents": 2000,
               "stock": 12
             }
@@ -3433,13 +4061,13 @@
         },
         {
           "id": "p2",
-          "name": "Wax melt collection · sample",
+          "name": "Wax melt collection \u00b7 sample",
           "category": "Wax melts",
-          "description": "Wax melt collection · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Wax melt collection \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 5,
           "dimensions_inches": [
             9,
@@ -3453,13 +4081,13 @@
           "variants": [
             {
               "id": "fresh",
-              "title": "Fresh linen · sample fragrance",
+              "title": "Fresh linen \u00b7 sample fragrance",
               "price_cents": 650,
               "stock": 12
             },
             {
               "id": "warm",
-              "title": "Warm woods · sample fragrance",
+              "title": "Warm woods \u00b7 sample fragrance",
               "price_cents": 650,
               "stock": 12
             }
@@ -3467,13 +4095,13 @@
         },
         {
           "id": "p3",
-          "name": "Room & linen spray · sample",
+          "name": "Room & linen spray \u00b7 sample",
           "category": "Sprays",
-          "description": "Room & linen spray · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Room & linen spray \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 10,
           "dimensions_inches": [
             9,
@@ -3487,7 +4115,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 1100,
               "stock": 12
             }
@@ -3495,13 +4123,13 @@
         },
         {
           "id": "p4",
-          "name": "Hand & body cream · sample",
+          "name": "Hand & body cream \u00b7 sample",
           "category": "Body care",
-          "description": "Hand & body cream · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Hand & body cream \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 10,
           "dimensions_inches": [
             9,
@@ -3515,7 +4143,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 1400,
               "stock": 12
             }
@@ -3523,13 +4151,13 @@
         },
         {
           "id": "p5",
-          "name": "Candle & melt gift box · sample",
+          "name": "Candle & melt gift box \u00b7 sample",
           "category": "Gifts",
-          "description": "Candle & melt gift box · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Candle & melt gift box \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 30,
           "dimensions_inches": [
             9,
@@ -3543,7 +4171,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 3200,
               "stock": 12
             }
@@ -3551,13 +4179,13 @@
         },
         {
           "id": "p6",
-          "name": "Electric wax warmer · sample",
+          "name": "Electric wax warmer \u00b7 sample",
           "category": "Warmers",
-          "description": "Electric wax warmer · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Electric wax warmer \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 26,
           "dimensions_inches": [
             9,
@@ -3571,7 +4199,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 2400,
               "stock": 12
             }
@@ -3592,26 +4220,26 @@
       "confirmed_catalog_examples": [
         {
           "name": "8 oz. soy blend candle",
-          "price_usd": 12.0
+          "price_usd": 12
         },
         {
           "name": "Car diffuser",
           "price_usd": 6.5
         },
         {
-          "name": "Room/linen spray · 4 oz.",
-          "price_usd": 7.0
+          "name": "Room/linen spray \u00b7 4 oz.",
+          "price_usd": 7
         },
         {
-          "name": "Wax melts · 2.75 oz.",
-          "price_usd": 4.0
+          "name": "Wax melts \u00b7 2.75 oz.",
+          "price_usd": 4
         },
         {
-          "name": "Laundry booster · 12 oz. pouch",
+          "name": "Laundry booster \u00b7 12 oz. pouch",
           "price_usd": 6.5
         },
         {
-          "name": "Rug freshener · 10 oz. pouch",
+          "name": "Rug freshener \u00b7 10 oz. pouch",
           "price_usd": 6.5
         }
       ],
@@ -3677,13 +4305,13 @@
           "variants": [
             {
               "id": "woodland",
-              "title": "Woodland · fictional scent",
+              "title": "Woodland \u00b7 fictional scent",
               "price_cents": 1200,
               "stock": 12
             },
             {
               "id": "citrus",
-              "title": "Citrus · fictional scent",
+              "title": "Citrus \u00b7 fictional scent",
               "price_cents": 1200,
               "stock": 12
             }
@@ -3693,7 +4321,7 @@
           "id": "p2",
           "name": "Car diffuser",
           "category": "Diffusers",
-          "description": "Car diffuser. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Car diffuser. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.littleelkcandles.com/",
@@ -3711,7 +4339,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 650,
               "stock": 12
             }
@@ -3719,9 +4347,9 @@
         },
         {
           "id": "p3",
-          "name": "Room/linen spray · 4 oz.",
+          "name": "Room/linen spray \u00b7 4 oz.",
           "category": "Sprays",
-          "description": "Room/linen spray · 4 oz.. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Room/linen spray \u00b7 4 oz.. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.littleelkcandles.com/",
@@ -3739,7 +4367,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 700,
               "stock": 12
             }
@@ -3747,9 +4375,9 @@
         },
         {
           "id": "p4",
-          "name": "Wax melts · 2.75 oz.",
+          "name": "Wax melts \u00b7 2.75 oz.",
           "category": "Wax melts",
-          "description": "Wax melts · 2.75 oz.. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Wax melts \u00b7 2.75 oz.. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.littleelkcandles.com/",
@@ -3767,7 +4395,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 400,
               "stock": 12
             }
@@ -3775,9 +4403,9 @@
         },
         {
           "id": "p5",
-          "name": "Laundry booster · 12 oz. pouch",
+          "name": "Laundry booster \u00b7 12 oz. pouch",
           "category": "Laundry",
-          "description": "Laundry booster · 12 oz. pouch. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Laundry booster \u00b7 12 oz. pouch. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.littleelkcandles.com/",
@@ -3795,7 +4423,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 650,
               "stock": 12
             }
@@ -3803,9 +4431,9 @@
         },
         {
           "id": "p6",
-          "name": "Rug freshener · 10 oz. pouch",
+          "name": "Rug freshener \u00b7 10 oz. pouch",
           "category": "Home fragrance",
-          "description": "Rug freshener · 10 oz. pouch. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Rug freshener \u00b7 10 oz. pouch. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.littleelkcandles.com/",
@@ -3823,7 +4451,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 650,
               "stock": 12
             }
@@ -3844,27 +4472,27 @@
       "confirmed_catalog_examples": [
         {
           "name": "Coffee Mug",
-          "price_usd": 25.0
+          "price_usd": 25
         },
         {
           "name": "Tumbler with Straw",
-          "price_usd": 20.0
+          "price_usd": 20
         },
         {
           "name": "Tiny Vase",
-          "price_usd": 10.0
+          "price_usd": 10
         },
         {
           "name": "Spoon Rest-Plain",
-          "price_usd": 12.0
+          "price_usd": 12
         },
         {
           "name": "Bowl-Small",
-          "price_usd": 10.0
+          "price_usd": 10
         },
         {
           "name": "Jewelry Holder",
-          "price_usd": 25.0
+          "price_usd": 25
         }
       ],
       "concept": "Explore a sample glaze choice and packing changes for multiple pieces. Keep restock or commission preferences in a fictional customer note instead of losing the conversation.",
@@ -3910,7 +4538,7 @@
           "id": "p1",
           "name": "Coffee Mug",
           "category": "Mugs",
-          "description": "This product name and displayed price were observed on the merchant’s shop on 2026-10-15, where this listing was marked sold out. This independent demo uses fictional stock and illustrative glaze choices to show the journey; it does not indicate actual availability. Generic pottery photography is not the merchant’s work.",
+          "description": "This product name and displayed price were observed on the merchant\u2019s shop on 2026-10-15, where this listing was marked sold out. This independent demo uses fictional stock and illustrative glaze choices to show the journey; it does not indicate actual availability. Generic pottery photography is not the merchant\u2019s work.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.lononpottery.com/shop",
@@ -3928,13 +4556,13 @@
           "variants": [
             {
               "id": "blue",
-              "title": "Blue glaze · sample availability",
+              "title": "Blue glaze \u00b7 sample availability",
               "price_cents": 2500,
               "stock": 4
             },
             {
               "id": "earth",
-              "title": "Earth glaze · sample availability",
+              "title": "Earth glaze \u00b7 sample availability",
               "price_cents": 2500,
               "stock": 3
             }
@@ -3944,7 +4572,7 @@
           "id": "p2",
           "name": "Tumbler with Straw",
           "category": "Drinkware",
-          "description": "This product name and displayed price were observed on the merchant’s shop on 2026-10-15, where this listing was marked sold out. This independent demo uses fictional stock and illustrative glaze choices to show the journey; it does not indicate actual availability. Generic pottery photography is not the merchant’s work.",
+          "description": "This product name and displayed price were observed on the merchant\u2019s shop on 2026-10-15, where this listing was marked sold out. This independent demo uses fictional stock and illustrative glaze choices to show the journey; it does not indicate actual availability. Generic pottery photography is not the merchant\u2019s work.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.lononpottery.com/shop",
@@ -3962,7 +4590,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 2000,
               "stock": 12
             }
@@ -3972,7 +4600,7 @@
           "id": "p3",
           "name": "Tiny Vase",
           "category": "Vases",
-          "description": "This product name and displayed price were observed on the merchant’s shop on 2026-10-15, where this listing was marked sold out. This independent demo uses fictional stock and illustrative glaze choices to show the journey; it does not indicate actual availability. Generic pottery photography is not the merchant’s work.",
+          "description": "This product name and displayed price were observed on the merchant\u2019s shop on 2026-10-15, where this listing was marked sold out. This independent demo uses fictional stock and illustrative glaze choices to show the journey; it does not indicate actual availability. Generic pottery photography is not the merchant\u2019s work.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.lononpottery.com/shop",
@@ -3990,7 +4618,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 1000,
               "stock": 12
             }
@@ -4000,7 +4628,7 @@
           "id": "p4",
           "name": "Spoon Rest-Plain",
           "category": "Kitchen",
-          "description": "This product name and displayed price were observed on the merchant’s shop on 2026-10-15, where this listing was marked sold out. This independent demo uses fictional stock and illustrative glaze choices to show the journey; it does not indicate actual availability. Generic pottery photography is not the merchant’s work.",
+          "description": "This product name and displayed price were observed on the merchant\u2019s shop on 2026-10-15, where this listing was marked sold out. This independent demo uses fictional stock and illustrative glaze choices to show the journey; it does not indicate actual availability. Generic pottery photography is not the merchant\u2019s work.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.lononpottery.com/shop",
@@ -4018,7 +4646,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 1200,
               "stock": 12
             }
@@ -4028,7 +4656,7 @@
           "id": "p5",
           "name": "Bowl-Small",
           "category": "Bowls",
-          "description": "This product name and displayed price were observed on the merchant’s shop on 2026-10-15, where this listing was marked sold out. This independent demo uses fictional stock and illustrative glaze choices to show the journey; it does not indicate actual availability. Generic pottery photography is not the merchant’s work.",
+          "description": "This product name and displayed price were observed on the merchant\u2019s shop on 2026-10-15, where this listing was marked sold out. This independent demo uses fictional stock and illustrative glaze choices to show the journey; it does not indicate actual availability. Generic pottery photography is not the merchant\u2019s work.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.lononpottery.com/shop",
@@ -4046,7 +4674,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 1000,
               "stock": 12
             }
@@ -4056,7 +4684,7 @@
           "id": "p6",
           "name": "Jewelry Holder",
           "category": "Home",
-          "description": "This product name and displayed price were observed on the merchant’s shop on 2026-10-15, where this listing was marked sold out. This independent demo uses fictional stock and illustrative glaze choices to show the journey; it does not indicate actual availability. Generic pottery photography is not the merchant’s work.",
+          "description": "This product name and displayed price were observed on the merchant\u2019s shop on 2026-10-15, where this listing was marked sold out. This independent demo uses fictional stock and illustrative glaze choices to show the journey; it does not indicate actual availability. Generic pottery photography is not the merchant\u2019s work.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://www.lononpottery.com/shop",
@@ -4074,7 +4702,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 2500,
               "stock": 12
             }
@@ -4084,7 +4712,7 @@
     },
     {
       "slug": "michaels-exotic-peppers",
-      "name": "Michael’s Exotic Peppers",
+      "name": "Michael\u2019s Exotic Peppers",
       "booth": "Row 11 D",
       "website": "https://michaelsexoticpeppers.com/",
       "web_presence": "The shop presents many pepper/flavor combinations and amplified versions.",
@@ -4158,7 +4786,7 @@
           "id": "p1",
           "name": "Grilled Pineapple Mango & Carolina Reaper Hot Sauce",
           "category": "Fruit & pepper",
-          "description": "Grilled Pineapple Mango & Carolina Reaper Hot Sauce. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Grilled Pineapple Mango & Carolina Reaper Hot Sauce. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://michaelsexoticpeppers.com/",
@@ -4176,7 +4804,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 999,
               "stock": 12
             }
@@ -4186,7 +4814,7 @@
           "id": "p2",
           "name": "Black Garlic & Ghost Pepper Hot Sauce",
           "category": "Garlic & pepper",
-          "description": "Black Garlic & Ghost Pepper Hot Sauce. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Black Garlic & Ghost Pepper Hot Sauce. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://michaelsexoticpeppers.com/",
@@ -4204,7 +4832,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 999,
               "stock": 12
             }
@@ -4214,7 +4842,7 @@
           "id": "p3",
           "name": "Grilled Banana & Trinidad Scorpion Hot Sauce",
           "category": "Fruit & pepper",
-          "description": "Grilled Banana & Trinidad Scorpion Hot Sauce. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Grilled Banana & Trinidad Scorpion Hot Sauce. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://michaelsexoticpeppers.com/",
@@ -4232,7 +4860,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 999,
               "stock": 12
             }
@@ -4242,7 +4870,7 @@
           "id": "p4",
           "name": "Grilled Pineapple Mango & Carolina Reaper - Amplification Hot Sauce",
           "category": "Amplified sauces",
-          "description": "Grilled Pineapple Mango & Carolina Reaper - Amplification Hot Sauce. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Grilled Pineapple Mango & Carolina Reaper - Amplification Hot Sauce. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://michaelsexoticpeppers.com/",
@@ -4260,7 +4888,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 1149,
               "stock": 12
             }
@@ -4270,7 +4898,7 @@
           "id": "p5",
           "name": "Watermelon & Red Scotch Bonnet Pepper Hot Sauce",
           "category": "Fruit & pepper",
-          "description": "Watermelon & Red Scotch Bonnet Pepper Hot Sauce. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Watermelon & Red Scotch Bonnet Pepper Hot Sauce. This product identity was observed on the merchant website; availability and all sample selections need confirmation. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": true,
           "price_verified": true,
           "price_source": "https://michaelsexoticpeppers.com/",
@@ -4288,7 +4916,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 999,
               "stock": 12
             }
@@ -4296,13 +4924,13 @@
         },
         {
           "id": "p6",
-          "name": "Tasting discovery set · sample",
+          "name": "Tasting discovery set \u00b7 sample",
           "category": "Discovery sets",
-          "description": "Tasting discovery set · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Tasting discovery set \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 36,
           "dimensions_inches": [
             9,
@@ -4316,13 +4944,13 @@
           "variants": [
             {
               "id": "fruit",
-              "title": "Fruit-forward · sample contents",
+              "title": "Fruit-forward \u00b7 sample contents",
               "price_cents": 2800,
               "stock": 12
             },
             {
               "id": "garlic",
-              "title": "Garlic-forward · sample contents",
+              "title": "Garlic-forward \u00b7 sample contents",
               "price_cents": 2800,
               "stock": 12
             }
@@ -4383,13 +5011,13 @@
       "products": [
         {
           "id": "p1",
-          "name": "Beaded drop earrings · sample",
+          "name": "Beaded drop earrings \u00b7 sample",
           "category": "Beadwork",
-          "description": "Beaded drop earrings · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Beaded drop earrings \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 3,
           "dimensions_inches": [
             9,
@@ -4403,13 +5031,13 @@
           "variants": [
             {
               "id": "terracotta",
-              "title": "Terracotta · sample",
+              "title": "Terracotta \u00b7 sample",
               "price_cents": 3200,
               "stock": 1
             },
             {
               "id": "blue",
-              "title": "Blue · sample",
+              "title": "Blue \u00b7 sample",
               "price_cents": 3200,
               "stock": 1
             }
@@ -4417,13 +5045,13 @@
         },
         {
           "id": "p2",
-          "name": "Beaded bracelet · sample",
+          "name": "Beaded bracelet \u00b7 sample",
           "category": "Beadwork",
-          "description": "Beaded bracelet · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Beaded bracelet \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 3,
           "dimensions_inches": [
             9,
@@ -4437,7 +5065,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 2400,
               "stock": 12
             }
@@ -4445,13 +5073,13 @@
         },
         {
           "id": "p3",
-          "name": "Small glass suncatcher · sample",
+          "name": "Small glass suncatcher \u00b7 sample",
           "category": "Stained glass",
-          "description": "Small glass suncatcher · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Small glass suncatcher \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 14,
           "dimensions_inches": [
             9,
@@ -4465,7 +5093,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 4800,
               "stock": 1
             }
@@ -4473,13 +5101,13 @@
         },
         {
           "id": "p4",
-          "name": "Window color charm · sample",
+          "name": "Window color charm \u00b7 sample",
           "category": "Stained glass",
-          "description": "Window color charm · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Window color charm \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 10,
           "dimensions_inches": [
             9,
@@ -4493,7 +5121,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 2800,
               "stock": 1
             }
@@ -4501,13 +5129,13 @@
         },
         {
           "id": "p5",
-          "name": "Cat play pouch · sample",
+          "name": "Cat play pouch \u00b7 sample",
           "category": "Cat toys",
-          "description": "Cat play pouch · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Cat play pouch \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 5,
           "dimensions_inches": [
             9,
@@ -4521,7 +5149,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 1400,
               "stock": 12
             }
@@ -4529,13 +5157,13 @@
         },
         {
           "id": "p6",
-          "name": "Handmade gift pairing · sample",
+          "name": "Handmade gift pairing \u00b7 sample",
           "category": "Gifts",
-          "description": "Handmade gift pairing · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Handmade gift pairing \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 12,
           "dimensions_inches": [
             9,
@@ -4549,7 +5177,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 4200,
               "stock": 12
             }
@@ -4610,13 +5238,13 @@
       "products": [
         {
           "id": "p1",
-          "name": "Original travel pillow carrier · sample",
+          "name": "Original travel pillow carrier \u00b7 sample",
           "category": "Original",
-          "description": "Original travel pillow carrier · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Original travel pillow carrier \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 12,
           "dimensions_inches": [
             9,
@@ -4630,13 +5258,13 @@
           "variants": [
             {
               "id": "sage",
-              "title": "Solid sage · sample fabric",
+              "title": "Solid sage \u00b7 sample fabric",
               "price_cents": 4499,
               "stock": 12
             },
             {
               "id": "stripe",
-              "title": "Simple stripe · sample fabric",
+              "title": "Simple stripe \u00b7 sample fabric",
               "price_cents": 4499,
               "stock": 12
             }
@@ -4644,13 +5272,13 @@
         },
         {
           "id": "p2",
-          "name": "Premium fabric carrier · sample",
+          "name": "Premium fabric carrier \u00b7 sample",
           "category": "Premium",
-          "description": "Premium fabric carrier · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Premium fabric carrier \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 14,
           "dimensions_inches": [
             9,
@@ -4664,13 +5292,13 @@
           "variants": [
             {
               "id": "indigo",
-              "title": "Solid indigo · sample fabric",
+              "title": "Solid indigo \u00b7 sample fabric",
               "price_cents": 4999,
               "stock": 12
             },
             {
               "id": "sand",
-              "title": "Solid sand · sample fabric",
+              "title": "Solid sand \u00b7 sample fabric",
               "price_cents": 4999,
               "stock": 12
             }
@@ -4678,13 +5306,13 @@
         },
         {
           "id": "p3",
-          "name": "Weekend travel carrier · sample",
+          "name": "Weekend travel carrier \u00b7 sample",
           "category": "Travel",
-          "description": "Weekend travel carrier · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Weekend travel carrier \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 12,
           "dimensions_inches": [
             9,
@@ -4698,7 +5326,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 4499,
               "stock": 12
             }
@@ -4706,13 +5334,13 @@
         },
         {
           "id": "p4",
-          "name": "Reading retreat carrier · sample",
+          "name": "Reading retreat carrier \u00b7 sample",
           "category": "Travel",
-          "description": "Reading retreat carrier · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Reading retreat carrier \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 12,
           "dimensions_inches": [
             9,
@@ -4726,7 +5354,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 4499,
               "stock": 12
             }
@@ -4734,13 +5362,13 @@
         },
         {
           "id": "p5",
-          "name": "Travel gift pair · sample",
+          "name": "Travel gift pair \u00b7 sample",
           "category": "Gifts",
-          "description": "Travel gift pair · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Travel gift pair \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 24,
           "dimensions_inches": [
             9,
@@ -4754,7 +5382,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 8499,
               "stock": 12
             }
@@ -4762,13 +5390,13 @@
         },
         {
           "id": "p6",
-          "name": "Guest-room gift selection · sample",
+          "name": "Guest-room gift selection \u00b7 sample",
           "category": "Gifts",
-          "description": "Guest-room gift selection · sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant’s actual product.",
+          "description": "Guest-room gift selection \u00b7 sample. An illustrative sample for this independent concept, not a claim about actual merchant inventory. Generic concept photography does not depict this merchant\u2019s actual product.",
           "identity_verified": false,
           "price_verified": false,
           "price_source": null,
-          "price_note": "Illustrative demo price — not a merchant offer.",
+          "price_note": "Illustrative demo price \u2014 not a merchant offer.",
           "weight_oz": 18,
           "dimensions_inches": [
             9,
@@ -4782,7 +5410,7 @@
           "variants": [
             {
               "id": "standard",
-              "title": "Standard · sample availability",
+              "title": "Standard \u00b7 sample availability",
               "price_cents": 6499,
               "stock": 12
             }

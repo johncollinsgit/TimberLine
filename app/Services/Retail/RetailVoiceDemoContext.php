@@ -18,8 +18,8 @@ class RetailVoiceDemoContext
         $cents = ['required', 'integer', 'min:0', 'max:100000000'];
 
         return [
-            'focus_customer' => ['nullable', 'string', 'max:50', 'regex:/\A(?:sample-[12]|[0-9]{1,18})\z/'],
-            'sample_activity' => ['sometimes', 'array:merchant,customers,orders', 'required_array_keys:merchant,customers,orders'],
+            'focus_customer' => $merchant === 'avery-knifeworks' ? ['nullable', 'string', Rule::in(array_column(app(AveryWorkspaceDemo::class)->snapshot()['customers'], 'id'))] : ['nullable', 'string', 'max:50', 'regex:/\A(?:sample-[12]|[0-9]{1,18})\z/'],
+            'sample_activity' => $merchant === 'avery-knifeworks' ? ['prohibited'] : ['sometimes', 'array:merchant,customers,orders', 'required_array_keys:merchant,customers,orders'],
             'sample_activity.merchant' => ['required_with:sample_activity', 'string', Rule::in(is_string($merchant) ? [$merchant] : [])],
             'sample_activity.customers' => ['array', 'max:2'],
             'sample_activity.customers.*' => ['array:id,points,notes,reward_entries', 'required_array_keys:id,points,notes,reward_entries'],
@@ -65,6 +65,14 @@ class RetailVoiceDemoContext
             }
 
             return $result;
+        }
+        if (($merchant['slug'] ?? '') === 'avery-knifeworks') {
+            $fixture = app(AveryWorkspaceDemo::class)->snapshot($focus);
+            if ($focus !== null && $fixture['focused_customer'] === null) {
+                throw ValidationException::withMessages(['focus_customer' => 'That fictional Avery customer is unavailable.']);
+            }
+
+            return [...$result, ...$fixture, 'source' => 'avery_fictional'];
         }
         if ($sample !== null) {
             $result['source'] = 'tablet_sample';

@@ -180,7 +180,7 @@ test('all twenty concepts keep catalogs customers carts and replayed sample chec
         $site = $this->showroom->site($slug);
         $tenantIds[] = $site->tenant_id;
         $catalog = $this->showroom->catalog($slug);
-        expect($catalog['products'])->toHaveCount(6);
+        expect($catalog['products'])->toHaveCount($slug === 'avery-knifeworks' ? 8 : 6);
         $product = collect($catalog['products'])->first(fn ($p) => ! $p['quote_only'] && collect($p['variants'])->contains(fn ($v) => $v['stock'] > 0));
         $variant = collect($product['variants'])->first(fn ($v) => $v['stock'] > 0);
         $lines = [['product_id' => $product['id'], 'variant_id' => $variant['id'], 'quantity' => 1]];

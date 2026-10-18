@@ -1,22 +1,34 @@
 <?php
 
 $catalog = [
-    // A reviewed Retail offer, separate from Managed Website add-on pricing.
-    // Requests do not reserve a place, activate access, or create a billing plan.
+    // New offers are separate from immutable legacy plan prices and entitlements.
+    'offers' => [
+        'standard' => [
+            'key' => 'standard',
+            'version' => 'standard-299-499-v1',
+            'name' => 'Everbranch Standard',
+            'currency' => 'USD',
+            'monthly_cents' => 29900,
+            'setup_cents' => 49900,
+            'interval' => 'month',
+            'recurring_price_lookup_key' => 'everbranch_standard_299_monthly_v1',
+            'setup_price_lookup_key' => 'everbranch_standard_499_setup_v1',
+            // The former tiers have different capacities. Do not pick or grant one
+            // from a price change. Commercial activation awaits that policy review.
+            'fulfillment_plan_key' => null,
+        ],
+    ],
     'launch_offers' => [
         'retail_launch_partner' => [
-            'name' => 'Everbranch Retail Launch Partner Offer',
+            'retired' => true,
+            'purchase_enabled' => false,
             'currency' => 'USD',
             'introductory_monthly_cents' => 8900,
             'introductory_months' => 6,
             'ongoing_monthly_cents' => 14900,
             'setup_cents' => 49900,
-            'qualifying_business_limit' => 10,
-            'eligibility' => 'operator_review',
-            'activation' => 'request_only',
         ],
     ],
-
     'defaults' => [
         'plan' => env('TENANT_ENTITLEMENTS_DEFAULT_PLAN', 'starter'),
         'operating_mode' => env('TENANT_ENTITLEMENTS_DEFAULT_MODE', 'shopify'),
@@ -2024,6 +2036,30 @@ $catalog = [
     ],
 
     'addons' => [
+        'ai_branch_pro' => [
+            'display_name' => 'AI Branch Pro', 'label' => 'AI Branch Pro',
+            'purchase_key' => 'addon.ai_branch_pro', 'billing_mode' => 'add_on', 'is_public' => false, 'purchase_enabled' => false,
+            'pricing' => ['currency' => 'USD', 'recurring_price_cents' => 19900, 'setup_price_cents' => 0],
+            'stripe' => ['product_lookup_key' => 'addon_ai_branch_pro', 'recurring_price_lookup_key' => 'addon_ai_branch_pro_monthly'],
+            'modules' => ['ai_branch'], 'legacy_grants' => [],
+            'ai_limits' => ['responses' => 3000, 'provider_budget_cents' => 3500, 'actions' => true],
+        ],
+        'ai_branch_growth' => [
+            'display_name' => 'AI Branch Growth', 'label' => 'AI Branch Growth',
+            'purchase_key' => 'addon.ai_branch_growth', 'billing_mode' => 'add_on', 'is_public' => false, 'purchase_enabled' => false,
+            'pricing' => ['currency' => 'USD', 'recurring_price_cents' => 9900, 'setup_price_cents' => 0],
+            'stripe' => ['product_lookup_key' => 'addon_ai_branch_growth', 'recurring_price_lookup_key' => 'addon_ai_branch_growth_monthly'],
+            'modules' => ['ai_branch'], 'legacy_grants' => [],
+            'ai_limits' => ['responses' => 1000, 'provider_budget_cents' => 1500, 'actions' => true],
+        ],
+        'ai_branch_starter' => [
+            'display_name' => 'AI Branch Starter', 'label' => 'AI Branch Starter',
+            'purchase_key' => 'addon.ai_branch_starter', 'billing_mode' => 'add_on', 'is_public' => false, 'purchase_enabled' => false,
+            'pricing' => ['currency' => 'USD', 'recurring_price_cents' => 4900, 'setup_price_cents' => 0],
+            'stripe' => ['product_lookup_key' => 'addon_ai_branch_starter', 'recurring_price_lookup_key' => 'addon_ai_branch_starter_monthly'],
+            'modules' => ['ai_branch'], 'legacy_grants' => [],
+            'ai_limits' => ['responses' => 300, 'provider_budget_cents' => 500, 'actions' => false],
+        ],
         'referrals' => [
             'display_name' => 'Referrals',
             'label' => 'Referrals',

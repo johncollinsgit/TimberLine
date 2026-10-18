@@ -17,6 +17,9 @@ if (is_string($host) && $host !== '') {
             Route::get('/showroom', [Retail::class, 'index'])->name('retail.showroom');
             Route::get('/showroom/pricing', [Retail::class, 'index'])->name('retail.pricing');
             Route::get('/showroom/assistant', [Retail::class, 'index'])->name('retail.assistant');
+            Route::get('/showroom/api/demo/delivery/{reference}', [Retail::class, 'demoDeliveryStatus'])->where('reference', 'DEMO-MSG-[a-f0-9]{12}')->middleware('throttle:30,1,retail-demo-status:');
+            Route::post('/showroom/api/demo/delivery', [Retail::class, 'demoDelivery'])->middleware('throttle:3,1,retail-demo-delivery:');
+            Route::get('/showroom/api/avery/handoff', [Retail::class, 'averyHandoff'])->middleware('throttle:10,1,retail-handoff:');
             Route::post('/showroom/api/signup', [Retail::class, 'signup'])->middleware('throttle:6,1,retail-signup:');
             Route::post('/showroom/api/assistant', [Retail::class, 'assistant'])->middleware('throttle:6,1,retail-ai:');
             Route::get('/showroom/api/voice/status', [RetailVoiceController::class, 'status'])->middleware('throttle:15,1,retail-voice-status:');

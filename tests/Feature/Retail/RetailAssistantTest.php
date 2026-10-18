@@ -25,7 +25,7 @@ test('live OpenAI uses server credentials bounded sample context and no provider
     expect($response->getContent())->not->toContain('synthetic-test-credential');
     Http::assertSent(fn ($r) => $r->url() === 'https://api.openai.com/v1/responses' && $r['store'] === false
         && $r['max_output_tokens'] === 700 && ! isset($r['tools'])
-        && str_contains($r['input'], 'fictional_retail_demonstration') && str_contains($r['input'], '14900'));
+        && str_contains($r['input'], 'fictional_retail_demonstration') && str_contains($r['input'], '29900'));
     Http::assertSentCount(1);
 });
 

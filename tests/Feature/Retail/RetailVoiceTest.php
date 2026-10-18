@@ -129,15 +129,15 @@ test('voice sends a valid server-key multipart call with bounded public demo con
         expect($request->header('Authorization'))->toBe(['Bearer synthetic-voice-credential']);
         expect($request->header('OpenAI-Safety-Identifier')[0])->toHaveLength(64)->not->toContain($this->owner->email);
         expect($session)->toMatchArray(['type' => 'realtime', 'model' => 'gpt-realtime-2.1', 'output_modalities' => ['audio'],
-            'max_output_tokens' => 450, 'tools' => [], 'tool_choice' => 'none', 'tracing' => null]);
+            'max_output_tokens' => 1400, 'tool_choice' => 'auto', 'tracing' => null]);
+        expect(array_column($session['tools'], 'name'))->toContain('get_demo_context', 'open_demo_customer', 'fill_demo_form', 'create_demo_customer', 'create_demo_invoice')->not->toContain('send_sms', 'send_email', 'charge_card');
         expect($session['audio']['input']['turn_detection'])->toMatchArray(['type' => 'server_vad', 'create_response' => true, 'interrupt_response' => true]);
         expect($session['audio']['input']['transcription']['model'])->toBe('gpt-4o-mini-transcribe');
         expect($session['audio']['output']['voice'])->toBe('marin');
         expect($context['page'])->toBe('store');
         expect($context['merchant']['catalog_sample'][0]['variants'][0]['price_cents'])->toBe(1299);
-        expect($context['offer']['ongoing_monthly_cents'])->toBe($expectedOffer['ongoing_monthly_cents']);
-        expect($context['offer']['introductory_monthly_cents'])->toBe($expectedOffer['introductory_monthly_cents']);
-        expect($context['capabilities'])->toMatchArray(['web_browsing' => false, 'actions' => false, 'private_customer_records' => false]);
+        expect($context['offer']['monthly_cents'])->toBe($expectedOffer['monthly_cents']);
+        expect($context['capabilities'])->toMatchArray(['web_browsing' => false, 'demo_actions' => true, 'live_actions' => false, 'private_customer_records' => false]);
         expect($session['instructions'])->not->toContain('PRIVATE CUSTOMER NOTE', 'PRIVATE SALES RESEARCH', 'private@example.invalid',
             'PRIVATE WAREHOUSE ADDRESS', 'private_cost_cents', 'PRIVATE SUPPLIER', 'synthetic-voice-credential');
 

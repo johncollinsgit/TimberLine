@@ -7,6 +7,11 @@ $salesContact = 'sales@'.$contactDomain;
 $upgradesContact = 'upgrades@'.$contactDomain;
 $helloContact = 'hello@'.$contactDomain;
 
+$standardOffer = (require __DIR__.'/module_catalog.php')['offers']['standard'];
+$money = static fn (int $cents): string => '$'.number_format($cents / 100, 0);
+$monthly = $money($standardOffer['monthly_cents']);
+$setup = $money($standardOffer['setup_cents']);
+
 return [
     'promo' => [
         'eyebrow' => 'Built for busy small businesses',
@@ -72,11 +77,7 @@ return [
                 'description' => 'Your team gets a simple place to see what is ready, what needs setup, and what to do next.',
             ],
         ],
-        'plan_order' => [
-            'starter',
-            'growth',
-            'pro',
-        ],
+        'plan_order' => ['standard'],
         'ctas' => [
             'install' => [
                 'label' => 'Shopify setup',
@@ -219,69 +220,15 @@ return [
         'headline' => 'Plans & Add-ons',
         'subtitle' => 'Informational access profile view built from workspace access and module state. Billing writes are intentionally deferred.',
         'billing_note' => 'Billing and payment-method capture are currently handled with the team. Plan and add-on availability in the app remains review-controlled.',
-        'recommended_plan_key' => 'launch_partner',
-        'plan_order' => [
-            'starter',
-            'launch_partner',
-            'growth',
-            'pro',
-        ],
+        'recommended_plan_key' => 'standard',
+        'plan_order' => ['standard'],
         'cards' => [
-            'starter' => [
-                'name' => 'Starter',
-                'price_display' => 'From $149/mo',
-                'summary' => 'Core platform foundation with reviews, lead capture, and baseline diagnostics for one store/channel.',
-                'highlights' => [
-                    'Core platform + reviews + intake/lead capture',
-                    'Basic moderation and diagnostics',
-                    '1 store/channel included',
-                ],
-                'cta' => [
-                    'label' => 'Install / Reinstall',
-                    'href' => '/shopify/reinstall/retail',
-                ],
-            ],
-            'launch_partner' => [
-                'name' => 'Launch Partner',
-                'price_display' => '$89/mo for 6 months',
-                'summary' => 'Limited first-10-businesses partner offer with guided setup and direct feedback access while Everbranch is shaped in the field.',
-                'highlights' => [
-                    '$499 one-time setup',
-                    '$149/mo after the first 6 months',
-                    'Priority partner support and feedback calls',
-                ],
-                'cta' => [
-                    'label' => 'Become a launch partner',
-                    'href' => '/platform/start#tab-start-pricing',
-                ],
-            ],
-            'growth' => [
-                'name' => 'Growth',
-                'price_display' => 'From $249/mo',
-                'summary' => 'Adds loyalty/rewards, birthdays, and eligibility for marketing/bulk email operations.',
-                'highlights' => [
-                    'Loyalty/rewards + birthday lifecycle',
-                    'Campaign and email-readiness expansion',
-                    'Add-on ready packaging model',
-                ],
-                'cta' => [
-                    'label' => 'Request Upgrade',
-                    'href' => '/platform/contact?intent=upgrade',
-                ],
-            ],
-            'pro' => [
-                'name' => 'Pro',
-                'price_display' => 'From $399/mo',
-                'summary' => 'Highest standard tier with wishlist and advanced diagnostics/reporting/export troubleshooting.',
-                'highlights' => [
-                    'Wishlist module included',
-                    'Advanced diagnostics and exports',
-                    'No bundled support tier or custom-work bundle',
-                ],
-                'cta' => [
-                    'label' => 'Book Pro Review',
-                    'href' => '/platform/contact?intent=pro',
-                ],
+            'standard' => [
+                'name' => 'Everbranch Standard',
+                'price_display' => $monthly.'/month per business',
+                'summary' => 'One standard offer for new businesses. We confirm your workspace scope and existing capacity limits before activation.',
+                'highlights' => [$setup.' one-time setup', 'Custom development is scoped and quoted separately', 'AI, text messaging, and third-party services may carry additional charges'],
+                'cta' => ['label' => 'Get started', 'href' => '/platform/start#tab-start-pricing'],
             ],
         ],
         'addons' => [
@@ -346,52 +293,23 @@ return [
         'headline' => "Simplify your life,\nGet more time with your family.",
         'submit_label' => 'Request production access',
         'plan_comparison' => [
-            'eyebrow' => 'One platform. Everything you need.',
-            'title' => 'Launch partner pricing',
-            'subtitle' => 'Starter includes everything. Growth gives you more capacity.',
-            'savings_note' => 'Launch partners save $360 in the first 6 months compared with regular Starter setup and monthly pricing.',
-            'recommended' => 'launch_partner',
+            'eyebrow' => 'A clear place to start',
+            'title' => 'Everbranch pricing',
+            'subtitle' => $monthly.'/month per business + '.$setup.' one-time standard setup.',
+            'savings_note' => 'Custom development is scoped and quoted separately. AI, text messaging, processing, taxes, and third-party services may carry additional charges. Existing agreements retain their terms.',
+            'recommended' => 'standard',
             'plans' => [
-                'starter' => [
-                    'label' => 'Starter',
-                    'descriptor' => 'Regular',
-                    'price' => '$149',
-                    'cadence' => '/mo',
-                    'badge' => null,
-                ],
-                'launch_partner' => [
-                    'label' => 'Launch Partner',
-                    'descriptor' => 'First 10 businesses',
-                    'price' => '$89',
-                    'cadence' => '/mo',
-                    'badge' => 'Limited to 10',
-                ],
-                'growth' => [
-                    'label' => 'Growth',
-                    'descriptor' => 'More capacity',
-                    'price' => '$249',
-                    'cadence' => '/mo',
-                    'badge' => null,
-                ],
+                'standard' => ['label' => 'Everbranch Standard', 'descriptor' => 'Per business', 'price' => $monthly, 'cadence' => '/month', 'badge' => null],
             ],
             'features' => [
-                ['label' => 'Setup', 'starter' => '$499 one-time', 'launch_partner' => '$499 one-time', 'growth' => '$999 one-time'],
-                ['label' => 'First 6 months', 'starter' => '$149/mo', 'launch_partner' => '$89/mo', 'growth' => '$249/mo'],
-                ['label' => 'After 6 months', 'starter' => '$149/mo', 'launch_partner' => '$149/mo', 'growth' => '$249/mo'],
-                ['label' => '6-month total', 'starter' => '$1,393', 'launch_partner' => '$1,033', 'growth' => '$2,493'],
-                ['label' => 'Team members', 'starter' => 'Up to 3 users', 'launch_partner' => 'Up to 3 users', 'growth' => 'Unlimited users'],
-                ['label' => 'Email contacts', 'starter' => 'Up to 2,000 contacts', 'launch_partner' => 'Up to 2,000 contacts', 'growth' => 'Up to 15,000 contacts'],
-                ['label' => 'Automation workflows', 'starter' => 'Basic automations', 'launch_partner' => 'Basic automations', 'growth' => 'Advanced automations'],
-                ['label' => 'Custom branding', 'starter' => 'Basic branding', 'launch_partner' => 'Basic branding', 'growth' => 'Full custom branding'],
-                ['label' => 'Customer support', 'starter' => 'Email support', 'launch_partner' => 'Priority partner support', 'growth' => 'Priority support'],
-                ['label' => 'Text messaging', 'starter' => 'Available as an add-on', 'launch_partner' => 'Available as an add-on', 'growth' => 'Available as an add-on'],
+                ['label' => 'Standard setup', 'standard' => $setup.' one-time'],
+                ['label' => 'Monthly subscription', 'standard' => $monthly.'/month'],
+                ['label' => 'First month plus setup', 'standard' => $money($standardOffer['monthly_cents'] + $standardOffer['setup_cents'])],
+                ['label' => 'Six months plus setup', 'standard' => $money(6 * $standardOffer['monthly_cents'] + $standardOffer['setup_cents'])],
+                ['label' => 'Twelve months of service', 'standard' => $money(12 * $standardOffer['monthly_cents'])],
+                ['label' => 'First twelve months plus setup', 'standard' => $money(12 * $standardOffer['monthly_cents'] + $standardOffer['setup_cents'])],
             ],
-            'partner_terms' => [
-                'Join a 30-minute feedback call each month',
-                'Report bugs and share honest feedback',
-                'Allow us to feature your business with permission',
-                'Commit to at least 6 months',
-            ],
+            'partner_terms' => [],
         ],
     ],
 

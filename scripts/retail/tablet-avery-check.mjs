@@ -1,0 +1,61 @@
+import puppeteer from 'puppeteer-core';
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+// Refresh an existing installed tab; preserve data and never submit a live message.
+const port=Number(process.env.RETAIL_QA_CDP_PORT),device=process.env.RETAIL_QA_DEVICE_NAME;
+assert.ok(port&&/^[a-z0-9-]+$/.test(device??''),'Provide a forwarded CDP port and device name.');
+const base='http://127.0.0.1:8797',version='everbranch-retail-v12',out=`output/retail/tablets/${device}`;
+fs.mkdirSync(out,{recursive:true});
+// An unrelated suspended Android tab must not stall attachment to the installed demo.
+const browser=await puppeteer.connect({browserWSEndpoint:`ws://127.0.0.1:${port}/devtools/browser`,defaultViewport:null,targetFilter:t=>t.type()!=='page'||t.url().startsWith(base+'/retail/'),protocolTimeout:60000});
+const pages=await browser.pages();let page;
+for(const p of pages)if(await p.evaluate(()=>matchMedia('(display-mode: standalone)').matches&&!document.hidden).catch(()=>false)){page=p;break;}
+page??=pages.find(p=>p.url().startsWith(base+'/retail/'));assert.ok(page,'Open the installed Retail demo first.');
+page.setDefaultTimeout(30000);await page.bringToFront();
+const before=await page.evaluate(()=>Object.fromEntries(Object.entries(localStorage).filter(([k])=>k.startsWith('retail-')&&k!=='retail-offline-pack')));
+const errors=[];page.on('pageerror',e=>errors.push(e.message));
+const click=async(s,text)=>{await page.bringToFront();await page.waitForSelector(s);for(const el of await page.$$(s)){if(!text||(await el.evaluate(e=>e.textContent)).includes(text)){await el.click();return;}}throw Error(`Missing ${s}: ${text}`);};
+const count=async(s,n)=>{await page.waitForFunction((s,n)=>document.querySelectorAll(s).length===n,{},s,n);};
+const has=async(s,text)=>{await page.waitForFunction((s,t)=>document.querySelector(s)?.textContent.includes(t),{},s,text);};
+const close=()=>click('[data-action=close]');
+const cdp=await page.createCDPSession();await cdp.send('Network.enable');await cdp.send('Network.setCacheDisabled',{cacheDisabled:true});await cdp.send('Network.setBypassServiceWorker',{bypass:true});
+await page.goto(base+'/retail/showroom',{waitUntil:'domcontentloaded'});
+await page.waitForSelector('.vendor-card');console.log(device,'fresh home loaded');
+await page.evaluate(async()=>{for(const r of await navigator.serviceWorker.getRegistrations())if(r.scope.endsWith('/retail/'))r.update().catch(()=>{});});
+await cdp.send('ServiceWorker.enable');await cdp.send('ServiceWorker.skipWaiting',{scopeURL:base+'/retail/'});
+await page.waitForFunction(async name=>{const keys=await caches.keys();return keys.includes(name)&&keys.filter(k=>k.startsWith('everbranch-retail-')).length===1;},{timeout:60000},version);
+await cdp.send('Network.setBypassServiceWorker',{bypass:false});
+await count('.vendor-card',20);await click('[data-action=offline]');
+await page.waitForFunction(()=>JSON.parse(localStorage.getItem('retail-offline-pack')||'null')?.offer?.usage?.future_usage?.[1]?.label==='Customer-facing AI conversations',{timeout:60000});
+await page.waitForFunction(async name=>{const c=await caches.open(name);const r=await c.match('/retail/photos.json');if(!r)return false;const photos=await r.json();return photos.length===142&&(await Promise.all(photos.map(p=>c.match(p)))).every(Boolean);},{timeout:60000},version);
+assert.equal(await page.evaluate(async name=>(await(await caches.open(name)).keys()).some(r=>new URL(r.url).pathname.includes('/api/')),version),false);
+console.log(device,'142 photos and current offline offer ready');
+await click('[data-action=pricing]');await has('.offer-card','$299.00');await has('.offer-setup','$499.00');
+for(const type of ['sms','email','ai','future'])await page.waitForSelector(`[data-usage=${type}]`);
+await has('[data-usage=sms]','$0.05 per SMS segment');await has('[data-usage=email]','$0.005 per email');await has('[data-usage=future]','Customer-facing AI conversations');
+await page.screenshot({path:out+'/pricing.png',fullPage:true});
+await page.goto(base+'/retail/showroom/concepts/avery-knifeworks',{waitUntil:'domcontentloaded'});await count('.product-card',8);await has('.product-card','$425.00');
+await click('.avery-launch [data-avery-action=finder]');
+const a=s=>`#modal [data-avery-action=${s}]`;
+await click(a('category'),'Kitchen');await click(a('use'),'Everyday meal prep');await click(a('budget'),'Up to $500');await click(a('material'),'Any handle');
+await count('.avery-result',3);await click('.avery-result [data-avery-action=knife]');await click(a('variant'),'Walnut');await click(a('qr'));await page.waitForSelector('.avery-qr svg');
+assert.match(await page.$eval('.avery-qr a',e=>e.href),/sheepsfoot-chefs-knife\?variant=/);
+await close();await click('.avery-launch [data-avery-action=workspace]');await click(a('workspace'),'Show 10 customers');await count('.avery-candidate',10);
+await click('[data-avery-action=customer][data-customer=ak-demo-03]');await has('.demo-workbench','Bob Ross');await has('.demo-workbench','Woodsman Knife');
+await click('[data-demo-action=market-customer][data-channel=sms]');await has('.demo-message-body','Modern Forestry: Owner-authorized Everbranch demo.');
+assert.equal(await page.$eval('#demo-live-message [name=consent]',e=>e.checked),false);assert.equal(await page.$eval('#demo-live-message [name=recipient]',e=>e.value),'');
+await page.screenshot({path:out+'/message-review.png'});await close();await click('.avery-launch [data-avery-action=passport]');await has('.avery-care','registration is optional');await close();
+await click('[data-action=presentation]');await click('.footer [data-avery-action=handoff]');await has('#avery-handoff-links','Live Stripe invoice');await count('#avery-handoff-links a',2);
+await close();await click('[data-action=presentation]');
+const readiness=await page.evaluate(async()=>{const r=await fetch('/retail/showroom/api/voice/status?merchant=avery-knifeworks');const j=await r.json();return {status:r.status,available:j.available,ready:j.ready};});assert.ok([200,503].includes(readiness.status));
+console.log(device,'finder, Bob, 10 follow-ups, passport, handoff and voice readiness checked');
+await cdp.send('Network.setCacheDisabled',{cacheDisabled:false});
+await cdp.send('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:-1,uploadThroughput:-1});
+try{await page.reload({waitUntil:'domcontentloaded'});await page.waitForSelector('.avery-launch');await count('.product-card',8);await page.waitForFunction(()=>{const i=document.querySelector('.hero img');return i?.complete&&i.naturalWidth>0;});await page.screenshot({path:out+'/offline-avery.png'});}
+finally{await cdp.send('Network.emulateNetworkConditions',{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1});}
+await page.reload({waitUntil:'domcontentloaded'});await page.waitForSelector('.avery-launch');
+const after=await page.evaluate(()=>Object.fromEntries(Object.entries(localStorage)));
+for(const [key,value] of Object.entries(before))assert.equal(after[key],value,`Existing tablet data retained: ${key}`);
+assert.deepEqual(errors,[]);
+const result={passed:true,device,cache:version,retainedStorageKeys:Object.keys(before).length,photos:142,festivalConcepts:20,averyModels:8,variantQR:true,followUps:10,bobFavorite:true,consentUnchecked:true,liveSendAttempted:false,handoffAvailable:true,voiceReadiness:readiness,ambientMicrophoneOpened:false,offline:true,errors};
+fs.writeFileSync(out+'/results.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result));await browser.disconnect();process.exit(0);

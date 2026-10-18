@@ -11,7 +11,7 @@ Returning online checks readiness but never restarts the microphone automaticall
 
 The owner-authenticated server supplies the selected demo catalog (up to 100
 products, including all 62 Sawyer source products), canonical Evergrove offer, and
-a read-only snapshot of fictional customers, sample orders, reward activity and
+a bounded snapshot of fictional customers, sample orders, reward activity and
 sample staff notes. **Ask AI about this customer** opens voice with that profile
 selected; **Ask AI about this workspace** preserves the current staff section.
 Conversation state stays within
@@ -30,9 +30,13 @@ extra/private fields. Connected and tablet sources are never merged. Sawyer neve
 queries its real customer workspace; it can use only fictional tablet profiles.
 Private prospect/CRM notes, research, credentials and real customer/tenant records
 are not attached. The UI shows the source, customer/order counts and focused
-profile. Data is captured at Start; end and restart after changing notes or sales.
-No action tools, live search, messages, purchases or account mutations
-are available. In-person point of sale and social marketing remain Coming Soon.
+profile. Context refreshes through get_demo_context after local demo edits. Seven allowlisted
+tools can navigate, open a fictional profile, fill allowed fields, save a fictional
+customer or invoice, and prepare a marketing draft. Completed tool calls are checked
+against strict local argument/ID allowlists and deduplicated by call ID. Cancelled
+calls do not execute. No live search, message send, payment or real account mutation
+is available to the AI. Recipient confirmation and actual delivery are separate UI
+actions described in AVERY_DEMO.md. In-person point of sale and social marketing remain Coming Soon.
 Demo prices and shipping are illustrative. The voice introduces itself as AI.
 
 “Internet aware” means the app checks its connection, the authenticated demo server
@@ -44,7 +48,7 @@ Live conversation always requires internet; this feature does not search the web
 
 The existing local install requires the Mac server and ADB reverse connection for
 sign-in and starting a session. Keep the Mac awake. The tablet also needs an internet
-route to OpenAI for WebRTC audio. Lenovo installation work remains on hold.
+route to OpenAI for WebRTC audio. Both authorized tablets use their existing installed Retail tabs.
 
 ## Server configuration
 
@@ -74,8 +78,8 @@ WebRTC carries audio directly to OpenAI. The app keeps a short, escaped transcri
 only in dialog memory and clears it when closed/backgrounded or the business
 changes. It does not save audio/transcripts to the application database, local
 storage, offline queue or service worker cache. This is not a claim about provider
-retention. Session tracing is disabled. Cache v7 includes only the public voice
-module and existing public shell/photos, preserving the complete 75-photo pack.
+retention. Session tracing is disabled. Cache v12 includes the public voice/action modules and shell, preserving the complete
+142-photo pack. Private APIs and real recipient details are never cached.
 
 For this local demonstration the existing authorized hosted credential was loaded
 into the local server process environment only. No production setting or file was

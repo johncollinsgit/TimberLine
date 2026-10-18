@@ -4,8 +4,12 @@ We have saved the activation request for {{ $business }}.
 Reference: {{ $reference }}
 
 Requested offer: {{ $offer['name'] }}
-${{ number_format($offer['introductory_monthly_cents'] / 100, 2) }}/month for the first {{ $offer['introductory_months'] }} months.
-Then ${{ number_format($offer['ongoing_monthly_cents'] / 100, 2) }}/month beginning with month {{ $offer['introductory_months'] + 1 }}.
+@if(isset($offer['monthly_cents']))
+${{ number_format($offer['monthly_cents'] / 100, 2) }}/month per business.
+@else
+{{-- Preserve already-issued historical confirmations using their saved snapshot. --}}
+${{ number_format($offer['introductory_monthly_cents'] / 100, 2) }}/month for {{ $offer['introductory_months'] }} months, then ${{ number_format($offer['ongoing_monthly_cents'] / 100, 2) }}/month.
+@endif
 One-time setup: ${{ number_format($offer['setup_cents'] / 100, 2) }}.
 
 {{ $offer['eligibility_note'] }}

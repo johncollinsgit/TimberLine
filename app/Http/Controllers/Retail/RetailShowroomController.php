@@ -37,6 +37,26 @@ class RetailShowroomController extends Controller
         return response()->json($data)->header('Cache-Control', 'private, no-store')->header('X-Robots-Tag', 'noindex, nofollow');
     }
 
+    public function demoDeliveryStatus(Request $r, string $reference)
+    {
+        $this->owner($r);
+
+        return $this->response(app(\App\Services\Retail\RetailDemoDelivery::class)->status($reference, $r->user()->id));
+    }
+
+    public function demoDelivery(Request $r)
+    {
+        $this->owner($r);
+        $data = $r->validate([
+            'channel' => 'required|in:email,sms', 'recipient' => 'required|string|max:190',
+            'customer_id' => 'required|string|max:80', 'product_id' => 'required|string|max:120',
+            'variant_id' => 'required|string|max:80', 'consent' => 'required|accepted',
+            'idempotency_key' => 'required|uuid',
+        ]);
+
+        return $this->response(app(\App\Services\Retail\RetailDemoDelivery::class)->send($data, $r->user()->id));
+    }
+
     public function index(Request $r)
     {
         $this->owner($r);
@@ -108,12 +128,30 @@ class RetailShowroomController extends Controller
         return $this->response(app(\App\Services\Retail\RetailSignupService::class)->submit($r->user(), $data));
     }
 
+    public function averyHandoff(Request $r)
+    {
+        $this->owner($r);
+        $path = storage_path('app/private/retail-presenter-handoff.json');
+        abort_unless(is_file($path), 404, 'The presenter handoff is not prepared.');
+        $data = json_decode(file_get_contents($path), true, 32, JSON_THROW_ON_ERROR);
+        $offer = app(\App\Services\Retail\EvergroveOffer::class)->presentation();
+        abort_unless(($data['merchant'] ?? '') === 'avery-knifeworks'
+            && ($data['amount_cents'] ?? null) === $offer['monthly_cents'] + $offer['setup_cents']
+            && in_array($data['payment_mode'] ?? '', ['live', 'test'], true)
+            && str_starts_with($data['agreement_url'] ?? '', 'https://evergrovesoftware.com/')
+            && str_starts_with($data['payment_url'] ?? '', 'https://invoice.stripe.com/'), 503, 'The prepared handoff needs review.');
+
+        return $this->response(array_intersect_key($data, array_flip(['agreement_url', 'payment_url', 'payment_mode', 'amount_cents'])));
+    }
+
     public function assistant(Request $r)
     {
         $this->owner($r);
         $data = $r->validate([
             'mode' => 'required|in:voice,email,sms,admin,personal', 'question' => 'required|string|max:1000',
             'business' => 'required|string|max:120', 'merchant' => 'nullable|string|max:100',
+            'demo_view' => 'nullable|in:storefront,workspace,customers,likely_to_order,production,inventory,orders,shipping,agreement',
+            'focus_customer' => ['nullable', \Illuminate\Validation\Rule::in(array_column(app(\App\Services\Retail\AveryWorkspaceDemo::class)->snapshot()['customers'], 'id'))],
             'history' => 'sometimes|array|max:4', 'history.*.role' => 'required|in:user,assistant',
             'history.*.content' => 'required|string|max:1500', 'tenant_id' => 'prohibited',
         ]);

@@ -21,16 +21,15 @@ beforeEach(function () {
     config()->set('retail_showroom.signup_confirmation_enabled', false);
     $this->url = 'http://'.parse_url(route('retail.showroom'), PHP_URL_HOST).'/retail/showroom/api/signup';
     $this->input = ['business_name' => 'Sample Retail', 'contact_name' => 'Sample Owner', 'email' => 'sample@retail.invalid',
-        'phone' => '+1 555 010 2345', 'subscription' => 'retail_launch_partner', 'pricing_accepted' => true,
+        'phone' => '+1 555 010 2345', 'subscription' => 'standard', 'pricing_accepted' => true,
         'quote_version' => app(EvergroveOffer::class)->presentation()['quote_version']];
     $this->actingAs($this->owner);
 });
 
-test('the retail offer has explicit intro expiry and leaves managed website pricing unchanged', function () {
+test('the retail offer is the standard single monthly rate and preserves the managed website add-on', function () {
     $offer = app(EvergroveOffer::class)->presentation();
-    expect($offer['introductory_monthly_cents'])->toBe(8900)->and($offer['introductory_months'])->toBe(6)
-        ->and($offer['ongoing_monthly_cents'])->toBe(14900)->and($offer['setup_cents'])->toBe(49900)
-        ->and($offer['qualifying_business_limit'])->toBe(10)->and($offer['activation'])->toBe('request_only')
+    expect($offer['monthly_cents'])->toBe(29900)->and($offer['setup_cents'])->toBe(49900)
+        ->and($offer['key'])->toBe('standard')->and($offer)->not->toHaveKey('introductory_months')
         ->and(config('module_catalog.addons.managed_website.pricing.recurring_price_cents'))->toBe(9900);
 });
 
@@ -84,7 +83,7 @@ test('confirmation is sent once only through an enabled real mail transport', fu
     $this->postJson($this->url, $this->input)->assertOk()->assertJsonPath('confirmation_status', 'submitted');
     $this->postJson($this->url, $this->input)->assertOk()->assertJsonPath('confirmation_status', 'submitted');
     Mail::assertSent(RetailSignupConfirmationMail::class, 1);
-    Mail::assertSent(RetailSignupConfirmationMail::class, fn ($mail) => $mail->hasTo($this->input['email']) && $mail->offer['ongoing_monthly_cents'] === 14900);
+    Mail::assertSent(RetailSignupConfirmationMail::class, fn ($mail) => $mail->hasTo($this->input['email']) && $mail->offer['monthly_cents'] === 29900);
 });
 
 test('an array mailer never falsely reports a confirmation sent', function () {
@@ -102,8 +101,13 @@ test('a different business cannot overwrite an existing registration for the sam
 
 test('a changed offer requires review rather than overwriting previously accepted terms', function () {
     $this->postJson($this->url, $this->input)->assertOk();
-    config()->set('module_catalog.launch_offers.retail_launch_partner.ongoing_monthly_cents', 15000);
+    config()->set('module_catalog.offers.standard.monthly_cents', 30000);
     $updated = app(EvergroveOffer::class)->presentation();
     $this->postJson($this->url, [...$this->input, 'quote_version' => $updated['quote_version']])->assertUnprocessable();
-    expect(data_get(CustomerAccessRequest::sole()->metadata, 'retail_signup.offer.ongoing_monthly_cents'))->toBe(14900);
+    expect(data_get(CustomerAccessRequest::sole()->metadata, 'retail_signup.offer.monthly_cents'))->toBe(29900);
+});
+
+test('the retired introductory offer key cannot select a new retail signup', function () {
+    $this->postJson($this->url, [...$this->input, 'subscription' => 'retail_launch_partner'])->assertUnprocessable();
+    expect(CustomerAccessRequest::query()->count())->toBe(0);
 });

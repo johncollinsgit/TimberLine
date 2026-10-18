@@ -2,7 +2,7 @@ import {chromium,expect} from '@playwright/test';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
-const base='http://127.0.0.1:8797', version='everbranch-retail-v7';
+const base='http://127.0.0.1:8797', version='everbranch-retail-v12';
 const photos=JSON.parse(fs.readFileSync('public/retail/photos.json','utf8'));
 const files=fs.readdirSync('public/retail/assets').filter(name=>name.endsWith('.webp')).map(name=>'/retail/assets/'+name).sort();
 assert.deepEqual(photos,files,'The offline manifest must cover every public demo photo');
