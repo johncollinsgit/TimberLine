@@ -1,3 +1,17 @@
+## October 18, 2026 — Avery negotiated service and exit terms
+
+Avery's Standard agreement adds its separately negotiated two-request/one-revision
+monthly support allowance, three-business-day acknowledgment target and five named
+users subject to confirmed production capacity. Cancellation remains at paid-period
+end. Actual authorized unpaid usage survives cancellation, with prepaid deductions
+never billed twice. Unused purchased credit is refundable after settlement;
+promotional credit has no cash value. A standard export is included, client domains
+and accounts stay client-owned, and transition/deletion, breach, confidentiality,
+liability and South Carolina/Pickens County dispute terms are explicit.
+These are contract obligations, not automated refunds, debt collection or access
+activation. Other customers and accepted versions retain their frozen terms.
+See `docs/retail/AVERY_DEMO.md` for the revision and operating requirements.
+
 ## October 18, 2026 — Avery-only shared demo entry
 
 Retail v20 adds `/avery`, a CSRF-protected PIN entry enabled only on the exact

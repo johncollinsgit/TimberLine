@@ -48,7 +48,7 @@ class StandardServicesAgreementTemplate
         $setup = (int) $offer['setup_cents'];
         $monthly = (int) $offer['monthly_cents'];
 
-        return [
+        $payload = [
             'agreement_type' => 'launch_partner', 'title' => $content['title'], 'content' => $content,
             'scope' => ['matrix' => $content['scope_matrix'], 'sections' => $content['scope_sections'], 'additional_scope' => $scope ?: null],
             'pricing' => ['currency' => $offer['currency'], 'usage_policy' => $usageTerms, 'usage_examples' => app(StandardUsagePricing::class)->teamUsageExample(), 'cost_categories' => ['everbranch_service' => ['label' => 'Everbranch Standard', 'description' => 'Setup and monthly service are separate line items.']],
@@ -60,5 +60,9 @@ class StandardServicesAgreementTemplate
             'subscription' => ['usage_policy' => $usageTerms, 'billing_lane' => 'stripe_direct', 'provider' => 'stripe', 'purchase_key' => 'everbranch.standard', 'canonical_plan_key' => $offer['fulfillment_plan_key'], 'offer_version' => $offer['version'], 'pricing_model' => 'standard', 'onboarding_amount_cents' => $setup, 'standard_amount_cents' => $monthly, 'currency' => $offer['currency'], 'billing_interval' => 'month', 'initial_invoice_amount_cents' => $setup + $monthly, 'initial_collection_method' => 'manual_invoice', 'activation_status' => 'disabled_pending_scope_payment_and_readiness', 'activation_requirements' => ['confirmed_scope_and_capacity', 'accepted_agreement', 'verified_payment', 'approved_billing_lane', 'audited_entitlement_fulfillment'], 'authorized_line_items' => [['key' => 'everbranch_onboarding', 'amount_cents' => $setup, 'frequency' => 'one_time'], ['key' => 'everbranch_standard', 'amount_cents' => $monthly, 'frequency' => 'month']]],
             'termination' => ['export_window_days' => 30, 'terms' => ['The client retains its records and supplied content. Platform access and managed services end on the agreed termination date.', 'Operational records may be requested for export during the 30-day export window. Billing, signed agreements and legal/audit records may be retained as required.'], 'minimum_term_months' => 0, 'notice' => 'Written notice before the next monthly renewal to john@evergrovesoftware.com.', 'effective' => 'End of the current paid service period.', 'early_termination_fee_cents' => 0, 'out_of_scope_work' => 'Separate written quote and approval; the existing $50/hour work-order rate applies unless an approved fixed quote states otherwise.'],
         ];
+
+        return $tenant->slug === 'avery-knifeworks'
+            ? app(AveryAgreementTerms::class)->apply($payload)
+            : $payload;
     }
 }

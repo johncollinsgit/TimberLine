@@ -166,3 +166,48 @@ email and six unchecked service preferences. All three pre-existing Retail keys
 and the separate Studio cache survived. Screen timeout restored to 1,200,000 ms.
 Evidence stays in ignored `output/retail/tablets/lenovo/` without private links.
 Galaxy remains pending USB reconnection for its final v16 pass and timeout restore.
+
+
+## October 18 — Negotiated agreement revision
+
+`AveryAgreementTerms` applies only to the Avery Standard template. It keeps $499
+setup + $299 service month 1 ($798 before tax), no initial usage charge/preload,
+existing approved unit/model rates and the closed activation gates. Month 1 begins
+at approved production activation or a separately agreed written start date; do not
+collect that covered month again. The merchant receives up to five named users only
+after the production plan can actually support that commitment. Other contact,
+storage, channel and workflow limits must be written into the launch checklist.
+
+Owner approvals: unused purchased credit is refundable after authorized charges;
+promotional credit is not cash-refundable. Included support is two consolidated
+routine requests/month, one revision round each, no rollover and a three-business-
+day acknowledgment target. Governing law is South Carolina; venue is Pickens County.
+Routine bug/security reports do not consume the update allowance. Custom work
+continues to need a separate approved quote at the existing $50/hour default.
+
+Cancellation remains effective at paid-period end with no early-termination fee.
+Stop renewals/reloads/new provider activity at cutoff. Manually reconcile any actual
+previously authorized usage reported late at the then-approved customer rate, apply
+paid credit once, and bill only the unpaid remainder (Net15). Do not treat this as an
+overdraft or automatic-card-charge authorization. Issue an initial closing statement
+within 15 business days; refund undisputed unused purchased credit within30 calendar
+days, with only itemized pending-charge/dispute reserves. Target final provider
+true-up within60 days; document exceptions and update at least every30 days.
+
+One standard export is included without an exit fee, requested during notice or
+within30 days after termination, targeted within10 business days of a complete
+verified request. A timely export remains eligible until delivered. Use available
+CSV/XLSX/JSON plus original available assets; rebuilding or extra migration work is
+separately approved. Preserve client domains/accounts; dedicated-number transfer
+remains provider-dependent and excludes shared/demo senders. Export access is not
+continued hosted operation. Remove active operational copies within30 days after
+the export window/timely request completion, then expire residual backups within90
+more days, subject to restricted legal/audit retention. These are operating
+obligations requiring a documented owner-managed closeout until automation exists;
+no cancellation, refund, invoice collection or deletion was triggered by revision.
+
+Revise only the still-unaccepted Avery agreement by creating the next immutable
+version after checking its exact current hash. Keep its proposal URL/access, old
+versions and the unpaid $798 invoice intact. Confirm Carolina's accepted version
+and content hash remain unchanged. Inspect the actual hosted proposal on desktop
+and phone without signing, paying or sending a message.
