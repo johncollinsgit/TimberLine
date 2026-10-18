@@ -184,3 +184,11 @@ Delivery claims persist before mail dispatch; `dispatching` after a crash and
 never automatic resend. Inspect provider delivery evidence before changing such
 states. Do not backfill old paid receipts or enable production mail during demo QA.
 No subscription amount or usage invoice is created by a statement or receipt email.
+
+
+Customer-facing rate disclosure (October 18): `customerPresentation()` removes
+provider costs and multipliers from quotes. Agreement and invoice copy use
+Everbranch model rates shown and approved before activation, retaining the exact
+$798 initial amount and all usage examples. `presentation()` and the immutable
+frozen billing policy retain internal cost calculations; existing accepted versions
+are never rewritten. Public Retail exports apply the same customer projection.

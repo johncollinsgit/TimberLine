@@ -4,6 +4,9 @@
   Future Standard email is $1.49/1,000, SMS $0.05/segment, MMS $0.15, AI and
   future memory/combined voice usage 2× actual provider cost. Memory and voice
   feature access have no extra Standard subscription fee. Planned stays planned.
+- Customer-facing quotes, agreements and invoice copy show Everbranch usage
+  rates and estimates. Provider costs and multipliers remain server-side; the
+  internal policy and existing dollar examples are unchanged.
 - Accepted, paid and fulfilled frozen policies bind messaging rates; legacy
   contracts retain precedence. Private owner/admin usage statements distinguish
   purchases from deductions. Receipt mail has a default-off durable delivery gate;
