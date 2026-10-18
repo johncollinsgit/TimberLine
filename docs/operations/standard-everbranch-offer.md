@@ -123,3 +123,32 @@ passed; one performance warning was 0.79 against a suggested 0.80. The whole-tre
 Pint run reports 598 pre-existing PHP 8.5 style issues; those files were not broadly
 reformatted. Production release and capacity/live recurring-price activation remain
 separate gated steps.
+
+
+## Approved future-customer prepaid usage policy — October 18
+
+The owner approved one shared prepaid service balance in addition to $299 monthly
+and $499 standard setup. New Standard email/SMS sending has no separate monthly
+sending subscription and no SMS setup fee. Keep legacy add-on pricing/allowances
+and contracts intact. Existing configured per-unit rates remain: $0.005/email,
+$0.05/SMS segment and $0.15/MMS. OpenAI usage is charged at 2× actual provider
+cost. Fixed connection or managed-service fees require a separate quote. Applicable
+sales tax remains Stripe Tax's responsibility; business taxes/maintenance/overhead
+are covered through the agreed prices and margin, not an invented tax surcharge.
+
+`StandardUsagePricing` supplies the versioned policy, bounded selection/preload
+quotes and dated provider-cost examples. $50 prepaid credit makes an initial
+$848 subtotal and does not create a $50 recurring fee. Auto-reload defaults off.
+The text example is $0.03 for 5,000 uncached input and 500 output tokens on
+GPT-6.1 Sol at the current Standard short-context rates. For balanced audio-only
+speech, GPT-Realtime-2.1 is approximately $0.096/customer-minute and Mini $0.03;
+context, repeated history, transcription and carrier costs are additional. These
+are estimates, not flat rates or already-enabled phone capabilities.
+
+Future voice model selection is explicitly requested: the owner configures an
+allowlist and budgets, team members can choose an approved cheaper/more-capable
+option, and the interface identifies the model and estimated rate before a session.
+Capture the actual selected model, rate version and trusted provider usage; show
+actual cost afterward. No silent upgrade to a more expensive model. The current
+Avery demo's verified voice model is unchanged until a cheaper model passes its
+screen-navigation, customer-record and action checks.
