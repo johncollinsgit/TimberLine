@@ -1249,6 +1249,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->prefix('billing')
         ->name('billing.')
         ->group(function (): void {
+            Route::get('/usage', \App\Http\Controllers\Billing\TenantUsageController::class)->name('usage');
             Route::post('/checkout', [\App\Http\Controllers\Billing\HostedBillingController::class, 'checkout'])
                 ->name('checkout');
             Route::post('/addons/{addonKey}/checkout', [\App\Http\Controllers\Billing\HostedBillingController::class, 'addonCheckout'])

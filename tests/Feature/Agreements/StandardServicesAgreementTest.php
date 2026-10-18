@@ -20,8 +20,10 @@ test('standard agreement freezes canonical flat prices and requires confirmed sc
         ->and($payload['subscription']['initial_collection_method'])->toBe('manual_invoice')
         ->and($payload['subscription']['usage_policy']['initial_usage_charge_cents'])->toBe(0)
         ->and($payload['subscription']['usage_policy']['overage_rates_micros']['email'])->toBe(1490)
-        ->and($payload['subscription']['usage_policy']['ai_provider_cost_multiplier'])->toBe(2);
-    expect($html)->toContain('Prepaid balance', 'not billed again', 'no usage fees', 'planned features', '$1.49');
+        ->and($payload['subscription']['usage_policy']['ai_provider_cost_multiplier'])->toBe(2)
+        ->and($payload['subscription']['usage_policy']['voice_provider_cost_multiplier'])->toBe(2)
+        ->and($payload['subscription']['usage_policy']['memory_feature_access_cents'])->toBe(0);
+    expect($html)->toContain('Prepaid balance', 'not billed again', 'no usage fees', 'planned release', '$1.49');
     $service = app(AgreementManagementService::class);
     $first = $service->prepareStandard($tenant, null);
     $hash = $first->currentVersion->content_hash;

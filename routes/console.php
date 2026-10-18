@@ -313,3 +313,6 @@ Schedule::command('website:dispatch-order-notifications')->everyMinute()->withou
 
 // Retention also applies while the paid AI runtime is disabled.
 Schedule::command('ai-branch:prune --apply')->dailyAt('03:40')->withoutOverlapping(20);
+
+// Rollout and verified recipient/payment gates are rechecked by the dispatcher.
+Schedule::command('billing:dispatch-usage-receipts')->everyFiveMinutes()->withoutOverlapping(10);

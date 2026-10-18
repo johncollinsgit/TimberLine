@@ -7,7 +7,7 @@ use Illuminate\Validation\ValidationException;
 /** New Standard rate card only; never rewrites legacy add-on rates or grants access. */
 class StandardUsagePricing
 {
-    public const SERVICES = ['email', 'sms', 'ai', 'customer_ai', 'phone_voice'];
+    public const SERVICES = ['email', 'sms', 'ai', 'customer_ai', 'phone_voice', 'memory'];
 
     public function presentation(): array
     {
@@ -24,7 +24,7 @@ class StandardUsagePricing
                 ['model' => 'gpt-realtime-2.1', 'label' => 'Current voice model', 'provider_audio_micros_per_balanced_minute' => 48000, 'customer_audio_micros_per_balanced_minute' => 48000 * $multiplier],
                 ['model' => 'gpt-realtime-2.1-mini', 'label' => 'Lower-cost voice option', 'provider_audio_micros_per_balanced_minute' => 15000, 'customer_audio_micros_per_balanced_minute' => 15000 * $multiplier],
             ],
-            'memory_example' => ['status' => 'Planned release', 'model' => 'gpt-6.1-sol', 'extra_input_tokens_per_reply' => 2000, 'provider_cost_micros_per_reply' => 4000, 'customer_cost_micros_per_reply' => 4000 * $multiplier, 'assumption' => 'Additional uncached text input for retrieved memories. Summary generation, storage, other model usage and phone costs are extra; no fixed monthly memory fee or release date is promised.'],
+            'memory_example' => ['status' => 'Planned release', 'model' => 'gpt-6.1-sol', 'extra_input_tokens_per_reply' => 2000, 'provider_cost_micros_per_reply' => 4000, 'customer_cost_micros_per_reply' => 4000 * $multiplier, 'assumption' => 'Additional uncached text input for retrieved memories. Memory is a Standard feature when released with no separate access fee. Additional summarization/model usage is also 2× actual provider cost; retention and capacity follow the confirmed scope. No release date is promised.'],
             'ai_source' => 'https://developers.openai.com/api/docs/pricing',
             'voice_assumption' => 'One elapsed minute split equally between user and AI speech. Audio only; text/context, repeated history, transcription and phone/carrier costs are additional. Actual provider usage determines the charge.',
             'tax_note' => 'Platform operating costs and business overhead are covered by the agreed prices and margin. Applicable customer sales tax is calculated separately by Stripe Tax; no arbitrary tax surcharge is added.',
@@ -51,7 +51,7 @@ class StandardUsagePricing
             'regular_month_cents' => $offer['monthly_cents'] + $total,
             'first_month_cents' => $offer['setup_cents'] + $offer['monthly_cents'],
             'initial_invoice_cents' => $offer['setup_cents'] + $offer['monthly_cents'],
-            'note' => 'Illustrative usage, not additional charges on the initial invoice or a five-user access grant. Actual usage draws from prepaid credit. Planned voice and memory require release and agreed scope; summary/storage, phone transport, fixed connection fees and applicable tax can add cost.',
+            'note' => 'Illustrative usage, not additional charges on the initial invoice or a five-user access grant. Actual usage draws from prepaid credit. Planned voice and memory require release and agreed scope; memory summarization/model usage, phone transport and applicable tax can add cost. Memory and voice have no separate feature access fee; final voice usage is 2× combined actual provider cost.',
         ];
     }
 
@@ -85,8 +85,8 @@ class StandardUsagePricing
         $quote = ['offer_version' => $offer['version'], 'usage' => $this->presentation(), 'selected_services' => $services,
             'setup_cents' => $offer['setup_cents'], 'first_month_cents' => $offer['monthly_cents'],
             'preload_cents' => $preloadCents, 'subtotal_cents' => $offer['setup_cents'] + $offer['monthly_cents'], 'preload_timing' => 'separate_optional_purchase_after_initial_payment',
-            'recurring_cents' => $offer['monthly_cents'], 'sms_setup_cents' => 0,
-            'quote_required' => in_array('phone_voice', $services, true) ? ['Phone connection and any fixed managed-service fees'] : [],
+            'recurring_cents' => $offer['monthly_cents'], 'sms_setup_cents' => 0, 'feature_access_cents' => array_fill_keys($services, 0),
+            'quote_required' => in_array('phone_voice', $services, true) ? ['Voice provider mix and usage estimate before activation; total usage charge is 2× combined actual provider cost'] : [],
             'activation_note' => 'Selection does not activate a service. Provider setup, agreed scope and capacity remain required. Prepaid usage is funded only after verified payment. The first month is already included; monthly renewal must start after that covered period.',
         ];
         $quote['hash'] = hash('sha256', json_encode($quote, JSON_THROW_ON_ERROR));

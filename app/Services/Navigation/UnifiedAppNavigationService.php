@@ -307,6 +307,11 @@ class UnifiedAppNavigationService
             }
         }
 
+        $billingMembership = $tenant && $user ? $user->tenants()->whereKey($tenant->id)->wherePivot('membership_active', true)->first() : null;
+        if ($user?->is_active && $billingMembership && in_array($billingMembership->pivot->role, ['owner', 'tenant_owner', 'admin'], true) && Route::has('billing.usage')) {
+            $items[] = ['key' => 'billing-usage', 'icon' => 'chart-bar', 'href' => route('billing.usage', ['tenant' => $tenant->slug]), 'label' => 'Usage & balance', 'current' => request()->routeIs('billing.usage')];
+        }
+
         if ($tenantId !== null && Route::has('account-help.index')) {
             $items[] = ['key' => 'account-help', 'icon' => 'lifebuoy', 'href' => route('account-help.index'), 'label' => 'Account Help', 'current' => request()->routeIs('account-help.*')];
         }
@@ -385,6 +390,9 @@ class UnifiedAppNavigationService
         if (app(\App\Services\Billing\TenantPaymentSetupAccess::class)->enabledFor($tenant)
             && app(\App\Services\Billing\TenantPaymentSetupAccess::class)->allows($tenant, $user)) {
             $add('payments', 'Payments', 'tenant-payments.index', 'credit-card');
+        }
+        if ($canWork && in_array($membership->pivot->role, ['owner', 'tenant_owner', 'admin'], true) && Route::has('billing.usage')) {
+            $add('billing-usage', 'Usage & balance', 'billing.usage', 'chart-bar');
         }
         $add('account-help', 'Account Help', 'account-help.index', 'lifebuoy');
         $quickActions = array_map(fn (array $item): array => [

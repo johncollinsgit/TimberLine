@@ -26,6 +26,7 @@
 @if($receipt->tax_amount_cents > 0)<tr><td style="padding:10px 0;color:#526164;">Tax</td><td align="right" style="padding:10px 0;">${{ number_format($receipt->tax_amount_cents / 100, 2) }}</td></tr>@endif
 </table>
 @endif
+@include('billing.partials.usage-statement', ['usageStatement' => data_get($receipt->metadata, 'usage_statement')])
 @if($receiptUrl)<table role="presentation" cellspacing="0" cellpadding="0" style="margin:28px 0 18px;"><tr><td bgcolor="#123c43" style="border-radius:7px;"><a href="{{ $receiptUrl }}" style="display:inline-block;padding:16px 24px;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;">View your payment receipt &rarr;</a></td></tr></table>@endif
 <p style="margin:0;font-size:14px;line-height:1.7;"><a href="{{ $proposalUrl }}" style="color:#123c43;text-decoration:underline;">View your signed agreement</a></p>
 <p style="margin:12px 0 0;font-size:12px;line-height:1.7;color:#657577;">Your agreement link opens directly, with no password. Please keep this private link for your records.</p>
