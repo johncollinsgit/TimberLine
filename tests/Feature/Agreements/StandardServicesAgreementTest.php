@@ -17,7 +17,11 @@ test('standard agreement freezes canonical flat prices and requires confirmed sc
     expect($html)->toContain('$299.00', '$499.00', '$50.00', 'Written notice before the next monthly renewal')->not->toContain('$89', '$149', '30 days’ notice');
     expect($payload['subscription']['initial_invoice_amount_cents'])->toBe(79800)
         ->and($payload['subscription']['canonical_plan_key'])->toBeNull()
-        ->and($payload['subscription']['initial_collection_method'])->toBe('manual_invoice');
+        ->and($payload['subscription']['initial_collection_method'])->toBe('manual_invoice')
+        ->and($payload['subscription']['usage_policy']['initial_usage_charge_cents'])->toBe(0)
+        ->and($payload['subscription']['usage_policy']['overage_rates_micros']['email'])->toBe(1490)
+        ->and($payload['subscription']['usage_policy']['ai_provider_cost_multiplier'])->toBe(2);
+    expect($html)->toContain('Prepaid balance', 'not billed again', 'no usage fees', 'planned features', '$1.49');
     $service = app(AgreementManagementService::class);
     $first = $service->prepareStandard($tenant, null);
     $hash = $first->currentVersion->content_hash;

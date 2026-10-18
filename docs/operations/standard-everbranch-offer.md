@@ -158,6 +158,6 @@ The owner subsequently approved $1.49/1,000 emails for future Standard offers.
 legacy messaging rates. The five-person example includes planned long-term memory
 (500 replies × 2,000 extra uncached input tokens): about $4 additional context at
 2× the example GPT-6.1 Sol cost. Total illustrative usage is $48.95 and a regular
-month $347.95; first-month economic cost is $846.95 including setup. These are not
-charges added to the actual $798 initial invoice. Future memory needs a release;
+month $347.95. The first payment is $798 for setup and month 1, with no usage
+fees or automatic usage preload. Optional later top-ups are separate purchases. Future memory needs a release;
 summary/storage/other usage are extra and no fixed memory fee is approved.
