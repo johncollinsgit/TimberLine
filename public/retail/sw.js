@@ -1,4 +1,4 @@
-const VERSION='everbranch-retail-v15';
+const VERSION='everbranch-retail-v16';
 const CORE=['/retail/offline.html','/retail/app.mjs','/retail/commerce.mjs','/retail/sales.mjs','/retail/voice.mjs','/retail/workbench.mjs','/retail/avery.mjs','/retail/avery-data.mjs','/retail/avery-workspace-data.mjs','/retail/standard-offer.mjs','/retail/pricing-examples.mjs','/retail/app.css','/retail/manifest.webmanifest','/retail/photos.json','/retail/assets/avery-logo.png','/retail/assets/icon.svg','/retail/assets/icon.svg?v=4','/retail/assets/icon-192.png?v=4','/retail/assets/icon-512.png?v=4','/retail/assets/icon-maskable-192.png?v=4','/retail/assets/icon-maskable-512.png?v=4'];
 // An update may retire the previous cache only after its replacement contains
 // every public demo photo, including images not visited on this device yet.

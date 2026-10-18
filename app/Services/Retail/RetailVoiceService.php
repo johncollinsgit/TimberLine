@@ -10,7 +10,7 @@ use Throwable;
 
 class RetailVoiceService
 {
-    public const PAGES = ['home', 'store', 'pricing', 'assistant', 'customers', 'rewards', 'team', 'orders', 'inventory', 'workspace', 'production', 'shipping', 'likely_to_order', 'agreement'];
+    public const PAGES = ['home', 'store', 'pricing', 'assistant', 'customers', 'rewards', 'team', 'orders', 'inventory', 'workspace', 'production', 'shipping', 'likely_to_order', 'agreement', 'care', 'passport', 'finder', 'products', 'invoices', 'new_customer', 'new_invoice', 'marketing'];
 
     private const UNAVAILABLE = 'Live voice could not connect. Check the internet connection and ask the owner to check voice API access, then try again. Guided examples are still available.';
 

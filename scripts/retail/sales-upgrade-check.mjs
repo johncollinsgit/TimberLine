@@ -83,10 +83,10 @@ if(!device){
  await page.locator('[data-action="offline"]').first().click();
  await page.waitForFunction(old=>JSON.parse(localStorage.getItem('retail-offline-pack')||'null')?.expires>old,previous,{timeout:60000});
  await page.evaluate(()=>navigator.serviceWorker.ready);
- const privateCached=await page.evaluate(async()=>{const c=await caches.open('everbranch-retail-v15');return (await c.keys()).some(r=>new URL(r.url).pathname.includes('/api/'));});assert.equal(privateCached,false);
+ const privateCached=await page.evaluate(async()=>{const c=await caches.open('everbranch-retail-v16');return (await c.keys()).some(r=>new URL(r.url).pathname.includes('/api/'));});assert.equal(privateCached,false);
  await context.setOffline(true);await page.goto(base+'/retail/showroom/assistant');await page.waitForSelector('.assistant-grid');assert.match(await page.locator('.assistant-hero').innerText(),/live AI unavailable/);
  await revealAction(page,'[data-action="pricing"]');await page.locator('[data-action="pricing"]').first().click();await page.locator('[data-sales-action="signup"]').first().click();assert.equal(await page.locator('#retail-signup-details').count(),0);
- await context.setOffline(false);await page.reload();await page.waitForSelector('.assistant-grid');checks.push('Cache v15 reopens assistant offline, excludes private APIs and blocks offline signup');
+ await context.setOffline(false);await page.reload();await page.waitForSelector('.assistant-grid');checks.push('Cache v16 reopens assistant offline, excludes private APIs and blocks offline signup');
 }
 assert.deepEqual(errors,[]);
 fs.writeFileSync(output+(device?'/galaxy-results.json':'/browser-results.json'),JSON.stringify({checks,errors,liveOpenAiVerified:live,device,signupSubmission:device?'reviewed only; never submitted':'intercepted fixture; no real registration'},null,2));

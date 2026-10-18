@@ -2,7 +2,7 @@
 
 The existing Retail install contains an independent Avery concept, not Avery's live
 store or an activated merchant workspace. No app identity or saved customer/cart
-records are reset. Cache v15 carries 142 public photographs and the public modules;
+records are reset. Cache v16 carries 142 public photographs and the public modules;
 authenticated pages, APIs, real recipients and agreement/payment links are excluded.
 
 ## Presentation sequence

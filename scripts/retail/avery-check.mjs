@@ -27,7 +27,7 @@ try{
  await page.goto('http://127.0.0.1:8797/retail/showroom');await page.waitForSelector('.vendor-grid');
  await page.locator('[data-action=offline]').first().click();
  await page.waitForFunction(()=>!!localStorage.getItem('retail-offline-pack'),null,{timeout:60000});
- await expect.poll(()=>page.evaluate(async()=>{const c=await caches.open('everbranch-retail-v15');return !!await c.match('/retail/avery-data.mjs');}),{timeout:60000}).toBe(true);
+ await expect.poll(()=>page.evaluate(async()=>{const c=await caches.open('everbranch-retail-v16');return !!await c.match('/retail/avery-data.mjs');}),{timeout:60000}).toBe(true);
  await page.goto('http://127.0.0.1:8797/retail/showroom/concepts/avery-knifeworks');await page.waitForSelector('.avery-launch');
  await page.locator('.avery-launch [data-avery-action=finder]').click();await a('category').filter({hasText:'Kitchen'}).click();await a('use').filter({hasText:'Everyday meal prep'}).click();await a('budget').filter({hasText:'Up to $500'}).click();await a('material').filter({hasText:'Any handle'}).click();
  await expect(page.locator('.avery-result')).toHaveCount(3);

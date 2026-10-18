@@ -164,3 +164,19 @@ test('voice masks upstream failures and malformed successful provider responses'
     }
     Http::assertSentCount(2);
 });
+
+test('new Avery care finder and passport pages can start voice with the same allowed context tools', function () {
+    Http::fake(['api.openai.com/v1/realtime/calls' => Http::response($this->sdp, 201, ['Content-Type' => 'application/sdp'])]);
+    foreach (['care', 'finder', 'passport'] as $page) {
+        $this->postJson($this->url.'/session', [...$this->input, 'merchant' => 'avery-knifeworks', 'page' => $page])->assertOk();
+    }
+    Http::assertSentCount(3);
+    Http::assertSent(function ($request) {
+        $parts = collect($request->data())->keyBy('name');
+        $session = json_decode($parts['session']['contents'], true);
+        $viewTool = collect($session['tools'])->firstWhere('name', 'show_demo_view');
+        expect($viewTool['parameters']['properties']['view']['enum'])->toContain('care', 'finder', 'passport');
+
+        return true;
+    });
+});
