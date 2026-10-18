@@ -14,7 +14,7 @@ page??=pages.find(p=>p.url().startsWith(base+'/retail/'));assert.ok(page,'Open t
 page.setDefaultTimeout(30000);await page.bringToFront();
 const before=await page.evaluate(()=>Object.fromEntries(Object.entries(localStorage).filter(([k])=>k.startsWith('retail-')&&k!=='retail-offline-pack')));
 const errors=[];page.on('pageerror',e=>errors.push(e.message));
-const click=async(s,text)=>{await page.bringToFront();await page.waitForSelector(s);for(const el of await page.$$(s)){if(!text||(await el.evaluate(e=>e.textContent)).includes(text)){if(!await el.isVisible()){const summary=await el.evaluateHandle(e=>e.closest('details')?.querySelector('summary'));if(summary.asElement())await summary.asElement().click();}await el.click();return;}}throw Error(`Missing ${s}: ${text}`);};
+const click=async(s,text)=>{await page.bringToFront();await page.waitForSelector(s);for(const el of await page.$$(s)){if(!text||(await el.evaluate(e=>e.textContent)).includes(text)){const summary=await el.evaluateHandle(e=>e.closest('details:not([open])')?.querySelector('summary'));if(summary.asElement()){await summary.asElement().click();await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));}await el.click();return;}}throw Error(`Missing ${s}: ${text}`);};
 const count=async(s,n)=>{await page.waitForFunction((s,n)=>document.querySelectorAll(s).length===n,{},s,n);};
 const has=async(s,text)=>{await page.waitForFunction((s,t)=>document.querySelector(s)?.textContent.includes(t),{},s,text);};
 const close=()=>click('[data-action=close]');

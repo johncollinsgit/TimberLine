@@ -147,3 +147,13 @@ QA: `navigation-care-check.mjs`, `avery-check.mjs`, `sales-upgrade-check.mjs`,
 consent and offline data. `email-brand-live-check.mjs` requires explicit opt-in and
 an owner-authorized email; its stable request ID prevents duplicate test sends.
 Never run it to a prospect or silently change that stable request ID.
+
+
+The presentation Mac uses `APP_URL=http://127.0.0.1:8797` and local landlord
+hosts. For a full application test run, pass the normal CI host settings through
+the test process (APP_URL=http://localhost, TENANCY_CANONICAL_LANDLORD_HOST,
+TENANCY_LANDLORD_PRIMARY_HOST and TENANCY_LANDLORD_HOSTS=app.theeverbranch.com,
+AUTH_FLAGSHIP_HOSTS=app.theeverbranch.com,theeverbranch.com). Do not rewrite the
+running demo's environment file or restart its process-only voice credential.
+Android QA must open a containing closed details menu explicitly before clicking;
+Puppeteer's isVisible can report true for hidden disclosure descendants.
