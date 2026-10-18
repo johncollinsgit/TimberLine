@@ -110,7 +110,7 @@ window.addEventListener('offline',()=>{state.offline=true;state.owner=false;stat
 window.addEventListener('online',()=>{toast('Connection restored. Reload to verify your sign-in before using live tools.');});
 sales=createRetailSales({context:()=>({pack:state.pack,owner:state.owner,offline:state.offline,merchant:merchant(),view:state.view,staffTab:state.staffTab,modal:state.modal,voiceSample,averyTool:(name,args)=>avery.voiceTool(name,args),averyContext:()=>avery.voiceContext(),demoTool:(name,args)=>workbench.tool(name,args),demoContext:()=>workbench.snapshot(),demoSelect:slug=>workbench.select(slug),demoInitialize:(slug,records)=>workbench.initialize(slug,records)}),openModal,closeModal,toast,api,navigate:destination=>{if(['customers','rewards','team'].includes(destination)) {if(!merchant())navigate(state.pack.vendors.find(v=>!v.read_only_source).slug);openStaff(destination);}else if(destination==='home')navigate('');else showSalesView(destination);}});
 avery=createAvery({context:()=>({merchant:merchant(),offer:state.pack?.offer,restricted:state.pack?.restricted,offline:state.offline,handoff:()=>api('avery/handoff'),saveServices:data=>api('avery/services','POST',data)}),openModal,toast});
-workbench=createDemoWorkbench({context:()=>({merchant:merchant(),vendors:state.pack.vendors,offline:state.offline}),openModal,toast,avery,api});
+workbench=createDemoWorkbench({context:()=>({merchant:merchant(),vendors:state.pack.vendors,offline:state.offline,restricted:state.pack?.restricted}),openModal,toast,avery,api});
 boot();
 
 // Native disclosure menus work with touch and keyboard; close on selection or outside click.
