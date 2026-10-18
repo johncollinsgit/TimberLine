@@ -152,3 +152,12 @@ Capture the actual selected model, rate version and trusted provider usage; show
 actual cost afterward. No silent upgrade to a more expensive model. The current
 Avery demo's verified voice model is unchanged until a cheaper model passes its
 screen-navigation, customer-record and action checks.
+
+The owner subsequently approved $1.49/1,000 emails for future Standard offers.
+`usage_policy.messaging_rates_micros` owns that rate separately from preserved
+legacy messaging rates. The five-person example includes planned long-term memory
+(500 replies × 2,000 extra uncached input tokens): about $4 additional context at
+2× the example GPT-6.1 Sol cost. Total illustrative usage is $48.95 and a regular
+month $347.95; first-month economic cost is $846.95 including setup. These are not
+charges added to the actual $798 initial invoice. Future memory needs a release;
+summary/storage/other usage are extra and no fixed memory fee is approved.
