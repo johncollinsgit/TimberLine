@@ -315,3 +315,27 @@ versioned environment and atomically switch only that preview's `current` link.
 Verify fresh desktop/mobile entry, rejected foreign scopes, agreement links,
 AI availability and presenter restoration. Roll back the preview pointer to the
 previous release; preserve its shared storage and owner cookies.
+
+
+The preview's Nginx directory index must not bypass Laravel's Studio guard. In
+Forge site **3432615 only**, retain the existing `.mjs` MIME rule and add:
+
+```nginx
+location = /studio/ {
+    try_files /__private_studio_route__ /index.php?$query_string;
+}
+location = /studio/index.html {
+    return 302 /studio/;
+}
+```
+
+This keeps the original presenter-authenticated Studio view and permits its
+legacy shell URL to follow the same guard. Verify anonymous `/studio/` redirects
+to sign-in, PIN guests receive 404 at both entries, and presenters receive 200.
+Use clipboard paste in Forge's editor: direct character entry can trigger editor
+auto-indent/completion. Preserve a before-copy, verify saved configuration tokens,
+and check the main production `/ready` remains healthy after the preview reload.
+The preview intentionally lacks production's Shopify customer-account client ID;
+its production-only `/ready` check was already unavailable on v19. Do not copy
+production credentials to satisfy it. Verify the preview through its isolated
+DB/cache boot check, PIN bootstrap, AI readiness and actual browser workflow.

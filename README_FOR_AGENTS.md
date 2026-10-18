@@ -8,7 +8,8 @@ server route/method/merchant restrictions block other businesses, Studio, privat
 research and real message dispatch. Existing presenter login remains intact and
 `/avery/presenter` exits guest mode. The guest grant lasts 12 hours and changing
 its configured code hash invalidates existing grants. No production flags change.
-See `docs/retail/SHOWROOM_RUNBOOK.md` for setup and recovery.
+The preview Nginx Studio directory/index routes now pass through the existing
+presenter guard. See `docs/retail/SHOWROOM_RUNBOOK.md` for setup and recovery.
 
 ## October 18, 2026 — Untethered Retail demo recovery and voice reliability
 
