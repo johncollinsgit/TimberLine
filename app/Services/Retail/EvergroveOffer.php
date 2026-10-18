@@ -10,6 +10,7 @@ class EvergroveOffer
 
         return [
             ...$pricing,
+            'usage_policy' => array_diff_key($pricing['usage_policy'], array_flip(['ai_provider_cost_multiplier', 'voice_provider_cost_multiplier', 'memory_provider_cost_multiplier'])),
             'key' => 'standard',
             'quote_version' => hash('sha256', json_encode($pricing, JSON_THROW_ON_ERROR)),
             'monthly_cents' => (int) $pricing['monthly_cents'],

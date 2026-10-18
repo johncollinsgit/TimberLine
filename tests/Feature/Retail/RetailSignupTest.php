@@ -34,7 +34,8 @@ test('the retail offer is the standard single monthly rate and preserves the man
         ->and($offer['usage']['billing_mode'])->toBe('shared_prepaid_usage')
         ->and($offer['usage']['sms_setup_cents'])->toBe(0)
         ->and($offer['usage']['sms_monthly_cents'])->toBe(0)
-        ->and($offer['usage']['ai_provider_cost_multiplier'])->toBe(2)
+        ->and($offer['usage'])->not->toHaveKey('ai_provider_cost_multiplier')
+        ->and(json_encode($offer, JSON_THROW_ON_ERROR))->not->toContain('provider_cost', '2\\u00d7')
         ->and(config('module_catalog.addons.sms.pricing.setup_price_cents'))->toBe(9900);
 });
 

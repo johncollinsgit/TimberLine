@@ -46,9 +46,11 @@ a successful audio connection on every network. Weak networks show an unavailabl
 reason; connection loss stops audio. Storefronts and photos remain usable offline.
 Live conversation always requires internet; this feature does not search the web.
 
-The legacy localhost install requires the Mac server and ADB reverse connection for
-sign-in and starting a session. Keep the Mac awake. The tablet also needs an internet
-route to OpenAI for WebRTC audio. Both authorized tablets use their existing installed Retail tabs.
+Current presenter installs use the isolated HTTPS host described below and need only
+the tablet and internet. Verify the actual home launcher URL, not a hosted page
+inside a legacy localhost WebAPK. During quiet QA, set the audio element muted and
+volume zero before Start; microphone mute alone leaves AI replies audible.
+The legacy localhost install still requires the Mac server and ADB reverse.
 
 ## Server configuration
 
@@ -78,7 +80,7 @@ WebRTC carries audio directly to OpenAI. The app keeps a short, escaped transcri
 only in dialog memory and clears it when closed/backgrounded or the business
 changes. It does not save audio/transcripts to the application database, local
 storage, offline queue or service worker cache. This is not a claim about provider
-retention. Session tracing is disabled. Cache v18 includes the public voice/action modules and shell, preserving the complete
+retention. Session tracing is disabled. Cache v19 includes the public voice/action modules and shell, preserving the complete
 142-photo pack. Private APIs and real recipient details are never cached.
 
 For this local demonstration the existing authorized hosted credential was loaded

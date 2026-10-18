@@ -18,9 +18,6 @@ export const standardOffer = {
         "sms_setup_cents": 0,
         "email_monthly_cents": 0,
         "sms_monthly_cents": 0,
-        "ai_provider_cost_multiplier": 2,
-        "voice_provider_cost_multiplier": 2,
-        "memory_provider_cost_multiplier": 2,
         "voice_feature_access_cents": 0,
         "memory_feature_access_cents": 0,
         "auto_reload_default": false,
@@ -77,9 +74,6 @@ export const standardOffer = {
         "sms_setup_cents": 0,
         "email_monthly_cents": 0,
         "sms_monthly_cents": 0,
-        "ai_provider_cost_multiplier": 2,
-        "voice_provider_cost_multiplier": 2,
-        "memory_provider_cost_multiplier": 2,
         "voice_feature_access_cents": 0,
         "memory_feature_access_cents": 0,
         "auto_reload_default": false,
@@ -98,20 +92,17 @@ export const standardOffer = {
                 "label": "Example text task",
                 "input_tokens": 5000,
                 "output_tokens": 500,
-                "provider_cost_micros": 15000,
                 "customer_cost_micros": 30000,
                 "assumption": "Standard short-context rates, uncached input. An illustration, not a flat fee per question."
             },
             {
                 "model": "gpt-realtime-2.1",
                 "label": "Current voice model",
-                "provider_audio_micros_per_balanced_minute": 48000,
                 "customer_audio_micros_per_balanced_minute": 96000
             },
             {
                 "model": "gpt-realtime-2.1-mini",
                 "label": "Lower-cost voice option",
-                "provider_audio_micros_per_balanced_minute": 15000,
                 "customer_audio_micros_per_balanced_minute": 30000
             }
         ],
@@ -119,13 +110,11 @@ export const standardOffer = {
             "status": "Planned release",
             "model": "gpt-6.1-sol",
             "extra_input_tokens_per_reply": 2000,
-            "provider_cost_micros_per_reply": 4000,
             "customer_cost_micros_per_reply": 8000,
-            "assumption": "Additional uncached text input for retrieved memories. Memory is a Standard feature when released with no separate access fee. Additional summarization/model usage is also 2\u00d7 actual provider cost; retention and capacity follow the confirmed scope. No release date is promised."
+            "assumption": "Additional uncached text input for retrieved memories. Memory is a Standard feature when released with no separate access fee. Additional summarization/model usage uses the approved Everbranch model rate; retention and capacity follow the confirmed scope. No release date is promised."
         },
-        "ai_source": "https://developers.openai.com/api/docs/pricing",
-        "voice_assumption": "One elapsed minute split equally between user and AI speech. Audio only; text/context, repeated history, transcription and phone/carrier costs are additional. Actual provider usage determines the charge.",
-        "tax_note": "Platform operating costs and business overhead are covered by the agreed prices and margin. Applicable customer sales tax is calculated separately by Stripe Tax; no arbitrary tax surcharge is added.",
+        "voice_assumption": "One elapsed minute split equally between user and AI speech. Audio only; text/context, repeated history, transcription and phone/carrier costs are additional. Measured usage at the approved Everbranch rates determines the charge.",
+        "tax_note": "Platform operating costs and maintenance are covered by the agreed prices. Applicable customer sales tax is calculated separately by Stripe Tax; no arbitrary tax surcharge is added.",
         "team_usage_example": {
             "team_size": 5,
             "rows": [
@@ -176,24 +165,24 @@ export const standardOffer = {
             "regular_month_cents": 34795,
             "first_month_cents": 79800,
             "initial_invoice_cents": 79800,
-            "note": "Illustrative usage, not additional charges on the initial invoice or a five-user access grant. Actual usage draws from prepaid credit. Planned voice and memory require release and agreed scope; memory summarization/model usage, phone transport and applicable tax can add cost. Memory and voice have no separate feature access fee; final voice usage is 2\u00d7 combined actual provider cost."
+            "note": "Illustrative usage, not additional charges on the initial invoice or a five-user access grant. Actual usage draws from prepaid credit. Planned voice and memory require release and agreed scope; memory summarization/model usage, phone transport and applicable tax can add cost. Memory and voice have no separate feature access fee; final voice rates and applicable components require approval before activation."
         },
         "future_usage": [
             {
                 "key": "memory",
                 "label": "An assistant that gets to know you",
                 "status": "Planned release \u00b7 long-term memory",
-                "note": "Return to previous plans, approved preferences and business decisions across conversations. Personal teammate memory stays separate from shared business knowledge, with review, correction and deletion controls. Memory is included as a Standard feature when released, with no extra access fee. Retrieval, summarization and model usage draw from the shared balance at 2\u00d7 actual provider cost. No release date is promised."
+                "note": "Return to previous plans, approved preferences and business decisions across conversations. Personal teammate memory stays separate from shared business knowledge, with review, correction and deletion controls. Memory is included as a Standard feature when released, with no extra access fee. Retrieval, summarization and model usage draw from the shared balance at the approved Everbranch model rates. No release date is promised."
             },
             {
                 "label": "Phone voice connection and calls",
                 "status": "Planned release \u00b7 provider stack pending",
-                "note": "No additional Standard feature access fee. Voice usage will be 2\u00d7 combined actual provider cost, including the selected model, voice and telephony components. Final all-in rates and any separately scoped fixed connection costs require review before activation."
+                "note": "No additional Standard feature access fee. Voice usage will follow approved Everbranch rates for the selected model, voice and telephony components. Final all-in rates and any separately scoped fixed connection costs require review before activation."
             },
             {
                 "label": "Customer-facing AI conversations",
                 "status": "Buildout and scope quote required",
-                "note": "OpenAI usage is priced at 2\u00d7 actual API cost. Approved catalog/customer access, provider setup, limits and any fixed connection fees must be agreed before launch."
+                "note": "AI usage follows the approved Everbranch model rates. Approved catalog/customer access, provider setup, limits and any fixed connection fees must be agreed before launch."
             },
             {
                 "label": "Choose your voice model",
@@ -207,7 +196,7 @@ export const standardOffer = {
             }
         ],
         "base_note": "Future Standard customers use one prepaid Everbranch service balance for email, text and AI, with future voice metered when available. There is no separate monthly email/text sending-access subscription and no text setup fee. Existing customer contracts and allowances stay unchanged.",
-        "ai_note": "OpenAI usage costs 2\u00d7 actual API cost. Estimates vary with the model, input/output, conversation history and tools. The future service will reserve estimated spend, enforce the available balance and owner-approved caps, and reconcile actual cost. Tablet demo voice is limited to five minutes per conversation and six starts per hour; it does not activate a paid service."
+        "ai_note": "AI usage is metered at the Everbranch rate for your selected model, shown and approved before activation. Estimates vary with the model, input/output, conversation history and tools. The future service will reserve estimated spend, enforce the available balance and owner-approved caps, and reconcile actual cost. Tablet demo voice is limited to five minutes per conversation and twenty starts per hour; it does not activate a paid service."
     },
     "contact_url": "https://evergrovesoftware.com/book"
 };

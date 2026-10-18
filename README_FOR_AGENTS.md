@@ -1,7 +1,9 @@
 ## October 18, 2026 — Untethered Retail demo recovery and voice reliability
 
 The tablet's old localhost install loses live access when ADB/USB disconnects.
-Retail v18 refreshes owner-authenticated CSRF state from a no-store session endpoint
+Customer-facing usage pricing shows Everbranch rates and estimates. Provider costs
+and multipliers remain server-side, including voice context and offline public data.
+Retail v19 refreshes owner-authenticated CSRF state from a no-store session endpoint
 before live writes, including a cold offline launch followed by reconnect. Tokens
 are never added to the offline pack. The isolated staging presenter transport needs
 an explicit flag and exact host; production remains blocked. The separate hosted

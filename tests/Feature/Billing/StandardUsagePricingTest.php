@@ -7,7 +7,8 @@ test('future Standard uses one prepaid balance without legacy SMS setup or month
     $quote = app(StandardUsagePricing::class)->quote(['sms', 'email', 'ai'], 5000);
     expect($quote['subtotal_cents'])->toBe(79800)->and($quote['recurring_cents'])->toBe(29900)
         ->and($quote['sms_setup_cents'])->toBe(0)->and($quote['usage']['sms_monthly_cents'])->toBe(0)
-        ->and($quote['usage']['ai_provider_cost_multiplier'])->toBe(2)
+        ->and($quote['usage'])->not->toHaveKey('ai_provider_cost_multiplier')
+        ->and(config('module_catalog.offers.standard.usage_policy.ai_provider_cost_multiplier'))->toBe(2)
         ->and($quote['usage']['messaging_rates_micros']['sms'])->toBe(50000)
         ->and($quote['usage']['messaging_rates_micros']['email'])->toBe(1490)
         ->and(config('marketing.messaging.platform.buyer_rates_micros.email'))->toBe(5000)
@@ -38,4 +39,16 @@ test('the five-person planning example includes future memory without adding est
         ->and($example['initial_invoice_cents'])->toBe(79800)
         ->and($pricing->presentation()['memory_example']['customer_cost_micros_per_reply'])->toBe(8000)
         ->and($pricing->invoiceUsageFooter())->toContain('$7.45', '$4.00', '$347.95', 'FIRST PAYMENT: $798.00', 'INFORMATIONAL ONLY');
+});
+
+test('customer usage quotes and invoice copy retain charges without exposing provider costs or markup', function () {
+    $pricing = app(StandardUsagePricing::class);
+    $quote = $pricing->quote(['ai', 'phone_voice', 'memory'], 0);
+    $public = json_encode($quote, JSON_THROW_ON_ERROR);
+    expect($public)->not->toContain('provider_cost', '2×', '2x actual')
+        ->and($quote['usage']['ai_examples'][0]['customer_cost_micros'])->toBe(30000)
+        ->and($quote['usage']['memory_example']['customer_cost_micros_per_reply'])->toBe(8000)
+        ->and($pricing->invoiceUsageFooter())->not->toContain('2×', '2x actual')
+        ->and($pricing->invoiceUsageFooter())->toContain('$1.49/1,000', '$0.05/segment', 'Everbranch model rates')
+        ->and($pricing->presentation()['ai_provider_cost_multiplier'])->toBe(2);
 });
