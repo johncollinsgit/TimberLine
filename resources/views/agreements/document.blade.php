@@ -68,6 +68,17 @@
         </div>
     </section>
 
+    @if(is_array($pricing['usage_examples'] ?? null))
+        @php $usageExample = $pricing['usage_examples']; @endphp
+        <section><h2 class="text-xl font-semibold text-zinc-950">Premium usage examples · informational only</h2>
+            <p class="mt-2 text-sm">Example monthly activity for a team of five. This is not an included allowance or a grant of five seats. Your first payment is $798 for setup and month 1, before applicable tax, with no usage fees or automatic preload.</p>
+            <div class="mt-4 overflow-x-auto"><table class="min-w-full text-left text-sm"><thead><tr><th class="px-4 py-3">Activity</th><th class="px-4 py-3">Quantity</th><th class="px-4 py-3">Estimated usage</th></tr></thead><tbody>
+            @foreach($usageExample['rows'] as $row)<tr class="border-t border-zinc-200"><td class="px-4 py-3">{{ $row['label'] }}{{ $row['planned'] ? ' (planned release)' : '' }}</td><td class="px-4 py-3">{{ number_format($row['quantity']) }} {{ $row['unit'] }}</td><td class="px-4 py-3">${{ number_format($row['cost_micros'] / 1000000, 2) }}</td></tr>@endforeach
+            </tbody><tfoot><tr><th class="px-4 py-3" colspan="2">Example monthly usage</th><td class="px-4 py-3">${{ number_format($usageExample['usage_total_cents'] / 100, 2) }}</td></tr><tr><th class="px-4 py-3" colspan="2">Example regular month including subscription</th><td class="px-4 py-3">${{ number_format($usageExample['regular_month_cents'] / 100, 2) }}</td></tr></tfoot></table></div>
+            <p class="mt-3 text-sm">{{ $usageExample['note'] }}</p>
+        </section>
+    @endif
+
     <section>
         <h2 class="text-xl font-semibold text-zinc-950">Scope matrix</h2>
         <div class="mt-4 overflow-x-auto rounded-2xl border border-zinc-200">
@@ -109,7 +120,7 @@
 
     <section class="rounded-2xl border border-zinc-900 bg-zinc-950 p-6 text-white">
         <h2 class="text-xl font-semibold">Termination and data export</h2>
-        <p class="mt-2 text-sm leading-6 text-zinc-300">30 days’ notice. The operational export window remains open for 30 days after the effective termination date.</p>
+        <p class="mt-2 text-sm leading-6 text-zinc-300">{{ data_get($document, 'termination.notice', '30 days’ notice.') }} The operational export window remains open for {{ data_get($document, 'termination.export_window_days', 30) }} days after the effective termination date.</p>
         <ul class="mt-4 list-disc space-y-2 pl-5 text-sm leading-6 text-zinc-300">@foreach((array) data_get($document, 'termination.terms', []) as $term)<li>{{ $term }}</li>@endforeach</ul>
     </section>
 

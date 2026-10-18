@@ -1,0 +1,147 @@
+import {money} from './commerce.mjs';
+import {usageExample} from './pricing-examples.mjs';
+import {createRetailVoice} from './voice.mjs';
+
+const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const features = [
+  ['voice','AI Voice Assistant','Talk naturally to Everbranch about your business.','↗'],
+  ['email','Email Marketing Assistant','Create personalized promotional emails and campaigns.','✉'],
+  ['sms','SMS Marketing Assistant','Draft customer text campaigns and follow-ups.','↗'],
+  ['admin','Virtual Business Assistant','Help with daily administrative and customer-management tasks.','✓'],
+  ['personal','Personalized AI Assistance',"Tailor assistance to your individual business.",'✦'],
+  ['social','Social Media Marketing','Coming Soon — AI-assisted social content and marketing campaigns.','◷'],
+];
+
+export function createRetailSales({context, openModal, closeModal, toast, api, navigate}) {
+  let draft = null, recognition = null, speechTimer = null, thread = [], lastReply = "";
+  const voice = createRetailVoice({context,openModal});
+  const live = () => context().owner && !context().offline && navigator.onLine && context().pack?.assistant?.available;
+  const currentOffer = () => context().pack?.offer;
+  const validOffer = o => o?.key === 'standard' && o.quote_version && o.monthly_cents === 29900 && o.setup_cents === 49900;
+  const terms = o => `<div class="launch-price-grid"><div><span>Per business</span><strong>${money(o.monthly_cents)}<small>/month</small></strong></div></div><div class="offer-setup">${money(o.setup_cents)} one-time setup</div>`;
+  const eligibility = o => `<p class="launch-eligibility">${esc(o.eligibility_note)}</p>`;
+
+  function usagePricing(o) {
+    const u=o.usage;if(!u)return '';
+    const rate=value=>`$${(value/1000000).toFixed(3)}`;
+    const examples=u.ai_examples??[],text=examples.find(x=>x.customer_cost_micros),voices=examples.filter(x=>x.customer_audio_micros_per_balanced_minute);
+    return `<section class="usage-pricing" id="usage-pricing"><span class="eyebrow">ONE SHARED PREPAID BALANCE · SEPARATE FROM THE $299 BASE</span><h2>Choose what you use.</h2><p>${esc(u.base_note)}</p><div class="offer-inclusions"><article data-usage="email"><h3>Email</h3><strong>${money(u.messaging_rates_micros.email/10)} per 1,000 emails</strong><p>$${(u.messaging_rates_micros.email/1000000).toFixed(5)} per email, deducted from your shared balance. Verified sending domain and recipient permission are required.</p><small>No separate monthly sending-access fee.</small></article><article data-usage="sms"><h3>Text messages</h3><strong>${money(u.messaging_rates_micros.sms/10000)} per SMS segment</strong><p>MMS: ${money(u.messaging_rates_micros.mms/10000)} per message when enabled. Long or Unicode texts can use several billable segments. Provider approval and recipient permission are required.</p><small>No text setup fee or separate monthly sending-access fee. Fixed number/connection fees, if needed, are quoted separately.</small></article></div><section data-usage="ai"><h3>AI · usage at your selected model’s rate</h3><p>${esc(u.ai_note)}</p><div class="avery-table-wrap"><table class="avery-table"><thead><tr><th>Illustration</th><th>Estimated balance used</th><th>Assumptions</th></tr></thead><tbody>${text?`<tr><td>Text task · ${esc(text.model)}</td><td>${rate(text.customer_cost_micros)}</td><td>${text.input_tokens.toLocaleString()} input + ${text.output_tokens.toLocaleString()} output tokens. ${esc(text.assumption)}</td></tr>`:''}${voices.map(v=>`<tr><td>${esc(v.label)}<small>${esc(v.model)}</small></td><td>${(v.customer_audio_micros_per_balanced_minute/10000).toFixed(1)}¢ per balanced minute<br>${money(v.customer_audio_micros_per_balanced_minute/1000)} per 10 minutes</td><td>Audio-only Everbranch usage estimate.</td></tr>`).join('')}</tbody></table></div><p class="compact-info">${esc(u.voice_assumption)} Estimates checked ${esc(u.costs_checked_at)}. Your final Everbranch rates are shown before activation.</p></section><section data-usage="wallet"><h3>Your balance, your spending decisions.</h3><p>Optional prepaid credit: ${u.credit_packs_cents.map(money).join(', ')}. Purchased credit is separate from the $299 subscription. Automatic reload starts off. The planned usage dashboard shows available and reserved balance, charges by service, alerts and owner-approved spending caps.</p><p>No paid service or automatic reload is activated from this pricing page. Usage credit is funded only after verified payment; provider readiness and agreed capacity still apply.</p></section>${usageExample(u.team_usage_example)}<section data-usage="future"><h3>Future services and model choices</h3><div class="offer-inclusions">${(u.future_usage??[]).map(r=>`<article><h4>${esc(r.label)}</h4><strong>${esc(r.status)}</strong><p>${esc(r.note)}</p></article>`).join('')}</div></section><p class="compact-info">${esc(u.tax_note)} Postage, payment processing and separately scoped custom work remain separate when applicable.</p></section>`;
+  }
+  function pricingPage() {
+    const o = currentOffer();
+    if (!validOffer(o)) return '<main class="wrap pricing-page"><h1>Refresh the Retail offer</h1><p>Reconnect and reload for current pricing and eligibility. An older offline pack cannot submit a signup request.</p></main>';
+    return `<main class="wrap pricing-page"><section class="pricing-hero"><div><div class="eyebrow">EVERBRANCH RETAIL · STANDARD OFFER</div><h1>Your next chapter.<br>A clear place to start.</h1><p>A storefront with personality. Customer relationships with context. A connected workspace for what comes next.</p><button class="button light" data-action="home">Explore the business demos →</button></div><article class="offer-card"><span class="pill">Standard pricing</span><h2>Everbranch Standard</h2>${terms(o)}<p class="standard-note">One monthly rate for future customers. Existing agreements keep their recorded terms.</p>${eligibility(o)}<button class="button" data-sales-action="signup">Get Started →</button><small class="compact-info">Request activation. No payment is taken here.</small></article></section><div class="section-head"><div><div class="eyebrow">WHAT’S INCLUDED IN THE PROPOSED SCOPE</div><h2>Make room for the work that matters.</h2></div></div><section class="offer-inclusions">${o.included.map((v,i)=>`<article><span class="offer-number">0${i+1}</span><h3>${esc(v.title)}</h3><p>${esc(v.body)}</p></article>`).join('')}</section><section class="partner-band"><div><div class="eyebrow">MORE THAN SOFTWARE</div><h2>A strategic partner.<br>One hour, every week.</h2><p>Dedicated time to talk through your business and decide what to do next.</p></div><ul class="offer-features">${(o.partnership??[]).map(v=>`<li>✓ ${esc(v)}</li>`).join('')}</ul></section><section class="offer-retail"><div><div class="eyebrow">A CONNECTED RETAIL EXPERIENCE</div><h2>From the first visit<br>to the next purchase.</h2><p>${esc(o.review_note)}</p><button class="button light" data-action="assistant">Meet your AI business assistant →</button></div><ul class="offer-features">${o.retail.map(v=>`<li>✓ ${esc(v)}</li>`).join('')}</ul></section>${usagePricing(o)}<section class="offer-next"><div><div class="eyebrow">YOUR NEXT STEP</div><h2>Let’s make it yours.</h2><button class="button" data-sales-action="signup">Get Started →</button></div><div><h3>1. Tell us about your business</h3><p>Review the monthly subscription and one-time standard setup.</p><h3>2. Request activation</h3><p>We confirm eligibility, your scope, and your own workspace setup.</p><h3>3. Approve your launch</h3><p>No subscription is active and no payment is taken until the authorized onboarding process is complete.</p></div></section><div class="policy-box"><strong>Clear expectations, before we start.</strong>${esc(o.additional)} AI examples are previews; live features, usage and provider readiness are confirmed in your written scope.</div><footer class="footer"><span>${money(o.monthly_cents)}/month per business · ${money(o.setup_cents)} one-time setup.</span><button class="text-button" data-action="home">Back to the showroom</button></footer></main>`;
+  }
+
+  function memoryPreview() {
+    const memory=currentOffer()?.usage?.future_usage?.find(r=>r.key==='memory');
+    return memory?`<section class="usage-pricing" data-roadmap="memory"><span class="pill">Planned release · unavailable today</span><h2>${esc(memory.label)}</h2><p>${esc(memory.note)}</p><p>For example: “Continue the release campaign we discussed last week, using my usual writing style.”</p><p class="compact-info">The current demo uses this conversation and its fictional business records. Cross-session personal memory will require the future release. Pricing is based on actual model usage, with estimates on the pricing page.</p></section>`:'';
+  }
+  function assistantPage() {
+    return `<main class="wrap assistant-page"><section class="assistant-hero"><div class="eyebrow">MEET YOUR AI BUSINESS ASSISTANT</div><h1>Good help.<br>Right where you work.</h1><p>Your business has a lot of moving parts. Everbranch helps you manage them.</p><div class="pill">${live()?'Live OpenAI · demo business':'Guided examples · live AI unavailable'}</div><p class="compact-info">${live()?'Ask questions and create drafts with OpenAI using the demonstration business.':'Try guided examples while the live AI connection is unavailable.'} No campaign is sent and no private customer information is accessed.</p></section><section class="assistant-grid" aria-label="Business assistant capabilities">${features.map(([key,title,body,icon])=>`<article class="assistant-card"><span class="assistant-symbol" aria-hidden="true">${icon}</span><span class="eyebrow">${key==='social'?'COMING SOON':live()?'ASK EVERBRANCH':'TRY A GUIDED EXAMPLE'}</span><h2>${title}</h2><p>${body}</p>${key==='social'?'<span class="pill">Coming Soon</span>':`<button class="button light" data-sales-action="assistant" data-mode="${key}">Try ${key==='voice'?'a conversation':'an example'} →</button>`}</article>`).join('')}</section>${memoryPreview()}<section class="assistant-next"><div><h2>Picture it working for your business.</h2><p>Explore the offer, then request a private setup review.</p></div><button class="button" data-action="pricing">See standard pricing →</button></section></main>`;
+  }
+
+  function signup() {
+    if(context().pack?.restricted){document.dispatchEvent(new CustomEvent('avery:handoff'));return;}
+    if (!context().owner || context().offline || !navigator.onLine) return toast('Connect with the showroom owner before entering personal information. Offline signup is unavailable.');
+    const o = currentOffer();
+    if (!validOffer(o)) return toast('Reconnect and reload to review the current offer.');
+    openModal('Get Started with Everbranch Retail', `<p class="eyebrow">STEP 1 OF 2 · YOUR BUSINESS</p><p>Request your own workspace. You will not receive access to the demonstration tenant.</p><form id="retail-signup-details" autocomplete="off"><div class="signup-fields"><label>Business name<input name="business_name" required maxlength="190" autocomplete="off"></label><label>Contact name<input name="contact_name" required maxlength="190" autocomplete="off"></label><label>Email address<input name="email" type="email" required maxlength="190" autocomplete="off" autocapitalize="none"></label><label>Phone number<input name="phone" type="tel" required maxlength="40" autocomplete="off"></label></div><label>Subscription<select name="subscription"><option value="${esc(o.key)}">Everbranch Standard — ${money(o.monthly_cents)}/month + ${money(o.setup_cents)} setup</option></select></label><p class="compact-info">No card details are collected. Details stay in this form until submission and are not saved in tablet storage.</p><button class="button" type="submit">Review pricing & request →</button></form>`, true);
+  }
+
+  function assistant(mode, forceGuided=false) {
+    const feature = features.find(v => v[0] === mode && v[0] !== 'social');
+    if (!feature) return;
+    const name = context().merchant?.name ?? 'Your sample business';
+    const useLive=live()&&!forceGuided;
+    openModal(feature[1], `<div class="policy-box"><strong>${useLive?'Live OpenAI · demonstration context':'Guided preview · sample context'}</strong>${useLive?'Your question and the sample business context go to OpenAI. Responses are drafts for review. No campaign, payment, or account activation is performed.':'These templates illustrate the workflow while live AI is unavailable. No campaign send or customer account is activated.'}</div><form id="retail-assistant-form" data-mode="${mode}" data-live="${useLive}" autocomplete="off"><label>Demonstration business<input name="business" maxlength="120" value="${esc(name)}"></label><label>${mode==='voice'?'Say or type a question or a page to open':'What are you working on?'}<textarea id="assistant-query" name="topic" rows="3" maxlength="300" required placeholder="${mode==='voice'?'Open pricing, show customer profiles, or show rewards':'For example: a weekend collection launch'}"></textarea></label><div class="assistant-controls"><button type="button" class="button light" data-sales-action="speak">Speak</button><button class="button" type="submit">${useLive?'Ask Everbranch':mode==='voice'?'Open page':'Create sample draft'}</button></div><p id="speech-status" class="compact-info" role="status">${mode==='voice'?'Speech uses your browser’s recognition service and may need internet. Typing is always available.':'Drafts stay here for review and are cleared when this dialog closes.'}</p></form><div id="assistant-result" class="assistant-result" aria-live="polite"></div>${useLive?`<button class="text-button" data-sales-action="guided" data-mode="${mode}">Use a guided example instead</button>`:''}`, true);
+  }
+
+  function clear() {
+    voice.clear();
+    draft = null; thread=[]; lastReply=""; window.speechSynthesis?.cancel();
+    clearTimeout(speechTimer);
+    if (recognition) { recognition.onresult = recognition.onerror = recognition.onend = null; recognition.abort(); recognition = null; }
+  }
+
+  function speak() {
+    const status = document.querySelector('#speech-status');
+    if (recognition) { recognition.stop(); return; }
+    const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!Speech) { status.textContent = 'Voice recognition is unavailable in this browser. Type your request above.'; return; }
+    const active = new Speech(); recognition = active;
+    active.lang = navigator.language || 'en-US'; active.continuous = false; active.interimResults = false;
+    active.onresult = event => { if (recognition!==active) return; document.querySelector('#assistant-query').value = event.results[0][0].transcript; status.textContent = 'Review the words, then submit your request.'; };
+    active.onerror = () => { if (recognition===active) status.textContent = 'Voice input stopped or was unavailable. You can type your request.'; };
+    active.onend = () => { if (recognition===active) { recognition=null; clearTimeout(speechTimer); if(status.textContent.startsWith('Listening')) status.textContent='Voice input ended. Review or type your request.'; } };
+    try { active.start(); status.textContent = 'Listening… select Speak again to stop.'; speechTimer=setTimeout(()=>active.stop(),12000); }
+    catch { recognition=null; status.textContent='Could not start voice input. Type your request instead.'; }
+  }
+
+  document.addEventListener('click', event => {
+    const button = event.target.closest('[data-sales-action]');
+    if (!button) return;
+    event.preventDefault();
+    if (button.dataset.salesAction==='signup') signup();
+    if (button.dataset.salesAction==='assistant') { if(button.dataset.mode==='voice')voice.open(); else assistant(button.dataset.mode); }
+    if (button.dataset.salesAction==='speak') speak();
+    if (button.dataset.salesAction==='voice') voice.open({customer:button.dataset.voiceCustomer||null});
+    if (button.dataset.salesAction==='typed-voice') assistant('voice',true);
+    if (button.dataset.salesAction==='guided') assistant(button.dataset.mode,true);
+    if (button.dataset.salesAction==='navigate' && ['home','pricing','assistant','customers','rewards','team'].includes(button.dataset.destination)){closeModal();navigate(button.dataset.destination);}
+    if (button.dataset.salesAction==='read' && lastReply && 'speechSynthesis' in window){window.speechSynthesis.cancel();window.speechSynthesis.speak(new SpeechSynthesisUtterance(lastReply));}
+  });
+  document.addEventListener('submit', async event => {
+    const form = event.target;
+    if (form.id==='retail-signup-details') {
+      event.preventDefault();
+      const data = Object.fromEntries(new FormData(form));
+      const o = currentOffer();
+      openModal('Review your activation request', `<p class="eyebrow">STEP 2 OF 2 · REVIEW BEFORE SUBMITTING</p><h3>${esc(data.business_name)}</h3><p>${esc(data.contact_name)} · ${esc(data.email)} · ${esc(data.phone)}</p>${terms(o)}<p class="standard-note">The standard subscription is $299/month per business with $499 one-time setup.</p>${eligibility(o)}<form id="retail-signup-review" autocomplete="off"><label class="signup-accept"><input type="checkbox" name="pricing_accepted" required> I have reviewed the introductory and ongoing rates, the setup fee, and eligibility. This requests activation; it does not activate a subscription or authorize a payment.</label><div id="signup-error" role="alert"></div><button class="button" type="submit">Submit activation request</button></form>`,true);
+      draft = {...data,quote_version:o.quote_version};
+    }
+    if (form.id==='retail-signup-review') {
+      event.preventDefault();
+      if (!draft || context().offline || !navigator.onLine) return toast('Reconnect and start again. Personal details were not saved on the tablet.');
+      const payload={...draft,pricing_accepted:true}, button=form.querySelector('button');
+      button.disabled=true; button.textContent='Saving request…';
+      try {
+        const result=await api('signup','POST',payload);
+        if(!form.isConnected) { clear(); return toast('Activation request saved for review.'); }
+        const message=result.confirmation_status==='submitted'?'A confirmation email has been submitted for delivery.':'Your request is saved. Confirmation email is pending; Evergrove will follow up after delivery setup or review.';
+        closeModal();
+        openModal('Request received',`<div class="order-success"><div class="tick">✓</div><h3>Your next chapter starts with a conversation.</h3><p>Activation pending review. No payment was taken and no subscription has been activated.</p><p>${message}</p><p class="compact-info">Reference: ${esc(result.reference)}</p><button class="button" data-action="close">Done</button></div>`);
+      } catch(error) { if(form.isConnected){ form.querySelector('#signup-error').textContent=error.message; button.disabled=false; button.textContent='Submit activation request'; } }
+    }
+    if (form.id==='retail-assistant-form') {
+      event.preventDefault();
+      const fd=new FormData(form), business=String(fd.get('business')).trim()||'Your sample business', topic=String(fd.get('topic')).trim(), mode=form.dataset.mode;
+      const output=document.querySelector('#assistant-result');
+      if(mode==='voice') {
+        const query=topic.toLowerCase();
+        const destination=/pricing|price|plan|subscription/.test(query)?'pricing':/customer|client|profile/.test(query)?'customers':/reward|point/.test(query)?'rewards':/team|staff/.test(query)?'team':/assistant|marketing/.test(query)?'assistant':/home|showroom/.test(query)?'home':null;
+        if(destination && /^(?:(?:please|can you)\s+)?(?:open|show|go|take)\b/.test(query)) { closeModal(); navigate(destination); return; }
+        if(form.dataset.live!=='true'){output.textContent='Try “open pricing,” “show customer profiles,” “show rewards,” “show team,” or “open the assistant.”'; return;}
+      }
+      if(form.dataset.live==='true') {
+        const button=form.querySelector('button[type="submit"]');button.disabled=true;output.textContent='Asking Everbranch…';
+        try {
+          const result=await api('assistant','POST',{mode,question:topic,business,merchant:context().merchant?.slug??null,history:thread.slice(-4),...(context().merchant?.slug==='avery-knifeworks'?{demo_view:context().averyContext?.().view??'workspace',focus_customer:context().averyContext?.().focused_customer?.id??null}:{})});
+          if(!form.isConnected)return;
+          thread=[...thread,{role:'user',content:topic},{role:'assistant',content:result.reply.slice(0,1500)}].slice(-4);lastReply=result.reply;
+          output.innerHTML=`<h3>Everbranch · OpenAI</h3><pre>${esc(result.reply)}</pre><small>Review before use. Demonstration business context.</small><div class="assistant-controls">${result.destination?`<button class="button light" data-sales-action="navigate" data-destination="${esc(result.destination)}">Open ${esc(result.destination)} →</button>`:''}${'speechSynthesis' in window?'<button class="button light" data-sales-action="read">Read aloud</button>':''}</div>`;
+        } catch(error){if(form.isConnected)output.textContent=error.message;}
+        finally{if(form.isConnected)button.disabled=false;}
+        return;
+      }
+      const drafts={email:`Subject: A little something new from ${business}\n\nHi [first name],\n\nWe’re making room for ${topic}. Explore the collection, find something you love, and get in touch if we can help.\n\n[Approved offer, dates and store link]\n${business}\n[Mailing address and unsubscribe link]\n\nReview audience consent, claims and details before sending.`,sms:`${business}: ${topic}. Discover what’s new: [approved link]. [Approved dates/terms]. Reply STOP to opt out.\n\nSample only. Review consent, sender setup and campaign details before sending.`,admin:`A practical next step for ${business}:\n\n1. Review ${topic} and confirm the owner and due date.\n2. Check customer requests and record a clear follow-up.\n3. Review the draft with your team before taking action.\n\nThis example creates no task, message or customer record.`,personal:`For ${business}, start with ${topic}.\n\nChoose one clear customer goal, connect it to a product or service, and plan one useful follow-up. Bring the draft to your weekly strategy call to confirm the audience, scope and next step.\n\nThis is a guided template; live business context is connected during approved setup.`};
+      output.innerHTML=`<h3>Sample draft · review before use</h3><pre>${esc(drafts[mode]??'')}</pre>`;
+    }
+  });
+  window.addEventListener('pagehide',()=>{
+    if(document.querySelector('#retail-signup-details,#retail-signup-review,#retail-assistant-form'))closeModal();
+    else clear();
+  });
+  document.addEventListener('visibilitychange',()=>{ if(document.hidden && (draft || document.querySelector('#retail-signup-details'))) closeModal(); });
+  return {pricingPage,assistantPage,clear};
+}

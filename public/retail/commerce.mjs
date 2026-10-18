@@ -1,0 +1,22 @@
+export const states=['AL','AK','AZ','AR','CA','CO','CT','DE','DC','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'];
+export const money=c=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(c/100);
+export function resolveLines(merchant,lines){
+ if(lines.length>40)throw Error('Too many cart lines.');const seen=new Set();
+ return lines.map(line=>{const product=merchant.products.find(p=>p.id===line.product_id),variant=product?.variants.find(v=>v.id===line.variant_id);const key=line.product_id+':'+line.variant_id;
+ if(!variant||!Number.isInteger(line.quantity)||line.quantity<1||line.quantity>20||line.quantity>variant.stock||product.quote_only||seen.has(key))throw Error('An item is unavailable, needs a quote, or has an invalid quantity.');seen.add(key);return{product,variant,quantity:line.quantity,line_cents:variant.price_cents*line.quantity};});
+}
+export function quote(merchant,lines,destination){
+ if(!/^\d{5}$/.test(destination.zip)||destination.zip==='00000'||!states.includes(destination.state))throw Error('Enter a five-digit US ZIP code and a valid state.');
+ const resolved=resolveLines(merchant,lines),s=merchant.shipping,groups={};
+ for(const l of resolved){const p=l.product,key=p.group;groups[key]??={kind:key,weight_oz:0,length:p.dimensions_inches[0],width:p.dimensions_inches[1],height:p.dimensions_inches[2],oversized:false,sample_measurements:true};groups[key].weight_oz+=p.weight_oz*l.quantity;groups[key].oversized||=p.oversized;if(s.kind==='ceramic'){groups[key].weight_oz+=6*l.quantity;groups[key].height+=2*l.quantity;}}
+ const package_groups=Object.values(groups),subtotal_cents=resolved.reduce((sum,l)=>sum+l.line_cents,0),options=[{id:'pickup',label:'Local pickup · sample schedule',amount_cents:0,kind:'sample',description:'Pickup address and timing need merchant confirmation.'}];
+ let reason='Sample shipping estimate. Origin, packed dimensions, handling and merchant policies are not verified.';
+ if(s.kind==='meat'){if(destination.state==='NC'&&destination.zip.startsWith('286'))options.push({id:'local',label:'Local delivery · sample eligibility',amount_cents:750,kind:'sample',description:'Illustrative local zone only. No delivery is booked.'});reason='Consumer meat shipping is disabled. Refrigerated and interstate shipping require merchant approval and verified cold-chain readiness.';}
+ else if(package_groups.some(p=>p.oversized))reason='This oversized item needs a manual packing and delivery quote.';
+ else{const weight=package_groups.reduce((sum,p)=>sum+p.weight_oz,0);if(weight<=0)reason='Package weight is missing. A carrier rate cannot be quoted.';else{const base=475+Number(destination.zip[0])*28+Math.ceil(weight*9)+s.handling_cents+Math.max(0,package_groups.length-1)*175,free=s.free_over_cents!==null&&subtotal_cents>s.free_over_cents;options.push({id:'ground',label:free?'Free shipping · unconfirmed demo rule':'Sample parcel · ground',amount_cents:free?0:base,kind:'sample',description:'Example calculation using illustrative package measurements. Not an actual USPS/UPS quote.'},{id:'expedited',label:'Sample parcel · expedited',amount_cents:base+650,kind:'sample',description:'Illustrative service only. No delivery date is promised.'});}}
+ return{options,reason,package_groups,kind:'sample',subtotal_cents,tax_cents:null,tax_note:'Tax is not calculated in this demonstration.'};
+}
+export function simulate(merchant,lines,destination,service,customer=null,redeem=false){
+ const q=quote(merchant,lines,destination),resolved=resolveLines(merchant,lines),rate=q.options.find(o=>o.id===service);if(!lines.length||!rate)throw Error('Add an item and choose an available fulfillment option.');if(redeem&&(!customer||customer.points<100))throw Error('Choose a sample customer with at least 100 points.');
+ const credit=redeem?Math.min(500,q.subtotal_cents):0;return{id:'DEMO-'+crypto.randomUUID().slice(0,8).toUpperCase(),is_demo:true,status:'simulated',customer_id:customer?.id??null,lines:resolved.map(l=>({name:l.product.name,variant:l.variant.title,quantity:l.quantity,line_cents:l.line_cents})),subtotal_cents:q.subtotal_cents,shipping_cents:rate.amount_cents,reward_credit_cents:credit,total_cents:q.subtotal_cents+rate.amount_cents-credit,tax_cents:null,service:rate.label,created_at:new Date().toISOString()};
+}

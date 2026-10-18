@@ -1,3 +1,64 @@
+## October 18, 2026 — Avery negotiated service and exit terms
+
+Avery's Standard agreement adds its separately negotiated two-request/one-revision
+monthly support allowance, three-business-day acknowledgment target and five named
+users subject to confirmed production capacity. Cancellation remains at paid-period
+end. Actual authorized unpaid usage survives cancellation, with prepaid deductions
+never billed twice. Unused purchased credit is refundable after settlement;
+promotional credit has no cash value. A standard export is included, client domains
+and accounts stay client-owned, and transition/deletion, breach, confidentiality,
+liability and South Carolina/Pickens County dispute terms are explicit.
+These are contract obligations, not automated refunds, debt collection or access
+activation. Other customers and accepted versions retain their frozen terms.
+See `docs/retail/AVERY_DEMO.md` for the revision and operating requirements.
+
+## October 18, 2026 — Avery-only shared demo entry
+
+Retail v20 adds `/avery`, a CSRF-protected PIN entry enabled only on the exact
+isolated staging host. The visitor sees one Avery concept, fictional workspace,
+context-aware AI, feature preferences and prepared agreement/payment links.
+A request-local unprivileged demo identity never authenticates the platform guard;
+server route/method/merchant restrictions block other businesses, Studio, private
+research and real message dispatch. Existing presenter login remains intact and
+`/avery/presenter` exits guest mode. The guest grant lasts 12 hours and changing
+its configured code hash invalidates existing grants. No production flags change.
+The preview Nginx Studio directory/index routes now pass through the existing
+presenter guard. See `docs/retail/SHOWROOM_RUNBOOK.md` for setup and recovery.
+
+## October 18, 2026 — Untethered Retail demo recovery and voice reliability
+
+The tablet's old localhost install loses live access when ADB/USB disconnects.
+Customer-facing usage pricing shows Everbranch rates and estimates. Provider costs
+and multipliers remain server-side, including voice context and offline public data.
+Retail v19 refreshes owner-authenticated CSRF state from a no-store session endpoint
+before live writes, including a cold offline launch followed by reconnect. Tokens
+are never added to the offline pack. The isolated staging presenter transport needs
+an explicit flag and exact host; production remains blocked. The separate hosted
+preview uses its own database, key, cookies and storage, preserving the live app.
+The private preview is `everbranch-retail-demo.on-forge.com` (Forge site 3432615).
+Voice sends compact current context, bounds conversation history and pauses/retries
+one rate-limited reply without replaying tools. See `docs/retail/VOICE_DEMO.md`.
+
+## October 18, 2026 — Standard usage policy and billing statements (release pending)
+
+- Standard first payment is $798, with no usage/preload; subsequent base is $299.
+  Future Standard email is $1.49/1,000, SMS $0.05/segment, MMS $0.15, AI and
+  future memory/combined voice usage 2× actual provider cost. Memory and voice
+  feature access have no extra Standard subscription fee. Planned stays planned.
+- Accepted, paid and fulfilled frozen policies bind messaging rates; legacy
+  contracts retain precedence. Private owner/admin usage statements distinguish
+  purchases from deductions. Receipt mail has a default-off durable delivery gate;
+  no automatic resend after ambiguous provider outcomes. See the Standard runbook.
+
+## October 17, 2026 — Standard offer for future customers
+
+- The canonical new offer is $299/month per business plus $499 one-time setup in
+  `module_catalog.offers.standard`. Public comparisons have one offer; legacy plan
+  IDs, stored agreements, subscriptions, add-ons and access remain unchanged.
+- Checkout verifies new exact provider prices and a once-only setup attempt.
+  Production capacity mapping is unresolved, so new standard checkout stays gated.
+  Read `docs/operations/standard-everbranch-offer.md` for source, test and release details.
+
 ## Ask Everbranch (2026-10-16; local, disabled)
 
 - The separately audited fictional pilot uses the fixed `everbranch-voice-pilot`
@@ -290,6 +351,94 @@
 
 # START HERE
 
+## 2026-10-18 — Avery workshop, actionable demo voice and Standard pricing (development)
+
+Retail cache v13 retains installed identities and saved records while adding Avery’s
+8-model/77-variant real-photo finder, exact shop QR, optional knife passport, linked
+fictional service queue, 14 customers/33 orders and workshop/production/shipping.
+Allowlisted voice and typed tools navigate, read fresh fictional context, fill forms,
+save demo customers/invoices and prepare messages. Live recipient consent and sends
+remain separate owner-reviewed actions; AI cannot send or charge. The authorized
+local SendGrid/Twilio tests succeeded, with an approved temporary Forestry SMS sender
+while the new Everbranch child account awaits onboarding. Provider secrets stay
+private; production transport remains disabled. Present mode ends with the actual
+review agreement and unpaid $798 Stripe invoice. New offers show $299 + $499 setup;
+text, email and AI charges/limits are separate. OpenAI uses the approved 2× actual API-cost policy with model estimates. The
+shared prepaid policy removes new-customer text setup and sending-access fees.
+Future voice includes owner-approved team model choice; connection scope and
+complete phone pricing still require a quote. See `docs/retail/AVERY_DEMO.md`. No website release.
+
+
+## 2026-10-17 — Retail conversational voice (development)
+
+The installed Retail PWA adds **Talk with AI**, an owner-authenticated OpenAI
+Realtime conversation using the selected demo catalog, canonical offer and a
+read-only snapshot of fictional customers, orders, rewards and sample staff notes.
+Profile/workspace entry buttons preserve the selected customer and staff section.
+Connected snapshots resolve only the marked demo tenant; tablet activity is
+strictly validated and kept separate. Real customers and private prospect notes
+remain excluded.
+Readiness checks precede microphone access; follow-up turns and interruptions share
+one session. Mute/end, navigation, backgrounding, network loss and the five-minute
+client limit clean up audio. Returning online never restarts the microphone.
+Voice is default-off; its server key stays private. There are no action tools,
+real customer records or web search. Cache v7 adds the public voice module and
+retains the full 75-photo offline pack. See `docs/retail/VOICE_DEMO.md` for local
+configuration, provider/privacy boundaries and verification. No production release.
+
+## 2026-10-17 — Retail offline photo repair (development)
+
+Retail cache v5 preloads the public shell and all 75 bundled demo photographs
+before activating an update or retiring the previous cache, reusing already saved
+public photos. A static public photo
+manifest covers every WebP under `public/retail/assets`; offline preparation uses
+the same list. Saved images are served from the device immediately, including
+when Wi-Fi is connected but the server cannot be reached. Private APIs and
+authenticated HTML remain excluded. See `docs/retail/VERIFICATION.md`.
+
+## 2026-10-16 — Retail tablet sales upgrade (development)
+
+The existing Retail PWA retains its installed Android identity and all twenty
+storefront concepts. A named canonical Retail Launch Partner offer replaces only
+the showroom offer: $89/month for six months, then $149/month from month seven,
+$499 setup, first ten qualifying businesses subject to operator review. Managed
+Website add-on pricing remains unchanged. Signup uses the existing production
+access-request service and prospect CRM; it creates no tenant membership, paid
+subscription, or reserved launch place. Personal form data is never persisted on
+the tablet. Confirmation delivery is separately gated and truthfully reported.
+
+The owner-only Retail assistant can call the existing server-side OpenAI account
+with bounded fictional business context, no tools, no provider response storage,
+and a request quota. Email/SMS/business drafts require review; it cannot send a
+campaign, grant access, charge a card or read another tenant. Guided examples work
+when live AI is unavailable. Voice input and optional read-aloud use browser
+capabilities. Social Media Marketing remains Coming Soon. Public shell cache v4
+includes the assistant module, with private API responses excluded.
+See `docs/retail/SALES_DEMO_UPGRADE.md` for setup, evidence and limitations.
+
+## 2026-10-15 — Private four-app retail showroom (development)
+
+Twenty isolated festival retail concepts and a retained Sawyer source-catalog preview
+share the existing Website Commerce catalog/cart lane. Owner-only routes, scoped
+team access, revocable previews, draft prospect/onboarding records, demo-only
+receipts/rewards, deterministic offline shipping, and test-only EasyPost rates stay
+separate from live payments, fulfillment, notifications, Shopify and Modern Forestry.
+The showroom is disabled by default; no merchant or production activation occurred.
+Twenty vendor-specific message templates, site observations and recipient evidence
+are owner-only. The review page has no send path. Separately approved external
+Facebook/email outreach records actual receipts in ignored private storage; reusable
+template draft metadata does not describe current delivery state. Honest Elderberry
+is excluded from outreach while its storefront remains. Private research and delivery
+records stay out of public/offline data.
+
+Retail and the separate Renfrow Studio are installable PWAs; Field retains live
+authentication and adds the bundled offline sample, alongside existing Showcase.
+The offer uses Managed Website pricing ($499 setup / $99 monthly) and a one-hour
+weekly strategic video call. Retail cache v3 refreshes public CORE/assets and retires
+the stale seven-concept shell; prepare the full twenty-concept pack on each device.
+Vector-derived PWA/native icons preserve app identities, and Android auth fallbacks
+keep the sign-in layout/heading readable. See `docs/retail/SHOWROOM_RUNBOOK.md` and
+`docs/retail/VERIFICATION.md` for device setup, scope, checks and release limitations.
 ## Ask Everbranch voice navigation (2026-10-16)
 
 Read `docs/operations/everbranch-voice-runbook.md` before extending voice work.

@@ -48,7 +48,12 @@ class LandlordAgreementController extends Controller
     {
         $data = $request->validate($this->pricingRules());
         $tenant = Tenant::query()->findOrFail((int) $data['tenant_id']);
+        if ($data['template_key'] === Agreement::TEMPLATE_MANAGED_WEBSITE_CLIENT_SERVICES) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['template_key' => 'The generic Launch Partner template is retired for new offers. Use the standard $299 monthly / $499 setup offer and review scope before preparing an agreement. Existing issued agreements remain available.']);
+        }
+
         $agreement = match ($data['template_key']) {
+            Agreement::TEMPLATE_STANDARD_SERVICES => $management->prepareStandard($tenant, $request->user()?->id, $data['additional_scope'] ?? null),
             Agreement::TEMPLATE_COLLINS_ELECTRIC_CLIENT_SERVICES => $management->prepareCollinsElectric($tenant, $request->user()?->id, $this->cents($data['onboarding_amount'] ?? null) ?? 29900, $this->cents($data['launch_partner_amount'] ?? null) ?? 5900, $this->cents($data['standard_amount'] ?? null) ?? 14900, $data['additional_scope'] ?? null),
             Agreement::TEMPLATE_MANAGED_WEBSITE_CLIENT_SERVICES => $management->prepareManagedWebsite($tenant, $request->user()?->id, $this->cents($data['onboarding_amount'] ?? null) ?? 29900, $this->cents($data['launch_partner_amount'] ?? null) ?? 8900, $this->cents($data['standard_amount'] ?? null) ?? 14900, $data['additional_scope'] ?? null),
             default => $management->prepareFrontYardFoods($tenant, $request->user()?->id, $this->cents($data['implementation_amount'] ?? null), $this->cents($data['due_on_acceptance'] ?? null), $this->cents($data['due_before_launch'] ?? null), $data['additional_scope'] ?? null),
@@ -79,7 +84,9 @@ class LandlordAgreementController extends Controller
         abort_if($agreement->agreement_type === Agreement::TYPE_SANDBOX_VALIDATION, 409, 'Sandbox validation agreements cannot version the client agreement.');
         abort_if(in_array($agreement->status, ['accepted', 'active', 'termination_pending', 'terminated'], true), 409);
         $data = $request->validate($this->pricingRules(false));
-        if ($agreement->template_key === Agreement::TEMPLATE_MANAGED_WEBSITE_CLIENT_SERVICES) {
+        if ($agreement->template_key === Agreement::TEMPLATE_STANDARD_SERVICES) {
+            $management->prepareStandard($agreement->tenant, $request->user()?->id, $data['additional_scope'] ?? null, reviseIssued: true);
+        } elseif ($agreement->template_key === Agreement::TEMPLATE_MANAGED_WEBSITE_CLIENT_SERVICES) {
             $management->prepareManagedWebsite($agreement->tenant, $request->user()?->id, $this->cents($data['onboarding_amount'] ?? null) ?? 29900, $this->cents($data['launch_partner_amount'] ?? null) ?? 8900, $this->cents($data['standard_amount'] ?? null) ?? 14900, $data['additional_scope'] ?? null);
         } elseif ($agreement->template_key === Agreement::TEMPLATE_COLLINS_ELECTRIC_CLIENT_SERVICES) {
             $management->prepareCollinsElectric($agreement->tenant, $request->user()?->id, $this->cents($data['onboarding_amount'] ?? null) ?? 29900, $this->cents($data['launch_partner_amount'] ?? null) ?? 5900, $this->cents($data['standard_amount'] ?? null) ?? 14900, $data['additional_scope'] ?? null);
@@ -259,7 +266,7 @@ class LandlordAgreementController extends Controller
     protected function pricingRules(bool $withTenant = true): array
     {
         $rules = [
-            'template_key' => ['nullable', Rule::in([Agreement::TEMPLATE_FRONT_YARD_CLIENT_SERVICES, Agreement::TEMPLATE_COLLINS_ELECTRIC_CLIENT_SERVICES, Agreement::TEMPLATE_MANAGED_WEBSITE_CLIENT_SERVICES])],
+            'template_key' => ['nullable', Rule::in([Agreement::TEMPLATE_STANDARD_SERVICES, Agreement::TEMPLATE_FRONT_YARD_CLIENT_SERVICES, Agreement::TEMPLATE_COLLINS_ELECTRIC_CLIENT_SERVICES, Agreement::TEMPLATE_MANAGED_WEBSITE_CLIENT_SERVICES])],
             'implementation_amount' => ['nullable', 'numeric', 'min:0', 'max:999999.99'],
             'due_on_acceptance' => ['nullable', 'numeric', 'min:0', 'max:999999.99'],
             'due_before_launch' => ['nullable', 'numeric', 'min:0', 'max:999999.99'],
@@ -269,7 +276,7 @@ class LandlordAgreementController extends Controller
             'standard_amount' => ['nullable', 'numeric', 'min:0', 'max:999999.99'],
         ];
         if ($withTenant) {
-            $rules['template_key'] = ['required', Rule::in([Agreement::TEMPLATE_FRONT_YARD_CLIENT_SERVICES, Agreement::TEMPLATE_COLLINS_ELECTRIC_CLIENT_SERVICES, Agreement::TEMPLATE_MANAGED_WEBSITE_CLIENT_SERVICES])];
+            $rules['template_key'] = ['required', Rule::in([Agreement::TEMPLATE_STANDARD_SERVICES, Agreement::TEMPLATE_FRONT_YARD_CLIENT_SERVICES, Agreement::TEMPLATE_COLLINS_ELECTRIC_CLIENT_SERVICES, Agreement::TEMPLATE_MANAGED_WEBSITE_CLIENT_SERVICES])];
             $rules['tenant_id'] = ['required', 'integer', 'exists:tenants,id'];
         }
 

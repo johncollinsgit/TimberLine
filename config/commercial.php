@@ -415,6 +415,8 @@ return [
     ],
 
     'billing_readiness' => [
+        // Enable only after the verified mail transport and rollout review.
+        'usage_receipts_enabled' => (bool) env('BILLING_USAGE_RECEIPTS_ENABLED', false),
         'checkout_active' => (bool) env('EVERBRANCH_STRIPE_CHECKOUT_ACTIVE', false),
         'lifecycle_mutations_enabled' => (bool) env('EVERBRANCH_STRIPE_LIFECYCLE_MUTATIONS_ENABLED', false),
         'allow_production_test_mode' => (bool) env('EVERBRANCH_STRIPE_TEST_MODE_ON_PRODUCTION_ALLOWED', false),

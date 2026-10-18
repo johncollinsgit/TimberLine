@@ -20,10 +20,10 @@ test('public plans page renders tiers and add-ons', function (): void {
         ->assertSeeText('Add-ons')
         ->assertSeeText('Module Map')
         ->assertSeeText('Included now')
-        ->assertSeeText('$89/mo for 6 months')
+        ->assertSeeText('$299/month per business')
         ->assertSeeText('$499 one-time setup')
-        ->assertSeeText('$149/mo after the first 6 months')
-        ->assertDontSeeText('$199/mo after the first 6 months');
+        ->assertDontSeeText('$89/mo')
+        ->assertDontSeeText('$149/mo');
 });
 
 test('public demo request page renders access request form', function (): void {
@@ -58,17 +58,13 @@ test('public start as a client page renders plan interest inputs', function (): 
         ->assertSeeText('Add-ons of interest')
         ->assertSeeText('Already have access? Sign in')
         ->assertSeeText('Pricing')
-        ->assertSeeText('Launch partner pricing')
-        ->assertSeeText('$149')
+        ->assertSeeText('Everbranch pricing')
+        ->assertSeeText('$299')
         ->assertSeeText('$499 one-time')
-        ->assertSeeText('$89/mo')
-        ->assertSeeText('$149/mo')
-        ->assertDontSeeText('$199/mo')
-        ->assertSeeText('$1,033')
-        ->assertSeeText('save $360 in the first 6 months')
-        ->assertSeeText('Limited to 10')
-        ->assertSeeText('First 10 businesses')
-        ->assertSeeText('Unlimited users')
+        ->assertSeeText('$798')
+        ->assertSeeText('$2,293')
+        ->assertDontSeeText('Limited to 10')
+        ->assertDontSeeText('Unlimited users')
         ->assertDontSeeText('Electrician')
         ->assertDontSeeText('CLIENT SIGNUP')
         ->assertDontSeeText('Production access request')
@@ -154,7 +150,7 @@ test('demo request captures business context without production commercial write
         'team_size' => '1_5',
         'timeline' => 'researching',
         'website' => 'https://demo-context.example.com',
-        'preferred_plan_key' => 'growth',
+        'preferred_plan_key' => 'standard',
         'addons_interest' => ['sms'],
     ])->assertRedirect(route('platform.request-submitted', ['intent' => 'demo'], absolute: false));
 
@@ -164,7 +160,7 @@ test('demo request captures business context without production commercial write
         ->and((string) data_get($request->metadata, 'team_size'))->toBe('1_5')
         ->and((string) data_get($request->metadata, 'timeline'))->toBe('researching')
         ->and((string) data_get($request->metadata, 'website'))->toBe('https://demo-context.example.com')
-        ->and((string) data_get($request->metadata, 'preferred_plan_key'))->toBe('growth')
+        ->and((string) data_get($request->metadata, 'preferred_plan_key'))->toBe('standard')
         ->and((array) data_get($request->metadata, 'addons_interest'))->toBe(['sms']);
 });
 

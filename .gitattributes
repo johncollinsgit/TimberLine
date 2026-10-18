@@ -9,3 +9,7 @@
 CHANGELOG.md export-ignore
 README.md export-ignore
 .github/workflows/browser-tests.yml export-ignore
+
+# Preserve upstream browser libraries verbatim and keep review focused on app code.
+public/studio/transformers.web.js linguist-vendored -whitespace
+public/studio/vendor/** linguist-vendored -whitespace

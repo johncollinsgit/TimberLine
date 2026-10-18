@@ -357,8 +357,7 @@ class TenantMessagingUsageService
 
     protected function includedUnits(int $tenantId, string $channel): int
     {
-        $contract = $this->activeUsageContract($tenantId);
-        $contractAllowance = data_get($contract?->metadata, 'included_units.'.$channel);
+        $contractAllowance = data_get($this->usageTerms($tenantId), 'included_units.'.$channel);
         if (is_numeric($contractAllowance)) {
             return max(0, (int) $contractAllowance);
         }
@@ -380,7 +379,7 @@ class TenantMessagingUsageService
 
     protected function buyerRate(int $tenantId, string $channel): int
     {
-        $contractRate = data_get($this->activeUsageContract($tenantId)?->metadata, 'overage_rates_micros.'.$channel);
+        $contractRate = data_get($this->usageTerms($tenantId), 'overage_rates_micros.'.$channel);
         if (is_numeric($contractRate)) {
             return max(0, (int) $contractRate);
         }
@@ -390,16 +389,24 @@ class TenantMessagingUsageService
 
     protected function billingMode(int $tenantId): string
     {
-        return strtolower(trim((string) data_get($this->activeUsageContract($tenantId)?->metadata, 'billing_mode', 'prepaid_credit')));
+        return strtolower(trim((string) data_get($this->usageTerms($tenantId), 'billing_mode', 'prepaid_credit')));
     }
 
     protected function pricingVersion(int $tenantId): string
     {
         return trim((string) data_get(
-            $this->activeUsageContract($tenantId)?->metadata,
+            $this->usageTerms($tenantId),
             'pricing_version',
             config('marketing.messaging.platform.pricing_version')
         ));
+    }
+
+    protected function usageTerms(int $tenantId): ?array
+    {
+        // Explicit existing contracts retain precedence over a future Standard offer.
+        $contract = $this->activeUsageContract($tenantId);
+
+        return $contract ? (array) $contract->metadata : app(\App\Services\Billing\StandardUsageAgreementPolicy::class)->forTenant($tenantId);
     }
 
     protected function activeUsageContract(int $tenantId): ?TenantAccessAddon

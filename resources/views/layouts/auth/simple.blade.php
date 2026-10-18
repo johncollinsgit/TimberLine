@@ -2,6 +2,7 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         @include('partials.head')
+        <link rel="stylesheet" href="{{ asset('css/everbranch-auth-compat.css') }}">
     </head>
     <body class="fb-auth-body antialiased {{ ($authTenantPresentation['variant'] ?? 'none') !== 'flagship' ? 'eb-auth-theme' : '' }}">
         @php

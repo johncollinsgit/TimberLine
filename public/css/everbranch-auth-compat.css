@@ -1,0 +1,57 @@
+/* Keep text legible on the non-flagship forest panel on every browser. */
+.eb-auth-theme .fb-auth-brand-copy h1 { color: #fffef9; opacity: 1; }
+.eb-auth-theme .fb-auth-brand-copy p,
+.eb-auth-theme .fb-auth-brand-foot { color: #e3ecd6; opacity: 1; }
+.eb-auth-theme .fb-auth-brand-lockup { filter: brightness(0) invert(1); }
+
+/* Older Android Chrome cannot render the utility framework's modern color/layer
+   rules. Keep the existing non-flagship sign-in usable without changing auth. */
+@supports not (color: oklch(0.5 0.1 120)) {
+  .eb-auth-theme, .eb-auth-theme *, .eb-auth-theme *::before, .eb-auth-theme *::after { box-sizing: border-box; }
+  .eb-auth-theme { margin: 0; background: #edf0e9; color: #172d23; font: 16px/1.5 system-ui, sans-serif; }
+  .eb-auth-theme .fb-auth-shell { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; max-width: 1100px; min-height: 100vh; padding: 32px; }
+  .eb-auth-theme .fb-auth-brand-panel { display: flex; flex-direction: column; justify-content: space-between; min-height: 440px; padding: 32px; border: 0; border-radius: 20px; background: #214a36; color: #fffef9; }
+  .eb-auth-theme .fb-auth-brand-lockup { display: block; width: 210px !important; max-width: 100%; height: auto !important; filter: brightness(0) invert(1); }
+  .eb-auth-theme .fb-auth-brand-copy { margin: 40px 0; }
+  .eb-auth-theme .fb-auth-brand-copy h1 { margin: 0 0 18px; color: #fffef9; font: 600 36px/1.12 system-ui, sans-serif; letter-spacing: -1px; }
+  .eb-auth-theme .fb-auth-brand-copy p, .eb-auth-theme .fb-auth-brand-foot { color: #e3ecd6; }
+  .eb-auth-theme .fb-auth-brand-copy .fb-auth-eyebrow { color: #e3ecd6; margin-bottom: 14px; }
+  .eb-auth-theme .fb-auth-brand-foot { font-size: 11px; letter-spacing: 1px; }
+  .eb-auth-theme .fb-auth-card-wrap { display: flex; align-items: center; justify-content: center; min-width: 0; }
+  .eb-auth-theme .fb-auth-card { width: 100%; max-width: 440px; padding: 30px; border: 1px solid #d2dccf; border-radius: 20px; background: #fffef9; box-shadow: 0 12px 36px #172d2308; }
+  .eb-auth-theme .fb-auth-card > div { display: grid; gap: 24px; }
+  .eb-auth-theme .fb-auth-title { margin: 10px 0; font: 650 32px/1.12 system-ui, sans-serif; letter-spacing: -1px; }
+  .eb-auth-theme .fb-auth-subtitle { margin: 0; color: #43584d; font-size: 15px; }
+  .eb-auth-theme .fb-auth-eyebrow { color: #214a36; font-size: 11px; font-weight: 700; letter-spacing: 2px; }
+  .eb-auth-theme .fb-auth-card form { display: grid; gap: 20px; }
+  .eb-auth-theme [data-flux-field] { display: block; min-width: 0; }
+  .eb-auth-theme [data-flux-label] { display: block; margin-bottom: 7px; font-size: 14px; font-weight: 600; }
+  .eb-auth-theme [data-flux-input] { display: block; position: relative; width: 100%; }
+  .eb-auth-theme .fb-auth-card input:not([type='hidden']):not([type='checkbox']) { display: block; width: 100%; min-height: 48px; padding: 12px 44px 12px 13px; border: 1px solid #bac9b7; border-radius: 9px; background: #fff; color: #172d23; font: inherit; outline: 0; }
+  .eb-auth-theme .fb-auth-card input:focus { border-color: #426e36; box-shadow: 0 0 0 3px #dce9b4 !important; }
+  .eb-auth-theme [data-flux-input] > div { position: absolute; top: 0; right: 3px; bottom: 0; display: flex; align-items: center; }
+  .eb-auth-theme [data-flux-input] button { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 10px; border: 0; border-radius: 7px; background: transparent; color: #43584d; }
+  .eb-auth-theme [data-flux-input] button svg { display: none; width: 20px; height: 20px; }
+  .eb-auth-theme [data-flux-input] button svg:last-child { display: block; }
+  .eb-auth-theme [data-viewable-open] button svg:first-child { display: block; }
+  .eb-auth-theme [data-viewable-open] button svg:last-child { display: none; }
+  .eb-auth-theme form > .relative { position: relative; }
+  .eb-auth-theme form > .relative > a { position: absolute; top: 0; right: 0; font-size: 12px; }
+  .eb-auth-theme ui-checkbox { display: inline-flex; vertical-align: middle; margin-right: 8px; cursor: pointer; }
+  .eb-auth-theme ui-checkbox ~ [data-flux-label] { display: inline; vertical-align: middle; font-weight: 400; }
+  .eb-auth-theme [data-flux-checkbox-indicator] { display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: 1px solid #bac9b7; border-radius: 4px; }
+  .eb-auth-theme [data-flux-checkbox-indicator] svg { display: none; width: 16px; height: 16px; }
+  .eb-auth-theme ui-checkbox[data-checked] svg:first-child { display: block; }
+  .eb-auth-theme .fb-auth-submit { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 48px; padding: 12px 20px; border: 1px solid #214a36; border-radius: 9px; background: #214a36; color: #fffef9; font: 650 16px/1.4 system-ui, sans-serif; cursor: pointer; }
+  .eb-auth-theme .fb-auth-submit svg, .eb-auth-theme [data-flux-loading-indicator], .eb-auth-theme [hidden], .eb-auth-theme .hidden { display: none; }
+  .eb-auth-theme .fb-auth-card a { color: #214a36; text-decoration: underline; text-underline-offset: 3px; }
+  .eb-auth-theme .fb-auth-card [role='alert']:empty { display: none; }
+  .eb-auth-theme .fb-auth-support { margin: 24px 0 0; padding-top: 20px; border-top: 1px solid #d2dccf; color: #43584d; font-size: 13px; }
+  @media (max-width: 700px) {
+    .eb-auth-theme .fb-auth-shell { display: block; padding: 18px; }
+    .eb-auth-theme .fb-auth-brand-panel { min-height: 0; padding: 24px; }
+    .eb-auth-theme .fb-auth-brand-copy, .eb-auth-theme .fb-auth-brand-foot { display: none; }
+    .eb-auth-theme .fb-auth-card-wrap { padding: 20px 0; }
+    .eb-auth-theme .fb-auth-card { max-width: 100%; padding: 24px; }
+  }
+}

@@ -24,6 +24,8 @@ class Agreement extends Model
 
     public const TEMPLATE_FRONT_YARD_SANDBOX_VALIDATION = 'front_yard_foods_sandbox_validation';
 
+    public const TEMPLATE_STANDARD_SERVICES = 'everbranch_standard_services_v1';
+
     public const STATUSES = ['draft', 'sent', 'viewed', 'accepted', 'declined', 'expired', 'active', 'termination_pending', 'terminated'];
 
     protected $guarded = [];

@@ -1,0 +1,592 @@
+{
+  "observed_at": "2026-10-17",
+  "products": [
+    {
+      "id": "sheepsfoot-chefs-knife",
+      "name": "Sheepsfoot Chef's Knife",
+      "variants": [
+        {
+          "id": "46558546067619",
+          "name": "Royal Blue/Maple Burl",
+          "price_cents": 42500,
+          "url": "https://avery-knifeworks.myshopify.com/products/sheepsfoot-chefs-knife?variant=46558546067619",
+          "image": "/retail/assets/avery-43753692168355.webp"
+        },
+        {
+          "id": "46558545969315",
+          "name": "Walnut",
+          "price_cents": 42500,
+          "url": "https://avery-knifeworks.myshopify.com/products/sheepsfoot-chefs-knife?variant=46558545969315",
+          "image": "/retail/assets/avery-43753708716195.webp"
+        },
+        {
+          "id": "46558546002083",
+          "name": "Maple Burl",
+          "price_cents": 42500,
+          "url": "https://avery-knifeworks.myshopify.com/products/sheepsfoot-chefs-knife?variant=46558546002083",
+          "image": "/retail/assets/avery-43753706127523.webp"
+        },
+        {
+          "id": "46559192711331",
+          "name": "Pearl/Maple Burl",
+          "price_cents": 42500,
+          "url": "https://avery-knifeworks.myshopify.com/products/sheepsfoot-chefs-knife?variant=46559192711331",
+          "image": "/retail/assets/avery-43753693577379.webp"
+        },
+        {
+          "id": "46559134843043",
+          "name": "Pinecone/Green Resin",
+          "price_cents": 42500,
+          "url": "https://avery-knifeworks.myshopify.com/products/sheepsfoot-chefs-knife?variant=46559134843043",
+          "image": "/retail/assets/avery-43753694757027.webp"
+        },
+        {
+          "id": "46590912168099",
+          "name": "Bocote",
+          "price_cents": 42500,
+          "url": "https://avery-knifeworks.myshopify.com/products/sheepsfoot-chefs-knife?variant=46590912168099",
+          "image": "/retail/assets/avery-43858751815843.webp"
+        },
+        {
+          "id": "46590912200867",
+          "name": "Zebrawood",
+          "price_cents": 42500,
+          "url": "https://avery-knifeworks.myshopify.com/products/sheepsfoot-chefs-knife?variant=46590912200867",
+          "image": "/retail/assets/avery-43858774261923.webp"
+        },
+        {
+          "id": "46590912233635",
+          "name": "Pinecone/Black Resin",
+          "price_cents": 42500,
+          "url": "https://avery-knifeworks.myshopify.com/products/sheepsfoot-chefs-knife?variant=46590912233635",
+          "image": "/retail/assets/avery-43858783469731.webp"
+        },
+        {
+          "id": "46590912266403",
+          "name": "Pinecone/White Resin",
+          "price_cents": 42500,
+          "url": "https://avery-knifeworks.myshopify.com/products/sheepsfoot-chefs-knife?variant=46590912266403",
+          "image": "/retail/assets/avery-43858785239203.webp"
+        }
+      ]
+    },
+    {
+      "id": "sheepsfoot-paring-knife",
+      "name": "Sheepsfoot Paring Knife",
+      "variants": [
+        {
+          "id": "46558655774883",
+          "name": "Walnut",
+          "price_cents": 16500,
+          "url": "https://avery-knifeworks.myshopify.com/products/sheepsfoot-paring-knife?variant=46558655774883",
+          "image": "/retail/assets/avery-43704011849891.webp"
+        },
+        {
+          "id": "46559233048739",
+          "name": "Bocote",
+          "price_cents": 16500,
+          "url": "https://avery-knifeworks.myshopify.com/products/sheepsfoot-paring-knife?variant=46559233048739",
+          "image": "/retail/assets/avery-43704083284131.webp"
+        },
+        {
+          "id": "46559233081507",
+          "name": "Zebra",
+          "price_cents": 16500,
+          "url": "https://avery-knifeworks.myshopify.com/products/sheepsfoot-paring-knife?variant=46559233081507",
+          "image": "/retail/assets/avery-43704111497379.webp"
+        },
+        {
+          "id": "46559235080355",
+          "name": "Red Resin/Maple Burl",
+          "price_cents": 16500,
+          "url": "https://avery-knifeworks.myshopify.com/products/sheepsfoot-paring-knife?variant=46559235080355",
+          "image": "/retail/assets/avery-43704217632931.webp"
+        },
+        {
+          "id": "47368604582051",
+          "name": "Purple Heart",
+          "price_cents": 16500,
+          "url": "https://avery-knifeworks.myshopify.com/products/sheepsfoot-paring-knife?variant=47368604582051",
+          "image": "/retail/assets/avery-45545483960483.webp"
+        },
+        {
+          "id": "47368606515363",
+          "name": "Maple Burl",
+          "price_cents": 16500,
+          "url": "https://avery-knifeworks.myshopify.com/products/sheepsfoot-paring-knife?variant=47368606515363",
+          "image": "/retail/assets/avery-45545487958179.webp"
+        },
+        {
+          "id": "47368606548131",
+          "name": "Nebula Resin/Maple Burl",
+          "price_cents": 16500,
+          "url": "https://avery-knifeworks.myshopify.com/products/sheepsfoot-paring-knife?variant=47368606548131",
+          "image": "/retail/assets/avery-45545492185251.webp"
+        },
+        {
+          "id": "47368606580899",
+          "name": "Carolina Blue Resin/Spalted Maple",
+          "price_cents": 16500,
+          "url": "https://avery-knifeworks.myshopify.com/products/sheepsfoot-paring-knife?variant=47368606580899",
+          "image": "/retail/assets/avery-45545496445091.webp"
+        },
+        {
+          "id": "47368606613667",
+          "name": "White Resin/Blue Curly Maple",
+          "price_cents": 16500,
+          "url": "https://avery-knifeworks.myshopify.com/products/sheepsfoot-paring-knife?variant=47368606613667",
+          "image": "/retail/assets/avery-45545508274339.webp"
+        },
+        {
+          "id": "47368606646435",
+          "name": "Pearl Resin/Maple Burl",
+          "price_cents": 16500,
+          "url": "https://avery-knifeworks.myshopify.com/products/sheepsfoot-paring-knife?variant=47368606646435",
+          "image": "/retail/assets/avery-45545513910435.webp"
+        }
+      ]
+    },
+    {
+      "id": "woodsman-knife",
+      "name": "Woodsman Knife",
+      "variants": [
+        {
+          "id": "46558758895779",
+          "name": "Pinecone/Pearl Resin",
+          "price_cents": 38500,
+          "url": "https://avery-knifeworks.myshopify.com/products/woodsman-knife?variant=46558758895779",
+          "image": "/retail/assets/avery-43753614016675.webp"
+        },
+        {
+          "id": "46558758928547",
+          "name": "Pinecone/Black Resin",
+          "price_cents": 38500,
+          "url": "https://avery-knifeworks.myshopify.com/products/woodsman-knife?variant=46558758928547",
+          "image": "/retail/assets/avery-43753611722915.webp"
+        },
+        {
+          "id": "46558758863011",
+          "name": "Maple Burl",
+          "price_cents": 38500,
+          "url": "https://avery-knifeworks.myshopify.com/products/woodsman-knife?variant=46558758863011",
+          "image": "/retail/assets/avery-43753609658531.webp"
+        },
+        {
+          "id": "46586789396643",
+          "name": "Red Resin/Maple Burl",
+          "price_cents": 38500,
+          "url": "https://avery-knifeworks.myshopify.com/products/woodsman-knife?variant=46586789396643",
+          "image": "/retail/assets/avery-8943255355555.webp"
+        },
+        {
+          "id": "46586789822627",
+          "name": "Blue Curly Maple",
+          "price_cents": 38500,
+          "url": "https://avery-knifeworks.myshopify.com/products/woodsman-knife?variant=46586789822627",
+          "image": "/retail/assets/avery-8943255355555.webp"
+        },
+        {
+          "id": "46586790183075",
+          "name": "Wenge",
+          "price_cents": 38500,
+          "url": "https://avery-knifeworks.myshopify.com/products/woodsman-knife?variant=46586790183075",
+          "image": "/retail/assets/avery-8943255355555.webp"
+        },
+        {
+          "id": "46586790379683",
+          "name": "Walnut",
+          "price_cents": 38500,
+          "url": "https://avery-knifeworks.myshopify.com/products/woodsman-knife?variant=46586790379683",
+          "image": "/retail/assets/avery-8943255355555.webp"
+        }
+      ]
+    },
+    {
+      "id": "field-knife",
+      "name": "Field Knife",
+      "variants": [
+        {
+          "id": "46558744150179",
+          "name": "Walnut",
+          "price_cents": 33500,
+          "url": "https://avery-knifeworks.myshopify.com/products/field-knife?variant=46558744150179",
+          "image": "/retail/assets/avery-43701966405795.webp"
+        },
+        {
+          "id": "46558744117411",
+          "name": "Maple Burl",
+          "price_cents": 33500,
+          "url": "https://avery-knifeworks.myshopify.com/products/field-knife?variant=46558744117411",
+          "image": "/retail/assets/avery-43752848556195.webp"
+        },
+        {
+          "id": "46558744182947",
+          "name": "Pinecone/Black Resin",
+          "price_cents": 33500,
+          "url": "https://avery-knifeworks.myshopify.com/products/field-knife?variant=46558744182947",
+          "image": "/retail/assets/avery-45342778196131.webp"
+        },
+        {
+          "id": "46559156764835",
+          "name": "Pinecone/Orange Resin",
+          "price_cents": 33500,
+          "url": "https://avery-knifeworks.myshopify.com/products/field-knife?variant=46559156764835",
+          "image": "/retail/assets/avery-43701959590051.webp"
+        },
+        {
+          "id": "46559156797603",
+          "name": "Blue Maple Burl",
+          "price_cents": 33500,
+          "url": "https://avery-knifeworks.myshopify.com/products/field-knife?variant=46559156797603",
+          "image": "/retail/assets/avery-43701962703011.webp"
+        },
+        {
+          "id": "46559156830371",
+          "name": "Royal Blue/Maple Burl",
+          "price_cents": 33500,
+          "url": "https://avery-knifeworks.myshopify.com/products/field-knife?variant=46559156830371",
+          "image": "/retail/assets/avery-43701970337955.webp"
+        },
+        {
+          "id": "46559156863139",
+          "name": "Pearl/Maple Burl",
+          "price_cents": 33500,
+          "url": "https://avery-knifeworks.myshopify.com/products/field-knife?variant=46559156863139",
+          "image": "/retail/assets/avery-43701972730019.webp"
+        },
+        {
+          "id": "46559223218339",
+          "name": "Bolivian Rosewood",
+          "price_cents": 33500,
+          "url": "https://avery-knifeworks.myshopify.com/products/field-knife?variant=46559223218339",
+          "image": "/retail/assets/avery-43703856267427.webp"
+        },
+        {
+          "id": "47334214893731",
+          "name": "Pinecone/Pearl Resin",
+          "price_cents": 33500,
+          "url": "https://avery-knifeworks.myshopify.com/products/field-knife?variant=47334214893731",
+          "image": "/retail/assets/avery-45342761779363.webp"
+        },
+        {
+          "id": "47334215745699",
+          "name": "Pinecone/Teal Resin",
+          "price_cents": 33500,
+          "url": "https://avery-knifeworks.myshopify.com/products/field-knife?variant=47334215745699",
+          "image": "/retail/assets/avery-8943252275363.webp"
+        }
+      ]
+    },
+    {
+      "id": "bird-and-trout",
+      "name": "Bird and Trout",
+      "variants": [
+        {
+          "id": "46558949736611",
+          "name": "Maple Burl",
+          "price_cents": 28500,
+          "url": "https://avery-knifeworks.myshopify.com/products/bird-and-trout?variant=46558949736611",
+          "image": "/retail/assets/avery-43700164198563.webp"
+        },
+        {
+          "id": "46558949802147",
+          "name": "Paduak",
+          "price_cents": 28500,
+          "url": "https://avery-knifeworks.myshopify.com/products/bird-and-trout?variant=46558949802147",
+          "image": "/retail/assets/avery-43700187758755.webp"
+        },
+        {
+          "id": "46559181144227",
+          "name": "Zebra",
+          "price_cents": 28500,
+          "url": "https://avery-knifeworks.myshopify.com/products/bird-and-trout?variant=46559181144227",
+          "image": "/retail/assets/avery-43702822666403.webp"
+        },
+        {
+          "id": "46558949769379",
+          "name": "Walnut",
+          "price_cents": 28500,
+          "url": "https://avery-knifeworks.myshopify.com/products/bird-and-trout?variant=46558949769379",
+          "image": "/retail/assets/avery-43858837078179.webp"
+        },
+        {
+          "id": "46590918525091",
+          "name": "Blue Resin/Maple Burl",
+          "price_cents": 28500,
+          "url": "https://avery-knifeworks.myshopify.com/products/bird-and-trout?variant=46590918525091",
+          "image": "/retail/assets/avery-43858847727779.webp"
+        },
+        {
+          "id": "46614946185379",
+          "name": "Blue Maple Burl",
+          "price_cents": 28500,
+          "url": "https://avery-knifeworks.myshopify.com/products/bird-and-trout?variant=46614946185379",
+          "image": "/retail/assets/avery-43933302653091.webp"
+        },
+        {
+          "id": "46614949658787",
+          "name": "Pinecone/Turquoise Resin",
+          "price_cents": 28500,
+          "url": "https://avery-knifeworks.myshopify.com/products/bird-and-trout?variant=46614949658787",
+          "image": "/retail/assets/avery-43933303898275.webp"
+        },
+        {
+          "id": "46614960308387",
+          "name": "Pinecone/Hunter Orange Resin",
+          "price_cents": 28500,
+          "url": "https://avery-knifeworks.myshopify.com/products/bird-and-trout?variant=46614960308387",
+          "image": "/retail/assets/avery-43933326540963.webp"
+        },
+        {
+          "id": "47357772005539",
+          "name": "Pinecone/Blue Resin",
+          "price_cents": 28500,
+          "url": "https://avery-knifeworks.myshopify.com/products/bird-and-trout?variant=47357772005539",
+          "image": "/retail/assets/avery-45480831156387.webp"
+        },
+        {
+          "id": "47357773840547",
+          "name": "Red Resin/Maple Burl",
+          "price_cents": 28500,
+          "url": "https://avery-knifeworks.myshopify.com/products/bird-and-trout?variant=47357773840547",
+          "image": "/retail/assets/avery-45480840790179.webp"
+        },
+        {
+          "id": "47357775904931",
+          "name": "Pinecone/Red Resin",
+          "price_cents": 28500,
+          "url": "https://avery-knifeworks.myshopify.com/products/bird-and-trout?variant=47357775904931",
+          "image": "/retail/assets/avery-45480845770915.webp"
+        },
+        {
+          "id": "47357778198691",
+          "name": "Pinecone/White Resin",
+          "price_cents": 28500,
+          "url": "https://avery-knifeworks.myshopify.com/products/bird-and-trout?variant=47357778198691",
+          "image": "/retail/assets/avery-45480850358435.webp"
+        }
+      ]
+    },
+    {
+      "id": "brookie-filet-knife",
+      "name": "Brookie Fillet Knife",
+      "variants": [
+        {
+          "id": "46558662394019",
+          "name": "Walnut",
+          "price_cents": 28500,
+          "url": "https://avery-knifeworks.myshopify.com/products/brookie-filet-knife?variant=46558662394019",
+          "image": "/retail/assets/avery-43702368567459.webp"
+        },
+        {
+          "id": "46558662361251",
+          "name": "Maple Burl",
+          "price_cents": 28500,
+          "url": "https://avery-knifeworks.myshopify.com/products/brookie-filet-knife?variant=46558662361251",
+          "image": "/retail/assets/avery-43753630826659.webp"
+        },
+        {
+          "id": "46558662426787",
+          "name": "Bocote",
+          "price_cents": 28500,
+          "url": "https://avery-knifeworks.myshopify.com/products/brookie-filet-knife?variant=46558662426787",
+          "image": "/retail/assets/avery-43753633710243.webp"
+        },
+        {
+          "id": "46559169675427",
+          "name": "Padauk",
+          "price_cents": 28500,
+          "url": "https://avery-knifeworks.myshopify.com/products/brookie-filet-knife?variant=46559169675427",
+          "image": "/retail/assets/avery-43753639411875.webp"
+        },
+        {
+          "id": "46578984911011",
+          "name": "Zebra",
+          "price_cents": 28500,
+          "url": "https://avery-knifeworks.myshopify.com/products/brookie-filet-knife?variant=46578984911011",
+          "image": "/retail/assets/avery-43753643475107.webp"
+        }
+      ]
+    },
+    {
+      "id": "elk-river-filet-knife",
+      "name": "Elk River Fillet Knife",
+      "variants": [
+        {
+          "id": "46559168692387",
+          "name": "Padauk",
+          "price_cents": 30000,
+          "url": "https://avery-knifeworks.myshopify.com/products/elk-river-filet-knife?variant=46559168692387",
+          "image": "/retail/assets/avery-43753753051299.webp"
+        },
+        {
+          "id": "46558523162787",
+          "name": "Walnut",
+          "price_cents": 30000,
+          "url": "https://avery-knifeworks.myshopify.com/products/elk-river-filet-knife?variant=46558523162787",
+          "image": "/retail/assets/avery-43753766158499.webp"
+        },
+        {
+          "id": "46558613242019",
+          "name": "Bocote",
+          "price_cents": 30000,
+          "url": "https://avery-knifeworks.myshopify.com/products/elk-river-filet-knife?variant=46558613242019",
+          "image": "/retail/assets/avery-43753730900131.webp"
+        },
+        {
+          "id": "46579035209891",
+          "name": "Zebra",
+          "price_cents": 30000,
+          "url": "https://avery-knifeworks.myshopify.com/products/elk-river-filet-knife?variant=46579035209891",
+          "image": "/retail/assets/avery-43753846735011.webp"
+        },
+        {
+          "id": "46613271150755",
+          "name": "Red Resin/Maple Burl",
+          "price_cents": 30000,
+          "url": "https://avery-knifeworks.myshopify.com/products/elk-river-filet-knife?variant=46613271150755",
+          "image": "/retail/assets/avery-43928908955811.webp"
+        },
+        {
+          "id": "46613271773347",
+          "name": "Maple Burl",
+          "price_cents": 30000,
+          "url": "https://avery-knifeworks.myshopify.com/products/elk-river-filet-knife?variant=46613271773347",
+          "image": "/retail/assets/avery-43928921407651.webp"
+        },
+        {
+          "id": "46613272002723",
+          "name": "Pearl Resin/Maple Burl",
+          "price_cents": 30000,
+          "url": "https://avery-knifeworks.myshopify.com/products/elk-river-filet-knife?variant=46613272002723",
+          "image": "/retail/assets/avery-43928925634723.webp"
+        },
+        {
+          "id": "46613272658083",
+          "name": "Seafoam Resin/Maple Burl",
+          "price_cents": 30000,
+          "url": "https://avery-knifeworks.myshopify.com/products/elk-river-filet-knife?variant=46613272658083",
+          "image": "/retail/assets/avery-43928928387235.webp"
+        },
+        {
+          "id": "46613273280675",
+          "name": "Royal Blue Resin/Maple Burl",
+          "price_cents": 30000,
+          "url": "https://avery-knifeworks.myshopify.com/products/elk-river-filet-knife?variant=46613273280675",
+          "image": "/retail/assets/avery-43928934056099.webp"
+        },
+        {
+          "id": "46613273378979",
+          "name": "Pinecone/White Resin",
+          "price_cents": 30000,
+          "url": "https://avery-knifeworks.myshopify.com/products/elk-river-filet-knife?variant=46613273378979",
+          "image": "/retail/assets/avery-43928938676387.webp"
+        },
+        {
+          "id": "46613274001571",
+          "name": "Blue Maple Burl",
+          "price_cents": 30000,
+          "url": "https://avery-knifeworks.myshopify.com/products/elk-river-filet-knife?variant=46613274001571",
+          "image": "/retail/assets/avery-43928943526051.webp"
+        },
+        {
+          "id": "46613274493091",
+          "name": "Pinecone/Hunter Orange Resin",
+          "price_cents": 30000,
+          "url": "https://avery-knifeworks.myshopify.com/products/elk-river-filet-knife?variant=46613274493091",
+          "image": "/retail/assets/avery-43928948703395.webp"
+        },
+        {
+          "id": "46613281407139",
+          "name": "Pinecone/Teal Resin",
+          "price_cents": 30000,
+          "url": "https://avery-knifeworks.myshopify.com/products/elk-river-filet-knife?variant=46613281407139",
+          "image": "/retail/assets/avery-43928957845667.webp"
+        }
+      ]
+    },
+    {
+      "id": "paring-knife",
+      "name": "Paring Knife",
+      "variants": [
+        {
+          "id": "46558494458019",
+          "name": "Walnut",
+          "price_cents": 17500,
+          "url": "https://avery-knifeworks.myshopify.com/products/paring-knife?variant=46558494458019",
+          "image": "/retail/assets/avery-43706643939491.webp"
+        },
+        {
+          "id": "46558494490787",
+          "name": "Maple Burl",
+          "price_cents": 17500,
+          "url": "https://avery-knifeworks.myshopify.com/products/paring-knife?variant=46558494490787",
+          "image": "/retail/assets/avery-43693345407139.webp"
+        },
+        {
+          "id": "46558537154723",
+          "name": "Padauk",
+          "price_cents": 17500,
+          "url": "https://avery-knifeworks.myshopify.com/products/paring-knife?variant=46558537154723",
+          "image": "/retail/assets/avery-43693353336995.webp"
+        },
+        {
+          "id": "46579033702563",
+          "name": "Red/Maple Burl",
+          "price_cents": 17500,
+          "url": "https://avery-knifeworks.myshopify.com/products/paring-knife?variant=46579033702563",
+          "image": "/retail/assets/avery-8943157313699.webp"
+        },
+        {
+          "id": "46836993392803",
+          "name": "Pearl Resin/Maple Burl",
+          "price_cents": 17500,
+          "url": "https://avery-knifeworks.myshopify.com/products/paring-knife?variant=46836993392803",
+          "image": "/retail/assets/avery-8943157313699.webp"
+        },
+        {
+          "id": "47334226460835",
+          "name": "Bocote",
+          "price_cents": 17500,
+          "url": "https://avery-knifeworks.myshopify.com/products/paring-knife?variant=47334226460835",
+          "image": "/retail/assets/avery-8943157313699.webp"
+        },
+        {
+          "id": "47334226493603",
+          "name": "Blue Maple Burl",
+          "price_cents": 17500,
+          "url": "https://avery-knifeworks.myshopify.com/products/paring-knife?variant=47334226493603",
+          "image": "/retail/assets/avery-8943157313699.webp"
+        },
+        {
+          "id": "47334226526371",
+          "name": "Wenge",
+          "price_cents": 17500,
+          "url": "https://avery-knifeworks.myshopify.com/products/paring-knife?variant=47334226526371",
+          "image": "/retail/assets/avery-8943157313699.webp"
+        },
+        {
+          "id": "47334226559139",
+          "name": "Bolivian Rosewood",
+          "price_cents": 17500,
+          "url": "https://avery-knifeworks.myshopify.com/products/paring-knife?variant=47334226559139",
+          "image": "/retail/assets/avery-8943157313699.webp"
+        },
+        {
+          "id": "47334226591907",
+          "name": "Seafoam Resin & Maple Burl",
+          "price_cents": 17500,
+          "url": "https://avery-knifeworks.myshopify.com/products/paring-knife?variant=47334226591907",
+          "image": "/retail/assets/avery-8943157313699.webp"
+        },
+        {
+          "id": "47579424260259",
+          "name": "Zebrawood",
+          "price_cents": 17500,
+          "url": "https://avery-knifeworks.myshopify.com/products/paring-knife?variant=47579424260259",
+          "image": "/retail/assets/avery-8943157313699.webp"
+        }
+      ]
+    }
+  ]
+}

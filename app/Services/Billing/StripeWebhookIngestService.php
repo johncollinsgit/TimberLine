@@ -8,6 +8,7 @@ use App\Models\Tenant;
 use App\Models\TenantBillingOrder;
 use App\Models\TenantCommercialOverride;
 use App\Models\TenantDirectInvoice;
+use App\Models\TenantMessagingLedgerEntry;
 use App\Services\Marketing\Messaging\TenantMessagingUsageService;
 use App\Services\Tenancy\LandlordOperatorActionAuditService;
 use Illuminate\Database\QueryException;
@@ -778,16 +779,32 @@ class StripeWebhookIngestService
         $packCents = (int) ($metadata['pack_cents'] ?? 0);
         $amountTotal = (int) ($object['amount_total'] ?? 0);
         $paymentStatus = strtolower(trim((string) ($object['payment_status'] ?? '')));
+        $checkoutId = trim((string) ($object['id'] ?? ''));
+        $currency = strtolower(trim((string) ($object['currency'] ?? '')));
         $allowedPacks = array_map('intval', (array) config('marketing.messaging.platform.credit_packs_cents', []));
-        if ($tenantId < 1 || ! in_array($packCents, $allowedPacks, true) || $amountTotal !== $packCents || ! in_array($paymentStatus, ['paid', 'no_payment_required'], true)) {
+        if ($tenantId < 1 || ! in_array($packCents, $allowedPacks, true) || $amountTotal !== $packCents || $paymentStatus !== 'paid' || $currency !== 'usd' || ! str_starts_with($checkoutId, 'cs_') || ! Tenant::query()->whereKey($tenantId)->exists()) {
             return ['ok' => false, 'status_code' => 400, 'message' => 'Invalid messaging credit checkout.'];
         }
 
-        $this->messagingUsage->fund($tenantId, $packCents * 10000, $eventId, [
-            'stripe_event_id' => $eventId,
-            'stripe_checkout_session_id' => $object['id'] ?? null,
-            'pack_cents' => $packCents,
-        ]);
+        DB::transaction(function () use ($tenantId, $packCents, $eventId, $checkoutId): void {
+            Tenant::query()->whereKey($tenantId)->lockForUpdate()->firstOrFail();
+            // Both completion event types refer to one purchase. Also recognize
+            // credit issued by the old event-key implementation before this fix.
+            $existing = TenantMessagingLedgerEntry::query()->forAllTenants()
+                ->where('tenant_id', $tenantId)->where('entry_type', 'credit_funding')
+                ->where('metadata->stripe_checkout_session_id', $checkoutId)->first();
+            if ($existing) {
+                if ((int) $existing->amount_micros !== $packCents * 10000) {
+                    throw new \RuntimeException('The prepaid purchase amount needs reconciliation.');
+                }
+
+                return;
+            }
+            $this->messagingUsage->fund($tenantId, $packCents * 10000, 'stripe_checkout:'.$checkoutId, [
+                'stripe_event_id' => $eventId, 'stripe_checkout_session_id' => $checkoutId,
+                'pack_cents' => $packCents, 'purchase_type' => 'separate_prepaid_top_up',
+            ]);
+        }, 3);
 
         return ['ok' => true, 'status_code' => 200, 'message' => 'processed_credit'];
     }

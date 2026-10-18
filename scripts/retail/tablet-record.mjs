@@ -1,0 +1,2 @@
+import {chromium} from '@playwright/test';
+const b=await chromium.connectOverCDP('http://127.0.0.1:9224');const ctx=b.contexts()[0];const p=ctx.pages().find(p=>p.url().includes('/studio/'));if(!p)throw Error('Studio is not open');await p.bringToFront();await p.locator('.cover-choice').first().click();await p.locator('.chapter').first().click();await p.locator('#record').click();console.log('Requested the tablet microphone for the Studio recording check.');process.exit(0);

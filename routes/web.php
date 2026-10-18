@@ -1249,6 +1249,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->prefix('billing')
         ->name('billing.')
         ->group(function (): void {
+            Route::get('/usage', \App\Http\Controllers\Billing\TenantUsageController::class)->name('usage');
             Route::post('/checkout', [\App\Http\Controllers\Billing\HostedBillingController::class, 'checkout'])
                 ->name('checkout');
             Route::post('/addons/{addonKey}/checkout', [\App\Http\Controllers\Billing\HostedBillingController::class, 'addonCheckout'])
@@ -2573,4 +2574,6 @@ Route::post('/email/unsubscribe', [\App\Http\Controllers\Marketing\MarketingEmai
 
 require __DIR__.'/soccer.php';
 
+// Private retail concepts never enter the public merchant commerce routes.
+require __DIR__.'/retail.php';
 require __DIR__.'/ai-branch.php';

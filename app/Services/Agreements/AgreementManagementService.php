@@ -23,6 +23,16 @@ class AgreementManagementService
         protected LandlordOperatorActionAuditService $audit,
     ) {}
 
+    public function prepareStandard(Tenant $tenant, ?int $actorUserId, ?string $additionalScope = null, bool $reviseIssued = false): Agreement
+    {
+        $issued = Agreement::query()->forTenant($tenant)->where('template_key', Agreement::TEMPLATE_STANDARD_SERVICES)->whereIn('status', ['sent', 'viewed'])->latest('id')->first();
+        if ($issued && ! $reviseIssued) {
+            return $issued->load('currentVersion');
+        }
+
+        return $this->prepareClientAgreement($tenant, $actorUserId, Agreement::TEMPLATE_STANDARD_SERVICES, app(StandardServicesAgreementTemplate::class)->build($tenant, $additionalScope));
+    }
+
     public function prepareCollinsElectric(
         Tenant $tenant,
         ?int $actorUserId,

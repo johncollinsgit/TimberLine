@@ -115,7 +115,7 @@
                             @endif
 
                             <div class="fb-start-actions fb-plan-compare__actions">
-                                <a href="#start-access-form" class="fb-btn fb-btn-primary">Become a launch partner</a>
+                                <a href="#start-access-form" class="fb-btn fb-btn-primary">Get started</a>
                             </div>
                         </div>
                     </div>

@@ -256,7 +256,7 @@
                                 </div>
                                 <div class="eg-mobile-account-card">
                                     <span>Plan</span>
-                                    <strong>Launch Partner</strong>
+                                    <strong>Everbranch Standard</strong>
                                     <p>Core app live. Rewards, birthday, and marketing branches ready.</p>
                                 </div>
                                 <div class="eg-mobile-setting-row">
@@ -366,9 +366,9 @@
         @if($comparePlans !== [] && $compareFeatures !== [])
             <section id="pricing" class="eg-section eg-section--compact eg-pricing-section">
                 <div class="eg-section-head" data-reveal>
-                    <p class="eg-kicker">{{ $planComparison['eyebrow'] ?? 'Launch partner pricing' }}</p>
-                    <h2>{{ $planComparison['title'] ?? 'Launch partner pricing' }}</h2>
-                    <p>{{ $planComparison['subtitle'] ?? 'Starter includes everything. Growth gives you more capacity.' }}</p>
+                    <p class="eg-kicker">{{ $planComparison['eyebrow'] ?? 'Everbranch pricing' }}</p>
+                    <h2>{{ $planComparison['title'] ?? 'Everbranch pricing' }}</h2>
+                    <p>{{ $planComparison['subtitle'] ?? 'One standard offer for your business.' }}</p>
                 </div>
                 <div class="eg-pricing-grid" data-reveal>
                     @foreach($comparePlans as $planKey => $plan)
@@ -396,7 +396,7 @@
                 @if(filled($planComparison['savings_note'] ?? null) || $partnerTerms !== [])
                     <div class="eg-partner-note" data-premium-surface data-reveal>
                         <div>
-                            <strong>{{ $planComparison['savings_note'] ?? 'Launch partner pricing is limited.' }}</strong>
+                            <strong>{{ $planComparison['savings_note'] ?? 'Everbranch pricing is limited.' }}</strong>
                             <span>Designed for the first businesses helping shape Everbranch in the field.</span>
                         </div>
                         @if($partnerTerms !== [])

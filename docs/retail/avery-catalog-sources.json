@@ -1,0 +1,56 @@
+{
+  "observed_at": "2026-10-17",
+  "products": [
+    {
+      "url": "https://avery-knifeworks.myshopify.com/products/sheepsfoot-chefs-knife.js",
+      "observed_at": "2026-10-17",
+      "title": "Sheepsfoot Chef's Knife",
+      "variants": 9
+    },
+    {
+      "url": "https://avery-knifeworks.myshopify.com/products/sheepsfoot-paring-knife.js",
+      "observed_at": "2026-10-17",
+      "title": "Sheepsfoot Paring Knife",
+      "variants": 10
+    },
+    {
+      "url": "https://avery-knifeworks.myshopify.com/products/woodsman-knife.js",
+      "observed_at": "2026-10-17",
+      "title": "Woodsman Knife",
+      "variants": 7
+    },
+    {
+      "url": "https://avery-knifeworks.myshopify.com/products/field-knife.js",
+      "observed_at": "2026-10-17",
+      "title": "Field Knife",
+      "variants": 10
+    },
+    {
+      "url": "https://avery-knifeworks.myshopify.com/products/bird-and-trout.js",
+      "observed_at": "2026-10-17",
+      "title": "Bird and Trout",
+      "variants": 12
+    },
+    {
+      "url": "https://avery-knifeworks.myshopify.com/products/brookie-filet-knife.js",
+      "observed_at": "2026-10-17",
+      "title": "Brookie Fillet Knife",
+      "variants": 5
+    },
+    {
+      "url": "https://avery-knifeworks.myshopify.com/products/elk-river-filet-knife.js",
+      "observed_at": "2026-10-17",
+      "title": "Elk River Fillet Knife",
+      "variants": 13
+    },
+    {
+      "url": "https://avery-knifeworks.myshopify.com/products/paring-knife.js",
+      "observed_at": "2026-10-17",
+      "title": "Paring Knife",
+      "variants": 11
+    }
+  ],
+  "guarantee": "https://www.averyknifeworks.com/lifetime-gaurantee",
+  "photos": "Exact public variant images where available; missing mappings use a clearly labeled model photo.",
+  "use": "Independent local sales demonstration. No merchant approval or live inventory feed."
+}
