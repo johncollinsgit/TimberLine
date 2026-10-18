@@ -287,7 +287,7 @@ it('exports signed releases through the canonical backend regardless of the work
 
 it('prepares SMS only for approved tenants while leaving the sender unverified', function () {
     config(['features.tenant_messaging_provisioning' => false, 'features.tenant_sms_provisioning_tenant_ids' => [$this->tenant->id], 'services.twilio.account_sid' => 'AC'.str_repeat('1', 32), 'services.twilio.auth_token' => 'fictional-provider-token']);
-    Http::fake(['api.twilio.com/*' => Http::response(['sid' => 'AC'.str_repeat('2', 32), 'auth_token' => 'fictional-subaccount-token'], 201)]);
+    Http::fake(['api.twilio.com/*' => Http::response(['sid' => 'AC'.str_repeat('2', 32), 'owner_account_sid' => 'AC'.str_repeat('1', 32), 'auth_token' => 'fictional-subaccount-token'], 201)]);
     $this->actingAs($this->admin)->post('/soccer/actions/sms-prepare?tenant=wren-family-soccer')->assertRedirect();
     $account = \App\Models\TenantMessagingAccount::query()->forAllTenants()->where('tenant_id', $this->tenant->id)->where('channel', 'sms')->sole();
     expect($account->status)->toBe('awaiting_business_profile')->and($account->isReady())->toBeFalse();
