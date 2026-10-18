@@ -8,6 +8,7 @@ use App\Models\TenantMessagingSenderProfile;
 use Aws\Credentials\Credentials;
 use Aws\SesV2\SesV2Client;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -40,40 +41,49 @@ class TenantMessagingProvisioningService
             throw new RuntimeException('Twilio parent credentials are not configured.');
         }
 
-        $existing = TenantMessagingAccount::query()->forAllTenants()
-            ->where('tenant_id', $tenant->id)->where('channel', 'sms')->first();
-        if ($existing?->provider_account_id) {
-            return $existing;
-        }
+        return Cache::lock('tenant-twilio-provision:'.$tenant->id, 60)->block(5, function () use ($tenant, $parentSid, $parentToken) {
+            $account = TenantMessagingAccount::query()->forAllTenants()->firstOrCreate(
+                ['tenant_id' => $tenant->id, 'channel' => 'sms'],
+                ['provider' => 'twilio_subaccount', 'mode' => 'platform_managed', 'status' => 'not_started'],
+            );
+            if ($account->provider_account_id) {
+                if ($account->provider_account_id === $parentSid) {
+                    throw new RuntimeException('This tenant references the Twilio parent account. Reconcile the mapping before provisioning or activation.');
+                }
 
-        $response = Http::asForm()->acceptJson()->withBasicAuth($parentSid, $parentToken)
-            ->timeout(30)->post("https://api.twilio.com/2010-04-01/Accounts/{$parentSid}.json", [
-                'FriendlyName' => 'Everbranch - '.$tenant->name.' - '.$tenant->id,
-            ]);
-        if ($response->failed()) {
-            throw new RuntimeException('Twilio subaccount provisioning failed: '.$this->providerError($response->json()));
-        }
+                return $account;
+            }
+            if (data_get($account->diagnostics, 'provision_request_started_at')) {
+                throw new RuntimeException('A previous Twilio provisioning attempt needs reconciliation. Do not create another subaccount automatically.');
+            }
+            $account->update(['status' => 'provisioning', 'diagnostics' => [
+                ...(array) $account->diagnostics, 'provision_request_started_at' => now()->toIso8601String(),
+            ]]);
+            try {
+                // POST the list resource. POST /Accounts/{parent}.json would rename the parent.
+                $response = Http::asForm()->acceptJson()->withBasicAuth($parentSid, $parentToken)
+                    ->timeout(30)->post('https://api.twilio.com/2010-04-01/Accounts.json', [
+                        'FriendlyName' => 'Everbranch - '.$tenant->name.' - '.$tenant->id,
+                    ]);
+                $payload = (array) $response->json();
+                if (! $response->successful() || ! preg_match('/^AC[0-9a-fA-F]{32}$/', $payload['sid'] ?? '')
+                    || $payload['sid'] === $parentSid || ($payload['owner_account_sid'] ?? '') !== $parentSid
+                    || empty($payload['auth_token'])) {
+                    throw new RuntimeException('Twilio did not return a verified child account. Reconcile the provider result before retrying.');
+                }
+                $account->update([
+                    'status' => 'awaiting_business_profile', 'provider_account_id' => $payload['sid'],
+                    'credentials' => ['auth_token' => $payload['auth_token']],
+                    'registration' => array_fill_keys(['secondary_customer_profile', 'brand', 'campaign', 'messaging_service', 'phone_number'], 'required'),
+                    'diagnostics' => [...(array) $account->diagnostics, 'provisioned_at' => now()->toIso8601String(), 'parent_account_verified' => true],
+                ]);
 
-        $payload = (array) $response->json();
-
-        return TenantMessagingAccount::query()->forAllTenants()->updateOrCreate(
-            ['tenant_id' => $tenant->id, 'channel' => 'sms'],
-            [
-                'provider' => 'twilio_subaccount',
-                'mode' => 'platform_managed',
-                'status' => 'awaiting_business_profile',
-                'provider_account_id' => $payload['sid'] ?? null,
-                'credentials' => ['auth_token' => $payload['auth_token'] ?? null],
-                'registration' => [
-                    'secondary_customer_profile' => 'required',
-                    'brand' => 'required',
-                    'campaign' => 'required',
-                    'messaging_service' => 'required',
-                    'phone_number' => 'required',
-                ],
-                'diagnostics' => ['provisioned_at' => now()->toIso8601String()],
-            ],
-        );
+                return $account->fresh();
+            } catch (\Throwable $error) {
+                $account->update(['status' => 'provisioning_requires_review']);
+                throw new RuntimeException('Twilio provisioning needs reconciliation before another attempt. No parent-account change was requested.', previous: $error);
+            }
+        });
     }
 
     /** @param array<string,mixed> $resources */

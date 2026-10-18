@@ -1,3 +1,5 @@
+> October 17, 2026: Twilio provisioning now targets the subaccount list endpoint and rejects parent-account mappings. See `docs/operations/twilio-subaccount-provisioning.md`; prepared tenant subaccounts remain unverified and Modern Forestry cutover is pending.
+
 ## Ask Everbranch (2026-10-16; local, disabled)
 
 - The separately audited fictional pilot uses the fixed `everbranch-voice-pilot`
