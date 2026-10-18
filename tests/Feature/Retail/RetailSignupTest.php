@@ -30,7 +30,12 @@ test('the retail offer is the standard single monthly rate and preserves the man
     $offer = app(EvergroveOffer::class)->presentation();
     expect($offer['monthly_cents'])->toBe(29900)->and($offer['setup_cents'])->toBe(49900)
         ->and($offer['key'])->toBe('standard')->and($offer)->not->toHaveKey('introductory_months')
-        ->and(config('module_catalog.addons.managed_website.pricing.recurring_price_cents'))->toBe(9900);
+        ->and(config('module_catalog.addons.managed_website.pricing.recurring_price_cents'))->toBe(9900)
+        ->and($offer['usage']['billing_mode'])->toBe('shared_prepaid_usage')
+        ->and($offer['usage']['sms_setup_cents'])->toBe(0)
+        ->and($offer['usage']['sms_monthly_cents'])->toBe(0)
+        ->and($offer['usage']['ai_provider_cost_multiplier'])->toBe(2)
+        ->and(config('module_catalog.addons.sms.pricing.setup_price_cents'))->toBe(9900);
 });
 
 test('signup uses authorized onboarding and CRM without creating a tenant or membership', function () {

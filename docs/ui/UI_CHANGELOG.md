@@ -1,3 +1,12 @@
+## 2026-10-18 — Shared prepaid pricing and future voice model choice (development)
+
+The Retail new-customer offer now presents the approved shared balance, no text
+setup or monthly sending-access fee, OpenAI at 2× actual API cost, and qualified
+text/voice estimates. Existing email/text rates remain pending the current owner
+discussion. Future voice explains owner-approved team model choice and budgets;
+no model switch or paid-service activation is introduced. Cache v13 preserves
+saved records and refreshes the public offline offer. Existing contracts are kept.
+
 
 ## 2026-10-18 — Avery workshop, actionable demo voice and Standard pricing (development)
 

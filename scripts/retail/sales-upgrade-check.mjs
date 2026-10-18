@@ -34,10 +34,14 @@ checks.push('Standard monthly rate, once-only setup, scope review and retained p
 for(const key of ['sms','email','ai','future'])await page.locator(`[data-usage=${key}]`).waitFor();
 assert.match(await page.locator('[data-usage=sms]').innerText(),/\$0\.05 per SMS segment/);
 assert.match(await page.locator('[data-usage=email]').innerText(),/\$0\.005 per email/);
-assert.match(await page.locator('[data-usage=ai]').innerText(),/Stops at either cap/);
+assert.match(await page.locator('[data-usage=ai]').innerText(),/2× actual OpenAI API cost/);
 assert.match(await page.locator('[data-usage=future]').innerText(),/Customer-facing AI conversations/);
-assert.match(await page.locator('[data-usage=future]').innerText(),/Pricing to be determined/);
-checks.push('Separate text/email/AI usage charges and caps; future voice and customer-facing AI explicitly unpriced');
+assert.match(await page.locator('[data-usage=future]').innerText(),/Choose your voice model/);
+assert.match(await page.locator('[data-usage=sms]').innerText(),/No text setup fee/);
+assert.match(await page.locator('[data-usage=ai]').innerText(),/9.6¢ per balanced minute/);
+assert.match(await page.locator('[data-usage=ai]').innerText(),/3.0¢ per balanced minute/);
+assert.match(await page.locator('[data-usage=wallet]').innerText(),/Automatic reload starts off/);
+checks.push('Shared prepaid policy, retained email/text rates, no text setup fee, 2× OpenAI estimates and planned owner-approved voice models');
 await page.screenshot({path:output+(device?'/galaxy-pricing.png':'/pricing-landscape.png'),fullPage:true});
 if(!device){await page.setViewportSize({width:800,height:1280});await page.screenshot({path:output+'/pricing-portrait.png',fullPage:true});}
 await page.locator('[data-sales-action="signup"]').first().click();await page.waitForSelector('#retail-signup-details');
@@ -73,10 +77,10 @@ if(!device){
  await page.locator('[data-action="offline"]').first().click();
  await page.waitForFunction(old=>JSON.parse(localStorage.getItem('retail-offline-pack')||'null')?.expires>old,previous,{timeout:60000});
  await page.evaluate(()=>navigator.serviceWorker.ready);
- const privateCached=await page.evaluate(async()=>{const c=await caches.open('everbranch-retail-v12');return (await c.keys()).some(r=>new URL(r.url).pathname.includes('/api/'));});assert.equal(privateCached,false);
+ const privateCached=await page.evaluate(async()=>{const c=await caches.open('everbranch-retail-v13');return (await c.keys()).some(r=>new URL(r.url).pathname.includes('/api/'));});assert.equal(privateCached,false);
  await context.setOffline(true);await page.goto(base+'/retail/showroom/assistant');await page.waitForSelector('.assistant-grid');assert.match(await page.locator('.assistant-hero').innerText(),/live AI unavailable/);
  await page.locator('[data-action="pricing"]').first().click();await page.locator('[data-sales-action="signup"]').first().click();assert.equal(await page.locator('#retail-signup-details').count(),0);
- await context.setOffline(false);await page.reload();await page.waitForSelector('.assistant-grid');checks.push('Cache v12 reopens assistant offline, excludes private APIs and blocks offline signup');
+ await context.setOffline(false);await page.reload();await page.waitForSelector('.assistant-grid');checks.push('Cache v13 reopens assistant offline, excludes private APIs and blocks offline signup');
 }
 assert.deepEqual(errors,[]);
 fs.writeFileSync(output+(device?'/galaxy-results.json':'/browser-results.json'),JSON.stringify({checks,errors,liveOpenAiVerified:live,device,signupSubmission:device?'reviewed only; never submitted':'intercepted fixture; no real registration'},null,2));

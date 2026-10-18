@@ -2,7 +2,7 @@
 
 The existing Retail install contains an independent Avery concept, not Avery's live
 store or an activated merchant workspace. No app identity or saved customer/cart
-records are reset. Cache v12 carries 142 public photographs and the public modules;
+records are reset. Cache v13 carries 142 public photographs and the public modules;
 authenticated pages, APIs, real recipients and agreement/payment links are excluded.
 
 ## Presentation sequence
@@ -32,10 +32,13 @@ authenticated pages, APIs, real recipients and agreement/payment links are exclu
    and checks one-message consent. A separate confirmation button sends the real
    message. SendGrid acceptance and Twilio delivery are reported distinctly. This
    does not enroll the recipient in Avery's or any other business's marketing list.
-6. Show pricing: $299/month plus $499 one-time setup. Separate text, email and AI
-   sections show fees, allowances and limits. Future phone voice, customer-facing
-   AI conversations and other connections are explicitly Pricing to be determined;
-   connection fees, meters, allowances and overages require written approval.
+6. Show pricing: $299/month plus $499 one-time setup and one shared prepaid usage
+   balance. New Standard has no text setup or separate email/text monthly access
+   fee. OpenAI is 2× actual API cost; model examples include the cheaper Mini voice
+   option. Email/text unit rates are retained pending the owner's current pricing
+   discussion. Future voice will offer owner-approved team model choice and caps;
+   telephone transport, connection fees, implementation and launch scope still
+   need a written quote. The screen does not activate a service or collect credit.
 7. Present mode's final Avery footer opens the actual review agreement and live
    $798 first-month/setup invoice. Links require the online owner session. The
    agreement access code is in the forward-ready email sent to the owner, never
@@ -100,3 +103,10 @@ cache exclusions, prices/fees, finder/QR, Bob, ten follow-ups, passport, handoff
 offline reopening. It checks voice readiness without opening the microphone and
 never submits a real message or payment. Private screenshot/evidence output is
 ignored under `output/retail`.
+
+Latest policy verification: 13 backend checks (77 assertions), changed-file Pint,
+and the browser sales/signup/typed-navigation/offline click-through passed with
+cache v13. This is browser verification, not completion of the physical-tablet
+refresh; both wireless-debugging transports need reconnection. The pricing and
+Twilio provisioning PRs passed their GitHub checks. No new live send, invoice,
+payment, subscription or production deployment occurred during this policy update.

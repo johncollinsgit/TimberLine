@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 // Refresh an existing installed tab; preserve data and never submit a live message.
 const port=Number(process.env.RETAIL_QA_CDP_PORT),device=process.env.RETAIL_QA_DEVICE_NAME;
 assert.ok(port&&/^[a-z0-9-]+$/.test(device??''),'Provide a forwarded CDP port and device name.');
-const base='http://127.0.0.1:8797',version='everbranch-retail-v12',out=`output/retail/tablets/${device}`;
+const base='http://127.0.0.1:8797',version='everbranch-retail-v13',out=`output/retail/tablets/${device}`;
 fs.mkdirSync(out,{recursive:true});
 // An unrelated suspended Android tab must not stall attachment to the installed demo.
 const browser=await puppeteer.connect({browserWSEndpoint:`ws://127.0.0.1:${port}/devtools/browser`,defaultViewport:null,targetFilter:t=>t.type()!=='page'||t.url().startsWith(base+'/retail/'),protocolTimeout:60000});

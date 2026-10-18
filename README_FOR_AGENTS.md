@@ -301,7 +301,7 @@
 
 ## 2026-10-18 — Avery workshop, actionable demo voice and Standard pricing (development)
 
-Retail cache v12 retains installed identities and saved records while adding Avery’s
+Retail cache v13 retains installed identities and saved records while adding Avery’s
 8-model/77-variant real-photo finder, exact shop QR, optional knife passport, linked
 fictional service queue, 14 customers/33 orders and workshop/production/shipping.
 Allowlisted voice and typed tools navigate, read fresh fictional context, fill forms,
@@ -311,8 +311,10 @@ local SendGrid/Twilio tests succeeded, with an approved temporary Forestry SMS s
 while the new Everbranch child account awaits onboarding. Provider secrets stay
 private; production transport remains disabled. Present mode ends with the actual
 review agreement and unpaid $798 Stripe invoice. New offers show $299 + $499 setup;
-text, email and AI charges/limits are separate. Future voice and customer-facing AI
-usage fees remain to be determined. See `docs/retail/AVERY_DEMO.md`. No website release.
+text, email and AI charges/limits are separate. OpenAI uses the approved 2× actual API-cost policy with model estimates. The
+shared prepaid policy removes new-customer text setup and sending-access fees.
+Future voice includes owner-approved team model choice; connection scope and
+complete phone pricing still require a quote. See `docs/retail/AVERY_DEMO.md`. No website release.
 
 
 ## 2026-10-17 — Retail conversational voice (development)

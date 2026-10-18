@@ -7,10 +7,21 @@ export const standardOffer = {
     "monthly_cents": 29900,
     "setup_cents": 49900,
     "interval": "month",
+    "usage_policy": {
+        "version": "standard-prepaid-2026-10-18-v1",
+        "billing_mode": "shared_prepaid_usage",
+        "sms_setup_cents": 0,
+        "email_monthly_cents": 0,
+        "sms_monthly_cents": 0,
+        "ai_provider_cost_multiplier": 2,
+        "auto_reload_default": false,
+        "fixed_connection_fees": "separately_quoted",
+        "scope": "Future Standard customers only; existing agreements and allowances retain their terms."
+    },
     "recurring_price_lookup_key": "everbranch_standard_299_monthly_v1",
     "setup_price_lookup_key": "everbranch_standard_499_setup_v1",
     "fulfillment_plan_key": null,
-    "quote_version": "093823d7d346273e201979921da4230f37dab74df5a52a613e073cf967919ed3",
+    "quote_version": "624522bd2738cc44113ee7c9c4cc4e2dd383291e9150ddb0b91772eab5f3be7e",
     "eligibility_note": "Standard offer for new businesses. Scope and capacity are confirmed before activation; a request does not activate billing.",
     "included": [
         {
@@ -47,86 +58,77 @@ export const standardOffer = {
     "review_note": "Retail features shown in this showroom are demonstrations. We confirm the catalog, shipping, payments, rewards, team access, and launch scope with you before enabling them for your business.",
     "additional": "Payment processing, postage, domains, messaging usage, third-party services, and custom development are discussed and priced in your written scope when applicable.",
     "usage": {
-        "messaging": [
-            {
-                "key": "messaging",
-                "label": "Messaging",
-                "monthly_cents": 1999,
-                "setup_cents": 0,
-                "included_units": 5000,
-                "unit": "emails",
-                "overage_micros": 5000,
-                "note": "Verified sending domain and recipient permission are required."
-            },
-            {
-                "key": "sms",
-                "label": "SMS",
-                "monthly_cents": 9900,
-                "setup_cents": 9900,
-                "included_units": 1000,
-                "unit": "SMS segments",
-                "overage_micros": 50000,
-                "note": "Long or Unicode messages can use multiple segments. Provider verification and recipient permission are required."
-            },
-            {
-                "key": "bulk_email_marketing",
-                "label": "Bulk Email Marketing",
-                "monthly_cents": 12900,
-                "setup_cents": 0,
-                "included_units": 50000,
-                "unit": "emails",
-                "overage_micros": null,
-                "note": "Bulk overage pricing requires written confirmation before purchase."
-            }
-        ],
-        "ai": [
-            {
-                "label": "AI Branch Starter",
-                "monthly_cents": 4900,
-                "requests": 300,
-                "provider_budget_cents": 500,
-                "status": "Proposed pilot limits \u2014 commercial approval required; no purchase or activation here"
-            },
-            {
-                "label": "AI Branch Growth",
-                "monthly_cents": 9900,
-                "requests": 1000,
-                "provider_budget_cents": 1500,
-                "status": "Proposed pilot limits \u2014 commercial approval required; no purchase or activation here"
-            },
-            {
-                "label": "AI Branch Pro",
-                "monthly_cents": 19900,
-                "requests": 3000,
-                "provider_budget_cents": 3500,
-                "status": "Proposed pilot limits \u2014 commercial approval required; no purchase or activation here"
-            }
-        ],
-        "future_usage": [
-            {
-                "label": "Phone voice connection and calls",
-                "status": "Pricing to be determined",
-                "note": "Separate connection/provider fees, usage unit, allowance and overage rate will be agreed before activation. No phone-service allowance is promised in the base subscription."
-            },
-            {
-                "label": "Customer-facing AI conversations",
-                "status": "Pricing to be determined",
-                "note": "Shopper conversations using the business catalog and approved customer context may have separate AI/provider usage fees. Connection fees, metering, allowance and overage rate will be agreed before activation; the tablet demonstration does not establish production pricing."
-            },
-            {
-                "label": "Other future connections",
-                "status": "Pricing to be determined",
-                "note": "New integrations can carry separate connection, subscription and usage fees. Each connection requires a written quote and approval before activation."
-            }
-        ],
-        "mms_micros": 150000,
-        "credits_cents": [
+        "version": "standard-prepaid-2026-10-18-v1",
+        "billing_mode": "shared_prepaid_usage",
+        "sms_setup_cents": 0,
+        "email_monthly_cents": 0,
+        "sms_monthly_cents": 0,
+        "ai_provider_cost_multiplier": 2,
+        "auto_reload_default": false,
+        "fixed_connection_fees": "separately_quoted",
+        "scope": "Future Standard customers only; existing agreements and allowances retain their terms.",
+        "messaging_rates_micros": {
+            "email": 5000,
+            "sms": 50000,
+            "mms": 150000
+        },
+        "credit_packs_cents": [
             2500,
             5000,
             10000
         ],
-        "base_note": "The $299 base does not include unlimited email, SMS or AI. These are separate options; the confirmed agreement controls included capacity. Usage stops when the approved allowance, credit balance or AI request/spending cap is reached unless an authorized arrangement permits more.",
-        "ai_note": "AI request and provider-spend limits both apply; reaching either limit stops new requests. No automatic overage charge is established here. Voice/telephone use is separate from these text AI pilot tiers. Demo voice is capped at five minutes per conversation and six starts per hour."
+        "currency": "USD",
+        "costs_checked_at": "2026-10-18",
+        "ai_examples": [
+            {
+                "model": "gpt-6.1-sol",
+                "label": "Example text task",
+                "input_tokens": 5000,
+                "output_tokens": 500,
+                "provider_cost_micros": 15000,
+                "customer_cost_micros": 30000,
+                "assumption": "Standard short-context rates, uncached input. An illustration, not a flat fee per question."
+            },
+            {
+                "model": "gpt-realtime-2.1",
+                "label": "Current voice model",
+                "provider_audio_micros_per_balanced_minute": 48000,
+                "customer_audio_micros_per_balanced_minute": 96000
+            },
+            {
+                "model": "gpt-realtime-2.1-mini",
+                "label": "Lower-cost voice option",
+                "provider_audio_micros_per_balanced_minute": 15000,
+                "customer_audio_micros_per_balanced_minute": 30000
+            }
+        ],
+        "ai_source": "https://developers.openai.com/api/docs/pricing",
+        "voice_assumption": "One elapsed minute split equally between user and AI speech. Audio only; text/context, repeated history, transcription and phone/carrier costs are additional. Actual provider usage determines the charge.",
+        "tax_note": "Platform operating costs and business overhead are covered by the agreed prices and margin. Applicable customer sales tax is calculated separately by Stripe Tax; no arbitrary tax surcharge is added.",
+        "future_usage": [
+            {
+                "label": "Phone voice connection and calls",
+                "status": "Buildout and connection quote required",
+                "note": "Model usage will draw from the shared balance. Phone transport, number and any fixed managed-service fees need a separate written quote before activation."
+            },
+            {
+                "label": "Customer-facing AI conversations",
+                "status": "Buildout and scope quote required",
+                "note": "OpenAI usage is priced at 2\u00d7 actual API cost. Approved catalog/customer access, provider setup, limits and any fixed connection fees must be agreed before launch."
+            },
+            {
+                "label": "Choose your voice model",
+                "status": "Planned for the eventual voice buildout",
+                "note": "Owners approve the available models and budgets. Team members can choose a lower-cost or more capable approved model, see an estimate first and itemized actual usage afterward. The current tablet demo retains its verified model."
+            },
+            {
+                "label": "Other future connections",
+                "status": "Pricing to be determined",
+                "note": "Connection, subscription or usage fees need a written quote and approval before activation. Unknown fees are not included at $0."
+            }
+        ],
+        "base_note": "Future Standard customers use one prepaid Everbranch service balance for email, text and AI, with future voice metered when available. There is no separate monthly email/text sending-access subscription and no text setup fee. Existing customer contracts and allowances stay unchanged.",
+        "ai_note": "OpenAI usage costs 2\u00d7 actual API cost. Estimates vary with the model, input/output, conversation history and tools. The future service will reserve estimated spend, enforce the available balance and owner-approved caps, and reconcile actual cost. Tablet demo voice is limited to five minutes per conversation and six starts per hour; it does not activate a paid service."
     },
     "contact_url": "https://evergrovesoftware.com/book"
 };

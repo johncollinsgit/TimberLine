@@ -1,32 +1,69 @@
 # Owner discussion: selectable services and shared usage credit
 
-Status: proposal for future customers, not an approved rate card or a change to
-existing customer contracts. The owner requested this discussion on October 18.
-Do not enable new recurring services or rewrite the issued Avery agreement/invoice
-until the selected services, prices, start date and customer approval are recorded.
+Status: the owner approved the shared prepaid structure, no separate SMS setup
+fee, and OpenAI at 2× actual API cost on October 18. Email/text rate changes below
+are still a discussion. Approval of a commercial model is not deployment or
+activation. Existing contracts and the already-issued $798 Avery documents stay
+unchanged until an explicitly reviewed revision is prepared.
 
-## Recommended commercial structure
+## Approved commercial structure
 
-- Keep Standard at $499 one-time setup and $299/month for confirmed platform scope.
-- Offer a single dollar-denominated prepaid Everbranch service balance, initially
-  using the existing $25/$50/$100 credit choices. Funds pay only for Everbranch's
-  approved consumable services; they are not transferable money or a payment method
-  for Avery's knives, shipping vendors or other third-party purchases.
-- Separate four usage meters: email messages, SMS/MMS billing units, phone minutes,
-  and AI usage. Show the actual billing unit and customer rate. A shared balance
-  does not mean all services cost the same or have the same unit.
-- Separate fixed connection/number/managed-service fees from usage. Avoid charging
-  a monthly sending-access fee without a clear ongoing feature/service benefit.
-  Any future replacement of the current optional SMS/email subscriptions applies
-  only to a newly approved offer version; preserve existing agreements/allowances.
-- Customer-facing voice and chat remain quote-required. The existing proposed
-  internal AI request tiers are not an approved price for shopper chat or phone AI.
-- Default automatic reload off, with voluntary threshold/reload amount and a monthly
-  spending ceiling. Give balance alerts and pause optional paid activity when the
-  available balance or approved cap is exhausted. Show pending reserved cost and
-  reconcile it when the provider confirms actual usage.
-- Unused purchased credit should carry forward under the agreed refund/cancellation
-  terms. Do not silently expire it or reset it as if it were a monthly allowance.
+- Standard remains $499 one-time setup and $299/month for confirmed platform scope.
+- One dollar-denominated prepaid Everbranch service balance pays for approved
+  consumable services. The existing optional credit choices are $25/$50/$100.
+  This is not transferable money or a payment method for Avery's knives, shipping
+  vendors or other third-party purchases.
+- Future Standard has no separate SMS setup fee and no separate email/SMS monthly
+  sending-access subscription. Preserve existing customers' subscriptions,
+  allowances and terms. Fixed number, connection or managed-service fees need
+  their own written quote.
+- OpenAI usage is billed at 2× actual API cost. This is a 100% cost markup and
+  50% gross margin on that provider cost, before payment processing, operations,
+  support and business taxes. Applicable customer sales tax is separate through
+  Stripe Tax; do not invent a company-tax surcharge.
+- Pending the current email/text discussion, retain the existing buyer usage
+  references: $0.005/email, $0.05/SMS segment, $0.15/MMS. Do not silently extend
+  2× pricing to these channels. A long or Unicode SMS can use multiple segments.
+- Show meters separately: email, SMS/MMS billing units, AI model input/output,
+  and future voice/phone usage. A shared balance does not create equal unit rates.
+- Automatic reload defaults off. The planned controls include optional reload,
+  balance alerts, reserved spend and monthly limits, pausing optional activity at
+  the available balance or approved cap. Provider actuals reconcile reservations.
+- Customer-facing AI and phone service need agreed scope/provider readiness and
+  a separate quote for any fixed connection/management costs. AI pricing policy
+  alone does not make a complete telephone minute price.
+- Unused purchased credit and refund/cancellation terms must be written before
+  live sale; do not silently expire funds or treat purchases as a reset allowance.
+
+## Future voice buildout: owner-approved model choice
+
+The owner requested team choice between cheaper and more capable models. This is
+part of the eventual voice buildout, not a request to change the verified current
+tablet model. Keep the live demo model fixed until the alternative passes tool,
+latency, interruption, context and permission checks.
+
+The owner/admin approves an allowed model set and defaults for each team role.
+A permitted team member can select within that set. The server reauthorizes model,
+tenant, role, tools and current pricing; a model choice must never widen data or
+action permissions. Do not trust arbitrary model IDs or client-provided prices.
+Show the selected model and a usage estimate before starting, then provider usage,
+the 2× charge and the shared balance after settlement. No automatic upgrade to a
+more expensive model; ask for a reviewed switch within the approved budget.
+
+Reserve a capped session estimate before provider activity. Enforce tenant balance
+and owner caps across concurrent users; one user cannot spend another user's
+reservation. Keep provider totals, rate versions and replay-safe session IDs for
+settlement/refunds. Interrupted sessions and ambiguous provider usage require
+reconciliation, not a second charge. Provider keys remain server-side. Test model
+selection, denied roles, stale rate cards, concurrent caps, cancellation, duplicate
+usage events and all existing action/confirmation boundaries before live rollout.
+
+Current illustrations (not flat fees): a 5,000-input/500-output short-context
+GPT-6.1 Sol task is about $0.03 at 2×. For an elapsed minute split equally between
+user and assistant speech, audio alone is about 9.6¢ with gpt-realtime-2.1 or 3¢
+with gpt-realtime-2.1-mini at 2×; ten balanced minutes are $0.96/$0.30. Text/context,
+repeated history, transcription and telephone transport can add cost. Model
+estimates and source date are exported from `StandardUsagePricing` to the demo.
 
 ## Selectable services and Stripe
 
@@ -72,13 +109,31 @@ and prepaid usage accounting distinct.
   $200 in time value before platform/support costs; that is not a measured expense
   or a margin calculation.
 
-The current buyer references are $0.005 per additional email and $0.05 per SMS
-segment, plus separate optional subscriptions/allowances. Twilio's published US
+The retained buyer references for the new wallet discussion are $0.005/email and
+$0.05/SMS segment. Separate legacy subscriptions and allowances remain valid for
+existing contracts. Twilio's published US
 SMS transport starts at $0.0083/segment before carrier/registration fees. SendGrid
 Essentials starts at $19.95/month; that is provider delivery infrastructure, not a
 customer marketing application. Retell advertises roughly $0.07–$0.31/minute for
 voice configurations; actual model/voice/telephony choices must be measured before
 a retail rate is committed. These are comparisons, not new approved Everbranch fees.
+
+## Email/text benchmark and pending decision
+
+Shopify Messaging includes 10,000 marketing emails/month, then $1 per 1,000 up to
+its first volume threshold. US SMS is $0.012 per billable message, with a separate
+$2.15/month approved toll-free number. Our retained $5/1,000 email and $0.05/SMS
+references are materially higher for delivery alone. The $299 platform value must
+come from the tailored workflow and service rather than claims of cheaper delivery.
+
+The latest recommendation is a published $1/1,000 email rate (not yet approved),
+and consideration of 2× actual SMS/MMS transport plus carrier cost (also not yet
+approved). A 2× illustration allocating a $19.95/50,000 provider plan over its full
+capacity gives $15.96 for 20,000 emails. This is not an account quote or measured
+actual cost: dedicated plans, under-used capacity, required subuser features and
+other charges can change the result. The flat proposed $1/1,000 would be $20 for
+20,000; Shopify is $10 after its included first 10,000. No new free allowance has
+been approved for Everbranch.
 
 ## Dashboard customers should see
 
@@ -104,3 +159,7 @@ usage already covered by an allowance.
 - https://docs.stripe.com/billing/subscriptions/usage-based/billing-credits
 - https://docs.stripe.com/billing/subscriptions/usage-based/billing-credits/implementation-guide
 - https://docs.stripe.com/invoicing/invoice-edits
+
+- https://help.shopify.com/en/manual/promoting-marketing/create-marketing/shopify-messaging/email/pricing
+- https://help.shopify.com/en/manual/promoting-marketing/create-marketing/shopify-messaging/sms/pricing
+- https://developers.openai.com/api/docs/pricing
