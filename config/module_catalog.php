@@ -12,7 +12,8 @@ $catalog = [
             'setup_cents' => 49900,
             'interval' => 'month',
             'usage_policy' => [
-                'version' => 'standard-prepaid-2026-10-18-v1',
+                'version' => 'standard-prepaid-2026-10-17-v2',
+                'messaging_rates_micros' => ['email' => 1490, 'sms' => 50000, 'mms' => 150000],
                 'billing_mode' => 'shared_prepaid_usage',
                 'sms_setup_cents' => 0,
                 'email_monthly_cents' => 0,
