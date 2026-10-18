@@ -22,6 +22,7 @@ class GlobalSearchRequest extends FormRequest
         return [
             'q' => ['nullable', 'string', 'max:120'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:20'],
+            'intent' => ['nullable', 'in:navigate'],
         ];
     }
 }

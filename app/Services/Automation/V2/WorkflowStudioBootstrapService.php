@@ -241,6 +241,7 @@ class WorkflowStudioBootstrapService
             'status' => $workflow->status,
             'draft_revision' => (int) $workflow->draft_revision,
             'published_version' => $publishedVersion?->version,
+            'has_unpublished_changes' => $publishedVersion && $publishedVersion->definition_hash !== app(PayloadFingerprint::class)->hash((array) $workflow->draft_definition),
             'test_state' => $workflow->test_state ?? [],
             'draft_definition' => $workflow->draft_definition,
         ];

@@ -1096,3 +1096,537 @@ it('resumes website collections after MySQL retains the collection table', funct
     expect(Schema::hasIndex('website_collections', 'wc_site_handle_uq'))->toBeTrue()
         ->and(Schema::hasIndex('website_collection_products', 'wcp_collection_product_uq'))->toBeTrue();
 });
+
+it('repairs native Website notification constraints after MySQL retains only the outbox table', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires disposable MySQL.');
+    }
+    foreach (['tenants', 'tenant_sites', 'website_orders', 'website_shipments'] as $name) {
+        if (! Schema::hasTable($name)) {
+            Schema::create($name, fn (Blueprint $table) => $table->id());
+        }
+    }
+    $migration = require database_path('migrations/2026_10_15_210000_create_website_order_notifications.php');
+    Schema::dropIfExists('website_order_notifications');
+    // Exact durable boundary: CREATE TABLE committed, but none of Laravel's
+    // following named FK/index ALTER statements or migration bookkeeping ran.
+    Schema::create('website_order_notifications', function (Blueprint $table): void {
+        $table->id();
+        $table->unsignedBigInteger('tenant_id');
+        $table->unsignedBigInteger('website_order_id');
+        $table->unsignedBigInteger('website_shipment_id')->nullable();
+        $table->char('transition_key', 64);
+        $table->string('kind', 32);
+        $table->string('status', 24)->default('pending');
+        $table->longText('snapshot');
+        $table->unsignedSmallInteger('attempts')->default(0);
+        $table->timestamp('next_attempt_at')->nullable();
+        $table->char('lease_token', 36)->nullable();
+        $table->timestamp('lease_expires_at')->nullable();
+        $table->timestamp('accepted_at')->nullable();
+        $table->string('provider_message_id', 255)->nullable();
+        $table->string('failure_code', 64)->nullable();
+        $table->timestamps();
+    });
+    expect(Schema::getForeignKeys('website_order_notifications'))->toBeEmpty()
+        ->and(Schema::hasIndex('website_order_notifications', 'won_transition_uq'))->toBeFalse()
+        ->and(Schema::hasIndex('website_order_notifications', 'won_due_idx'))->toBeFalse()
+        ->and(Schema::hasIndex('website_order_notifications', 'won_lease_idx'))->toBeFalse()
+        ->and(Schema::hasIndex('website_order_notifications', 'won_order_status_idx'))->toBeFalse();
+    $key = hash('sha256', random_bytes(20));
+    $tenantId = DB::table('tenants')->insertGetId(array_intersect_key(['name' => 'Notification recovery', 'slug' => 'notification-recovery-'.substr($key, 0, 12)], array_flip(Schema::getColumnListing('tenants'))));
+    $siteId = DB::table('tenant_sites')->insertGetId(array_intersect_key(['tenant_id' => $tenantId, 'status' => 'draft', 'public_enabled' => false, 'subdomain' => 'notification-'.substr($key, 0, 12)], array_flip(Schema::getColumnListing('tenant_sites'))));
+    $orderId = DB::table('website_orders')->insertGetId(array_intersect_key(['tenant_id' => $tenantId, 'tenant_site_id' => $siteId, 'number' => 'RECOVERY-'.substr($key, 0, 12), 'lookup_token' => substr($key, 0, 56)], array_flip(Schema::getColumnListing('website_orders'))));
+    DB::table('website_order_notifications')->insert(['tenant_id' => $tenantId, 'website_order_id' => $orderId,
+        'transition_key' => $key, 'kind' => 'confirmed', 'snapshot' => 'encrypted-recovery-sentinel', 'status' => 'blocked', 'created_at' => now(), 'updated_at' => now()]);
+    $migration->up();
+    $migration->up();
+    expect(Schema::hasIndex('website_order_notifications', 'won_transition_uq'))->toBeTrue()
+        ->and(Schema::hasIndex('website_order_notifications', 'won_due_idx'))->toBeTrue()
+        ->and(Schema::hasIndex('website_order_notifications', 'won_lease_idx'))->toBeTrue()
+        ->and(Schema::hasIndex('website_order_notifications', 'won_order_status_idx'))->toBeTrue()
+        ->and(Schema::getColumnType('website_order_notifications', 'snapshot'))->toBe('longtext')
+        ->and(DB::table('website_order_notifications')->where('transition_key', $key)->value('snapshot'))->toBe('encrypted-recovery-sentinel')
+        ->and(collect(Schema::getForeignKeys('website_order_notifications'))->pluck('name')->all())
+        ->toContain('won_tenant_fk', 'won_order_fk', 'won_shipment_fk');
+    expect(fn () => DB::table('website_order_notifications')->insert(['tenant_id' => $tenantId, 'website_order_id' => $orderId,
+        'transition_key' => $key, 'kind' => 'confirmed', 'snapshot' => 'duplicate-must-be-rejected', 'status' => 'blocked']))
+        ->toThrow(\Illuminate\Database\QueryException::class);
+    // A different interruption can retain some constraints. Repair the missing
+    // final index without recreating the table, its other keys, or its sentinel.
+    Schema::table('website_order_notifications', fn (Blueprint $table) => $table->dropIndex('won_order_status_idx'));
+    $migration->up();
+    $migration->up();
+    expect(Schema::hasIndex('website_order_notifications', 'won_order_status_idx'))->toBeTrue()
+        ->and(DB::table('website_order_notifications')->where('transition_key', $key)->value('snapshot'))->toBe('encrypted-recovery-sentinel');
+    DB::table('website_order_notifications')->where('transition_key', $key)->delete();
+});
+
+it('repairs native catalog source identities after MySQL retained the bare table before named keys', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('This recovery contract requires disposable MySQL.');
+    }
+    foreach (['tenants', 'tenant_sites', 'website_products', 'website_product_variants', 'website_collections'] as $name) {
+        if (! Schema::hasTable($name)) {
+            Schema::create($name, fn (Blueprint $table) => $table->id());
+        }
+    }
+    Schema::dropIfExists('website_catalog_source_mappings');
+    Schema::create('website_catalog_source_mappings', function (Blueprint $table): void {
+        $table->id();
+        $table->unsignedBigInteger('tenant_id');
+        $table->unsignedBigInteger('tenant_site_id');
+        $table->string('provider', 24);
+        $table->string('source_shop', 253);
+        $table->string('source_type', 16);
+        $table->string('source_gid', 190);
+        $table->unsignedBigInteger('website_product_id')->nullable();
+        $table->unsignedBigInteger('website_product_variant_id')->nullable();
+        $table->unsignedBigInteger('website_collection_id')->nullable();
+        $table->char('source_fingerprint', 64);
+        $table->char('target_fingerprint', 64);
+        $table->longText('provenance');
+        $table->timestamps();
+    });
+    expect(Schema::getForeignKeys('website_catalog_source_mappings'))->toBeEmpty()->and(Schema::hasIndex('website_catalog_source_mappings', 'wcs_source_uq'))->toBeFalse();
+    $key = substr(hash('sha256', random_bytes(20)), 0, 12);
+    $tenant = DB::table('tenants')->insertGetId(array_intersect_key(['name' => 'Catalog recovery', 'slug' => 'catalog-recovery-'.$key], array_flip(Schema::getColumnListing('tenants'))));
+    $site = DB::table('tenant_sites')->insertGetId(array_intersect_key(['tenant_id' => $tenant, 'subdomain' => 'catalog-recovery-'.$key, 'status' => 'draft', 'public_enabled' => false], array_flip(Schema::getColumnListing('tenant_sites'))));
+    $row = ['tenant_id' => $tenant, 'tenant_site_id' => $site, 'provider' => 'shopify', 'source_shop' => 'fictional-recovery.myshopify.com', 'source_type' => 'product', 'source_gid' => 'gid://shopify/Product/123', 'source_fingerprint' => str_repeat('a', 64), 'target_fingerprint' => str_repeat('b', 64), 'provenance' => 'encrypted-recovery-sentinel'];
+    $id = DB::table('website_catalog_source_mappings')->insertGetId($row);
+    $migration = require database_path('migrations/2026_10_15_230000_create_website_catalog_source_mappings.php');
+    $migration->up();
+    $migration->up();
+    expect(collect(Schema::getForeignKeys('website_catalog_source_mappings'))->pluck('name')->all())->toContain('wcs_tenant_fk', 'wcs_site_fk', 'wcs_product_fk', 'wcs_variant_fk', 'wcs_collection_fk');
+    foreach (['wcs_source_uq', 'wcs_product_idx', 'wcs_variant_idx', 'wcs_collection_idx'] as $name) {
+        expect(Schema::hasIndex('website_catalog_source_mappings', $name))->toBeTrue();
+    }
+    expect(DB::table('website_catalog_source_mappings')->where('id', $id)->value('provenance'))->toBe('encrypted-recovery-sentinel');
+    expect(fn () => DB::table('website_catalog_source_mappings')->insert($row))->toThrow(\Illuminate\Database\QueryException::class);
+    expect(fn () => DB::table('website_catalog_source_mappings')->insert(array_merge($row, ['tenant_id' => PHP_INT_MAX, 'source_gid' => 'gid://shopify/Product/124'])))->toThrow(\Illuminate\Database\QueryException::class);
+    Schema::table('website_catalog_source_mappings', fn (Blueprint $table) => $table->dropIndex('wcs_collection_idx'));
+    $migration->up();
+    $migration->up();
+    expect(Schema::hasIndex('website_catalog_source_mappings', 'wcs_collection_idx'))->toBeTrue()->and(DB::table('website_catalog_source_mappings')->where('id', $id)->value('provenance'))->toBe('encrypted-recovery-sentinel');
+    DB::table('website_catalog_source_mappings')->where('id', $id)->delete();
+});
+
+it('recovers subscription provider evidence from bare MySQL tables and preserves scoped durable identities', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Requires disposable MySQL.');
+    }
+    foreach (['tenants', 'shopify_stores'] as $name) {
+        if (! Schema::hasTable($name)) {
+            Schema::create($name, function (Blueprint $t) use ($name): void {
+                $t->id();
+                if ($name === 'shopify_stores') {
+                    $t->unsignedBigInteger('tenant_id');
+                    $t->string('store_key')->nullable();
+                    $t->string('shop_domain')->nullable();
+                }
+            });
+        }
+    }
+    $migration = require database_path('migrations/2026_10_15_235000_create_subscription_provider_evidence.php');
+    $tables = array_keys($migration->indexes());
+    Schema::disableForeignKeyConstraints();
+    foreach (array_reverse($tables) as $table) {
+        Schema::dropIfExists($table);
+    }
+    Schema::enableForeignKeyConstraints();
+    $migration->up();
+    // CREATE of the first table survived, while later tables did not.
+    Schema::table('subscription_installations', fn (Blueprint $t) => $t->dropForeign('si_active_credential_fk'));
+    foreach (array_reverse(array_slice($tables, 1)) as $table) {
+        Schema::drop($table);
+    }
+    $migration->up();
+    $migration->up();
+    $fingerprint = function () use ($tables): array {
+        $result = [];
+        foreach ($tables as $table) {
+            $indexes = collect(Schema::getIndexes($table))->map(fn ($x) => \Illuminate\Support\Arr::only($x, ['name', 'columns', 'unique', 'primary']))->sortBy('name')->values()->all();
+            $keys = collect(Schema::getForeignKeys($table))->map(fn ($x) => \Illuminate\Support\Arr::only($x, ['name', 'columns', 'foreign_table', 'foreign_columns', 'on_update', 'on_delete']))->sortBy('name')->values()->all();
+            $result[$table] = [$indexes, $keys];
+        }
+
+        return $result;
+    };
+    $clean = $fingerprint();
+    foreach ($tables as $table) {
+        foreach (Schema::getForeignKeys($table) as $fk) {
+            Schema::table($table, fn (Blueprint $t) => $t->dropForeign($fk['name']));
+        }
+    }
+    foreach ($tables as $table) {
+        foreach (Schema::getIndexes($table) as $index) {
+            if (! $index['primary']) {
+                Schema::table($table, fn (Blueprint $t) => $index['unique'] ? $t->dropUnique($index['name']) : $t->dropIndex($index['name']));
+            }
+        }
+    }
+    $suffix = bin2hex(random_bytes(5));
+    $tenant = DB::table('tenants')->insertGetId(array_intersect_key(['name' => 'Subscription recovery', 'slug' => 'subscription-recovery-'.$suffix], array_flip(Schema::getColumnListing('tenants'))));
+    $store = DB::table('shopify_stores')->insertGetId(array_intersect_key(['tenant_id' => $tenant, 'store_key' => 'recovery-'.$suffix, 'shop_domain' => 'recovery-'.$suffix.'.myshopify.com'], array_flip(Schema::getColumnListing('shopify_stores'))));
+    $install = ['public_id' => (string) \Illuminate\Support\Str::uuid(), 'tenant_id' => $tenant, 'shopify_store_id' => $store, 'shop_domain' => 'recovery-'.$suffix.'.myshopify.com', 'shop_gid' => 'gid://shopify/Shop/1', 'app_gid' => 'gid://shopify/App/1', 'app_installation_gid' => 'gid://shopify/AppInstallation/1', 'public_client_id' => 'recovery-public', 'evidence' => 'encrypted-installation-sentinel'];
+    $id = DB::table('subscription_installations')->insertGetId($install);
+    $credential = DB::table('subscription_credential_revisions')->insertGetId(['tenant_id' => $tenant, 'installation_id' => $id, 'revision' => 1, 'credentials' => 'encrypted-token-sentinel', 'app_secret' => 'encrypted-app-secret-sentinel', 'app_secret_reference' => 'test:app', 'app_secret_revision' => '1', 'credential_fingerprint' => str_repeat('a', 64), 'digest_key_id' => str_repeat('a', 16)]);
+    $operation = DB::table('subscription_operations')->insertGetId(['tenant_id' => $tenant, 'installation_id' => $id, 'credential_revision_id' => $credential, 'request_uuid' => (string) \Illuminate\Support\Str::uuid(), 'kind' => 'installation_probe', 'request_fingerprint' => str_repeat('b', 64), 'digest_key_id' => str_repeat('a', 16), 'request' => 'encrypted-request-sentinel']);
+    $delivery = ['tenant_id' => $tenant, 'installation_id' => $id, 'delivery_id' => 'delivery-sentinel', 'topic' => 'app/uninstalled', 'api_version' => '2026-10', 'body_fingerprint' => str_repeat('c', 64), 'digest_key_id' => str_repeat('a', 16), 'raw_body' => 'encrypted-body-sentinel', 'headers' => 'encrypted-headers-sentinel', 'verification' => 'encrypted-signature-revision-sentinel'];
+    $inbox = DB::table('subscription_webhook_inboxes')->insertGetId($delivery);
+    DB::table('subscription_provider_resources')->insert(['tenant_id' => $tenant, 'installation_id' => $id, 'sync_operation_id' => $operation, 'resource_type' => 'contract', 'provider_gid' => 'gid://shopify/SubscriptionContract/1', 'provider_revision' => '18446744073709551615', 'status' => 'ACTIVE', 'observed_at' => now(), 'snapshot' => 'encrypted-snapshot-sentinel']);
+    $migration->up();
+    $migration->up();
+    expect($fingerprint())->toBe($clean)
+        ->and(DB::table('subscription_installations')->where('id', $id)->value('evidence'))->toBe('encrypted-installation-sentinel')
+        ->and(DB::table('subscription_webhook_inboxes')->where('id', $inbox)->value('raw_body'))->toBe('encrypted-body-sentinel')
+        ->and(DB::table('subscription_provider_resources')->value('provider_revision'))->toBe('18446744073709551615');
+    $second = DB::table('subscription_installations')->insertGetId(array_merge($install, ['public_id' => (string) \Illuminate\Support\Str::uuid(), 'shop_domain' => 'second-'.$suffix.'.myshopify.com', 'shop_gid' => 'gid://shopify/Shop/2', 'app_installation_gid' => 'gid://shopify/AppInstallation/2', 'public_client_id' => 'second-public']));
+    expect(fn () => DB::table('subscription_installations')->where('id', $second)->update(['active_credential_revision_id' => $credential]))->toThrow(\Illuminate\Database\QueryException::class);
+    DB::table('subscription_installations')->where('id', $id)->update(['active_credential_revision_id' => $credential]);
+    Schema::table('subscription_webhook_inboxes', function (Blueprint $t): void {
+        $t->dropForeign('swi_install_fk');
+        $t->dropIndex('swi_due_idx');
+    });
+    $migration->up();
+    $migration->up();
+    expect($fingerprint())->toBe($clean);
+    Schema::table('subscription_webhook_inboxes', function (Blueprint $t): void {
+        $t->dropForeign('swi_install_fk');
+        $t->foreign(['installation_id', 'tenant_id'], 'swi_install_fk')->references(['id', 'tenant_id'])->on('subscription_installations')->restrictOnDelete()->cascadeOnUpdate();
+    });
+    expect(fn () => $migration->up())->toThrow(RuntimeException::class);
+    Schema::table('subscription_webhook_inboxes', fn (Blueprint $t) => $t->dropForeign('swi_install_fk'));
+    $migration->up();
+    Schema::table('subscription_webhook_inboxes', fn (Blueprint $t) => $t->dropUnique('swi_delivery_uq'));
+    $duplicate = DB::table('subscription_webhook_inboxes')->insertGetId($delivery);
+    expect(fn () => $migration->up())->toThrow(\Illuminate\Database\QueryException::class);
+    expect(DB::table('subscription_webhook_inboxes')->count())->toBe(2);
+    DB::table('subscription_webhook_inboxes')->where('id', $duplicate)->delete();
+    $migration->up();
+    Schema::table('subscription_webhook_inboxes', fn (Blueprint $t) => $t->dropForeign('swi_install_fk'));
+    $orphan = DB::table('subscription_webhook_inboxes')->insertGetId(array_merge($delivery, ['delivery_id' => 'orphan-sentinel', 'installation_id' => PHP_INT_MAX]));
+    expect(fn () => $migration->up())->toThrow(\Illuminate\Database\QueryException::class);
+    expect(DB::table('subscription_webhook_inboxes')->where('id', $orphan)->value('raw_body'))->toBe('encrypted-body-sentinel');
+    DB::table('subscription_webhook_inboxes')->where('id', $orphan)->delete();
+    $migration->up();
+    $migration->up();
+    expect($fingerprint())->toBe($clean)->and(DB::table('subscription_operations')->where('id', $operation)->value('request'))->toBe('encrypted-request-sentinel');
+});
+
+it('deduplicates concurrent subscription operations and webhook deliveries on MySQL after lost dispatch', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Requires disposable MySQL.');
+    }
+    $migration = require database_path('migrations/2026_10_15_235000_create_subscription_provider_evidence.php');
+    $migration->up();
+    $suffix = bin2hex(random_bytes(6));
+    $tenant = DB::table('tenants')->insertGetId(array_intersect_key(['name' => 'Concurrency fixture', 'slug' => 'subscription-race-'.$suffix], array_flip(Schema::getColumnListing('tenants'))));
+    $store = DB::table('shopify_stores')->insertGetId(array_intersect_key(['tenant_id' => $tenant, 'store_key' => 'race-'.$suffix, 'shop_domain' => 'race-'.$suffix.'.myshopify.com'], array_flip(Schema::getColumnListing('shopify_stores'))));
+    $install = \App\Models\SubscriptionInstallation::query()->create(['tenant_id' => $tenant, 'shopify_store_id' => $store, 'shop_domain' => 'race-'.$suffix.'.myshopify.com', 'shop_gid' => 'gid://shopify/Shop/'.$suffix, 'app_gid' => 'gid://shopify/App/'.$suffix, 'app_installation_gid' => 'gid://shopify/AppInstallation/'.$suffix, 'public_client_id' => 'race-'.$suffix, 'status' => 'verified', 'verified_at' => now()]);
+    $credential = \App\Models\SubscriptionCredentialRevision::query()->create(['tenant_id' => $tenant, 'installation_id' => $install->id, 'revision' => 1, 'status' => 'active', 'credentials' => ['access_token' => 'synthetic-private-token'], 'credential_fingerprint' => str_repeat('a', 64), 'digest_key_id' => str_repeat('a', 16)]);
+    $install->update(['active_credential_revision_id' => $credential->id]);
+    $dir = sys_get_temp_dir().'/subscription-evidence-race-'.$suffix;
+    mkdir($dir, 0700);
+    $cache = $dir.'/config.php';
+    file_put_contents($cache, '<?php return '.var_export(config()->all(), true).';');
+    chmod($cache, 0600);
+    $processes = [];
+    $results = [];
+    $uuid = (string) \Illuminate\Support\Str::uuid();
+    $code = <<<'PHP'
+require 'vendor/autoload.php';
+$d=json_decode(stream_get_contents(STDIN),true,512,JSON_THROW_ON_ERROR);
+$app=require 'bootstrap/app.php'; $app->useEnvironmentPath($d['dir']); $app->loadEnvironmentFrom('absent.env'); $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+Illuminate\Support\Facades\Http::preventStrayRequests(); Illuminate\Support\Facades\Queue::fake();
+config()->set('subscriptions.provider_reads_enabled',true); config()->set('subscriptions.provider_read_tenant_ids',[$d['tenant']]);
+// This test isolates database concurrency. Real canonical manager/entitlement
+// checks are exercised by SubscriptionEvidencePersistenceTest.
+$access=new class extends App\Services\Subscriptions\SubscriptionAccessService { public function assertManager(int $id,?App\Models\User $actor):void {} public function entitled(int $id):bool{return true;} };
+$actor=(new App\Models\User)->forceFill(['id'=>1]);
+touch($d['dir'].'/ready-'.$d['worker']); $deadline=microtime(true)+15; while(!file_exists($d['dir'].'/go')) { if(microtime(true)>$deadline){throw new RuntimeException('Barrier timeout');} usleep(10000); }
+$lost=function(int $id) use($d):void { file_put_contents($d['dir'].'/dispatches',json_encode($id).PHP_EOL,FILE_APPEND|LOCK_EX); chmod($d['dir'].'/dispatches',0600); throw new RuntimeException('Synthetic lost after-commit dispatch'); };
+$op=(new App\Services\Subscriptions\SubscriptionOperationService($access))->record($d['tenant'],$d['install'],$actor,'owned_contract_sync',$d['uuid'],['bound'=>2],afterCommit:$lost);
+$inbox=(new App\Services\Subscriptions\SubscriptionWebhookInboxService($access))->persist($d['tenant'],$d['install'],'race-delivery','same-event','subscription_contracts/update','2026-10','{"id":1}',afterCommit:$lost,signingEvidence:['app_secret_reference'=>'test:app','app_secret_revision'=>'1']);
+Illuminate\Support\Facades\Http::assertNothingSent(); Illuminate\Support\Facades\Queue::assertNothingPushed();
+echo json_encode(['operation'=>$op->id,'inbox'=>$inbox->id]);
+PHP;
+    try {
+        foreach ([1, 2] as $worker) {
+            $process = new \Symfony\Component\Process\Process([PHP_BINARY, '-r', $code], base_path(), ['APP_CONFIG_CACHE' => $cache, 'APP_ENV' => 'testing', 'LOG_CHANNEL' => 'null'], json_encode(['dir' => $dir, 'worker' => $worker, 'tenant' => $tenant, 'install' => $install->id, 'uuid' => $uuid]), 25);
+            $process->start();
+            $processes[] = $process;
+        }
+        $deadline = microtime(true) + 15;
+        while (! file_exists($dir.'/ready-1') || ! file_exists($dir.'/ready-2')) {
+            if (microtime(true) > $deadline) {
+                throw new RuntimeException('Workers did not reach barrier.');
+            } usleep(10000);
+        }
+        touch($dir.'/go');
+        foreach ($processes as $process) {
+            $process->wait();
+            expect($process->isSuccessful())->toBeTrue($process->getErrorOutput());
+            $results[] = json_decode($process->getOutput(), true, 512, JSON_THROW_ON_ERROR);
+        }
+        expect(count(file($dir.'/dispatches', FILE_IGNORE_NEW_LINES)))->toBe(2)
+            ->and($results[0])->toBe($results[1])
+            ->and(DB::table('subscription_operations')->where('installation_id', $install->id)->where('request_uuid', $uuid)->count())->toBe(1)
+            ->and(DB::table('subscription_operations')->where('id', $results[0]['operation'])->value('status'))->toBe('queued')
+            ->and(DB::table('subscription_webhook_inboxes')->where('installation_id', $install->id)->count())->toBe(1)
+            ->and(DB::table('subscription_webhook_inboxes')->where('id', $results[0]['inbox'])->value('status'))->toBe('pending');
+    } finally {
+        foreach ($processes as $process) {
+            if ($process->isRunning()) {
+                $process->stop();
+            }
+        }
+        foreach (glob($dir.'/*') as $file) {
+            unlink($file);
+        } rmdir($dir);
+    }
+});
+
+it('recovers Recharge evidence from partial MySQL DDL without changing accepted generations or private evidence', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Requires disposable MySQL.');
+    }
+    foreach (['tenants', 'shopify_stores', 'integration_connections'] as $name) {
+        if (! Schema::hasTable($name)) {
+            Schema::create($name, function (Blueprint $t) use ($name): void {
+                $t->id();
+                if ($name !== 'tenants') {
+                    $t->unsignedBigInteger('tenant_id');
+                }
+                if ($name === 'shopify_stores') {
+                    $t->string('store_key')->nullable();
+                    $t->string('shop_domain')->nullable();
+                }
+                if ($name === 'integration_connections') {
+                    $t->string('provider');
+                    $t->string('external_account_id')->nullable();
+                }
+            });
+        }
+    }
+    $migration = require database_path('migrations/2026_10_16_120000_create_subscription_recharge_evidence.php');
+    $tables = array_keys($migration->indexes());
+    Schema::disableForeignKeyConstraints();
+    foreach (array_reverse($tables) as $table) {
+        Schema::dropIfExists($table);
+    }
+    Schema::enableForeignKeyConstraints();
+    $migration->up();
+    Schema::table('subscription_recharge_connections', fn (Blueprint $t) => $t->dropForeign('src_active_fk'));
+    foreach (array_reverse(array_slice($tables, 1)) as $table) {
+        Schema::drop($table);
+    }
+    $migration->up();
+    $migration->up();
+    $fingerprint = function () use ($tables): array {
+        $result = [];
+        foreach ($tables as $table) {
+            $indexes = collect(Schema::getIndexes($table))->map(fn ($x) => \Illuminate\Support\Arr::only($x, ['name', 'columns', 'unique', 'primary']))->sortBy('name')->values()->all();
+            $keys = collect(Schema::getForeignKeys($table))->map(fn ($x) => \Illuminate\Support\Arr::only($x, ['name', 'columns', 'foreign_table', 'foreign_columns', 'on_update', 'on_delete']))->sortBy('name')->values()->all();
+            $result[$table] = [$indexes, $keys];
+        }
+
+        return $result;
+    };
+    $clean = $fingerprint();
+    foreach ($tables as $table) {
+        foreach (Schema::getForeignKeys($table) as $fk) {
+            Schema::table($table, fn (Blueprint $t) => $t->dropForeign($fk['name']));
+        }
+    }
+    foreach ($tables as $table) {
+        foreach (Schema::getIndexes($table) as $index) {
+            if (! $index['primary']) {
+                Schema::table($table, fn (Blueprint $t) => $index['unique'] ? $t->dropUnique($index['name']) : $t->dropIndex($index['name']));
+            }
+        }
+    }
+    $suffix = bin2hex(random_bytes(5));
+    $tenant = DB::table('tenants')->insertGetId(array_intersect_key(['name' => 'Recharge recovery', 'slug' => 'recharge-recovery-'.$suffix], array_flip(Schema::getColumnListing('tenants'))));
+    $source = DB::table('integration_connections')->insertGetId(['tenant_id' => $tenant, 'provider' => 'recharge', 'external_account_id' => 'recovery-'.$suffix]);
+    $encrypted = fn (string $value) => \Illuminate\Support\Facades\Crypt::encryptString(json_encode(['sentinel' => $value]));
+    $connectionEvidence = $encrypted('connection-private');
+    $syncState = $encrypted('accepted-generation-private');
+    $tokenEvidence = $encrypted('immutable-private-token');
+    $requestEvidence = $encrypted('private-read-request');
+    $snapshotEvidence = $encrypted('customer-private@example.test');
+    $mappingEvidence = $encrypted('private-local-mapping');
+    $connectionValues = ['public_id' => (string) \Illuminate\Support\Str::uuid(), 'tenant_id' => $tenant, 'provider_store_id' => '000123'.$suffix, 'platform' => 'shopify', 'identifier' => 'recovery-'.$suffix.'.myshopify.com', 'source_integration_connection_id' => $source, 'evidence' => $connectionEvidence, 'sync_state' => $syncState];
+    $connection = DB::table('subscription_recharge_connections')->insertGetId($connectionValues);
+    $credentialValues = ['tenant_id' => $tenant, 'connection_id' => $connection, 'revision' => 1, 'credentials' => $tokenEvidence, 'credential_fingerprint' => str_repeat('a', 64), 'digest_key_id' => str_repeat('b', 16)];
+    $credential = DB::table('subscription_recharge_credential_revisions')->insertGetId($credentialValues);
+    $operationValues = ['tenant_id' => $tenant, 'connection_id' => $connection, 'credential_revision_id' => $credential, 'request_uuid' => (string) \Illuminate\Support\Str::uuid(), 'kind' => 'shadow_sync', 'request' => $requestEvidence, 'request_fingerprint' => str_repeat('c', 64), 'digest_key_id' => str_repeat('b', 16)];
+    $operation = DB::table('subscription_recharge_operations')->insertGetId($operationValues);
+    $resourceValues = ['tenant_id' => $tenant, 'connection_id' => $connection, 'sync_operation_id' => $operation, 'generation_id' => (string) \Illuminate\Support\Str::uuid(), 'resource_type' => 'customer', 'provider_id' => '00018446744073709551615001', 'source_updated_at' => '2026-10-16T14:30:00.123456-04:00', 'canonical_digest' => str_repeat('d', 64), 'digest_key_id' => str_repeat('b', 16), 'observed_at' => '2026-10-16 18:30:00.123456', 'completeness' => 'complete', 'snapshot' => $snapshotEvidence, 'mapping' => $mappingEvidence];
+    $resource = DB::table('subscription_recharge_resources')->insertGetId($resourceValues);
+    $migration->up();
+    $migration->up();
+    expect($fingerprint())->toBe($clean)
+        ->and(DB::table('subscription_recharge_connections')->where('id', $connection)->value('evidence'))->toBe($connectionEvidence)
+        ->and(DB::table('subscription_recharge_connections')->where('id', $connection)->value('sync_state'))->toBe($syncState)
+        ->and(DB::table('subscription_recharge_credential_revisions')->where('id', $credential)->value('credentials'))->toBe($tokenEvidence)
+        ->and(DB::table('subscription_recharge_resources')->where('id', $resource)->value('snapshot'))->toBe($snapshotEvidence)
+        ->and(DB::table('subscription_recharge_resources')->where('id', $resource)->value('mapping'))->toBe($mappingEvidence)
+        ->and(DB::table('subscription_recharge_resources')->where('id', $resource)->value('provider_id'))->toBe('00018446744073709551615001')
+        ->and(DB::table('subscription_recharge_resources')->where('id', $resource)->value('source_updated_at'))->toBe('2026-10-16T14:30:00.123456-04:00')
+        ->and(DB::table('subscription_recharge_resources')->where('id', $resource)->value('observed_at'))->toBe('2026-10-16 18:30:00.123456');
+
+    // The active pointer cannot borrow even a same-tenant connection's credential.
+    $second = DB::table('subscription_recharge_connections')->insertGetId(array_replace($connectionValues, ['public_id' => (string) \Illuminate\Support\Str::uuid(), 'provider_store_id' => 'second-'.$suffix]));
+    expect(fn () => DB::table('subscription_recharge_connections')->where('id', $second)->update(['active_credential_revision_id' => $credential]))->toThrow(\Illuminate\Database\QueryException::class);
+    expect(fn () => DB::table('subscription_recharge_credential_revisions')->insert(array_replace($credentialValues, ['tenant_id' => PHP_INT_MAX, 'revision' => 2])))->toThrow(\Illuminate\Database\QueryException::class);
+    expect(fn () => DB::table('subscription_recharge_operations')->insert(array_replace($operationValues, ['connection_id' => $second, 'request_uuid' => (string) \Illuminate\Support\Str::uuid()])))->toThrow(\Illuminate\Database\QueryException::class);
+    expect(fn () => DB::table('subscription_recharge_resources')->insert(array_replace($resourceValues, ['connection_id' => $second])))->toThrow(\Illuminate\Database\QueryException::class);
+    DB::table('subscription_recharge_connections')->where('id', $connection)->update(['active_credential_revision_id' => $credential]);
+    $next = DB::table('subscription_recharge_resources')->insertGetId(array_replace($resourceValues, ['generation_id' => (string) \Illuminate\Support\Str::uuid(), 'completeness' => 'staged']));
+    expect(DB::table('subscription_recharge_resources')->count())->toBe(2);
+    expect(fn () => DB::table('subscription_recharge_resources')->insert($resourceValues))->toThrow(\Illuminate\Database\QueryException::class);
+
+    Schema::table('subscription_recharge_resources', function (Blueprint $t): void {
+        $t->dropForeign('srr_operation_fk');
+        $t->dropIndex('srr_customer_idx');
+    });
+    $migration->up();
+    $migration->up();
+    expect($fingerprint())->toBe($clean);
+    Schema::table('subscription_recharge_resources', function (Blueprint $t): void {
+        $t->dropForeign('srr_operation_fk');
+        $t->foreign(['sync_operation_id', 'connection_id', 'tenant_id'], 'srr_operation_fk')->references(['id', 'connection_id', 'tenant_id'])->on('subscription_recharge_operations')->restrictOnDelete()->cascadeOnUpdate();
+    });
+    expect(fn () => $migration->up())->toThrow(RuntimeException::class);
+    Schema::table('subscription_recharge_resources', fn (Blueprint $t) => $t->dropForeign('srr_operation_fk'));
+    $migration->up();
+    Schema::table('subscription_recharge_resources', function (Blueprint $t): void {
+        $t->dropUnique('srr_generation_uq');
+        $t->index(['connection_id', 'resource_type', 'provider_id', 'generation_id'], 'srr_generation_uq');
+    });
+    expect(fn () => $migration->up())->toThrow(RuntimeException::class);
+    Schema::table('subscription_recharge_resources', fn (Blueprint $t) => $t->dropIndex('srr_generation_uq'));
+    $migration->up();
+
+    // Conflicting retained rows stop repair without deleting or changing evidence.
+    Schema::table('subscription_recharge_operations', fn (Blueprint $t) => $t->dropUnique('sro_request_uq'));
+    $duplicate = DB::table('subscription_recharge_operations')->insertGetId($operationValues);
+    expect(fn () => $migration->up())->toThrow(\Illuminate\Database\QueryException::class);
+    expect(DB::table('subscription_recharge_operations')->where('connection_id', $connection)->count())->toBe(2);
+    DB::table('subscription_recharge_operations')->where('id', $duplicate)->delete();
+    $migration->up();
+    Schema::table('subscription_recharge_resources', fn (Blueprint $t) => $t->dropForeign('srr_operation_fk'));
+    $orphan = DB::table('subscription_recharge_resources')->insertGetId(array_replace($resourceValues, ['generation_id' => (string) \Illuminate\Support\Str::uuid(), 'sync_operation_id' => PHP_INT_MAX]));
+    expect(fn () => $migration->up())->toThrow(\Illuminate\Database\QueryException::class);
+    expect(DB::table('subscription_recharge_resources')->where('id', $orphan)->value('snapshot'))->toBe($snapshotEvidence);
+    DB::table('subscription_recharge_resources')->where('id', $orphan)->delete();
+    $migration->up();
+    $migration->up();
+    $migration->down();
+    expect($fingerprint())->toBe($clean)
+        ->and(DB::table('subscription_recharge_operations')->where('id', $operation)->value('request'))->toBe($requestEvidence)
+        ->and(DB::table('subscription_recharge_resources')->where('id', $resource)->value('snapshot'))->toBe($snapshotEvidence)
+        ->and(DB::table('subscription_recharge_resources')->where('id', $next)->value('completeness'))->toBe('staged');
+});
+
+it('deduplicates concurrent Recharge reads and fences recovered leases on MySQL without executing providers', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Requires disposable MySQL.');
+    }
+    $migration = require database_path('migrations/2026_10_16_120000_create_subscription_recharge_evidence.php');
+    $migration->up();
+    if (! Schema::hasTable('users')) {
+        Schema::create('users', fn (Blueprint $t) => $t->id());
+    }
+    $suffix = bin2hex(random_bytes(6));
+    $tenant = DB::table('tenants')->insertGetId(array_intersect_key(['name' => 'Recharge concurrency', 'slug' => 'recharge-race-'.$suffix], array_flip(Schema::getColumnListing('tenants'))));
+    $actorId = DB::table('users')->insertGetId(array_intersect_key(['name' => 'Fictional manager', 'email' => 'recharge-'.$suffix.'@example.test', 'password' => 'unused-synthetic-password'], array_flip(Schema::getColumnListing('users'))));
+    $connection = \App\Models\SubscriptionRechargeConnection::query()->create(['tenant_id' => $tenant, 'provider_store_id' => 'race-'.$suffix, 'platform' => 'shopify', 'identifier' => 'race-'.$suffix.'.myshopify.com', 'status' => 'verified', 'verified_at' => now()]);
+    $credential = \App\Models\SubscriptionRechargeCredentialRevision::query()->create(['tenant_id' => $tenant, 'connection_id' => $connection->id, 'revision' => 1, 'status' => 'active', 'credentials' => ['access_token' => 'synthetic-private-recharge-token'], 'credential_fingerprint' => str_repeat('a', 64), 'digest_key_id' => str_repeat('b', 16)]);
+    $connection->update(['active_credential_revision_id' => $credential->id]);
+    $dir = sys_get_temp_dir().'/recharge-read-race-'.$suffix;
+    mkdir($dir, 0700);
+    $cache = $dir.'/config.php';
+    file_put_contents($cache, '<?php return '.var_export(config()->all(), true).';');
+    chmod($cache, 0600);
+    $processes = [];
+    $results = [];
+    $uuid = (string) \Illuminate\Support\Str::uuid();
+    $code = <<<'PHP'
+require 'vendor/autoload.php';
+$d=json_decode(stream_get_contents(STDIN),true,512,JSON_THROW_ON_ERROR);
+$app=require 'bootstrap/app.php'; $app->useEnvironmentPath($d['dir']); $app->loadEnvironmentFrom('absent.env'); $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+Illuminate\Support\Facades\Http::preventStrayRequests(); Illuminate\Support\Facades\Queue::fake(); Illuminate\Support\Facades\Mail::fake();
+config()->set('subscriptions.recharge_reads_enabled',true); config()->set('subscriptions.recharge_read_tenant_ids',[$d['tenant']]);
+// Isolate database concurrency; actual active-manager and entitlement checks are
+// exercised by SubscriptionRechargeReadTest request/service regressions.
+$access=new class extends App\Services\Subscriptions\SubscriptionAccessService { public function assertManager(int $id,?App\Models\User $actor):void {} public function entitled(int $id):bool{return true;} };
+$actor=App\Models\User::query()->findOrFail($d['actor']);
+touch($d['dir'].'/ready-'.$d['worker']); $deadline=microtime(true)+15; while(!file_exists($d['dir'].'/go')) { if(microtime(true)>$deadline){throw new RuntimeException('Barrier timeout');} usleep(10000); }
+$service=new App\Services\Subscriptions\SubscriptionRechargeOperationService($access);
+$op=$service->record($d['tenant'],$d['connection'],$actor,'sync_slice',$d['uuid'],['position'=>['stream'=>0,'cursor'=>null],'limit'=>50]);
+$claim=$service->claim($d['tenant'],$op->id,$actor);
+Illuminate\Support\Facades\Http::assertNothingSent(); Illuminate\Support\Facades\Queue::assertNothingPushed(); Illuminate\Support\Facades\Mail::assertNothingSent();
+echo json_encode(['operation'=>$op->id,'lease'=>$claim?->lease_token]);
+PHP;
+    try {
+        foreach ([1, 2] as $worker) {
+            $process = new \Symfony\Component\Process\Process([PHP_BINARY, '-r', $code], base_path(), ['APP_CONFIG_CACHE' => $cache, 'APP_ENV' => 'testing', 'LOG_CHANNEL' => 'null'], json_encode(['dir' => $dir, 'worker' => $worker, 'tenant' => $tenant, 'actor' => $actorId, 'connection' => $connection->id, 'uuid' => $uuid]), 25);
+            $process->start();
+            $processes[] = $process;
+        }
+        $deadline = microtime(true) + 15;
+        while (! file_exists($dir.'/ready-1') || ! file_exists($dir.'/ready-2')) {
+            if (microtime(true) > $deadline) {
+                throw new RuntimeException('Recharge workers did not reach barrier.');
+            } usleep(10000);
+        }
+        touch($dir.'/go');
+        foreach ($processes as $process) {
+            $process->wait();
+            expect($process->isSuccessful())->toBeTrue($process->getErrorOutput());
+            $results[] = json_decode($process->getOutput(), true, 512, JSON_THROW_ON_ERROR);
+        }
+        $lease = collect($results)->pluck('lease')->filter()->values();
+        $id = $results[0]['operation'];
+        expect($results[0]['operation'])->toBe($results[1]['operation'])
+            ->and($lease->count())->toBe(1)
+            ->and(DB::table('subscription_recharge_operations')->where('connection_id', $connection->id)->where('request_uuid', $uuid)->count())->toBe(1)
+            ->and(DB::table('subscription_recharge_operations')->where('id', $id)->value('attempts'))->toBe(1);
+        config()->set('subscriptions.recharge_reads_enabled', true);
+        config()->set('subscriptions.recharge_read_tenant_ids', [$tenant]);
+        $access = new class extends \App\Services\Subscriptions\SubscriptionAccessService
+        {
+            public function assertManager(int $id, ?\App\Models\User $actor): void {}
+
+            public function entitled(int $id): bool
+            {
+                return true;
+            }
+        };
+        $service = new \App\Services\Subscriptions\SubscriptionRechargeOperationService($access);
+        $actor = \App\Models\User::query()->findOrFail($actorId);
+        // A lost worker response retains the operation; expiry permits GET-only
+        // recovery under a fresh fence without duplicating the request identity.
+        DB::table('subscription_recharge_operations')->where('id', $id)->update(['lease_expires_at' => now()->subSecond()]);
+        $recovered = $service->claim($tenant, $id, $actor);
+        expect($recovered->attempts)->toBe(2)
+            ->and($service->complete($tenant, $id, $lease[0], 'completed'))->toBeFalse()
+            ->and($service->complete($tenant, $id, $recovered->lease_token, 'completed', ['observed_count' => 0]))->toBeTrue()
+            ->and($service->claim($tenant, $id, $actor))->toBeNull();
+        expect(fn () => $service->record($tenant, $connection->id, $actor, 'sync_slice', $uuid, ['different' => true]))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+        $replayed = $service->record($tenant, $connection->id, $actor, 'sync_slice', $uuid, ['limit' => 50, 'position' => ['cursor' => null, 'stream' => 0]]);
+        expect($replayed->id)->toBe($id)->and($replayed->status)->toBe('completed')
+            ->and($replayed->result)->toBe(['observed_count' => 0]);
+    } finally {
+        foreach ($processes as $process) {
+            if ($process->isRunning()) {
+                $process->stop();
+            }
+        }
+        foreach (glob($dir.'/*') as $file) {
+            unlink($file);
+        } rmdir($dir);
+    }
+});

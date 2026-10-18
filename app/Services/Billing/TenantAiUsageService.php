@@ -16,12 +16,15 @@ class TenantAiUsageService
         abort_unless((bool) config('bud.ai_enabled') && (bool) config('bud.provider_configured'), 503, 'Paid AI is not available yet.');
 
         return DB::transaction(function () use ($tenant, $user, $clientUuid, $context, $model, $seconds): TenantAiUsageEvent {
+            // Acquire the shared budget lock before any consistent read establishes a MySQL snapshot.
+            $setting = TenantBudSetting::query()->where('tenant_id', (int) $tenant->id)->lockForUpdate()->first();
             $existing = TenantAiUsageEvent::query()->forTenantId((int) $tenant->id)->where('client_uuid', $clientUuid)->first();
             if ($existing) {
+                abort_unless($existing->feature === 'field_voice_transcription' && (int) $existing->user_id === (int) $user->id && $existing->context === $context, 409, 'This request belongs to a different AI action.');
+
                 return $existing;
             }
 
-            $setting = TenantBudSetting::query()->where('tenant_id', (int) $tenant->id)->lockForUpdate()->first();
             abort_unless($setting?->ai_status === 'approved', 403, 'Paid AI must be approved for this workspace.');
             if (! $setting->ai_period_started_at || ! $setting->ai_period_started_at->isSameMonth(now())) {
                 $setting->forceFill(['ai_used_cents' => 0, 'ai_period_started_at' => now()->startOfMonth()])->save();

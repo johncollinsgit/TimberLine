@@ -3,6 +3,42 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_16_120000_create_subscription_recharge_evidence.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['early connection retained before trailing tables', 'bare tables and encrypted evidence retained before every named index and foreign key', 'partial constraints repaired repeatedly without changing accepted generations', 'wrong-tenant and wrong-connection credential and operation parents rejected', 'duplicate generation or request and orphan scope fail without deleting evidence', 'same-named changed index or referential action fails closed', 'concurrent operation UUID dedupe with recovered fenced lease and immutable request replay'],
+    ],
+    '2026_10_16_000000_create_ai_branch_accounts.php' => [
+        'test' => 'tests/Integration/AiBranchMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['completed table and encrypted sentinel retained before migration bookkeeping'],
+    ],
+    '2026_10_16_000001_create_ai_branch_conversations.php' => [
+        'test' => 'tests/Integration/AiBranchMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['completed table and encrypted sentinel retained before migration bookkeeping'],
+    ],
+    '2026_10_16_000002_create_ai_branch_memories.php' => [
+        'test' => 'tests/Integration/AiBranchMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['completed table and encrypted sentinel retained before migration bookkeeping'],
+    ],
+    '2026_10_16_000003_create_ai_branch_actions.php' => [
+        'test' => 'tests/Integration/AiBranchMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['completed table and encrypted sentinel retained before migration bookkeeping'],
+    ],
+    '2026_10_15_235000_create_subscription_provider_evidence.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['early installation retained before trailing tables', 'all-column bare tables with encrypted sentinel before every FK/index', 'partial constraints repaired twice with unchanged evidence and uint64 precision', 'conflicting duplicates or orphan scope fails without deleting evidence', 'same-named changed referential action fails closed', 'concurrent UUID and delivery dedupe with lost scalar after-commit dispatch remains recoverable'],
+    ],
+    '2026_10_15_220000_reconcile_reviewed_schema_drift.php' => [
+        'test' => 'tests/Integration/ReviewedSchemaDriftRecoveryTest.php',
+        'scenarios' => ['exact observed production DDL with historical rows and unowned development notes', 'earlier repairs retained before missing unique and foreign key repair', 'archival column retained after an atomic delivery-reference copy rolls back', 'conflicting evidence and unrelated duplicate/orphan conflicts stop before DDL', 'clean and observed schemas converge without production name or column-order rewrites'],
+    ],
+    '2026_10_15_230000_create_website_catalog_source_mappings.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['bare native catalog source table and encrypted sentinel retained before every named FK/index ALTER', 'earlier source mapping keys retained before trailing index repair'],
+    ],
+    '2026_10_15_210000_create_website_order_notifications.php' => [
+        'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['bare native notification table and encrypted sentinel retained before every named FK/index ALTER', 'earlier native notification constraints retained before final index repair'],
+    ],
     '2026_10_13_220000_create_soccer_workspace.php' => [
         'test' => 'tests/Integration/SoccerMySqlMigrationRecoveryTest.php',
         'scenarios' => ['family and season tables retained before remaining soccer tables'],
@@ -126,5 +162,49 @@ return [
     '2026_10_08_000000_create_fleet_operation_records.php' => [
         'test' => 'tests/Integration/FleetOperationsMySqlMigrationRecoveryTest.php',
         'scenarios' => ['operation table retained before Laravel records the migration batch'],
+    ],
+    '2026_10_16_100000_create_marketing_brand_knowledge_versions.php' => [
+        'test' => 'tests/Integration/MarketingDeskMySqlRecoveryTest.php',
+        'scenarios' => ['table retained before tenant and unique indexes; completed DDL and saved rows retained before migration bookkeeping'],
+    ],
+    '2026_10_16_100001_create_marketing_reply_policies.php' => [
+        'test' => 'tests/Integration/MarketingDeskMySqlRecoveryTest.php',
+        'scenarios' => ['table retained before tenant and unique indexes; completed DDL and saved rows retained before migration bookkeeping'],
+    ],
+    '2026_10_16_100002_create_marketing_social_posts.php' => [
+        'test' => 'tests/Integration/MarketingDeskMySqlRecoveryTest.php',
+        'scenarios' => ['table retained before tenant and unique indexes; completed DDL and saved rows retained before migration bookkeeping'],
+    ],
+    '2026_10_16_100003_create_marketing_social_publications.php' => [
+        'test' => 'tests/Integration/MarketingDeskMySqlRecoveryTest.php',
+        'scenarios' => ['table retained before tenant and unique indexes; completed DDL and saved rows retained before migration bookkeeping'],
+    ],
+    '2026_10_16_100004_create_marketing_assistant_turns.php' => [
+        'test' => 'tests/Integration/MarketingDeskMySqlRecoveryTest.php',
+        'scenarios' => ['table retained before tenant and unique indexes; completed DDL and saved rows retained before migration bookkeeping'],
+    ],
+    '2026_10_16_100005_create_marketing_audience_permissions.php' => [
+        'test' => 'tests/Integration/MarketingDeskMySqlRecoveryTest.php',
+        'scenarios' => ['table retained before tenant and unique indexes; completed DDL and saved rows retained before migration bookkeeping'],
+    ],
+    '2026_10_16_100006_create_marketing_automation_enrollments.php' => [
+        'test' => 'tests/Integration/MarketingDeskMySqlRecoveryTest.php',
+        'scenarios' => ['table retained before tenant and unique indexes; completed DDL and saved rows retained before migration bookkeeping'],
+    ],
+    '2026_10_16_100007_create_marketing_delivery_authorizations.php' => [
+        'test' => 'tests/Integration/MarketingDeskMySqlRecoveryTest.php',
+        'scenarios' => ['table retained before tenant and unique indexes; completed DDL and saved rows retained before migration bookkeeping'],
+    ],
+    '2026_10_16_100008_create_marketing_delivery_attempts.php' => [
+        'test' => 'tests/Integration/MarketingDeskMySqlRecoveryTest.php',
+        'scenarios' => ['table retained before tenant and unique indexes; completed DDL and saved rows retained before migration bookkeeping'],
+    ],
+    '2026_10_16_100009_create_marketing_conversation_controls.php' => [
+        'test' => 'tests/Integration/MarketingDeskMySqlRecoveryTest.php',
+        'scenarios' => ['table retained before tenant and unique indexes; completed DDL and saved rows retained before migration bookkeeping'],
+    ],
+    '2026_10_16_100010_create_marketing_social_account_bindings.php' => [
+        'test' => 'tests/Integration/MarketingDeskMySqlRecoveryTest.php',
+        'scenarios' => ['table retained before tenant and unique indexes; completed DDL and saved rows retained before migration bookkeeping'],
     ],
 ];

@@ -1,3 +1,12 @@
+## October 17, 2026 — Standard offer for future customers
+
+- The canonical new offer is $299/month per business plus $499 one-time setup in
+  `module_catalog.offers.standard`. Public comparisons have one offer; legacy plan
+  IDs, stored agreements, subscriptions, add-ons and access remain unchanged.
+- Checkout verifies new exact provider prices and a once-only setup attempt.
+  Production capacity mapping is unresolved, so new standard checkout stays gated.
+  Read `docs/operations/standard-everbranch-offer.md` for source, test and release details.
+
 # Modern Forestry Backstage
 
 ## 2026-10-18 — Avery workshop, actionable demo voice and Standard pricing (development)
@@ -15,6 +24,12 @@ review agreement and unpaid $798 Stripe invoice. New offers show $299 + $499 set
 text, email and AI charges/limits are separate. Future voice and customer-facing AI
 usage fees remain to be determined. See `docs/retail/AVERY_DEMO.md`. No website release.
 
+## Company vehicle locator
+
+The Field Service Location Tracker shows selected company vans and their
+recorded Bouncie trip paths, with local-date history and per-vehicle health.
+See [selected van map operations](docs/operations/collins-fleet-selected-routes.md)
+for access boundaries, isolated validation and release checks.
 
 ## Tenant mailboxes (staged)
 

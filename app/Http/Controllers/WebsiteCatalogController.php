@@ -7,8 +7,10 @@ use App\Models\TenantSite;
 use App\Models\TenantSiteMedia;
 use App\Models\WebsiteCollection;
 use App\Models\WebsiteProduct;
+use App\Models\WebsiteProductVariant;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
 use App\Services\ManagedWebsite\WebsiteCatalogService;
+use App\Services\ManagedWebsite\WebsiteShippingReadinessService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -35,7 +37,7 @@ class WebsiteCatalogController extends Controller
     public function index(Request $request)
     {
         $site = $this->site($request);
-        $filters = $request->validate(['q' => ['nullable', 'string', 'max:190'], 'status' => ['nullable', Rule::in(['active', 'draft', 'archived', 'all'])], 'collection' => ['nullable', 'integer'], 'sort' => ['nullable', Rule::in(['title', 'newest', 'updated'])]]);
+        $filters = $request->validate(['q' => ['nullable', 'string', 'max:190'], 'status' => ['nullable', Rule::in(['active', 'draft', 'archived', 'all'])], 'collection' => ['nullable', 'integer'], 'sort' => ['nullable', Rule::in(['title', 'newest', 'updated'])], 'shipping' => ['nullable', Rule::in(['missing_weight'])]]);
         $query = WebsiteProduct::query()->forTenantId($site->tenant_id)->where('tenant_site_id', $site->id)->with('variants', 'collections');
         $status = $filters['status'] ?? 'active';
         if ($status !== 'all') {
@@ -48,12 +50,48 @@ class WebsiteCatalogController extends Controller
         if (! empty($filters['collection'])) {
             $query->whereHas('collections', fn ($q) => $q->where('website_collections.id', $filters['collection'])->where('website_collections.tenant_id', $site->tenant_id));
         }
+        $shipping = app(WebsiteShippingReadinessService::class);
+        if (($filters['shipping'] ?? '') === 'missing_weight') {
+            $query->whereIn('id', $shipping->missingWeights($site)->select('website_product_id'));
+        }
         match ($filters['sort'] ?? 'title') {
             'newest' => $query->latest('id'),'updated' => $query->latest('updated_at'),default => $query->orderBy('title')
         };
         $counts = WebsiteProduct::query()->forTenantId($site->tenant_id)->where('tenant_site_id', $site->id)->selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status');
 
-        return view('managed-website.catalog.products', ['site' => $site, 'products' => $query->paginate(30)->withQueryString(), 'filters' => $filters, 'status' => $status, 'counts' => $counts, 'collections' => $this->collectionsFor($site), 'canEdit' => app(ManagedWebsiteService::class)->editorEnabledFor($site->tenant)]);
+        return view('managed-website.catalog.products', ['site' => $site, 'products' => $query->paginate(30)->withQueryString(), 'filters' => $filters, 'status' => $status, 'counts' => $counts, 'collections' => $this->collectionsFor($site), 'canEdit' => app(ManagedWebsiteService::class)->editorEnabledFor($site->tenant), 'missingWeightProductCount' => $shipping->missingWeights($site)->distinct()->count('website_product_id')]);
+    }
+
+    public function shippingWeights(Request $request, WebsiteCatalogService $catalog, WebsiteShippingReadinessService $shipping)
+    {
+        $site = $this->site($request);
+        $catalog->assertEditor($site, $request->user());
+        $filters = $request->validate(['show' => ['nullable', Rule::in(['missing', 'all'])], 'q' => ['nullable', 'string', 'max:190']]);
+        $query = WebsiteProductVariant::query()->forTenantId($site->tenant_id)->where('is_available', true)
+            ->whereHas('product', fn ($query) => $query->forTenantId($site->tenant_id)->where('tenant_site_id', $site->id)
+                ->where('product_type', 'physical')->where('status', '!=', 'archived'))->with('product');
+        if (($filters['show'] ?? 'missing') === 'missing') {
+            $query->where(fn ($query) => $query->whereNull('shipping_weight_ounces')->orWhere('shipping_weight_ounces', '<=', 0));
+        }
+        if (filled($filters['q'] ?? null)) {
+            $like = '%'.addcslashes($filters['q'], '%_\\').'%';
+            $query->where(fn ($query) => $query->where('sku', 'like', $like)->orWhere('title', 'like', $like)
+                ->orWhereHas('product', fn ($query) => $query->where('title', 'like', $like)));
+        }
+
+        return view('managed-website.catalog.shipping-weights', [
+            'site' => $site, 'variants' => $query->orderBy('website_product_id')->orderBy('id')->paginate(30)->withQueryString(),
+            'filters' => $filters, 'missingWeightCount' => $shipping->missingWeights($site)->count(),
+        ]);
+    }
+
+    public function saveShippingWeights(Request $request, WebsiteCatalogService $catalog)
+    {
+        $site = $this->site($request);
+        $count = $catalog->saveShippingWeights($site, $request->all(), $request->user());
+
+        return redirect()->route('managed-website.products.shipping-weights', ['show' => $request->input('show') === 'all' ? 'all' : 'missing'])
+            ->with('status', $count === 0 ? 'No shipping weights changed.' : 'Shipping weights saved for '.$count.' '.str('variant')->plural($count).'.');
     }
 
     private function collectionsFor(TenantSite $site)

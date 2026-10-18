@@ -96,6 +96,7 @@ class TenantModuleAccessResolver
             $definition = $this->moduleDefinition($moduleKey);
 
             $sources = [];
+            $hasConfirmedAddon = false;
             $hasAccess = false;
             $source = 'flag';
 
@@ -115,6 +116,11 @@ class TenantModuleAccessResolver
                     $hasAccess = true;
                     $source = $source === 'plan' ? $source : 'addon';
                     $sources[] = 'addon:'.$addonKey;
+                    $hasConfirmedAddon = $hasConfirmedAddon || in_array(
+                        (string) ($addon['source'] ?? ''),
+                        (array) ($definition['confirmed_addon_sources'] ?? []),
+                        true
+                    );
                 }
             }
 
@@ -167,6 +173,8 @@ class TenantModuleAccessResolver
                 'required_shopify_store_role' => strtolower(trim((string) ($definition['required_shopify_store_role'] ?? ''))),
                 'tenant_allowed' => $this->tenantAllowedForDefinition($definition, $tenantSlug),
                 'billing_mode' => strtolower(trim((string) ($definition['billing_mode'] ?? 'unavailable'))),
+                'confirmed_billing_statuses' => $this->normalizedStringList((array) ($definition['confirmed_billing_statuses'] ?? [])),
+                'has_confirmed_addon' => $hasConfirmedAddon,
                 'dependencies' => $this->normalizedStringList((array) ($definition['dependencies'] ?? [])),
                 'capabilities' => $this->normalizedCapabilityList((array) ($definition['capabilities'] ?? [])),
                 'visibility' => is_array($definition['visibility'] ?? null) ? (array) $definition['visibility'] : [],
@@ -564,10 +572,11 @@ class TenantModuleAccessResolver
                 $query->whereNull('ends_at')
                     ->orWhere('ends_at', '>=', now());
             })
-            ->get(['addon_key', 'enabled', 'starts_at', 'ends_at'])
+            ->get(['addon_key', 'enabled', 'source', 'starts_at', 'ends_at'])
             ->map(fn (TenantAccessAddon $row): array => [
                 'addon_key' => strtolower(trim((string) $row->addon_key)),
                 'enabled' => (bool) $row->enabled,
+                'source' => (string) $row->source,
                 'starts_at' => optional($row->starts_at)->toIso8601String(),
                 'ends_at' => optional($row->ends_at)->toIso8601String(),
             ])
@@ -723,6 +732,21 @@ class TenantModuleAccessResolver
         }
 
         if ($enabled) {
+            // Priced modules can require an explicit, currently valid commercial
+            // grant. Self-service activation's pending_billing is never payment.
+            $confirmedBilling = (array) ($module['confirmed_billing_statuses'] ?? []);
+            if ($confirmedBilling !== [] && ! (bool) ($module['has_confirmed_addon'] ?? false)
+                && ! in_array(strtolower((string) ($module['billing_status'] ?? '')), $confirmedBilling, true)) {
+                $purchaseEnabled = \App\Support\Tenancy\CatalogPurchasePolicy::moduleEnabled((string) $module['module_key']);
+
+                return [
+                    'enabled' => false,
+                    'reason' => $purchaseEnabled ? 'add_on_required' : 'rollout_pending',
+                    'source' => 'flag',
+                    'cta' => $purchaseEnabled ? 'add' : 'request',
+                    'cta_routing' => $purchaseEnabled ? $ctaRouting : 'request_access',
+                ];
+            }
             foreach ((array) ($module['dependencies'] ?? []) as $dependencyKey) {
                 $dependency = is_array($allModules[$dependencyKey] ?? null) ? $allModules[$dependencyKey] : null;
                 if ($dependency === null || ! (bool) ($dependency['has_access_raw'] ?? false)) {
@@ -748,6 +772,9 @@ class TenantModuleAccessResolver
         }
 
         if (! $enabled) {
+            if (! \App\Support\Tenancy\CatalogPurchasePolicy::moduleEnabled((string) $module['module_key'])) {
+                return ['enabled' => false, 'reason' => 'rollout_pending', 'source' => $source, 'cta' => 'request', 'cta_routing' => 'request_access'];
+            }
             if ($source === 'override' || ($module['enabled_status'] ?? 'inherit') === 'disabled') {
                 $reason = 'disabled_by_override';
             } elseif (($module['billing_mode'] ?? 'unavailable') === 'add_on') {
@@ -1300,6 +1327,8 @@ class TenantModuleAccessResolver
             'shopify_embedded_surfaces' => $canonicalArray('shopify_embedded_surfaces'),
             'required_shopify_store_role' => $canonicalString('required_shopify_store_role'),
             'billing_mode' => $canonicalString('billing_mode', 'unavailable'),
+            'confirmed_billing_statuses' => $canonicalArray('confirmed_billing_statuses'),
+            'confirmed_addon_sources' => $canonicalArray('confirmed_addon_sources'),
             'dependencies' => $canonicalArray('dependencies'),
             'capabilities' => $canonicalArray('capabilities'),
             'visibility' => $canonicalArray('visibility'),

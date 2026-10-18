@@ -57,14 +57,14 @@ class EnsureTenantAccess
         app(\App\Support\Tenancy\TenantContext::class)->set((int) $tenant->id);
         View::share('currentTenant', $tenant);
 
-        if (app(\App\Services\Soccer\SoccerAccess::class)->enabled($tenant) && ! $request->routeIs('soccer.*', 'tenant.brand.*', 'profile.*', 'account-help.*', 'admin.users', 'admin.users.*', 'tenant.switch*', 'search.*')) {
+        if (app(\App\Services\Soccer\SoccerAccess::class)->enabled($tenant) && ! $request->routeIs('soccer.*', 'tenant-payments.*', 'tenant.brand.*', 'profile.*', 'account-help.*', 'admin.users', 'admin.users.*', 'tenant.switch*', 'search.*', 'app.search')) {
             if ($request->isMethod('GET')) {
                 return redirect()->route('soccer.workspace', ['tenant' => $tenant->slug]);
             }
             abort(403, 'Use the soccer workspace for Wren operations.');
         }
 
-        return $next($request);
+        return app(\App\Services\AiBranch\AiFictionalPilot::class)->during($tenant, $user, fn () => $next($request));
     }
 
     protected function assertStoreAccess(Request $request, int $tenantId): void

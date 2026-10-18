@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\ShopifyStore;
 use App\Models\Tenant;
 use App\Models\TenantModuleEntitlement;
+use App\Models\User;
 use App\Services\Wholesale\WholesaleOperationsService;
 
 beforeEach(function (): void {
@@ -91,7 +92,7 @@ test('mixed stores remain retail and cannot open wholesale operations', function
         ->assertDontSeeText('What needs attention');
 });
 
-test('retail subscriptions stay available from the verified retail app', function (): void {
+test('retail subscriptions require the verified app and an active authorized workspace manager', function (): void {
     configureEmbeddedRetailStore((int) $this->tenant->id);
     TenantModuleEntitlement::query()->create([
         'tenant_id' => $this->tenant->id,
@@ -104,6 +105,13 @@ test('retail subscriptions stay available from the verified retail app', functio
     ]);
 
     $this->get(route('shopify.app.subscriptions', retailEmbeddedSignedQuery()))
+        ->assertForbidden()
+        ->assertDontSeeText('Active Candle Club customers');
+
+    $actor = User::factory()->create(['is_active' => true]);
+    $actor->tenants()->attach($this->tenant->id, ['role' => 'admin', 'membership_active' => true]);
+
+    $this->actingAs($actor)->get(route('shopify.app.subscriptions', retailEmbeddedSignedQuery()))
         ->assertOk()
         ->assertSeeText('Subscriptions')
         ->assertSeeText('Candle Club');

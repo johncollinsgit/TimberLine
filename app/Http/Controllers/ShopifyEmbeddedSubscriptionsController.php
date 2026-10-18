@@ -2,12 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use App\Services\Shopify\ShopifyEmbeddedAppContext;
+use App\Services\Subscriptions\SubscriptionAccessService;
 use App\Services\Subscriptions\SubscriptionModuleService;
 use App\Services\Tenancy\TenantModuleAccessResolver;
 use App\Services\Tenancy\TenantResolver;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
@@ -31,7 +32,7 @@ class ShopifyEmbeddedSubscriptionsController extends Controller
                 'host' => $context['host'] ?? null,
                 'storeLabel' => 'Shopify Admin',
                 'headline' => 'Subscriptions',
-                'subheadline' => 'Manage recurring subscriptions and Candle Club.',
+                'subheadline' => 'Subscription setup and local requests for review.',
                 'appNavigation' => $this->embeddedAppNavigation('subscriptions', null, null),
                 'pageActions' => [],
                 'pageSubnav' => [],
@@ -44,7 +45,11 @@ class ShopifyEmbeddedSubscriptionsController extends Controller
         $store = (array) $context['store'];
         $tenantId = $tenantResolver->resolveTenantIdForStoreContext($store);
         $moduleState = $moduleAccessResolver->module($tenantId, SubscriptionModuleService::MODULE_KEY);
-        $enabled = (bool) ($moduleState['has_access'] ?? false);
+        $access = app(SubscriptionAccessService::class);
+        $enabled = $tenantId !== null && $access->canManage($tenantId, $request->user());
+        if ($enabled) {
+            $access->storeIdentity($tenantId, $store);
+        }
 
         $payload = $tenantId !== null && $enabled
             ? $subscriptions->adminPayload($tenantId)
@@ -57,16 +62,17 @@ class ShopifyEmbeddedSubscriptionsController extends Controller
             'host' => (string) ($context['host'] ?? ''),
             'storeLabel' => ucfirst((string) ($store['key'] ?? 'store')).' Store',
             'headline' => 'Subscriptions',
-            'subheadline' => 'Manage recurring subscriptions and Candle Club.',
+            'subheadline' => 'Subscription setup and local requests for review.',
             'appNavigation' => $this->embeddedAppNavigation('subscriptions', null, $tenantId),
             'pageActions' => [],
             'pageSubnav' => [],
             'subscriptionsAccess' => [
                 'enabled' => $enabled,
                 'status' => (string) ($moduleState['ui_state'] ?? 'locked'),
-                'message' => $enabled ? null : 'Subscriptions is not enabled for this tenant yet.',
+                'message' => $enabled ? null : 'An enabled Subscriptions add-on and an active Everbranch workspace owner, admin or manager sign-in are required. Shopify launch context alone does not grant management access.',
             ],
             'subscriptionsPayload' => $payload,
+            'workspaceSubscriptionsUrl' => $enabled ? route('subscriptions.workspace.index', ['tenant' => $tenantId]) : null,
         ], $enabled ? 200 : 403);
     }
 
@@ -85,7 +91,8 @@ class ShopifyEmbeddedSubscriptionsController extends Controller
         $validated = $request->validate([
             'commitment_months' => ['nullable', 'integer', 'min:1', 'max:60'],
             'allowed_pauses_per_commitment' => ['nullable', 'integer', 'min:0', 'max:24'],
-            'pause_duration_options' => ['nullable', 'array'],
+            'pause_duration_options' => ['nullable', 'array', 'max:12'],
+            'pause_duration_options.*' => ['integer', 'min:1', 'max:12'],
             'renewal_reward_months' => ['nullable', 'integer', 'min:1', 'max:60'],
             'first_gift_product_variant_gid' => ['nullable', 'string', 'max:190'],
             'first_gift_label' => ['nullable', 'string', 'max:190'],
@@ -93,12 +100,14 @@ class ShopifyEmbeddedSubscriptionsController extends Controller
             'renewal_gift_label' => ['nullable', 'string', 'max:190'],
             'cancellation_prompt' => ['nullable', 'string', 'max:2000'],
             'voting_reward_candle_cash' => ['nullable', 'integer', 'min:0', 'max:1000'],
-            'poll_defaults' => ['nullable', 'array'],
+            'poll_defaults' => ['nullable', 'array:source_surfaces'],
+            'poll_defaults.source_surfaces' => ['sometimes', 'array', 'max:3'],
+            'poll_defaults.source_surfaces.*' => ['in:app,storefront,facebook', 'distinct'],
         ]);
 
         return response()->json([
             'ok' => true,
-            'data' => $subscriptions->saveCandleClubSettings($tenantId, $validated),
+            'data' => $subscriptions->saveCandleClubSettings($tenantId, $validated, $request->user()?->id),
         ]);
     }
 
@@ -115,7 +124,7 @@ class ShopifyEmbeddedSubscriptionsController extends Controller
         }
 
         $validated = $request->validate([
-            'rows' => ['nullable', 'array'],
+            'rows' => ['required', 'array', 'min:1', 'max:500'],
             'rows.*' => ['array'],
         ]);
 
@@ -210,13 +219,28 @@ class ShopifyEmbeddedSubscriptionsController extends Controller
             return null;
         }
 
+        // Shared embedded verification may accept alternate app credentials.
+        // Subscription ownership belongs to one original app installation.
+        if (($context['auth_source'] ?? '') !== 'session_token'
+            || (string) ($context['shopify_app_client_id'] ?? '') === ''
+            || ! hash_equals((string) ($context['store']['client_id'] ?? ''), (string) $context['shopify_app_client_id'])) {
+            return null;
+        }
+
         $tenantId = $tenantResolver->resolveTenantIdForStoreContext((array) $context['store']);
         if ($tenantId === null) {
             return null;
         }
 
-        $moduleState = $moduleAccessResolver->module($tenantId, SubscriptionModuleService::MODULE_KEY);
+        $access = app(SubscriptionAccessService::class);
+        // The Shopify token verifies the store. A separate authenticated workspace
+        // membership grants management authority; request emails/headers never do.
+        $actor = $request->user();
+        if (! $actor instanceof User || ! $access->canManage($tenantId, $actor)) {
+            return null;
+        }
+        $access->bindStore($tenantId, (array) $context['store'], $actor);
 
-        return (bool) ($moduleState['has_access'] ?? false) ? $tenantId : null;
+        return $tenantId;
     }
 }

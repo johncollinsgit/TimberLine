@@ -32,10 +32,30 @@ function soccerCap($test, array $caps): void
         $ts[$k] = [...$ts[$k], ...$v];
     }$test->store->query('seasons', $test->t->id)->where('id', $test->season)->update(['teams' => json_encode($ts)]);
 }
+function soccerCoachInterest(array &$input): void
+{
+    $input['volunteer'] = true;
+    $input['coach_jersey_size'] = 'Adult L';
+    $input['coach_parent'] = 'mother';
+    $input['coach_name'] = 'Example Mom';
+    $input['coach_teams'] = ['green-bears', 'blue-dragons'];
+    $input['coach_available_8_of_10'] = true;
+}
 it('uses birthday on season start at each age boundary', function () {
     foreach (['2024-03-01' => 'green-bears', '2023-03-01' => 'green-bears', '2022-03-01' => 'blue-dragons', '2020-03-01' => 'blue-dragons', '2019-03-01' => 'red-falcons', '2005-03-01' => 'red-falcons'] as $dob => $team) {
         expect($this->svc->teamFor($dob, '2027-03-01'))->toBe($team);
     }expect(fn () => $this->svc->teamFor('2024-03-02', '2027-03-01'))->toThrow(ValidationException::class);
+});
+it('requires a fresh matching release after a birthday correction', function () {
+    [$family,$input] = soccerFamily($this, ['2020-02-21']);
+    $player = $input['children'][0]['player_id'];
+    $old = $this->store->query('releases', $this->t->id)->where('player_id', $player)->first();
+    $this->store->query('releases', $this->t->id)->where('id', $old->id)->update(['answers' => $this->store->encrypt(['child1Birthday' => '2020-02-21'])]);
+    $this->store->query('players', $this->t->id)->where('id', $player)->update(['birthday' => '2019-02-21']);
+    expect(fn () => $this->svc->register($this->t->id, $family, $input))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class, 'current birthday');
+    $new = $this->store->insert('releases', $this->t->id, ['family_id' => $family, 'player_id' => $player, 'season_key' => 'spring-2027', 'source_key' => (string) \Illuminate\Support\Str::uuid(), 'form_version' => 'test', 'answers' => $this->store->encrypt(['child1Birthday' => '2019-02-21']), 'sha256' => str_repeat('b', 64), 'signed_at' => now()]);
+    $this->svc->register($this->t->id, $family, $input);
+    expect($this->store->query('registrations', $this->t->id)->where('player_id', $player)->value('release_id'))->toBe($new);
 });
 it('uses reserves for all siblings only after a strict public majority', function () {
     soccerCap($this, ['red-falcons' => ['public' => 0, 'reserved' => 1]]);
@@ -50,6 +70,56 @@ it('does not grant reserves for a tied family', function () {
     $out = $this->svc->register($this->t->id, $f, $in);
     expect($out['placed'])->toHaveCount(1)->and($out['waitlisted'])->toHaveCount(1);
 });
+it('quotes available, reserved, and waitlisted children without charging the waitlist', function () {
+    soccerCap($this, ['red-falcons' => ['public' => 0, 'reserved' => 1]]);
+    [$family,$input] = soccerFamily($this, ['2023-01-01', '2021-01-01', '2018-01-01']);
+    $input['children'][1]['needs_jersey'] = true;
+    $input['children'][1]['jersey_size'] = 'Youth M';
+    $quote = $this->svc->quote($this->t->id, $family, $input);
+    expect($quote['due_today_cents'])->toBe(11000)
+        ->and(array_column($quote['children'], 'status'))->toBe(['available', 'available', 'available'])
+        ->and($quote['children'][2]['seat_kind'])->toBe('reserved')
+        ->and($this->store->query('registrations', $this->t->id)->count())->toBe(0);
+    $input['expected_due_today_cents'] = $quote['due_today_cents'];
+    $input['expected_available_player_ids'] = array_column($quote['children'], 'player_id');
+    $this->svc->register($this->t->id, $family, $input);
+    expect((int) $this->store->query('invoices', $this->t->id)->where('family_id', $family)->value('amount_cents'))->toBe(11000);
+});
+it('quotes a waitlist even when a public space opens behind an earlier family', function () {
+    soccerCap($this, ['green-bears' => ['public' => 0, 'reserved' => 0]]);
+    [$first,$firstInput] = soccerFamily($this, ['2023-01-01']);
+    $this->svc->register($this->t->id, $first, $firstInput);
+    soccerCap($this, ['green-bears' => ['public' => 1, 'reserved' => 0]]);
+    [$later,$laterInput] = soccerFamily($this, ['2023-01-01']);
+    $quote = $this->svc->quote($this->t->id, $later, $laterInput);
+    expect($quote['due_today_cents'])->toBe(0)->and($quote['children'][0]['status'])->toBe('waitlisted');
+});
+it('quotes assistant coach waivers in the amount due today', function () {
+    [$family,$input] = soccerFamily($this, ['2023-01-01', '2021-01-01', '2018-01-01']);
+    soccerCoachInterest($input);
+    foreach ($input['children'] as &$child) {
+        $child['needs_jersey'] = true;
+        $child['jersey_size'] = 'Youth M';
+    } unset($child);
+    $quote = $this->svc->quote($this->t->id, $family, $input);
+    expect($quote['due_today_cents'])->toBe(5000)
+        ->and(collect($quote['children'])->where('amount_cents', 0))->toHaveCount(2);
+    $input['expected_due_today_cents'] = $quote['due_today_cents'];
+    $input['expected_available_player_ids'] = array_column($quote['children'], 'player_id');
+    $this->svc->register($this->t->id, $family, $input);
+    expect((int) $this->store->query('invoices', $this->t->id)->where('family_id', $family)->value('amount_cents'))->toBe(5000);
+});
+it('rejects a stale availability quote before creating a charged registration', function () {
+    soccerCap($this, ['green-bears' => ['public' => 1, 'reserved' => 0]]);
+    [$family,$input] = soccerFamily($this, ['2023-01-01']);
+    $quote = $this->svc->quote($this->t->id, $family, $input);
+    [$other,$otherInput] = soccerFamily($this, ['2023-01-01']);
+    $this->svc->register($this->t->id, $other, $otherInput);
+    $input['expected_due_today_cents'] = $quote['due_today_cents'];
+    $input['expected_available_player_ids'] = array_column($quote['children'], 'player_id');
+    expect(fn () => $this->svc->register($this->t->id, $family, $input))->toThrow(ValidationException::class, 'Spots changed');
+    expect($this->store->query('registrations', $this->t->id)->where('family_id', $family)->count())->toBe(0);
+});
 it('keeps remaining siblings together if reserves cannot fit them all', function () {
     soccerCap($this, ['red-falcons' => ['public' => 0, 'reserved' => 1]]);
     [$f,$in] = soccerFamily($this, ['2023-01-01', '2023-02-01', '2021-01-01', '2018-01-01', '2017-01-01']);
@@ -59,9 +129,7 @@ it('keeps remaining siblings together if reserves cannot fit them all', function
 });
 it('charges 30 or 50 and waives two children including jerseys', function () {
     [$f,$in] = soccerFamily($this, ['2023-01-01', '2021-01-01', '2018-01-01']);
-    $in['volunteer'] = true;
-    $in['coach_jersey_size'] = 'Adult L';
-    $in['waived_player_ids'] = array_column(array_slice($in['children'], 0, 2), 'player_id');
+    soccerCoachInterest($in);
     foreach ($in['children'] as &$c) {
         $c['needs_jersey'] = true;
         $c['jersey_size'] = 'Youth M';
@@ -69,6 +137,56 @@ it('charges 30 or 50 and waives two children including jerseys', function () {
     $this->svc->register($this->t->id, $f, $in);
     $r = $this->store->query('registrations', $this->t->id)->get();
     expect($r->where('waived', true))->toHaveCount(2)->and($r->sum('amount_cents'))->toBe(5000);
+    $profile = $this->store->decrypt($this->store->query('families', $this->t->id)->where('id', $f)->value('profile'));
+    expect($profile['coaching_by_season']['spring-2027'])->toMatchArray(['role' => 'assistant', 'parent' => 'mother', 'name' => 'Example Mom', 'teams' => ['green-bears', 'blue-dragons'], 'available_8_of_10' => true]);
+});
+it('requires complete assistant coach interest before granting a free registration', function () {
+    [$family,$input] = soccerFamily($this, ['2023-01-01']);
+    $input['volunteer'] = true;
+    $input['coach_jersey_size'] = 'Adult L';
+    expect(fn () => $this->svc->register($this->t->id, $family, $input))->toThrow(ValidationException::class);
+    expect($this->store->query('registrations', $this->t->id)->count())->toBe(0);
+    soccerCoachInterest($input);
+    $this->svc->register($this->t->id, $family, $input);
+    expect($this->store->query('registrations', $this->t->id)->where('waived', true)->count())->toBe(1);
+});
+it('applies at most two waivers across later submissions without a child waiver choice', function () {
+    [$family,$input] = soccerFamily($this, ['2023-01-01', '2021-01-01', '2018-01-01']);
+    soccerCoachInterest($input);
+    $children = $input['children'];
+    $input['children'] = array_slice($children, 0, 2);
+    $this->svc->register($this->t->id, $family, $input);
+    $input['children'] = [$children[0], $children[2]];
+    $input['waived_player_ids'] = [$children[2]['player_id']];
+    $this->svc->register($this->t->id, $family, $input);
+    expect($this->store->query('registrations', $this->t->id)->where('waived', true)->count())->toBe(2);
+    expect($this->store->query('registrations', $this->t->id)->count())->toBe(3);
+    expect((bool) $this->store->query('registrations', $this->t->id)->where('player_id', $children[2]['player_id'])->value('waived'))->toBeFalse();
+});
+it('automatically waives higher-cost jersey registrations first', function () {
+    [$family,$input] = soccerFamily($this, ['2023-01-01', '2021-01-01', '2018-01-01']);
+    soccerCoachInterest($input);
+    foreach (array_slice($input['children'], 1) as $child) {
+        $index = array_search($child['player_id'], array_column($input['children'], 'player_id'), true);
+        $input['children'][$index]['needs_jersey'] = true;
+        $input['children'][$index]['jersey_size'] = 'Youth M';
+    }
+    $this->svc->register($this->t->id, $family, $input);
+    expect((bool) $this->store->query('registrations', $this->t->id)->where('player_id', $input['children'][0]['player_id'])->value('waived'))->toBeFalse();
+    expect($this->store->query('registrations', $this->t->id)->where('waived', true)->pluck('player_id')->sort()->values()->all())
+        ->toBe(collect(array_slice(array_column($input['children'], 'player_id'), 1))->sort()->values()->all());
+});
+it('keeps prior coach interest when a later paid child is registered', function () {
+    [$family,$input] = soccerFamily($this, ['2023-01-01', '2021-01-01']);
+    soccerCoachInterest($input);
+    $second = $input['children'][1];
+    $input['children'] = [$input['children'][0]];
+    $this->svc->register($this->t->id, $family, $input);
+    $input = ['season_id' => $this->season, 'volunteer' => false, 'children' => [$second]];
+    $this->svc->register($this->t->id, $family, $input);
+    $profile = $this->store->decrypt($this->store->query('families', $this->t->id)->where('id', $family)->value('profile'));
+    expect($profile['coaching_by_season']['spring-2027']['name'])->toBe('Example Mom');
+    expect($this->store->query('registrations', $this->t->id)->where('waived', true)->count())->toBe(1);
 });
 it('replays registration without creating duplicate children seats or invoices', function () {
     [$f,$in] = soccerFamily($this, ['2023-01-01']);
@@ -81,6 +199,25 @@ it('does not invoice waitlisted players', function () {
     [$f,$in] = soccerFamily($this, ['2023-01-01']);
     $this->svc->register($this->t->id, $f, $in);
     expect($this->store->query('invoices', $this->t->id)->count())->toBe(0);
+});
+
+it('uses the soccer merchant for both settlement and payout with card wallets only', function () {
+    config()->set('services.stripe.secret', 'sk_test_fictional');
+    config()->set('commercial.billing_readiness.tenant_payments', ['enabled' => true, 'tenant_slugs' => [$this->t->slug], 'connect_webhooks_verified' => true]);
+    \App\Models\TenantPaymentAccount::create(['tenant_id' => $this->t->id, 'provider' => 'stripe_connect',
+        'provider_account_id' => 'acct_wrenfictional', 'status' => 'ready', 'charges_enabled' => true,
+        'payouts_enabled' => true, 'details_submitted' => true]);
+    [$family, $input] = soccerFamily($this, ['2020-02-21']);
+    $input['children'][0]['needs_jersey'] = true;
+    $input['children'][0]['jersey_size'] = 'Youth M';
+    $this->svc->register($this->t->id, $family, $input);
+    $invoice = $this->store->query('invoices', $this->t->id)->first();
+    \Illuminate\Support\Facades\Http::preventStrayRequests();
+    \Illuminate\Support\Facades\Http::fake(['https://api.stripe.com/v1/checkout/sessions' => \Illuminate\Support\Facades\Http::response(['id' => 'cs_fictional', 'url' => 'https://checkout.stripe.com/c/pay/fictional'])]);
+    expect(app(SoccerPaymentService::class)->checkout($this->t->id, $invoice->id))->toBe('https://checkout.stripe.com/c/pay/fictional');
+    \Illuminate\Support\Facades\Http::assertSent(fn ($request) => $request['payment_intent_data']['on_behalf_of'] === 'acct_wrenfictional'
+        && $request['payment_intent_data']['transfer_data']['destination'] === 'acct_wrenfictional'
+        && $request['payment_method_types'] === ['card'] && $request['line_items'][0]['price_data']['unit_amount'] === 5000);
 });
 it('blocks queue bypass and promotes an entire waiting family atomically', function () {
     soccerCap($this, ['green-bears' => ['public' => 0, 'reserved' => 0], 'blue-dragons' => ['public' => 0, 'reserved' => 0]]);
@@ -112,6 +249,43 @@ it('deduplicates reminders and Sarah alerts', function () {
     $this->svc->tick($this->t->id, $this->season);
     expect($this->store->query('deliveries', $this->t->id)->count())->toBe($n);
 });
+it('queues a payment link and sends soccer texts only from 8 a.m. to 8 p.m. Eastern', function () {
+    config()->set('soccer.sms_enabled', true);
+    $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-20 07:59:00', 'America/New_York'));
+    [$family, $input] = soccerFamily($this, ['2023-01-01']);
+    $this->svc->register($this->t->id, $family, $input);
+    $invoice = $this->store->query('invoices', $this->t->id)->firstOrFail();
+    $familyDelivery = $this->store->query('deliveries', $this->t->id)->get()->first(fn ($d) => ($this->store->decrypt($d->payload)['invoice_id'] ?? null) === $invoice->id);
+    expect($familyDelivery)->not->toBeNull();
+    expect($this->store->decrypt($familyDelivery->payload)['body'])->toContain('/spring?pay='.$invoice->id);
+
+    $deliveries = app(\App\Services\Soccer\SoccerDeliveryService::class);
+    $deliveries->run($this->t->id);
+    expect($this->store->query('deliveries', $this->t->id)->where('attempts', '>', 0)->count())->toBe(0);
+    $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-20 08:00:00', 'America/New_York'));
+    \Illuminate\Support\Facades\Http::preventStrayRequests();
+    $deliveries->run($this->t->id);
+    expect($this->store->query('deliveries', $this->t->id)->where('attempts', '>', 0)->count())->toBeGreaterThan(0);
+
+    $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-20 20:00:00', 'America/New_York'));
+    app(\App\Services\Soccer\SoccerEvents::class)->record($this->t->id, $this->season, $family, 'hours_boundary', ['summary' => 'Boundary check.'], waitlist: true);
+    $pending = $this->store->query('deliveries', $this->t->id)->where('status', 'pending')->firstOrFail();
+    $deliveries->run($this->t->id);
+    expect($this->store->row('deliveries', $this->t->id, $pending->id)->attempts)->toBe(0);
+});
+it('suppresses a queued payment link once its invoice is no longer payable', function () {
+    config()->set('soccer.sms_enabled', true);
+    $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-20 12:00:00', 'America/New_York'));
+    [$family, $input] = soccerFamily($this, ['2023-01-01']);
+    $this->svc->register($this->t->id, $family, $input);
+    $invoice = $this->store->query('invoices', $this->t->id)->firstOrFail();
+    $familyDelivery = $this->store->query('deliveries', $this->t->id)->get()->first(fn ($d) => ($this->store->decrypt($d->payload)['invoice_id'] ?? null) === $invoice->id);
+    $this->store->query('invoices', $this->t->id)->where('id', $invoice->id)->update(['status' => 'paid']);
+    \Illuminate\Support\Facades\Http::preventStrayRequests();
+    app(\App\Services\Soccer\SoccerDeliveryService::class)->run($this->t->id);
+    $delivery = $this->store->row('deliveries', $this->t->id, $familyDelivery->id);
+    expect($delivery->status)->toBe('suppressed')->and($delivery->error)->toBe('invoice_closed')->and($delivery->attempts)->toBe(0);
+});
 it('confirms verified Venmo once without trusting parent declarations', function () {
     [$f,$in] = soccerFamily($this, ['2023-01-01']);
     $this->svc->register($this->t->id, $f, $in);
@@ -142,9 +316,7 @@ it('keeps player registered after a full manual refund and rejects excess refund
 });
 it('confirms waived siblings immediately and holds only the unpaid child', function () {
     [$family,$input] = soccerFamily($this, ['2023-01-01', '2021-01-01', '2018-01-01']);
-    $input['volunteer'] = true;
-    $input['coach_jersey_size'] = 'Adult L';
-    $input['waived_player_ids'] = array_column(array_slice($input['children'], 0, 2), 'player_id');
+    soccerCoachInterest($input);
     $this->svc->register($this->t->id, $family, $input);
     expect($this->store->query('registrations', $this->t->id)->where('status', 'registered')->count())->toBe(2);
     $this->travel(49)->hours();

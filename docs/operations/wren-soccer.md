@@ -26,6 +26,9 @@ answers, and imports never infer payments from payment-method notes. Alias,
 changed-email, missing-contact, and date conflicts require admin review.
 Additional guardian emails are admin-verified family aliases and still require
 email-code verification; they never create backend memberships.
+The Alumni Family path checks for a matching family or verified guardian email
+before sending its branded sign-in code. Unknown addresses receive a clear
+prompt to check their prior email or choose New Family.
 
 The default teams have public/reserved capacities 25/5, 44/6, and 35/5 for ages
 3-4, 5-7, and 8+. The owner confirmed March 15, 2027 as both first practice and age cutoff.
@@ -40,7 +43,10 @@ waitlist offers require each waiting sibling to head its team queue.
 ## Required account setup before opening
 
 - Complete Wren-owned Stripe Express onboarding in Settings. Onboarding and
-  checkout retain the canonical tenant-payment rollout gates. Refresh checks
+  checkout retain the canonical tenant-payment rollout gates. Live Connect
+  webhook verification blocks collection, but does not block starting onboarding;
+  the account must exist before a controlled payment/refund can verify callbacks.
+  Refresh checks
   Stripe's current charges/payouts flags; no parent declaration confirms payment.
 - Configure the signed soccer endpoint `/api/soccer/stripe`, including
   `WREN_SOCCER_STRIPE_WEBHOOK_SECRET`. Subscribe to checkout completion and refund
@@ -79,6 +85,54 @@ records. Durable encrypted SMS deliveries summarize the family action for Sarah
 and appear with delivery results/replies in Messages. Opt-out is rechecked before
 family delivery; failed sends retry up to five times. Ambiguous in-flight sends
 remain visible for review and are not blindly resent.
+Soccer SMS starts only from 08:00 through 19:59 America/New_York; messages
+queued overnight wait until 08:00. Offer and reminder texts include a link to
+the family's specific invoice. The website requires verified family sign-in
+before opening Stripe Checkout, and queued payment links are suppressed after
+the invoice is paid or expires. GroupMe remains the team conversation channel.
+
+Signed-in families can ask Wren help about teams, fees, waitlists, schedule,
+and releases. Every exchange is stored encrypted in soccer events. Unanswered
+questions capture the recent conversation and appear in the admin Messages
+review queue. The assistant uses only public season facts for AI answers and
+does not include saved family profiles or medical releases in model requests. Parent-confirmed
+birthday corrections update the active player record and audit old/new values;
+historical signed releases remain unchanged. Existing active registrations
+require Wren review before a birthday changes because the team may change.
+The family form collects spouse name and phone in place of the old secondary
+phone field and no longer asks for a pickup phone. Assistant coach volunteers
+identify Mom or Dad, give the coach name and adult jersey size, select all
+preferred age groups, and confirm availability for at least 8 of 10 weeks.
+Their season interest appears in the admin Coaches tab. Up to two child
+registrations can use coach waivers; backend validation requires complete
+coaching interest before applying a waiver. Parents choose a jersey for each
+child; they do not choose which child gets the waiver. The backend applies
+available waivers automatically to new registrations with the higher fees
+first, counting children already waived in the season toward the two-child
+limit. A later submission cannot claim a third waiver by reselecting an
+earlier waived child. The family form shows the $30 registration fee, optional
+$20 jersey add-on, and resulting per-child total separately.
+The review page requests a read-only, family-scoped availability quote using
+current team capacity, earlier waitlist entries, sibling reserve rules, and
+remaining coach waivers. It displays available and waitlisted children and
+"Due Today" only for places that can be offered. Registration repeats allocation
+under the season lock and rejects a changed set of offered children or amount
+before inserting new admissions; the family must review the refreshed quote.
+When registration is closed, no payment is due or spot held. A quote is never a
+reservation, and the final invoice remains the payment authority.
+The help assistant answers common questions with local rules while
+an AI key is absent. To enable broader AI replies, a Wren admin can save an
+OpenAI API key in Season settings (stored encrypted), or an operator can set
+`OPENAI_API_KEY` server-side; leave `WREN_SOCCER_HELP_AI_ENABLED=true`. The default model is
+`gpt-6-luna`, overrideable with `WREN_SOCCER_HELP_AI_MODEL`. Provider requests
+set `store=false` and never receive a family profile or release.
+
+Soccer Stripe Checkout uses the verified connected account for both
+`payment_intent_data.on_behalf_of` and `transfer_data.destination`, matching the
+native storefront settlement pattern. This identifies the connected soccer
+business as the settlement merchant without changing pricing, platform fees or
+the existing destination-charge refund/reconciliation model. Verify the merchant
+statement details in the controlled payment/refund smoke test before opening.
 
 Stripe payment-intent and provider IDs deduplicate confirmations. Late or
 mismatched transfers are recorded for admin review without allocating seats.

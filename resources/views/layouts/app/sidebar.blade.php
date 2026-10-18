@@ -6,7 +6,8 @@
 
 @php
   $prefs = is_array(auth()->user()?->ui_preferences ?? null) ? auth()->user()->ui_preferences : [];
-  $wideLayout = !empty($prefs['wide_layout']);
+  $marketingDeskSurface = request()->routeIs('marketing.desk.*');
+  $wideLayout = !empty($prefs['wide_layout']) || $marketingDeskSurface;
   $compactTables = !empty($prefs['compact_tables']);
 @endphp
 @php
@@ -125,7 +126,7 @@
   data-tenant-display="{{ ($isLandlordShell || $isNeutralTenantSurface) ? 'classic' : $tenantBrand['display_style'] }}"
   data-tenant-corners="{{ ($isLandlordShell || $isNeutralTenantSurface) ? 'soft' : $tenantBrand['corner_style'] }}"
   style="{{ ($isLandlordShell || $isNeutralTenantSurface) ? '' : $tenantThemeStyle }}"
-  class="min-h-screen antialiased mf-app-shell {{ $wideLayout ? 'mf-wide' : '' }} {{ $compactTables ? 'mf-compact' : '' }} {{ $isLandlordShell ? 'mf-landlord-shell' : '' }} {{ (! $isLandlordShell && ! $isNeutralTenantSurface) ? 'mf-tenant-themed' : '' }} {{ $isCollinsWorkspace ? 'mf-collins-full-canvas' : '' }}"
+  class="min-h-screen antialiased mf-app-shell {{ $wideLayout ? 'mf-wide' : '' }} {{ $marketingDeskSurface ? 'mf-marketing-desk' : '' }} {{ $compactTables ? 'mf-compact' : '' }} {{ $isLandlordShell ? 'mf-landlord-shell' : '' }} {{ (! $isLandlordShell && ! $isNeutralTenantSurface) ? 'mf-tenant-themed' : '' }} {{ $isCollinsWorkspace ? 'mf-collins-full-canvas' : '' }}"
 >
 
 @if($useShowcaseStyle)
@@ -164,6 +165,10 @@
   </button>
 
   <div class="mf-global-actions">
+    <button type="button" data-command-voice-trigger class="mf-global-employee-preview" aria-label="Find a page by voice" title="Find a page by voice">
+      <flux:icon.microphone class="size-4" aria-hidden="true" />
+      <span>Speak</span>
+    </button>
     @foreach($topbarContextPills as $pill)
       <span class="mf-global-context">{{ $pill }}</span>
     @endforeach
@@ -410,6 +415,9 @@
   :context-label="$workspaceLabel"
   :description="$commandSearchDescription"
 />
+@if(!$isLandlordShell && $activeTenant instanceof \App\Models\Tenant && $user && app(\App\Services\AiBranch\AiAssistantAccess::class)->allows($activeTenant, $user))
+  <x-app-ai-assistant :tenant="$activeTenant" />
+@endif
 <script>
   (function () {
     let timeoutId;

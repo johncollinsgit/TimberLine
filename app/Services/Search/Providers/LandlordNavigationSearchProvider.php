@@ -21,36 +21,9 @@ class LandlordNavigationSearchProvider implements LandlordSearchProvider
         }
 
         $normalized = trim($query);
-        $navigation = $this->navigationService->build($request, $context['user'] ?? $request->user());
-        $items = collect((array) ($navigation['items'] ?? []))
-            ->flatMap(function (array $item): array {
-                $rows = [$item];
-                foreach ((array) ($item['children'] ?? []) as $child) {
-                    if (is_array($child)) {
-                        $child['parent_label'] = $item['label'] ?? '';
-                        $rows[] = $child;
-                    }
-                }
-
-                return $rows;
-            });
-
-        $destinations = $items->map(function (array $item) use ($normalized): array {
-            $title = trim((string) ($item['label'] ?? ''));
-            $parent = trim((string) ($item['parent_label'] ?? ''));
-
-            return $this->result([
-                'type' => 'navigation',
-                'subtype' => 'landlord_destination',
-                'title' => $title,
-                'subtitle' => $parent !== '' ? $parent.' • Everbranch Admin' : 'Everbranch Admin destination',
-                'url' => $item['href'] ?? null,
-                'badge' => 'Admin page',
-                'score' => $this->matchScore($normalized, [$title, $parent], 180),
-                'icon' => (string) ($item['icon'] ?? 'rectangle-stack'),
-                'meta' => ['control_plane_only' => true],
-            ]);
-        });
+        $destinations = collect((new NavigationSearchProvider($this->navigationService))->search($query, $context))
+            ->map(fn (array $row): array => [...$row, 'subtype' => 'landlord_destination', 'badge' => 'Admin page',
+                'meta' => [...$row['meta'], 'control_plane_only' => true]]);
 
         $actions = collect([
             [
@@ -97,6 +70,7 @@ class LandlordNavigationSearchProvider implements LandlordSearchProvider
 
         return $destinations
             ->concat($actions)
+            ->filter(fn (array $row): bool => empty($context['navigation_only']) || app(\App\Services\Navigation\NavigationQuery::class)->isDestination($row))
             ->filter(fn (array $result): bool => $normalized === '' || (int) $result['score'] > 0)
             ->sortByDesc('score')
             ->take(7)

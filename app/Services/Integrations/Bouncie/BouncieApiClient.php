@@ -36,6 +36,20 @@ class BouncieApiClient
         return $all;
     }
 
+    /** Documented GET /v1/trips; callers must keep each query window within a week. */
+    public function trips(string $imei, string $startsAfter, string $endsBefore): array
+    {
+        $payload = $this->request()->get($this->url('trips'), [
+            'imei' => $imei, 'gps-format' => 'geojson',
+            'starts-after' => $startsAfter, 'ends-before' => $endsBefore,
+        ])->throw()->json();
+        if (! is_array($payload) || ! array_is_list($payload)) {
+            throw new \UnexpectedValueException('Invalid Bouncie trip response.');
+        }
+
+        return array_values(array_filter($payload, 'is_array'));
+    }
+
     private function request(): PendingRequest
     {
         // Bouncie explicitly requires the raw access token without a Bearer prefix.

@@ -7,19 +7,21 @@ use App\Models\FleetLocationPoint;
 use App\Models\FleetTrackingDevice;
 use App\Models\IntegrationConnection;
 use App\Models\Tenant;
+use App\Services\FleetTracking\BouncieLocationRefreshService;
+use App\Services\FleetTracking\FleetMapService;
 use App\Services\FleetTracking\FleetTrackingAccessService;
 use App\Services\Integrations\Bouncie\BouncieConnector;
 use App\Services\Tenancy\LandlordOperatorActionAuditService;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class FleetTrackingController extends Controller
 {
-    public function __construct(private readonly FleetTrackingAccessService $access, private readonly LandlordOperatorActionAuditService $audit, private readonly BouncieConnector $bouncie) {}
+    public function __construct(private readonly FleetTrackingAccessService $access, private readonly LandlordOperatorActionAuditService $audit, private readonly BouncieConnector $bouncie, private readonly FleetMapService $map) {}
 
     public function index(Request $request): View
     {
@@ -41,70 +43,26 @@ class FleetTrackingController extends Controller
             }
         }
 
-        return view('field-service.fleet-tracking', ['tenant' => $tenant, 'settings' => $settings, 'devices' => $devices, 'points' => $points, 'fleetMap' => $this->fleetMapPayload($devices, $points), 'vehicles' => FieldServiceVehicle::query()->forTenantId((int) $tenant->id)->where('status', 'active')->orderBy('name')->get(), 'globalEnabled' => (bool) config('services.fleet_tracking.enabled', false), 'mapApiKey' => (string) config('services.google_maps.fleet_api_key', ''), 'bouncieConnection' => $connection, 'bouncieVehicles' => $bouncieVehicles, 'bouncieConnectionError' => $connectionError, 'canManageBouncie' => $canManageBouncie, 'isDemoBouncieFeed' => (bool) data_get($connection?->metadata, 'demo_route_feed', false)]);
+        return view('field-service.fleet-tracking', ['tenant' => $tenant, 'settings' => $settings, 'devices' => $devices, 'points' => $points, 'fleetMap' => $this->map->snapshot($tenant, $request), 'vehicles' => FieldServiceVehicle::query()->forTenantId((int) $tenant->id)->where('status', 'active')->orderBy('name')->get(), 'globalEnabled' => (bool) config('services.fleet_tracking.enabled', false), 'mapApiKey' => (string) config('services.google_maps.fleet_api_key', ''), 'bouncieConnection' => $connection, 'bouncieVehicles' => $bouncieVehicles, 'bouncieConnectionError' => $connectionError, 'canManageBouncie' => $canManageBouncie, 'isDemoBouncieFeed' => (bool) data_get($connection?->metadata, 'demo_route_feed', false)]);
     }
 
-    /** @return array{vehicles:array<int,array<string,mixed>>,bounds:array<string,float>|null} */
-    private function fleetMapPayload(Collection $devices, Collection $points): array
+    public function mapData(Request $request, BouncieLocationRefreshService $refresh): JsonResponse
     {
-        $colors = ['#059669', '#2563eb', '#d97706', '#9333ea'];
-        $vehiclePoints = $points->where('source', 'bouncie')->whereNotNull('fleet_tracking_device_id')->groupBy('fleet_tracking_device_id');
-        $allPoints = $vehiclePoints->flatten(1)->values();
-        if ($allPoints->isEmpty()) {
-            return ['vehicles' => [], 'bounds' => null];
-        }
+        $tenant = $this->tenant($request);
+        $this->authorizeViewer($request, $tenant);
+        $feed = $refresh->refresh($tenant);
+        $payload = $this->map->snapshot($tenant, $request);
+        $payload['feed'] = $feed;
 
-        $minLat = (float) $allPoints->min(fn (FleetLocationPoint $point): float => (float) $point->latitude);
-        $maxLat = (float) $allPoints->max(fn (FleetLocationPoint $point): float => (float) $point->latitude);
-        $minLng = (float) $allPoints->min(fn (FleetLocationPoint $point): float => (float) $point->longitude);
-        $maxLng = (float) $allPoints->max(fn (FleetLocationPoint $point): float => (float) $point->longitude);
-        $latSpan = max(0.0001, $maxLat - $minLat);
-        $lngSpan = max(0.0001, $maxLng - $minLng);
-
-        $vehicles = $devices->values()->map(function (FleetTrackingDevice $device, int $index) use ($vehiclePoints, $colors, $minLat, $minLng, $latSpan, $lngSpan): array {
-            /** @var Collection<int,FleetLocationPoint> $routePoints */
-            $routePoints = ($vehiclePoints->get($device->id) ?? collect())->sortBy('recorded_at')->values();
-            $latest = $routePoints->last();
-            $distanceMiles = 0.0;
-            foreach ($routePoints->values() as $pointIndex => $point) {
-                if ($pointIndex === 0) {
-                    continue;
-                }
-                $previous = $routePoints->get($pointIndex - 1);
-                $distanceMiles += $this->distanceMiles((float) $previous->latitude, (float) $previous->longitude, (float) $point->latitude, (float) $point->longitude);
-            }
-
-            return [
-                'id' => (int) $device->id,
-                'label' => (string) ($device->vehicle?->name ?: $device->label ?: 'Company vehicle'),
-                'tracker_label' => (string) ($device->label ?: 'Bouncie tracker'),
-                'identifier' => $device->vehicle?->identifier,
-                'color' => $colors[$index % count($colors)],
-                'last_seen' => $latest?->recorded_at?->diffForHumans(),
-                'last_recorded_at' => $latest?->recorded_at?->toIso8601String(),
-                'updates' => $routePoints->count(),
-                'distance_miles' => round($distanceMiles, 1),
-                'route' => $routePoints->map(fn (FleetLocationPoint $point): array => [
-                    'latitude' => (float) $point->latitude,
-                    'longitude' => (float) $point->longitude,
-                    'x' => round(8 + (84 * (((float) $point->longitude - $minLng) / $lngSpan)), 2),
-                    'y' => round(92 - (84 * (((float) $point->latitude - $minLat) / $latSpan)), 2),
-                    'recorded_at' => $point->recorded_at?->toIso8601String(),
-                ])->all(),
-            ];
-        })->filter(fn (array $vehicle): bool => $vehicle['route'] !== [])->values()->all();
-
-        return ['vehicles' => $vehicles, 'bounds' => ['south' => $minLat, 'north' => $maxLat, 'west' => $minLng, 'east' => $maxLng]];
+        return response()->json($payload)->header('Cache-Control', 'no-store, private');
     }
 
-    private function distanceMiles(float $fromLat, float $fromLng, float $toLat, float $toLng): float
+    public function history(Request $request, int $vehicleId): JsonResponse
     {
-        $earthRadiusMiles = 3958.7613;
-        $latDelta = deg2rad($toLat - $fromLat);
-        $lngDelta = deg2rad($toLng - $fromLng);
-        $a = sin($latDelta / 2) ** 2 + cos(deg2rad($fromLat)) * cos(deg2rad($toLat)) * sin($lngDelta / 2) ** 2;
+        $tenant = $this->tenant($request);
+        $this->authorizeViewer($request, $tenant);
 
-        return $earthRadiusMiles * 2 * atan2(sqrt($a), sqrt(max(0, 1 - $a)));
+        return response()->json($this->map->history($tenant, $vehicleId, $request))->header('Cache-Control', 'no-store, private');
     }
 
     public function updateSettings(Request $request): RedirectResponse

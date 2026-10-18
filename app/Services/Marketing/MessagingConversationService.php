@@ -142,7 +142,8 @@ class MessagingConversationService
         ?MarketingProfile $profile,
         string $instagramAccountId,
         string $instagramSenderId,
-        array $context = []
+        array $context = [],
+        string $channel = 'instagram'
     ): MessagingConversation {
         $accountId = trim($instagramAccountId);
         $senderId = trim($instagramSenderId);
@@ -150,8 +151,8 @@ class MessagingConversationService
 
         $conversation = MessagingConversation::query()
             ->forTenantId($tenantId)
-            ->where('channel', 'instagram')
-            ->where('source_type', 'instagram')
+            ->where('channel', $channel)
+            ->where('source_type', $channel)
             ->where('source_id', $fingerprint)
             ->when(
                 $storeKey !== null,
@@ -163,19 +164,19 @@ class MessagingConversationService
 
         $sourceContext = [
             ...(is_array($context['source_context'] ?? null) ? $context['source_context'] : []),
-            'instagram_sender_id' => $senderId,
+            $channel.'_sender_id' => $senderId,
         ];
         if (! $conversation instanceof MessagingConversation) {
             $conversation = MessagingConversation::query()->create([
                 'tenant_id' => $tenantId,
                 'store_key' => $storeKey,
-                'channel' => 'instagram',
+                'channel' => $channel,
                 'marketing_profile_id' => $profile?->id,
                 'phone' => null,
                 'email' => null,
                 'subject' => null,
                 'status' => 'open',
-                'source_type' => 'instagram',
+                'source_type' => $channel,
                 'source_id' => $fingerprint,
                 'source_context' => $sourceContext,
             ]);
@@ -202,6 +203,7 @@ class MessagingConversationService
                 'conversation_id' => (int) $conversation->id,
                 'channel' => $attributes['channel'] ?? $conversation->channel,
                 'direction' => $attributes['direction'] ?? null,
+                'tenant_id' => $conversation->tenant_id, 'conversation_id' => $conversation->id,
                 'provider' => $provider,
                 'provider_message_id' => $providerMessageId,
                 'body' => $attributes['body'] ?? null,
@@ -216,6 +218,7 @@ class MessagingConversationService
 
         if ($providerMessageId !== null) {
             $message = MessagingConversationMessage::query()
+                ->where('tenant_id', $conversation->tenant_id)->where('conversation_id', $conversation->id)
                 ->where('provider', $provider)
                 ->where('provider_message_id', $providerMessageId)
                 ->first();
@@ -223,6 +226,7 @@ class MessagingConversationService
 
         if (! $message instanceof MessagingConversationMessage) {
             $message = MessagingConversationMessage::query()
+                ->where('tenant_id', $conversation->tenant_id)->where('conversation_id', $conversation->id)
                 ->where('dedupe_hash', $dedupeHash)
                 ->first();
         }
@@ -259,6 +263,7 @@ class MessagingConversationService
             } catch (UniqueConstraintViolationException $exception) {
                 if ($providerMessageId !== null) {
                     $message = MessagingConversationMessage::query()
+                        ->where('tenant_id', $conversation->tenant_id)->where('conversation_id', $conversation->id)
                         ->where('provider', $provider)
                         ->where('provider_message_id', $providerMessageId)
                         ->first();
@@ -266,6 +271,7 @@ class MessagingConversationService
 
                 if (! $message instanceof MessagingConversationMessage) {
                     $message = MessagingConversationMessage::query()
+                        ->where('tenant_id', $conversation->tenant_id)->where('conversation_id', $conversation->id)
                         ->where('dedupe_hash', $dedupeHash)
                         ->first();
                 }

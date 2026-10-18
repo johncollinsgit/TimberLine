@@ -4,7 +4,7 @@ use App\Services\Navigation\UnifiedAppNavigationService;
 use App\Services\Search\Providers\NavigationSearchProvider;
 use Illuminate\Http\Request;
 
-test('navigation search indexes a parent Production item and its direct children, but not grandchildren', function (): void {
+test('navigation search indexes every authorized depth including nested pages', function (): void {
     $nav = [
         'items' => [
             [
@@ -23,7 +23,7 @@ test('navigation search indexes a parent Production item and its direct children
                         'key' => 'pouring',
                         'label' => 'Pouring',
                         'href' => '/pouring',
-                        // Grandchildren should never be indexed.
+                        // Nested destinations are included for voice page finding.
                         'children' => [
                             [
                                 'key' => 'deep',
@@ -61,7 +61,25 @@ test('navigation search indexes a parent Production item and its direct children
         ->and((string) ($shipping['subtitle'] ?? ''))->toContain('Production');
 
     $deepResults = $provider->search('Deep Nested', ['request' => $request]);
-    expect($deepResults)->toBe([]);
+    expect($deepResults)->toHaveCount(1)
+        ->and($deepResults[0]['url'])->toBe('/pouring/deep')
+        ->and($deepResults[0]['subtitle'])->toContain('Pouring');
+});
+
+test('navigation search includes authorized settings and traverses non-link groups without exposing hidden children', function (): void {
+    $navigation = Mockery::mock(UnifiedAppNavigationService::class);
+    $navigation->shouldReceive('build')->andReturn([
+        'items' => [['label' => 'Work', 'children' => [
+            ['label' => 'Calendar', 'key' => 'class-scheduling', 'href' => '/classes'],
+            ['label' => 'Hidden report', 'href' => '/hidden', 'hidden' => true, 'children' => [['label' => 'Secret', 'href' => '/secret']]],
+        ]]],
+        'admin_sub_items' => [['key' => 'users', 'label' => 'Team Access', 'href' => '/admin/users']],
+    ]);
+    $provider = new NavigationSearchProvider($navigation);
+    $context = ['request' => Request::create('/dashboard')];
+    expect($provider->search('employees', $context)[0]['url'])->toBe('/admin/users')
+        ->and($provider->search('schedule', $context)[0]['url'])->toBe('/classes')
+        ->and($provider->search('Secret', $context))->toBe([]);
 });
 
 test('navigation search preserves top-level items and includes parent context for child results', function (): void {

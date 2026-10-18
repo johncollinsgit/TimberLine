@@ -23,6 +23,9 @@ use App\Services\ManagedWebsite\WebsiteCommerceService;
 use App\Services\ManagedWebsite\WebsiteCommerceShippingService;
 use App\Services\ManagedWebsite\WebsiteProductCsvService;
 use App\Services\ManagedWebsite\WebsiteQuoteAttributionService;
+use App\Services\ManagedWebsite\WebsiteShipmentLifecycleService;
+use App\Services\ManagedWebsite\WebsiteShippingAccessService;
+use App\Services\ManagedWebsite\WebsiteShippingSetupService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -234,7 +237,21 @@ class WebsiteCommerceController extends Controller
         abort_unless((int) $order->tenant_id === (int) $tenant->id, 404);
         $order->load(['lines', 'payments', 'fulfillments.lines', 'shipments.events', 'events']);
 
-        return view('managed-website.commerce.order', compact('tenant', 'order') + ['canManageOrders' => $commerce->enabledFor($tenant)]);
+        $nativePayments = $order->payments->filter(fn ($payment) => $payment->provider === 'stripe' && data_get($payment->metadata, 'checkout_version') === 1);
+        $pendingRefunds = $nativePayments->flatMap(function ($payment) {
+            return collect((array) data_get($payment->metadata, 'refunds', []))
+                ->reject(fn ($operation) => in_array($operation['status'] ?? '', ['succeeded', 'failed', 'canceled'], true))
+                ->map(fn ($operation, $requestId) => $operation + ['request_id' => $requestId,
+                    'can_retry' => isset($operation['provider_id']) || now()->timestamp - (int) ($operation['requested_at'] ?? 0) < 23 * 3600])
+                ->values();
+        });
+        $refundableCents = max(0, $order->total_cents - $order->refunded_cents - $pendingRefunds->sum('amount_cents'));
+
+        return view('managed-website.commerce.order', compact('tenant', 'order', 'pendingRefunds', 'refundableCents') + [
+            'canManageOrders' => $commerce->enabledFor($tenant), 'canServicePayments' => $nativePayments->isNotEmpty(),
+            'canManageShipping' => app(WebsiteShippingAccessService::class)->canManage($tenant, $request->user()),
+            'shippingEnabled' => app(WebsiteCommerceShippingService::class)->enabledFor($tenant),
+        ]);
     }
 
     public function fulfill(Request $request, WebsiteOrder $order, WebsiteCommerceService $commerce): RedirectResponse
@@ -261,10 +278,21 @@ class WebsiteCommerceController extends Controller
     {
         $tenant = $this->tenant($request);
         abort_unless((int) $order->tenant_id === (int) $tenant->id, 404);
-        $data = $request->validate(['amount' => ['required', 'numeric', 'min:0.01'], 'reason' => ['nullable', 'string', 'max:1000']]);
-        $commerce->refund($order, $request->user(), (int) round(((float) $data['amount']) * 100), (string) ($data['reason'] ?? ''));
+        $data = $request->validate(['request_id' => ['required', 'uuid'], 'amount' => ['required', 'decimal:0,2', 'min:0.01', 'max:1000000'], 'reason' => ['nullable', 'string', 'max:1000']]);
+        $commerce->refund($order, $request->user(), app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->cents($data['amount']), (string) ($data['reason'] ?? ''), $data['request_id']);
 
         return back()->with('status', 'Refund submitted to Stripe.');
+    }
+
+    public function checkRefunds(Request $request, WebsiteOrder $order): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        abort_unless((int) $order->tenant_id === (int) $tenant->id, 404);
+        $payment = $order->payments()->forTenantId($tenant->id)->where('provider', 'stripe')
+            ->where('metadata->checkout_version', 1)->where('metadata->paid_confirmed', true)->latest('id')->firstOrFail();
+        app(\App\Services\ManagedWebsite\WebsitePaymentService::class)->reconcileRefunds($payment);
+
+        return back()->with('status', 'Refund status checked with Stripe.');
     }
 
     public function addOrderNote(Request $request, WebsiteOrder $order, WebsiteCommerceService $commerce): RedirectResponse
@@ -281,58 +309,123 @@ class WebsiteCommerceController extends Controller
         $tenant = $this->tenant($request);
         abort_unless((int) $order->tenant_id === (int) $tenant->id, 404);
         $quoteId = (int) $request->validate(['shipping_rate_quote_id' => ['required', 'integer']])['shipping_rate_quote_id'];
-        $quote = WebsiteShippingRateQuote::query()->forTenant($tenant)->findOrFail($quoteId);
+        $quote = app(\App\Services\ManagedWebsite\WebsiteShippingPlanService::class)->quoteForOrder($order, $quoteId);
         $shipment = $shipping->purchaseLabel($order, $quote, $request->user());
 
-        return back()->with('status', 'Label purchased'.($shipment->tracking_number ? ' — tracking '.$shipment->tracking_number : '.'));
+        return back()->with('status', data_get($shipment->parcel, '_native.buy_state') === 'purchased'
+            ? 'Label purchased'.($shipment->tracking_number ? ' — tracking '.$shipment->tracking_number : '.')
+            : 'Postage is not confirmed. Check or resume the saved attempt before preparing another label.');
     }
 
     public function voidLabel(Request $request, WebsiteShipment $shipment, WebsiteCommerceShippingService $shipping): RedirectResponse
     {
         $tenant = $this->tenant($request);
         abort_unless((int) $shipment->tenant_id === (int) $tenant->id, 404);
+        $request->validate(['confirm_unused' => ['required', 'accepted']]);
         $shipping->voidLabel($shipment, $request->user());
 
         return back()->with('status', 'Label void requested.');
     }
 
+    public function reconcileShipment(Request $request, WebsiteShipment $shipment, WebsiteShipmentLifecycleService $lifecycle): RedirectResponse
+    {
+        $this->authorizeShipment($request, $shipment);
+        $lifecycle->reconcile($shipment);
+
+        return back()->with('status', 'Shipment checked with the original carrier account.');
+    }
+
+    public function packShipment(Request $request, WebsiteShipment $shipment, WebsiteShipmentLifecycleService $lifecycle): RedirectResponse
+    {
+        $this->authorizeShipment($request, $shipment);
+        $lifecycle->pack($shipment, $request->user());
+
+        return back()->with('status', 'Package marked packed. Carrier handoff is recorded separately.');
+    }
+
+    public function resumePostage(Request $request, WebsiteShipment $shipment, WebsiteShipmentLifecycleService $lifecycle): RedirectResponse
+    {
+        $this->authorizeShipment($request, $shipment);
+        $shipment = $lifecycle->resumePurchase($shipment, $request->user());
+
+        return back()->with('status', data_get($shipment->parcel, '_native.buy_state') === 'purchased'
+            ? 'The saved postage purchase is confirmed.' : 'The saved postage purchase still needs review. No replacement was purchased.');
+    }
+
+    public function handoffShipment(Request $request, WebsiteShipment $shipment, WebsiteShipmentLifecycleService $lifecycle): RedirectResponse
+    {
+        $this->authorizeShipment($request, $shipment);
+        $request->validate(['confirm_handoff' => ['required', 'accepted']]);
+        $lifecycle->handoff($shipment, $request->user());
+
+        return back()->with('status', 'Carrier handoff recorded.');
+    }
+
+    public function prepareReplacement(Request $request, WebsiteShipment $shipment, WebsiteShipmentLifecycleService $lifecycle): RedirectResponse
+    {
+        $this->authorizeShipment($request, $shipment);
+        $request->validate(['confirm_retired_label' => ['required', 'accepted']]);
+        $lifecycle->prepareReplacement($shipment, $request->user(), true);
+
+        return back()->with('status', 'Replacement rates prepared. Review and approve the separate postage cost before purchase.');
+    }
+
+    public function approveReplacement(Request $request, WebsiteShipment $shipment, WebsiteShipmentLifecycleService $lifecycle): RedirectResponse
+    {
+        $this->authorizeShipment($request, $shipment);
+        $data = $request->validate(['rate_id' => ['required', 'string', 'max:190'], 'cost_cents' => ['required', 'integer', 'min:0', 'max:10000000'], 'confirm_cost' => ['required', 'accepted']]);
+        $lifecycle->approveReplacement($shipment, $data['rate_id'], (int) $data['cost_cents'], $request->user());
+
+        return back()->with('status', 'Replacement postage submitted. Check the saved purchase status before printing.');
+    }
+
+    private function authorizeShipment(Request $request, WebsiteShipment $shipment): void
+    {
+        $tenant = $this->tenant($request);
+        abort_unless($shipment->tenant_id === $tenant->id && $shipment->provider === 'easypost', 404);
+        app(WebsiteShippingAccessService::class)->assertCanManage($tenant, $request->user());
+    }
+
     public function shippingSettings(Request $request, WebsiteCommerceShippingService $shipping): View
     {
         $tenant = $this->tenant($request);
-        abort_unless($shipping->enabledFor($tenant), 423, 'Native shipping is not enabled for this workspace.');
         $site = $this->site($tenant);
+        $shippingEnabled = $shipping->enabledFor($tenant);
         $locations = WebsiteFulfillmentLocation::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->latest('is_default')->get();
         $packages = WebsiteShippingPackage::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->latest('is_default')->get();
 
-        return view('managed-website.commerce.shipping', compact('tenant', 'site', 'locations', 'packages'));
+        app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->assertEditor($site, $request->user());
+        $variants = WebsiteProductVariant::query()->forTenant($tenant)->where('is_available', true)->whereHas('product', fn ($query) => $query->where('tenant_site_id', $site->id)->where('product_type', 'physical')->where('status', '!=', 'archived'))->with('product')->orderBy('website_product_id')->get();
+        $canManageShipping = app(WebsiteShippingAccessService::class)->canManage($tenant, $request->user());
+        $shippingHealth = $canManageShipping ? app(\App\Services\ManagedWebsite\WebsiteShippingHealthService::class)->forSite($site) : null;
+
+        return view('managed-website.commerce.shipping', compact('tenant', 'site', 'locations', 'packages', 'variants', 'shippingEnabled', 'canManageShipping', 'shippingHealth'));
     }
 
-    public function saveFulfillmentLocation(Request $request, WebsiteCommerceShippingService $shipping): RedirectResponse
+    public function saveFulfillmentLocation(Request $request): RedirectResponse
     {
         $tenant = $this->tenant($request);
-        abort_unless($shipping->enabledFor($tenant), 423, 'Native shipping is not enabled for this workspace.');
-        $data = $request->validate(['name' => ['required', 'string', 'max:190'], 'street1' => ['required', 'string', 'max:190'], 'street2' => ['nullable', 'string', 'max:190'], 'city' => ['required', 'string', 'max:120'], 'state' => ['required', 'string', 'size:2'], 'zip' => ['required', 'string', 'max:10'], 'is_default' => ['nullable', 'boolean']]);
-        $site = $this->site($tenant);
-        if (($data['is_default'] ?? false) === true) {
-            WebsiteFulfillmentLocation::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->update(['is_default' => false]);
-        }
-        WebsiteFulfillmentLocation::query()->create(['tenant_id' => $tenant->id, 'tenant_site_id' => $site->id, 'name' => $data['name'], 'address' => ['name' => $data['name'], 'street1' => $data['street1'], 'street2' => $data['street2'] ?? '', 'city' => $data['city'], 'state' => strtoupper($data['state']), 'zip' => $data['zip'], 'country' => 'US'], 'is_default' => (bool) ($data['is_default'] ?? false), 'active' => true]);
+        app(WebsiteShippingSetupService::class)->saveLocation($this->site($tenant), $request->all(), $request->user());
 
-        return back()->with('status', 'Ship-from location saved.');
+        return back()->with('status', 'Pickup / ship-from location saved.');
     }
 
     public function saveShippingPackage(Request $request, WebsiteCommerceShippingService $shipping): RedirectResponse
     {
         $tenant = $this->tenant($request);
         abort_unless($shipping->enabledFor($tenant), 423, 'Native shipping is not enabled for this workspace.');
-        $data = $request->validate(['name' => ['required', 'string', 'max:190'], 'length_inches' => ['required', 'integer', 'min:1', 'max:1000'], 'width_inches' => ['required', 'integer', 'min:1', 'max:1000'], 'height_inches' => ['required', 'integer', 'min:1', 'max:1000'], 'weight_ounces' => ['required', 'integer', 'min:1', 'max:1000000'], 'is_default' => ['nullable', 'boolean']]);
-        $site = $this->site($tenant);
-        if (($data['is_default'] ?? false) === true) {
-            WebsiteShippingPackage::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->update(['is_default' => false]);
-        }
-        WebsiteShippingPackage::query()->create($data + ['tenant_id' => $tenant->id, 'tenant_site_id' => $site->id, 'is_default' => (bool) ($data['is_default'] ?? false), 'active' => true]);
+        app(WebsiteShippingSetupService::class)->savePackage($this->site($tenant), $request->all(), $request->user());
 
         return back()->with('status', 'Package preset saved.');
+    }
+
+    public function saveShippingPolicy(Request $request, WebsiteCommerceShippingService $shipping): RedirectResponse
+    {
+        $tenant = $this->tenant($request);
+        abort_unless($shipping->enabledFor($tenant), 423, 'Native shipping is not enabled for this workspace.');
+        app(WebsiteShippingSetupService::class)->savePolicy($this->site($tenant), $request->all(), $request->user());
+
+        return back()->with('status', 'Shipping services and mode saved.');
     }
 
     public function imports(Request $request, CommerceImportService $imports): View
@@ -397,8 +490,10 @@ class WebsiteCommerceController extends Controller
         $request->session()->put($this->cartSessionKey($site), $cart->token);
 
         return view('managed-website.cart', compact('site', 'cart') + [
-            'shippingEnabled' => $shipping->enabledFor($tenant),
+            'checkoutAttempt' => app(\App\Services\ManagedWebsite\WebsiteCheckoutService::class)->activePayment($cart),
+            'shippingEnabled' => $shipping->enabledFor($tenant) && $cart->loadMissing('items.variant.product')->items->contains(fn ($item) => $item->variant?->product?->product_type === 'physical'),
             'checkoutReady' => $commerce->checkoutReadiness($tenant)['ready'],
+            'missingShippingWeights' => app(\App\Services\ManagedWebsite\WebsiteShippingReadinessService::class)->missingCartWeights($cart),
         ]);
     }
 
@@ -455,7 +550,7 @@ class WebsiteCommerceController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:190'], 'email' => ['required', 'email:rfc,dns', 'max:190'], 'phone' => ['nullable', 'string', 'max:80'],
             'fulfillment_method' => ['required', 'in:ship,pickup,local_delivery'], 'shipping_rate_quote_id' => ['nullable', 'integer', 'required_if:fulfillment_method,ship'],
-            'shipping_address' => ['nullable', 'array', 'required_if:fulfillment_method,ship'], 'shipping_address.name' => ['nullable', 'string', 'max:190'], 'shipping_address.street1' => ['nullable', 'string', 'max:190'], 'shipping_address.street2' => ['nullable', 'string', 'max:190'], 'shipping_address.city' => ['nullable', 'string', 'max:120'], 'shipping_address.state' => ['nullable', 'string', 'size:2'], 'shipping_address.zip' => ['nullable', 'string', 'max:10'], 'shipping_address.country' => ['nullable', 'string', 'size:2'],
+            'shipping_address' => ['nullable', 'array', 'required_if:fulfillment_method,ship,local_delivery'], 'shipping_address.name' => ['nullable', 'string', 'max:190'], 'shipping_address.street1' => ['nullable', 'string', 'max:190'], 'shipping_address.street2' => ['nullable', 'string', 'max:190'], 'shipping_address.city' => ['nullable', 'string', 'max:120'], 'shipping_address.state' => ['nullable', 'string', 'size:2'], 'shipping_address.zip' => ['nullable', 'string', 'max:10'], 'shipping_address.country' => ['nullable', 'string', 'size:2'],
             'preferred_at' => ['nullable', 'string', 'max:80'], 'notes' => ['nullable', 'string', 'max:2000'],
         ]);
         $result = $commerce->beginCheckout($cart, $data + ['first_name' => Str::before($data['name'], ' '), 'last_name' => Str::after($data['name'], ' ')], route('managed-website.store.success'), route('managed-website.store.cart'));
@@ -463,12 +558,47 @@ class WebsiteCommerceController extends Controller
         return redirect()->away($result['url']);
     }
 
-    public function success(Request $request, ManagedWebsiteService $websites): View
+    public function resumeCheckout(Request $request, ManagedWebsiteService $websites, WebsiteCommerceService $commerce): RedirectResponse
     {
         [$tenant, $site] = $this->publicSite($request, $websites);
-        $order = WebsiteOrder::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->where('number', (string) $request->query('order'))->where('lookup_token', (string) $request->query('token'))->with('lines')->firstOrFail();
+        $this->requireCommerce($tenant, $commerce);
+        abort_unless($commerce->checkoutReadiness($tenant)['ready'], 423, 'Website checkout is not ready.');
+        $cart = \App\Models\WebsiteCart::query()->forTenantId($tenant->id)->where('tenant_site_id', $site->id)
+            ->where('token', (string) $request->session()->get($this->cartSessionKey($site)))->where('status', 'active')->firstOrFail();
+        $checkout = app(\App\Services\ManagedWebsite\WebsiteCheckoutService::class);
+        $payment = $checkout->activePayment($cart);
+        abort_unless($payment, 422, 'No open checkout was found.');
+        abort_if(in_array($payment->status, ['paid_review', 'payment_review'], true), 422, 'This payment needs staff review. Contact the store.');
+        abort_unless($tenant->paymentAccount()->value('provider_account_id') === data_get($payment->metadata, 'account_id'), 423, 'The merchant payment account changed. Contact the store.');
 
-        return view('managed-website.order', compact('site', 'order'));
+        return redirect()->away($checkout->ensureSession($payment)['url']);
+    }
+
+    public function cancelCheckout(Request $request, ManagedWebsiteService $websites, WebsiteCommerceService $commerce): RedirectResponse
+    {
+        [$tenant, $site] = $this->publicSite($request, $websites);
+        $this->requireCommerce($tenant, $commerce);
+        $cart = \App\Models\WebsiteCart::query()->forTenantId($tenant->id)->where('tenant_site_id', $site->id)
+            ->where('token', (string) $request->session()->get($this->cartSessionKey($site)))->where('status', 'active')->firstOrFail();
+        $checkout = app(\App\Services\ManagedWebsite\WebsiteCheckoutService::class);
+        $payment = $checkout->activePayment($cart);
+        abort_unless($payment, 422, 'No open checkout was found.');
+        $checkout->cancelPayment($payment);
+
+        return redirect()->route('managed-website.store.cart')->with('cart_status', 'Checkout cancelled. You can update your cart.');
+    }
+
+    public function success(Request $request, ManagedWebsiteService $websites): \Illuminate\Http\Response
+    {
+        [$tenant, $site] = $this->publicSite($request, $websites);
+        $token = $request->query('token');
+        $number = $request->query('order');
+        abort_unless(is_string($token) && preg_match('/^[A-Za-z0-9]{56}$/D', $token) && is_string($number) && strlen($number) <= 190, 404);
+        $order = WebsiteOrder::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->where('number', $number)->where('lookup_token', $token)->with('lines', 'shipments')->firstOrFail();
+        abort_unless(hash_equals((string) $order->lookup_token, $token), 404);
+
+        return response()->view('managed-website.order', compact('site', 'order'))->header('Cache-Control', 'private, no-store')
+            ->header('Referrer-Policy', 'no-referrer')->header('X-Robots-Tag', 'noindex, nofollow');
     }
 
     public function webhook(Request $request, WebsiteCommerceService $commerce): JsonResponse
@@ -476,7 +606,13 @@ class WebsiteCommerceController extends Controller
         $payload = $request->getContent();
         $signature = (string) $request->header('Stripe-Signature');
         abort_unless($this->validSignature($payload, $signature), 400, 'Invalid webhook signature.');
-        $commerce->processStripeEvent((array) json_decode($payload, true, 512, JSON_THROW_ON_ERROR));
+        try {
+            $event = json_decode($payload, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $exception) {
+            abort(400, 'Invalid webhook payload.');
+        }
+        abort_unless(is_array($event), 400, 'Invalid webhook payload.');
+        $commerce->processStripeEvent($event);
 
         return response()->json(['received' => true]);
     }
@@ -489,14 +625,12 @@ class WebsiteCommerceController extends Controller
         $data = $request->validate(['shipping_address' => ['required', 'array'], 'shipping_address.name' => ['required', 'string', 'max:190'], 'shipping_address.street1' => ['required', 'string', 'max:190'], 'shipping_address.street2' => ['nullable', 'string', 'max:190'], 'shipping_address.city' => ['required', 'string', 'max:120'], 'shipping_address.state' => ['required', 'string', 'size:2'], 'shipping_address.zip' => ['required', 'string', 'max:10'], 'shipping_address.country' => ['required', 'string', 'size:2']]);
         $quotes = $shipping->quote($cart, $data['shipping_address']);
 
-        return response()->json(['quotes' => collect($quotes)->map(fn (WebsiteShippingRateQuote $quote) => ['id' => $quote->id, 'carrier' => $quote->carrier, 'service' => $quote->service, 'amount_cents' => $quote->amount_cents, 'currency' => $quote->currency, 'delivery_days' => $quote->delivery_days, 'expires_at' => $quote->expires_at->toIso8601String()])->values()]);
+        return response()->json(['quotes' => collect($quotes)->map(fn (WebsiteShippingRateQuote $quote) => ['id' => $quote->id, 'carrier' => $quote->carrier, 'service' => $quote->service, 'amount_cents' => $quote->amount_cents, 'currency' => $quote->currency, 'delivery_days' => $quote->delivery_days, 'expires_at' => $quote->expires_at->toIso8601String(), 'mode' => data_get($quote->parcel, '_shipping_plan.mode')])->values()]);
     }
 
     public function shippingWebhook(Request $request, WebsiteCommerceShippingService $shipping): JsonResponse
     {
-        $payload = $request->getContent();
-        abort_unless($this->validEasyPostSignature($payload, (string) $request->header('X-Hmac-Signature')), 400, 'Invalid shipping webhook signature.');
-        $shipping->processWebhook((array) json_decode($payload, true, 512, JSON_THROW_ON_ERROR));
+        app(WebsiteShipmentLifecycleService::class)->ingest($request->getContent(), $request->headers->all(), $request->method(), $request->getPathInfo());
 
         return response()->json(['received' => true]);
     }
@@ -580,21 +714,17 @@ class WebsiteCommerceController extends Controller
     private function validSignature(string $payload, string $header): bool
     {
         $secret = trim((string) config('managed_website.stripe_webhook_secret'));
-        if ($secret === '' || ! preg_match('/t=(\d+),v1=([^,]+)/', $header, $matches) || abs(now()->timestamp - (int) $matches[1]) > 300) {
+        if ($secret === '' || ! preg_match('/(?:^|,)\s*t=(\d+)(?:,|$)/', $header, $timestamp) || abs(now()->timestamp - (int) $timestamp[1]) > 300) {
             return false;
         }
-
-        return hash_equals(hash_hmac('sha256', $matches[1].'.'.$payload, $secret), $matches[2]);
-    }
-
-    private function validEasyPostSignature(string $payload, string $signature): bool
-    {
-        $secret = trim((string) config('managed_website.easypost_webhook_secret'));
-        if ($secret === '' || $signature === '') {
-            return false;
+        preg_match_all('/(?:^|,)\s*v1=([a-f0-9]{64})(?=,|$)/i', $header, $signatures);
+        $expected = hash_hmac('sha256', $timestamp[1].'.'.$payload, $secret);
+        foreach ($signatures[1] as $signature) {
+            if (hash_equals($expected, $signature)) {
+                return true;
+            }
         }
-        $signature = str_starts_with($signature, 'v1=') ? substr($signature, 3) : $signature;
 
-        return hash_equals(hash_hmac('sha256', $payload, $secret), $signature);
+        return false;
     }
 }

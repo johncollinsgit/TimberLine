@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("Everbranch public studio", () => {
-    test("keeps the launch-partner path and primary navigation available", async ({ page }) => {
+    test("keeps the setup request path and primary navigation available", async ({ page }) => {
         await page.goto("/platform/promo");
         await expect(page.getByRole("heading", { name: /your business has a rhythm/i })).toBeVisible();
-        await expect(page.getByRole("link", { name: /become a launch partner/i }).first()).toHaveAttribute("href", /start/);
+        await expect(page.getByRole("link", { name: /get started/i }).first()).toHaveAttribute("href", /start/);
         await expect(page.getByRole("link", { name: "Plans" }).first()).toBeVisible();
         await expect(page.getByRole("link", { name: "Customer Loop", exact: true, includeHidden: true })).toHaveAttribute("href", "#customer-loop");
         await expect(page.getByRole("link", { name: /plan your customer loop/i })).toHaveAttribute("href", /start/);
@@ -70,7 +70,7 @@ test.describe("Everbranch public studio", () => {
         await expect(page.getByRole("tab", { name: "Website" })).toHaveAttribute("aria-selected", "true");
         await expect(page.getByText("Northline Build", { exact: true })).toBeVisible();
         await expect(page.getByText(/not a live customer website or workspace/i)).toBeVisible();
-        await expect(page.getByRole("link", { name: /request launch-partner access/i }).first()).toHaveAttribute("href", /start/);
+        await expect(page.getByRole("link", { name: /request access/i }).first()).toHaveAttribute("href", /start/);
 
         await page.getByRole("button", { name: /start a project conversation/i }).click();
         await expect(page.getByText(/request received/i)).toBeVisible();

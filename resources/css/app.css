@@ -4,6 +4,7 @@
 @import './public-studio.css';
 @import './public-story-film.css';
 @import './everbranch-workspace.css';
+@import './marketing-desk.css';
 
 @source '../views';
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';

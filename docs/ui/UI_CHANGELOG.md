@@ -14,6 +14,102 @@ review agreement and unpaid $798 Stripe invoice. New offers show $299 + $499 set
 text, email and AI charges/limits are separate. Future voice and customer-facing AI
 usage fees remain to be determined. See `docs/retail/AVERY_DEMO.md`. No website release.
 
+## October 17, 2026 — Standard offer for future customers
+
+- The canonical new offer is $299/month per business plus $499 one-time setup in
+  `module_catalog.offers.standard`. Public comparisons have one offer; legacy plan
+  IDs, stored agreements, subscriptions, add-ons and access remain unchanged.
+- Checkout verifies new exact provider prices and a once-only setup attempt.
+  Production capacity mapping is unresolved, so new standard checkout stays gated.
+  Read `docs/operations/standard-everbranch-offer.md` for source, test and release details.
+
+## 2026-10-16 - Workspace status independent of integration health
+
+- The landlord client list and client settings share the saved administrative
+  status. Workspaces without an explicit status display Active; setup gaps and
+  unresolved provider errors remain in Health instead of implying Inactive.
+- Explicit Active, Inactive and Suspended settings are preserved. No stored
+  status, membership, billing, entitlement or integration evidence is changed.
+
+## 2026-10-16 - Shared payment account setup (feature branch; disabled)
+
+- Added a gated owner/admin Payments page with cards/digital-wallet and PayPal
+  account sections. Known Stripe details are prefilled; embedded verification has
+  a hosted fallback. PayPal uses explicit sharing consent and existing-account
+  sign-in, with test mode and connection status shown separately from checkout.
+- Gated navigation covers standard, Website & sales and Wren settings. The page
+  clearly states that Everbranch billing is separate and PayPal checkout is not
+  active. No customer-facing checkout option is introduced in this phase.
+
+## 2026-10-16 — Marketing Desk and workflow usability
+
+- Marketing Desk uses the shared dashboard/list/detail/form shapes and restrained
+  workspace tokens. Daily actions, approval states and real source freshness stay
+  visible; unrelated import diagnostics do not occupy the desk.
+- Studio retains its real canvas/inspector and gains an outline, fit, four views,
+  visible publication guidance and connection summaries. Small screens keep a
+  readable step flow and existing inspector drawer.
+- Desktop/phone browser checks use a clearly fictional local workspace. Provider
+  execution and production rollout remain disabled.
+
+## 2026-10-16 - Workspace-aware AI attention briefings
+
+- Added the gated What needs attention? request, collapsible Context used panels, ordered evidence links, source coverage and generation time with workspace timezone. Viewing context consumes no AI allowance.
+- Standard and Website & sales launchers pass allowlisted page identity. Private chat/memory scope follows the selected workspace. Changed permissions or context versions show a restart explanation with private deletion controls.
+- Added validated workspace timezone to existing AI settings. Briefings share chat limits and provider spending caps. No financial summaries, external calendar retrieval or automated actions are introduced; rollout remains disabled.
+
+## 2026-10-15 - Native shipping lifecycle and printer setup
+
+## 2026-10-15 AI Branch pilot workspace
+
+- Added a gated AI workspace and canonical navigation launcher with escaped conversation text, evidence lists, explicit owner budget opt-in, private memory controls and exact internal-note previews. Uses the existing app shell and controls. Hidden/default-off rollout preserves all current customer surfaces.
+
+
+- Order fulfillment separates saved postage, packing, label output, handoff,
+  refund review and separately approved replacement rates. Retired labels lose
+  print actions; unresolved purchases retain check/resume actions.
+- Printer setup supports saved Mac/Windows driver profiles, actual-size thermal
+  and sheet PDFs, calibration, and explicit print outcome history. Guest and
+  account tracking omit private documents and staff/provider details.
+- Local setup checks and per-order transactional update states expose blocked or
+  uncertain work without starting provider operations. Rollout remains disabled.
+
+## 2026-10-15 - Reviewed parcels and shared shipping checkout
+
+- Native shipping setup adds explicit test/production mode, approved USPS
+  services, usable package dimensions, packed-weight/item limits, and optional
+  confirmed product-mix capacity. Product variants expose dimensions and a
+  must-ship-alone flag while retaining existing measurements during other edits.
+- Retail themes share shipping address and rate selection. Address/name changes
+  clear stale selections; test rates are identified. Store copy and checkout use
+  the published free-shipping threshold. The standard theme also supports cart
+  quantity updates/removal through its existing scoped endpoint.
+- No production activation is included. See the retail shipping launch plan.
+
+## 2026-10-15 - Retail shipping weight readiness
+
+- Products shows missing-weight product counts, a filter, and row warnings.
+  Add weights opens a paginated bulk variant editor with ounces, pounds, and
+  grams; product editing includes the same units and a missing-weight notice.
+- Shopper carts identify items unavailable for shipping while keeping catalog
+  access and other configured delivery options. Missing measurements are
+  merchant setup tasks and do not open checkout or carrier rollout gates.
+- CSV/edit preservation and transactional tenant-scoped weight updates accompany
+  the UI. See docs/operations/retail-shipping-launch-plan.md.
+
+## 2026-10-15 — Selected company vans and recorded trip paths
+
+- The standalone Location Tracker starts with all configured vans selected and
+  keeps per-user, per-workspace selections through refreshes. Checkboxes,
+  Select All, Clear All, named markers and shared history keep the view aligned.
+- Bouncie trip geometry supplies clean paths with redundant samples simplified,
+  meaningful gaps preserved, and trips kept separate. Today, Yesterday and custom
+  ranges use the account timezone and existing retention window.
+- Van/trip highlighting, provider distance and duration, explicit freshness,
+  missing/disconnected tracking and partial failures help dispatch interpret
+  the available evidence. Refreshes preserve the map position.
+- Existing account gates, Bouncie configuration and vehicle assignments remain
+  unchanged. See `docs/operations/collins-fleet-selected-routes.md`.
 
 ## 2026-10-15 — Everbranch Showcase workspace and landlord presentation
 
@@ -2823,3 +2919,20 @@ usage fees remain to be determined. See `docs/retail/AVERY_DEMO.md`. No website 
 - Added tenant-scoped inbox, sent, draft, and trash views; search, compose, read/unread, stars, and admin controls for addresses and member access.
 - Cloudflare setup accepts a one-use zone-scoped token. It adds ownership proof and changes MX only after transport readiness and a conflict check. Other DNS providers can use the manual records.
 - No production mail server or customer domain is activated by this change.
+
+
+## 2026-10-16 - Payment setup pilot release
+
+- Enabled the shared Payments page for Wren only after protected deployment.
+  Stripe platform-profile failures now explain that Everbranch must complete
+  setup; changing the owner's email does not resolve that provider blocker.
+- No Shop Pay buyer button, PayPal checkout, registration opening or additional
+  tenant activation is included.
+
+
+## 2026-10-16 - Soccer Stripe settlement identity
+
+- Soccer Checkout identifies its verified connected business as the settlement
+  merchant and payout destination, matching native storefront payments. Card
+  wallets, registration/jersey totals, zero platform fees and launch gates stay
+  unchanged. No live charge or registration opening is performed.

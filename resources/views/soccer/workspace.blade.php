@@ -48,7 +48,7 @@
 @endif
 
 @if($section==='parents')<section class="section"><h2>{{ $families->count() }} families</h2>
-@forelse($families as $f)<details id="family-{{ $f['id'] }}"><summary>{{ $f['profile']['parentName']??$f['email'] }} <small class="muted">{{ $f['email'] }}</small></summary><div class="form-grid"><div><p>{{ $f['profile']['phone']??'Phone missing' }}</p><p class="muted">{{ $f['profile']['address']??'' }}</p></div><div>
+@forelse($families as $f)<details id="family-{{ $f['id'] }}"><summary>{{ $f['profile']['parentName']??$f['email'] }} <small class="muted">{{ $f['email'] }}</small></summary><div class="form-grid"><div><p>{{ $f['profile']['phone']??'Phone missing' }}</p>@if(!empty($f['profile']['spouseName'])||!empty($f['profile']['spousePhone']))<p>Spouse: {{ $f['profile']['spouseName']??'' }} · {{ $f['profile']['spousePhone']??'' }}</p>@endif<p class="muted">{{ $f['profile']['address']??'' }}</p></div><div>
 @foreach($players->where('family_id',$f['id']) as $p)<p>{{ $p['name'] }} <small class="muted">{{ $p['birthday'] }}</small></p>
 @endforeach</div></div><p class="muted">{{ $f['verified_at']?'Email verified':'Awaiting account claim' }} · {{ $f['sms_consent_at']?'Soccer SMS consent recorded':'SMS consent not recorded' }}</p><form method="post" action="{{ $actionUrl('guardian') }}" class="form-grid">
 @csrf<input type="hidden" name="family_id" value="{{ $f['id'] }}"><label>Verified additional / changed guardian email<input required type="email" name="email"></label><label>Evidence for household access<input name="reason" required></label><button>Link guardian email</button></form></details>
@@ -133,7 +133,9 @@
 @endforeach</section>
 @if($admin)<section class="section"><h2>Parent coaching volunteers</h2>
 @foreach($families as $family)
-@if(data_get($family, 'profile.coaching_by_season.'.$season?->season_key.'.volunteer'))<div class="row"><strong>{{ $family['profile']['parentName']??$family['email'] }}</strong><span>{{ $family['email'] }} · {{ $family['profile']['phone']??'' }} · Jersey {{ data_get($family, 'profile.coaching_by_season.'.$season?->season_key.'.jersey_size') }}</span></div>
+@if(data_get($family, 'profile.coaching_by_season.'.$season?->season_key.'.volunteer'))
+@php($interest=data_get($family, 'profile.coaching_by_season.'.$season?->season_key, []))
+<div class="row"><strong>{{ $interest['name']??$family['profile']['parentName']??$family['email'] }} · Assistant coach</strong><span>{{ ucfirst($interest['parent']??'Parent') }} · {{ $family['email'] }} · {{ $family['profile']['phone']??'' }} · Jersey {{ $interest['jersey_size']??'' }} · Teams: {{ implode(', ', array_map(fn($key)=>config('soccer.teams.'.$key.'.name', $key), $interest['teams']??[])) }} · {{ !empty($interest['available_8_of_10'])?'Confirmed 8 of 10 weeks':'Availability not recorded' }}</span></div>
 @endif
 @endforeach</section><section class="section"><h2>Assign a coach</h2><p class="muted"><a href="{{ route('admin.users',['tenant'=>$tenant->slug]) }}">Open Team Access</a> to invite their account to Wren first. Volunteering waives fees but does not grant backend access.</p><form method="post" action="{{ $actionUrl('coach') }}">
 @csrf<div class="form-grid"><label>Name<input required name="name"></label><label>Workspace account email<input required type="email" name="email"></label><label>Coach role<select name="role"><option value="assistant">Assistant coach</option><option value="head">Head coach</option></select></label><fieldset><legend>Assigned teams</legend>
@@ -142,7 +144,19 @@
 @endif
 @endif
 
-@if($section==='messages')<section class="section"><h2>GroupMe conversations</h2><p class="muted">Use your own GroupMe account to read and send messages. Group membership and your Wren role both control access.</p><details><summary>Connect your GroupMe account</summary><form method="post" action="{{ $actionUrl('groupme-connect') }}" class="form-grid">
+@if($section==='messages')
+@if($admin)<section class="section"><h2>Family questions for Wren</h2><p class="muted">When the family help assistant cannot verify an answer, the question and conversation are saved here for review.</p>
+@forelse($helpQuestions as $question)
+<details><summary>{{ $question['data']['summary'] ?? 'Family question' }} · {{ $families->get($question['family_id'])['email'] ?? 'Family account' }} · {{ $question['created_at'] }}</summary>
+@foreach($question['data']['transcript'] ?? [] as $exchange)
+<div class="message"><strong>Family</strong><p>{{ $exchange['question'] ?? '' }}</p><strong>Assistant</strong><p>{{ $exchange['answer'] ?? '' }}</p></div>
+@endforeach
+<form method="post" action="{{ $actionUrl('help-reviewed') }}">@csrf<input type="hidden" name="event_id" value="{{ $question['id'] }}"><button type="submit">Mark reviewed</button></form>
+</details>
+@empty<p class="empty">No unanswered family questions.</p>
+@endforelse</section>
+@endif
+<section class="section"><h2>GroupMe conversations</h2><p class="muted">Use your own GroupMe account to read and send messages. Group membership and your Wren role both control access.</p><details><summary>Connect your GroupMe account</summary><form method="post" action="{{ $actionUrl('groupme-connect') }}" class="form-grid">
 @csrf<label>Personal GroupMe API token<input required type="password" name="token" autocomplete="off"></label><div><a href="https://dev.groupme.com/" target="_blank" rel="noopener noreferrer" class="muted">Get your token from GroupMe Developers</a><p class="muted">Stored encrypted; never shared with other coaches.</p></div><button>Connect account</button></form></details><div class="actions">
 @forelse($groups as $key=>$gid)<button class="ghost" data-group="{{ $gid }}">{{ ucwords(str_replace('_',' ',$key)) }}</button>
 @empty<p class="empty">Admin must map the existing GroupMe groups in Settings.</p>
@@ -192,9 +206,17 @@
 @foreach(['legal_name'=>'Legal organization or operator name','contact_name'=>'Authorized contact name','contact_email'=>'Contact email','contact_phone'=>'Contact mobile phone','address'=>'Mailing street address','city'=>'City','state'=>'State (two letters)','postal_code'=>'ZIP code'] as $key=>$label)<label>{{ $label }}<input required type="{{ $key==='contact_email'?'email':'text' }}" name="{{ $key }}" value="{{ $smsProfile[$key]??'' }}" {{ $key==='state'?'maxlength=2':'' }}></label>@endforeach
 <label>EIN · registered organizations only<input type="password" name="ein" autocomplete="off" placeholder="{{ !empty($smsProfile['ein'])?'Saved securely; leave blank to keep':'Enter only in this secure form' }}"></label><p class="muted">Use the real legal operator and contact details. Provider approval, a texting number, and messaging credit are required before alerts can be sent.</p><button>Save sender details securely</button></form></details></section><section class="section"><h2>Card account</h2><p class="muted">Wren owns its Stripe account. Complete identity and payout details in Stripe.</p><form method="post" action="{{ $actionUrl('card-connect') }}" class="form-grid">
 @csrf<label>Account owner email<input type="email" name="email" required value="{{ auth()->user()->email }}"></label><button>Continue Stripe onboarding</button></form>
+@if(app(\App\Services\Billing\TenantPaymentSetupAccess::class)->enabledFor($tenant))<p style="margin-top:20px"><a class="btn ghost" href="{{ route('tenant-payments.index',['tenant'=>$tenant->slug]) }}">Payment accounts · Stripe & PayPal</a></p>@endif
 @if($cardAccount)<p>Status: {{ $cardAccount->status }}</p><form method="post" action="{{ $actionUrl('card-refresh') }}">
 @csrf<button class="ghost">Check Stripe verification</button></form>
-@endif</section><section class="section"><h2>Spring 2027 season</h2>
+@endif</section><section class="section"><h2>Family help AI</h2><p class="muted">The family chat answers common questions and saves unanswered conversations in Messages. Add a server-side OpenAI key here to enable broader AI answers. The key is encrypted and never shown again.</p>
+@php($helpAiKeyPresent=!empty($settings['help_ai_key']) || (bool) config('services.openai.api_key'))
+<p>Status: {{ $helpAiKeyPresent ? (($settings['help_ai_enabled']??config('soccer.help_ai_enabled'))?'AI answers active':'AI answers paused') : 'API key needed; common help remains available' }}</p>
+<form method="post" action="{{ $actionUrl('help-ai-settings') }}" class="form-grid">@csrf
+<label>OpenAI API key<input type="password" name="help_ai_key" autocomplete="new-password" placeholder="{{ !empty($settings['help_ai_key'])?'Saved securely; leave blank to keep':'Paste a key to enable AI answers' }}"></label>
+<label><span><input type="checkbox" name="enabled" value="1" @checked($settings['help_ai_enabled']??config('soccer.help_ai_enabled'))> Enable AI answers when a key is configured</span></label>
+@if(!empty($settings['help_ai_key']))<label><span><input type="checkbox" name="remove_key" value="1"> Remove saved key</span></label>@endif
+<button>Save family help settings</button></form></section><section class="section"><h2>Spring 2027 season</h2>
 @if($season)<form method="post" action="{{ $actionUrl('season') }}">
 @csrf<input type="hidden" name="id" value="{{ $season->id }}"><div class="form-grid"><label>First practice date<input type="date" name="starts_on" value="{{ $season->starts_on }}"></label><label>Age cutoff date<input type="date" name="age_as_of" value="{{ $season->age_as_of??$season->starts_on }}"></label><label>Scheduled opening · Eastern time<input type="datetime-local" name="registration_opens_at" value="{{ $season->registration_opens_at?\Carbon\CarbonImmutable::parse($season->registration_opens_at)->timezone('America/New_York')->format('Y-m-d\\TH:i'):'' }}"></label><label>Offer deadline (hours)<input type="number" name="offer_hours" min="1" max="336" value="{{ $season->offer_hours }}"></label></div>
 @foreach($capacity as $k=>$tm)<div class="row"><strong>{{ $tm['name'] }}</strong><div class="actions"><label>Public spots<input type="number" name="teams[{{ $k }}][public]" value="{{ $tm['public'] }}" min="{{ $tm['public_used'] }}"></label><label>Admin reserve<input type="number" name="teams[{{ $k }}][reserved]" value="{{ $tm['reserved'] }}" min="{{ $tm['reserved_used'] }}"></label></div></div>

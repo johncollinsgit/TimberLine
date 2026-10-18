@@ -109,7 +109,7 @@
 
     <section class="rounded-2xl border border-zinc-900 bg-zinc-950 p-6 text-white">
         <h2 class="text-xl font-semibold">Termination and data export</h2>
-        <p class="mt-2 text-sm leading-6 text-zinc-300">30 days’ notice. The operational export window remains open for 30 days after the effective termination date.</p>
+        <p class="mt-2 text-sm leading-6 text-zinc-300">{{ data_get($document, 'termination.notice', '30 days’ notice.') }} The operational export window remains open for {{ data_get($document, 'termination.export_window_days', 30) }} days after the effective termination date.</p>
         <ul class="mt-4 list-disc space-y-2 pl-5 text-sm leading-6 text-zinc-300">@foreach((array) data_get($document, 'termination.terms', []) as $term)<li>{{ $term }}</li>@endforeach</ul>
     </section>
 

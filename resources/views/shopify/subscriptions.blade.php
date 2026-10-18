@@ -31,6 +31,8 @@
     <style>
         .eg-subscriptions {
             max-width: 1320px;
+            min-width: 0;
+            width: 100%;
             margin: 0 auto;
             display: grid;
             gap: 16px;
@@ -63,6 +65,8 @@
         }
 
         .eg-subscriptions-card {
+            min-width: 0;
+            overflow-x: auto;
             border: 1px solid rgba(15, 23, 42, 0.1);
             border-radius: 8px;
             background: #fff;
@@ -164,6 +168,11 @@
             font-weight: 650;
         }
 
+        .eg-subscriptions-actions button:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
         @media (max-width: 900px) {
             .eg-subscriptions-grid,
             .eg-subscriptions-band,
@@ -185,6 +194,14 @@
                 <p class="eg-subscriptions-muted">{{ $access['message'] ?? 'This tenant does not have the Subscriptions module enabled.' }}</p>
             </article>
         @else
+            <article class="eg-subscriptions-card" role="status">
+                <h2>Setup and review mode</h2>
+                <p>{{ data_get($payload, 'readiness.message') }}</p>
+                <p class="eg-subscriptions-muted">Local snapshots may be out of date. No provider-confirmed sync or payment retry is enabled.</p>
+                @if(!empty($workspaceSubscriptionsUrl))
+                    <p><a href="{{ $workspaceSubscriptionsUrl }}" target="_blank" rel="noopener" style="text-decoration: underline;">View verified contract history in Everbranch</a></p>
+                @endif
+            </article>
             <nav class="eg-subscriptions-tabs" aria-label="Subscription sections">
                 @foreach($tabs as $tab)
                     <span>{{ $tab }}</span>
@@ -195,7 +212,7 @@
                 <article class="eg-subscriptions-card">
                     <p class="eg-subscriptions-kicker">Active subscribers</p>
                     <p class="eg-subscriptions-value">{{ number_format((int) ($metrics['active_subscribers'] ?? 0)) }}</p>
-                    <p class="eg-subscriptions-muted">Shopify contracts mirrored locally.</p>
+                    <p class="eg-subscriptions-muted">Local contract records; provider ownership and freshness require verification.</p>
                 </article>
                 <article class="eg-subscriptions-card">
                     <p class="eg-subscriptions-kicker">Active Candle Club</p>
@@ -205,7 +222,7 @@
                 <article class="eg-subscriptions-card">
                     <p class="eg-subscriptions-kicker">Upcoming orders</p>
                     <p class="eg-subscriptions-value">{{ number_format((int) ($metrics['upcoming_orders'] ?? 0)) }}</p>
-                    <p class="eg-subscriptions-muted">Due in the next 31 days.</p>
+                    <p class="eg-subscriptions-muted">Local billing dates from today through the next 31 days.</p>
                 </article>
                 <article class="eg-subscriptions-card">
                     <p class="eg-subscriptions-kicker">Order errors</p>
@@ -242,14 +259,14 @@
                                 <td>{{ $commitment['months_remaining'] ?? 0 }}</td>
                                 <td>{{ $commitment['pauses_remaining'] ?? 0 }} / {{ $commitment['allowed_pauses'] ?? 2 }}</td>
                                 <td>{{ ($payment['brand'] ?? null) ? ($payment['brand'].' ending '.($payment['last_digits'] ?? '')) : ($payment['status'] ?? 'Not mirrored') }}</td>
-                                <td>{{ $latest['event_type'] ?? 'None yet' }}</td>
+                                <td>{{ $latest['event_type'] ?? 'None yet' }} @if(! empty($latest['status'])) · {{ str_replace('_', ' ', $latest['status']) }} @endif</td>
                                 <td>
                                     <div class="eg-subscriptions-actions">
-                                        <button type="button">Pause</button>
-                                        <button type="button">Swap</button>
-                                        <button type="button">Address</button>
-                                        <button type="button">Payment email</button>
-                                        <button type="button">Cancel</button>
+                                        <button type="button" disabled title="Provider operations are not enabled">Pause</button>
+                                        <button type="button" disabled title="Provider operations are not enabled">Swap</button>
+                                        <button type="button" disabled title="Provider operations are not enabled">Address</button>
+                                        <button type="button" disabled title="Provider operations are not enabled">Payment email</button>
+                                        <button type="button" disabled title="Provider operations are not enabled">Cancel</button>
                                     </div>
                                 </td>
                             </tr>
@@ -262,7 +279,7 @@
 
             <article class="eg-subscriptions-card">
                 <h2>Monthly Candle Club scents</h2>
-                <p class="eg-subscriptions-muted">Chosen monthly scents are mirrored as draft Shopify products, kept private until you publish them, and can collect private-first Candle Club feedback.</p>
+                <p class="eg-subscriptions-muted">Local monthly scent records and feedback. Product publishing is not enabled here.</p>
                 <div class="eg-subscriptions-scent-grid">
                     @forelse((array) ($payload['monthly_scents'] ?? []) as $scent)
                         <section class="eg-subscriptions-card">
@@ -282,9 +299,9 @@
                             </p>
                             <p><span class="eg-subscriptions-pill">{{ $scent['product_status'] ?? 'draft' }}</span></p>
                             <div class="eg-subscriptions-actions">
-                                <button type="button">View scent</button>
-                                <button type="button">Export reviews</button>
-                                <button type="button">Publish product</button>
+                                <button type="button" disabled title="Provider operations are not enabled">View scent</button>
+                                <button type="button" disabled title="Provider operations are not enabled">Export reviews</button>
+                                <button type="button" disabled title="Provider operations are not enabled">Publish product</button>
                             </div>
                         </section>
                     @empty

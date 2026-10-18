@@ -1,3 +1,12 @@
+## October 17, 2026 — Standard offer for future customers
+
+- The canonical new offer is $299/month per business plus $499 one-time setup in
+  `module_catalog.offers.standard`. Public comparisons have one offer; legacy plan
+  IDs, stored agreements, subscriptions, add-ons and access remain unchanged.
+- Checkout verifies new exact provider prices and a once-only setup attempt.
+  Production capacity mapping is unresolved, so new standard checkout stays gated.
+  Read `docs/operations/standard-everbranch-offer.md` for source, test and release details.
+
 # SYSTEM SNAPSHOT
 
 ## 2026-10-18 — Avery workshop, actionable demo voice and Standard pricing (development)
@@ -86,6 +95,339 @@ the stale seven-concept shell; prepare the full twenty-concept pack on each devi
 Vector-derived PWA/native icons preserve app identities, and Android auth fallbacks
 keep the sign-in layout/heading readable. See `docs/retail/SHOWROOM_RUNBOOK.md` and
 `docs/retail/VERIFICATION.md` for device setup, scope, checks and release limitations.
+## Fictional voice pilot (2026-10-16; provisioning increment)
+
+- A privileged, audited seven-day grant can prepare `everbranch-voice-pilot` for
+  one existing verified owner. It uses a deterministic scripted provider with
+  zero tokens/cost and no subscription records or external dispatch. Real tenant
+  paid gates stay unchanged; revoked/expired pilots cannot fall through to them.
+- Request-local configuration restores after responses/errors. Existing reviewed
+  note/task/report services operate only on the synthetic tenant. See
+  `docs/operations/everbranch-fictional-voice-pilot.md` for setup and revocation.
+
+## Ask Everbranch assistant (2026-10-16; local fictional acceptance)
+
+- A default-off, tenant-allowlisted web panel/native sheet reuses AI Branch chat,
+  private memory, context, actions and usage. Reading the panel does not dispatch
+  a provider request. Owner/admin authorization remains unchanged.
+- Additional independent flags expose saved QuickBooks report totals and private
+  weekly snapshots of registered task events, current notes and customer activity.
+  Reports disclose incomplete sources and recheck scope before JSON/print export.
+- Internal note previews require exact approval. Unchanged AI notes support one
+  audited compensating archive; intervening edits invalidate undo permanently.
+- No new schema or activation. See the voice runbook and acceptance matrix for
+  evidence and open customer, triage, mail, phone, receptionist and device work.
+- A separate default-off shared attention rail now coordinates Customer Loop
+  follow-ups with leases, exact versions, assignment/snooze/resolution and
+  encrypted UUID receipts. It does not dispatch drafts or replace legacy screens.
+- Phone foundations now include provider-neutral call events, a strict Twilio
+  signed-form normalizer, pure duplicate-safe call reduction, timezone/holiday
+  routing and a local/testing-only fictional practice view. No live phone ingress,
+  dispatch, number purchase or billing is implemented. See the phone rails doc.
+- Reviewed commitment tasks can use exact team-visible job-note quotes, an explicit
+  assignee and a workspace-zone due time. Separate immutable approval creates one
+  sourced internal task. DST gaps/repeats and changed sources/assignments fail
+  closed; no accounting write, notification or automatic reminder is introduced.
+
+## Ask Everbranch voice navigation (2026-10-16; local implementation)
+
+- Verified Mac restoration now has navigation-only action filtering, exact
+  matching, canonical nested destinations and a versioned mobile voice inventory.
+  Choices refresh access; stale/cancelled requests and unsaved forms retain
+  truthful state. No migration or production activation.
+- See `docs/operations/everbranch-voice-runbook.md` for contracts, verification
+  and remaining device/coverage gaps. The combined AI/phone release is incomplete.
+
+## Stripe and PayPal connection setup (2026-10-16; deployed, Wren setup pilot)
+
+- A shared default-off, exact-tenant-allowlisted Payments page supports Stripe
+  embedded onboarding/hosted fallback and PayPal Partner Referrals account setup.
+  Active verified owners/admins with an eligible canonical Branch can manage it.
+  PayPal status comes from server-owned tracking and partner grants, not callbacks.
+- Wren delegates Stripe setup to the shared immutable-request retry service;
+  changing an email cannot invalidate the idempotency payload. Platform Connect
+  activation errors are distinguished from email problems. No migration.
+- PayPal checkout, webhooks, refunds and subscription billing are still later
+  phases. Only Wren payment setup is enabled; collection, PayPal and other
+  tenants stay gated.
+  See `docs/architecture/stripe-paypal-payments-plan.md` and
+  `docs/operations/tenant-payment-setup.md` before continuing.
+
+- PR #410 deployed at `cb133ecf` through protected run `38904619886`. Live
+  Connect is blocked on the platform owner identity document; keep the saved
+  immutable retry. Shop Pay unpaid-session diagnostics and remaining checkout
+  work are documented in `docs/operations/shop-pay-wallet-readiness.md`.
+
+- Soccer Stripe Checkout explicitly names the connected soccer business as
+  `on_behalf_of` as well as the transfer destination, matching native storefront
+  settlement. No prices, platform fees or collection gates change.
+
+## 2026-10-16 — Marketing Desk photos, Instagram history and planning AI
+
+- The desk uses the full workspace canvas, explains the daily workflow and shows
+  real draft/imported photos. Existing Instagram posts can be explicitly refreshed
+  (latest 50); photo cards compare lifetime metrics with missing values and
+  separate post-sync/insights freshness. No scheduled scrape or publication occurs.
+- Read-only social access has its own default-off gate. Account ownership and
+  credentials are rechecked after provider reads; repeated imports are serialized
+  and reuse existing publications. Reach/saves need separate insights permission.
+- Marketing Bud has independent provider activation and per-role model rates.
+  Owners can plan without approving draft brand claims; customer replies still
+  require approved knowledge/policies. The existing shared $50 cap and usage
+  reservations remain enforced. Legacy Bud/voice and AI Branch billing stay separate.
+- PNG/WebP uploads normalize to workspace-owned JPEGs. No schema changes.
+- Composer creates the public storage link in each candidate release so uploaded
+  marketing photos keep working after atomic deployment. See the Forge runbook.
+  See `docs/operations/marketing-desk.md` for setup and verification.
+
+## Recharge customer/settings rollout preparation (2026-10-16; disabled)
+
+- The owner confirmed Recharge handles Modern Forestry's active subscriptions and
+  requested customer/settings parity preparation without activation. A separate
+  tenant-scoped, query-only source lane retains encrypted immutable credentials,
+  complete accepted captures and proposed local drafts. It creates no operational
+  customers, provider changes, card charges, notifications or cutover.
+- `/subscriptions/recharge` provides secure private source setup, explicit bounded
+  capture, customer/address/subscription review and exact field comparisons. Page
+  rendering is offline. Read flags default false/empty independently of all live
+  operations. Source credentials and expected Recharge store identity are required;
+  no configured production credential or actual source reconciliation was found.
+- Versioned manual settings observations and exact isolated drafts retain source
+  provenance, missing fields and nulls; tenant managers can compare them privately.
+  Recharge reports an incomplete Shopify Checkout conversion with legacy
+  Braintree/PayPal subscribers. No source setting was changed.
+- Full settings/history/vault parity remains unverified. API store facts do not
+  prove notification, dunning, portal, shipping/tax or workflow equivalence; absent
+  resource families remain coverage gaps. See
+  `docs/operations/everbranch-recharge-rollout-preparation.md`.
+
+## 2026-10-16 — Marketing Desk and Automation Studio (implemented, disabled)
+
+- Shared `/marketing/desk` adds Today, Bud, a social calendar, measured best posts,
+  a four-channel inbox, recipes, versioned approved knowledge and owner settings.
+- Marketing reuses canonical profiles, campaign delivery/consent, the tenant AI
+  ledger and Workflow Studio v2. New execution requires explicit tenant allowlists,
+  independent delivery/AI/Meta flags and recorded approvals. No production
+  activation, provider send, published post or billing change was performed.
+- Studio gains a wider directory, connection summaries, Overview/Build/Activity/
+  Settings, an outline, fit to view and clearer draft/live/test states. Existing
+  workflow versions and operational Asana/Calendar behavior remain compatible.
+- Eleven additive tables retain approvals, enrollment, cost-only usage references,
+  social attempts and exclusive account binding. Unknown external outcomes never
+  automatically resend. Profile merges cannot transfer marketing permission.
+- Read `docs/operations/marketing-desk.md` for setup, exact boundaries, verification
+  and rollback. Real Meta review/provider tests and merchant acceptance gate launch.
+
+## Modern Forestry AI purchase preparation (2026-10-16; staged)
+
+- The user approved an AI-only Growth purchase at $99/month and a separate
+  fictional provider request capped at $0.10. Its genuine provider request
+  succeeded with 39 input / 18 output tokens and a conservative $0.000024
+  cost ceiling. Final provider billing remains unreconciled. A dedicated OpenAI
+  project/service key is installed securely and expires November 14, 2026.
+- A private preview-first operator command prepares one tenant-allowlisted,
+  idempotent subscription Checkout. Its rollout is independently off by default;
+  public purchasing stays closed. Setup and Launch Partner base charges are
+  excluded from this checkout. A new verified paid webhook is still required.
+- Add-on fulfillment preserves workspace profile metadata and the base plan.
+  Paid Checkout/invoice statuses normalize to active subscription evidence;
+  late events preserve known periods and single-item provider periods work.
+  See the Modern Forestry rollout and AI operations runbooks before activation.
+
+## Modern Forestry Launch Partner AI selection (2026-10-16; billing/AI pending)
+
+- Modern Forestry tenant 1 is now registered as a Launch Partner client (directory record 314, audit 620), at the current $89/month for six cycles then $149/month, plus $99/month AI Branch Growth. Monthly totals are $188 then $248 before tax. This records commercial intent, not an active paid subscription. Setup applicability and provider spending cap still require review/approval.
+- Production checks found no recorded paid agreement/subscription or deployed AI tables/provider configuration. The stored Stripe customer reference is unverified under the current live account. Existing alpha access remains unchanged.
+- The alpha bootstrap now excludes the separate paid `ai_branch` grant; legacy Shopify `ai` and rewards stay protected. Follow `docs/operations/modern-forestry-launch-partner-ai-rollout.md`; review multi-item phase billing before checkout, and retain all normal release/acceptance gates.
+
+## Workspace-aware AI attention briefings (2026-10-16; disabled)
+
+- Version-2 context now projects permitted operational evidence from the selected workspace, with server-authorized page identity, explicit coverage and bounded samples. On-demand attention briefings share chat reservations and UTC billing limits. Workspace timezone uses existing profile metadata; no tables are added.
+- Context has an independent default-off flag and tenant allowlist. Active owner/admin, canonical access, current paid AI billing and owner cap remain mandatory. History and in-flight answers recheck permissions and record access; incompatible chats retain private deletion and a restart explanation.
+- Read `docs/architecture/everbranch-ai-workspace-context.md` and the updated AI runbook. Fictional acceptance uses a guarded local fake-provider harness. No production tenant is enrolled; remote staging, real provider quality/billing and a named approved production tenant remain release gates.
+
+## Optional Everbranch AI Branch development 2026-10-15
+
+- A hidden default-off `ai_branch` add-on now provides owner/admin chat with sampled tenant job evidence, encrypted private conversations, explicit personal memory, durable usage reservations, and exact-preview approvals for internal owner-visible job notes. Bud Core and the Shopify AI Assistant retain their existing behavior.
+- Canonical Starter/Growth/Pro add-ons preserve $49/$99/$199 monthly pricing; response/provider caps are proposed pilot defaults. New purchases remain blocked by `purchase_enabled=false`. Runtime requires global and tenant rollout flags, canonical access, exactly one confirmed tier and active billing ledger, and owner opt-in. No automatic overage, live Stripe setup, voice or phone transport is activated.
+- Read `docs/architecture/everbranch-ai-implementation.md` and `docs/operations/everbranch-ai-runbook.md` before continuing. Additive schema, daily retention, an audited usage reconciliation command and AI-specific tests are included. Provider and commercial activation still require a named approved pilot.
+
+
+## Subscriptions Phase 2 provider evidence (2026-10-15; deployed, reads disabled)
+
+- A separate query-only Shopify adapter verifies tenant-owned Shop/App/installation
+  identity and immutable encrypted credential revisions. Explicit manager-triggered
+  reads require both the global gate and tenant allowlist; no global Shopify token
+  fallback, provider mutation, automatic refresh, billing, mail or scheduled read
+  is introduced.
+- Five additive evidence tables retain operations, signed webhook deliveries and
+  owned provider resources. Sync resumes bounded slices, then verifies the complete
+  index before publishing totals. Failed/partial reads preserve accepted history;
+  unknown totals remain distinct from verified zero. Original observation times
+  and exact unsigned revisions survive retries and promotion.
+- `/subscriptions` shows scoped saved history, search/status filters, prerequisites
+  and freshness without provider calls. A dedicated installation-bound raw-HMAC
+  endpoint retains encrypted/quarantined evidence only; signing material and actual
+  webhook registration remain separate setup requirements.
+- Real MySQL partial-DDL/concurrency recovery, fake-provider race/ownership tests,
+  and synthetic desktop/mobile browser checks passed. The disposable baseline,
+  protected CI and deployment gate still govern release. See
+  `docs/operations/everbranch-subscriptions-provider-reads.md` for operational limits.
+- PR #402 deployed at `f62584af` through protected run `38821001498` / Forge
+  `80347709`. CI passed 3,248 tests and 41 MySQL recovery tests. Exact-release
+  readiness and the reviewed 409-table schema passed; 18 historical subscription
+  tables and the native catalog/site/inventory/audits retained matching digests.
+
+## Subscriptions Phase 1 foundation (2026-10-15; deployed disabled)
+
+- Canonical subscription entitlements cover admin, customer/mobile, public polls,
+  webhook evidence and CLI apply paths. Active tenant managers require a separate
+  Everbranch sign-in; Shopify launch/session context alone is insufficient.
+- Store/app identity is locally frozen; new request evidence is encrypted and
+  truthful. Requests, cutover review and received webhooks never execute Shopify
+  changes, queue payment emails or charge cards. The isolated adapter contract is
+  pinned to 2026-10; provider execution and scheduling remain hard disabled.
+- App Review subscription demos no longer seed operational contracts/polls or
+  live votes/reviews. Existing demo evidence is retained and excluded from metrics.
+- Subscriptions has local USD 99/month separate add-on metadata; Modern Forestry
+  retains its explicit comped grant. Canonical new purchases stay disabled in
+  catalogs, direct/plan checkout and mobile handoff. No external billing setup
+  occurs. Gift Cards is a later separate add-on with pricing pending approval.
+- Read-only merchant checks found zero contracts owned by Backstage; other-app
+  subscriptions require reviewed ownership/vault migration. Six existing selling
+  plan groups belong to the separately verified Recharge Subscriptions app; its
+  nullable installation lookup does not establish billing or migration state. See
+  `docs/operations/everbranch-subscriptions-and-gift-cards.md` for the five
+  subscription phases, gift-card phases, limitations and acceptance gates.
+- PR #401 deployed at `f8bf74f3` through protected run `38818732814` / Forge
+  `80346741`. Exact-release readiness and the approved 404-table schema passed;
+  subscription purchasing, execution, scheduling and native commerce remain off.
+
+## Reviewed schema reconciliation (2026-10-15; deployed)
+
+- A separate forward-only repair addresses historical production drift before
+  shipping Phase 4. It restores constraints/indexes, preserves historical tables
+  and wide text, leaves unresolved development ownership nullable, and changes
+  only the future subscription default. Broken delivery-profile links retain
+  their original IDs internally before the intended SET NULL behavior.
+- Fingerprints permit only definition-checked historical name aliases and
+  column-order equivalence on four declared tables; they now verify FK actions.
+  Missing, changed and duplicate constraints still fail the release gate.
+- PR #400 deployed through protected run `38815157152` / Forge `80345469` at
+  `228c84d5`. Exact-release readiness, migrations and the approved `cb51b941`
+  fingerprint passed. All four retained delivery references and every other
+  field matched the before-release aggregate digests. Checkout/shipping remain
+  disabled with zero native payments, active holds or shipments. Modern Forestry
+  is the native pilot; its Shopify store and checkout stay independent.
+- See `docs/operations/schema-drift-reconciliation-2026-10-15.md`.
+
+## Native Shopify catalog snapshot adapter (2026-10-15; deployed, activation disabled)
+
+- An explicit local-file CLI adapter prepares native drafts from the approved
+  read-only Shopify catalog export. Tenant/site/shop/GID mappings retain encrypted
+  source provenance and compare imported targets before any overwrite. The adapter
+  does not invoke provider APIs, publish, activate, or import customers/orders.
+- Missing weights remain NULL. Invalid tracked stock projects to zero/unavailable;
+  original values stay encrypted. Galleries display up to twelve safe images while
+  retaining the complete source gallery. Stock allocation, dimensions/packing,
+  source tax policy and unsupported commerce features require launch review.
+- After disposable SQLite/MySQL recovery rehearsals, the approved production pilot
+  import prepared 397 draft products, 1,681 variants and 24 draft collections,
+  covering 101 of 109 source ACTIVE products (92.7%). Identical apply replay changed
+  no catalog, mapping, inventory or audit rows. The two missing weights and every
+  missing dimension remain NULL; 369 invalid-stock variants remain unavailable.
+- The pilot published no catalog or site changes. Checkout, shipping and sender
+  gates stayed closed; no pilot order, payment or shipment was created. Inventory
+  is a snapshot and requires merchant allocation. See
+  `docs/operations/native-shopify-catalog-snapshot.md`.
+
+## Native retail shipping Phase 4 (2026-10-15; deployed, activation disabled)
+
+- Durable original-account postage attempts distinguish resumable preflight from
+  ambiguous submitted buys; recovery never blindly buys another label. Packing,
+  printing, handoff, canonical carrier acceptance, refunds, and replacement cost
+  approval have separate states. Signed queued events and bounded GET polling
+  retain precise tracking order and exception episodes.
+- Protected original PNG plus lossless 4x6/Letter/A4 PDFs, Mac/Windows workstation
+  profiles, calibration pages, and explicit print-result history use ordinary
+  OS drivers. No physical printer has been verified.
+- The encrypted `website_order_notifications` outbox uses an explicit approved
+  transactional sender, unique transitions, after-commit jobs and a bounded
+  scanner. Ambiguous sends require operator evidence; disabled history does not
+  automatically send after activation. Guest tracking is host/site/token scoped.
+- PR #399 deployed at `34a04d4b` through protected run `38816970879` / Forge
+  `80346236`. The disposable 404-table schema `a4555a6b` and mandatory MySQL
+  migration gate passed, including interrupted FK/index recovery.
+  Checkout, shipping and notifications remain disabled until the controlled
+  Phase 5 merchant/hardware/provider launch. No real postage or mail was sent.
+- See `docs/operations/retail-shipping-launch-plan.md`, shipping operations,
+  and `website-label-printing.md` for scope and physical verification limits.
+
+## Native retail shipping Phase 3 (2026-10-15; released disabled)
+
+- `WebsiteCheckoutService` saves durable attempts/holds before provider calls;
+  frozen requests and hosted URLs stay in encrypted order data. Both retail
+  carts expose scoped resume/cancel controls and freeze open checkout contents.
+- `WebsitePaymentService` verifies canonical Stripe Session/Intent/account/tax
+  and financial state before once-only inventory commitment. Uncertain payments
+  and stock conflicts block fulfillment; confirmed provider expiry releases
+  holds. Refund requests reserve balance, reverse destination transfers and
+  application fees, and reconcile final provider status without restocking.
+- `WebsiteStripeService` pins the native contract to `2025-06-30.basil`. The
+  native webhook secret is required for checkout; v1 signature rotation works.
+  `website:reconcile-payments` runs every five minutes with bounded native-only
+  recovery, including after new commerce is paused. No provider Session is
+  created by the reconciliation command.
+- Pre-deploy review fixes expose pickup origin setup independently of carrier
+  activation and durable pending-refund controls during paused checkout.
+- Phases 1–3 deployed together through PR #397 / Forge `80340808` at
+  `88bda81a`, with checkout/shipping disabled and no native payments, active
+  holds, or shipments. No migration was needed. Phase 5 still proves real
+  merchant tax, settlement, carrier delivery, and hardware printing.
+  Phase 4 also includes printer-independent thermal/Letter/A4 documents and
+  a verified printer matrix; USB DYMO LabelWriter 4XL is the first named device.
+  See `docs/operations/retail-shipping-launch-plan.md` and the rollback runbook.
+
+## Native retail shipping Phase 2 (2026-10-15; released disabled)
+
+- Phase 1 is draft PR #394. Phase 2 adds reviewed package capacity, explicit USPS
+  services/mode, box/packing tare, correct EasyPost shipment requests, current
+  quote context checks, and an immutable order-owned shipping plan.
+- `WebsiteShippingSetupService` stores tenant/site-scoped policy and package
+  rules in existing site JSON. `WebsiteShippingPlanService` handles conservative
+  packing, account/address/cart fingerprints, and order evidence. Missing item
+  dimensions require a merchant-tested capacity; weights are never guessed.
+- Both retail themes share rate selection and the published free-shipping
+  threshold. Cart edits expire quote eligibility without erasing order evidence.
+- No migration, production deployment, or activation is included. Payment and
+  inventory reliability, provider lifecycle/recovery, and a real shipping pilot
+  remain Phases 3–5. See `docs/operations/retail-shipping-launch-plan.md`.
+
+## 2026-10-15 - Retail shipping weight readiness
+
+- Native Website Products identifies available physical variants missing weights
+  with a product count, filter, row warnings, and a paginated bulk weight editor.
+  Merchants can enter ounces, pounds, or grams; existing whole-ounce storage
+  rounds converted measurements upward.
+- Ordinary product edits and older CSV files preserve omitted measurements.
+  Catalog CSV export includes every variant and its stable ID, name, weight, and
+  dimensions. Import validates ownership and preserves blank measurement cells.
+- Missing weights block carrier quoting and shipping checkout, while browsing
+  and pickup remain available. No account, entitlement, rollout, payment,
+  provider activation, or schema change is included.
+- Follow docs/operations/retail-shipping-launch-plan.md for the five phases
+  and docs/operations/website-commerce-shipping-operations.md for operation.
+
+## 2026-10-15 — Selected-van map and trip history
+
+The standalone Field Service locator keeps all configured company vans visible,
+with user/workspace-scoped display selections, independently ranked latest
+positions, and Bouncie trip history. Provider GPS paths are simplified within
+12 meters, with trips and large sample gaps kept separate. History reads retain
+policy, entitlement, account and retention gates. Credentials stay server-side.
+No migrations or fleet setup changes are required. Release through the normal
+protected GitHub/Forge pipeline. See
+`docs/operations/collins-fleet-selected-routes.md` for validation and limits.
 
 ## 2026-10-15 — Everbranch Showcase workspace and landlord presentation
 
@@ -99,6 +441,8 @@ keep the sign-in layout/heading readable. See `docs/retail/SHOWROOM_RUNBOOK.md` 
 - The landlord console uses five primary groups. Owner-only client presentation
   presets save audited metadata without changing access or billing. Blank owner
   email configuration disables template editing.
+- Administrative workspace status defaults to Active when unset and remains
+  independent of setup/integration Health warnings in the directory and settings.
 - No provider, billing, entitlement, schema, or production activation is included.
   See `docs/ui/everbranch-showcase-polish.md` for scope and verification boundaries.
 
@@ -110,6 +454,11 @@ coaches receive assigned-team backend access. Historical evidence is immutable,
 imports are replayable, and Spring 2027 stays closed behind season/provider
 readiness. Wren-only SMS provisioning uses an explicit tenant-ID allowlist;
 Settings collects encrypted operator details without activating an unapproved sender.
+The family portal checks Alumni emails before sending codes and can show age-based
+team guidance. Signed-in help keeps encrypted conversations and routes unknown
+questions to admin Messages. Parent-confirmed birthday corrections are audited;
+signed releases remain unchanged. Broader AI replies need a server-side key,
+which Wren admins may save encrypted in Settings.
 Follow `docs/operations/wren-soccer.md` for release, setup, and rollback.
 
 ## 2026-10-13 - Evergrove consultation intake

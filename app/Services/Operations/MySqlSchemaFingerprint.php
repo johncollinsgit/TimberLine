@@ -14,7 +14,7 @@ use RuntimeException;
  */
 class MySqlSchemaFingerprint
 {
-    /** @return array{fingerprint: string, schema: array<int, array<string, mixed>>} */
+    /** @return array{fingerprint: string, raw_fingerprint: string, schema: array<int, array<string, mixed>>} */
     public function inspect(ConnectionInterface $connection): array
     {
         if ($connection->getDriverName() !== 'mysql') {
@@ -44,9 +44,31 @@ class MySqlSchemaFingerprint
         }
 
         $json = json_encode($schema, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        // Keep the old physical export/hash reproducible, while the gate also
+        // verifies FK actions. Fetch all actions once, rather than per alias.
+        $actions = [];
+        foreach ($connection->select('SELECT table_name AS table_name, constraint_name AS constraint_name, delete_rule AS on_delete, update_rule AS on_update FROM information_schema.referential_constraints WHERE constraint_schema = ?', [$database]) as $action) {
+            $actions[$action->table_name][$action->constraint_name] = $action;
+        }
+        $canonical = $schema;
+        foreach ($canonical as &$table) {
+            foreach ($table['foreign_keys'] as &$foreign) {
+                $action = $actions[$table['table']][$foreign['name']] ?? null;
+                if (! $action) {
+                    throw new RuntimeException('Foreign-key action metadata is incomplete.');
+                }
+                $foreign['on_delete'] = strtolower($action->on_delete);
+                $foreign['on_update'] = strtolower($action->on_update);
+                ksort($foreign);
+            }
+            unset($foreign);
+        }
+        unset($table);
+        $canonical = (new ReviewedMySqlSchemaCompatibility)->canonicalize($canonical);
 
         return [
-            'fingerprint' => hash('sha256', $json),
+            'fingerprint' => hash('sha256', json_encode($canonical, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)),
+            'raw_fingerprint' => hash('sha256', $json),
             'schema' => $schema,
         ];
     }

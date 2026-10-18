@@ -31,3 +31,6 @@ yarn-error.log
 
 /output/trajectory/
 /output/retail/
+
+# Private customer audit evidence and isolated fleet preview output
+/artifacts/collins-fleet/

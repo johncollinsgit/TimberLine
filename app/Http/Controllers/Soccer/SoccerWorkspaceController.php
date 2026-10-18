@@ -35,6 +35,11 @@ class SoccerWorkspaceController extends Controller
             $regs = $regs->map(fn ($row) => (object) collect((array) $row)->except(['amount_cents', 'payment_status', 'waived', 'offer_group'])->all());
         }
         $data = ['tenant' => $t, 'admin' => $admin, 'coach' => $coach, 'section' => $section, 'seasons' => $seasons, 'season' => $selected, 'registrations' => $regs, 'players' => $players, 'families' => $families, 'capacity' => $selected ? app(SoccerRegistrationService::class)->capacities($selected) : [], 'coaches' => $admin ? $this->store->query('coaches', $t->id)->get() : collect([$coach]), 'payments' => $admin ? $this->store->query('payments', $t->id)->latest('created_at')->get() : collect(), 'refunds' => $admin ? $this->store->query('refunds', $t->id)->latest('created_at')->get()->map(fn ($refund) => [...(array) $refund, 'evidence' => $this->store->decrypt($refund->evidence)]) : collect(), 'invoices' => $admin ? $this->store->query('invoices', $t->id)->latest('created_at')->get() : collect(), 'imports' => $admin ? $this->store->query('import_rows', $t->id)->where('status', 'review')->get()->map(fn ($i) => [...(array) $i, 'evidence' => $this->store->decrypt($i->evidence)]) : collect(), 'events' => $admin ? $this->store->query('events', $t->id)->latest('created_at')->limit(50)->get()->map(fn ($e) => [...(array) $e, 'data' => $this->store->decrypt($e->data)]) : collect(), 'cardAccount' => $admin ? $t->paymentAccount()->first() : null, 'smsAccount' => $admin ? \App\Models\TenantMessagingAccount::query()->forAllTenants()->where('tenant_id', $t->id)->where('channel', 'sms')->first() : null, 'settings' => $admin ? $this->store->settings($t->id) : [], 'smsThreads' => $admin ? \App\Models\MessagingConversation::query()->forTenantId($t->id)->where('source_type', 'soccer_waitlist')->with('messages')->latest('last_message_at')->limit(50)->get() : collect(), 'blockers' => $admin ? app(\App\Services\Soccer\SoccerLaunchReadiness::class)->blockers($t) : [], 'releases' => $admin ? $this->store->query('releases', $t->id)->get() : collect(), 'groups' => app(SoccerGroupMeService::class)->allowed($t->id, $r->user(), $coach, $admin)];
+        $data['helpQuestions'] = collect();
+        if ($admin && $section === 'messages') {
+            $reviewed = $this->store->query('events', $t->id)->where('action', 'family_help_reviewed')->get()->map(fn ($e) => $this->store->decrypt($e->data)['question_event_id'] ?? null)->filter()->all();
+            $data['helpQuestions'] = $this->store->query('events', $t->id)->where('action', 'family_help_unanswered')->latest('created_at')->limit(100)->get()->reject(fn ($e) => in_array($e->id, $reviewed, true))->map(fn ($e) => [...(array) $e, 'data' => $this->store->decrypt($e->data)])->values();
+        }
         if ($section === 'website') {
             $svc = app(SoccerWebsiteService::class);
             $svc->editor($t, $r->user());
@@ -58,7 +63,7 @@ class SoccerWorkspaceController extends Controller
                 throw $error;
             }
 
-            return back()->withErrors($error->validator)->withInput($r->except(['token', 'ein']));
+            return back()->withErrors($error->validator)->withInput($r->except(['token', 'ein', 'help_ai_key']));
         } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $error) {
             if (in_array($error->getStatusCode(), [409, 422, 423, 502], true)) {
                 return back()->withErrors(['soccer' => $error->getMessage() ?: 'This action could not be completed. Reload and try again.']);
@@ -169,6 +174,19 @@ class SoccerWorkspaceController extends Controller
             $settings['soccer_group_url'] = $d['soccer_group_url'];
             $settings['launch_verified'] = $d['launch_verified'] ?? false;
             $this->store->saveSettings($id, $settings);
+        } elseif ($action === 'help-ai-settings') {
+            $d = $r->validate(['help_ai_key' => 'nullable|string|min:20|max:500', 'enabled' => 'nullable|boolean', 'remove_key' => 'nullable|boolean']);
+            $settings = $this->store->settings($id);
+            if ($d['remove_key'] ?? false) {
+                unset($settings['help_ai_key']);
+            } elseif (! empty($d['help_ai_key'])) {
+                $settings['help_ai_key'] = trim($d['help_ai_key']);
+            }
+            $enabled = (bool) ($d['enabled'] ?? false);
+            abort_if($enabled && empty($settings['help_ai_key']) && ! config('services.openai.api_key'), 422, 'Add a server-side OpenAI API key before enabling AI answers.');
+            $settings['help_ai_enabled'] = $enabled;
+            $this->store->saveSettings($id, $settings);
+            app(\App\Services\Soccer\SoccerEvents::class)->record($id, null, null, 'family_help_ai_settings_changed', ['summary' => 'Wren family help AI settings changed; credential remains encrypted.'], $actor);
         } elseif ($action === 'groupme-connect') {
             $d = $r->validate(['token' => 'required|string|max:500']);
             app(SoccerGroupMeService::class)->connect($id, $r->user(), $d['token']);
@@ -177,6 +195,11 @@ class SoccerWorkspaceController extends Controller
             $allowed = app(SoccerGroupMeService::class)->allowed($id, $r->user(), $this->access->coach($t, $r->user()), $this->access->admin($t, $r->user()));
             abort_unless(in_array($d['group_id'], $allowed, true), 403);
             app(SoccerGroupMeService::class)->send($id, $r->user(), $d['group_id'], $d['body'], $d['request_id']);
+        } elseif ($action === 'help-reviewed') {
+            $d = $r->validate(['event_id' => 'required|uuid']);
+            $question = $this->store->row('events', $id, $d['event_id']);
+            abort_unless($question->action === 'family_help_unanswered', 422);
+            app(\App\Services\Soccer\SoccerEvents::class)->record($id, $question->season_id, $question->family_id, 'family_help_reviewed', ['question_event_id' => $question->id, 'summary' => 'Wren reviewed a family help question.'], $actor);
         } elseif ($action === 'website-initialize') {
             app(SoccerWebsiteService::class)->initialize($t, $r->user());
         } elseif (in_array($action, ['website-save', 'website-publish', 'website-restore'], true)) {

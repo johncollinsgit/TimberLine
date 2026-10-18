@@ -1,6 +1,7 @@
 <?php
 
 require __DIR__.'/highlevel.php';
+require __DIR__.'/marketing-desk.php';
 
 use App\Http\Controllers\AccountingCommandCenterController;
 use App\Http\Controllers\AdminMasterDataController;
@@ -305,7 +306,7 @@ $landlordHosts = array_values(array_unique(array_filter($landlordHosts, static f
 $landlordRoutes = static function (): void {
     Route::get('/landlord', [LandlordTenantDirectoryController::class, 'dashboard'])
         ->name('dashboard');
-    Route::get('/landlord/search', LandlordSearchController::class)
+    Route::match(['GET', 'POST'], '/landlord/search', LandlordSearchController::class)
         ->name('search');
     Route::post('/landlord/operator-costs', [LandlordTenantDirectoryController::class, 'storeRecurringCost'])
         ->name('operator-costs.store');
@@ -764,11 +765,17 @@ Route::post('/account/profile', [WebsiteShopperAccountController::class, 'update
 Route::get('/account/orders/{number}', [WebsiteShopperAccountController::class, 'order'])->name('managed-website.store.account.orders.show');
 Route::post('/cart/items/{variant}', [WebsiteCommerceController::class, 'addCartItem'])->middleware('throttle:30,1')->name('managed-website.store.cart.items.store');
 Route::post('/cart/lines/{item}', [WebsiteCommerceController::class, 'updateCartItem'])->middleware('throttle:30,1')->name('managed-website.store.cart.lines.update');
+Route::post('/checkout/website/resume', [WebsiteCommerceController::class, 'resumeCheckout'])->middleware('throttle:10,1')->name('managed-website.store.checkout.resume');
+Route::post('/checkout/website/cancel', [WebsiteCommerceController::class, 'cancelCheckout'])->middleware('throttle:10,1')->name('managed-website.store.checkout.cancel');
 Route::post('/checkout/website', [WebsiteCommerceController::class, 'checkout'])->middleware('throttle:10,1')->name('managed-website.store.checkout');
 Route::post('/cart/shipping-rates', [WebsiteCommerceController::class, 'shippingRates'])->middleware('throttle:10,1')->name('managed-website.store.shipping-rates');
 Route::get('/checkout/website/success', [WebsiteCommerceController::class, 'success'])->name('managed-website.store.success');
+Route::get('/orders/track', [\App\Http\Controllers\WebsiteOrderTrackingController::class, 'show'])->middleware('throttle:60,1')->name('managed-website.store.tracking');
 Route::post('/webhooks/website-stripe', [WebsiteCommerceController::class, 'webhook'])->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:120,1')->name('managed-website.store.webhook');
 Route::post('/webhooks/website-easypost', [WebsiteCommerceController::class, 'shippingWebhook'])->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:120,1')->name('managed-website.store.shipping-webhook');
+Route::post('/webhooks/subscriptions/{publicId}', \App\Http\Controllers\SubscriptionProviderWebhookController::class)
+    ->whereUuid('publicId')->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:120,1')
+    ->name('subscriptions.provider.webhook');
 Route::post('/webhooks/bouncie', [FleetTrackingWebhookController::class, 'bouncie'])->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:120,1')->name('fleet-tracking.webhooks.bouncie');
 
 Route::prefix('signup/classes/{tenant:slug}')
@@ -783,6 +790,20 @@ Route::prefix('signup/classes/{tenant:slug}')
     });
 
 Route::middleware(['auth', 'verified'])->group(function () {
+
+    Route::middleware(['tenant.access', 'module:subscriptions'])
+        ->get('/subscriptions', [\App\Http\Controllers\SubscriptionWorkspaceController::class, 'index'])
+        ->name('subscriptions.workspace.index');
+
+    Route::middleware(['tenant.access', 'module:subscriptions'])->prefix('subscriptions/recharge')->name('subscriptions.recharge.')->group(function (): void {
+        Route::get('/', [\App\Http\Controllers\SubscriptionRechargeController::class, 'index'])->name('index');
+        Route::get('/records/{resource}', [\App\Http\Controllers\SubscriptionRechargeController::class, 'show'])->whereNumber('resource')->name('show');
+        Route::get('/settings/{category}', [\App\Http\Controllers\SubscriptionRechargeController::class, 'settings'])->whereIn('category', array_keys(\App\Services\Subscriptions\SubscriptionRechargeManualSettingsService::SOURCE_PATHS))->name('settings');
+        Route::post('/source', [\App\Http\Controllers\SubscriptionRechargeController::class, 'source'])->middleware('throttle:10,1')->name('source');
+        Route::post('/verify', [\App\Http\Controllers\SubscriptionRechargeController::class, 'verify'])->middleware('throttle:10,1')->name('verify');
+        Route::post('/capture', [\App\Http\Controllers\SubscriptionRechargeController::class, 'capture'])->middleware('throttle:20,1')->name('capture');
+        Route::post('/prepare', [\App\Http\Controllers\SubscriptionRechargeController::class, 'prepare'])->middleware('throttle:20,1')->name('prepare');
+    });
 
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
         ->get('/sales-channels', [SalesChannelController::class, 'index'])
@@ -831,13 +852,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/commerce/imports', [WebsiteCommerceController::class, 'imports'])->name('commerce.imports');
             Route::post('/commerce/imports/dry-run', [WebsiteCommerceController::class, 'createImportDryRun'])->name('commerce.imports.dry-run');
             Route::get('/commerce/shipping', [WebsiteCommerceController::class, 'shippingSettings'])->name('commerce.shipping');
+            Route::post('/commerce/shipping/connection', [\App\Http\Controllers\WebsiteCarrierSetupController::class, 'store'])->name('commerce.shipping.connection.store');
+            Route::get('/commerce/printing', [\App\Http\Controllers\WebsiteLabelController::class, 'settings'])->name('printing.settings');
+            Route::post('/commerce/printing/profiles', [\App\Http\Controllers\WebsiteLabelController::class, 'saveProfile'])->name('printing.profiles.save');
+            Route::get('/commerce/printing/test.pdf', [\App\Http\Controllers\WebsiteLabelController::class, 'testDocument'])->name('printing.test');
             Route::get('/commerce/pirate-ship', [PirateShipBridgeController::class, 'index'])->name('commerce.pirate-ship');
             Route::get('/commerce/pirate-ship/orders.csv', [PirateShipBridgeController::class, 'export'])->name('commerce.pirate-ship.export');
             Route::post('/commerce/pirate-ship/tracking', [PirateShipBridgeController::class, 'import'])->name('commerce.pirate-ship.import');
             Route::post('/commerce/shipping/locations', [WebsiteCommerceController::class, 'saveFulfillmentLocation'])->name('commerce.shipping.locations.store');
             Route::post('/commerce/shipping/packages', [WebsiteCommerceController::class, 'saveShippingPackage'])->name('commerce.shipping.packages.store');
+            Route::post('/commerce/shipping/policy', [WebsiteCommerceController::class, 'saveShippingPolicy'])->name('commerce.shipping.policy.store');
             Route::get('/products/export', [WebsiteCommerceController::class, 'exportProducts'])->name('products.export');
             Route::post('/products/import', [WebsiteCommerceController::class, 'importProducts'])->name('products.import');
+            Route::get('/products/shipping-weights', [\App\Http\Controllers\WebsiteCatalogController::class, 'shippingWeights'])->name('products.shipping-weights');
+            Route::post('/products/shipping-weights', [\App\Http\Controllers\WebsiteCatalogController::class, 'saveShippingWeights'])->name('products.shipping-weights.save');
             Route::post('/products', [\App\Http\Controllers\WebsiteCatalogController::class, 'store'])->name('products.store');
             Route::put('/products/{product}', [\App\Http\Controllers\WebsiteCatalogController::class, 'update'])->name('products.update');
             Route::delete('/products/{product}', [\App\Http\Controllers\WebsiteCatalogController::class, 'archive'])->name('products.destroy');
@@ -855,9 +883,25 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/orders/{order}/fulfill', [WebsiteCommerceController::class, 'fulfill'])->name('orders.fulfill');
             Route::post('/orders/{order}/cancel', [WebsiteCommerceController::class, 'cancel'])->name('orders.cancel');
             Route::post('/orders/{order}/refund', [WebsiteCommerceController::class, 'refund'])->name('orders.refund');
+            Route::post('/orders/{order}/refunds/check', [WebsiteCommerceController::class, 'checkRefunds'])->name('orders.refunds.check');
+            Route::post('/orders/{order}/notifications/{notificationId}/retry', [\App\Http\Controllers\WebsiteOrderNotificationController::class, 'retry'])->whereNumber('notificationId')->name('notifications.retry');
+            Route::post('/orders/{order}/notifications/{notificationId}/resolve', [\App\Http\Controllers\WebsiteOrderNotificationController::class, 'resolve'])->whereNumber('notificationId')->name('notifications.resolve');
             Route::post('/orders/{order}/notes', [WebsiteCommerceController::class, 'addOrderNote'])->name('orders.notes.store');
             Route::post('/orders/{order}/labels', [WebsiteCommerceController::class, 'purchaseLabel'])->name('orders.labels.purchase');
             Route::post('/shipments/{shipment}/void', [WebsiteCommerceController::class, 'voidLabel'])->name('shipments.void');
+            Route::post('/shipments/{shipment}/check', [WebsiteCommerceController::class, 'reconcileShipment'])->name('shipments.check');
+            Route::post('/shipments/{shipment}/resume', [WebsiteCommerceController::class, 'resumePostage'])->name('shipments.resume');
+            Route::post('/shipments/{shipment}/pack', [WebsiteCommerceController::class, 'packShipment'])->name('shipments.pack');
+            Route::post('/shipments/{shipment}/handoff', [WebsiteCommerceController::class, 'handoffShipment'])->name('shipments.handoff');
+            Route::post('/shipments/{shipment}/replacement', [WebsiteCommerceController::class, 'prepareReplacement'])->name('shipments.replacement');
+            Route::post('/shipments/{shipment}/replacement/approve', [WebsiteCommerceController::class, 'approveReplacement'])->name('shipments.replacement.approve');
+            Route::get('/shipments/{shipment}/label', [\App\Http\Controllers\WebsiteLabelController::class, 'show'])->name('labels.show');
+            Route::post('/shipments/{shipment}/label/prepare', [\App\Http\Controllers\WebsiteLabelController::class, 'prepare'])->name('labels.prepare');
+            Route::get('/shipments/{shipment}/label.pdf', [\App\Http\Controllers\WebsiteLabelController::class, 'download'])->name('labels.download');
+            Route::post('/shipments/{shipment}/prints', [\App\Http\Controllers\WebsiteLabelController::class, 'requestPrint'])->name('labels.print');
+            Route::get('/shipments/{shipment}/prints/{requestId}', [\App\Http\Controllers\WebsiteLabelController::class, 'printView'])->name('labels.print-view');
+            Route::get('/shipments/{shipment}/prints/{requestId}/image', [\App\Http\Controllers\WebsiteLabelController::class, 'image'])->name('labels.image');
+            Route::post('/shipments/{shipment}/prints/{requestId}/result', [\App\Http\Controllers\WebsiteLabelController::class, 'printResult'])->name('labels.print-result');
             Route::post('/pages', [ManagedWebsiteController::class, 'storePage'])->name('pages.store');
             Route::delete('/pages/{page}', [ManagedWebsiteController::class, 'destroyPage'])->name('pages.destroy');
             Route::put('/pages/{page}', [ManagedWebsiteController::class, 'savePage'])->name('pages.update');
@@ -889,7 +933,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/dashboard', DashboardLaunchpad::class)->name('dashboard');
     });
     Route::middleware(['role:admin,manager,marketing_manager,member', 'tenant.access'])
-        ->get('/search', [GlobalSearchController::class, 'index'])
+        ->match(['GET', 'POST'], '/search', [GlobalSearchController::class, 'index'])
         ->name('app.search');
 
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access', 'module:class_scheduling'])
@@ -941,6 +985,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->prefix('workspaces/{tenant:slug}/integrations/instagram')
         ->name('integrations.instagram.')
         ->group(function (): void {
+            Route::post('/subscribe', [InstagramConnectionController::class, 'subscribe'])->name('subscribe');
             Route::get('/connect', [InstagramConnectionController::class, 'connect'])->name('connect');
         });
 
@@ -996,6 +1041,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware(['role:admin', 'tenant.access'])
         ->get('/internal/onboarding/harness', [OnboardingHarnessController::class, 'show'])
         ->name('onboarding.harness');
+
+    Route::middleware(['tenant.access'])->prefix('payments')->name('tenant-payments.')->group(function (): void {
+        Route::get('/', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'index'])->name('index');
+        Route::post('/stripe/start', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'stripeStart'])->middleware('throttle:5,1')->name('stripe.start');
+        Route::post('/stripe/session', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'stripeSession'])->middleware('throttle:10,1')->name('stripe.session');
+        Route::post('/stripe/refresh', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'stripeRefresh'])->middleware('throttle:5,1')->name('stripe.refresh');
+        Route::post('/paypal/start', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'paypalStart'])->middleware('throttle:5,1')->name('paypal.start');
+        Route::get('/paypal/return', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'paypalReturn'])->middleware('throttle:10,1')->name('paypal.return');
+        Route::post('/paypal/refresh', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'paypalRefresh'])->middleware('throttle:5,1')->name('paypal.refresh');
+        Route::post('/paypal/disconnect', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'paypalDisconnect'])->name('paypal.disconnect');
+    });
 
     // Canonical onboarding wizard UI (authenticated, tenant-aware). Uses the onboarding API seams; no redirects.
     Route::middleware(['role:admin,manager,marketing_manager', 'tenant.access'])
@@ -1087,6 +1143,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/payroll-hours-export', [FieldServiceController::class, 'exportTimeEntries'])->name('payroll-hours.export');
             Route::middleware('module:fleet_tracking')->prefix('fleet-tracking')->name('fleet-tracking.')->group(function (): void {
                 Route::get('/', [FleetTrackingController::class, 'index'])->name('index');
+                Route::get('/map', [FleetTrackingController::class, 'mapData'])->middleware('throttle:30,1')->name('map');
+                Route::get('/map/vehicles/{vehicleId}/history', [FleetTrackingController::class, 'history'])->whereNumber('vehicleId')->middleware('throttle:240,1')->name('history');
                 Route::post('/settings', [FleetTrackingController::class, 'updateSettings'])->name('settings.update');
                 Route::post('/devices', [FleetTrackingController::class, 'storeDevice'])->name('devices.store');
                 Route::post('/bouncie/sync-vehicles', [FleetTrackingController::class, 'syncBouncieVehicles'])->name('bouncie.sync-vehicles');
@@ -2517,3 +2575,4 @@ require __DIR__.'/soccer.php';
 
 // Private retail concepts never enter the public merchant commerce routes.
 require __DIR__.'/retail.php';
+require __DIR__.'/ai-branch.php';

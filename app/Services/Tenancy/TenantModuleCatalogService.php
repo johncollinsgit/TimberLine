@@ -276,7 +276,7 @@ class TenantModuleCatalogService
 
         $plans = [];
         foreach ((array) config('module_catalog.plans', []) as $planKey => $definition) {
-            if (! is_array($definition)) {
+            if (! is_array($definition) || ! ($definition['is_public'] ?? false)) {
                 continue;
             }
 
@@ -733,6 +733,9 @@ class TenantModuleCatalogService
         foreach ((array) config('module_catalog.addons', []) as $addonKey => $definition) {
             if (! is_array($definition) || ! in_array($moduleKey, array_map('strval', (array) ($definition['modules'] ?? [])), true)) {
                 continue;
+            }
+            if (! \App\Support\Tenancy\CatalogPurchasePolicy::addonEnabled((string) $addonKey)) {
+                return [];
             }
 
             $billingMode = strtolower(trim((string) ($definition['billing_mode'] ?? 'unavailable')));
