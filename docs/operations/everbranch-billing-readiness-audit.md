@@ -1,3 +1,7 @@
+# Current standard offer
+
+The October 17, 2026 standard offer supersedes the historical public prices below. See [standard offer operations](standard-everbranch-offer.md). Existing client terms remain unchanged.
+
 # Everbranch Billing / Stripe Readiness Audit
 
 ## 2026-10-13 Public Launch Partner Renewal Price

@@ -1,3 +1,12 @@
+## October 17, 2026 — Standard offer for future customers
+
+- The canonical new offer is $299/month per business plus $499 one-time setup in
+  `module_catalog.offers.standard`. Public comparisons have one offer; legacy plan
+  IDs, stored agreements, subscriptions, add-ons and access remain unchanged.
+- Checkout verifies new exact provider prices and a once-only setup attempt.
+  Production capacity mapping is unresolved, so new standard checkout stays gated.
+  Read `docs/operations/standard-everbranch-offer.md` for source, test and release details.
+
 ## Ask Everbranch (2026-10-16; local, disabled)
 
 - The separately audited fictional pilot uses the fixed `everbranch-voice-pilot`

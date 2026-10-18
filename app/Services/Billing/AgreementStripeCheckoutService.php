@@ -176,6 +176,9 @@ class AgreementStripeCheckoutService
 
     protected function readinessBlocker(TenantBillingOrder $order): ?string
     {
+        if (data_get($order->agreement?->currentVersion?->subscription_payload, 'initial_collection_method') === 'manual_invoice') {
+            return 'This agreement uses a separate initial invoice. Checkout is blocked to prevent duplicate setup or first-month collection.';
+        }
         if (! (bool) config('commercial.billing_readiness.agreement_checkout.enabled', false)) {
             return 'Agreement checkout is not enabled yet.';
         }

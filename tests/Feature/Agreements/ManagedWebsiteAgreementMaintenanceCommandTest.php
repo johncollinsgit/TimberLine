@@ -5,9 +5,10 @@ use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
 
-test('maintenance command prepares an idempotent managed website draft and reports safe billing readiness', function (): void {
+test('maintenance command preserves an issued historical managed website draft and reports safe billing readiness', function (): void {
     $tenant = Tenant::query()->create(['name' => 'Carolina Barrel Co', 'slug' => 'carolina-barrel-co']);
     $actor = User::factory()->create(['email' => 'johncollinsemail@gmail.com']);
+    app(\App\Services\Agreements\AgreementManagementService::class)->prepareManagedWebsite($tenant, $actor->id);
     config()->set('commercial.billing_readiness.agreement_checkout', [
         'enabled' => true,
         'tenant_slugs' => ['carolina-barrel-co'],
@@ -51,5 +52,11 @@ test('maintenance command fails closed for unknown tenants and actors', function
             'tenant' => $tenant->slug,
             '--actor-email' => 'missing@example.com',
         ]))->toBe(1)
+        ->and(Agreement::query()->count())->toBe(0);
+});
+
+test('retired managed website command cannot issue a new introductory offer', function () {
+    $tenant = Tenant::query()->create(['name' => 'New business', 'slug' => 'new-business']);
+    expect(Artisan::call('everbranch:prepare-managed-website-agreement', ['tenant' => $tenant->slug]))->toBe(1)
         ->and(Agreement::query()->count())->toBe(0);
 });

@@ -2,19 +2,19 @@
 
 namespace App\Services\Tenancy;
 
-use App\Models\CustomerExternalProfile;
 use App\Models\CustomerAccessRequest;
+use App\Models\CustomerExternalProfile;
 use App\Models\MarketingImportRun;
 use App\Models\MarketingProfile;
 use App\Models\ShopifyImportRun;
 use App\Models\ShopifyStore;
-use App\Models\TenantOnboardingBlueprintProvisioning;
 use App\Models\TenantAccessAddon;
 use App\Models\TenantBillingFulfillment;
+use App\Models\TenantOnboardingBlueprintProvisioning;
+use App\Services\Billing\TenantBillingNextStepResolver;
 use App\Services\Marketing\Email\TenantEmailSettingsService;
 use App\Services\Marketing\TwilioSenderConfigService;
 use App\Services\Onboarding\OnboardingJourneyTelemetryService;
-use App\Services\Billing\TenantBillingNextStepResolver;
 use App\Support\Tenancy\TenantModuleUi;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
@@ -53,8 +53,7 @@ class TenantCommercialExperienceService
         protected TwilioSenderConfigService $twilioSenderConfigService,
         protected OnboardingJourneyTelemetryService $journeyTelemetryService,
         protected TenantBillingNextStepResolver $billingNextStepResolver,
-    ) {
-    }
+    ) {}
 
     /**
      * @return array{promo:array<string,mixed>,plan_cards:array<int,array<string,mixed>>}
@@ -332,25 +331,25 @@ class TenantCommercialExperienceService
     {
         $payload = $this->rememberJourneyPayload($tenantId, 'onboarding', function () use ($tenantId): array {
             $content = (array) config('product_surfaces.onboarding', []);
-        $moduleOrder = $this->normalizeKeys((array) ($content['module_order'] ?? []));
+            $moduleOrder = $this->normalizeKeys((array) ($content['module_order'] ?? []));
 
-        if ($moduleOrder === []) {
-            $moduleOrder = array_keys((array) config('entitlements.modules', []));
-        }
+            if ($moduleOrder === []) {
+                $moduleOrder = array_keys((array) config('entitlements.modules', []));
+            }
 
-        $resolved = $this->accessResolver->resolveForTenant($tenantId, $moduleOrder);
-        $moduleStates = $this->applyDisplayLabels(
-            tenantId: $tenantId,
-            moduleStates: (array) ($resolved['modules'] ?? [])
-        );
-        $content = $this->applyContentLabelTokens($content, $moduleStates, $tenantId);
-        $checklist = TenantModuleUi::checklist($moduleStates, $moduleOrder);
-        $onboarding = $this->onboardingMeta($tenantId, $checklist);
+            $resolved = $this->accessResolver->resolveForTenant($tenantId, $moduleOrder);
+            $moduleStates = $this->applyDisplayLabels(
+                tenantId: $tenantId,
+                moduleStates: (array) ($resolved['modules'] ?? [])
+            );
+            $content = $this->applyContentLabelTokens($content, $moduleStates, $tenantId);
+            $checklist = TenantModuleUi::checklist($moduleStates, $moduleOrder);
+            $onboarding = $this->onboardingMeta($tenantId, $checklist);
 
-        $planKey = strtolower(trim((string) ($resolved['plan_key'] ?? '')));
-        $planDefinition = is_array(config('entitlements.plans.'.$planKey))
-            ? (array) config('entitlements.plans.'.$planKey)
-            : [];
+            $planKey = strtolower(trim((string) ($resolved['plan_key'] ?? '')));
+            $planDefinition = is_array(config('entitlements.plans.'.$planKey))
+                ? (array) config('entitlements.plans.'.$planKey)
+                : [];
 
             return [
                 'content' => $content,
@@ -405,24 +404,24 @@ class TenantCommercialExperienceService
     {
         $payload = $this->rememberJourneyPayload($tenantId, 'merchant_journey', function () use ($tenantId): array {
             $content = (array) config('product_surfaces.onboarding', []);
-        $moduleOrder = $this->normalizeKeys((array) ($content['module_order'] ?? []));
+            $moduleOrder = $this->normalizeKeys((array) ($content['module_order'] ?? []));
 
-        if ($moduleOrder === []) {
-            $moduleOrder = array_keys((array) config('entitlements.modules', []));
-        }
+            if ($moduleOrder === []) {
+                $moduleOrder = array_keys((array) config('entitlements.modules', []));
+            }
 
-        $resolved = $this->accessResolver->resolveForTenant($tenantId, $moduleOrder);
-        $moduleStates = $this->applyDisplayLabels(
-            tenantId: $tenantId,
-            moduleStates: (array) ($resolved['modules'] ?? [])
-        );
-        $content = $this->applyContentLabelTokens($content, $moduleStates, $tenantId);
-        $checklist = TenantModuleUi::checklist($moduleStates, $moduleOrder);
+            $resolved = $this->accessResolver->resolveForTenant($tenantId, $moduleOrder);
+            $moduleStates = $this->applyDisplayLabels(
+                tenantId: $tenantId,
+                moduleStates: (array) ($resolved['modules'] ?? [])
+            );
+            $content = $this->applyContentLabelTokens($content, $moduleStates, $tenantId);
+            $checklist = TenantModuleUi::checklist($moduleStates, $moduleOrder);
 
-        $planKey = strtolower(trim((string) ($resolved['plan_key'] ?? '')));
-        $planDefinition = is_array(config('entitlements.plans.'.$planKey))
-            ? (array) config('entitlements.plans.'.$planKey)
-            : [];
+            $planKey = strtolower(trim((string) ($resolved['plan_key'] ?? '')));
+            $planDefinition = is_array(config('entitlements.plans.'.$planKey))
+                ? (array) config('entitlements.plans.'.$planKey)
+                : [];
 
             $summary = $this->merchantJourneySummary($tenantId);
             $customerSummary = $summary['customer_summary'];
@@ -532,7 +531,7 @@ class TenantCommercialExperienceService
             return $token !== '' ? $token : null;
         }, (array) data_get($meta, 'addons_interest', []))));
 
-        $allowedPlanKeys = array_keys((array) config('module_catalog.plans', []));
+        $allowedPlanKeys = [...array_keys((array) config('module_catalog.plans', [])), 'standard'];
         if ($preferredPlanKey !== '' && ! in_array($preferredPlanKey, $allowedPlanKeys, true)) {
             $preferredPlanKey = '';
         }
@@ -615,22 +614,22 @@ class TenantCommercialExperienceService
             $mapping = is_array($commercialProfile['billing_mapping'] ?? null) ? (array) $commercialProfile['billing_mapping'] : [];
             $stripe = is_array($mapping['stripe'] ?? null) ? (array) $mapping['stripe'] : [];
 
-                $stripe = [
-                    'customer_reference' => (string) ($stripe['customer_reference'] ?? ''),
-                    'subscription_reference' => (string) ($stripe['subscription_reference'] ?? ''),
-                    'subscription_status' => (string) ($stripe['subscription_status'] ?? ''),
-                    'subscription_deleted_at' => $stripe['subscription_deleted_at'] ?? null,
-                    'checkout_session_id' => (string) ($stripe['checkout_session_id'] ?? ''),
-                    'checkout_completed_at' => $stripe['checkout_completed_at'] ?? null,
-                    'checkout_failed_at' => $stripe['checkout_failed_at'] ?? null,
-                    'checkout_payment_status' => (string) ($stripe['checkout_payment_status'] ?? ''),
-                    'billing_confirmed_at' => $stripe['billing_confirmed_at'] ?? null,
-                    'billing_ended_at' => $stripe['billing_ended_at'] ?? null,
-                    'confirmed_plan_key' => $stripe['confirmed_plan_key'] ?? null,
-                    'confirmed_addon_keys' => is_array($stripe['confirmed_addon_keys'] ?? null) ? (array) $stripe['confirmed_addon_keys'] : [],
-                    'action_required' => (bool) ($stripe['action_required'] ?? false),
-                    'last_invoice_paid_at' => $stripe['last_invoice_paid_at'] ?? null,
-                    'last_invoice_payment_failed_at' => $stripe['last_invoice_payment_failed_at'] ?? null,
+            $stripe = [
+                'customer_reference' => (string) ($stripe['customer_reference'] ?? ''),
+                'subscription_reference' => (string) ($stripe['subscription_reference'] ?? ''),
+                'subscription_status' => (string) ($stripe['subscription_status'] ?? ''),
+                'subscription_deleted_at' => $stripe['subscription_deleted_at'] ?? null,
+                'checkout_session_id' => (string) ($stripe['checkout_session_id'] ?? ''),
+                'checkout_completed_at' => $stripe['checkout_completed_at'] ?? null,
+                'checkout_failed_at' => $stripe['checkout_failed_at'] ?? null,
+                'checkout_payment_status' => (string) ($stripe['checkout_payment_status'] ?? ''),
+                'billing_confirmed_at' => $stripe['billing_confirmed_at'] ?? null,
+                'billing_ended_at' => $stripe['billing_ended_at'] ?? null,
+                'confirmed_plan_key' => $stripe['confirmed_plan_key'] ?? null,
+                'confirmed_addon_keys' => is_array($stripe['confirmed_addon_keys'] ?? null) ? (array) $stripe['confirmed_addon_keys'] : [],
+                'action_required' => (bool) ($stripe['action_required'] ?? false),
+                'last_invoice_paid_at' => $stripe['last_invoice_paid_at'] ?? null,
+                'last_invoice_payment_failed_at' => $stripe['last_invoice_payment_failed_at'] ?? null,
                 'last_webhook_event_id' => (string) ($stripe['last_webhook_event_id'] ?? ''),
                 'last_webhook_event_type' => (string) ($stripe['last_webhook_event_type'] ?? ''),
                 'last_webhook_received_at' => $stripe['last_webhook_received_at'] ?? null,
@@ -806,7 +805,6 @@ class TenantCommercialExperienceService
         ];
     }
 
-
     /**
      * @return array{
      *   content:array<string,mixed>,
@@ -827,78 +825,78 @@ class TenantCommercialExperienceService
     {
         $payload = $this->rememberJourneyPayload($tenantId, 'plans', function () use ($tenantId): array {
             $content = (array) config('product_surfaces.plans', []);
-        $moduleCatalog = (array) config('entitlements.modules', []);
-        $moduleKeys = array_keys($moduleCatalog);
-        $resolved = $this->accessResolver->resolveForTenant($tenantId, $moduleKeys);
+            $moduleCatalog = (array) config('entitlements.modules', []);
+            $moduleKeys = array_keys($moduleCatalog);
+            $resolved = $this->accessResolver->resolveForTenant($tenantId, $moduleKeys);
 
-        $moduleStates = $this->applyDisplayLabels(
-            tenantId: $tenantId,
-            moduleStates: (array) ($resolved['modules'] ?? [])
-        );
-        $content = $this->applyContentLabelTokens($content, $moduleStates, $tenantId);
-        $checklist = TenantModuleUi::checklist($moduleStates, $moduleKeys);
-        $onboarding = $this->onboardingMeta($tenantId, $checklist);
+            $moduleStates = $this->applyDisplayLabels(
+                tenantId: $tenantId,
+                moduleStates: (array) ($resolved['modules'] ?? [])
+            );
+            $content = $this->applyContentLabelTokens($content, $moduleStates, $tenantId);
+            $checklist = TenantModuleUi::checklist($moduleStates, $moduleKeys);
+            $onboarding = $this->onboardingMeta($tenantId, $checklist);
 
-        $planKey = strtolower(trim((string) ($resolved['plan_key'] ?? '')));
-        $planCatalog = (array) config('entitlements.plans', []);
-        $currentPlan = is_array($planCatalog[$planKey] ?? null) ? (array) $planCatalog[$planKey] : [];
-        $currentPlanIncludes = $this->normalizeKeys((array) ($currentPlan['includes'] ?? []));
+            $planKey = strtolower(trim((string) ($resolved['plan_key'] ?? '')));
+            $planCatalog = (array) config('entitlements.plans', []);
+            $currentPlan = is_array($planCatalog[$planKey] ?? null) ? (array) $planCatalog[$planKey] : [];
+            $currentPlanIncludes = $this->normalizeKeys((array) ($currentPlan['includes'] ?? []));
 
-        $currentPlanModules = [];
-        foreach ($currentPlanIncludes as $moduleKey) {
-            if (! isset($moduleStates[$moduleKey]) || ! is_array($moduleStates[$moduleKey])) {
-                continue;
+            $currentPlanModules = [];
+            foreach ($currentPlanIncludes as $moduleKey) {
+                if (! isset($moduleStates[$moduleKey]) || ! is_array($moduleStates[$moduleKey])) {
+                    continue;
+                }
+
+                $currentPlanModules[$moduleKey] = $moduleStates[$moduleKey];
             }
 
-            $currentPlanModules[$moduleKey] = $moduleStates[$moduleKey];
-        }
+            $enabledAddonKeys = $this->enabledAddonKeys($tenantId);
 
-        $enabledAddonKeys = $this->enabledAddonKeys($tenantId);
+            $addonCatalog = (array) config('entitlements.addons', []);
+            $addonCards = [];
+            foreach ($addonCatalog as $addonKey => $definition) {
+                if (! is_array($definition)) {
+                    continue;
+                }
 
-        $addonCatalog = (array) config('entitlements.addons', []);
-        $addonCards = [];
-        foreach ($addonCatalog as $addonKey => $definition) {
-            if (! is_array($definition)) {
-                continue;
-            }
+                $normalizedAddonKey = strtolower(trim((string) $addonKey));
+                if ($normalizedAddonKey === '') {
+                    continue;
+                }
 
-            $normalizedAddonKey = strtolower(trim((string) $addonKey));
-            if ($normalizedAddonKey === '') {
-                continue;
-            }
+                $contentDefinition = is_array(($content['addons'][$normalizedAddonKey] ?? null))
+                    ? (array) $content['addons'][$normalizedAddonKey]
+                    : [];
+                $includeKeys = $this->normalizeKeys((array) ($definition['includes'] ?? []));
 
-            $contentDefinition = is_array(($content['addons'][$normalizedAddonKey] ?? null))
-                ? (array) $content['addons'][$normalizedAddonKey]
-                : [];
-            $includeKeys = $this->normalizeKeys((array) ($definition['includes'] ?? []));
+                $modules = array_map(function (string $moduleKey) use ($moduleStates): array {
+                    $state = is_array($moduleStates[$moduleKey] ?? null) ? $moduleStates[$moduleKey] : [
+                        'module_key' => $moduleKey,
+                        'label' => $this->moduleLabel($moduleKey),
+                        'ui_state' => 'locked',
+                        'setup_status' => 'not_started',
+                        'has_access' => false,
+                        'coming_soon' => false,
+                        'upgrade_prompt_eligible' => true,
+                    ];
 
-            $modules = array_map(function (string $moduleKey) use ($moduleStates): array {
-                $state = is_array($moduleStates[$moduleKey] ?? null) ? $moduleStates[$moduleKey] : [
-                    'module_key' => $moduleKey,
-                    'label' => $this->moduleLabel($moduleKey),
-                    'ui_state' => 'locked',
-                    'setup_status' => 'not_started',
-                    'has_access' => false,
-                    'coming_soon' => false,
-                    'upgrade_prompt_eligible' => true,
+                    return [
+                        'module_key' => $moduleKey,
+                        'label' => $this->moduleLabel($moduleKey),
+                        'state' => TenantModuleUi::present($state, $this->moduleLabel($moduleKey)),
+                    ];
+                }, $includeKeys);
+
+                $addonCards[] = [
+                    'addon_key' => $normalizedAddonKey,
+                    'label' => (string) ($contentDefinition['name'] ?? $definition['label'] ?? Str::title(str_replace('_', ' ', $normalizedAddonKey))),
+                    'price_display' => (string) ($contentDefinition['price_display'] ?? 'Add-on pricing'),
+                    'summary' => (string) ($contentDefinition['summary'] ?? ''),
+                    'enabled' => in_array($normalizedAddonKey, $enabledAddonKeys, true),
+                    'modules' => $modules,
                 ];
-
-                return [
-                    'module_key' => $moduleKey,
-                    'label' => $this->moduleLabel($moduleKey),
-                    'state' => TenantModuleUi::present($state, $this->moduleLabel($moduleKey)),
-                ];
-            }, $includeKeys);
-
-            $addonCards[] = [
-                'addon_key' => $normalizedAddonKey,
-                'label' => (string) ($contentDefinition['name'] ?? $definition['label'] ?? Str::title(str_replace('_', ' ', $normalizedAddonKey))),
-                'price_display' => (string) ($contentDefinition['price_display'] ?? 'Add-on pricing'),
-                'summary' => (string) ($contentDefinition['summary'] ?? ''),
-                'enabled' => in_array($normalizedAddonKey, $enabledAddonKeys, true),
-                'modules' => $modules,
-            ];
-        }
+            }
 
             return [
                 'content' => $content,
@@ -953,86 +951,86 @@ class TenantCommercialExperienceService
     {
         $payload = $this->rememberJourneyPayload($tenantId, 'integrations', function () use ($tenantId): array {
             $content = (array) config('product_surfaces.integrations', []);
-        $cardsConfig = (array) ($content['cards'] ?? []);
-        $moduleKeys = [];
+            $cardsConfig = (array) ($content['cards'] ?? []);
+            $moduleKeys = [];
 
-        foreach ($cardsConfig as $card) {
-            if (! is_array($card)) {
-                continue;
+            foreach ($cardsConfig as $card) {
+                if (! is_array($card)) {
+                    continue;
+                }
+
+                $moduleKey = strtolower(trim((string) ($card['module_key'] ?? '')));
+                if ($moduleKey !== '') {
+                    $moduleKeys[] = $moduleKey;
+                }
             }
 
-            $moduleKey = strtolower(trim((string) ($card['module_key'] ?? '')));
-            if ($moduleKey !== '') {
-                $moduleKeys[] = $moduleKey;
-            }
-        }
+            $moduleKeys = $this->normalizeKeys($moduleKeys);
+            $resolved = $this->accessResolver->resolveForTenant($tenantId, $moduleKeys);
+            $moduleStates = $this->applyDisplayLabels(
+                tenantId: $tenantId,
+                moduleStates: (array) ($resolved['modules'] ?? [])
+            );
+            $content = $this->applyContentLabelTokens($content, $moduleStates, $tenantId);
+            $statusContext = $this->integrationStatusContext($tenantId);
+            $onboarding = $this->onboardingMeta($tenantId);
 
-        $moduleKeys = $this->normalizeKeys($moduleKeys);
-        $resolved = $this->accessResolver->resolveForTenant($tenantId, $moduleKeys);
-        $moduleStates = $this->applyDisplayLabels(
-            tenantId: $tenantId,
-            moduleStates: (array) ($resolved['modules'] ?? [])
-        );
-        $content = $this->applyContentLabelTokens($content, $moduleStates, $tenantId);
-        $statusContext = $this->integrationStatusContext($tenantId);
-        $onboarding = $this->onboardingMeta($tenantId);
+            $cards = $this->integrationCards(
+                cardsConfig: $cardsConfig,
+                moduleStates: $moduleStates,
+                content: $content,
+                statusContext: $statusContext
+            );
+            $categoriesConfig = (array) ($content['categories'] ?? []);
+            $groupedCards = [];
+            foreach ($cards as $card) {
+                $category = strtolower(trim((string) ($card['category'] ?? 'other')));
+                if (! isset($groupedCards[$category])) {
+                    $groupedCards[$category] = [];
+                }
 
-        $cards = $this->integrationCards(
-            cardsConfig: $cardsConfig,
-            moduleStates: $moduleStates,
-            content: $content,
-            statusContext: $statusContext
-        );
-        $categoriesConfig = (array) ($content['categories'] ?? []);
-        $groupedCards = [];
-        foreach ($cards as $card) {
-            $category = strtolower(trim((string) ($card['category'] ?? 'other')));
-            if (! isset($groupedCards[$category])) {
-                $groupedCards[$category] = [];
+                $groupedCards[$category][] = $card;
             }
 
-            $groupedCards[$category][] = $card;
-        }
+            $categories = [];
+            foreach ($categoriesConfig as $categoryKey => $categoryLabel) {
+                $normalized = strtolower(trim((string) $categoryKey));
+                if ($normalized === '' || ! isset($groupedCards[$normalized])) {
+                    continue;
+                }
 
-        $categories = [];
-        foreach ($categoriesConfig as $categoryKey => $categoryLabel) {
-            $normalized = strtolower(trim((string) $categoryKey));
-            if ($normalized === '' || ! isset($groupedCards[$normalized])) {
-                continue;
+                $categories[] = [
+                    'key' => $normalized,
+                    'label' => (string) $categoryLabel,
+                    'cards' => $groupedCards[$normalized],
+                ];
+                unset($groupedCards[$normalized]);
             }
 
-            $categories[] = [
-                'key' => $normalized,
-                'label' => (string) $categoryLabel,
-                'cards' => $groupedCards[$normalized],
-            ];
-            unset($groupedCards[$normalized]);
-        }
-
-        foreach ($groupedCards as $categoryKey => $categoryCards) {
-            $categories[] = [
-                'key' => $categoryKey,
-                'label' => $this->integrationCategoryLabel($categoryKey, $categoriesConfig),
-                'cards' => $categoryCards,
-            ];
-        }
-
-        $statusRegistry = [];
-        foreach ($cards as $card) {
-            $key = strtolower(trim((string) ($card['key'] ?? '')));
-            if ($key === '') {
-                continue;
+            foreach ($groupedCards as $categoryKey => $categoryCards) {
+                $categories[] = [
+                    'key' => $categoryKey,
+                    'label' => $this->integrationCategoryLabel($categoryKey, $categoriesConfig),
+                    'cards' => $categoryCards,
+                ];
             }
 
-            $statusRegistry[$key] = is_array($card['status_registry'] ?? null)
-                ? (array) $card['status_registry']
+            $statusRegistry = [];
+            foreach ($cards as $card) {
+                $key = strtolower(trim((string) ($card['key'] ?? '')));
+                if ($key === '') {
+                    continue;
+                }
+
+                $statusRegistry[$key] = is_array($card['status_registry'] ?? null)
+                    ? (array) $card['status_registry']
+                    : [];
+            }
+
+            $planKey = strtolower(trim((string) ($resolved['plan_key'] ?? '')));
+            $planDefinition = is_array(config('entitlements.plans.'.$planKey))
+                ? (array) config('entitlements.plans.'.$planKey)
                 : [];
-        }
-
-        $planKey = strtolower(trim((string) ($resolved['plan_key'] ?? '')));
-        $planDefinition = is_array(config('entitlements.plans.'.$planKey))
-            ? (array) config('entitlements.plans.'.$planKey)
-            : [];
 
             return [
                 'content' => $content,
@@ -1419,8 +1417,7 @@ class TenantCommercialExperienceService
         array $moduleStates,
         array $content,
         array $statusContext
-    ): array
-    {
+    ): array {
         $cards = [];
         foreach ($cardsConfig as $cardKey => $definition) {
             if (! is_array($definition)) {
@@ -2394,6 +2391,7 @@ class TenantCommercialExperienceService
         foreach ($items as $key => $value) {
             if (is_array($value)) {
                 $items[$key] = $this->replaceTokensInArray($value, $tokenMap);
+
                 continue;
             }
 

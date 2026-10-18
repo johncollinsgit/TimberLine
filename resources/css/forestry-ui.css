@@ -15056,3 +15056,6 @@ body.eb-workflow-picker-open {
   .eg-site-logo img { max-width: 100%; width: 150px; }
 }
 @media (prefers-reduced-motion: reduce) { .eg-hamburger > span { transition: none; } }
+
+/* The current acquisition offer is a single plan; legacy tables remain internal. */
+.eg-pricing-grid:has(> .eg-pricing-card:only-child) { grid-template-columns: minmax(0, 1fr); max-width: 44rem; margin-inline: auto; }

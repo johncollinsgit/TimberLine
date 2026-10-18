@@ -136,7 +136,7 @@ test('managed website agreement is tenant specific bounded and wired for recurri
         ->and($agreement->currentVersion->rendered_content)->not->toContain('Front Yard Foods');
 });
 
-test('landlord can prepare a managed website agreement from the agreement form', function (): void {
+test('landlord cannot issue the retired generic introductory agreement', function (): void {
     $tenant = agreementTenant('managed-website-form');
     $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
     $host = app('router')->getRoutes()->getByName('landlord.agreements.store')?->getDomain() ?: 'app.theeverbranch.com';
@@ -151,9 +151,8 @@ test('landlord can prepare a managed website agreement from the agreement form',
         'standard_amount' => '149.00',
     ]);
 
-    $agreement = Agreement::query()->forTenant($tenant)->where('template_key', Agreement::TEMPLATE_MANAGED_WEBSITE_CLIENT_SERVICES)->firstOrFail();
-    $response->assertRedirect(route('landlord.agreements.show', $agreement));
-    expect($agreement->currentVersion->subscription_payload['promotional_amount_cents'])->toBe(8900);
+    $response->assertSessionHasErrors('template_key');
+    expect(Agreement::query()->forTenant($tenant)->count())->toBe(0);
 });
 
 test('managed website acceptance authorizes the exact initial and recurring Stripe schedule', function (): void {

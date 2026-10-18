@@ -276,7 +276,7 @@ class TenantModuleCatalogService
 
         $plans = [];
         foreach ((array) config('module_catalog.plans', []) as $planKey => $definition) {
-            if (! is_array($definition)) {
+            if (! is_array($definition) || ! ($definition['is_public'] ?? false)) {
                 continue;
             }
 

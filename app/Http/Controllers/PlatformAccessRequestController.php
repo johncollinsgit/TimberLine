@@ -43,7 +43,7 @@ class PlatformAccessRequestController extends Controller
             'mobile_interest' => ['nullable', 'string', 'max:80', Rule::in($mobileInterestKeys)],
             'website' => ['nullable', 'url', 'max:300'],
             'message' => ['nullable', 'string', 'max:2000'],
-            'preferred_plan_key' => ['nullable', 'string', 'max:80'],
+            'preferred_plan_key' => ['nullable', 'string', Rule::in(['standard'])],
             'addons_interest' => ['nullable', 'array'],
             'addons_interest.*' => ['string', 'max:120'],
         ]);
@@ -62,7 +62,7 @@ class PlatformAccessRequestController extends Controller
             'mobile_interest' => (string) ($validated['mobile_interest'] ?? ''),
             'website' => (string) ($validated['website'] ?? ''),
             'message' => (string) ($validated['message'] ?? ''),
-            'preferred_plan_key' => (string) ($validated['preferred_plan_key'] ?? ''),
+            'preferred_plan_key' => (string) ($validated['preferred_plan_key'] ?? ($validated['intent'] === 'production' ? 'standard' : '')),
             'addons_interest' => (array) ($validated['addons_interest'] ?? []),
         ]);
 

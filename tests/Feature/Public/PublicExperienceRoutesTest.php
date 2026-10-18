@@ -32,7 +32,7 @@ test('guest home route renders the marketing landing page by default', function 
         ->assertSee('data-studio-hero-slide', false)
         ->assertSee('everbranch-field-owner-office.jpg', false)
         ->assertSee('data-studio-hero-slide', false)
-        ->assertSeeText('Become a launch partner')
+        ->assertSeeText('Get started')
         ->assertSeeText('See the Everbranch story')
         ->assertSee('everbranch-story.mp4', false)
         ->assertSee('v=20260810-systems', false)
@@ -104,7 +104,7 @@ test('public industry example pages remain isolated from tenant and Shopify surf
         ->assertSeeText('Operations workspace')
         ->assertSeeText('Field & service teams')
         ->assertSeeText('not a live customer website or workspace')
-        ->assertSeeText('Request launch-partner access')
+        ->assertSeeText('Request access')
         ->assertSee(route('platform.promo').'#industries', false)
         ->assertDontSee('shopify.app', false)
         ->assertDontSee('tenant.access', false);

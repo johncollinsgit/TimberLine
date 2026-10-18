@@ -104,6 +104,10 @@ class CustomerAccessRequestService
 
             $existing = $this->findOpenRequest($email, $normalizedSlug, $applicationKind);
             if ($existing) {
+                $priorOffer = data_get($existing->metadata, 'preferred_plan_key');
+                if ($preferredPlanKey === 'standard' && filled($priorOffer) && $priorOffer !== 'standard') {
+                    throw ValidationException::withMessages(['preferred_plan_key' => 'Your existing offer request retains its terms and needs operator review before a new offer can replace it.']);
+                }
                 if ($this->isRejected($existing)) {
                     throw ValidationException::withMessages([
                         'email' => 'This request has been rejected. Please contact sales for next steps.',
@@ -142,6 +146,7 @@ class CustomerAccessRequestService
                         'contact_preference' => $contactPreference !== '' ? $contactPreference : null,
                         'agreement' => $agreementAccepted,
                         'preferred_plan_key' => $preferredPlanKey !== '' ? $preferredPlanKey : null,
+                        'offer_snapshot' => $preferredPlanKey === 'standard' ? config('module_catalog.offers.standard') : null,
                         'addons_interest' => $addonsInterest !== [] ? $addonsInterest : null,
                     ], static fn (mixed $value): bool => $value !== null)),
                 ])->save();
@@ -194,6 +199,7 @@ class CustomerAccessRequestService
                     'contact_preference' => $contactPreference !== '' ? $contactPreference : null,
                     'agreement' => $agreementAccepted,
                     'preferred_plan_key' => $preferredPlanKey !== '' ? $preferredPlanKey : null,
+                    'offer_snapshot' => $preferredPlanKey === 'standard' ? config('module_catalog.offers.standard') : null,
                     'addons_interest' => $addonsInterest !== [] ? $addonsInterest : null,
                 ],
                 'user_id' => $user?->id,

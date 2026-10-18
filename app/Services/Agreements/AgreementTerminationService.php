@@ -18,6 +18,10 @@ class AgreementTerminationService
             throw new InvalidArgumentException('Sandbox validation agreements do not create client termination workflows.');
         }
 
+        if ($agreement->template_key === Agreement::TEMPLATE_STANDARD_SERVICES && ! $effectiveAt) {
+            throw new InvalidArgumentException('Confirm the end of the current paid service period before scheduling Standard cancellation.');
+        }
+
         return DB::transaction(function () use ($agreement, $actorUserId, $reason, $effectiveAt): AgreementTermination {
             $effective = $effectiveAt ? now()->parse($effectiveAt) : now()->addDays(30);
             $termination = AgreementTermination::query()->updateOrCreate(['agreement_id' => (int) $agreement->id], [

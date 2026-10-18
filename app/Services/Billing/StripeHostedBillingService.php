@@ -40,162 +40,114 @@ class StripeHostedBillingService
             return ['ok' => false, 'url' => null, 'session_id' => null, 'message' => 'Stripe is not configured.'];
         }
 
-        $tenantId = (int) $tenant->id;
-        $preferredPlanKey = strtolower(trim((string) ($billingInterest['preferred_plan_key'] ?? '')));
-        if ($preferredPlanKey === '' || ! array_key_exists($preferredPlanKey, (array) config('module_catalog.plans', []))) {
-            return ['ok' => false, 'url' => null, 'session_id' => null, 'message' => 'A valid preferred tier is required to start checkout.'];
-        }
-
-        $addonsInterest = array_values(array_filter(array_map(
-            static fn (mixed $value): string => strtolower(trim((string) $value)),
-            (array) ($billingInterest['addons_interest'] ?? [])
-        ), static fn (string $value): bool => $value !== ''));
-
-        foreach ($addonsInterest as $interest) {
-            $candidate = str_starts_with($interest, 'addon.') ? substr($interest, 6) : $interest;
-            if (is_array(config('module_catalog.addons.'.$candidate))
-                && ! \App\Support\Tenancy\CatalogPurchasePolicy::addonEnabled($candidate)) {
+        foreach ((array) ($billingInterest['addons_interest'] ?? []) as $interest) {
+            $addonKey = str_starts_with((string) $interest, 'addon.') ? substr($interest, 6) : $interest;
+            if (config('module_catalog.addons.'.$addonKey.'.purchase_enabled') === false) {
                 return ['ok' => false, 'url' => null, 'session_id' => null, 'message' => 'Purchasing this add-on is paused until servicing and billing are ready.'];
             }
         }
 
-        $eligibleAddons = $this->eligibleAddonsForPlan($preferredPlanKey);
-        $addonsInterest = array_values(array_filter(
-            $addonsInterest,
-            static fn (string $addonKey): bool => array_key_exists($addonKey, (array) config('module_catalog.addons', []))
-                && in_array($addonKey, $eligibleAddons, true)
-        ));
-
-        $stripeMapping = (array) config('commercial.stripe_mapping', []);
-        $tierMap = is_array($stripeMapping['tiers'] ?? null) ? (array) $stripeMapping['tiers'] : [];
-        $addonMap = is_array($stripeMapping['addons'] ?? null) ? (array) $stripeMapping['addons'] : [];
-
-        $tierRow = is_array($tierMap[$preferredPlanKey] ?? null) ? (array) $tierMap[$preferredPlanKey] : [];
-        $tierLookupKey = trim((string) ($tierRow['recurring_price_lookup_key'] ?? ''));
-        if ($tierLookupKey === '') {
-            return ['ok' => false, 'url' => null, 'session_id' => null, 'message' => 'Stripe mapping missing for the selected tier.'];
+        if (($billingInterest['preferred_plan_key'] ?? '') === 'standard') {
+            return $this->createStandardCheckoutSession($tenant, $actor, $billingInterest);
         }
 
-        $lookupKeys = [$tierLookupKey];
-        foreach ($addonsInterest as $addonKey) {
-            $addonRow = is_array($addonMap[$addonKey] ?? null) ? (array) $addonMap[$addonKey] : [];
-            $addonLookupKey = trim((string) ($addonRow['recurring_price_lookup_key'] ?? ''));
-            if ($addonLookupKey === '') {
-                return ['ok' => false, 'url' => null, 'session_id' => null, 'message' => 'Stripe mapping missing for add-on: '.$addonKey];
-            }
-            $lookupKeys[] = $addonLookupKey;
+        return ['ok' => false, 'url' => null, 'session_id' => null, 'message' => 'This legacy tier is retired for new purchases. Existing agreements retain their recorded terms.'];
+    }
+
+    /** The standard offer has its own immutable prices; legacy agreements use their snapshots. */
+    protected function createStandardCheckoutSession(Tenant $tenant, User $actor, array $billingInterest): array
+    {
+        $failure = static fn (string $message): array => ['ok' => false, 'url' => null, 'session_id' => null, 'message' => $message];
+        $offer = (array) config('module_catalog.offers.standard');
+        $planKey = trim((string) ($offer['fulfillment_plan_key'] ?? ''));
+        if ($planKey === '' || ! is_array(config('module_catalog.plans.'.$planKey))) {
+            return $failure('Standard pricing is ready. Workspace capacity and fulfillment require review before checkout can open.');
+        }
+        if (\App\Models\Agreement::query()->where('tenant_id', $tenant->id)->whereIn('status', ['accepted', 'active', 'termination_pending'])->exists()
+            || \App\Models\TenantBillingSubscription::query()->where('tenant_id', $tenant->id)->exists()) {
+            return $failure('This business has an existing agreement or subscription. Its terms require review and are not replaced by the new offer.');
+        }
+        if ((array) ($billingInterest['addons_interest'] ?? []) !== []) {
+            return $failure('Additional services need their own reviewed purchase; they are not included in standard setup.');
         }
 
-        $resolved = $this->resolvePriceIdsByLookupKey($lookupKeys);
-        if (! ($resolved['ok'] ?? false)) {
-            return ['ok' => false, 'url' => null, 'session_id' => null, 'message' => (string) ($resolved['message'] ?? 'Stripe price lookup failed.')];
+        try {
+            return \Illuminate\Support\Facades\Cache::lock('standard-checkout-'.$tenant->id, 60)->block(3, function () use ($tenant, $actor, $offer, $planKey, $failure): array {
+                $profile = \App\Models\TenantCommercialOverride::query()->firstOrCreate(['tenant_id' => $tenant->id]);
+                $mapping = (array) $profile->billing_mapping;
+                if (filled(data_get($mapping, 'stripe.subscription_reference')) || filled(data_get($mapping, 'stripe.checkout_completed_at'))) {
+                    return $failure('This business already has billing records. Manage its existing agreement instead of starting a new subscription.');
+                }
+                $attempt = data_get($profile->metadata, 'standard_checkout');
+                if (is_array($attempt)) {
+                    if (filled($attempt['session_id'] ?? null)) {
+                        $response = $this->stripeRequest()->get($this->stripeApiBaseUrl().'/v1/checkout/sessions/'.rawurlencode($attempt['session_id']));
+                        $session = $response->json();
+                        if ($response->failed() || ! is_array($session) || ($session['status'] ?? '') !== 'open') {
+                            return $failure('The previous checkout needs review. No second setup charge or subscription was created.');
+                        }
+
+                        return ['ok' => true, 'url' => $attempt['url'], 'session_id' => $attempt['session_id'], 'message' => null];
+                    }
+                    // Stripe may discard idempotency keys after 24 hours. Never blindly replay an uncertain old request.
+                    if (\Illuminate\Support\Carbon::parse($attempt['reserved_at'])->lt(now()->subHours(23))) {
+                        return $failure('The saved payment attempt needs provider review before another checkout can be created.');
+                    }
+                } else {
+                    $lines = [];
+                    foreach (['recurring_price_lookup_key' => 'monthly_cents', 'setup_price_lookup_key' => 'setup_cents'] as $lookupField => $amountField) {
+                        $lookup = $offer[$lookupField];
+                        $response = $this->stripeRequest()->get($this->stripeApiBaseUrl().'/v1/prices', ['active' => 'true', 'lookup_keys[0]' => $lookup, 'limit' => 2]);
+                        $rows = (array) $response->json('data', []);
+                        $price = count($rows) === 1 ? $rows[0] : [];
+                        $recurring = $amountField === 'monthly_cents';
+                        if ($response->failed() || ($price['lookup_key'] ?? '') !== $lookup || ! ($price['active'] ?? false)
+                            || ($price['currency'] ?? '') !== 'usd' || ($price['unit_amount'] ?? null) !== $offer[$amountField]
+                            || ($price['type'] ?? '') !== ($recurring ? 'recurring' : 'one_time')
+                            || ($recurring && (data_get($price, 'recurring.interval') !== 'month' || data_get($price, 'recurring.interval_count') !== 1 || data_get($price, 'recurring.usage_type') !== 'licensed'))
+                            || (! $recurring && ! empty($price['recurring'])) || empty($price['id'])) {
+                            return $failure('The configured Stripe price does not match the standard USD monthly/setup offer.');
+                        }
+                        $lines[] = ['price' => $price['id'], 'quantity' => 1];
+                    }
+                    $payload = [
+                        'mode' => 'subscription',
+                        'success_url' => $this->tenantReturnUrl($tenant, 'success').'&session_id={CHECKOUT_SESSION_ID}',
+                        'cancel_url' => $this->tenantReturnUrl($tenant, 'cancel'),
+                        'client_reference_id' => 'tenant-'.$tenant->id,
+                        'customer_email' => (string) $actor->email,
+                        'line_items' => $lines,
+                        'metadata' => ['tenant_id' => (string) $tenant->id, 'checkout_plan_key' => $planKey, 'offer_version' => $offer['version']],
+                        'subscription_data' => ['metadata' => ['tenant_id' => (string) $tenant->id, 'checkout_plan_key' => $planKey, 'offer_version' => $offer['version']]],
+                    ];
+                    if (filled(data_get($mapping, 'stripe.customer_reference'))) {
+                        unset($payload['customer_email']);
+                        $payload['customer'] = data_get($mapping, 'stripe.customer_reference');
+                    }
+                    $attempt = ['key' => 'standard-'.(string) \Illuminate\Support\Str::uuid(), 'reserved_at' => now()->toIso8601String(), 'offer' => $offer, 'payload' => $payload];
+                    $metadata = (array) $profile->metadata;
+                    $metadata['standard_checkout'] = $attempt;
+                    $profile->forceFill(['metadata' => $metadata])->save();
+                }
+                $response = $this->stripeRequest()->withHeaders(['Idempotency-Key' => $attempt['key']])->post($this->stripeApiBaseUrl().'/v1/checkout/sessions', $attempt['payload']);
+                $json = (array) $response->json();
+                $url = (string) ($json['url'] ?? '');
+                if ($response->failed() || empty($json['id']) || ! str_starts_with($url, 'https://checkout.stripe.com/')) {
+                    return $failure('Stripe could not confirm checkout. The saved attempt is retained for a safe retry.');
+                }
+                $attempt['session_id'] = (string) $json['id'];
+                $attempt['url'] = $url;
+                $metadata = (array) $profile->fresh()->metadata;
+                $metadata['standard_checkout'] = $attempt;
+                $profile->forceFill(['metadata' => $metadata])->save();
+
+                return ['ok' => true, 'url' => $url, 'session_id' => $attempt['session_id'], 'message' => null];
+            });
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return $failure('Checkout is unavailable. No payment or activation has been confirmed; retry the saved request later.');
         }
-
-        $priceIdsByLookupKey = is_array($resolved['price_ids_by_lookup_key'] ?? null) ? (array) $resolved['price_ids_by_lookup_key'] : [];
-        $tierPriceId = trim((string) ($priceIdsByLookupKey[strtolower($tierLookupKey)] ?? ''));
-        if ($tierPriceId === '') {
-            return ['ok' => false, 'url' => null, 'session_id' => null, 'message' => 'Stripe price resolution failed for the selected tier.'];
-        }
-
-        $lineItems = [
-            ['price_id' => $tierPriceId, 'quantity' => 1],
-        ];
-        foreach ($addonsInterest as $addonKey) {
-            $addonRow = is_array($addonMap[$addonKey] ?? null) ? (array) $addonMap[$addonKey] : [];
-            $addonLookupKey = strtolower(trim((string) ($addonRow['recurring_price_lookup_key'] ?? '')));
-            $addonPriceId = trim((string) ($priceIdsByLookupKey[$addonLookupKey] ?? ''));
-            if ($addonLookupKey !== '' && $addonPriceId !== '') {
-                $lineItems[] = ['price_id' => $addonPriceId, 'quantity' => 1];
-            }
-        }
-
-        $successUrl = $this->tenantReturnUrl($tenant, 'success');
-        $cancelUrl = $this->tenantReturnUrl($tenant, 'cancel');
-        $successSessionSeparator = str_contains($successUrl, '?') ? '&' : '?';
-
-        $commercialProfile = $this->commercialConfigService->tenantCommercialProfile($tenantId);
-        $billingMapping = is_array($commercialProfile['billing_mapping'] ?? null)
-            ? (array) $commercialProfile['billing_mapping']
-            : [];
-        $stripeCustomerReference = trim((string) data_get($billingMapping, 'stripe.customer_reference', ''));
-
-        $metadata = $this->stripeMetadata($tenant, $actor, $billingInterest, [
-            'checkout_plan_key' => $preferredPlanKey,
-            'checkout_addons_interest' => $addonsInterest,
-        ]);
-
-        $payload = [
-            'mode' => 'subscription',
-            'success_url' => $successUrl.$successSessionSeparator.'session_id={CHECKOUT_SESSION_ID}',
-            'cancel_url' => $cancelUrl,
-            'client_reference_id' => 'tenant-'.$tenantId,
-        ];
-
-        if ($stripeCustomerReference !== '') {
-            $payload['customer'] = $stripeCustomerReference;
-        } else {
-            $payload['customer_email'] = (string) ($actor->email ?? '');
-        }
-
-        foreach ($metadata as $key => $value) {
-            $payload['metadata['.$key.']'] = $value;
-            $payload['subscription_data[metadata]['.$key.']'] = $value;
-        }
-
-        foreach ($lineItems as $index => $item) {
-            $payload['line_items['.$index.'][price]'] = (string) $item['price_id'];
-            $payload['line_items['.$index.'][quantity]'] = (int) $item['quantity'];
-        }
-
-        $idempotencyKey = $this->checkoutIdempotencyKey($tenantId, $billingInterest);
-        $response = $this->stripeRequest()
-            ->withHeaders(['Idempotency-Key' => $idempotencyKey])
-            ->post($this->stripeApiBaseUrl().'/v1/checkout/sessions', $payload);
-
-        $json = is_array($response->json()) ? $response->json() : [];
-        if ($response->failed()) {
-            $this->auditService->record(
-                tenantId: $tenantId,
-                actorUserId: (int) $actor->id,
-                actionType: 'tenant_billing.hosted_checkout_session',
-                status: 'failed',
-                targetType: 'tenant',
-                targetId: $tenantId,
-                context: [
-                    'stripe_status' => $response->status(),
-                    'stripe_error' => trim((string) data_get($json, 'error.message', '')),
-                ],
-                beforeState: null,
-                afterState: null,
-            );
-
-            return ['ok' => false, 'url' => null, 'session_id' => null, 'message' => $this->stripeErrorMessage($json, $response->status())];
-        }
-
-        $sessionId = trim((string) ($json['id'] ?? ''));
-        $url = trim((string) ($json['url'] ?? ''));
-
-        $this->auditService->record(
-            tenantId: $tenantId,
-            actorUserId: (int) $actor->id,
-            actionType: 'tenant_billing.hosted_checkout_session',
-            status: 'success',
-            targetType: 'tenant',
-            targetId: $tenantId,
-            context: [
-                'stripe_session_id' => $sessionId,
-                'preferred_plan_key' => $preferredPlanKey,
-                'addons_interest' => $addonsInterest,
-            ],
-            beforeState: null,
-            afterState: null,
-        );
-
-        if ($sessionId === '' || $url === '') {
-            return ['ok' => false, 'url' => null, 'session_id' => null, 'message' => 'Stripe checkout session returned no redirect URL.'];
-        }
-
-        return ['ok' => true, 'url' => $url, 'session_id' => $sessionId, 'message' => null];
     }
 
     /**

@@ -12,8 +12,7 @@ class TenantBillingNextStepResolver
     public function __construct(
         protected LandlordCommercialConfigService $commercialConfigService,
         protected TenantHostBuilder $hostBuilder,
-    ) {
-    }
+    ) {}
 
     /**
      * @param  array{
@@ -256,12 +255,7 @@ class TenantBillingNextStepResolver
 
     protected function planKeyAllowed(string $planKey): bool
     {
-        $key = strtolower(trim($planKey));
-        if ($key === '') {
-            return false;
-        }
-
-        return array_key_exists($key, (array) config('module_catalog.plans', []));
+        return $planKey === 'standard' && filled(config('module_catalog.offers.standard.fulfillment_plan_key'));
     }
 
     /**
