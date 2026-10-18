@@ -11,6 +11,17 @@ $catalog = [
             'monthly_cents' => 29900,
             'setup_cents' => 49900,
             'interval' => 'month',
+            'usage_policy' => [
+                'version' => 'standard-prepaid-2026-10-18-v1',
+                'billing_mode' => 'shared_prepaid_usage',
+                'sms_setup_cents' => 0,
+                'email_monthly_cents' => 0,
+                'sms_monthly_cents' => 0,
+                'ai_provider_cost_multiplier' => 2,
+                'auto_reload_default' => false,
+                'fixed_connection_fees' => 'separately_quoted',
+                'scope' => 'Future Standard customers only; existing agreements and allowances retain their terms.',
+            ],
             'recurring_price_lookup_key' => 'everbranch_standard_299_monthly_v1',
             'setup_price_lookup_key' => 'everbranch_standard_499_setup_v1',
             // The former tiers have different capacities. Do not pick or grant one
