@@ -151,9 +151,18 @@ Never run it to a prospect or silently change that stable request ID.
 
 The presentation Mac uses `APP_URL=http://127.0.0.1:8797` and local landlord
 hosts. For a full application test run, pass the normal CI host settings through
-the test process (APP_URL=http://localhost, TENANCY_CANONICAL_LANDLORD_HOST,
+the test process (APP_URL=http://localhost, TENANCY_CANONICAL_SCHEME=https,
+TENANCY_CANONICAL_LANDLORD_HOST,
 TENANCY_LANDLORD_PRIMARY_HOST and TENANCY_LANDLORD_HOSTS=app.theeverbranch.com,
 AUTH_FLAGSHIP_HOSTS=app.theeverbranch.com,theeverbranch.com). Do not rewrite the
 running demo's environment file or restart its process-only voice credential.
 Android QA must open a containing closed details menu explicitly before clicking;
 Puppeteer's isVisible can report true for hidden disclosure descendants.
+
+
+Lenovo installed v16 and extended checks passed on USB: existing standalone app,
+all 142 photos, new navigation/care examples, current invoice preview, centered
+email and six unchecked service preferences. All three pre-existing Retail keys
+and the separate Studio cache survived. Screen timeout restored to 1,200,000 ms.
+Evidence stays in ignored `output/retail/tablets/lenovo/` without private links.
+Galaxy remains pending USB reconnection for its final v16 pass and timeout restore.
