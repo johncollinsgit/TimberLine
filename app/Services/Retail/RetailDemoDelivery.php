@@ -33,11 +33,22 @@ class RetailDemoDelivery
         return storage_path('app/private/retail-demo-deliveries');
     }
 
+    protected function settingsPath(): string
+    {
+        return storage_path('app/private/retail-demo-delivery.json');
+    }
+
     protected function settings(): array
     {
-        // The private presenter transport is local only. Production needs a separately reviewed rollout.
-        $path = storage_path('app/private/retail-demo-delivery.json');
-        if (! app()->environment('local') || ! is_file($path)) {
+        // Production remains blocked. The isolated staging host needs an explicit rollout
+        // and exact host match, in addition to the controller's verified owner/consent checks.
+        $hosted = app()->environment('staging')
+            && config('retail_showroom.presenter_transport_enabled')
+            && is_string(config('retail_showroom.presenter_host'))
+            && config('retail_showroom.presenter_host') !== ''
+            && hash_equals(config('retail_showroom.presenter_host'), request()->getHost());
+        $path = $this->settingsPath();
+        if ((! app()->environment('local') && ! $hosted) || ! is_file($path)) {
             return [];
         }
 

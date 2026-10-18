@@ -229,3 +229,15 @@ test('additional website observations stay in private prospect research and surv
         ->and(data_get($p->fresh()->source_snapshot, 'research.site_review.opportunity'))->toBe('Owner reviewed the next conversation.');
     $this->getJson($this->base.'bootstrap')->assertOk()->assertDontSee('Owner reviewed the next conversation.')->assertDontSee('site_review');
 });
+
+test('offline recovery refreshes only the authenticated owner session without provider calls', function () {
+    $this->withSession(['_token' => str_repeat('a', 40)]);
+    $response = $this->getJson($this->base.'session')->assertOk()->assertJsonPath('csrf_token', str_repeat('a', 40));
+    expect($response->headers->get('Cache-Control'))->toContain('private', 'no-store');
+    expect(array_keys($response->json()))->toBe(['csrf_token', 'assistant']);
+    $this->actingAs(User::factory()->create(['is_active' => true, 'email_verified_at' => now()]));
+    $this->getJson($this->base.'session')->assertForbidden()->assertJsonMissing(['csrf_token' => str_repeat('a', 40)]);
+    auth()->forgetGuards();
+    $this->getJson($this->base.'session')->assertUnauthorized();
+    Http::assertNothingSent();
+});

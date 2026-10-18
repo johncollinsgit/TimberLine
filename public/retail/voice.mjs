@@ -1,4 +1,5 @@
 import {demoToolNames} from './workbench.mjs';
+import {refreshRetailSession,retailFetch} from './connection.mjs';
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 export function createRetailVoice({context,openModal}) {
@@ -20,7 +21,7 @@ export function createRetailVoice({context,openModal}) {
   const controller=new AbortController();abort=controller;
   const timer=setTimeout(()=>controller.abort(),timeout);
   try {
-   const response=await fetch('/retail/showroom/api/voice/'+path,{method:data?'POST':'GET',credentials:'same-origin',cache:'no-store',signal:controller.signal,
+   const response=await retailFetch('/retail/showroom/api/voice/'+path,{method:data?'POST':'GET',credentials:'same-origin',cache:'no-store',signal:controller.signal,
     headers:{Accept:'application/json','Content-Type':'application/json','X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]')?.content??''},body:data?JSON.stringify(data):undefined});
    const result=await response.json().catch(()=>({}));
    if([401,403,419].includes(response.status))throw Error('Sign in as the showroom owner, then reopen voice.');
@@ -55,6 +56,7 @@ export function createRetailVoice({context,openModal}) {
   if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia||!window.RTCPeerConnection){update('unavailable','Live voice needs a supported browser and a trusted connection. Your other demos remain available.');return false;}
   update('checking','Checking the demo server and live voice connection…');
   try {
+   await refreshRetailSession();if(id!==generation||!panel())return false;
    const result=await request('status',null,12000);if(id!==generation||!panel())return false;
    update(result.available?'ready':'unavailable',result.available?'Ready for a live conversation. Your microphone is off.':result.message);
    return !!result.available;

@@ -46,7 +46,7 @@ a successful audio connection on every network. Weak networks show an unavailabl
 reason; connection loss stops audio. Storefronts and photos remain usable offline.
 Live conversation always requires internet; this feature does not search the web.
 
-The existing local install requires the Mac server and ADB reverse connection for
+The legacy localhost install requires the Mac server and ADB reverse connection for
 sign-in and starting a session. Keep the Mac awake. The tablet also needs an internet
 route to OpenAI for WebRTC audio. Both authorized tablets use their existing installed Retail tabs.
 
@@ -78,7 +78,7 @@ WebRTC carries audio directly to OpenAI. The app keeps a short, escaped transcri
 only in dialog memory and clears it when closed/backgrounded or the business
 changes. It does not save audio/transcripts to the application database, local
 storage, offline queue or service worker cache. This is not a claim about provider
-retention. Session tracing is disabled. Cache v12 includes the public voice/action modules and shell, preserving the complete
+retention. Session tracing is disabled. Cache v17 includes the public voice/action modules and shell, preserving the complete
 142-photo pack. Private APIs and real recipient details are never cached.
 
 For this local demonstration the existing authorized hosted credential was loaded
@@ -131,3 +131,36 @@ Its synthetic questions ask what Avery Morgan bought and the total, then her rew
 balance and staff note. It creates sample activity only in a fresh QA browser,
 opens voice from the fictional customer profile, and verifies spoken answers.
 Use `RETAIL_QA_LIVE_VOICE=1 node scripts/retail/voice-records-live-check.mjs`.
+
+
+## Untethered HTTPS presenter preview and recovery
+
+The tablet-and-internet demo uses a separate Forge preview, with an independent
+SQLite database seeded only with showroom fixtures, its own app key and host-only
+secure session cookie. Do not point it at the production database, copy production
+configuration, merge this mixed preview branch to main, or enable push-to-deploy.
+Publish only an exact GitHub-gated preview SHA, build a new candidate directory,
+verify it, and atomically change only the preview pointer. Production's current
+release and protected Forge deployment flow are unchanged.
+
+A new host is a new PWA identity. Back up only Retail local records privately,
+retain the old app and Studio, authenticate normally at the hosted origin, transfer
+sample records/carts without cookies or tokens, then regenerate the full public
+offline pack and install the hosted PWA. Verify retained data, offline cold launch,
+reconnection, real audio and conversation tools with all ADB reverse mappings
+removed. The Mac must not be required for runtime.
+
+`GET /retail/showroom/api/session` reauthorizes the active verified configured owner
+and supplies the current session CSRF token with private/no-store headers. The
+public shell never stores that token. Recheck refreshes the session before checking
+provider readiness; live writes refresh it too. No uncertain POST is automatically
+replayed, and reconnect never starts the microphone. Expired authentication
+continues to require sign-in. Check with
+`node scripts/retail/connection-recovery-check.mjs` (mocked audio; real auth/session
+and offline shell).
+
+The one-message SendGrid/Twilio presenter transport additionally permits only an
+explicitly enabled exact staging host (`RETAIL_PRESENTER_TRANSPORT_ENABLED` and
+`RETAIL_PRESENTER_HOST`). Its protected private settings and durable delivery audit
+must migrate together. Production remains blocked even if that flag is set. No
+queue worker or production webhook is enabled on the preview.

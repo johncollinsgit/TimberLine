@@ -37,6 +37,16 @@ class RetailShowroomController extends Controller
         return response()->json($data)->header('Cache-Control', 'private, no-store')->header('X-Robots-Tag', 'noindex, nofollow');
     }
 
+    public function session(Request $r)
+    {
+        $this->owner($r);
+
+        return $this->response([
+            'csrf_token' => $r->session()->token(),
+            'assistant' => ['available' => app(\App\Services\Retail\RetailAssistantService::class)->available(), 'provider' => 'openai'],
+        ]);
+    }
+
     public function demoDeliveryStatus(Request $r, string $reference)
     {
         $this->owner($r);

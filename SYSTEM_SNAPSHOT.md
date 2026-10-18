@@ -1,3 +1,13 @@
+## October 18, 2026 — Untethered Retail demo recovery (preview preparation)
+
+The tablet's old localhost install loses live access when ADB/USB disconnects.
+Retail v17 refreshes owner-authenticated CSRF state from a no-store session endpoint
+before live writes, including a cold offline launch followed by reconnect. Tokens
+are never added to the offline pack. The isolated staging presenter transport needs
+an explicit flag and exact host; production remains blocked. The separate hosted
+preview uses its own database, key, cookies and storage, preserving the live app.
+See `docs/retail/VOICE_DEMO.md` for the hosting and device migration procedure.
+
 ## October 18, 2026 — Standard usage policy and billing statements (release pending)
 
 - Standard first payment is $798, with no usage/preload; subsequent base is $299.
