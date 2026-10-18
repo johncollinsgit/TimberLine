@@ -40,7 +40,14 @@ class EverbranchPrepareManagedWebsiteAgreement extends Command
             return self::FAILURE;
         }
 
-        $agreement = $management->prepareManagedWebsite($tenant, $actor?->id);
+        $agreement = \App\Models\Agreement::query()->forTenant($tenant)
+            ->where('template_key', \App\Models\Agreement::TEMPLATE_MANAGED_WEBSITE_CLIENT_SERVICES)->latest('id')->first();
+        if (! $agreement) {
+            $this->error('The generic Launch Partner offer is retired. New customers use $299/month plus $499 setup; review scope before preparing a new agreement.');
+
+            return self::FAILURE;
+        }
+
         $agreement->loadMissing('currentVersion');
         $billing = $this->billingReadiness($slug);
         $result = [

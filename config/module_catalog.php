@@ -1,6 +1,39 @@
 <?php
 
 $catalog = [
+    // New offers are separate from immutable legacy plan prices and entitlements.
+    'offers' => [
+        'standard' => [
+            'key' => 'standard',
+            'version' => 'standard-299-499-v1',
+            'name' => 'Everbranch Standard',
+            'currency' => 'USD',
+            'monthly_cents' => 29900,
+            'setup_cents' => 49900,
+            'interval' => 'month',
+            'usage_policy' => [
+                'version' => 'standard-prepaid-2026-10-17-v2',
+                'messaging_rates_micros' => ['email' => 1490, 'sms' => 50000, 'mms' => 150000],
+                'billing_mode' => 'shared_prepaid_usage',
+                'sms_setup_cents' => 0,
+                'email_monthly_cents' => 0,
+                'sms_monthly_cents' => 0,
+                'ai_provider_cost_multiplier' => 2,
+                'voice_provider_cost_multiplier' => 2,
+                'memory_provider_cost_multiplier' => 2,
+                'voice_feature_access_cents' => 0,
+                'memory_feature_access_cents' => 0,
+                'auto_reload_default' => false,
+                'fixed_connection_fees' => 'separately_quoted',
+                'scope' => 'Future Standard customers only; existing agreements and allowances retain their terms.',
+            ],
+            'recurring_price_lookup_key' => 'everbranch_standard_299_monthly_v1',
+            'setup_price_lookup_key' => 'everbranch_standard_499_setup_v1',
+            // The former tiers have different capacities. Do not pick or grant one
+            // from a price change. Commercial activation awaits that policy review.
+            'fulfillment_plan_key' => null,
+        ],
+    ],
     'defaults' => [
         'plan' => env('TENANT_ENTITLEMENTS_DEFAULT_PLAN', 'starter'),
         'operating_mode' => env('TENANT_ENTITLEMENTS_DEFAULT_MODE', 'shopify'),
@@ -1866,7 +1899,8 @@ $catalog = [
             'label' => 'Base Workspace',
             'purchase_key' => 'plan.base',
             'track' => 'direct',
-            'is_public' => true,
+            'is_public' => false,
+            'purchase_enabled' => false,
             'position' => 5,
             'pricing' => ['currency' => 'USD', 'recurring_price_cents' => 9900, 'setup_price_cents' => 2900],
             'stripe' => [
@@ -1899,7 +1933,8 @@ $catalog = [
             'label' => 'Starter',
             'purchase_key' => 'plan.starter',
             'track' => 'shopify',
-            'is_public' => true,
+            'is_public' => false,
+            'purchase_enabled' => false,
             'position' => 10,
             'pricing' => ['currency' => 'USD', 'recurring_price_cents' => 14900, 'setup_price_cents' => 4900],
             'stripe' => [
@@ -1940,7 +1975,8 @@ $catalog = [
             'label' => 'Growth',
             'purchase_key' => 'plan.growth',
             'track' => 'shopify',
-            'is_public' => true,
+            'is_public' => false,
+            'purchase_enabled' => false,
             'position' => 20,
             'pricing' => ['currency' => 'USD', 'recurring_price_cents' => 29900, 'setup_price_cents' => 7900],
             'stripe' => [
@@ -1986,7 +2022,8 @@ $catalog = [
             'label' => 'Pro',
             'purchase_key' => 'plan.pro',
             'track' => 'shopify',
-            'is_public' => true,
+            'is_public' => false,
+            'purchase_enabled' => false,
             'position' => 30,
             'pricing' => ['currency' => 'USD', 'recurring_price_cents' => 39900, 'setup_price_cents' => 9900],
             'stripe' => [

@@ -311,6 +311,7 @@ test('stripe credit checkout fulfillment is idempotent and rejects amount tamper
         'created' => time(),
         'data' => ['object' => [
             'id' => 'cs_credit_1',
+            'currency' => 'usd',
             'object' => 'checkout.session',
             'amount_total' => 2500,
             'payment_status' => 'paid',
@@ -328,6 +329,14 @@ test('stripe credit checkout fulfillment is idempotent and rejects amount tamper
 
     expect($service->ingest($payload, $signature)['message'])->toBe('processed_credit')
         ->and($service->ingest($payload, $signature)['message'])->toBe('processed_credit')
+        ->and(DB::table('tenant_messaging_credit_accounts')->where('tenant_id', $tenant->id)->value('balance_micros'))->toBe(25000000)
+        ->and(DB::table('tenant_messaging_ledger_entries')->where('entry_type', 'credit_funding')->count())->toBe(1);
+
+    $event['id'] = 'evt_credit_second_notification';
+    $event['type'] = 'checkout.session.async_payment_succeeded';
+    $again = json_encode($event, JSON_THROW_ON_ERROR);
+    $againSignature = 't='.$timestamp.',v1='.hash_hmac('sha256', $timestamp.'.'.$again, 'whsec_test_credit');
+    expect($service->ingest($again, $againSignature)['message'])->toBe('processed_credit')
         ->and(DB::table('tenant_messaging_credit_accounts')->where('tenant_id', $tenant->id)->value('balance_micros'))->toBe(25000000)
         ->and(DB::table('tenant_messaging_ledger_entries')->where('entry_type', 'credit_funding')->count())->toBe(1);
 

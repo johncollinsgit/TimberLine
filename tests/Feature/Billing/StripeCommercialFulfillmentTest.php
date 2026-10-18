@@ -339,5 +339,5 @@ test('subscription deleted webhook downgrades stripe-fulfilled access and keeps 
 
     $journey = app(TenantCommercialExperienceService::class)->merchantJourneyPayload((int) $tenant->id);
     expect((string) data_get($journey, 'commercial_summary.lifecycle_state'))->toBe('action_required')
-        ->and((string) data_get($journey, 'billing_next_step.mode'))->toBe('hosted_checkout');
+        ->and((string) data_get($journey, 'billing_next_step.mode'))->toBe('landlord_follow_up');
 });

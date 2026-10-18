@@ -48,7 +48,7 @@ test('merchant journey payload includes normalized billing interest and next ste
         ->and((string) data_get($payload, 'billing_next_step.mode'))->toBe('landlord_follow_up');
 });
 
-test('hosted checkout mode when stripe is enabled and interest is valid', function (): void {
+test('retired plan interest requires follow up even when stripe is enabled', function (): void {
     config()->set('commercial.billing_readiness.checkout_active', true);
     config()->set('services.stripe.secret', 'sk_test_123');
 
@@ -72,8 +72,8 @@ test('hosted checkout mode when stripe is enabled and interest is valid', functi
     $journey = app(TenantCommercialExperienceService::class)->merchantJourneyPayload((int) $tenant->id);
     $nextStep = (array) ($journey['billing_next_step'] ?? []);
 
-    expect((string) ($nextStep['mode'] ?? ''))->toBe('hosted_checkout')
-        ->and((array) ($nextStep['cta_route'] ?? []))->toMatchArray(['name' => 'billing.checkout', 'method' => 'post']);
+    expect((string) ($nextStep['mode'] ?? ''))->toBe('unavailable')
+        ->and($nextStep['cta_route'] ?? null)->toBeNull();
 });
 
 test('billing portal mode when stripe customer reference exists', function (): void {
@@ -108,7 +108,7 @@ test('billing portal mode when stripe customer reference exists', function (): v
         ->and((array) ($nextStep['cta_route'] ?? []))->toMatchArray(['name' => 'billing.portal', 'method' => 'post']);
 });
 
-test('hosted checkout endpoint creates session and redirects with tenant-safe urls and metadata', function (): void {
+test('retired tier checkout rejects arbitrary client prices without provider requests', function (): void {
     config()->set('commercial.billing_readiness.checkout_active', true);
     config()->set('services.stripe.secret', 'sk_test_123');
 
@@ -144,47 +144,16 @@ test('hosted checkout endpoint creates session and redirects with tenant-safe ur
         ],
     ]);
 
-    $checkoutUrl = 'https://checkout.stripe.test/session/cs_123';
-
-    $tenantId = (int) $tenant->id;
-
-    Http::fake(function (\Illuminate\Http\Client\Request $request) use ($checkoutUrl, $tenantId) {
-        if (str_contains($request->url(), '/v1/prices')) {
-            return Http::response([
-                'data' => [
-                    ['id' => 'price_growth', 'lookup_key' => 'tier_growth_monthly'],
-                    ['id' => 'price_sms', 'lookup_key' => 'addon_sms_monthly'],
-                ],
-            ], 200);
-        }
-
-        if (str_contains($request->url(), '/v1/checkout/sessions')) {
-            $data = $request->data();
-
-            expect((string) ($data['mode'] ?? ''))->toBe('subscription')
-                ->and((string) ($data['line_items[0][price]'] ?? ''))->toBe('price_growth')
-                ->and((string) ($data['line_items[1][price]'] ?? ''))->toBe('price_sms')
-                ->and((string) ($data['metadata[tenant_id]'] ?? ''))->toBe((string) $tenantId)
-                ->and((string) ($data['metadata[preferred_plan_key]'] ?? ''))->toBe('growth')
-                ->and((string) ($data['success_url'] ?? ''))->toContain('https://acme.theeverbranch.com/start?billing=success&session_id={CHECKOUT_SESSION_ID}')
-                ->and((string) ($data['cancel_url'] ?? ''))->toBe('https://acme.theeverbranch.com/start?billing=cancel')
-                ->and(json_encode($data))->not->toContain('price_evil');
-
-            return Http::response([
-                'id' => 'cs_123',
-                'url' => $checkoutUrl,
-            ], 200);
-        }
-
-        return Http::response(['error' => ['message' => 'unexpected']], 500);
-    });
+    Http::fake();
 
     $this->actingAs($user)
         ->post('http://acme.theeverbranch.com/billing/checkout', [
             'price_id' => 'price_evil',
             'line_items' => [['price' => 'price_evil']],
         ])
-        ->assertRedirect($checkoutUrl);
+        ->assertRedirect();
+
+    Http::assertNothingSent();
 
     expect(TenantAccessProfile::query()->where('tenant_id', (int) $tenant->id)->value('plan_key'))->toBe('starter');
 });

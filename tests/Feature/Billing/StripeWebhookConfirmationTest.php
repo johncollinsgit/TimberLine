@@ -77,7 +77,7 @@ test('valid signed webhook updates billing mapping for correct tenant and does n
 
     // Prime journey cache, then ensure webhook invalidates override-driven cache cleanly.
     $before = app(TenantCommercialExperienceService::class)->merchantJourneyPayload((int) $tenant->id);
-    expect((string) data_get($before, 'billing_next_step.mode'))->toBe('hosted_checkout');
+    expect((string) data_get($before, 'billing_next_step.mode'))->toBe('unavailable');
 
     $this->call('POST', 'http://app.backstage.local/webhooks/stripe/events', [], [], [], [
         'CONTENT_TYPE' => 'application/json',

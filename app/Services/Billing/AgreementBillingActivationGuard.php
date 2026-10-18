@@ -31,6 +31,9 @@ class AgreementBillingActivationGuard
     {
         $authorization->loadMissing(['agreement', 'acceptance']);
         $reasons = [];
+        if ($authorization->agreement?->template_key === \App\Models\Agreement::TEMPLATE_STANDARD_SERVICES && blank(data_get($authorization->metadata, 'canonical_plan_key'))) {
+            $reasons[] = 'confirmed_standard_capacity_required';
+        }
         if ($authorization->agreement?->agreement_type === Agreement::TYPE_SANDBOX_VALIDATION
             || data_get($authorization->metadata, 'validation_only') === true) {
             $reasons[] = 'sandbox_validation_cannot_activate';

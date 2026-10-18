@@ -7,7 +7,7 @@
     $cta = is_array($cta ?? null) ? $cta : [];
     $startClientCta = is_array($cta['start_client'] ?? null) && filled($cta['start_client']['href'] ?? null)
         ? $cta['start_client']
-        : ['href' => route('platform.start'), 'label' => 'Become a launch partner'];
+        : ['href' => route('platform.start'), 'label' => 'Get started'];
 @endphp
 <!DOCTYPE html>
 <html lang="en">
@@ -54,7 +54,7 @@
                 <h1 id="hero-title">Your business has a rhythm.<br>Everbranch helps you keep it.</h1>
                 <p class="eb-studio-hero__lede">Customers, work, messages, files, and the next thing that needs attention, connected in one place that feels like it was made for how your team actually operates.</p>
                 <div class="eb-studio-hero__actions">
-                    <a class="eb-studio-button eb-studio-button--light" href="{{ $startClientCta['href'] }}">Become a launch partner <span aria-hidden="true">↗</span></a>
+                    <a class="eb-studio-button eb-studio-button--light" href="{{ $startClientCta['href'] }}">Get started <span aria-hidden="true">↗</span></a>
                     <button class="eb-studio-play" type="button" data-studio-film-open aria-haspopup="dialog">
                         <span class="eb-studio-play__icon" aria-hidden="true">▶</span>
                         <span>See the Everbranch story</span>
