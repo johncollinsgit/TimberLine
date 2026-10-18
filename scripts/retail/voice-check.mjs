@@ -20,7 +20,7 @@ await page.addInitScript(()=>{
  window.RTCPeerConnection=class {
   constructor(){this.connectionState='new';qa.peers.push(this);}
   addTrack(){}
-  createDataChannel(){const channel={sent:[],send(value){this.sent.push(JSON.parse(value));},close(){this.closed=true;}};qa.channels.push(channel);return channel;}
+  createDataChannel(){const channel={readyState:'open',sent:[],send(value){this.sent.push(JSON.parse(value));},close(){this.closed=true;}};qa.channels.push(channel);return channel;}
   async createOffer(){return {type:'offer',sdp:'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n'};}
   async setLocalDescription(){}
   async setRemoteDescription(){this.connectionState='connected';this.onconnectionstatechange?.();qa.channels.at(-1).onopen?.();}
@@ -58,6 +58,14 @@ try {
  checks.push('Audio SDP uses the selected context; turns, interruption and escaped transcripts render; mute disables the audio track');
  await page.screenshot({path:out+'/conversation-landscape.png'});
  await page.setViewportSize({width:800,height:1280});await page.screenshot({path:out+'/conversation-portrait.png'});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ const sentBefore=await page.evaluate(()=>window.__voiceQA.channels.at(-1).sent.filter(e=>e.type==='response.create').length);
+ await emit({type:'rate_limits.updated',rate_limits:[{name:'tokens',reset_seconds:0.1}]});
+ await emit({type:'response.done',response:{status:'failed',status_details:{error:{code:'rate_limit_exceeded',message:'PRIVATE_PROVIDER_DIAGNOSTIC'}}}});
+ await expect(page.locator('#voice-status')).toContainText('Voice is catching up');assert.equal(await page.evaluate(()=>window.__voiceQA.tracks.at(-1).enabled),false);
+ await expect.poll(()=>page.evaluate(()=>window.__voiceQA.channels.at(-1).sent.filter(e=>e.type==='response.create').length),{timeout:6000}).toBe(sentBefore+1);
+ assert.equal(await page.evaluate(()=>window.__voiceQA.tracks.at(-1).enabled),true);assert.ok(!(await page.locator('#voice-status').innerText()).includes('PRIVATE_PROVIDER'));
+ await emit({type:'response.done',response:{status:'completed',output:[]}});
+ checks.push('A provider rate-limit pause disables microphone briefly and retries one reply without replaying a tool or exposing diagnostics');
  await page.locator('[data-voice-action=end]').click();await stopped();assert.equal(await page.locator('#voice-transcript li').count(),3);
  await page.locator('#voice-merchant').selectOption('mcneills-pottery');await expect(page.locator('#retail-voice')).toHaveAttribute('data-state','ready');assert.equal(await page.locator('#voice-transcript li').count(),0);await start();assert.equal(sessions.at(-1).merchant,'mcneills-pottery');
  await context.setOffline(true);await expect(page.locator('#retail-voice')).toHaveCount(0);await stopped();await page.locator('[data-sales-action=voice]').first().click();await expect(page.locator('#voice-status')).toContainText('Offline.');
@@ -72,7 +80,7 @@ try {
  await page.evaluate(()=>{window.__voiceQA.permission='allow';window.__voiceQA.defer=true;});await page.locator('[data-voice-action=check]').click();await expect(page.locator('#retail-voice')).toHaveAttribute('data-state','ready');await page.locator('[data-voice-action=start]').click();await expect.poll(()=>page.evaluate(()=>!!window.__voiceQA.resolveMic)).toBe(true);
  await page.locator('[data-action=close]').first().click();await page.evaluate(()=>window.__voiceQA.resolveMic());await stopped();
  checks.push('Denied microphone access is recoverable; permission resolving after close cannot leave a microphone open');
- await page.evaluate(()=>window.__voiceQA.defer=false);await open();await start();await page.locator('[data-action=close]').first().click();await stopped();
+ await page.evaluate(()=>window.__voiceQA.defer=false);await open();await start();await emit({type:'response.done',response:{status:'failed',status_details:{error:{code:'rate_limit_exceeded'}}}});const retryClosed=await page.evaluate(()=>window.__voiceQA.channels.at(-1).sent.length);await page.locator('[data-action=close]').first().click();await stopped();await page.waitForTimeout(3200);assert.equal(await page.evaluate(()=>window.__voiceQA.channels.at(-1).sent.length),retryClosed);checks.push('Closing during a rate-limit pause cancels its timer and cannot reopen microphone or send a late retry');
  await open();await start();await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});await stopped();assert.equal(await page.locator('#voice-transcript li').count(),0);await page.evaluate(()=>delete document.hidden);
  checks.push('Closing an active call or backgrounding the app stops audio and clears the conversation');
  await page.locator('[data-voice-action=check]').click();await expect(page.locator('#retail-voice')).toHaveAttribute('data-state','ready');await start();await page.evaluate(()=>{const peer=window.__voiceQA.peers.at(-1);peer.connectionState='failed';peer.onconnectionstatechange();});await expect(page.locator('#voice-status')).toContainText('Connection lost');await stopped();

@@ -1,3 +1,4 @@
+import {compactVoiceResult} from './voice-context.mjs';
 import {demoToolNames} from './workbench.mjs';
 import {refreshRetailSession,retailFetch} from './connection.mjs';
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -5,7 +6,8 @@ const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;
 export function createRetailVoice({context,openModal}) {
  const completedCalls=new Set();
  let responseActive=false,pendingText=null;
- let peer=null,channel=null,microphone=null,audio=null,abort=null,sessionTimer=null,connectTimer=null,probeTimer=null;
+ let peer=null,channel=null,microphone=null,audio=null,abort=null,sessionTimer=null,connectTimer=null,probeTimer=null,retryTimer=null;
+ let ratePaused=false,rateRetries=0,tokenResetSeconds=3;
  let generation=0,muted=false,speaking=false,busy=false,startPending=false,selected=null,focusedCustomer=null,pageAtOpen='home',rows=new Map(),sequence=0;
  const panel=()=>document.querySelector('#retail-voice');
  const update=(next,message)=>{const node=panel();if(!node)return;node.dataset.state=next;
@@ -39,7 +41,7 @@ export function createRetailVoice({context,openModal}) {
   panel().querySelector('#voice-transcript-hint').hidden=true;log.scrollTop=log.scrollHeight;
  }
  function stop(message='Conversation ended. Check the connection to start again.',clearTranscript=false) {
-  generation++;busy=false;startPending=false;responseActive=false;pendingText=null;abort?.abort();abort=null;clearTimeout(sessionTimer);clearTimeout(connectTimer);clearTimeout(probeTimer);
+  generation++;busy=false;startPending=false;responseActive=false;pendingText=null;abort?.abort();abort=null;clearTimeout(sessionTimer);clearTimeout(connectTimer);clearTimeout(probeTimer);clearTimeout(retryTimer);retryTimer=null;ratePaused=false;rateRetries=0;
   if(channel){channel.onopen=channel.onmessage=channel.onclose=channel.onerror=null;channel.close();channel=null;}
   if(peer){peer.ontrack=peer.onconnectionstatechange=peer.oniceconnectionstatechange=null;peer.close();peer=null;}
   microphone?.getTracks().forEach(track=>track.stop());microphone=null;
@@ -48,6 +50,20 @@ export function createRetailVoice({context,openModal}) {
   if(clearTranscript){rows.clear();panel()?.querySelector('#voice-transcript')?.replaceChildren();}
   const mute=panel()?.querySelector('[data-voice-action="mute"]');if(mute){mute.textContent='Mute microphone';mute.setAttribute('aria-pressed','false');}
   update('ended',message);
+ }
+ function recoverRateLimit(error) {
+  if(error?.code!=='rate_limit_exceeded'||!peer||channel?.readyState!=='open')return false;
+  if(retryTimer)return true;
+  if(rateRetries>=1)return false;
+  rateRetries++;ratePaused=true;responseActive=false;
+  microphone?.getAudioTracks().forEach(track=>track.enabled=false);
+  const id=generation,seconds=Math.min(30,Math.max(3,Math.ceil(tokenResetSeconds)));
+  update('thinking',`Voice is catching up. Microphone paused; retrying the reply in ${seconds} seconds…`);
+  retryTimer=setTimeout(()=>{retryTimer=null;if(id!==generation||channel?.readyState!=='open')return;
+   ratePaused=false;microphone?.getAudioTracks().forEach(track=>track.enabled=!muted);
+   responseActive=true;update('thinking','Continuing your reply…');channel.send(JSON.stringify({type:'response.create'}));
+  },seconds*1000);
+  return true;
  }
  async function check() {
   if(!panel()||peer||busy)return false;
@@ -87,6 +103,7 @@ export function createRetailVoice({context,openModal}) {
     if(data.type==='input_audio_buffer.speech_started'){speaking=false;update(muted?'muted':'listening',muted?'Microphone muted.':'Listening…');}
     if(data.type==='input_audio_buffer.speech_stopped')update(muted?'muted':'thinking',muted?'Microphone muted.':'Thinking about your question…');
     if(data.type==='input_audio_buffer.committed')transcript('user','Transcribing…',data.item_id);
+    if(data.type==='rate_limits.updated'){const limit=data.rate_limits?.find(r=>r.name==='tokens');if(Number.isFinite(limit?.reset_seconds))tokenResetSeconds=limit.reset_seconds;}
     if(data.type==='response.created'){responseActive=true;if(!speaking)update('thinking','Thinking…');}
     if(data.type==='response.done')responseActive=false;
     if(data.type==='output_audio_buffer.started'){speaking=true;update('speaking','Speaking. You can interrupt, or select Mute microphone.');}
@@ -95,17 +112,19 @@ export function createRetailVoice({context,openModal}) {
     if(['response.output_audio_transcript.done','response.audio_transcript.done'].includes(data.type))transcript('assistant',data.transcript,data.item_id??data.response_id);
     if(data.type==='conversation.item.input_audio_transcription.completed')transcript('user',data.transcript,data.item_id);
     if(data.type==='response.done'&&data.response?.status==='completed'){
+     rateRetries=0;
      const calls=(data.response.output??[]).filter(item=>item.type==='function_call'&&item.status==='completed');
      for(const item of calls){
       if(completedCalls.has(item.call_id))continue;completedCalls.add(item.call_id);
       let result={ok:false,message:'This display command is unavailable.'};
       try{if(selected&&demoToolNames.includes(item.name)&&String(item.arguments).length<4000){const args=JSON.parse(item.arguments);if(args&&typeof args==='object'&&!Array.isArray(args))result=context().demoTool?.(item.name,args)??result;}}catch{result={ok:false,message:'The demo display request could not be read.'};}
-      if(channel?.readyState==='open')channel.send(JSON.stringify({type:'conversation.item.create',item:{type:'function_call_output',call_id:item.call_id,output:JSON.stringify(result)}}));
+      if(channel?.readyState==='open')channel.send(JSON.stringify({type:'conversation.item.create',item:{type:'function_call_output',call_id:item.call_id,output:JSON.stringify(compactVoiceResult(result))}}));
      }
      if(pendingText){const question=pendingText;pendingText=null;sendText(question);}else if(calls.length&&channel?.readyState==='open'){responseActive=true;channel.send(JSON.stringify({type:'response.create'}));}
     }
-    if(data.type==='response.done'&&data.response?.status==='failed'){stop('The voice service could not finish that reply. Your saved demo work is intact. Recheck to continue.');return;}
+    if(data.type==='response.done'&&data.response?.status==='failed'){if(recoverRateLimit(data.response.status_details?.error))return;stop('The voice service could not finish that reply. Your saved demo work is intact. Recheck to continue.');return;}
     if(data.type==='response.done'&&data.response?.status!=='completed'&&pendingText){const question=pendingText;pendingText=null;sendText(question);}
+    if(data.type==='error'&&recoverRateLimit(data.error))return;
     if(data.type==='error'&&!['response_cancel_not_active','conversation_already_has_active_response'].includes(data.error?.code))stop('Live voice could not continue. Your microphone is off. Recheck the connection and try again.');
    };
    channel.onclose=()=>{if(id===generation)stop('The voice connection ended. Your microphone is off.');};
@@ -140,10 +159,11 @@ export function createRetailVoice({context,openModal}) {
   if(action==='end')stop();
   if(action==='check')check();
   if(action==='play')audio?.play().then(()=>{const button=panel()?.querySelector('[data-voice-action="play"]');if(button)button.hidden=true;}).catch(()=>{});
-  if(action==='mute'&&microphone){muted=!muted;microphone.getAudioTracks().forEach(track=>track.enabled=!muted);const button=panel().querySelector('[data-voice-action="mute"]');button.textContent=muted?'Unmute microphone':'Mute microphone';button.setAttribute('aria-pressed',String(muted));update(muted?'muted':speaking?'speaking':'listening',muted?'Microphone muted. You can still hear replies.':speaking?'Speaking. You can interrupt my reply.':'Listening…');}
+  if(action==='mute'&&microphone){muted=!muted;microphone.getAudioTracks().forEach(track=>track.enabled=!muted&&!ratePaused);const button=panel().querySelector('[data-voice-action="mute"]');button.textContent=muted?'Unmute microphone':'Mute microphone';button.setAttribute('aria-pressed',String(muted));if(ratePaused){update('thinking','Voice is catching up. Your microphone is paused while the reply retries.');return;}update(muted?'muted':speaking?'speaking':'listening',muted?'Microphone muted. You can still hear replies.':speaking?'Speaking. You can interrupt my reply.':'Listening…');}
  });
  function sendText(question){
   if(channel?.readyState!=='open')return;
+  if(ratePaused){pendingText=question;return;}
   if(speaking){channel.send(JSON.stringify({type:'output_audio_buffer.clear'}));speaking=false;}
   if(responseActive){pendingText=question;return;}
   channel.send(JSON.stringify({type:'conversation.item.create',item:{type:'message',role:'user',content:[{type:'input_text',text:question}]}}));

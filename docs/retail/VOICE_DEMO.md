@@ -78,7 +78,7 @@ WebRTC carries audio directly to OpenAI. The app keeps a short, escaped transcri
 only in dialog memory and clears it when closed/backgrounded or the business
 changes. It does not save audio/transcripts to the application database, local
 storage, offline queue or service worker cache. This is not a claim about provider
-retention. Session tracing is disabled. Cache v17 includes the public voice/action modules and shell, preserving the complete
+retention. Session tracing is disabled. Cache v18 includes the public voice/action modules and shell, preserving the complete
 142-photo pack. Private APIs and real recipient details are never cached.
 
 For this local demonstration the existing authorized hosted credential was loaded
@@ -164,3 +164,38 @@ explicitly enabled exact staging host (`RETAIL_PRESENTER_TRANSPORT_ENABLED` and
 `RETAIL_PRESENTER_HOST`). Its protected private settings and durable delivery audit
 must migrate together. Production remains blocked even if that flag is set. No
 queue worker or production webhook is enabled on the preview.
+
+
+The isolated host is `https://everbranch-retail-demo.on-forge.com` (Forge site
+3432615 on the existing server). Its secure file session lasts 43,200 minutes
+(30 days) between use, independently of the legacy localhost cookie.
+
+Forge's default MIME map does not recognize `.mjs`. In this preview site's Nginx
+configuration only, preserve all existing directives and add:
+
+```nginx
+location ~ ^/retail/[a-z0-9-]+\.mjs$ {
+    types { application/javascript mjs; }
+    default_type application/javascript;
+    add_header Cache-Control "no-cache";
+    add_header X-Content-Type-Options "nosniff";
+    try_files $uri =404;
+}
+```
+
+Verify `Content-Type: application/javascript` over public HTTPS for every module;
+otherwise Chromium leaves the app at its loading screen. Forge validates/reloads
+this change. Do not edit production site 3053351's configuration for this preview.
+
+Rapid live acceptance exposed an OpenAI token-per-minute limit after several
+commands: repeated full snapshots had enlarged each reply's context. V18 keeps all
+records in the UI but sends a compact initial index and relevant tool results
+(83% smaller in the Avery regression, with all 14 customers and 77 catalog options
+retained). It uses a 6,000-token post-instruction history budget and 0.7 retention
+ratio, following the [Realtime cost guidance](https://developers.openai.com/api/docs/guides/voice-latency-cost).
+For an explicit provider rate-limit response, the client pauses microphone input
+and retries that reply once after a bounded 3–30-second delay. It does not replay
+tools, resend a message or retry an uncertain provider POST. End/close/background
+cancel the timer and stop media. Other failures still stop the conversation.
+Run `voice-context-check.mjs` and `voice-check.mjs` for coverage of payload size,
+retained facts, transient recovery, diagnostics privacy and cancellation.

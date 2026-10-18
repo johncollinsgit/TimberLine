@@ -120,3 +120,19 @@ test('Sawyer voice includes all retained catalog products without querying its r
     expect($context['merchant']['catalog_sample'])->toHaveCount(62);
     expect($context['demo_records']['customers'])->toBe([])->and($context['demo_records']['orders'])->toBe([]);
 });
+
+test('Avery voice keeps a compact index and bounded history while returning full fictional records to the tablet', function () {
+    $response = $this->postJson($this->url, [...$this->input, 'merchant' => 'avery-knifeworks', 'focus_customer' => 'ak-demo-03'])
+        ->assertOk()->assertJsonPath('context_summary.customers', 14)->assertJsonPath('context_summary.orders', 33)
+        ->assertJsonPath('context_summary.focused_customer', 'Bob Ross');
+    [$context, $session] = voiceDemoSentContext();
+    expect($context['demo_records']['customers'])->toHaveCount(14);
+    expect($context['demo_records']['suggested_follow_up_ids'])->toHaveCount(10);
+    expect($context['demo_records'])->not->toHaveKeys(['suggested_follow_ups', 'care_requests', 'interests', 'batches']);
+    expect($context['demo_records']['focused_customer']['favorite_knife']['model'])->toBe('Woodsman Knife');
+    expect(strlen(json_encode($context)))->toBeLessThan(16000);
+    expect($response->json('demo_records.care_requests'))->toHaveCount(3);
+    expect($response->json('demo_records.interests'))->toHaveCount(4);
+    expect($session['truncation'])->toBe(['type' => 'retention_ratio', 'retention_ratio' => 0.7, 'token_limits' => ['post_instructions' => 6000]]);
+    Http::assertSentCount(1);
+});

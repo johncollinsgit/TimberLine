@@ -107,13 +107,13 @@ class RetailVoiceService
 
         try {
             $session = ['type' => 'realtime', 'model' => $this->model(), 'output_modalities' => ['audio'],
-                'instructions' => $this->instructions()."\n\nDEMO_CONTEXT_JSON:\n".json_encode($context, JSON_THROW_ON_ERROR),
+                'instructions' => $this->instructions()."\n\nDEMO_CONTEXT_JSON:\n".json_encode($this->voiceContext($context), JSON_THROW_ON_ERROR),
                 'audio' => ['input' => [
                     'transcription' => ['model' => 'gpt-4o-mini-transcribe'],
                     'turn_detection' => ['type' => 'server_vad', 'threshold' => 0.5, 'prefix_padding_ms' => 300,
                         'silence_duration_ms' => 650, 'create_response' => true, 'interrupt_response' => true],
                 ], 'output' => ['voice' => 'marin']],
-                'max_output_tokens' => 1400, 'tools' => filled($input['merchant'] ?? null) ? app(AveryWorkspaceDemo::class)->tools() : [], 'tool_choice' => filled($input['merchant'] ?? null) ? 'auto' : 'none', 'tracing' => null];
+                'max_output_tokens' => 1400, 'truncation' => ['type' => 'retention_ratio', 'retention_ratio' => 0.7, 'token_limits' => ['post_instructions' => 6000]], 'tools' => filled($input['merchant'] ?? null) ? app(AveryWorkspaceDemo::class)->tools() : [], 'tool_choice' => filled($input['merchant'] ?? null) ? 'auto' : 'none', 'tracing' => null];
 
             $response = Http::withToken($this->key())->withHeaders([
                 'Accept' => 'application/sdp',
@@ -134,7 +134,9 @@ class RetailVoiceService
 
         return ['demo_records' => $context['demo_records'], 'sdp' => $answer, 'business' => $context['merchant']['name'] ?? null, 'max_duration_seconds' => $this->maxDurationSeconds(),
             'context_summary' => ['source' => $context['demo_records']['source'], 'as_of' => $context['demo_records']['as_of'],
-                'customers' => count($context['demo_records']['customers']), 'orders' => count($context['demo_records']['orders']),
+                'customers' => count($context['demo_records']['customers']), 'orders' => ($context['demo_records']['source'] ?? '') === 'avery_fictional'
+                    ? array_sum(array_map(fn ($customer) => count($customer['orders'] ?? []), $context['demo_records']['customers']))
+                    : count($context['demo_records']['orders']),
                 'focused_customer' => $context['demo_records']['focused_customer']['name'] ?? null]];
     }
 
@@ -173,6 +175,23 @@ class RetailVoiceService
                 'eligibility_note', 'included', 'partnership', 'review_note', 'additional',
             ])),
             'capabilities' => ['live_voice' => true, 'web_browsing' => false, 'demo_actions' => $slug !== null, 'live_actions' => false, 'demo_customer_records' => true, 'private_customer_records' => false]];
+    }
+
+    private function voiceContext(array $context): array
+    {
+        if (($context['merchant']['slug'] ?? null) !== 'avery-knifeworks') {
+            return $context;
+        }
+        $records = $context['demo_records'];
+        $context['demo_records'] = array_intersect_key($records, array_flip(['source', 'as_of', 'view', 'focused_customer', 'notes', 'ranking_explanation']));
+        $context['demo_records']['customers'] = array_map(fn ($customer) => [
+            ...array_intersect_key($customer, array_flip(['id', 'name', 'favorite_knife'])),
+            'order_count' => count($customer['orders'] ?? []),
+        ], $records['customers']);
+        $context['demo_records']['suggested_follow_up_ids'] = array_column($records['suggested_follow_ups'], 'id');
+        $context['demo_records']['detail_access'] = 'Open a customer or call get_demo_context for current notes, orders, forms and workshop details.';
+
+        return $context;
     }
 
     private function instructions(): string

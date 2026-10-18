@@ -1,0 +1,14 @@
+import fs from 'node:fs';import assert from 'node:assert/strict';
+import {compactVoiceResult} from '../../public/retail/voice-context.mjs';
+const data=JSON.parse(fs.readFileSync('resources/data/avery-workspace-demo.json'));
+const products=JSON.parse(fs.readFileSync('resources/data/avery-catalog-demo.json')).products;
+const focused=data.customers.find(c=>c.name==='Bob Ross');
+const full={ok:true,view:'customers',fictional:true,merchant:'avery-knifeworks',focused_customer:focused,customers:data.customers,catalog:products,workshop:{production:data.batches,materials:data.materials,shipping:data.shipping,passport:{requests:data.care_requests,interests:data.interests},finder:{category:'Kitchen'},selection:{model:'Woodsman Knife',handle:'Walnut'}}};
+const before=JSON.stringify(full),compact=compactVoiceResult(full),after=JSON.stringify(compact);
+assert.equal(JSON.stringify(full),before);assert.equal(compact.customers.length,14);assert.equal(compact.catalog.length,8);assert.equal(compact.catalog.reduce((n,p)=>n+p.variants.length,0),77);
+assert.equal(compact.focused_customer.name,'Bob Ross');assert.equal(compact.focused_customer.favorite_knife.model,'Woodsman Knife');assert.ok(compact.focused_customer.orders.length);assert.ok(compact.focused_customer.notes.length);
+assert.equal(compact.workshop.passport,undefined);assert.deepEqual(compact.workshop.selection,full.workshop.selection);assert.ok(after.length<before.length*.5);
+const form={ok:true,view:'new_customer',form:{kind:'customer',name:'Pat Taylor',email:'pat@demo.invalid',notes:'Prefers walnut'}};assert.deepEqual(compactVoiceResult(form).form,form.form);
+const care=compactVoiceResult({...full,view:'care'});assert.equal(care.workshop.passport.requests.length,3);
+const draft={channel:'sms',subject:'Avery',sms_body:'Fictional John prefers the Chef',image:'UI_ONLY',url:'UI_ONLY'};assert.equal(compactVoiceResult({ok:true,marketing_draft:draft}).marketing_draft.sms_body,draft.sms_body);assert.ok(!JSON.stringify(compactVoiceResult({ok:true,marketing_draft:draft})).includes('UI_ONLY'));
+console.log(JSON.stringify({passed:true,beforeBytes:before.length,afterBytes:after.length,reductionPercent:Math.round(100*(1-after.length/before.length)),allCustomers:true,allModelsAnd77Variants:true,focusedOrdersNotesFavorite:true,formPreserved:true,careWhenRelevant:true}));
