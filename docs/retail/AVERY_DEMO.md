@@ -2,7 +2,7 @@
 
 The existing Retail install contains an independent Avery concept, not Avery's live
 store or an activated merchant workspace. No app identity or saved customer/cart
-records are reset. Cache v13 carries 142 public photographs and the public modules;
+records are reset. Cache v15 carries 142 public photographs and the public modules;
 authenticated pages, APIs, real recipients and agreement/payment links are excluded.
 
 ## Presentation sequence
@@ -35,8 +35,7 @@ authenticated pages, APIs, real recipients and agreement/payment links are exclu
 6. Show pricing: $299/month plus $499 one-time setup and one shared prepaid usage
    balance. New Standard has no text setup or separate email/text monthly access
    fee. OpenAI is 2× actual API cost; model examples include the cheaper Mini voice
-   option. Email/text unit rates are retained pending the owner's current pricing
-   discussion. Future voice will offer owner-approved team model choice and caps;
+   option. Email is $1.49/1,000, SMS $0.05/segment and MMS $0.15. The example five-person usage is $48.95 and a regular month $347.95. The first payment is $798, with no usage fees or preload. Future voice will offer owner-approved team model choice and caps;
    telephone transport, connection fees, implementation and launch scope still
    need a written quote. The screen does not activate a service or collect credit.
 7. Present mode's final Avery footer opens the actual review agreement and live
@@ -110,3 +109,41 @@ cache v13. This is browser verification, not completion of the physical-tablet
 refresh; both wireless-debugging transports need reconnection. The pricing and
 Twilio provisioning PRs passed their GitHub checks. No new live send, invoice,
 payment, subscription or production deployment occurred during this policy update.
+
+
+## October 18 presentation polish
+
+Avery's top navigation uses Shop & discover (catalog/finder/story), Knife care
+(passport/Care & interests), Workshop (customers, follow-ups, orders, production,
+inventory and shipping), and Demo tools (assistant/pricing/presentation/app kit).
+Touch/keyboard menus close on selection, Escape or outside click. The supplied
+transparent Avery logo appears in the store, workspace/passport and email preview.
+
+Care & interests explains both workflows and includes three fictional service
+requests (Received, Being serviced and Ready) and four product-specific interests.
+Customer, knife, handle, purchase reference and service activity remain linked;
+saved preferences never imply contact permission. Sample requests use catalog
+photos labeled as fictional; no real service intake or warranty approval occurs.
+An additive sample seed preserves tablet-created records and production progress.
+Fourteen customers, 33 past orders, three production batches, six material lots
+and shipping checklists make the workshop concrete. Voice/typed navigation can
+open the finder, passport and Care & interests through the same allowlisted tools.
+
+The centered email preview uses Avery's logo, exact selected handle photo, readable
+copy and product link. The reviewed SendGrid HTML mirrors that design and embeds
+logo/photo with content IDs. Real recipient confirmation and the existing durable
+send reservation remain mandatory; no mailing list is populated. Existing demo
+invoice draft presentation is a separate agent's work and is not changed here.
+
+Present close has six service preference checkboxes. An owner-only endpoint stores
+an audited, canonical, zero-access-fee quote on the existing prospect. Replay does
+not duplicate the audit. Saving does not activate features, change the live invoice,
+preload credit or accept terms. Future memory is an included Standard feature when
+released; memory/model usage and future combined voice cost are 2× actual provider
+cost. Planned features remain labeled planned.
+
+QA: `navigation-care-check.mjs`, `avery-check.mjs`, `sales-upgrade-check.mjs`,
+`photo-offline-check.mjs` and `workbench-check.mjs` exercise layouts, saved records,
+consent and offline data. `email-brand-live-check.mjs` requires explicit opt-in and
+an owner-authorized email; its stable request ID prevents duplicate test sends.
+Never run it to a prospect or silently change that stable request ID.

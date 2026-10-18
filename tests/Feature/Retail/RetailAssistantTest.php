@@ -11,6 +11,7 @@ beforeEach(function () {
     config()->set('retail_showroom.enabled', true);
     config()->set('retail_showroom.owner_email', $this->owner->email);
     config()->set('retail_showroom.ai_enabled', true);
+    config()->set('retail_showroom.ai_model', 'gpt-6.1-sol');
     config()->set('services.openai.api_key', 'synthetic-test-credential');
     $this->url = 'http://'.parse_url(route('retail.showroom'), PHP_URL_HOST).'/retail/showroom/api/assistant';
     $this->input = ['mode' => 'email', 'business' => 'Sample Retail', 'question' => 'Draft a weekend collection announcement', 'history' => []];

@@ -8,7 +8,7 @@ class AveryWorkspaceDemo
     public function snapshot(?string $customer = null, string $view = 'workspace'): array
     {
         $data = json_decode(file_get_contents(resource_path('data/avery-workspace-demo.json')), true, 512, JSON_THROW_ON_ERROR);
-        $data['view'] = in_array($view, ['storefront', 'workspace', 'customers', 'likely_to_order', 'production', 'inventory', 'orders', 'shipping', 'agreement', 'products', 'invoices', 'new_customer', 'new_invoice', 'marketing'], true) ? $view : 'workspace';
+        $data['view'] = in_array($view, ['storefront', 'workspace', 'customers', 'likely_to_order', 'production', 'inventory', 'orders', 'shipping', 'agreement', 'care', 'passport', 'finder', 'products', 'invoices', 'new_customer', 'new_invoice', 'marketing'], true) ? $view : 'workspace';
         $data['focused_customer'] = collect($data['customers'])->firstWhere('id', $customer);
         $data['suggested_follow_ups'] = collect($data['customers'])->sortByDesc('score')->take(10)->values()->all();
         $data['ranking_explanation'] = 'Fictional follow-up suggestions from explicit restock interest, upcoming gift occasions, saved handle preferences and example purchase timing. Scores are heuristics, never calibrated probabilities. Permission to contact is separate and no message is sent.';
@@ -20,7 +20,7 @@ class AveryWorkspaceDemo
     {
         return [
             ['type' => 'function', 'name' => 'show_demo_view', 'description' => 'Display a fictional screen for the currently selected demo business. Use likely_to_order to show ten customers likely to order soon, with the recorded reasons and contact-permission status. Opening a screen does not save, send or charge anything.',
-                'parameters' => ['type' => 'object', 'additionalProperties' => false, 'properties' => ['view' => ['type' => 'string', 'enum' => ['storefront', 'workspace', 'customers', 'likely_to_order', 'production', 'inventory', 'orders', 'shipping', 'agreement', 'products', 'invoices', 'new_customer', 'new_invoice', 'marketing']]], 'required' => ['view']]],
+                'parameters' => ['type' => 'object', 'additionalProperties' => false, 'properties' => ['view' => ['type' => 'string', 'enum' => ['storefront', 'workspace', 'customers', 'likely_to_order', 'production', 'inventory', 'orders', 'shipping', 'agreement', 'care', 'passport', 'finder', 'products', 'invoices', 'new_customer', 'new_invoice', 'marketing']]], 'required' => ['view']]],
             ['type' => 'function', 'name' => 'open_demo_customer', 'description' => 'Open one fictional customer in the selected business by exact name or ID from the supplied records. Never open real customer data.',
                 'parameters' => ['type' => 'object', 'additionalProperties' => false, 'properties' => ['customer' => ['type' => 'string']], 'required' => ['customer']]],
             ['type' => 'function', 'name' => 'get_demo_context', 'description' => 'Read the current fictional demo screen, focused customer, purchase history and suggested follow-ups. No provider, CRM or real customer access.',

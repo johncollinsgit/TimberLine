@@ -14,7 +14,7 @@
           "model": "Woodsman Knife",
           "handle": "Walnut",
           "total_cents": 38500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         }
       ],
       "signals": [
@@ -50,10 +50,10 @@
         {
           "reference": "DEMO-AKW-0201",
           "date": "2026-06-28",
-          "model": "Sheepsfoot Chef\u2019s Knife",
+          "model": "Sheepsfoot Chef’s Knife",
           "handle": "Maple Burl",
           "total_cents": 42500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         },
         {
           "reference": "DEMO-AKW-0202",
@@ -61,13 +61,13 @@
           "model": "Bird and Trout",
           "handle": "Maple Burl",
           "total_cents": 28500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         }
       ],
       "signals": [
         {
           "kind": "restock_interest",
-          "model": "Sheepsfoot Chef\u2019s Knife",
+          "model": "Sheepsfoot Chef’s Knife",
           "detail": "Asked for this model in the next maker release.",
           "weight": 45
         },
@@ -83,7 +83,7 @@
         },
         {
           "kind": "saved_handle",
-          "model": "Sheepsfoot Chef\u2019s Knife",
+          "model": "Sheepsfoot Chef’s Knife",
           "detail": "Saved Maple Burl as a preferred handle.",
           "weight": 12
         }
@@ -99,9 +99,9 @@
       ],
       "score": 99,
       "favorite_knife": {
-        "model": "Sheepsfoot Chef\u2019s Knife",
+        "model": "Sheepsfoot Chef’s Knife",
         "handle": "Maple Burl",
-        "reason": "Saved a chef\u2019s knife for a gift and asked about the next release."
+        "reason": "Saved a chef’s knife for a gift and asked about the next release."
       }
     },
     {
@@ -116,7 +116,7 @@
           "model": "Bird and Trout",
           "handle": "Pinecone/Pearl Resin",
           "total_cents": 28500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         },
         {
           "reference": "DEMO-AKW-0302",
@@ -124,7 +124,7 @@
           "model": "Field Knife",
           "handle": "Pinecone/Pearl Resin",
           "total_cents": 33500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         },
         {
           "reference": "DEMO-AKW-0303",
@@ -132,7 +132,7 @@
           "model": "Woodsman Knife",
           "handle": "Pinecone/Pearl Resin",
           "total_cents": 38500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         }
       ],
       "signals": [
@@ -162,7 +162,7 @@
       "favorite_knife": {
         "model": "Woodsman Knife",
         "handle": "Pinecone/Pearl Resin",
-        "reason": "Fictional Bob\u2019s stated favorite for woodland walks and camp chores."
+        "reason": "Fictional Bob’s stated favorite for woodland walks and camp chores."
       }
     },
     {
@@ -177,7 +177,7 @@
           "model": "Field Knife",
           "handle": "Walnut",
           "total_cents": 33500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         },
         {
           "reference": "DEMO-AKW-0402",
@@ -185,7 +185,7 @@
           "model": "Brookie Fillet Knife",
           "handle": "Walnut",
           "total_cents": 28500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         },
         {
           "reference": "DEMO-AKW-0403",
@@ -193,7 +193,7 @@
           "model": "Sheepsfoot Paring Knife",
           "handle": "Walnut",
           "total_cents": 16500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         },
         {
           "reference": "DEMO-AKW-0404",
@@ -201,7 +201,7 @@
           "model": "Woodsman Knife",
           "handle": "Walnut",
           "total_cents": 38500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         }
       ],
       "signals": [
@@ -245,7 +245,7 @@
           "model": "Brookie Fillet Knife",
           "handle": "Maple Burl",
           "total_cents": 28500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         }
       ],
       "signals": [
@@ -290,7 +290,7 @@
           "model": "Sheepsfoot Paring Knife",
           "handle": "Pinecone/Pearl Resin",
           "total_cents": 16500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         },
         {
           "reference": "DEMO-AKW-0602",
@@ -298,7 +298,7 @@
           "model": "Woodsman Knife",
           "handle": "Pinecone/Pearl Resin",
           "total_cents": 38500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         }
       ],
       "signals": [
@@ -337,15 +337,15 @@
           "model": "Woodsman Knife",
           "handle": "Walnut",
           "total_cents": 38500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         },
         {
           "reference": "DEMO-AKW-0702",
           "date": "2026-02-21",
-          "model": "Sheepsfoot Chef\u2019s Knife",
+          "model": "Sheepsfoot Chef’s Knife",
           "handle": "Walnut",
           "total_cents": 42500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         },
         {
           "reference": "DEMO-AKW-0703",
@@ -353,7 +353,7 @@
           "model": "Bird and Trout",
           "handle": "Walnut",
           "total_cents": 28500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         }
       ],
       "signals": [
@@ -394,10 +394,10 @@
         {
           "reference": "DEMO-AKW-0801",
           "date": "2025-04-26",
-          "model": "Sheepsfoot Chef\u2019s Knife",
+          "model": "Sheepsfoot Chef’s Knife",
           "handle": "Maple Burl",
           "total_cents": 42500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         },
         {
           "reference": "DEMO-AKW-0802",
@@ -405,7 +405,7 @@
           "model": "Bird and Trout",
           "handle": "Maple Burl",
           "total_cents": 28500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         },
         {
           "reference": "DEMO-AKW-0803",
@@ -413,7 +413,7 @@
           "model": "Field Knife",
           "handle": "Maple Burl",
           "total_cents": 33500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         },
         {
           "reference": "DEMO-AKW-0804",
@@ -421,13 +421,13 @@
           "model": "Brookie Fillet Knife",
           "handle": "Maple Burl",
           "total_cents": 28500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         }
       ],
       "signals": [
         {
           "kind": "restock_interest",
-          "model": "Sheepsfoot Chef\u2019s Knife",
+          "model": "Sheepsfoot Chef’s Knife",
           "detail": "Asked for this model in the next maker release.",
           "weight": 45
         },
@@ -465,7 +465,7 @@
           "model": "Bird and Trout",
           "handle": "Pinecone/Pearl Resin",
           "total_cents": 28500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         }
       ],
       "signals": [],
@@ -492,7 +492,7 @@
           "model": "Field Knife",
           "handle": "Walnut",
           "total_cents": 33500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         },
         {
           "reference": "DEMO-AKW-1002",
@@ -500,7 +500,7 @@
           "model": "Brookie Fillet Knife",
           "handle": "Walnut",
           "total_cents": 28500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         }
       ],
       "signals": [
@@ -544,7 +544,7 @@
           "model": "Brookie Fillet Knife",
           "handle": "Maple Burl",
           "total_cents": 28500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         },
         {
           "reference": "DEMO-AKW-1102",
@@ -552,7 +552,7 @@
           "model": "Sheepsfoot Paring Knife",
           "handle": "Maple Burl",
           "total_cents": 16500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         },
         {
           "reference": "DEMO-AKW-1103",
@@ -560,7 +560,7 @@
           "model": "Woodsman Knife",
           "handle": "Maple Burl",
           "total_cents": 38500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         }
       ],
       "signals": [
@@ -598,7 +598,7 @@
           "model": "Sheepsfoot Paring Knife",
           "handle": "Pinecone/Pearl Resin",
           "total_cents": 16500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         },
         {
           "reference": "DEMO-AKW-1202",
@@ -606,15 +606,15 @@
           "model": "Woodsman Knife",
           "handle": "Pinecone/Pearl Resin",
           "total_cents": 38500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         },
         {
           "reference": "DEMO-AKW-1203",
           "date": "2025-09-29",
-          "model": "Sheepsfoot Chef\u2019s Knife",
+          "model": "Sheepsfoot Chef’s Knife",
           "handle": "Pinecone/Pearl Resin",
           "total_cents": 42500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         },
         {
           "reference": "DEMO-AKW-1204",
@@ -622,7 +622,7 @@
           "model": "Bird and Trout",
           "handle": "Pinecone/Pearl Resin",
           "total_cents": 28500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         }
       ],
       "signals": [
@@ -655,7 +655,7 @@
           "model": "Woodsman Knife",
           "handle": "Walnut",
           "total_cents": 38500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         }
       ],
       "signals": [
@@ -685,10 +685,10 @@
         {
           "reference": "DEMO-AKW-1401",
           "date": "2025-08-20",
-          "model": "Sheepsfoot Chef\u2019s Knife",
+          "model": "Sheepsfoot Chef’s Knife",
           "handle": "Maple Burl",
           "total_cents": 42500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         },
         {
           "reference": "DEMO-AKW-1402",
@@ -696,7 +696,7 @@
           "model": "Bird and Trout",
           "handle": "Maple Burl",
           "total_cents": 28500,
-          "status": "Completed \u00b7 fictional"
+          "status": "Completed · fictional"
         }
       ],
       "signals": [
@@ -747,7 +747,7 @@
     },
     {
       "id": "DEMO-BATCH-02",
-      "model": "Sheepsfoot Chef\u2019s Knife",
+      "model": "Sheepsfoot Chef’s Knife",
       "quantity": 3,
       "stage": 4,
       "steel": "CPM MagnaCut",
@@ -756,6 +756,18 @@
       "handle_lot": "DEMO-WN-03",
       "due": "2026-10-26",
       "notes": "Fictional work in progress; no real manufacturing instruction."
+    },
+    {
+      "id": "DEMO-BATCH-03",
+      "model": "Sheepsfoot Chef’s Knife",
+      "quantity": 3,
+      "stage": 4,
+      "steel": "CPM MagnaCut",
+      "steel_lot": "DEMO-STEEL-26B",
+      "handles": "Maple Burl",
+      "handle_lot": "DEMO-MB-08",
+      "due": "2026-10-27",
+      "notes": "Fictional gift-order run. Handle fitting follows the recorded steel lot; confirm maker routing and specifications before live use."
     }
   ],
   "materials": [
@@ -786,13 +798,27 @@
       "on_hand": 15,
       "allocated": 7,
       "unit": "sets"
+    },
+    {
+      "name": "Maple Burl handle sets",
+      "lot": "DEMO-MB-08",
+      "on_hand": 8,
+      "allocated": 3,
+      "unit": "sets"
+    },
+    {
+      "name": "Shipping presentation boxes",
+      "lot": "DEMO-PACK-19",
+      "on_hand": 16,
+      "allocated": 2,
+      "unit": "boxes"
     }
   ],
   "shipping": [
     {
       "reference": "DEMO-SHIP-01",
       "customer_id": "ak-demo-02",
-      "model": "Sheepsfoot Chef\u2019s Knife",
+      "model": "Sheepsfoot Chef’s Knife",
       "status": "Packing",
       "method": "USPS example",
       "checks": [
@@ -815,5 +841,129 @@
       ]
     }
   ],
-  "notes": "All customers, orders, timing, stock, lot numbers, production and shipping are fictional. Product model names refer to the public catalog. Suggestions are explainable heuristics, not predictions or proof of intent. No messages, payments or postage are sent."
+  "notes": "All customers, orders, timing, stock, lot numbers, production and shipping are fictional. Product model names refer to the public catalog. Suggestions are explainable heuristics, not predictions or proof of intent. No messages, payments or postage are sent.",
+  "care_requests": [
+    {
+      "id": "demo-care-seed-bob",
+      "reference": "DEMO-CARE-101",
+      "customer_id": "ak-demo-03",
+      "customer_name": "Bob Ross",
+      "knife_id": "avery-demo-bob-001",
+      "model": "woodsman-knife",
+      "handle": "Pinecone/Pearl Resin",
+      "purchase_reference": "DEMO-SALE-1178",
+      "steel": "CPM MagnaCut",
+      "kind": "Sharpening & maintenance",
+      "intake": "Showroom drop-off",
+      "note": "Fictional intake: light edge dulling after camp use. Clean, sharpen and inspect the sheath; no repair authorized.",
+      "conversation": "Please keep the original pinecone handle; it is my favorite camp knife.",
+      "status": "Received",
+      "events": [
+        {
+          "status": "Received",
+          "at": "2026-10-17T14:00:00Z"
+        }
+      ]
+    },
+    {
+      "id": "demo-care-seed-john",
+      "reference": "DEMO-CARE-102",
+      "customer_id": "ak-demo-02",
+      "customer_name": "John Smith",
+      "knife_id": "avery-demo-john-001",
+      "model": "sheepsfoot-chefs-knife",
+      "handle": "Maple Burl",
+      "purchase_reference": "DEMO-SALE-1121",
+      "steel": "CPM MagnaCut",
+      "kind": "Handle inspection & maintenance",
+      "intake": "Mail",
+      "note": "Fictional intake: inspect a loose-feeling handle and discuss options with John before any paid repair. Coverage remains for Avery to decide.",
+      "conversation": "This is the knife I reach for every evening. Please ask before changing its handle.",
+      "status": "Being serviced",
+      "events": [
+        {
+          "status": "Received",
+          "at": "2026-10-15T16:00:00Z"
+        },
+        {
+          "status": "Being serviced",
+          "at": "2026-10-16T15:00:00Z"
+        }
+      ]
+    },
+    {
+      "id": "demo-care-seed-casey",
+      "reference": "DEMO-CARE-103",
+      "customer_id": "ak-demo-04",
+      "customer_name": "Casey Reed",
+      "knife_id": "avery-demo-casey-001",
+      "model": "woodsman-knife",
+      "handle": "Walnut",
+      "purchase_reference": "DEMO-EVENT-1008",
+      "steel": "CPM MagnaCut",
+      "kind": "Sharpening & maintenance",
+      "intake": "Event / festival",
+      "note": "Fictional service complete: edge refreshed, blade cleaned and sheath inspected. Ready for collection; no notification has been sent.",
+      "conversation": "I will collect it at the next showroom visit.",
+      "status": "Ready",
+      "events": [
+        {
+          "status": "Received",
+          "at": "2026-10-12T15:00:00Z"
+        },
+        {
+          "status": "Being serviced",
+          "at": "2026-10-13T15:00:00Z"
+        },
+        {
+          "status": "Ready",
+          "at": "2026-10-16T18:00:00Z"
+        }
+      ]
+    }
+  ],
+  "interests": [
+    {
+      "id": "demo-interest-john",
+      "customer_id": "ak-demo-02",
+      "customer_name": "John Smith",
+      "model": "sheepsfoot-chefs-knife",
+      "handle": "Maple Burl",
+      "kind": "restock",
+      "consent_at": "2026-10-16T14:00:00Z",
+      "created_at": "2026-10-16T14:00:00Z",
+      "note": "Gift for a home cook; interested in the next Maple Burl release."
+    },
+    {
+      "id": "demo-interest-bob",
+      "customer_id": "ak-demo-03",
+      "customer_name": "Bob Ross",
+      "model": "woodsman-knife",
+      "handle": "Pinecone/Pearl Resin",
+      "kind": "preference",
+      "created_at": "2026-10-15T13:00:00Z",
+      "note": "Favorite handle saved for future comparison. No consent attached to this preference."
+    },
+    {
+      "id": "demo-interest-casey",
+      "customer_id": "ak-demo-04",
+      "customer_name": "Casey Reed",
+      "model": "woodsman-knife",
+      "handle": "Walnut",
+      "kind": "preference",
+      "created_at": "2026-10-16T12:00:00Z",
+      "note": "Comparing an everyday field knife; permission still needed before outreach."
+    },
+    {
+      "id": "demo-interest-jordan",
+      "customer_id": "ak-demo-05",
+      "customer_name": "Jordan Hayes",
+      "model": "sheepsfoot-chefs-knife",
+      "handle": "Walnut",
+      "kind": "restock",
+      "consent_at": "2026-10-17T10:00:00Z",
+      "created_at": "2026-10-17T10:00:00Z",
+      "note": "A product-specific restock alert only; no general mailing list permission."
+    }
+  ]
 }

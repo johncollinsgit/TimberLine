@@ -1,3 +1,4 @@
+import {revealAction} from './qa-navigation.mjs';
 import {chromium,expect} from '@playwright/test';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
@@ -26,7 +27,7 @@ try{
  await page.goto('http://127.0.0.1:8797/retail/showroom');await page.waitForSelector('.vendor-grid');
  await page.locator('[data-action=offline]').first().click();
  await page.waitForFunction(()=>!!localStorage.getItem('retail-offline-pack'),null,{timeout:60000});
- await expect.poll(()=>page.evaluate(async()=>{const c=await caches.open('everbranch-retail-v13');return !!await c.match('/retail/avery-data.mjs');}),{timeout:60000}).toBe(true);
+ await expect.poll(()=>page.evaluate(async()=>{const c=await caches.open('everbranch-retail-v15');return !!await c.match('/retail/avery-data.mjs');}),{timeout:60000}).toBe(true);
  await page.goto('http://127.0.0.1:8797/retail/showroom/concepts/avery-knifeworks');await page.waitForSelector('.avery-launch');
  await page.locator('.avery-launch [data-avery-action=finder]').click();await a('category').filter({hasText:'Kitchen'}).click();await a('use').filter({hasText:'Everyday meal prep'}).click();await a('budget').filter({hasText:'Up to $500'}).click();await a('material').filter({hasText:'Any handle'}).click();
  await expect(page.locator('.avery-result')).toHaveCount(3);
@@ -38,29 +39,29 @@ try{
  await a('qr').click();await expect(page.locator('.avery-qr svg')).toBeVisible();
  const exact=await page.locator('.avery-qr a').getAttribute('href');assert.ok(exact.includes('sheepsfoot-chefs-knife?variant='));
  await page.screenshot({path:out+'/exact-handle-qr.png',fullPage:true});
- await a('owner').click();await expect(page.locator('.avery-interest')).toHaveCount(1);await expect(page.locator('.avery-interest')).toContainText('No permission to contact');
+ await a('owner').click();await expect(page.locator('.avery-interest')).toHaveCount(5);await expect(page.locator('.avery-interest').last()).toContainText('No permission to contact');
  await a('finder').click();await a('category').filter({hasText:'Hunting'}).click();await a('use').filter({hasText:'Camp & woodcraft'}).click();await a('budget').filter({hasText:'Up to $400'}).click();await a('material').filter({hasText:'Any handle'}).click();
  await page.locator('.avery-result').first().locator('[data-avery-action=knife]').click();await a('restock').click();
  assert.equal(await page.locator('[name=permission]').isChecked(),false);await page.locator('[name=permission]').check();await page.locator('#avery-restock button[type=submit]').click();
- await expect(page.locator('.avery-interest')).toHaveCount(2);await expect(page.locator('.avery-interest').last()).toContainText('Product-specific demonstration permission');
+ await expect(page.locator('.avery-interest')).toHaveCount(6);await expect(page.locator('.avery-interest').last()).toContainText('Product-specific demonstration permission');
  await a('passport').first().click();await expect(page.locator('.avery-care')).toContainText('registration is optional');
  await a('service').click();await page.locator('#avery-service button[type=submit]').click();
  await expect(page.locator('.avery-passport')).toContainText('Received');await a('owner').first().click();
- await expect(page.locator('.avery-service-row')).toContainText('Morgan Ellis');await expect(page.locator('.avery-service-row')).toContainText('avery-demo-knife-001');
+ await expect(page.locator('.avery-service-row[data-knife=avery-demo-knife-001]')).toContainText('Morgan Ellis');await expect(page.locator('.avery-service-row[data-knife=avery-demo-knife-001]')).toContainText('avery-demo-knife-001');
  for(const [name,size] of [['landscape',{width:1280,height:800}],['portrait',{width:800,height:1280}],['phone',{width:390,height:844}]]){
   await page.setViewportSize(size);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   assert.equal(await page.locator('.modal').evaluate(e=>e.scrollWidth>e.clientWidth),false);
   await page.screenshot({path:`${out}/owner-${name}.png`,fullPage:true});
  }
- await a('advance').click();await expect(page.locator('.avery-service-row .pill')).toHaveText('Being serviced');await a('advance').click();await expect(page.locator('.avery-service-row .pill')).toHaveText('Ready');
+ await page.locator('.avery-service-row[data-knife=avery-demo-knife-001] [data-avery-action=advance]').click();await expect(page.locator('.avery-service-row[data-knife=avery-demo-knife-001] .pill')).toHaveText('Being serviced');await page.locator('.avery-service-row[data-knife=avery-demo-knife-001] [data-avery-action=advance]').click();await expect(page.locator('.avery-service-row[data-knife=avery-demo-knife-001] .pill')).toHaveText('Ready');
  await page.locator('[data-action=close]').click();
  // Model an old saved pack without touching accepted server requests.
  await page.evaluate(()=>{const d=JSON.parse(localStorage.getItem('retail-offline-pack'));d.offer={key:'retail_launch_partner',introductory_monthly_cents:8900,ongoing_monthly_cents:14900};localStorage.setItem('retail-offline-pack',JSON.stringify(d));});
  await context.setOffline(true);await page.reload();await page.waitForSelector('.avery-launch');
  await page.locator('.avery-launch [data-avery-action=passport]').click();await expect(page.locator('.avery-passport')).toContainText('Ready');
- await a('owner').first().click();await expect(page.locator('.avery-interest')).toHaveCount(2);await a('advance').click();await expect(page.locator('.avery-service-row .pill')).toHaveText('Returned');
+ await a('owner').first().click();await expect(page.locator('.avery-interest')).toHaveCount(6);await page.locator('.avery-service-row[data-knife=avery-demo-knife-001] [data-avery-action=advance]').click();await expect(page.locator('.avery-service-row[data-knife=avery-demo-knife-001] .pill')).toHaveText('Returned');
  await a('passport').first().click();await expect(page.locator('#modal-body')).toContainText('Returned to customer');
- await page.locator('[data-action=close]').click();await page.locator('[data-action=pricing]').first().click();await expect(page.locator('.offer-card')).toContainText('$299.00');await expect(page.locator('.offer-setup')).toContainText('$499.00');assert.ok(!/\$89|\$149|first 10|introductory/i.test(await page.locator('.pricing-page').innerText()));
+ await page.locator('[data-action=close]').click();await revealAction(page,'[data-action=pricing]');await page.locator('[data-action=pricing]').first().click();await expect(page.locator('.offer-card')).toContainText('$299.00');await expect(page.locator('.offer-setup')).toContainText('$499.00');assert.ok(!/\$89|\$149|first 10|introductory/i.test(await page.locator('.pricing-page').innerText()));
  await page.screenshot({path:out+'/offline-standard-pricing.png',fullPage:true});
  assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
  fs.writeFileSync(out+'/results.json',JSON.stringify({passed:true,models:products.length,variants:products.reduce((n,p)=>n+p.variants.length,0),exactVariantLink:exact,categoryBudgetFilters:true,duplicatePreferenceGuard:true,permissionExplicit:true,passportAndOwnerLinked:true,serviceHistory:true,offline:true,oldPackPriceUpgraded:true,layouts:['landscape','portrait','phone'],errors,externalRequests:external},null,2));

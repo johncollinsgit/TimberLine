@@ -8,6 +8,26 @@ use Illuminate\Validation\ValidationException;
 /** Owner-reviewed one-message demonstrations. Never touches a merchant CRM or legacy messaging connection. */
 class RetailDemoDelivery
 {
+    /** Embed the reviewed local artwork so the actual email keeps the same logo and photo. */
+    protected function emailAttachments(array $variant): array
+    {
+        $photo = (string) ($variant['image'] ?? '');
+        if (! preg_match('~^/retail/assets/avery-[0-9]+\.webp$~', $photo)) {
+            throw new \RuntimeException('A reviewed catalog photograph is required.');
+        }
+
+        return array_map(function (array $asset): array {
+            [$relative, $id, $type] = $asset;
+            $path = public_path($relative);
+            if (! is_file($path)) {
+                throw new \RuntimeException('Email artwork is unavailable.');
+            }
+
+            return ['content' => base64_encode(file_get_contents($path)), 'type' => $type,
+                'filename' => basename($path), 'disposition' => 'inline', 'content_id' => $id];
+        }, [['retail/assets/avery-logo.png', 'avery-logo', 'image/png'], [ltrim($photo, '/'), 'avery-knife-photo', 'image/webp']]);
+    }
+
     protected function directory(): string
     {
         return storage_path('app/private/retail-demo-deliveries');
@@ -95,6 +115,7 @@ class RetailDemoDelivery
                         'personalizations' => [['to' => [['email' => $recipient]]]],
                         'from' => ['email' => $provider['from']['address'], 'name' => $provider['from']['name'] ?? 'Evergrove Software'],
                         'subject' => $subject, 'content' => [['type' => 'text/plain', 'value' => $body], ['type' => 'text/html', 'value' => $html]],
+                        'attachments' => $this->emailAttachments($variant),
                         'custom_args' => ['demo_reference' => $row['reference']],
                     ]);
                     if ($response->status() !== 202) {

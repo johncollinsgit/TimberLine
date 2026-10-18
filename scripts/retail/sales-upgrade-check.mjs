@@ -1,3 +1,4 @@
+import {revealAction} from './qa-navigation.mjs';
 import {chromium} from '@playwright/test';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
@@ -23,7 +24,7 @@ assert.equal(await page.locator('.vendor-card').count(),20);checks.push('All 20 
 const bootstrap=await page.evaluate(async()=>fetch('/retail/showroom/api/bootstrap').then(r=>r.json()));
 assert.equal(bootstrap.offer.monthly_cents,29900);assert.equal(bootstrap.offer.setup_cents,49900);
 assert.ok(!JSON.stringify(bootstrap).includes('api_key'));checks.push('Canonical pricing and no credential in bootstrap');
-await page.locator('[data-action="pricing"]').first().click();
+await revealAction(page,'[data-action="pricing"]');await page.locator('[data-action="pricing"]').first().click();
 await page.waitForSelector('.launch-price-grid');
 assert.match(await page.locator('.launch-price-grid').first().innerText(),/299\.00/);
 assert.match(await page.locator('.standard-note').first().innerText(),/Existing agreements/);
@@ -33,7 +34,7 @@ assert.match(await page.locator('.partner-band').innerText(),/One-hour video cal
 checks.push('Standard monthly rate, once-only setup, scope review and retained partnership');
 for(const key of ['sms','email','ai','future'])await page.locator(`[data-usage=${key}]`).waitFor();
 assert.match(await page.locator('[data-usage=sms]').innerText(),/\$0\.05 per SMS segment/);
-assert.match(await page.locator('[data-usage=email]').innerText(),/\$0\.005 per email/);
+assert.match(await page.locator('[data-usage=email]').innerText(),/\$1\.49 per 1,000 emails/);
 assert.match(await page.locator('[data-usage=ai]').innerText(),/2× actual OpenAI API cost/);
 assert.match(await page.locator('[data-usage=future]').innerText(),/Customer-facing AI conversations/);
 assert.match(await page.locator('[data-usage=future]').innerText(),/Choose your voice model/);
@@ -41,6 +42,10 @@ assert.match(await page.locator('[data-usage=sms]').innerText(),/No text setup f
 assert.match(await page.locator('[data-usage=ai]').innerText(),/9.6¢ per balanced minute/);
 assert.match(await page.locator('[data-usage=ai]').innerText(),/3.0¢ per balanced minute/);
 assert.match(await page.locator('[data-usage=wallet]').innerText(),/Automatic reload starts off/);
+assert.match(await page.locator('[data-usage=example]').innerText(),/\$347\.95/);
+assert.match(await page.locator('[data-usage=example]').innerText(),/No usage fees or automatic usage preload/);
+assert.match(await page.locator('[data-example=memory]').innerText(),/\$4\.00/);
+assert.match(await page.locator('[data-usage=future]').innerText(),/Planned release · long-term memory/);
 checks.push('Shared prepaid policy, retained email/text rates, no text setup fee, 2× OpenAI estimates and planned owner-approved voice models');
 await page.screenshot({path:output+(device?'/galaxy-pricing.png':'/pricing-landscape.png'),fullPage:true});
 if(!device){await page.setViewportSize({width:800,height:1280});await page.screenshot({path:output+'/pricing-portrait.png',fullPage:true});}
@@ -60,8 +65,9 @@ if(!device){
 }
 await page.locator('[data-action="close"]').first().click();
 assert.equal(await page.locator('#retail-signup-review').count(),0);
-await page.locator('[data-action="assistant"]').first().click();await page.waitForSelector('.assistant-grid');
+await revealAction(page,'[data-action="assistant"]');await page.locator('[data-action="assistant"]').first().click();await page.waitForSelector('.assistant-grid');
 assert.equal(await page.locator('.assistant-card').count(),6);assert.match(await page.locator('.assistant-card').last().innerText(),/Coming Soon/);
+assert.match(await page.locator('[data-roadmap=memory]').innerText(),/Planned release · unavailable today/);
 checks.push('Six assistant capabilities with Social Media explicitly Coming Soon');
 await page.screenshot({path:output+(device?'/galaxy-assistant.png':'/assistant-portrait.png'),fullPage:true});
 await page.locator('[data-sales-action="assistant"][data-mode="email"]').click();await page.waitForSelector('#retail-assistant-form');
@@ -77,10 +83,10 @@ if(!device){
  await page.locator('[data-action="offline"]').first().click();
  await page.waitForFunction(old=>JSON.parse(localStorage.getItem('retail-offline-pack')||'null')?.expires>old,previous,{timeout:60000});
  await page.evaluate(()=>navigator.serviceWorker.ready);
- const privateCached=await page.evaluate(async()=>{const c=await caches.open('everbranch-retail-v13');return (await c.keys()).some(r=>new URL(r.url).pathname.includes('/api/'));});assert.equal(privateCached,false);
+ const privateCached=await page.evaluate(async()=>{const c=await caches.open('everbranch-retail-v15');return (await c.keys()).some(r=>new URL(r.url).pathname.includes('/api/'));});assert.equal(privateCached,false);
  await context.setOffline(true);await page.goto(base+'/retail/showroom/assistant');await page.waitForSelector('.assistant-grid');assert.match(await page.locator('.assistant-hero').innerText(),/live AI unavailable/);
- await page.locator('[data-action="pricing"]').first().click();await page.locator('[data-sales-action="signup"]').first().click();assert.equal(await page.locator('#retail-signup-details').count(),0);
- await context.setOffline(false);await page.reload();await page.waitForSelector('.assistant-grid');checks.push('Cache v13 reopens assistant offline, excludes private APIs and blocks offline signup');
+ await revealAction(page,'[data-action="pricing"]');await page.locator('[data-action="pricing"]').first().click();await page.locator('[data-sales-action="signup"]').first().click();assert.equal(await page.locator('#retail-signup-details').count(),0);
+ await context.setOffline(false);await page.reload();await page.waitForSelector('.assistant-grid');checks.push('Cache v15 reopens assistant offline, excludes private APIs and blocks offline signup');
 }
 assert.deepEqual(errors,[]);
 fs.writeFileSync(output+(device?'/galaxy-results.json':'/browser-results.json'),JSON.stringify({checks,errors,liveOpenAiVerified:live,device,signupSubmission:device?'reviewed only; never submitted':'intercepted fixture; no real registration'},null,2));

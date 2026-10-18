@@ -1,3 +1,4 @@
+import {revealAction} from './qa-navigation.mjs';
 import {chromium,expect} from '@playwright/test';import fs from 'node:fs';import assert from 'node:assert/strict';
 const base='http://127.0.0.1:8797',out='output/retail/voice';fs.mkdirSync(out,{recursive:true});
 const browser=await chromium.launch(),context=await browser.newContext({viewport:{width:960,height:600},serviceWorkers:'block'}),page=await context.newPage();const sessions=[],errors=[];

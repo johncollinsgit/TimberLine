@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 // Refresh an existing installed tab; preserve data and never submit a live message.
 const port=Number(process.env.RETAIL_QA_CDP_PORT),device=process.env.RETAIL_QA_DEVICE_NAME;
 assert.ok(port&&/^[a-z0-9-]+$/.test(device??''),'Provide a forwarded CDP port and device name.');
-const base='http://127.0.0.1:8797',version='everbranch-retail-v13',out=`output/retail/tablets/${device}`;
+const base='http://127.0.0.1:8797',version='everbranch-retail-v15',out=`output/retail/tablets/${device}`;
 fs.mkdirSync(out,{recursive:true});
 // An unrelated suspended Android tab must not stall attachment to the installed demo.
 const browser=await puppeteer.connect({browserWSEndpoint:`ws://127.0.0.1:${port}/devtools/browser`,defaultViewport:null,targetFilter:t=>t.type()!=='page'||t.url().startsWith(base+'/retail/'),protocolTimeout:60000});
@@ -14,7 +14,7 @@ page??=pages.find(p=>p.url().startsWith(base+'/retail/'));assert.ok(page,'Open t
 page.setDefaultTimeout(30000);await page.bringToFront();
 const before=await page.evaluate(()=>Object.fromEntries(Object.entries(localStorage).filter(([k])=>k.startsWith('retail-')&&k!=='retail-offline-pack')));
 const errors=[];page.on('pageerror',e=>errors.push(e.message));
-const click=async(s,text)=>{await page.bringToFront();await page.waitForSelector(s);for(const el of await page.$$(s)){if(!text||(await el.evaluate(e=>e.textContent)).includes(text)){await el.click();return;}}throw Error(`Missing ${s}: ${text}`);};
+const click=async(s,text)=>{await page.bringToFront();await page.waitForSelector(s);for(const el of await page.$$(s)){if(!text||(await el.evaluate(e=>e.textContent)).includes(text)){if(!await el.isVisible()){const summary=await el.evaluateHandle(e=>e.closest('details')?.querySelector('summary'));if(summary.asElement())await summary.asElement().click();}await el.click();return;}}throw Error(`Missing ${s}: ${text}`);};
 const count=async(s,n)=>{await page.waitForFunction((s,n)=>document.querySelectorAll(s).length===n,{},s,n);};
 const has=async(s,text)=>{await page.waitForFunction((s,t)=>document.querySelector(s)?.textContent.includes(t),{},s,text);};
 const close=()=>click('[data-action=close]');
@@ -26,13 +26,13 @@ await cdp.send('ServiceWorker.enable');await cdp.send('ServiceWorker.skipWaiting
 await page.waitForFunction(async name=>{const keys=await caches.keys();return keys.includes(name)&&keys.filter(k=>k.startsWith('everbranch-retail-')).length===1;},{timeout:60000},version);
 await cdp.send('Network.setBypassServiceWorker',{bypass:false});
 await count('.vendor-card',20);await click('[data-action=offline]');
-await page.waitForFunction(()=>JSON.parse(localStorage.getItem('retail-offline-pack')||'null')?.offer?.usage?.future_usage?.[1]?.label==='Customer-facing AI conversations',{timeout:60000});
+await page.waitForFunction(()=>JSON.parse(localStorage.getItem('retail-offline-pack')||'null')?.offer?.usage?.messaging_rates_micros?.email===1490,{timeout:60000});
 await page.waitForFunction(async name=>{const c=await caches.open(name);const r=await c.match('/retail/photos.json');if(!r)return false;const photos=await r.json();return photos.length===142&&(await Promise.all(photos.map(p=>c.match(p)))).every(Boolean);},{timeout:60000},version);
 assert.equal(await page.evaluate(async name=>(await(await caches.open(name)).keys()).some(r=>new URL(r.url).pathname.includes('/api/')),version),false);
 console.log(device,'142 photos and current offline offer ready');
 await click('[data-action=pricing]');await has('.offer-card','$299.00');await has('.offer-setup','$499.00');
 for(const type of ['sms','email','ai','future'])await page.waitForSelector(`[data-usage=${type}]`);
-await has('[data-usage=sms]','$0.05 per SMS segment');await has('[data-usage=email]','$0.005 per email');await has('[data-usage=future]','Customer-facing AI conversations');
+await has('[data-usage=sms]','$0.05 per SMS segment');await has('[data-usage=email]','$1.49 per 1,000 emails');await has('[data-usage=future]','Customer-facing AI conversations');
 await page.screenshot({path:out+'/pricing.png',fullPage:true});
 await page.goto(base+'/retail/showroom/concepts/avery-knifeworks',{waitUntil:'domcontentloaded'});await count('.product-card',8);await has('.product-card','$425.00');
 await click('.avery-launch [data-avery-action=finder]');

@@ -8,12 +8,21 @@ export const standardOffer = {
     "setup_cents": 49900,
     "interval": "month",
     "usage_policy": {
-        "version": "standard-prepaid-2026-10-18-v1",
+        "version": "standard-prepaid-2026-10-17-v2",
+        "messaging_rates_micros": {
+            "email": 1490,
+            "sms": 50000,
+            "mms": 150000
+        },
         "billing_mode": "shared_prepaid_usage",
         "sms_setup_cents": 0,
         "email_monthly_cents": 0,
         "sms_monthly_cents": 0,
         "ai_provider_cost_multiplier": 2,
+        "voice_provider_cost_multiplier": 2,
+        "memory_provider_cost_multiplier": 2,
+        "voice_feature_access_cents": 0,
+        "memory_feature_access_cents": 0,
         "auto_reload_default": false,
         "fixed_connection_fees": "separately_quoted",
         "scope": "Future Standard customers only; existing agreements and allowances retain their terms."
@@ -21,7 +30,7 @@ export const standardOffer = {
     "recurring_price_lookup_key": "everbranch_standard_299_monthly_v1",
     "setup_price_lookup_key": "everbranch_standard_499_setup_v1",
     "fulfillment_plan_key": null,
-    "quote_version": "624522bd2738cc44113ee7c9c4cc4e2dd383291e9150ddb0b91772eab5f3be7e",
+    "quote_version": "1d3faa3f019a7456f06551e9a4b25d1d6232a859c6a09b59c2f14043365440cc",
     "eligibility_note": "Standard offer for new businesses. Scope and capacity are confirmed before activation; a request does not activate billing.",
     "included": [
         {
@@ -58,20 +67,24 @@ export const standardOffer = {
     "review_note": "Retail features shown in this showroom are demonstrations. We confirm the catalog, shipping, payments, rewards, team access, and launch scope with you before enabling them for your business.",
     "additional": "Payment processing, postage, domains, messaging usage, third-party services, and custom development are discussed and priced in your written scope when applicable.",
     "usage": {
-        "version": "standard-prepaid-2026-10-18-v1",
+        "version": "standard-prepaid-2026-10-17-v2",
+        "messaging_rates_micros": {
+            "email": 1490,
+            "sms": 50000,
+            "mms": 150000
+        },
         "billing_mode": "shared_prepaid_usage",
         "sms_setup_cents": 0,
         "email_monthly_cents": 0,
         "sms_monthly_cents": 0,
         "ai_provider_cost_multiplier": 2,
+        "voice_provider_cost_multiplier": 2,
+        "memory_provider_cost_multiplier": 2,
+        "voice_feature_access_cents": 0,
+        "memory_feature_access_cents": 0,
         "auto_reload_default": false,
         "fixed_connection_fees": "separately_quoted",
         "scope": "Future Standard customers only; existing agreements and allowances retain their terms.",
-        "messaging_rates_micros": {
-            "email": 5000,
-            "sms": 50000,
-            "mms": 150000
-        },
         "credit_packs_cents": [
             2500,
             5000,
@@ -102,14 +115,80 @@ export const standardOffer = {
                 "customer_audio_micros_per_balanced_minute": 30000
             }
         ],
+        "memory_example": {
+            "status": "Planned release",
+            "model": "gpt-6.1-sol",
+            "extra_input_tokens_per_reply": 2000,
+            "provider_cost_micros_per_reply": 4000,
+            "customer_cost_micros_per_reply": 8000,
+            "assumption": "Additional uncached text input for retrieved memories. Memory is a Standard feature when released with no separate access fee. Additional summarization/model usage is also 2\u00d7 actual provider cost; retention and capacity follow the confirmed scope. No release date is promised."
+        },
         "ai_source": "https://developers.openai.com/api/docs/pricing",
         "voice_assumption": "One elapsed minute split equally between user and AI speech. Audio only; text/context, repeated history, transcription and phone/carrier costs are additional. Actual provider usage determines the charge.",
         "tax_note": "Platform operating costs and business overhead are covered by the agreed prices and margin. Applicable customer sales tax is calculated separately by Stripe Tax; no arbitrary tax surcharge is added.",
+        "team_usage_example": {
+            "team_size": 5,
+            "rows": [
+                {
+                    "key": "email",
+                    "label": "Marketing emails",
+                    "quantity": 5000,
+                    "unit": "emails",
+                    "cost_micros": 7450000,
+                    "planned": false
+                },
+                {
+                    "key": "sms",
+                    "label": "Text alerts",
+                    "quantity": 300,
+                    "unit": "SMS segments",
+                    "cost_micros": 15000000,
+                    "planned": false
+                },
+                {
+                    "key": "ai",
+                    "label": "Example AI tasks",
+                    "quantity": 500,
+                    "unit": "tasks",
+                    "cost_micros": 15000000,
+                    "planned": false
+                },
+                {
+                    "key": "voice_mini",
+                    "label": "Future Mini voice \u00b7 audio only",
+                    "quantity": 250,
+                    "unit": "balanced minutes",
+                    "cost_micros": 7500000,
+                    "planned": true
+                },
+                {
+                    "key": "memory",
+                    "label": "Future long-term memory \u00b7 additional context",
+                    "quantity": 500,
+                    "unit": "replies",
+                    "cost_micros": 4000000,
+                    "planned": true
+                }
+            ],
+            "usage_total_cents": 4895,
+            "base_cents": 29900,
+            "setup_cents": 49900,
+            "regular_month_cents": 34795,
+            "first_month_cents": 79800,
+            "initial_invoice_cents": 79800,
+            "note": "Illustrative usage, not additional charges on the initial invoice or a five-user access grant. Actual usage draws from prepaid credit. Planned voice and memory require release and agreed scope; memory summarization/model usage, phone transport and applicable tax can add cost. Memory and voice have no separate feature access fee; final voice usage is 2\u00d7 combined actual provider cost."
+        },
         "future_usage": [
             {
+                "key": "memory",
+                "label": "An assistant that gets to know you",
+                "status": "Planned release \u00b7 long-term memory",
+                "note": "Return to previous plans, approved preferences and business decisions across conversations. Personal teammate memory stays separate from shared business knowledge, with review, correction and deletion controls. Memory is included as a Standard feature when released, with no extra access fee. Retrieval, summarization and model usage draw from the shared balance at 2\u00d7 actual provider cost. No release date is promised."
+            },
+            {
                 "label": "Phone voice connection and calls",
-                "status": "Buildout and connection quote required",
-                "note": "Model usage will draw from the shared balance. Phone transport, number and any fixed managed-service fees need a separate written quote before activation."
+                "status": "Planned release \u00b7 provider stack pending",
+                "note": "No additional Standard feature access fee. Voice usage will be 2\u00d7 combined actual provider cost, including the selected model, voice and telephony components. Final all-in rates and any separately scoped fixed connection costs require review before activation."
             },
             {
                 "label": "Customer-facing AI conversations",

@@ -52,7 +52,7 @@ test('reviewed SendGrid email uses exact catalog data and a durable replay guard
     Http::assertSentCount(1);
     $raw = file_get_contents(glob($this->dir.'/*.json')[0]);
     expect($raw)->toContain('One presenter-requested demonstration message', 'synthetic-message')->not->toContain('presenter@example.test', 'synthetic-sendgrid-key', 'saved an interest');
-    Http::assertSent(fn ($r) => $r['personalizations'][0]['to'][0]['email'] === 'presenter@example.test' && str_contains($r['content'][1]['value'], 'exact knife'));
+    Http::assertSent(fn ($r) => $r['personalizations'][0]['to'][0]['email'] === 'presenter@example.test' && str_contains($r['content'][1]['value'], 'Explore this knife') && str_contains($r['content'][1]['value'], 'cid:avery-logo') && count($r['attachments']) === 2 && $r['attachments'][0]['content_id'] === 'avery-logo' && $r['attachments'][1]['content_id'] === 'avery-knife-photo');
 });
 
 test('temporary SMS sender rejects other mobiles and reports actual provider delivery separately from acceptance', function () {

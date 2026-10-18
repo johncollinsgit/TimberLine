@@ -1,3 +1,4 @@
+import {revealAction} from './qa-navigation.mjs';
 import {chromium,expect} from '@playwright/test';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';

@@ -128,6 +128,35 @@ class RetailShowroomController extends Controller
         return $this->response(app(\App\Services\Retail\RetailSignupService::class)->submit($r->user(), $data));
     }
 
+    public function averyServices(Request $r)
+    {
+        $this->owner($r);
+        $data = $r->validate([
+            'services' => 'present|array|max:6',
+            'services.*' => ['required', 'string', 'distinct', \Illuminate\Validation\Rule::in(\App\Services\Billing\StandardUsagePricing::SERVICES)],
+            'offer_version' => ['required', \Illuminate\Validation\Rule::in([app(\App\Services\Retail\EvergroveOffer::class)->presentation()['quote_version']])],
+            'tenant_id' => 'prohibited', 'amount_cents' => 'prohibited', 'preload_cents' => 'prohibited',
+            'payment_method' => 'prohibited', 'activate' => 'prohibited',
+        ]);
+        $quote = app(\App\Services\Billing\StandardUsagePricing::class)->quote($data['services'], 0);
+        DB::transaction(function () use ($r, $quote) {
+            $prospect = LandlordProspect::where('source_snapshot->showroom->slug', 'avery-knifeworks')->lockForUpdate()->firstOrFail();
+            $snapshot = $prospect->source_snapshot;
+            $before = $snapshot['standard_feature_selection'] ?? null;
+            if (($before['quote']['hash'] ?? null) === $quote['hash']) {
+                return;
+            }
+            $selection = ['quote' => $quote, 'status' => 'pending_launch_review', 'selected_at' => now()->toIso8601String(), 'selected_by' => $r->user()->id];
+            $snapshot['standard_feature_selection'] = $selection;
+            $prospect->forceFill(['source_snapshot' => $snapshot])->save();
+            app(LandlordOperatorActionAuditService::class)->record(tenantId: null, actorUserId: $r->user()->id,
+                actionType: 'retail_standard_features_selected', targetType: 'landlord_prospect', targetId: $prospect->id,
+                beforeState: $before, afterState: $selection, result: ['billing_impact_cents' => 0, 'activated' => false]);
+        });
+
+        return $this->response(['saved' => true, 'status' => 'pending_launch_review', 'activated' => false, 'quote' => $quote]);
+    }
+
     public function averyHandoff(Request $r)
     {
         $this->owner($r);
@@ -141,7 +170,8 @@ class RetailShowroomController extends Controller
             && str_starts_with($data['agreement_url'] ?? '', 'https://evergrovesoftware.com/')
             && str_starts_with($data['payment_url'] ?? '', 'https://invoice.stripe.com/'), 503, 'The prepared handoff needs review.');
 
-        return $this->response(array_intersect_key($data, array_flip(['agreement_url', 'payment_url', 'payment_mode', 'amount_cents'])));
+        return $this->response([...array_intersect_key($data, array_flip(['agreement_url', 'payment_url', 'payment_mode', 'amount_cents'])),
+            'feature_selection' => data_get(LandlordProspect::where('source_snapshot->showroom->slug', 'avery-knifeworks')->first()?->source_snapshot, 'standard_feature_selection')]);
     }
 
     public function assistant(Request $r)
@@ -150,7 +180,7 @@ class RetailShowroomController extends Controller
         $data = $r->validate([
             'mode' => 'required|in:voice,email,sms,admin,personal', 'question' => 'required|string|max:1000',
             'business' => 'required|string|max:120', 'merchant' => 'nullable|string|max:100',
-            'demo_view' => 'nullable|in:storefront,workspace,customers,likely_to_order,production,inventory,orders,shipping,agreement',
+            'demo_view' => 'nullable|in:storefront,workspace,customers,likely_to_order,production,inventory,orders,shipping,agreement,care,passport,finder',
             'focus_customer' => ['nullable', \Illuminate\Validation\Rule::in(array_column(app(\App\Services\Retail\AveryWorkspaceDemo::class)->snapshot()['customers'], 'id'))],
             'history' => 'sometimes|array|max:4', 'history.*.role' => 'required|in:user,assistant',
             'history.*.content' => 'required|string|max:1500', 'tenant_id' => 'prohibited',
