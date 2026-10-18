@@ -130,15 +130,13 @@ separate gated steps.
 The owner approved one shared prepaid service balance in addition to $299 monthly
 and $499 standard setup. New Standard email/SMS sending has no separate monthly
 sending subscription and no SMS setup fee. Keep legacy add-on pricing/allowances
-and contracts intact. Existing configured per-unit rates remain: $0.005/email,
-$0.05/SMS segment and $0.15/MMS. OpenAI usage is charged at 2× actual provider
+and contracts intact. Future Standard rates are $1.49/1,000 emails, $0.05/SMS segment and $0.15/MMS. The existing $0.005/email legacy configuration is preserved. OpenAI usage is charged at 2× actual provider
 cost. Fixed connection or managed-service fees require a separate quote. Applicable
 sales tax remains Stripe Tax's responsibility; business taxes/maintenance/overhead
 are covered through the agreed prices and margin, not an invented tax surcharge.
 
 `StandardUsagePricing` supplies the versioned policy, bounded selection/preload
-quotes and dated provider-cost examples. $50 prepaid credit makes an initial
-$848 subtotal and does not create a $50 recurring fee. Auto-reload defaults off.
+quotes and dated provider-cost examples. The initial invoice is always $798 with no usage fees or preload. Optional later $25/$50/$100 credit purchases are separate from the monthly subscription. Auto-reload defaults off.
 The text example is $0.03 for 5,000 uncached input and 500 output tokens on
 GPT-6.1 Sol at the current Standard short-context rates. For balanced audio-only
 speech, GPT-Realtime-2.1 is approximately $0.096/customer-minute and Mini $0.03;
@@ -159,5 +157,30 @@ legacy messaging rates. The five-person example includes planned long-term memor
 (500 replies × 2,000 extra uncached input tokens): about $4 additional context at
 2× the example GPT-6.1 Sol cost. Total illustrative usage is $48.95 and a regular
 month $347.95. The first payment is $798 for setup and month 1, with no usage
-fees or automatic usage preload. Optional later top-ups are separate purchases. Future memory needs a release;
-summary/storage/other usage are extra and no fixed memory fee is approved.
+fees or automatic usage preload. Optional later top-ups are separate purchases. Memory is an included Standard feature when released, with no extra access subscription; retrieval/summarization model usage is 2× actual cost. Future voice is 2× combined actual model/voice/telephony usage, without marking the same component twice. Standard feature checkboxes add no access fees; separately scoped custom connections still need approval.
+
+
+## Actual usage statements and receipt delivery
+
+`StandardUsageAgreementPolicy` reads the exact frozen accepted version only after
+normal paid subscription and audited fulfillment gates. Existing explicit usage
+contracts take precedence. This binds the new email rate without migrating legacy
+contracts or granting a Branch. Standard capacity is still unresolved and activation
+remains blocked. Future AI/voice/memory wallet metering is not enabled by this work.
+
+`/billing/usage` is private, current-tenant owner/admin only (active membership).
+The read-only statement separates settled wallet deductions, credit purchases,
+current reserved/available balance and separately recorded legacy AI activity.
+Verified paid receipts freeze a statement once; provider retries preserve it.
+Advance invoices show actuals through capture, never fabricated future usage.
+
+`BILLING_USAGE_RECEIPTS_ENABLED=false` defaults the new durable receipt outbox off.
+After normal release and mail verification, the scheduled
+`billing:dispatch-usage-receipts` command processes new pending live Stripe-paid
+receipts only. It rechecks processed signed-event ledger proof and uses the same
+tenant's invoice recipient or exact accepted signer, with no platform-owner fallback.
+Delivery claims persist before mail dispatch; `dispatching` after a crash and
+`needs_reconciliation` after ambiguous mail responses require operator reconciliation,
+never automatic resend. Inspect provider delivery evidence before changing such
+states. Do not backfill old paid receipts or enable production mail during demo QA.
+No subscription amount or usage invoice is created by a statement or receipt email.

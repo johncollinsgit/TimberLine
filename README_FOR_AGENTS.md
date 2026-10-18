@@ -1,3 +1,14 @@
+## October 18, 2026 — Standard usage policy and billing statements (release pending)
+
+- Standard first payment is $798, with no usage/preload; subsequent base is $299.
+  Future Standard email is $1.49/1,000, SMS $0.05/segment, MMS $0.15, AI and
+  future memory/combined voice usage 2× actual provider cost. Memory and voice
+  feature access have no extra Standard subscription fee. Planned stays planned.
+- Accepted, paid and fulfilled frozen policies bind messaging rates; legacy
+  contracts retain precedence. Private owner/admin usage statements distinguish
+  purchases from deductions. Receipt mail has a default-off durable delivery gate;
+  no automatic resend after ambiguous provider outcomes. See the Standard runbook.
+
 ## October 17, 2026 — Standard offer for future customers
 
 - The canonical new offer is $299/month per business plus $499 one-time setup in

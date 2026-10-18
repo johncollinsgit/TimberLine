@@ -20,3 +20,5 @@ Future service billing follows your signed agreement.
 
 Questions or ready for the next step? {{ config('everbranch.support_email', 'john@evergrovesoftware.com') }}
 Everbranch by Evergrove Software
+
+@include('billing.partials.usage-statement-text', ['usageStatement' => data_get($receipt->metadata, 'usage_statement')])

@@ -38,6 +38,7 @@
         <div><p class="ep-eyebrow">Payment confirmed</p><h2>Thank you for choosing Everbranch.</h2><p>Your payment is complete and your signed agreement is on file.@if($receipt) <strong>${{ number_format($receipt->total_amount_cents / 100, 2) }} {{ strtoupper($receipt->currency) }}</strong> received.@endif</p></div>
         @if($receipt?->receipt_url ?: $receipt?->hosted_invoice_url)<a class="ep-button ep-button-secondary" href="{{ $receipt->receipt_url ?: $receipt->hosted_invoice_url }}" rel="noopener noreferrer">View your receipt ↗</a>@endif
     </section>
+    @include('billing.partials.usage-statement', ['usageStatement' => data_get($receipt?->metadata, 'usage_statement')])
     @endif
     <div class="ep-intro">
         <p class="ep-eyebrow">Your {{ $product }} agreement</p>
