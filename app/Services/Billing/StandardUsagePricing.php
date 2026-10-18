@@ -49,7 +49,7 @@ class StandardUsagePricing
         return ['team_size' => 5, 'rows' => $rows, 'usage_total_cents' => $total,
             'base_cents' => $offer['monthly_cents'], 'setup_cents' => $offer['setup_cents'],
             'regular_month_cents' => $offer['monthly_cents'] + $total,
-            'first_month_cents' => $offer['setup_cents'] + $offer['monthly_cents'] + $total,
+            'first_month_cents' => $offer['setup_cents'] + $offer['monthly_cents'],
             'initial_invoice_cents' => $offer['setup_cents'] + $offer['monthly_cents'],
             'note' => 'Illustrative usage, not additional charges on the initial invoice or a five-user access grant. Actual usage draws from prepaid credit. Planned voice and memory require release and agreed scope; summary/storage, phone transport, fixed connection fees and applicable tax can add cost.',
         ];
@@ -63,9 +63,9 @@ class StandardUsagePricing
         foreach ($example['rows'] as $row) {
             $lines[] = $row['label'].' | '.number_format($row['quantity']).' '.$row['unit'].' | '.$usd((int) round($row['cost_micros'] / 10000));
         }
-        $lines[] = 'Usage estimate: '.$usd($example['usage_total_cents']).' | Regular month incl. $299 base: '.$usd($example['regular_month_cents']).' | First month incl. $499 setup and example usage: '.$usd($example['first_month_cents']);
-        $lines[] = 'ACTUAL INITIAL INVOICE: '.$usd($example['initial_invoice_cents']).' setup + first month. Usage/preload is not included. Do not collect the first service month twice.';
-        $lines[] = 'Email $1.49/1,000; SMS $0.05/segment; OpenAI 2x actual API cost. AI task: 5,000 input + 500 output tokens (GPT-6.1 Sol). Future memory: 2,000 additional uncached input tokens/reply, about $0.008/reply, not a fixed subscription fee. Voice is balanced audio only.';
+        $lines[] = 'Usage estimate: '.$usd($example['usage_total_cents']).' | Regular month incl. $299 base: '.$usd($example['regular_month_cents']);
+        $lines[] = 'FIRST PAYMENT: '.$usd($example['initial_invoice_cents']).' setup + month 1. No usage fees or automatic preload. Later optional top-ups are separate purchases. Do not collect the first service month twice.';
+        $lines[] = 'Premium marketing usage: email $1.49/1,000; SMS $0.05/segment; OpenAI 2x actual API cost. AI task: 5,000 input + 500 output tokens (GPT-6.1 Sol). Future memory: 2,000 additional uncached input tokens/reply, about $0.008/reply, not a fixed subscription fee. Voice is balanced audio only.';
         $lines[] = $example['note'];
 
         return implode("\n", $lines);
@@ -84,7 +84,7 @@ class StandardUsagePricing
         $offer = (array) config('module_catalog.offers.standard');
         $quote = ['offer_version' => $offer['version'], 'usage' => $this->presentation(), 'selected_services' => $services,
             'setup_cents' => $offer['setup_cents'], 'first_month_cents' => $offer['monthly_cents'],
-            'preload_cents' => $preloadCents, 'subtotal_cents' => $offer['setup_cents'] + $offer['monthly_cents'] + $preloadCents,
+            'preload_cents' => $preloadCents, 'subtotal_cents' => $offer['setup_cents'] + $offer['monthly_cents'], 'preload_timing' => 'separate_optional_purchase_after_initial_payment',
             'recurring_cents' => $offer['monthly_cents'], 'sms_setup_cents' => 0,
             'quote_required' => in_array('phone_voice', $services, true) ? ['Phone connection and any fixed managed-service fees'] : [],
             'activation_note' => 'Selection does not activate a service. Provider setup, agreed scope and capacity remain required. Prepaid usage is funded only after verified payment. The first month is already included; monthly renewal must start after that covered period.',

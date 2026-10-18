@@ -5,7 +5,7 @@ use Illuminate\Validation\ValidationException;
 
 test('future Standard uses one prepaid balance without legacy SMS setup or monthly sending subscriptions', function () {
     $quote = app(StandardUsagePricing::class)->quote(['sms', 'email', 'ai'], 5000);
-    expect($quote['subtotal_cents'])->toBe(84800)->and($quote['recurring_cents'])->toBe(29900)
+    expect($quote['subtotal_cents'])->toBe(79800)->and($quote['recurring_cents'])->toBe(29900)
         ->and($quote['sms_setup_cents'])->toBe(0)->and($quote['usage']['sms_monthly_cents'])->toBe(0)
         ->and($quote['usage']['ai_provider_cost_multiplier'])->toBe(2)
         ->and($quote['usage']['messaging_rates_micros']['sms'])->toBe(50000)
@@ -34,8 +34,8 @@ test('the five-person planning example includes future memory without adding est
     $example = $pricing->teamUsageExample();
     expect($example['usage_total_cents'])->toBe(4895)
         ->and($example['regular_month_cents'])->toBe(34795)
-        ->and($example['first_month_cents'])->toBe(84695)
+        ->and($example['first_month_cents'])->toBe(79800)
         ->and($example['initial_invoice_cents'])->toBe(79800)
         ->and($pricing->presentation()['memory_example']['customer_cost_micros_per_reply'])->toBe(8000)
-        ->and($pricing->invoiceUsageFooter())->toContain('$7.45', '$4.00', '$347.95', 'ACTUAL INITIAL INVOICE: $798.00', 'INFORMATIONAL ONLY');
+        ->and($pricing->invoiceUsageFooter())->toContain('$7.45', '$4.00', '$347.95', 'FIRST PAYMENT: $798.00', 'INFORMATIONAL ONLY');
 });
