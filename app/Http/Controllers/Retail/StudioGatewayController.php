@@ -24,6 +24,6 @@ class StudioGatewayController extends Controller
         $response = $client->withBody($r->getContent(), $r->header('Content-Type', 'application/json'))->send($r->method(), 'https://levelfoundations.org/api/studio'.($path !== '' ? '/'.$path : ''));
 
         // No upstream cookies, redirects, credentials or public caching are forwarded.
-        return response($response->body(), $response->status())->header('Content-Type', $response->header('Content-Type') ?: 'application/json')->header('Cache-Control', 'private, no-store')->header('X-Content-Type-Options','nosniff');
+        return response($response->body(), $response->status())->header('Content-Type', $response->header('Content-Type') ?: 'application/json')->header('Cache-Control', 'private, no-store')->header('X-Content-Type-Options', 'nosniff');
     }
 }
