@@ -1,3 +1,12 @@
+## Wren family help (2026-10-19)
+
+- `SoccerFamilyHelpService` handles toddler/minimum-age, human contact, move-up,
+  season schedule/address, and live registration-status questions locally.
+  Preserve distinct season/opening dates, family-profile vs enrollment language,
+  and returning players through 12. No under-three exceptions or invented fall
+  cutoff. Review claims must reflect actual persisted evidence; the AI cannot
+  claim it saved or changed records. See `docs/operations/wren-soccer.md`.
+
 ## Wren player age eligibility (2026-10-19)
 
 - Use `SoccerEligibilityService` for quote, registration, profile, and helper age
@@ -52,10 +61,14 @@
   cannot open checkout, create a subscription, grant a module or reroute refunds.
   Signed revocation/payment events and genuine sandbox acceptance remain gates.
 
-- PR #410 deployed at `cb133ecf` through protected run `38904619886`. Live
-  Connect is blocked on the platform owner identity document; keep the saved
-  immutable retry. Shop Pay unpaid-session diagnostics and remaining checkout
-  work are documented in `docs/operations/shop-pay-wallet-readiness.md`.
+- PR #410 deployed at `cb133ecf` through protected run `38904619886`. On
+  October 19 the owner completed live identity and Connect agreement setup.
+  A verified cached HTTP 400 plus a complete zero-account scan allowed an audited
+  separate recovery reservation; the original encrypted request is preserved.
+  Wren now has a live connected account in onboarding. Business/bank verification,
+  callbacks and payment/refund proof still gate collection. See the payment setup
+  runbook for evidence. Shop Pay diagnostics remain in
+  `docs/operations/shop-pay-wallet-readiness.md`.
 
 - Soccer Stripe Checkout explicitly names the connected soccer business as
   `on_behalf_of` as well as the transfer destination, matching native storefront

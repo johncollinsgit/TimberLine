@@ -1,3 +1,12 @@
+## 2026-10-19 - Wren parent help answers
+
+- Common toddler, human-contact, move-up, schedule and address questions now
+  receive direct answers without AI setup. Registration status is separate from
+  practice dates; younger saved profiles are distinct from Spring enrollment.
+  Returning players remain eligible through 12. Unverified questions refer to
+  Sarah without promising an exception or claiming an unsaved review.
+- Existing help panel and encrypted signed-in history remain in place.
+
 ## 2026-10-16 - Workspace status independent of integration health
 
 - The landlord client list and client settings share the saved administrative

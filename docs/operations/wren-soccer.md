@@ -99,6 +99,24 @@ does not include saved family profiles or medical releases in model requests. Pa
 birthday corrections update the active player record and audit old/new values;
 historical signed releases remain unchanged. Existing active registrations
 require Wren review before a birthday changes because the team may change.
+Common help intents answer locally without an AI credential, including casual
+`2yo`/`almost 3` questions, human contact, season dates, the full church address,
+and requests to move up. A human request immediately gives Sarah's text/call
+number. Under-three players cannot enroll in Spring, while family profile saving
+remains available. Returning eligibility stays through age 12 at the cutoff.
+Registration answers read the saved season's actual open flag and required start
+date; future scheduled openings are shown only from `registration_opens_at` in
+Eastern time. Practice dates never substitute for registration opening dates.
+The approved Spring schedule ends May 17, 2027, on Monday evenings 5:30–6:30 PM.
+The attachment's old $25 price and swapped team labels are not authoritative;
+current $30/$50 fees and Green Bears 3–4, Blue Dragons 5–7, Red Falcons 8+ remain.
+Unknown answers refer to Sarah without claiming a question has been saved.
+Successful signed-in exchanges still persist encrypted review evidence as above;
+the AI is explicitly prohibited from claiming it changed or saved records.
+AI requests contain the current question and public program facts only. Stored
+conversation answers are not forwarded because local team assessments and
+birthday confirmations may contain private family information. Encrypted history
+and admin review transcripts remain available inside their existing access scope.
 The family form collects spouse name and phone in place of the old secondary
 phone field and no longer asks for a pickup phone. Assistant coach volunteers
 identify Mom or Dad, give the coach name and adult jersey size, select all
