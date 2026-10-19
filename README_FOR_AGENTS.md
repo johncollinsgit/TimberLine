@@ -1,3 +1,12 @@
+## Wren player age eligibility (2026-10-19)
+
+- Use `SoccerEligibilityService` for quote, registration, profile, and helper age
+  decisions. New ages 3–10; returning through 12 at the season cutoff. A guardian
+  or coaching role is not player history. Only prior registered/historical rows or
+  retained signed D1 releases qualify; fresh portal releases cannot grant alumni status.
+- Keep profile saving available for children outside current eligibility. Do not
+  auto-enroll future players or change payment/provider launch gates.
+
 ## Ask Everbranch (2026-10-16; local, disabled)
 
 - The separately audited fictional pilot uses the fixed `everbranch-voice-pilot`

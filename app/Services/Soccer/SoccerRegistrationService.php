@@ -68,6 +68,7 @@ class SoccerRegistrationService
             }
             $player = $players[$child['player_id']];
             abort_unless($player->birthday, 422, 'Review and complete each player’s birthday.');
+            app(SoccerEligibilityService::class)->assertEligible($tenant, $player, $season);
             $team = $this->teamFor($player->birthday, $season->age_as_of ?? $season->starts_on);
             $seat = ! $queueByTeam->has($team) && $capacity[$team]['public_free'] > 0 ? 'public' : null;
             if ($seat) {
@@ -164,6 +165,7 @@ class SoccerRegistrationService
                 }
                 $p = $players[$child['player_id']];
                 abort_unless($p->birthday, 422, 'Review and complete each player’s birthday.');
+                app(SoccerEligibilityService::class)->assertEligible($tenant, $p, $season);
                 $team = $this->teamFor($p->birthday, $season->age_as_of ?? $season->starts_on);
                 $jersey = (bool) $child['needs_jersey'];
                 if ($jersey && empty($child['jersey_size'])) {

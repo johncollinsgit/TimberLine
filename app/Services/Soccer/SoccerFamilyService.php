@@ -96,9 +96,10 @@ class SoccerFamilyService
     public function profile(int $tenant, object $family): array
     {
         $seasons = $this->store->query('seasons', $tenant)->orderByDesc('season_key')->get();
+        $currentSeason = $seasons->firstWhere('season_key', 'spring-2027');
 
         return ['family' => ['id' => $family->id, 'email' => $family->email, 'profile' => $this->store->decrypt($family->profile), 'sms_consent' => (bool) $family->sms_consent_at],
-            'players' => $this->store->query('players', $tenant)->where('family_id', $family->id)->orderBy('name')->get()->map(fn ($p) => ['id' => $p->id, 'name' => $p->name, 'birthday' => $p->birthday, 'profile' => $this->store->decrypt($p->profile)]),
+            'players' => $this->store->query('players', $tenant)->where('family_id', $family->id)->orderBy('name')->get()->map(fn ($p) => ['id' => $p->id, 'name' => $p->name, 'birthday' => $p->birthday, 'profile' => $this->store->decrypt($p->profile), 'eligibility' => $currentSeason ? app(SoccerEligibilityService::class)->assess($tenant, $p, $currentSeason) : null]),
             'seasons' => $seasons->map(fn ($s) => ['id' => $s->id, 'key' => $s->season_key, 'name' => $s->name, 'starts_on' => $s->starts_on, 'age_as_of' => $s->age_as_of ?? $s->starts_on, 'registration_opens_at' => $s->registration_opens_at, 'open' => (bool) $s->registration_open, 'teams' => app(SoccerRegistrationService::class)->capacities($s)]),
             'registrations' => $this->store->query('registrations', $tenant)->where('family_id', $family->id)->get(),
             'invoices' => $this->store->query('invoices', $tenant)->where('family_id', $family->id)->latest('created_at')->get()->map(fn ($i) => collect((array) $i)->except(['checkout_id', 'payment_intent_id', 'tenant_id'])->all()),

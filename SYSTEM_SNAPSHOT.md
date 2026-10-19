@@ -1,3 +1,14 @@
+# Wren player age eligibility (2026-10-19)
+
+- New players register at ages 3–10; returning players through age 12, measured
+  on the season age cutoff. Quote and registration enforce the same tenant- and
+  family-scoped evidence. Earlier registered/historical participation or retained
+  signed D1 release evidence qualifies; a new portal signature cannot invent history.
+- Younger/older children may remain saved family profiles without enrollment or
+  charges. The website estimates future seasons separately; no practice date is
+  invented in Laravel. Uncertain help answers refer parents to Sarah without promises.
+- No migration, enrollment, refund, charge, or provider activation occurs.
+
 # SYSTEM SNAPSHOT
 
 ## Fictional voice pilot (2026-10-16; provisioning increment)
