@@ -80,10 +80,14 @@
   See `docs/architecture/stripe-paypal-payments-plan.md` and
   `docs/operations/tenant-payment-setup.md` before continuing.
 
-- PR #410 deployed at `cb133ecf` through protected run `38904619886`. Live
-  Connect is blocked on the platform owner identity document; keep the saved
-  immutable retry. Shop Pay unpaid-session diagnostics and remaining checkout
-  work are documented in `docs/operations/shop-pay-wallet-readiness.md`.
+- PR #410 deployed at `cb133ecf` through protected run `38904619886`. On
+  October 19 the owner completed live identity and Connect agreement setup.
+  A verified cached HTTP 400 plus a complete zero-account scan allowed an audited
+  separate recovery reservation; the original encrypted request is preserved.
+  Wren now has a live connected account in onboarding. Business/bank verification,
+  callbacks and payment/refund proof still gate collection. See the payment setup
+  runbook for evidence. Shop Pay diagnostics remain in
+  `docs/operations/shop-pay-wallet-readiness.md`.
 
 - Soccer Stripe Checkout explicitly names the connected soccer business as
   `on_behalf_of` as well as the transfer destination, matching native storefront
