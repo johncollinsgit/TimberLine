@@ -20,6 +20,9 @@ class TenantMessagingAccountResolver
             ->first();
 
         if ((bool) config('features.tenant_messaging_platform') && $account?->isReady()) {
+            if ($channel === 'sms' && $account->provider === 'twilio_subaccount') {
+                $this->assertIsolatedTwilioAccount($account);
+            }
             $this->assertProviderCostIsAllowed($account->provider, $channel);
 
             return [
@@ -54,7 +57,20 @@ class TenantMessagingAccountResolver
             throw new RuntimeException('The Twilio callback account is not registered or ready.');
         }
 
+        $this->assertIsolatedTwilioAccount($account);
+
         return $account;
+    }
+
+    public function assertIsolatedTwilioAccount(TenantMessagingAccount $account): void
+    {
+        $sid = trim((string) $account->provider_account_id);
+        if ($account->provider !== 'twilio_subaccount' || ! preg_match('/^AC[0-9a-f]{32}$/iD', $sid)
+            || $sid === trim((string) config('services.twilio.account_sid'))
+            || TenantMessagingAccount::query()->forAllTenants()->where('channel', 'sms')
+                ->where('provider_account_id', $sid)->where('id', '!=', $account->id)->exists()) {
+            throw new RuntimeException('Tenant texting account needs operator reconciliation; a platform or shared account cannot be used.');
+        }
     }
 
     public function isLegacyTenant(int $tenantId): bool

@@ -2,6 +2,7 @@
 
 namespace App\Services\Marketing\Messaging;
 
+use App\Models\IntegrationConnection;
 use App\Models\Tenant;
 use App\Models\TenantMessagingAccount;
 use App\Models\TenantMessagingSenderProfile;
@@ -40,40 +41,76 @@ class TenantMessagingProvisioningService
             throw new RuntimeException('Twilio parent credentials are not configured.');
         }
 
-        $existing = TenantMessagingAccount::query()->forAllTenants()
-            ->where('tenant_id', $tenant->id)->where('channel', 'sms')->first();
-        if ($existing?->provider_account_id) {
-            return $existing;
-        }
+        $attempt = DB::transaction(function () use ($tenant, $parentSid) {
+            Tenant::query()->whereKey($tenant->id)->lockForUpdate()->firstOrFail();
+            $existing = TenantMessagingAccount::query()->forAllTenants()
+                ->where('tenant_id', $tenant->id)->where('channel', 'sms')->first();
+            if ($existing?->provider_account_id) {
+                app(TenantMessagingAccountResolver::class)->assertIsolatedTwilioAccount($existing);
 
-        $response = Http::asForm()->acceptJson()->withBasicAuth($parentSid, $parentToken)
-            ->timeout(30)->post("https://api.twilio.com/2010-04-01/Accounts/{$parentSid}.json", [
-                'FriendlyName' => 'Everbranch - '.$tenant->name.' - '.$tenant->id,
+                return $existing;
+            }
+            $fingerprint = hash('sha256', $parentSid.'|'.$tenant->id);
+            if (IntegrationConnection::query()->forAllTenants()->where('tenant_id', $tenant->id)
+                ->where('provider', 'tenant_twilio_onboarding')->where('external_account_id', $fingerprint)->exists()) {
+                throw new RuntimeException('Texting account creation needs operator reconciliation before another request.');
+            }
+
+            // Twilio account creation has no documented idempotency key. Persist
+            // intent before the request and never blindly retry an unknown result.
+            return IntegrationConnection::create([
+                'tenant_id' => $tenant->id,
+                'provider' => 'tenant_twilio_onboarding',
+                'external_account_id' => $fingerprint,
+                'external_account_label' => 'Tenant texting account setup',
+                'status' => IntegrationConnection::STATUS_PENDING,
+                'connected_by_user_id' => auth()->id(),
+                'external_account_secret' => json_encode(['payload' => ['FriendlyName' => Str::limit('Everbranch - '.$tenant->name.' - '.$tenant->id, 64, '')]], JSON_THROW_ON_ERROR),
             ]);
+        });
+        if ($attempt instanceof TenantMessagingAccount) {
+            return $attempt;
+        }
+        $payload = json_decode($attempt->external_account_secret, true, flags: JSON_THROW_ON_ERROR)['payload'];
+        $response = Http::asForm()->acceptJson()->withBasicAuth($parentSid, $parentToken)
+            ->connectTimeout(5)->timeout(30)->post('https://api.twilio.com/2010-04-01/Accounts.json', $payload);
         if ($response->failed()) {
-            throw new RuntimeException('Twilio subaccount provisioning failed: '.$this->providerError($response->json()));
+            $attempt->update(['status' => IntegrationConnection::STATUS_ERROR, 'last_error_code' => 'provider_rejected', 'last_error_at' => now()]);
+            throw new RuntimeException('Twilio subaccount provisioning failed; operator reconciliation is required.');
+        }
+        $data = (array) $response->json();
+        if (! preg_match('/^AC[0-9a-f]{32}$/iD', (string) ($data['sid'] ?? ''))
+            || $data['sid'] === $parentSid || ($data['owner_account_sid'] ?? '') !== $parentSid
+            || empty($data['auth_token'])) {
+            $attempt->update(['status' => IntegrationConnection::STATUS_ERROR, 'last_error_code' => 'invalid_provider_identity', 'last_error_at' => now()]);
+            throw new RuntimeException('Twilio did not return an isolated tenant account; operator reconciliation is required.');
         }
 
-        $payload = (array) $response->json();
-
-        return TenantMessagingAccount::query()->forAllTenants()->updateOrCreate(
-            ['tenant_id' => $tenant->id, 'channel' => 'sms'],
-            [
-                'provider' => 'twilio_subaccount',
-                'mode' => 'platform_managed',
-                'status' => 'awaiting_business_profile',
-                'provider_account_id' => $payload['sid'] ?? null,
-                'credentials' => ['auth_token' => $payload['auth_token'] ?? null],
-                'registration' => [
-                    'secondary_customer_profile' => 'required',
-                    'brand' => 'required',
-                    'campaign' => 'required',
-                    'messaging_service' => 'required',
-                    'phone_number' => 'required',
+        return DB::transaction(function () use ($tenant, $attempt, $data) {
+            Tenant::query()->whereKey($tenant->id)->lockForUpdate()->firstOrFail();
+            $account = TenantMessagingAccount::query()->forAllTenants()->updateOrCreate(
+                ['tenant_id' => $tenant->id, 'channel' => 'sms'],
+                [
+                    'provider' => 'twilio_subaccount',
+                    'mode' => 'platform_managed',
+                    'status' => 'awaiting_business_profile',
+                    'provider_account_id' => $data['sid'],
+                    'credentials' => ['auth_token' => $data['auth_token']],
+                    'registration' => [
+                        'secondary_customer_profile' => 'required',
+                        'brand' => 'required',
+                        'campaign' => 'required',
+                        'messaging_service' => 'required',
+                        'phone_number' => 'required',
+                    ],
+                    'diagnostics' => ['provisioned_at' => now()->toIso8601String(), 'onboarding_attempt_id' => $attempt->id],
                 ],
-                'diagnostics' => ['provisioned_at' => now()->toIso8601String()],
-            ],
-        );
+            );
+            app(TenantMessagingAccountResolver::class)->assertIsolatedTwilioAccount($account);
+            $attempt->update(['status' => IntegrationConnection::STATUS_CONNECTED, 'connected_at' => now()]);
+
+            return $account;
+        });
     }
 
     /** @param array<string,mixed> $resources */
@@ -89,6 +126,7 @@ class TenantMessagingProvisioningService
         return DB::transaction(function () use ($tenantId, $resources): TenantMessagingAccount {
             $account = TenantMessagingAccount::query()->forAllTenants()
                 ->where('tenant_id', $tenantId)->where('channel', 'sms')->lockForUpdate()->firstOrFail();
+            app(TenantMessagingAccountResolver::class)->assertIsolatedTwilioAccount($account);
             $account->update([
                 'provider_resource_id' => $resources['messaging_service_sid'],
                 'sender_identifier' => $resources['phone_number'],
