@@ -48,7 +48,7 @@
                                 <p class="mt-3 text-sm text-zinc-600" data-complete hidden>Setup closed. Use Check verification below to see your current status.</p>
                             </div>
                         @else
-                            <form method="post" action="{{ route('tenant-payments.stripe.start', ['tenant' => $tenant->slug]) }}" class="space-y-4" x-data="{ submitting: false }" x-on:submit="submitting = true">
+                            <form method="post" action="{{ route('tenant-payments.stripe.start', ['tenant' => $tenant->slug]) }}" class="space-y-4" x-data="{ submitting: false }" x-on:submit="submitting = true" x-on:pageshow.window="submitting = false">
                                 @csrf
                                 <label class="block max-w-md text-sm font-medium text-zinc-800">Account owner email<input class="mt-2 block min-h-12 w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-base" type="email" name="email" autocomplete="email" value="{{ old('email', auth()->user()->email) }}" required></label>
                                 <button class="fb-btn fb-btn-primary min-h-12 w-full justify-center px-6 sm:w-auto disabled:opacity-60" x-bind:disabled="submitting"><span x-show="!submitting">{{ $account ? 'Continue payment setup' : 'Activate card payments' }}</span><span x-show="submitting" x-cloak>Opening secure setup…</span></button>
