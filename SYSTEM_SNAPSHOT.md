@@ -1,3 +1,14 @@
+# Tenant SMS account isolation (2026-10-19)
+
+- Tenant SMS creation posts to Twilio's account collection, validates a distinct
+  child owned by the configured platform, and rejects parent/shared bindings in
+  provisioning, delivery, callbacks and registration completion. Creation intent
+  is durable before HTTP; an unknown result requires operator reconciliation.
+- Wren's older prepared row was found linked to the platform SID while its sender
+  stayed unready. Repair must preserve encrypted evidence, scan child accounts,
+  and bind a dedicated child without moving platform numbers or registrations.
+  Saved legal details and messaging credit remain intact. See the soccer runbook.
+
 # Wren family help (2026-10-19)
 
 - Common parent questions use deterministic answers for minimum age, immediate

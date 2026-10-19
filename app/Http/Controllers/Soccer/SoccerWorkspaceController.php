@@ -80,11 +80,7 @@ class SoccerWorkspaceController extends Controller
         $svc = app(SoccerRegistrationService::class);
         if ($action === 'sms-prepare') {
             try {
-                $account = DB::transaction(function () use ($t) {
-                    $t->newQuery()->whereKey($t->id)->lockForUpdate()->firstOrFail();
-
-                    return app(\App\Services\Marketing\Messaging\TenantMessagingProvisioningService::class)->provisionSms($t);
-                });
+                $account = app(\App\Services\Marketing\Messaging\TenantMessagingProvisioningService::class)->provisionSms($t);
             } catch (\RuntimeException $error) {
                 abort(502, 'Texting account setup is unavailable. Check the approved sender rollout and provider configuration.');
             }

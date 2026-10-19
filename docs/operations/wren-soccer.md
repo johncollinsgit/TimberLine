@@ -42,6 +42,28 @@ waitlist offers require each waiting sibling to head its team queue.
 
 ## Required account setup before opening
 
+### SMS connection correction, 2026-10-19
+
+The original SMS preparation used Twilio's account-specific update URL instead
+of the account-creation collection. Wren's prepared row consequently referenced
+the platform SID; no sender was ready and no soccer deliveries were recorded.
+Existing platform numbers, services and brand approvals are not Wren resources.
+The corrected service validates child ownership and rejects parent/shared account
+bindings for provisioning, delivery, callbacks and registration completion.
+
+Account creation has a durable encrypted intent reservation before HTTP. Unknown
+outcomes stop for operator reconciliation, including after a connection timeout;
+do not delete the reservation and retry. Reconcile a complete platform child-account
+scan against the frozen intended name and tenant evidence before any new create.
+Preserve the incorrect binding encrypted in the repair evidence, detach only
+Wren's local reference, then create or adopt its proven dedicated child. Never
+move platform numbers, brands or campaigns, or mark Wren ready from their status.
+The saved business form is not a provider submission. Retain its encrypted EIN,
+the existing $15 owner credit and GroupMe connection during repair. Provider
+registration, approval and actual SMS delivery proof still gate opening.
+
+### Launch connections
+
 - Complete Wren-owned Stripe Express onboarding in Settings. Onboarding and
   checkout retain the canonical tenant-payment rollout gates. Live Connect
   webhook verification blocks collection, but does not block starting onboarding;

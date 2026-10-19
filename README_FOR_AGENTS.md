@@ -1956,3 +1956,11 @@ full regression/build, and normal release gates.
 ## Team message files (2026-10-05)
 
 Mobile conversations support up to five private photos/PDFs per message, 50 MB per file, through bounded 512 KiB chunk uploads. `team_message_attachments` owns these files on the private local disk. Channel access, current workspace membership, uploader ownership, exact checksums and detected MIME are checked server-side. Files become readable only after attachment to a visible message; workspace assets and Modern Forestry commerce are not involved.
+# Tenant SMS provisioning safety (2026-10-19)
+
+Create Twilio subaccounts with `POST /2010-04-01/Accounts.json`; posting to an
+account-specific URL updates the parent. A tenant account must differ from the
+platform SID, belong to that platform, and be exclusive to one tenant. The
+provisioner durably reserves intent outside provider HTTP and must not be wrapped
+in a caller transaction. Do not retry an ambiguous creation or reuse a parent
+binding. Follow `docs/operations/wren-soccer.md` for reviewed Wren reconciliation.
