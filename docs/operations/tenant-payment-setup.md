@@ -71,6 +71,28 @@ errors are shown as platform setup problems rather than bad emails. No raw
 provider response is displayed. The latter may require the platform owner to
 complete identity verification directly in Stripe.
 
+### Reviewed Wren recovery, 2026-10-19
+
+The owner completed live platform identity verification and explicitly approved
+the Connect agreement. The saved setup now matches destination payments,
+Stripe-hosted onboarding and Express dashboard access. Stripe disclosed platform
+refund/chargeback and negative-balance liability and Radar Standard pricing of
+$0 per screened transaction and $1 per connected account.
+
+The original request returned a cached HTTP 400 platform-profile rejection
+(`Idempotent-Replayed: true`). An authenticated complete scan proved zero live
+connected accounts, with the configured platform identity independently verified.
+The operator marked that definitively failed reservation failed, preserved its
+encrypted key/payload and creation time, and committed a separate immutable
+recovery reservation linked to it before contacting Stripe. That recovery created
+one Wren account and linked the local record, with append-only audit evidence.
+This is not a retry pattern for an ambiguous result: any provider account,
+timeout, unverified identity or incomplete scan stops creation for reconciliation.
+The existing service and its 23-hour guard remain unchanged.
+
+The account is onboarding only. Business verification, bank payouts, signed
+callbacks and the controlled payment/refund proof remain collection gates.
+
 ## Release and proof
 
 ### Observed provider setup, 2026-10-16
