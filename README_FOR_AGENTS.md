@@ -1964,4 +1964,3 @@ platform SID, belong to that platform, and be exclusive to one tenant. The
 provisioner durably reserves intent outside provider HTTP and must not be wrapped
 in a caller transaction. Do not retry an ambiguous creation or reuse a parent
 binding. Follow `docs/operations/wren-soccer.md` for reviewed Wren reconciliation.
-
