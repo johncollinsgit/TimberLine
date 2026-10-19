@@ -90,7 +90,7 @@ class SoccerFamilyHelpService
         if (preg_match('/\b(coach|coaching|volunteer)\b/u', $question)) {
             return ['answer' => 'Mom or Dad can volunteer as an assistant coach. Choose every age group you could coach and confirm that you can be available for at least 8 of 10 weeks. Assistant coaches may receive up to two free child registrations, including jerseys.', 'needs_review' => false];
         }
-        if (preg_match('/\b(team|age group|how old|age cutoff)\b/u', $question) && $season) {
+        if (preg_match('/\b(team|age|old|eligible|eligibility|alumni|returning)\b|add.{0,30}(child|player)/u', $question) && $season) {
             $cutoff = $season->age_as_of ?? $season->starts_on;
             $teams = json_decode($season->teams, true) ?: config('soccer.teams');
             $lines = [];
@@ -100,11 +100,12 @@ class SoccerFamilyHelpService
                         continue;
                     }
                     $age = (int) CarbonImmutable::parse($player->birthday)->diffInYears(CarbonImmutable::parse($cutoff));
+                    $eligibility = app(SoccerEligibilityService::class)->assess($tenant, $player, $season);
                     $team = collect($teams)->first(fn ($row) => $age >= $row['min_age'] && ($row['max_age'] === null || $age <= $row['max_age']));
-                    $lines[] = $player->name.': age '.$age.' — expected team '.($team['name'] ?? 'not available for this age').'.';
+                    $lines[] = $player->name.': age '.$age.' — '.($eligibility['eligible'] ? 'expected team '.($team['name'] ?? 'pending') : $eligibility['reason']).'.';
                 }
             }
-            $answer = 'Teams use each child’s age on '.($cutoff ? CarbonImmutable::parse($cutoff)->format('F j, Y') : 'the season cutoff date').'. Green Bears are ages 3–4, Blue Dragons 5–7, and Red Falcons 8+.'.($lines ? ' Your family: '.implode(' ', $lines) : ' Add a child’s birthday to see their expected team.');
+            $answer = 'Teams use each child’s age on '.($cutoff ? CarbonImmutable::parse($cutoff)->format('F j, Y') : 'the season cutoff date').'. Green Bears are ages 3–4, Blue Dragons 5–7, and Red Falcons for eligible players age 8 and up. New players must be ages 3–10; returning players with prior participation on file may play through age 12, subject to available places. Younger children can be saved in your family account for a future season without registering or paying now.'.($lines ? ' Your family: '.implode(' ', $lines) : ' Add a child’s birthday to see their expected team.');
 
             return ['answer' => $answer, 'needs_review' => false];
         }
@@ -139,7 +140,7 @@ class SoccerFamilyHelpService
         }
 
         $cutoff = $season?->age_as_of ?? $season?->starts_on;
-        $facts = 'Wren Family Soccer Spring 2027 at Community Bible Church in Easley, SC. Green Bears ages 3-4; Blue Dragons ages 5-7; Red Falcons ages 8+. Age cutoff: '.($cutoff ?: 'not confirmed').'. Registration currently '.($season?->registration_open ? 'open' : 'closed').'. $30 reusing a jersey, $50 with a new jersey. Assistant coaches may receive up to two free child registrations and must be available for at least 8 of 10 weeks. Waitlisted children are not charged until offered a spot. Text payment links go out 8 a.m.-8 p.m. Families review and sign a new medical release each season. GroupMe remains the soccer group.';
+        $facts = 'Wren Family Soccer Spring 2027 at Community Bible Church in Easley, SC. Green Bears ages 3-4; Blue Dragons ages 5-7; Red Falcons for eligible players 8 and up. New players must be ages 3-10; returning players with prior participation on file may play through age 12, subject to capacity. Children under 3 can be saved as family profiles for a future season but cannot register or be charged now. Do not promise exceptions; refer uncertain eligibility to Sarah Collins at 678-644-1829. Age cutoff: '.($cutoff ?: 'not confirmed').'. Registration currently '.($season?->registration_open ? 'open' : 'closed').'. $30 reusing a jersey, $50 with a new jersey. Assistant coaches may receive up to two free child registrations and must be available for at least 8 of 10 weeks. Waitlisted children are not charged until offered a spot. Text payment links go out 8 a.m.-8 p.m. Families review and sign a new medical release each season. GroupMe remains the soccer group.';
         $context = collect(array_slice($prior, -4))->map(fn ($row) => ['question' => $row['question'], 'answer' => $row['answer']])->all();
 
         try {
@@ -148,7 +149,7 @@ class SoccerFamilyHelpService
                 'reasoning' => ['effort' => 'none'],
                 'store' => false,
                 'max_output_tokens' => 300,
-                'instructions' => 'You are the Wren Family Soccer registration help assistant. Answer only from these verified facts: '.$facts.' If the answer requires private account information, policy not stated here, or any fact you cannot verify, set can_answer to false and leave answer empty. Do not invent dates, policy, or promises. Never claim to update a record; the website handles record changes separately. Keep answers short and friendly.',
+                'instructions' => 'You are the Wren Family Soccer registration help assistant. Answer only from these verified facts: '.$facts.' If the answer requires private account information, policy not stated here, or any fact you cannot verify, set can_answer to false and leave answer empty. Do not invent dates, policy, or promises. When uncertain, direct the parent to Sarah Collins at 678-644-1829; never promise an exception. Never claim to update a record; the website handles record changes separately. Keep answers short and friendly.',
                 'input' => json_encode(['recent_conversation' => $context, 'question' => $message], JSON_THROW_ON_ERROR),
                 'text' => ['format' => ['type' => 'json_schema', 'name' => 'wren_help_answer', 'strict' => true, 'schema' => [
                     'type' => 'object', 'properties' => ['can_answer' => ['type' => 'boolean'], 'answer' => ['type' => 'string']], 'required' => ['can_answer', 'answer'], 'additionalProperties' => false,
@@ -172,6 +173,6 @@ class SoccerFamilyHelpService
 
     private function unanswered(): array
     {
-        return ['answer' => 'I’m not sure of the answer, so I’ve saved your question and the conversation for the Wren team to review in Everbranch.', 'needs_review' => true];
+        return ['answer' => 'I’m not sure of that policy. Please text Sarah Collins at 678-644-1829; she can review it with you. I’ve saved your question for the Wren team, and I cannot promise an exception.', 'needs_review' => true];
     }
 }
