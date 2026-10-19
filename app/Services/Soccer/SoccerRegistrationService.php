@@ -409,6 +409,13 @@ class SoccerRegistrationService
             $invoices = $this->store->query('invoices', $tenant)->where('season_id', $seasonId)->where('status', 'unpaid')->get();
             foreach ($invoices as $i) {
                 $expires = CarbonImmutable::parse($i->expires_at);
+                if (json_decode($i->registration_ids, true) === []) {
+                    if ($expires->lte(now())) {
+                        $this->store->query('invoices', $tenant)->where('id', $i->id)->update(['status' => 'expired', 'updated_at' => now()]);
+                    }
+
+                    continue;
+                }
                 if ($expires->lte(now())) {
                     $this->store->query('invoices', $tenant)->where('id', $i->id)->update(['status' => 'expired', 'updated_at' => now()]);
                     $this->store->query('registrations', $tenant)->where('offer_group', $i->offer_group)->where('status', 'offered')->update(['status' => 'waitlisted', 'auto_eligible' => false, 'seat_kind' => null, 'offer_expires_at' => null, 'updated_at' => now()]);

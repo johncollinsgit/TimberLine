@@ -63,7 +63,7 @@ class SoccerPaymentService
             $this->store->query('invoices', $tenant)->where('id', $id)->update(['status' => 'paid', 'provider' => $provider, 'payment_intent_id' => $provider === 'stripe' ? ($evidence['payment_intent'] ?? null) : null, 'paid_at' => now(), 'updated_at' => now()]);
             $this->store->query('registrations', $tenant)->where('offer_group', $i->offer_group)->update(['status' => 'registered', 'offer_expires_at' => null, 'payment_status' => 'paid', 'updated_at' => now()]);
             $this->store->query('registrations', $tenant)->where('offer_group', $i->offer_group)->where('waived', true)->update(['payment_status' => 'waived']);
-            $this->events->record($tenant, $i->season_id, $i->family_id, 'payment_confirmed', ['invoice_id' => $id, 'summary' => 'Family payment confirmed; children registered.'], $actor, waitlist: true);
+            $this->events->record($tenant, $i->season_id, $i->family_id, 'payment_confirmed', ['invoice_id' => $id, 'summary' => $regs->isNotEmpty() ? 'Family payment confirmed; children registered.' : 'Payment confirmed; no player registrations changed.'], $actor, waitlist: $regs->isNotEmpty());
         }, 3);
     }
 
