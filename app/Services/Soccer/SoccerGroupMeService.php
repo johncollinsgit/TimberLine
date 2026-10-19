@@ -83,10 +83,12 @@ class SoccerGroupMeService
         return $messages;
     }
 
-    public function send(int $tenant, User $user, string $group, string $text, string $requestId): void
+    public function send(int $tenant, User $user, string $group, string $text, string $requestId): ?string
     {
         $this->group($tenant, $user, $group);
         $r = $this->api($this->token($tenant, $user))->post('/groups/'.rawurlencode($group).'/messages', ['message' => ['source_guid' => $requestId, 'text' => $text]]);
         abort_unless($r->successful() || $r->status() === 409, 502, 'GroupMe could not post the message.');
+
+        return $r->json('response.message.id');
     }
 }

@@ -1,3 +1,16 @@
+# Wren email registration launch (2026-10-19)
+
+- Soccer can explicitly use `WREN_SOCCER_NOTIFICATION_MODE=email` while its
+  Twilio sender is awaiting approval. Verified parent emails carry offers,
+  reminders, waived-place notices, waitlist updates and payment confirmations.
+  Head Coaches receives generic GroupMe operational alerts through the verified
+  admin connection. Shared messages contain no family details or invoice links.
+- SMS remains the default. Email mode requires its own launch smoke verification;
+  payment, bridge, email and GroupMe gates remain enforced. Durable deliveries
+  track provider acceptance, suppression and ambiguous outcomes inside Messages.
+  There is no automatic switch to SMS or change to legacy provider credentials.
+  No migration is required. See `docs/operations/wren-soccer.md`.
+
 # Tenant SMS account isolation (2026-10-19)
 
 - Tenant SMS creation posts to Twilio's account collection, validates a distinct

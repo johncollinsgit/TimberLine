@@ -16,16 +16,22 @@ class SoccerLaunchReadiness
         if (strlen((string) config('soccer.stripe_webhook_secret')) < 16) {
             $b[] = 'Soccer Stripe webhook is not configured.';
         }
-        if (! config('soccer.sms_enabled') || ! TenantMessagingAccount::query()->forAllTenants()->where('tenant_id', $t->id)->where('channel', 'sms')->get()->contains(fn ($a) => $a->isReady())) {
+        $mode = config('soccer.notification_mode');
+        if (! in_array($mode, ['sms', 'email'], true)) {
+            $b[] = 'Select a supported soccer notification mode.';
+        }
+        if ($mode === 'sms' && (! config('soccer.sms_enabled') || ! TenantMessagingAccount::query()->forAllTenants()->where('tenant_id', $t->id)->where('channel', 'sms')->get()->contains(fn ($a) => $a->isReady()))) {
             $b[] = 'Wren SMS sender is not ready.';
         }
-        if (! config('marketing.sms.enabled') || config('marketing.sms.dry_run')) {
+        if ($mode === 'sms' && (! config('marketing.sms.enabled') || config('marketing.sms.dry_run'))) {
             $b[] = 'Live SMS delivery must be enabled and dry-run disabled.';
         }
-        $usage = app(\App\Services\Marketing\Messaging\TenantMessagingUsageService::class);
-        $balance = $usage->summary($t->id, 'sms');
-        if ($balance['included_units'] - $balance['used_units'] - $balance['reserved_units'] < 3 && $balance['credit_available_micros'] < 3 * $balance['overage_rate_micros'] && ! $usage->postpaidAuthorizedForChannel($t->id, 'sms')) {
-            $b[] = 'Wren needs available SMS units or messaging credit.';
+        if ($mode === 'sms') {
+            $usage = app(\App\Services\Marketing\Messaging\TenantMessagingUsageService::class);
+            $balance = $usage->summary($t->id, 'sms');
+            if ($balance['included_units'] - $balance['used_units'] - $balance['reserved_units'] < 3 && $balance['credit_available_micros'] < 3 * $balance['overage_rate_micros'] && ! $usage->postpaidAuthorizedForChannel($t->id, 'sms')) {
+                $b[] = 'Wren needs available SMS units or messaging credit.';
+            }
         }
         if (in_array(config('mail.default'), ['log', 'array', 'failover'], true)) {
             $b[] = 'Sign-in email delivery must use a verified live mail transport.';
@@ -38,7 +44,7 @@ class SoccerLaunchReadiness
         if (($s['verified_group_ids'] ?? []) !== ($s['groupme_groups'] ?? []) || ! $groupActor || ! app(SoccerAccess::class)->admin($t, $groupActor) || ! app(SoccerStore::class)->query('groupme_connections', $t->id)->where('user_id', $groupActor->id)->exists()) {
             $b[] = 'An admin must connect GroupMe and verify membership in all three mapped groups.';
         }
-        if (! (bool) ($s['launch_verified'] ?? false)) {
+        if (! (bool) ($s['launch_verified'] ?? false) || ($s['launch_verified_mode'] ?? 'sms') !== $mode) {
             $b[] = 'Admin delivery and payment smoke verification is incomplete.';
         }
 
