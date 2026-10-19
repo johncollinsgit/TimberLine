@@ -56,7 +56,7 @@ class SoccerPaymentService
             $regs = $this->store->query('registrations', $tenant)->where('offer_group', $i->offer_group)->get();
             $valid = $amount === $i->amount_cents && $i->status === 'unpaid' && CarbonImmutable::parse($i->expires_at)->gt(now()) && $regs->every(fn ($r) => $r->status === 'offered' || $r->status === 'registered' && $r->waived);
             if (! $valid) {
-                $this->events->record($tenant, $i->season_id, $i->family_id, 'payment_needs_review', ['invoice_id' => $id, 'summary' => 'Late, duplicate, or mismatched payment needs review.'], $actor, waitlist: true);
+                $this->events->record($tenant, $i->season_id, $i->family_id, 'payment_needs_review', ['invoice_id' => $id, 'summary' => 'Late, duplicate, or mismatched payment needs review.'], $actor, waitlist: $regs->isNotEmpty());
 
                 return;
             }

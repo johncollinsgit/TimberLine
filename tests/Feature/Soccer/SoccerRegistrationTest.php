@@ -316,10 +316,12 @@ it('expires a standalone invoice without registration reminders or waitlist chan
         ->and($this->store->query('deliveries', $this->t->id)->count())->toBe(0);
     $this->travel(2)->hours();
     $this->svc->tick($this->t->id, $this->season);
+    app(SoccerPaymentService::class)->paid($this->t->id, $invoice, 'stripe', 'intent:pi_verification_late', 100, ['payment_intent' => 'pi_verification_late']);
     expect($this->store->row('invoices', $this->t->id, $invoice)->status)->toBe('expired')
         ->and($this->store->query('registrations', $this->t->id)->count())->toBe(0)
         ->and($this->store->query('deliveries', $this->t->id)->count())->toBe(0)
-        ->and($this->store->query('events', $this->t->id)->whereIn('action', ['payment_reminder', 'offer_expired'])->count())->toBe(0);
+        ->and($this->store->query('events', $this->t->id)->whereIn('action', ['payment_reminder', 'offer_expired'])->count())->toBe(0)
+        ->and($this->store->query('events', $this->t->id)->where('action', 'payment_needs_review')->count())->toBe(1);
 });
 it('flags late payment without taking an expired seat', function () {
     [$f,$in] = soccerFamily($this, ['2023-01-01']);
