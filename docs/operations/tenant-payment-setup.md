@@ -1,5 +1,18 @@
 # Tenant payment connection setup
 
+## Guided setup screen (2026-10-19)
+
+The Payments page shows account creation, submitted business details and Stripe
+approval as separate steps, using saved provider evidence. Cards and payouts have
+separate statuses and a last-checked time. The secure handoff can be resumed;
+identity and bank details remain in Stripe. A bank account awaiting approval does
+not prevent starting business setup, but unresolved provider requirements and
+the existing checkout gates still prevent collection.
+
+Wren Settings links to this shared page when its exact rollout is enabled, so
+owners have one payment setup path. The legacy soccer handoff remains available
+when shared setup is disabled. No account-create, launch, fee or retry rules change.
+
 This is connection setup only. Follow the phased delivery plan in
 `docs/architecture/stripe-paypal-payments-plan.md`. Never advertise PayPal
 checkout or recurring billing as live on the strength of a connection alone.
