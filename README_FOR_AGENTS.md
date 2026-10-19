@@ -1,3 +1,12 @@
+## Wren family help (2026-10-19)
+
+- `SoccerFamilyHelpService` handles toddler/minimum-age, human contact, move-up,
+  season schedule/address, and live registration-status questions locally.
+  Preserve distinct season/opening dates, family-profile vs enrollment language,
+  and returning players through 12. No under-three exceptions or invented fall
+  cutoff. Review claims must reflect actual persisted evidence; the AI cannot
+  claim it saved or changed records. See `docs/operations/wren-soccer.md`.
+
 ## Wren player age eligibility (2026-10-19)
 
 - Use `SoccerEligibilityService` for quote, registration, profile, and helper age

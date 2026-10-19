@@ -1,3 +1,14 @@
+# Wren family help (2026-10-19)
+
+- Common parent questions use deterministic answers for minimum age, immediate
+  Sarah contact, moving up after the first practice, full location and schedule.
+  Registration answers use current saved status and a separately saved future
+  opening; season start is never an invented opening date. AI receives the same
+  confirmed public facts, without family profile or medical data.
+- Profile saving below age 3 and alumni enrollment through 12 are unchanged.
+  Unknown answers retain encrypted admin review but make no unsupported save claim.
+  No migration, provider send or registration opening is introduced.
+
 # Wren player age eligibility (2026-10-19)
 
 - New players register at ages 3–10; returning players through age 12, measured
