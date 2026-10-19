@@ -93,6 +93,19 @@ The existing service and its 23-hour guard remain unchanged.
 The account is onboarding only. Business verification, bank payouts, signed
 callbacks and the controlled payment/refund proof remain collection gates.
 
+### Controlled payment verification
+
+The owner approved a $1 live verification payment followed by an admin refund.
+Prepare one audited invoice with no registration IDs and a unique offer group;
+keep public checkout and registration gates closed. Use the verified Wren account
+as both destination and settlement merchant. The owner completes Stripe Checkout.
+The normal signed soccer callback records the payment, and the existing admin
+refund flow returns it with transfer reversal. A payment without player records
+does not claim enrollment or queue a waitlist text. Preserve the invoice, payment,
+refund and operator evidence; never use a real child's registration as a fixture.
+An empty-registration invoice expires without family-offer reminders or waitlist
+expiry alerts; normal player offers retain their existing deadlines and messages.
+
 ## Release and proof
 
 ### Observed provider setup, 2026-10-16

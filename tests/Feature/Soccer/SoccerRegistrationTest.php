@@ -295,6 +295,34 @@ it('confirms verified Venmo once without trusting parent declarations', function
     $p->paid($this->t->id, $i->id, 'venmo', 'verified-transfer', 3000, ['verified' => true]);
     expect($this->store->query('registrations', $this->t->id)->value('status'))->toBe('registered')->and($this->store->query('payments', $this->t->id)->count())->toBe(1);
 });
+it('records a standalone verification payment without enrolling children or queuing a waitlist alert', function () {
+    [$family] = soccerFamily($this, []);
+    $invoice = $this->store->insert('invoices', $this->t->id, ['season_id' => $this->season, 'family_id' => $family, 'offer_group' => (string) \Illuminate\Support\Str::uuid(), 'registration_ids' => '[]', 'amount_cents' => 100, 'expires_at' => now()->addHour()]);
+    $payments = app(SoccerPaymentService::class);
+    $payments->paid($this->t->id, $invoice, 'stripe', 'intent:pi_verification', 100, ['payment_intent' => 'pi_verification']);
+    $payments->paid($this->t->id, $invoice, 'stripe', 'intent:pi_verification', 100, ['payment_intent' => 'pi_verification']);
+    expect($this->store->row('invoices', $this->t->id, $invoice)->status)->toBe('paid')
+        ->and($this->store->query('payments', $this->t->id)->count())->toBe(1)
+        ->and($this->store->query('registrations', $this->t->id)->count())->toBe(0)
+        ->and($this->store->query('deliveries', $this->t->id)->count())->toBe(0);
+    $event = $this->store->query('events', $this->t->id)->where('action', 'payment_confirmed')->sole();
+    expect($this->store->decrypt($event->data)['summary'])->toBe('Payment confirmed; no player registrations changed.');
+});
+it('expires a standalone invoice without registration reminders or waitlist changes', function () {
+    [$family] = soccerFamily($this, []);
+    $invoice = $this->store->insert('invoices', $this->t->id, ['season_id' => $this->season, 'family_id' => $family, 'offer_group' => (string) \Illuminate\Support\Str::uuid(), 'registration_ids' => '[]', 'amount_cents' => 100, 'expires_at' => now()->addHour()]);
+    $this->svc->tick($this->t->id, $this->season);
+    expect($this->store->row('invoices', $this->t->id, $invoice)->status)->toBe('unpaid')
+        ->and($this->store->query('deliveries', $this->t->id)->count())->toBe(0);
+    $this->travel(2)->hours();
+    $this->svc->tick($this->t->id, $this->season);
+    app(SoccerPaymentService::class)->paid($this->t->id, $invoice, 'stripe', 'intent:pi_verification_late', 100, ['payment_intent' => 'pi_verification_late']);
+    expect($this->store->row('invoices', $this->t->id, $invoice)->status)->toBe('expired')
+        ->and($this->store->query('registrations', $this->t->id)->count())->toBe(0)
+        ->and($this->store->query('deliveries', $this->t->id)->count())->toBe(0)
+        ->and($this->store->query('events', $this->t->id)->whereIn('action', ['payment_reminder', 'offer_expired'])->count())->toBe(0)
+        ->and($this->store->query('events', $this->t->id)->where('action', 'payment_needs_review')->count())->toBe(1);
+});
 it('flags late payment without taking an expired seat', function () {
     [$f,$in] = soccerFamily($this, ['2023-01-01']);
     $this->svc->register($this->t->id, $f, $in);
