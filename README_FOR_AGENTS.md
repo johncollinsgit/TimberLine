@@ -1,3 +1,16 @@
+## Wren email registration launch (2026-10-19)
+
+- `soccer.notification_mode=email` is an explicit Wren launch path, not a ready
+  SMS declaration. Parent operational email uses the existing configured mailer;
+  Head Coaches GroupMe alerts recheck admin access and current group membership.
+  Do not put family names, medical details, invoice links or override reasons in
+  shared alerts. Preserve per-event dedupe and stable GroupMe source GUIDs.
+- `launch_verified_mode` binds the smoke checklist to the selected mode. Verify
+  real sign-in/notification email, Head Coaches delivery, existing card/refund
+  evidence and current readiness before opening. SMTP exceptions stay uncertain
+  for operator reconciliation rather than blind resend. No schema or new SMS
+  registration is involved. See the soccer runbook.
+
 ## Wren family help (2026-10-19)
 
 - `SoccerFamilyHelpService` handles toddler/minimum-age, human contact, move-up,

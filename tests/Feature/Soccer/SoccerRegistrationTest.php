@@ -295,6 +295,43 @@ it('confirms verified Venmo once without trusting parent declarations', function
     $p->paid($this->t->id, $i->id, 'venmo', 'verified-transfer', 3000, ['verified' => true]);
     expect($this->store->query('registrations', $this->t->id)->value('status'))->toBe('registered')->and($this->store->query('payments', $this->t->id)->count())->toBe(1);
 });
+it('completes a four-child coach family for $60 with email notices and no SMS', function () {
+    config()->set(['soccer.notification_mode' => 'email', 'soccer.sms_enabled' => false, 'mail.default' => 'array']);
+    \Illuminate\Support\Facades\Mail::purge('array');
+    \Illuminate\Support\Facades\Http::preventStrayRequests();
+    [$family, $input] = soccerFamily($this, ['2023-01-01', '2021-01-01', '2020-01-01', '2018-01-01']);
+    soccerCoachInterest($input);
+    $this->store->query('families', $this->t->id)->where('id', $family)->update(['sms_consent_at' => null]);
+    $result = $this->svc->register($this->t->id, $family, $input);
+    expect($result['placed'])->toHaveCount(4);
+    $invoice = $this->store->query('invoices', $this->t->id)->sole();
+    expect($invoice->amount_cents)->toBe(6000)->and($this->store->query('registrations', $this->t->id)->where('waived', true)->count())->toBe(2);
+    app(\App\Services\Soccer\SoccerDeliveryService::class)->run($this->t->id);
+    app(SoccerPaymentService::class)->paid($this->t->id, $invoice->id, 'stripe', 'fictional-email-payment', 6000, ['payment_intent' => 'pi_fictional']);
+    app(SoccerPaymentService::class)->paid($this->t->id, $invoice->id, 'stripe', 'fictional-email-payment', 6000, ['payment_intent' => 'pi_fictional']);
+    app(\App\Services\Soccer\SoccerDeliveryService::class)->run($this->t->id);
+    expect($this->store->query('registrations', $this->t->id)->where('status', 'registered')->count())->toBe(4)
+        ->and($this->store->query('payments', $this->t->id)->count())->toBe(1)
+        ->and(\Illuminate\Support\Facades\Mail::mailer()->getSymfonyTransport()->messages())->toHaveCount(2);
+    \Illuminate\Support\Facades\Http::assertNothingSent();
+});
+it('emails fully waived coach registrations including new jerseys without a payment', function () {
+    config()->set(['soccer.notification_mode' => 'email', 'soccer.sms_enabled' => false, 'mail.default' => 'array']);
+    \Illuminate\Support\Facades\Mail::purge('array');
+    [$family, $input] = soccerFamily($this, ['2023-01-01', '2021-01-01']);
+    soccerCoachInterest($input);
+    foreach ($input['children'] as &$child) {
+        $child['needs_jersey'] = true;
+        $child['jersey_size'] = 'Youth M';
+    }
+    unset($child);
+    $this->svc->register($this->t->id, $family, $input);
+    app(\App\Services\Soccer\SoccerDeliveryService::class)->run($this->t->id);
+    expect($this->store->query('invoices', $this->t->id)->sole()->status)->toBe('waived')
+        ->and($this->store->query('payments', $this->t->id)->count())->toBe(0)
+        ->and($this->store->query('deliveries', $this->t->id)->sole()->status)->toBe('accepted')
+        ->and(\Illuminate\Support\Facades\Mail::mailer()->getSymfonyTransport()->messages())->toHaveCount(1);
+});
 it('records a standalone verification payment without enrolling children or queuing a waitlist alert', function () {
     [$family] = soccerFamily($this, []);
     $invoice = $this->store->insert('invoices', $this->t->id, ['season_id' => $this->season, 'family_id' => $family, 'offer_group' => (string) \Illuminate\Support\Str::uuid(), 'registration_ids' => '[]', 'amount_cents' => 100, 'expires_at' => now()->addHour()]);

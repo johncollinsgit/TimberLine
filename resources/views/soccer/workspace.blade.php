@@ -162,15 +162,22 @@
 @empty<p class="empty">Admin must map the existing GroupMe groups in Settings.</p>
 @endforelse</div><div id="groupme-messages" aria-live="polite"></div><form method="post" action="{{ $actionUrl('groupme-send') }}" id="groupme-compose" hidden>
 @csrf<input type="hidden" name="group_id" id="selected-group"><input type="hidden" name="request_id" value="{{ \Illuminate\Support\Str::uuid() }}"><label>Message<textarea required name="body" maxlength="1000" rows="3"></textarea></label><button style="margin-top:12px">Send to GroupMe</button></form></section>
-@if($admin)<section class="section"><h2>Waitlist texts & notifications</h2>
+@if($admin)<section class="section"><h2>Registration messages & notifications</h2>
 @foreach($smsThreads as $thread)
-<details><summary>{{ $thread->phone }} · {{ $thread->unread_count }} unread</summary>
+<details><summary>{{ $thread->email ?? $thread->phone }} · {{ $thread->unread_count }} unread</summary>
 @foreach($thread->messages as $message)
 <div class="message"><strong>{{ $message->direction==='inbound'?'Reply':'Wren Soccer' }}</strong><p>{{ $message->body }}</p><small>{{ $message->delivery_status }} · {{ $message->received_at??$message->sent_at }}</small></div>
 @endforeach
 </details>
 @endforeach
+@if(config('soccer.notification_mode')==='email')
+<p class="muted">Parents receive registration offers, confirmations, and reminders by email. Waitlist alerts go to Head Coaches in GroupMe. Text messaging is pending verification.</p>
+@else
 <p class="muted">Every waitlist change alerts Sarah at 678-644-1829. Family offers and reminders use SMS.</p>
+@endif
+@foreach($notificationDeliveries as $delivery)
+<div class="message"><strong>{{ strtoupper($delivery['channel']) }} · {{ $delivery['status'] }}</strong><small>{{ $delivery['created_at'] }} · {{ $delivery['attempts'] }} attempts @if($delivery['error']) · {{ $delivery['error'] }} @endif</small></div>
+@endforeach
 @foreach($events as $e)<div class="message"><strong>{{ ucwords(str_replace('_',' ',$e['action'])) }}</strong><p>{{ $e['data']['summary']??'' }}</p><small>{{ $e['created_at'] }}</small></div>
 @endforeach</section>
 @endif
@@ -231,7 +238,7 @@
 @csrf<div class="form-grid">
 @foreach(['soccer'=>'Soccer','head_coaches'=>'Head Coaches','all_coaches'=>'All Coaches'] as $key=>$label)<label>{{ $label }} group ID<input name="{{ $key }}_group" value="{{ $settings['groupme_groups'][$key]??'' }}"></label>
 @endforeach<label>Soccer group join link<input type="url" name="soccer_group_url" value="{{ $settings['soccer_group_url']??'' }}"></label></div><label><span><input type="checkbox" name="launch_verified" value="1"
-@checked($settings['launch_verified']??false)> I verified sign-in email, card payment/refund, Sarah/family SMS delivery, and the three GroupMe groups</span></label><button style="margin-top:20px">Save verified connections</button></form></section><section class="section"><h2>Import review · {{ $imports->count() }} unresolved rows</h2><p class="muted">Missing or conflicting identity data requires review before linking to a family.</p>
+@checked(($settings['launch_verified']??false) && ($settings['launch_verified_mode']??'sms')===config('soccer.notification_mode'))> I verified sign-in email, card payment/refund, {{ config('soccer.notification_mode')==='email'?'parent registration email and Head Coaches GroupMe alerts':'Sarah/family SMS delivery' }}, and the three GroupMe groups</span></label><button style="margin-top:20px">Save verified connections</button></form></section><section class="section"><h2>Import review · {{ $imports->count() }} unresolved rows</h2><p class="muted">Missing or conflicting identity data requires review before linking to a family.</p>
 @foreach($imports as $i)<details><summary>{{ $i['source'] }} · row {{ $i['row_number'] }} · {{ $i['season_key'] }}</summary><dl>
 @foreach($i['evidence']['row']??[] as $label=>$value)
 @if($value)<div class="row"><dt class="muted">{{ $label }}</dt><dd>{{ $value }}</dd></div>

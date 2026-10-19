@@ -42,6 +42,35 @@ waitlist offers require each waiting sibling to head its team queue.
 
 ## Required account setup before opening
 
+### Email registration while SMS is pending, 2026-10-19
+
+The owner prioritized completing registration through the working email setup
+and selected Head Coaches for waitlist alerts. Explicitly configure
+`WREN_SOCCER_NOTIFICATION_MODE=email`; the default remains `sms`. Parent offers,
+reminders, waived-place notices, general waitlist updates and successful payment
+confirmations use verified family email addresses through the existing mailer.
+The Head Coaches group receives generic change alerts and an authenticated
+Everbranch link, without names, medical details, invoices or override reasons.
+The saved verifying admin must retain active Wren admin access and provider group
+membership. The GroupMe source GUID remains stable across retries.
+
+Existing encrypted delivery rows carry the notification channel. Email acceptance
+records the mailer message ID and appears in Messages; it is not a claim of inbox
+delivery. Recheck family address and invoice payability immediately before sending.
+Suppress closed/expired payment links. Fully waived confirmation notices do not
+require a payable invoice. SMTP exceptions stay `uncertain` for manual provider
+reconciliation; do not resend them blindly. Failed GroupMe sends retry with the
+same source GUID. Delivery failures remain visible to admins in Messages.
+
+Mode-specific smoke verification is required: `launch_verified_mode=email`, a
+received sign-in code and registration-update email, a confirmed Head Coaches
+test alert, the existing signed card payment/refund evidence and verified group
+mapping. Preserve the active release ID when caching configuration. Let the
+existing overdue opening schedule open registration only after all selected-mode
+readiness checks pass. SMS remains disabled and its approval is not fabricated;
+the existing $15 credit and operator tax details are preserved. Switching modes
+requires a new smoke verification and operator review of pending deliveries.
+
 ### SMS connection correction, 2026-10-19
 
 The original SMS preparation used Twilio's account-specific update URL instead
