@@ -1,0 +1,181 @@
+{
+  "audited_release": "00acdc1b05b04e81356c53601f6a6f653dd6f843",
+  "reviewed_groups": {
+    "workflow": [
+      {
+        "path": "tests/Feature/Auth/CustomerAccessApprovalLifecycleTest.php",
+        "exists": true,
+        "sha256": "1f3041e684cb14b0eb3ec557653def9a3540bd600df58a44940bf210c9ff270f"
+      },
+      {
+        "path": "tests/Feature/Onboarding/FirstLoginWorkspaceTest.php",
+        "exists": true,
+        "sha256": "c18187a779dcf9bb561f34838039fab8e1923a943712323c09d28b0e100e9a04"
+      },
+      {
+        "path": "tests/Feature/FieldService/FieldServiceWorkspaceTest.php",
+        "exists": true,
+        "sha256": "92d208d43e9913915797ef2989110f28bf42050aa52de4f051cc30f80eab2f3c"
+      },
+      {
+        "path": "tests/Feature/Mobile/TeamMessageAttachmentTest.php",
+        "exists": true,
+        "sha256": "00e36696d7fb48052818deed04c9e6c942a87786dddc76153a0772001a8b303b"
+      },
+      {
+        "path": "tests/Feature/ClassScheduling/FrontYardFoodsSchedulingTest.php",
+        "exists": true,
+        "sha256": "898625ab61f283057ef9692979d72adfccb0159e6f02659b3bc223a4ad42a1f8"
+      }
+    ],
+    "permissions": [
+      {
+        "path": "tests/Feature/Auth/AuthenticationTest.php",
+        "exists": true,
+        "sha256": "9422a5aa09dab53f09b7bce445727d4f1f5c6dfcc93b12b936ac9473790696bc"
+      },
+      {
+        "path": "tests/Feature/Auth/PasswordResetTest.php",
+        "exists": true,
+        "sha256": "ba11ba9a0ed04084e95c9bd187de3ef5c081d92919fa7e9b05e5a6c46c713e42"
+      },
+      {
+        "path": "tests/Feature/Search/GlobalSearchControllerTest.php",
+        "exists": true,
+        "sha256": "aa9ee13c6828dac920ded72ec8099dae5d7d984de954550a6f024cc2bdc95cb0"
+      },
+      {
+        "path": "tests/Feature/ShopifyEmbeddedSurfaceIsolationTest.php",
+        "exists": true,
+        "sha256": "dd4f4ee24f2c882edc730bef1cd5c9afb61a3df39c586b207cf82f7b3aa531ca"
+      },
+      {
+        "path": "tests/Feature/Mobile/CollinsEmployeeAccessReleaseTest.php",
+        "exists": true,
+        "sha256": "dfd22ffc51f4acf81e4b274047f3c840afa909d01c3f14b8d384ebdcaa2c6a97"
+      }
+    ],
+    "changes": [
+      {
+        "path": "tests/Feature/Everbranch/BranchSettingsTest.php",
+        "exists": true,
+        "sha256": "bc891969716254da302b304004d262ac37f71e5118c112438ffc7bf45ebc34a4"
+      },
+      {
+        "path": "tests/Feature/Public/ElectricianIntakeTest.php",
+        "exists": true,
+        "sha256": "7738872599a098028e6dfa04c663a01b7bb401ff775dd1c9cfd82787033def78"
+      },
+      {
+        "path": "tests/Feature/Public/StandardPublicOfferTest.php",
+        "exists": true,
+        "sha256": "29e8a6716014aa0c439ac4674890ab9862aff8de1a81cb8a2e32e946d1721aa5"
+      },
+      {
+        "path": "tests/Feature/Landlord/DeveloperDashboardTest.php",
+        "exists": true,
+        "sha256": "dae0d2dd806c3401eecefadd61cbb9cde753b73236f4534958c0a3af3379523b"
+      },
+      {
+        "path": "app/Services/Tenancy/TenantModuleCatalogService.php",
+        "exists": true,
+        "sha256": "2fd42de7478b698c854457298e3e9e05be195cf1be9e3795627ac3927f5c5367"
+      },
+      {
+        "path": "app/Services/Tenancy/TenantCommercialExperienceService.php",
+        "exists": true,
+        "sha256": "cb99cde75cb9345848ed9ade043d95779a7d63ce00fff69bb4ecb8962c40a8bd"
+      },
+      {
+        "path": "app/Services/Operations/OperationalStatusService.php",
+        "exists": true,
+        "sha256": "054c08dce046c032305fcfefcdfbae65d5d7f10af3841e3506588a188f194b7b"
+      },
+      {
+        "path": "app/Http/Controllers/Marketing/MarketingModuleStoreController.php",
+        "exists": true,
+        "sha256": "a73d36384ddc8f9c5cc2d25d6ac401194c2f62cd5aaab1d4b9b7b2eda006244c"
+      },
+      {
+        "path": "resources/views/marketing/modules.blade.php",
+        "exists": true,
+        "sha256": "baccd4fd2fbbe3b01a9a8a38278c85a80e0a3520c986b8ec76fd80cc8769c865"
+      },
+      {
+        "path": "resources/views/landlord/developer/index.blade.php",
+        "exists": true,
+        "sha256": "26ca6e177d8ce7b51eb4ae169c3ec7ac33db3c6a6fadf5efd6b374205457158b"
+      }
+    ],
+    "release_docs": [
+      {
+        "path": "README.md",
+        "exists": true,
+        "sha256": "2ccb5e97877bd142d5bbef74da4c64ea916e5fece5f302f8332fff575cb283d1"
+      },
+      {
+        "path": "README_FOR_AGENTS.md",
+        "exists": true,
+        "sha256": "b8d28ee17a8162a9c81eaad4db6cdc663e2ab36b3dffaeed5613bda3456414e4"
+      },
+      {
+        "path": "docs/operations/coordinated-release-2026-10-20.md",
+        "exists": true,
+        "sha256": "5550f49ee0088306d4d9776ad3c7825abbe2cad2686e9de31b985eace2237d07"
+      },
+      {
+        "path": "docs/operations/standard-public-offer.md",
+        "exists": true,
+        "sha256": "cf50fb1c9919b921ed6198d7a9c2b59817290c00292944f9656929de0d74e28e"
+      },
+      {
+        "path": ".github/workflows/deploy.yml",
+        "exists": true,
+        "sha256": "cff32e4d75900b8569c3db505ab65a0958d5a5a03080023d1531fb67677bf366"
+      },
+      {
+        "path": ".github/workflows/tests.yml",
+        "exists": true,
+        "sha256": "966ec0a6dd55f7c201ac71f6f2bde26267ad4034f997724847d8b6d71eee40a7"
+      },
+      {
+        "path": "config/module_catalog.php",
+        "exists": true,
+        "sha256": "f9fc20ea1f6daeadfa734e7a32ff5771f6342d574a6304af0c8c2d7b24da1ae5"
+      },
+      {
+        "path": "config/marketplace.php",
+        "exists": true,
+        "sha256": "200a36bcbb870502b91f8d6be1f6ca7bf25233d7b9e8fe80d4616dac5599a11e"
+      }
+    ]
+  },
+  "observations": [
+    {
+      "finding": "F07",
+      "files": [
+        "app/Http/Controllers/Marketing/MarketingModuleStoreController.php",
+        "app/Services/Tenancy/TenantModuleCatalogService.php",
+        "resources/views/marketing/modules.blade.php"
+      ],
+      "observation": "Premium payload maps only key/name; owned branches filter catalog entries first restricted by SAFE_TO_MARKET/app_store visibility; internal M remains absent even with entitlement."
+    },
+    {
+      "finding": "F06",
+      "files": [
+        "README.md",
+        "README_FOR_AGENTS.md",
+        "docs/operations/coordinated-release-2026-10-20.md"
+      ],
+      "observation": "README public launch-partner primary statement remains; agent README still labels live Simple candidate not deployed and follow-up changes pending. Historical directions coexist with current shipped behavior."
+    },
+    {
+      "finding": "F08",
+      "files": [
+        "docs/operations/standard-public-offer.md",
+        "app/Services/Billing/TenantBillingNextStepResolver.php"
+      ],
+      "observation": "standard remains prospective metadata with no automatic checkout/fulfillment mapping; missing config/unknown plan fail closed, not a proven paid activation journey."
+    }
+  ]
+}

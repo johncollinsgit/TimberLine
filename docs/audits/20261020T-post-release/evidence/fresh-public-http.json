@@ -1,0 +1,82 @@
+[
+  {
+    "url": "https://app.theeverbranch.com/ready",
+    "final_url": "https://app.theeverbranch.com/ready",
+    "status": 200,
+    "sha256": "e61b4633f292b9652dbe9846de3bfb156bbaa5e059e9e34f3e0e0fdb2b1d613c",
+    "bytes": 68,
+    "captured_utc": "2026-10-20T08:58:20.565943+00:00",
+    "ready": {
+      "status": "ok",
+      "release": "00acdc1b05b04e81356c53601f6a6f653dd6f843"
+    }
+  },
+  {
+    "url": "https://app.theeverbranch.com/up",
+    "final_url": "https://app.theeverbranch.com/up",
+    "status": 200,
+    "sha256": "cc71769dc12bba317aabbd36b5db75b8cca058d062bde7e63cb458a286dbacba",
+    "bytes": 2199,
+    "captured_utc": "2026-10-20T08:58:20.883832+00:00"
+  },
+  {
+    "url": "https://theeverbranch.com/platform/start",
+    "final_url": "https://theeverbranch.com/platform/start",
+    "status": 200,
+    "sha256": "fc3e3910353c888d621ca0ae427af378dc4b4bd0b3831063e9604d98df59b633",
+    "bytes": 48329,
+    "captured_utc": "2026-10-20T08:58:21.293817+00:00",
+    "markers": {
+      "setup_499": true,
+      "monthly_299": true,
+      "usage_may_apply": true,
+      "electrician_option": true,
+      "premium_name": true
+    }
+  },
+  {
+    "url": "https://theeverbranch.com/platform/plans",
+    "final_url": "https://theeverbranch.com/platform/plans",
+    "status": 200,
+    "sha256": "d5ed7163425c28c81977f0a96ca86dc69b800baa5720c39dd0ab647bd480bf6d",
+    "bytes": 14145,
+    "captured_utc": "2026-10-20T08:58:21.673951+00:00",
+    "markers": {
+      "setup_499": true,
+      "monthly_299": true,
+      "usage_may_apply": true,
+      "electrician_option": false,
+      "premium_name": true
+    }
+  },
+  {
+    "url": "https://theeverbranch.com/explore/modules",
+    "final_url": "https://theeverbranch.com/explore/modules",
+    "status": 200,
+    "sha256": "fcf00ff6409058d79b31beb1ec843a0fed0766d47ab9f1ec57eab66ecb24bded",
+    "bytes": 69605,
+    "captured_utc": "2026-10-20T08:58:22.066726+00:00",
+    "markers": {
+      "setup_499": true,
+      "monthly_299": true,
+      "usage_may_apply": true,
+      "electrician_option": false,
+      "premium_name": true
+    }
+  },
+  {
+    "url": "https://evergrovesoftware.com/",
+    "final_url": "https://evergrovesoftware.com/",
+    "status": 200,
+    "sha256": "4cf0e102e5b0bf17faabaad97acf9dee7dc5efb6da453a3c28b094e1de62e8b7",
+    "bytes": 38969,
+    "captured_utc": "2026-10-20T08:58:22.546413+00:00",
+    "markers": {
+      "setup_499": true,
+      "monthly_299": true,
+      "usage_may_apply": true,
+      "electrician_option": false,
+      "premium_name": true
+    }
+  }
+]

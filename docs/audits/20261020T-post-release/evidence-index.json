@@ -1,0 +1,180 @@
+{
+  "E01": {
+    "layer": "HISTORICAL_BASELINE",
+    "source": "evidence/baseline-original-artifacts.tar.gz",
+    "description": "evidence/environment.json \u2014 original branch/HEAD, preserved dirty-file list and diff fingerprint.",
+    "limit": "Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E02": {
+    "layer": "HISTORICAL_BASELINE",
+    "source": "evidence/baseline-original-artifacts.tar.gz",
+    "description": "evidence/public-http.json \u2014 dated anonymous HTTP observations, including /ready release; no cookies/tokens retained.",
+    "limit": "Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E03": {
+    "layer": "HISTORICAL_BASELINE",
+    "source": "evidence/baseline-original-artifacts.tar.gz",
+    "description": "evidence/source-manifest.json, document-index*.csv and module-inventory.json \u2014 production-version source and documentation inventory.",
+    "limit": "Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E04": {
+    "layer": "HISTORICAL_BASELINE",
+    "source": "evidence/baseline-original-artifacts.tar.gz",
+    "description": "evidence/full-junit.xml, evidence/test-case-index.json \u2014 initial full isolated PHP run; 3,799 cases, 3,784 pass, 14 fail, one skipped.",
+    "limit": "Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E05": {
+    "layer": "HISTORICAL_BASELINE",
+    "source": "evidence/baseline-original-artifacts.tar.gz",
+    "description": "evidence/targeted-recheck.xml, targeted-dns-recheck.xml, dns-fixtures-recheck.xml and test-summary.json \u2014 all 14 initial failures subsequently pass in focused environment-corrected reruns; no app patch.",
+    "limit": "Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E06": {
+    "layer": "HISTORICAL_BASELINE",
+    "source": "evidence/baseline-original-artifacts.tar.gz",
+    "description": "Build/typecheck/node test summary recorded below; build.log hash in evidence/checks.json. Build output generated in temporary source only.",
+    "limit": "Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E07": {
+    "layer": "HISTORICAL_BASELINE",
+    "source": "evidence/baseline-original-artifacts.tar.gz",
+    "description": "evidence/public-interactions.json \u2014 14/14 public interaction checks, Chromium and mobile WebKit.",
+    "limit": "Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E08": {
+    "layer": "HISTORICAL_BASELINE",
+    "source": "evidence/baseline-original-artifacts.tar.gz",
+    "description": "evidence/browser-checks.json \u2014 24 local public-page viewport visits plus four production homepage observations, with computed styles/options.",
+    "limit": "Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E09": {
+    "layer": "HISTORICAL_BASELINE",
+    "source": "evidence/baseline-original-artifacts.tar.gz",
+    "description": "evidence/auth-browser-create.json and synthetic-persistence.json \u2014 synthetic browser login/customer/job save/reload and independent DB read.",
+    "limit": "Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E10": {
+    "layer": "HISTORICAL_BASELINE",
+    "source": "evidence/baseline-original-artifacts.tar.gz",
+    "description": "evidence/ops-failure-probe.json \u2014 absent health table causes misleading zero from aggregator; paired view traced in source.",
+    "limit": "Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E11": {
+    "layer": "HISTORICAL_BASELINE",
+    "source": "evidence/baseline-original-artifacts.tar.gz",
+    "description": "evidence/source-observations.md \u2014 current public commercial/industry observations reconciled with source.",
+    "limit": "Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E12": {
+    "layer": "HISTORICAL_BASELINE",
+    "source": "evidence/baseline-original-artifacts.tar.gz",
+    "description": "evidence/lighthouse-*.json \u2014 isolated local desktop and simulated-mobile diagnostics, with limitations.",
+    "limit": "Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E13": {
+    "layer": "HISTORICAL_BASELINE",
+    "source": "evidence/baseline-original-artifacts.tar.gz",
+    "description": "route-inventory.csv, navigation-inventory.csv, screen-inventory.csv and jobs-and-flags.json \u2014 inventory, not proof of hands-on execution.",
+    "limit": "Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E14": {
+    "layer": "HISTORICAL_BASELINE",
+    "source": "evidence/baseline-original-artifacts.tar.gz",
+    "description": "evidence/test-case-index.json \u2014 Tenancy, Auth, Search, FieldService, Mobile, Shopify surface and provider guard contract cases.",
+    "limit": "Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E15": {
+    "layer": "HISTORICAL_BASELINE",
+    "source": "evidence/baseline-original-artifacts.tar.gz",
+    "description": "evidence/source-observations.md \u2014 dated README/operating-document conflicts; historical claims not treated as current deployment proof.",
+    "limit": "Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "P01": {
+    "layer": "CURRENT_COMBINED_CI",
+    "sources": [
+      "evidence/checked-ci-metadata.json",
+      "evidence/checked-ci-result-lines.txt",
+      "evidence/followup-final-ci-summary.json"
+    ],
+    "description": "Same-tree Linux PHP 8.4 full regression: 4093 passing, 29247 assertions, three fixture-export skips; 8 synthetic settings and 34 public browser cases; synthetic provider contracts. Not real provider/production login proof."
+  },
+  "P02": {
+    "layer": "DEPLOYMENT_AND_SOURCE_IDENTITY",
+    "sources": [
+      "evidence/source-and-preservation.json",
+      "evidence/production-deploy-metadata.json",
+      "evidence/deploy-reuse-plan.txt",
+      "evidence/followup-merge.json"
+    ],
+    "description": "Checked head and live merge have identical tree dfb891e7. Deploy reused passed exact-tree PR gates; final deploy Test/Build and Migration jobs were skipped, not rerun. Independent /ready confirms audited release."
+  },
+  "P03": {
+    "layer": "LIVE_PUBLIC_BROWSER",
+    "sources": [
+      "evidence/final-live-smoke.json",
+      "evidence/final-live-smoke.log",
+      "evidence/release-final-smoke.spec.ts",
+      "evidence/release-smoke.spec.ts"
+    ],
+    "description": "22/22 coordinator GET/HEAD-only Chromium/WebKit cases at live release, including keyboard, dialogs, contrast, reduced motion, labels, responsive pages and electrician selection. No POST, production login or physical device."
+  },
+  "P04": {
+    "layer": "FRESH_LIVE_PUBLIC_HTTP",
+    "sources": [
+      "evidence/fresh-public-http.json"
+    ],
+    "description": "Fresh independent anonymous GET: exact /ready plus /up, canonical start/plans/explorer and parent site return 200. Offer/fee/industry markers; no submission or credentials retained."
+  },
+  "P05": {
+    "layer": "CURRENT_FAILURE_CONTRACTS",
+    "sources": [
+      "../20261020T-health-unknown/report.md",
+      "../../../tests/Feature/Landlord/DeveloperDashboardTest.php",
+      "evidence/checked-ci-result-lines.txt"
+    ],
+    "description": "Current full CI includes fault injection for count/severity/recent queries, first failure, successful zero/nonzero, provenance/cache failure, sanitized evidence and non-operator denial; no live fault injection."
+  },
+  "P06": {
+    "layer": "COORDINATOR_RUNTIME_AND_MYSQL",
+    "sources": [
+      "evidence/final-runtime.json",
+      "evidence/combined-schema-review.json",
+      "evidence/marketplace-deploy-summary.json",
+      "evidence/backup-metadata-redacted.json"
+    ],
+    "description": "Effective Marketplace flags all off and host unset; Teams rollout unchanged. 55 actual MySQL migration recovery cases/352 assertions and baseline/upgrade/concurrency checks pass. Private backup metadata is gzip-verified; no data restore/export or real provider acceptance."
+  },
+  "P07": {
+    "layer": "CURRENT_SYNTHETIC_OWNERSHIP_PROBE",
+    "sources": [
+      "evidence/premium-ownership-probe.php",
+      "evidence/premium-ownership-probe.json"
+    ],
+    "description": "Fresh isolated SQLite :memory: exact-source fixture: canonical M entitlement resolves true, but signed-in catalog omits it and premium payload has only key/name. No HTTP sent. This is a settings ownership/readiness gap, not activation proof."
+  },
+  "P08": {
+    "layer": "CURRENT_SOURCE_AND_DOCUMENT_REVIEW",
+    "sources": [
+      "evidence/source-review.json",
+      "module-inventory.json"
+    ],
+    "description": "Current source/README/runbook/test assertions reviewed against exact release. Source inventory is not hands-on coverage. Retired offer/deployed-state drift remains in entry points."
+  },
+  "P09": {
+    "layer": "HISTORICAL_LOCAL_PERFORMANCE",
+    "sources": [
+      "../20261020T-public-quality/evidence/lighthouse-summary.json",
+      "../20261020T-public-quality/report.md"
+    ],
+    "description": "Prior candidate local Lighthouse: accessibility 100 in 12 runs, mobile performance around59\u201361. Uncompressed loopback and simulated network do not prove final production/device performance; X3 remains unknown."
+  },
+  "P10": {
+    "layer": "CURRENT_SETTINGS_AND_INTAKE_CONTRACTS",
+    "sources": [
+      "../20261020T-branch-settings/report.md",
+      "../20261020T-electrician-intake/report.md",
+      "evidence/checked-ci-result-lines.txt"
+    ],
+    "description": "Settings/role/tenant/price/wizard and electrician flag\u00d7intent cases included in final combined CI; browser settings use actual Blade exports with intercepted effects, not persistent production sessions."
+  }
+}

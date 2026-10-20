@@ -1,0 +1,96 @@
+[
+  {
+    "priority": 1,
+    "id": "N01",
+    "finding_ids": [
+      "F08"
+    ],
+    "action": "Confirm and rehearse assisted Simple commercial handoff",
+    "effort": "0.5\u20131 day for assisted process; 2\u20134 days for separately scoped sandbox billing acceptance, access dependent",
+    "acceptance": [
+      "Setup49900 and recurring29900 USD are exact for the new offer; usage terms and any premium/custom services are explicitly accepted.",
+      "Provider-confirmed successful and failed/retried/abandoned states do not grant early or duplicate access.",
+      "Existing subscriptions/agreements do not silently convert; no legacy price fallback.",
+      "Actual sandbox receipt, payment and activation reconcile; staff can explain pending next step."
+    ],
+    "constraint": "Use separate scoped approval/sandbox work; no live collection in this audit."
+  },
+  {
+    "priority": 2,
+    "id": "N02",
+    "finding_ids": [
+      "F09",
+      "F10"
+    ],
+    "action": "Close recovery and genuine-provider acceptance prerequisites before broad rollout",
+    "effort": "Recovery1\u20132 days; provider2\u20135 days plus external lead time",
+    "acceptance": [
+      "Disposable restore completes and representative customer/job/ledger relationships reconcile.",
+      "Export is tenant-scoped, complete for the chosen scenario and can be independently read.",
+      "Evidence contains version/backup identity and reconciliation results, with no private backup contents or credentials committed.",
+      "Actual sandbox checkout/refund/invite delivery and representative queue/retry outcomes are independently observed.",
+      "Merchant/tenant/store/account and callback signatures reconcile to the original operation.",
+      "Domain/TLS, policies, merchant readiness, usage/rates and relevant device wallet acceptance have explicit evidence before enabling Marketplace."
+    ],
+    "constraint": "Disposable/restricted environments only; keep launch gates off until independently reviewed."
+  },
+  {
+    "priority": 3,
+    "id": "N03",
+    "finding_ids": [
+      "F07"
+    ],
+    "action": "Show canonical premium ownership/readiness in existing settings",
+    "effort": "1\u20132 engineer-days",
+    "acceptance": [
+      "Owned premium fixture shows identity and accurate gated/setup/ready state.",
+      "Non-owner and foreign-tenant data stays hidden; financial terms retain existing policy.",
+      "Internal/default-off product never becomes a public choice or automatic activation.",
+      "Core tabs/search/guides and no-mutation preview behavior retain browser coverage."
+    ],
+    "constraint": "Do not broaden public/internal visibility or infer activation from a marketing key."
+  },
+  {
+    "priority": 4,
+    "id": "N04",
+    "finding_ids": [
+      "F06"
+    ],
+    "action": "Reconcile current product/setup/release entry points and label historical sections",
+    "effort": "2\u20134 engineer-hours",
+    "acceptance": [
+      "One dated current entry point names the actual live release, Simple offer, request/review/setup flow and genuine gates.",
+      "Retired Launch Partner/current-candidate references are clearly historical or superseded.",
+      "Runbook states exact released vs pending items and links reproducible evidence; do not rewrite historical evidence."
+    ],
+    "constraint": "Documentation cleanup only, with source-of-truth links; not a legal or legacy-agreement rewrite."
+  },
+  {
+    "priority": 5,
+    "id": "N05",
+    "finding_ids": [
+      "F11"
+    ],
+    "action": "Measure production/device performance, then prioritize actual bottlenecks",
+    "effort": "0.5\u20131.5 engineer-days for baseline; optimization effort follows measured bottleneck",
+    "acceptance": [
+      "Versioned repeatable representative route timing and actual network/cache/device conditions are recorded.",
+      "Primary interaction and accessibility tasks work on representative physical devices.",
+      "Metrics distinguish local, emulated and production observations; accessibility100 is never substituted for performance."
+    ],
+    "constraint": "GET-only baseline and approved synthetic accounts; never infer production percentiles from localhost."
+  },
+  {
+    "priority": 6,
+    "id": "N06",
+    "finding_ids": [],
+    "action": "Optional staff-only quality-report agent",
+    "effort": "3\u20135 engineer-days for read-only report prototype after runner/permissions design",
+    "acceptance": [
+      "On-demand landlord-only report uses immutable rubric and versioned evidence.",
+      "Missing evidence remains null; deterministic score arithmetic is independently validated.",
+      "No autonomous billing/provider/customer/flag/deploy actions; optional AI narrative cannot mark its own checks passed."
+    ],
+    "constraint": "Proposal only; see quality-agent-proposal.md. Not required for current capability completeness."
+  }
+]

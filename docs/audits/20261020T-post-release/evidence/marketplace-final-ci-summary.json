@@ -1,0 +1,14 @@
+{
+  "run": 39394144725,
+  "head": "b446564c534e805296904ea12b93490b695072c7",
+  "rows": [
+    "ci (8.4)\tVerify public offer and accessibility in Chromium and WebKit\t2026-10-20T08:38:18.0604926Z   30 passed (1.6m)",
+    "ci (8.4)\tRun PHP tests in parallel\t2026-10-20T08:41:28.9423773Z   Tests:    1 skipped, 4079 passed (29057 assertions)",
+    "mysql migration recovery\tVerify clean and partial migration paths\t2026-10-20T08:36:16.3096806Z   Tests:    55 passed (352 assertions)",
+    "mysql migration recovery\tVerify committed MySQL schema baseline\t2026-10-20T08:37:21.2264119Z MySQL schema matches the approved fingerprint.",
+    "mysql migration recovery\tVerify committed MySQL schema baseline\t2026-10-20T08:37:33.4378334Z MySQL schema matches the approved fingerprint.",
+    "mysql migration recovery\tVerify tenant marketing AI budget concurrency\t2026-10-20T08:37:39.6120910Z   Tests:    1 passed (21 assertions)",
+    "mysql migration recovery\tVerify AI chat, briefing replay and approval concurrency on MySQL\t2026-10-20T08:37:43.8991571Z   Tests:    4 passed (20 assertions)"
+  ],
+  "combined_recovery_executed_no_skips": true
+}
