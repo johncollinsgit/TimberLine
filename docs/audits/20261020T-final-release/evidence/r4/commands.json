@@ -1,0 +1,169 @@
+[
+  {
+    "label": "source-sha",
+    "argv": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "database": "everbranch_r4_source_test",
+    "exit_status": 0,
+    "seconds": 0.009
+  },
+  {
+    "label": "source-tree",
+    "argv": [
+      "git",
+      "rev-parse",
+      "HEAD^{tree}"
+    ],
+    "database": "everbranch_r4_source_test",
+    "exit_status": 0,
+    "seconds": 0.008
+  },
+  {
+    "label": "source-clean",
+    "argv": [
+      "git",
+      "status",
+      "--porcelain"
+    ],
+    "database": "everbranch_r4_source_test",
+    "exit_status": 0,
+    "seconds": 0.026
+  },
+  {
+    "label": "php-lint",
+    "argv": [
+      "php",
+      "-l",
+      "<isolated-root>/probe.php"
+    ],
+    "database": "everbranch_r4_source_test",
+    "exit_status": 0,
+    "seconds": 0.038
+  },
+  {
+    "label": "source-schema",
+    "argv": [
+      "php",
+      "artisan",
+      "migrate",
+      "--force",
+      "--no-interaction"
+    ],
+    "database": "everbranch_r4_source_test",
+    "exit_status": 0,
+    "seconds": 3.001
+  },
+  {
+    "label": "source-fingerprint",
+    "argv": [
+      "php",
+      "artisan",
+      "schema:fingerprint",
+      "--expect-file=database/schema/mysql-schema.sha256",
+      "--no-interaction"
+    ],
+    "database": "everbranch_r4_source_test",
+    "exit_status": 0,
+    "seconds": 0.498
+  },
+  {
+    "label": "app-seed-and-export",
+    "argv": [
+      "php",
+      "<isolated-root>/probe.php",
+      "<isolated-checkout>",
+      "seed",
+      "<isolated-root>/evidence-20261020T095401Z"
+    ],
+    "database": "everbranch_r4_source_test",
+    "exit_status": 0,
+    "seconds": 0.503
+  },
+  {
+    "label": "mysqldump",
+    "argv": [
+      "/opt/homebrew/bin/mysqldump",
+      "--no-defaults",
+      "--protocol=TCP",
+      "--host=127.0.0.1",
+      "--port=33318",
+      "--user=root",
+      "--single-transaction",
+      "--quick",
+      "--skip-lock-tables",
+      "--routines",
+      "--triggers",
+      "--events",
+      "--no-tablespaces",
+      "--set-gtid-purged=OFF",
+      "everbranch_r4_source_test"
+    ],
+    "database": "everbranch_r4_source_test",
+    "exit_status": 0,
+    "seconds": 1.05
+  },
+  {
+    "label": "reject-non-test-target",
+    "argv": [
+      "bash",
+      "scripts/ops/verify-mysql-backup-restore.sh",
+      "<isolated-root>/evidence-20261020T095401Z/synthetic-backup.sql.gz"
+    ],
+    "database": "everbranch_r4_guard_production",
+    "exit_status": 1,
+    "seconds": 0.005
+  },
+  {
+    "label": "guarded-restore",
+    "argv": [
+      "bash",
+      "scripts/ops/verify-mysql-backup-restore.sh",
+      "<isolated-root>/evidence-20261020T095401Z/synthetic-backup.sql.gz"
+    ],
+    "database": "everbranch_r4_restore_test",
+    "exit_status": 0,
+    "seconds": 3.376
+  },
+  {
+    "label": "restore-fingerprint",
+    "argv": [
+      "php",
+      "artisan",
+      "schema:fingerprint",
+      "--expect-file=database/schema/mysql-schema.sha256",
+      "--no-interaction"
+    ],
+    "database": "everbranch_r4_restore_test",
+    "exit_status": 0,
+    "seconds": 0.506
+  },
+  {
+    "label": "app-read-restored-and-export",
+    "argv": [
+      "php",
+      "<isolated-root>/probe.php",
+      "<isolated-checkout>",
+      "verify",
+      "<isolated-root>/evidence-20261020T095401Z"
+    ],
+    "database": "everbranch_r4_restore_test",
+    "exit_status": 0,
+    "seconds": 0.221
+  },
+  {
+    "label": "customer-export-recovery-and-boundaries",
+    "argv": [
+      "php",
+      "<isolated-root>/probe.php",
+      "<isolated-checkout>",
+      "customer-recovery",
+      "<isolated-root>/evidence-20261020T095401Z"
+    ],
+    "database": "everbranch_r4_restore_test",
+    "exit_status": 0,
+    "seconds": 0.248
+  }
+]

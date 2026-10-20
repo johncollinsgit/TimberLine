@@ -1,0 +1,325 @@
+{
+  "source_sha": "19abee58d6d4e5c275f15adc2f54b24b12fb6e69",
+  "source_tree": "155f20cb69f71b7af67aa53302a117c1cc0a3a96",
+  "mysql_version": "8.4.11",
+  "synthetic_only": true,
+  "production_backup_restore_assurance": false,
+  "sql_tables_compared": 475,
+  "populated_tables": {
+    "customer_external_profiles": 4,
+    "field_service_financial_documents": 4,
+    "field_service_jobs": 4,
+    "field_service_tasks": 4,
+    "landlord_operator_actions": 4,
+    "marketing_profile_links": 4,
+    "marketing_profiles": 4,
+    "migrations": 307,
+    "tenant_messaging_credit_accounts": 2,
+    "tenant_messaging_ledger_entries": 2,
+    "tenant_user": 2,
+    "tenants": 2,
+    "users": 3
+  },
+  "all_table_row_hashes_equal": true,
+  "app_relationships": {
+    "r4-fictional-a": {
+      "customers": 2,
+      "jobs": 2,
+      "tasks": 2,
+      "invoice_total": "246.90",
+      "ledger_balance_micros": 5000000,
+      "ledger_sum_micros": 5000000
+    },
+    "r4-fictional-b": {
+      "customers": 2,
+      "jobs": 2,
+      "tasks": 2,
+      "invoice_total": "246.90",
+      "ledger_balance_micros": 5000000,
+      "ledger_sum_micros": 5000000
+    }
+  },
+  "app_reads_equal": true,
+  "independent_sql_relationships_equal": true,
+  "sql_relationships": {
+    "job_customer_task_invoice_user_joins": [
+      [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      [
+        2,
+        1,
+        2,
+        1,
+        2,
+        1,
+        2,
+        1,
+        2,
+        1
+      ],
+      [
+        3,
+        2,
+        3,
+        2,
+        3,
+        2,
+        3,
+        2,
+        3,
+        2
+      ],
+      [
+        4,
+        2,
+        4,
+        2,
+        4,
+        2,
+        4,
+        2,
+        4,
+        2
+      ]
+    ],
+    "invoice_totals": [
+      "1\t2\t246.90\t246.90",
+      "2\t2\t246.90\t246.90"
+    ],
+    "ledger_totals": [
+      "1\t5000000\t5000000\t1",
+      "2\t5000000\t5000000\t1"
+    ]
+  },
+  "actual_operator_export_route": true,
+  "export_scope": "11-table landlord marketing/customer snapshot; excludes jobs/ledger",
+  "customer_export_recovery": {
+    "customer_export_scope": [
+      "marketing_profiles",
+      "marketing_profile_links",
+      "customer_external_profiles",
+      "marketing_profile_wishlist_items",
+      "marketing_campaigns",
+      "marketing_segments",
+      "marketing_message_templates",
+      "marketing_event_source_mappings",
+      "marketing_order_event_attributions",
+      "marketing_import_runs",
+      "tenant_marketing_settings"
+    ],
+    "supported_marketing_snapshot_only": true,
+    "not_a_job_or_ledger_export": true,
+    "blocked": {
+      "foreign_target": true,
+      "tamper": true,
+      "tenant_owner_not_operator": true,
+      "tenant_owner_download_denied": true,
+      "foreign_download_denied": true,
+      "route_context_mismatch": true
+    },
+    "dry_run_no_mutation": true,
+    "apply": {
+      "mode": "apply",
+      "dry_run": false,
+      "applied": true,
+      "artifact_file_name": "r4-fictional-a-marketing-snapshot-20261020_095445-fbc62b15-40c7-4fa3-a2c2-8e288b273054.json",
+      "artifact_bytes": 8087,
+      "schema_version": 1,
+      "source_generated_at": "2026-10-20T09:54:45+00:00",
+      "source_tenant": {
+        "id": 1,
+        "slug": "r4-fictional-a"
+      },
+      "checksum_sha256": "7f2f74a3efe1f071a45f5896b3471ea8c8f8add9be62f8bd67260ab5f32ab3a7",
+      "allow_overwrite": true,
+      "table_results": {
+        "marketing_profiles": {
+          "inserted": 0,
+          "updated": 2,
+          "skipped_existing": 0,
+          "skipped_invalid": 0
+        },
+        "marketing_profile_links": {
+          "inserted": 2,
+          "updated": 0,
+          "skipped_existing": 0,
+          "skipped_invalid": 0
+        },
+        "customer_external_profiles": {
+          "inserted": 2,
+          "updated": 0,
+          "skipped_existing": 0,
+          "skipped_invalid": 0
+        },
+        "marketing_profile_wishlist_items": {
+          "inserted": 0,
+          "updated": 0,
+          "skipped_existing": 0,
+          "skipped_invalid": 0
+        },
+        "marketing_campaigns": {
+          "inserted": 0,
+          "updated": 0,
+          "skipped_existing": 0,
+          "skipped_invalid": 0
+        },
+        "marketing_segments": {
+          "inserted": 0,
+          "updated": 0,
+          "skipped_existing": 0,
+          "skipped_invalid": 0
+        },
+        "marketing_message_templates": {
+          "inserted": 0,
+          "updated": 0,
+          "skipped_existing": 0,
+          "skipped_invalid": 0
+        },
+        "marketing_event_source_mappings": {
+          "inserted": 0,
+          "updated": 0,
+          "skipped_existing": 0,
+          "skipped_invalid": 0
+        },
+        "marketing_order_event_attributions": {
+          "inserted": 0,
+          "updated": 0,
+          "skipped_existing": 0,
+          "skipped_invalid": 0
+        },
+        "marketing_import_runs": {
+          "inserted": 0,
+          "updated": 0,
+          "skipped_existing": 0,
+          "skipped_invalid": 0
+        },
+        "tenant_marketing_settings": {
+          "inserted": 0,
+          "updated": 0,
+          "skipped_existing": 0,
+          "skipped_invalid": 0
+        }
+      },
+      "before_counts": {
+        "marketing_profiles": 2,
+        "marketing_profile_links": 0,
+        "customer_external_profiles": 0,
+        "marketing_profile_wishlist_items": 0,
+        "marketing_campaigns": 0,
+        "marketing_segments": 0,
+        "marketing_message_templates": 0,
+        "marketing_event_source_mappings": 0,
+        "marketing_order_event_attributions": 0,
+        "marketing_import_runs": 0,
+        "tenant_marketing_settings": 0
+      },
+      "after_counts": {
+        "marketing_profiles": 2,
+        "marketing_profile_links": 2,
+        "customer_external_profiles": 2,
+        "marketing_profile_wishlist_items": 0,
+        "marketing_campaigns": 0,
+        "marketing_segments": 0,
+        "marketing_message_templates": 0,
+        "marketing_event_source_mappings": 0,
+        "marketing_order_event_attributions": 0,
+        "marketing_import_runs": 0,
+        "tenant_marketing_settings": 0
+      },
+      "skipped_tables": []
+    },
+    "foreign_rows_unchanged": true,
+    "all_export_data_equal": true,
+    "http_sent": 0
+  },
+  "guard_non_test_rejected_unchanged": true,
+  "backup_sha256": "a48f8c5fbe427343e9824f6d64bf5910bf60f9865c1f42fc92f48068e9d6aea7",
+  "backup_bytes": 86750,
+  "uncompressed_bytes": 1009749,
+  "export_hashes": {
+    "seed-r4-fictional-a.json": "1023de6b613d902312d3bdf9abf3ae3ba613660247c9cfac2a08ca26aaa48c35",
+    "verify-r4-fictional-b.json": "e1343a016cbaa2db3761af43933bc131f1dfcf69037fe1ec54f8241b868fc4ec",
+    "customer-before.json": "bbc64486d6acde2bad5e78553f456465290311c1654d1da2ed4af2726692982e",
+    "seed-r4-fictional-b.json": "db066ec90335e9aca73473a95d11baf47b338d0b84011e123c2b39c26c5f0ca0",
+    "verify-r4-fictional-a.json": "119a9ca9bc4e2b17315ba427f5a2c71b7b60f73d919fe25b9c2f07d1a593b032",
+    "customer-after.json": "bbc64486d6acde2bad5e78553f456465290311c1654d1da2ed4af2726692982e"
+  },
+  "private_payloads_in_committed_evidence": false,
+  "commands": [
+    {
+      "label": "source-sha",
+      "exit_status": 0,
+      "seconds": 0.009
+    },
+    {
+      "label": "source-tree",
+      "exit_status": 0,
+      "seconds": 0.008
+    },
+    {
+      "label": "source-clean",
+      "exit_status": 0,
+      "seconds": 0.026
+    },
+    {
+      "label": "php-lint",
+      "exit_status": 0,
+      "seconds": 0.038
+    },
+    {
+      "label": "source-schema",
+      "exit_status": 0,
+      "seconds": 3.001
+    },
+    {
+      "label": "source-fingerprint",
+      "exit_status": 0,
+      "seconds": 0.498
+    },
+    {
+      "label": "app-seed-and-export",
+      "exit_status": 0,
+      "seconds": 0.503
+    },
+    {
+      "label": "mysqldump",
+      "exit_status": 0,
+      "seconds": 1.05
+    },
+    {
+      "label": "reject-non-test-target",
+      "exit_status": 1,
+      "seconds": 0.005
+    },
+    {
+      "label": "guarded-restore",
+      "exit_status": 0,
+      "seconds": 3.376
+    },
+    {
+      "label": "restore-fingerprint",
+      "exit_status": 0,
+      "seconds": 0.506
+    },
+    {
+      "label": "app-read-restored-and-export",
+      "exit_status": 0,
+      "seconds": 0.221
+    },
+    {
+      "label": "customer-export-recovery-and-boundaries",
+      "exit_status": 0,
+      "seconds": 0.248
+    }
+  ]
+}

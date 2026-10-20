@@ -1,0 +1,34 @@
+
+Running 22 tests using 2 workers
+
+(node:95827) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+(node:95826) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/22] [live-webkit] › public-quality.frozen.spec.ts:30:5 › public header and workflow steps retain readable default, hover and focus states
+[2/22] [live-chromium] › public-quality.frozen.spec.ts:30:5 › public header and workflow steps retain readable default, hover and focus states
+[3/22] [live-chromium] › public-quality.frozen.spec.ts:66:9 › core public pages fit 390px and retain their primary action
+[4/22] [live-webkit] › public-quality.frozen.spec.ts:66:9 › core public pages fit 390px and retain their primary action
+[5/22] [live-chromium] › public-quality.frozen.spec.ts:66:9 › core public pages fit 820px and retain their primary action
+[6/22] [live-webkit] › public-quality.frozen.spec.ts:66:9 › core public pages fit 820px and retain their primary action
+[7/22] [live-chromium] › public-quality.frozen.spec.ts:66:9 › core public pages fit 1440px and retain their primary action
+[8/22] [live-webkit] › public-quality.frozen.spec.ts:66:9 › core public pages fit 1440px and retain their primary action
+[9/22] [live-chromium] › public-quality.frozen.spec.ts:94:5 › public forms expose accessible labels including optional fields
+[10/22] [live-webkit] › public-quality.frozen.spec.ts:94:5 › public forms expose accessible labels including optional fields
+[11/22] [live-chromium] › public-quality.frozen.spec.ts:106:5 › the current offer and conditional fees are visible before requesting access
+[12/22] [live-webkit] › public-quality.frozen.spec.ts:106:5 › the current offer and conditional fees are visible before requesting access
+[13/22] [live-chromium] › studio-landing.frozen.spec.ts:4:9 › Everbranch public studio › keeps the current offer path and primary navigation available
+[14/22] [live-chromium] › studio-landing.frozen.spec.ts:14:9 › Everbranch public studio › supports keyboard workflow and story-dialog controls
+[15/22] [live-webkit] › studio-landing.frozen.spec.ts:4:9 › Everbranch public studio › keeps the current offer path and primary navigation available
+[16/22] [live-chromium] › studio-landing.frozen.spec.ts:39:9 › Everbranch public studio › honors reduced motion
+[17/22] [live-webkit] › studio-landing.frozen.spec.ts:14:9 › Everbranch public studio › supports keyboard workflow and story-dialog controls
+[18/22] [live-chromium] › release-final-smoke.spec.ts:7:7 › released electrician intake remains selectable on /platform/start
+[19/22] [live-chromium] › release-final-smoke.spec.ts:7:7 › released electrician intake remains selectable on /platform/demo
+[20/22] [live-webkit] › studio-landing.frozen.spec.ts:39:9 › Everbranch public studio › honors reduced motion
+[21/22] [live-webkit] › release-final-smoke.spec.ts:7:7 › released electrician intake remains selectable on /platform/start
+[22/22] [live-webkit] › release-final-smoke.spec.ts:7:7 › released electrician intake remains selectable on /platform/demo
+  22 passed (24.2s)

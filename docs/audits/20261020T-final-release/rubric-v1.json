@@ -1,0 +1,230 @@
+{
+  "rubric_version": "1",
+  "rating_scale": {
+    "0": "absent or verified broken for required purpose",
+    "1": "substantial implementation, intended outcome blocked",
+    "2": "useful basic outcome with substantial verified gaps",
+    "3": "expected use and important applicable boundary cases work, minor gaps",
+    "4": "all defined checks satisfied with suitable evidence"
+  },
+  "categories": [
+    {
+      "id": "W",
+      "name": "Customer workflow completeness and usefulness",
+      "weight": 25,
+      "criteria": [
+        {
+          "id": "W1",
+          "name": "Account request to first workspace",
+          "weight": 6,
+          "acceptance_checks": "Synthetic registration, approval/invite/setup and first useful task; validation/duplicate/inactive-account checks."
+        },
+        {
+          "id": "W2",
+          "name": "Field job lifecycle",
+          "weight": 7,
+          "acceptance_checks": "Synthetic tenant job create, read, edit, notes/material/time, completion/archive/restore; role and persistence checks."
+        },
+        {
+          "id": "W3",
+          "name": "Retail operations",
+          "weight": 6,
+          "acceptance_checks": "Synthetic order/import/rewards/wholesale contract checks; invalid signatures, replay and store separation."
+        },
+        {
+          "id": "W4",
+          "name": "Shared customer, team and class work",
+          "weight": 6,
+          "acceptance_checks": "Synthetic customer persistence, team messaging attachments, class enrollment/capacity and handoffs."
+        }
+      ]
+    },
+    {
+      "id": "R",
+      "name": "Reliability and data correctness",
+      "weight": 15,
+      "criteria": [
+        {
+          "id": "R1",
+          "name": "Persistence and validation",
+          "weight": 4,
+          "acceptance_checks": "Reviewed feature tests exercise save/reload and invalid input in representative core tasks."
+        },
+        {
+          "id": "R2",
+          "name": "Retry and idempotency",
+          "weight": 4,
+          "acceptance_checks": "Reviewed duplicate/retry tests for provider events, messages and payments retain one intended result."
+        },
+        {
+          "id": "R3",
+          "name": "Failures and health visibility",
+          "weight": 3,
+          "acceptance_checks": "Observe public health and run history/failure contracts; errors must stay distinguishable from success."
+        },
+        {
+          "id": "R4",
+          "name": "Recovery and customer export",
+          "weight": 4,
+          "acceptance_checks": "Restore a disposable MySQL backup and verify representative customer data export and recovery."
+        }
+      ]
+    },
+    {
+      "id": "U",
+      "name": "Usability, onboarding, and navigation",
+      "weight": 15,
+      "criteria": [
+        {
+          "id": "U1",
+          "name": "First value and approval guidance",
+          "weight": 5,
+          "acceptance_checks": "Visitor understands request vs instant access; synthetic first-login/setup flow identifies useful next action."
+        },
+        {
+          "id": "U2",
+          "name": "Navigation and module discovery",
+          "weight": 4,
+          "acceptance_checks": "Public links and filters work; canonical module visibility and authorized shell navigation have evidence."
+        },
+        {
+          "id": "U3",
+          "name": "Form feedback and recovery",
+          "weight": 3,
+          "acceptance_checks": "Core invalid/expired/duplicate submissions produce actionable feedback; public controls are usable."
+        },
+        {
+          "id": "U4",
+          "name": "Daily home and search",
+          "weight": 3,
+          "acceptance_checks": "Synthetic role-aware dashboard/search identify available next actions and suppress inaccessible content."
+        }
+      ]
+    },
+    {
+      "id": "S",
+      "name": "Security, permissions, and tenant isolation",
+      "weight": 15,
+      "criteria": [
+        {
+          "id": "S1",
+          "name": "Tenant and object boundaries",
+          "weight": 6,
+          "acceptance_checks": "Synthetic A/B tenant host, membership, object and mobile API negative tests; no real-record enumeration."
+        },
+        {
+          "id": "S2",
+          "name": "Role and financial boundaries",
+          "weight": 4,
+          "acceptance_checks": "Synthetic member/manager/owner/landlord and financial-field negative tests for representative workflows."
+        },
+        {
+          "id": "S3",
+          "name": "Authentication and session controls",
+          "weight": 3,
+          "acceptance_checks": "Synthetic login, registration, verification, reset, 2FA and signed/expired-token contracts."
+        },
+        {
+          "id": "S4",
+          "name": "Sensitive data and integration gates",
+          "weight": 2,
+          "acceptance_checks": "Synthetic secret/private-field, unsigned-webhook and disabled-provider/host checks."
+        }
+      ]
+    },
+    {
+      "id": "C",
+      "name": "Clarity of purpose, audience, and customer value",
+      "weight": 10,
+      "criteria": [
+        {
+          "id": "C1",
+          "name": "Purpose, audience and brand",
+          "weight": 3,
+          "acceptance_checks": "Public platform and parent explain business outcomes; demos are labeled and product families are not falsely conflated."
+        },
+        {
+          "id": "C2",
+          "name": "Prices and package promises",
+          "weight": 4,
+          "acceptance_checks": "Homepage, plans, start and explorer agree on seat limits, included modules, add-on prices and offer terms."
+        },
+        {
+          "id": "C3",
+          "name": "Availability and next steps",
+          "weight": 3,
+          "acceptance_checks": "Public discovery suppresses internal/legacy options and distinguishes live, assisted, gated and future capabilities."
+        }
+      ]
+    },
+    {
+      "id": "A",
+      "name": "Shared platform architecture and maintainability",
+      "weight": 10,
+      "criteria": [
+        {
+          "id": "A1",
+          "name": "Canonical catalog and shared services",
+          "weight": 4,
+          "acceptance_checks": "Routes/UI reuse centralized module access, navigation and commercial contracts; exceptions are identified."
+        },
+        {
+          "id": "A2",
+          "name": "Ownership and domain separation",
+          "weight": 3,
+          "acceptance_checks": "Representative tenant policies/services/models and provider lanes have explicit ownership without parallel mutations."
+        },
+        {
+          "id": "A3",
+          "name": "Documentation and release discipline",
+          "weight": 3,
+          "acceptance_checks": "Current doc entry points, setup, CI migration/release guards and evidence versioning are coherent and reproducible."
+        }
+      ]
+    },
+    {
+      "id": "I",
+      "name": "Integrations and operational readiness",
+      "weight": 5,
+      "criteria": [
+        {
+          "id": "I1",
+          "name": "Integration contract behavior",
+          "weight": 2,
+          "acceptance_checks": "Synthetic mocked-provider tests cover signed events, failures, retries and disconnected/disabled state."
+        },
+        {
+          "id": "I2",
+          "name": "Live sandbox and recovery operations",
+          "weight": 3,
+          "acceptance_checks": "Verified disposable merchant/store and mailbox sandbox, queue/retry visibility and backup evidence; actual provider acceptance."
+        }
+      ]
+    },
+    {
+      "id": "X",
+      "name": "Accessibility, responsiveness, and performance",
+      "weight": 5,
+      "criteria": [
+        {
+          "id": "X1",
+          "name": "Keyboard, labels and contrast",
+          "weight": 2,
+          "acceptance_checks": "Public keyboard activation/dialog focus/escape, readable header links and labeled forms have browser evidence."
+        },
+        {
+          "id": "X2",
+          "name": "Responsive public surfaces",
+          "weight": 1.5,
+          "acceptance_checks": "Phone 390px, tablet 820px, desktop 1440px checks for core public pages; no horizontal overflow or lost primary CTA."
+        },
+        {
+          "id": "X3",
+          "name": "Representative performance",
+          "weight": 1.5,
+          "acceptance_checks": "Record repeatable local browser/Lighthouse timings for representative public routes and note limits; no invented production percentile."
+        }
+      ]
+    }
+  ]
+}

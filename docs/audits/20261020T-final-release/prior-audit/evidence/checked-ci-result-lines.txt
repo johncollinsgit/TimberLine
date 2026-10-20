@@ -1,0 +1,12 @@
+mysql migration recovery	Verify clean and partial migration paths	2026-10-20T08:38:39.6566890Z   Tests:    55 passed (352 assertions)
+mysql migration recovery	Verify committed MySQL schema baseline	2026-10-20T08:39:45.3820163Z MySQL schema matches the approved fingerprint.
+mysql migration recovery	Verify committed MySQL schema baseline	2026-10-20T08:39:57.7715565Z MySQL schema matches the approved fingerprint.
+mysql migration recovery	Verify tenant marketing AI budget concurrency	2026-10-20T08:40:03.9843939Z   Tests:    1 passed (21 assertions)
+mysql migration recovery	Verify AI chat, briefing replay and approval concurrency on MySQL	2026-10-20T08:40:08.3997523Z   Tests:    4 passed (20 assertions)
+ci (8.4)	Verify Team preservation and work contracts with synthetic data	2026-10-20T08:37:36.3907704Z # skipped 0
+ci (8.4)	Build frontend assets	2026-10-20T08:37:39.8351853Z # skipped 0
+ci (8.4)	Verify Fleet embedding and allowance in Chromium and WebKit	2026-10-20T08:38:54.7447089Z # skipped 0
+ci (8.4)	Verify workspace branch settings in Chromium and WebKit	2026-10-20T08:39:00.4193935Z   Tests:    5 passed (39 assertions)
+ci (8.4)	Verify workspace branch settings in Chromium and WebKit	2026-10-20T08:39:27.4357308Z   8 passed (26.1s)
+ci (8.4)	Verify public offer and accessibility in Chromium and WebKit	2026-10-20T08:40:58.1045042Z   34 passed (1.5m)
+ci (8.4)	Run PHP tests in parallel	2026-10-20T08:44:11.1952711Z   Tests:    3 skipped, 4093 passed (29247 assertions)

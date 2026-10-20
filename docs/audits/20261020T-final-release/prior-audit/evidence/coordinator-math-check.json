@@ -1,0 +1,70 @@
+{
+  "directory": "/Users/johncollins/Documents/ChatGPT/Barrel/everbranch-quality/docs/audits/20261020T-post-release",
+  "rubric_sha256": "f4ecefe6861587da7b611eca3a7016f9597f74d8037b276a507eaa701ac71048",
+  "criteria": 27,
+  "raw_exact": "87.25",
+  "score_half_up": "87.3",
+  "unknown_weight": "8.5",
+  "unknown_criteria": [
+    "R4",
+    "I2",
+    "X3"
+  ],
+  "assessed_weight": "91.5",
+  "changed_from_original": [
+    {
+      "criterion": "W1",
+      "before": 3,
+      "after": 4,
+      "reason": "Configured electrician intake now works for demo/production with tutorial on/off and preserves pending/inactive access. Current request/approval/invite/first-workspace/first-task contracts pass; historical browser save evidence is retained. Actual delivered invite/provider acceptance remains I2 unknown."
+    },
+    {
+      "criterion": "R3",
+      "before": 2,
+      "after": 4,
+      "reason": "Public readiness identifies the exact live release. Failed count/severity/recent reads now produce known=false/null total and Unknown, with safe diagnostics and last-success provenance; successful zero/nonzero and cache failures have current fault-contract evidence. No production outage was induced."
+    },
+    {
+      "criterion": "U1",
+      "before": 2,
+      "after": 4,
+      "reason": "Public offer/start/receipt explain request, review, approval/access and guided setup without payment at request. Synthetic first-login/workspace setup identifies useful next actions; current approval/reset/first-task contracts pass. This scoped criterion does not certify real invite delivery or every live account."
+    },
+    {
+      "criterion": "U2",
+      "before": 2,
+      "after": 3,
+      "reason": "Readable public navigation, safe branch choices, tabbed current plan/branches/add/setup, search/filter and accessible guides have current evidence. Owned internal/premium software is omitted from Your branches and premium cards do not reconcile ownership/readiness (F07)."
+    },
+    {
+      "criterion": "C2",
+      "before": 2,
+      "after": 4,
+      "reason": "Homepage/plans/start/explorer/parent agree on $499 setup + $299/month and conditional text/email/AI usage fees, included core branches and separate unpriced premium software. Exact tenant Messaging product no longer substitutes SMS bundle. Prospective offer metadata still requires staff-finalized commercial setup, not a proven automatic collection path."
+    },
+    {
+      "criterion": "C3",
+      "before": 2,
+      "after": 3,
+      "reason": "Public choices intersect explicit Simple core keys with safe visibility and reject premium/internal/retired selections. Marketplace remains default-off/internal, separately priced, with no marketing-triggered activation. Premium owned/gated/readiness distinctions remain incomplete in the signed-in settings cards (F07)."
+    },
+    {
+      "criterion": "A1",
+      "before": 2,
+      "after": 3,
+      "reason": "Canonical catalog/access/navigation/commercial services and exact-product pricing are reused; central Marketplace module mapping is correct. A presentation exception persists: premium cards import names only and omit canonical owned/readiness state (F07)."
+    },
+    {
+      "criterion": "A2",
+      "before": 3,
+      "after": 4,
+      "reason": "Current scoped tenant/provider ownership contracts pass and Workflow Studio navigation styles are scoped to their owning tool. Marketplace owns its separate tables/merchant lanes and retains explicit off/default/host gates; no marketing or settings action grants it."
+    },
+    {
+      "criterion": "X1",
+      "before": 2,
+      "after": 4,
+      "reason": "Current live GET-only browser evidence verifies public contrast, keyboard activation/dialog focus/Escape, labeled forms and reduced motion. Settings fixture browsers verify keyboard tab cycling and focus return. This defined public criterion does not certify physical devices or all authenticated accessibility."
+    }
+  ]
+}

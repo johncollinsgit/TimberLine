@@ -1,0 +1,20 @@
+{
+  "audited_release": "0169e0e85cb08b83dc50e072bde9672db4e3d94e",
+  "audited_tree": "155f20cb69f71b7af67aa53302a117c1cc0a3a96",
+  "checked_head": "19abee58d6d4e5c275f15adc2f54b24b12fb6e69",
+  "checked_tree": "155f20cb69f71b7af67aa53302a117c1cc0a3a96",
+  "audit_branch": "codex/everbranch-final-quality-audit-20261020",
+  "original_rubric_sha256": "f4ecefe6861587da7b611eca3a7016f9597f74d8037b276a507eaa701ac71048",
+  "rubric_copy_sha256": "f4ecefe6861587da7b611eca3a7016f9597f74d8037b276a507eaa701ac71048",
+  "source_tips": {
+    "codex/everbranch-public-quality": "fb0a6cfa89fb5d785baf9b6b5ce72cf18ee4acde",
+    "codex/everbranch-branch-settings": "dc57b1dec023d5d445d6f13fc6d21175c955169a",
+    "codex/everbranch-electrician-intake": "1a6f1af0b400a7c80cdcfe7a70b46e03bf08498a",
+    "codex/everbranch-health-unknown": "63e48025f8a0458168ef50b5c56f5cc2a5f02e84",
+    "codex/everbranch-premium-readiness-20261020": "19abee58d6d4e5c275f15adc2f54b24b12fb6e69"
+  },
+  "original_dirty_diff_sha256": "b3a08d4f7b42156b1ad3df2879f63104110c56673354b7879e82c8ed33dbc874",
+  "branch_scope": "Only docs/audits/20261020T-final-release; no app/gate/customer/provider/deploy changes",
+  "captured_utc": "2026-10-20T10:21:09.884684+00:00",
+  "previous_audit_commit": "fb2a5550e177e18aebbe755440ad55ec09625b34"
+}

@@ -1,0 +1,1128 @@
+{
+  "dashboard": {
+    "display_name": "Overview",
+    "status": "live",
+    "market_state": "INTERNAL_ONLY",
+    "channels": [
+      "shopify"
+    ],
+    "classification": "shopify-only",
+    "default_enabled": true,
+    "default_setup_status": "configured",
+    "dependencies": [],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "wholesale_operations": {
+    "display_name": "Wholesale Operations",
+    "status": "live",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "shopify"
+    ],
+    "classification": "shopify-only",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "shopify"
+    ],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": true
+    }
+  },
+  "shopify_product_options": {
+    "display_name": "Product Options",
+    "status": "live",
+    "market_state": "INTERNAL_ONLY",
+    "channels": [
+      "shopify"
+    ],
+    "classification": "shopify-only",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "shopify"
+    ],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "customers": {
+    "display_name": "Customers",
+    "status": "live",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "both"
+    ],
+    "classification": "shared-core",
+    "default_enabled": true,
+    "default_setup_status": "configured",
+    "dependencies": [],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": true,
+      "app_store": false
+    }
+  },
+  "teams_wholesale_workspace": {
+    "display_name": "Teams Wholesale Workspace",
+    "status": "live",
+    "market_state": "INTERNAL_ONLY",
+    "channels": [
+      "both"
+    ],
+    "classification": "shared-core",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "team_work"
+    ],
+    "billing_mode": "custom",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "team_work": {
+    "display_name": "Team",
+    "status": "live",
+    "market_state": "INTERNAL_ONLY",
+    "channels": [
+      "both"
+    ],
+    "classification": "shared-core",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [],
+    "billing_mode": "custom",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "work_core": {
+    "display_name": "Work",
+    "status": "live",
+    "market_state": "INTERNAL_ONLY",
+    "channels": [
+      "both"
+    ],
+    "classification": "shared-core",
+    "default_enabled": true,
+    "default_setup_status": "configured",
+    "dependencies": [],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "field_service": {
+    "display_name": "Field Service",
+    "status": "live",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "backstage"
+    ],
+    "classification": "shared-core",
+    "activation_policy": "baseline_auto",
+    "default_enabled": true,
+    "default_setup_status": "configured",
+    "dependencies": [
+      "customers"
+    ],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": true,
+      "public_site": true,
+      "app_store": true
+    }
+  },
+  "time_tracking": {
+    "display_name": "Time & Scheduling",
+    "status": "live",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "backstage"
+    ],
+    "classification": "tenant-add-on",
+    "activation_policy": "template_recommended",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "field_service"
+    ],
+    "billing_mode": "custom",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "team_communication": {
+    "display_name": "Team Communication",
+    "status": "live",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "backstage"
+    ],
+    "classification": "tenant-add-on",
+    "activation_policy": "template_recommended",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "field_service"
+    ],
+    "billing_mode": "custom",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "field_inventory": {
+    "display_name": "Field Inventory",
+    "status": "live",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "backstage"
+    ],
+    "classification": "tenant-add-on",
+    "activation_policy": "template_recommended",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "field_service"
+    ],
+    "billing_mode": "custom",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "fleet": {
+    "display_name": "Fleet",
+    "status": "live",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "backstage"
+    ],
+    "classification": "tenant-add-on",
+    "activation_policy": "template_recommended",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "field_service"
+    ],
+    "billing_mode": "custom",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "fleet_tracking": {
+    "display_name": "Fleet Tracking",
+    "status": "live",
+    "market_state": "INTERNAL_ONLY",
+    "channels": [
+      "backstage"
+    ],
+    "classification": "tenant-add-on",
+    "activation_policy": "guided",
+    "default_enabled": false,
+    "default_setup_status": "blocked",
+    "dependencies": [
+      "fleet",
+      "time_tracking"
+    ],
+    "billing_mode": "custom",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "markets_and_makers": {
+    "display_name": "Markets and Makers Merchant",
+    "status": "live",
+    "channels": [
+      "both"
+    ],
+    "classification": "internal",
+    "default_enabled": false,
+    "default_setup_status": "configured",
+    "dependencies": [],
+    "billing_mode": "included",
+    "activation_policy": "internal_only",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "everbranch_billing": {
+    "display_name": "Everbranch Billing",
+    "status": "live",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "both"
+    ],
+    "classification": "tenant-add-on",
+    "default_enabled": false,
+    "default_setup_status": "blocked",
+    "dependencies": [
+      "customers"
+    ],
+    "billing_mode": "custom",
+    "visibility": {
+      "mobile_store": true,
+      "public_site": true,
+      "app_store": true
+    }
+  },
+  "equipment_maintenance": {
+    "display_name": "Equipment Maintenance",
+    "status": "live",
+    "market_state": "INTERNAL_ONLY",
+    "channels": [
+      "backstage"
+    ],
+    "classification": "shared-core",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "customers",
+      "field_service"
+    ],
+    "billing_mode": "custom_contract",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "class_scheduling": {
+    "display_name": "Class Scheduling",
+    "status": "live",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "backstage"
+    ],
+    "classification": "shared-core",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "customers"
+    ],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": true,
+      "public_site": true,
+      "app_store": true
+    }
+  },
+  "plant_inventory": {
+    "display_name": "Plant Inventory",
+    "status": "live",
+    "market_state": "INTERNAL_ONLY",
+    "channels": [
+      "backstage"
+    ],
+    "classification": "shared-core",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "activity": {
+    "display_name": "Activity",
+    "status": "placeholder",
+    "market_state": "PLACEHOLDER",
+    "channels": [
+      "both"
+    ],
+    "classification": "shared-core",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "customers"
+    ],
+    "billing_mode": "unavailable",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "questions": {
+    "display_name": "Questions",
+    "status": "placeholder",
+    "market_state": "INTERNAL_ONLY",
+    "channels": [
+      "backstage"
+    ],
+    "classification": "internal-admin",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "customers"
+    ],
+    "billing_mode": "unavailable",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "rewards": {
+    "display_name": "Rewards",
+    "status": "live",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "both"
+    ],
+    "classification": "shared-core",
+    "default_enabled": false,
+    "default_setup_status": "configured",
+    "dependencies": [
+      "customers"
+    ],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": true,
+      "public_site": true,
+      "app_store": true
+    }
+  },
+  "birthdays": {
+    "display_name": "Birthdays / Lifecycle",
+    "status": "live",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "both"
+    ],
+    "classification": "shared-core",
+    "default_enabled": false,
+    "default_setup_status": "configured",
+    "dependencies": [
+      "customers",
+      "rewards"
+    ],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": true,
+      "public_site": true,
+      "app_store": true
+    }
+  },
+  "reviews": {
+    "display_name": "Reviews",
+    "status": "live",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "both"
+    ],
+    "classification": "shared-core",
+    "default_enabled": true,
+    "default_setup_status": "configured",
+    "dependencies": [
+      "customers"
+    ],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": true,
+      "app_store": false
+    }
+  },
+  "lead_capture": {
+    "display_name": "Lead Capture / Intake",
+    "status": "live",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "both"
+    ],
+    "classification": "shared-core",
+    "default_enabled": true,
+    "default_setup_status": "configured",
+    "dependencies": [],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": true,
+      "app_store": false
+    }
+  },
+  "wishlist": {
+    "display_name": "Wishlist",
+    "status": "live",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "both"
+    ],
+    "classification": "shared-core",
+    "default_enabled": false,
+    "default_setup_status": "configured",
+    "dependencies": [
+      "customers"
+    ],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": true,
+      "public_site": true,
+      "app_store": true
+    }
+  },
+  "referrals": {
+    "display_name": "Referrals",
+    "status": "placeholder",
+    "market_state": "PLACEHOLDER",
+    "channels": [
+      "both"
+    ],
+    "classification": "add-on",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "rewards"
+    ],
+    "billing_mode": "add_on",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": true,
+      "app_store": true
+    }
+  },
+  "vip": {
+    "display_name": "VIP",
+    "status": "placeholder",
+    "market_state": "PLACEHOLDER",
+    "channels": [
+      "both"
+    ],
+    "classification": "add-on",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "rewards"
+    ],
+    "billing_mode": "unavailable",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "notifications": {
+    "display_name": "Notifications",
+    "status": "placeholder",
+    "market_state": "PLACEHOLDER",
+    "channels": [
+      "both"
+    ],
+    "classification": "shared-core",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "customers"
+    ],
+    "billing_mode": "unavailable",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "campaigns": {
+    "display_name": "Campaigns",
+    "status": "beta",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "both"
+    ],
+    "classification": "shared-core",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "customers"
+    ],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": true,
+      "public_site": true,
+      "app_store": true
+    }
+  },
+  "reporting": {
+    "display_name": "Reporting",
+    "status": "live",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "both"
+    ],
+    "classification": "shared-core",
+    "default_enabled": true,
+    "default_setup_status": "configured",
+    "dependencies": [],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": true,
+      "app_store": false
+    }
+  },
+  "diagnostics_advanced": {
+    "display_name": "Advanced Diagnostics",
+    "status": "beta",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "both"
+    ],
+    "classification": "shared-core",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "reporting"
+    ],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": true,
+      "public_site": true,
+      "app_store": true
+    }
+  },
+  "integrations": {
+    "display_name": "Integrations",
+    "status": "beta",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "both"
+    ],
+    "classification": "integration-layer",
+    "default_enabled": true,
+    "default_setup_status": "not_started",
+    "dependencies": [],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": true,
+      "app_store": false
+    }
+  },
+  "uploads": {
+    "display_name": "Uploads / Imports",
+    "status": "live",
+    "market_state": "INTERNAL_ONLY",
+    "channels": [
+      "both"
+    ],
+    "classification": "shared-core",
+    "default_enabled": true,
+    "default_setup_status": "not_started",
+    "dependencies": [],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "onboarding": {
+    "display_name": "Onboarding",
+    "status": "live",
+    "market_state": "INTERNAL_ONLY",
+    "channels": [
+      "both"
+    ],
+    "classification": "shared-core",
+    "default_enabled": true,
+    "default_setup_status": "not_started",
+    "dependencies": [],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "settings": {
+    "display_name": "Settings",
+    "status": "live",
+    "market_state": "INTERNAL_ONLY",
+    "channels": [
+      "both"
+    ],
+    "classification": "shared-core",
+    "default_enabled": true,
+    "default_setup_status": "configured",
+    "dependencies": [],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "shopify": {
+    "display_name": "Shopify",
+    "status": "live",
+    "market_state": "INTERNAL_ONLY",
+    "channels": [
+      "shopify"
+    ],
+    "classification": "shopify-only",
+    "default_enabled": true,
+    "default_setup_status": "configured",
+    "dependencies": [],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "quickbooks": {
+    "display_name": "QuickBooks",
+    "status": "beta",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "both"
+    ],
+    "classification": "integration-layer",
+    "activation_policy": "integration_required",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "integrations"
+    ],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": true,
+      "app_store": true
+    }
+  },
+  "trajectory": {
+    "display_name": "Trajectory",
+    "status": "beta",
+    "market_state": "INTERNAL_ONLY",
+    "channels": [
+      "both"
+    ],
+    "classification": "tenant-add-on",
+    "activation_policy": "operator_only",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [],
+    "billing_mode": "custom",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "accounting_command_center": {
+    "display_name": "Accounting Command Center",
+    "status": "beta",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "both"
+    ],
+    "classification": "tenant-add-on",
+    "activation_policy": "integration_required",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "integrations",
+      "quickbooks"
+    ],
+    "billing_mode": "custom",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": true
+    }
+  },
+  "documents": {
+    "display_name": "Documents",
+    "status": "beta",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "both"
+    ],
+    "classification": "shared-core",
+    "activation_policy": "template_recommended",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "uploads"
+    ],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": true,
+      "public_site": true,
+      "app_store": true
+    }
+  },
+  "estimator": {
+    "display_name": "Estimator",
+    "status": "beta",
+    "market_state": "INTERNAL_ONLY",
+    "channels": [
+      "backstage"
+    ],
+    "classification": "shared-core",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "field_service"
+    ],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": true,
+      "public_site": false,
+      "app_store": true
+    }
+  },
+  "wix": {
+    "display_name": "Wix",
+    "status": "roadmap",
+    "market_state": "PLACEHOLDER",
+    "channels": [
+      "backstage"
+    ],
+    "classification": "integration-layer",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "integrations"
+    ],
+    "billing_mode": "unavailable",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "squarespace": {
+    "display_name": "Squarespace",
+    "status": "roadmap",
+    "market_state": "PLACEHOLDER",
+    "channels": [
+      "backstage"
+    ],
+    "classification": "integration-layer",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "integrations"
+    ],
+    "billing_mode": "unavailable",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "square": {
+    "display_name": "Square",
+    "status": "beta",
+    "market_state": "INTERNAL_ONLY",
+    "channels": [
+      "backstage"
+    ],
+    "classification": "integration-layer",
+    "default_enabled": true,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "integrations"
+    ],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "workflow_automations": {
+    "display_name": "Workflow Automations",
+    "status": "live",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "both"
+    ],
+    "classification": "add-on",
+    "default_enabled": false,
+    "default_setup_status": "configured",
+    "dependencies": [
+      "integrations"
+    ],
+    "billing_mode": "add_on",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": true,
+      "app_store": true
+    }
+  },
+  "soccer": {
+    "display_name": "Soccer operations",
+    "status": "beta",
+    "market_state": "INTERNAL_ONLY",
+    "channels": [
+      "both"
+    ],
+    "classification": "shared-core",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "activation_policy": "operator_only",
+    "dependencies": [],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "managed_website": {
+    "display_name": "Everbranch Managed Website",
+    "status": "beta",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "both"
+    ],
+    "classification": "add-on",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "activation_policy": "operator_only",
+    "dependencies": [],
+    "billing_mode": "add_on",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": true,
+      "app_store": true
+    }
+  },
+  "email": {
+    "display_name": "Email",
+    "status": "beta",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "both"
+    ],
+    "classification": "integration-layer",
+    "default_enabled": false,
+    "default_setup_status": "configured",
+    "dependencies": [
+      "integrations"
+    ],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": true
+    }
+  },
+  "sms": {
+    "display_name": "SMS",
+    "status": "beta",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "both"
+    ],
+    "classification": "integration-layer",
+    "default_enabled": false,
+    "default_setup_status": "configured",
+    "dependencies": [
+      "integrations",
+      "customers",
+      "messaging"
+    ],
+    "billing_mode": "add_on",
+    "visibility": {
+      "mobile_store": true,
+      "public_site": true,
+      "app_store": true
+    }
+  },
+  "mobile_connection": {
+    "display_name": "Mobile Connection",
+    "status": "roadmap",
+    "market_state": "PLACEHOLDER",
+    "channels": [
+      "both"
+    ],
+    "classification": "integration-layer",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "integrations"
+    ],
+    "billing_mode": "unavailable",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    }
+  },
+  "ai_branch": {
+    "display_name": "AI Branch",
+    "status": "beta",
+    "market_state": "INTERNAL_ONLY",
+    "channels": [
+      "both"
+    ],
+    "classification": "add-on",
+    "default_enabled": false,
+    "default_setup_status": "configured",
+    "dependencies": [],
+    "billing_mode": "add_on",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": false,
+      "app_store": false
+    },
+    "activation_policy": "operator_only"
+  },
+  "ai": {
+    "display_name": "AI Assistant",
+    "status": "beta",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "both"
+    ],
+    "classification": "shared-core",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "customers"
+    ],
+    "billing_mode": "included",
+    "visibility": {
+      "mobile_store": true,
+      "public_site": true,
+      "app_store": true
+    }
+  },
+  "bulk_email_marketing": {
+    "display_name": "Bulk Email Marketing",
+    "status": "beta",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "both"
+    ],
+    "classification": "add-on",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "email",
+      "campaigns",
+      "messaging"
+    ],
+    "billing_mode": "add_on",
+    "visibility": {
+      "mobile_store": true,
+      "public_site": true,
+      "app_store": true
+    }
+  },
+  "messaging": {
+    "display_name": "Messaging",
+    "status": "beta",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "both"
+    ],
+    "classification": "add-on",
+    "default_enabled": false,
+    "default_setup_status": "configured",
+    "dependencies": [
+      "customers"
+    ],
+    "billing_mode": "add_on",
+    "visibility": {
+      "mobile_store": true,
+      "public_site": true,
+      "app_store": true
+    }
+  },
+  "subscriptions": {
+    "display_name": "Subscriptions",
+    "status": "beta",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "shopify"
+    ],
+    "classification": "add-on",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [
+      "customers",
+      "shopify"
+    ],
+    "billing_mode": "add_on",
+    "visibility": {
+      "mobile_store": true,
+      "public_site": true,
+      "app_store": true
+    }
+  },
+  "additional_channels": {
+    "display_name": "Additional Channels",
+    "status": "beta",
+    "market_state": "SAFE_TO_MARKET",
+    "channels": [
+      "both"
+    ],
+    "classification": "add-on",
+    "default_enabled": false,
+    "default_setup_status": "configured",
+    "dependencies": [
+      "shopify"
+    ],
+    "billing_mode": "add_on",
+    "visibility": {
+      "mobile_store": true,
+      "public_site": true,
+      "app_store": true
+    }
+  },
+  "future_niche_modules": {
+    "display_name": "Future Niche Modules",
+    "status": "roadmap",
+    "market_state": "PLACEHOLDER",
+    "channels": [
+      "both"
+    ],
+    "classification": "add-on",
+    "default_enabled": false,
+    "default_setup_status": "not_started",
+    "dependencies": [],
+    "billing_mode": "custom",
+    "visibility": {
+      "mobile_store": false,
+      "public_site": true,
+      "app_store": false
+    }
+  }
+}

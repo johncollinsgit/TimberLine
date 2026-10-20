@@ -1,0 +1,878 @@
+{
+  "config": {
+    "argv": [
+      "/opt/homebrew/Cellar/node/26.3.1/bin/node",
+      "/Users/johncollins/Documents/Codex/2026-10-20/task/integration/node_modules/@playwright/test/cli.js",
+      "test",
+      "--config",
+      "bounded-pass/final-smoke.config.cjs"
+    ],
+    "configFile": "/Users/johncollins/Documents/Codex/2026-10-20/task/bounded-pass/final-smoke.config.cjs",
+    "rootDir": "/Users/johncollins/Documents/Codex/2026-10-20/task",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 2
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Users/johncollins/Documents/Codex/2026-10-20/task/bounded-pass/live-smoke",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "id": "live-chromium",
+        "name": "live-chromium",
+        "testDir": "/Users/johncollins/Documents/Codex/2026-10-20/task",
+        "testIgnore": [],
+        "testMatch": [
+          "release-final-smoke.spec.ts"
+        ],
+        "timeout": 45000
+      },
+      {
+        "outputDir": "/Users/johncollins/Documents/Codex/2026-10-20/task/bounded-pass/live-smoke",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "id": "live-webkit",
+        "name": "live-webkit",
+        "testDir": "/Users/johncollins/Documents/Codex/2026-10-20/task",
+        "testIgnore": [],
+        "testMatch": [
+          "release-final-smoke.spec.ts"
+        ],
+        "timeout": 45000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "line",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "/Users/johncollins/Documents/Codex/2026-10-20/task/bounded-pass/live-smoke.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 2,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "release-final-smoke.spec.ts",
+      "file": "release-final-smoke.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "public header and workflow steps retain readable default, hover and focus states",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "live-chromium",
+              "projectName": "live-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1106,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T10:05:57.547Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "contrast-ratios",
+                      "contentType": "application/json",
+                      "body": "eyJwbGFucy1kZWZhdWx0IjoxNS41NTY0MDI0NDMzOTg4MjksInBsYW5zLWhvdmVyIjoxMS4zNzQ2ODQ4MzY0MzAzNjIsImV4YW1wbGUtZGVmYXVsdCI6Ni40Mzk0ODAyNTgxNjQ5MDMsImV4YW1wbGUtaG92ZXIiOjExLjMwNDk2NTk0MTU2ODI3NywibW9kdWxlLWRlZmF1bHQiOjEyLjAwMTg3NzQ3MzAwMjk5NSwibW9kdWxlLWhvdmVyIjoxMi4wMDE4Nzc0NzMwMDI5OTUsIm1vZHVsZS1kZXNjcmlwdGlvbi1kZWZhdWx0Ijo1LjY3OTU2MjAxMTc4MzcwNywibW9kdWxlLWRlc2NyaXB0aW9uLWhvdmVyIjo1LjY3OTU2MjAxMTc4MzcwNywic3RlcC1kZWZhdWx0Ijo2LjAxMTEzODIyOTI1NDEzOCwic3RlcC1ob3ZlciI6MTIuNzAyNTU0MjM3NjUyMzM2fQ=="
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            },
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "live-webkit",
+              "projectName": "live-webkit",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 1576,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T10:05:57.547Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "contrast-ratios",
+                      "contentType": "application/json",
+                      "body": "eyJwbGFucy1kZWZhdWx0IjoxNS41NTY0MDI0NDMzOTg4MjksInBsYW5zLWhvdmVyIjoxMS4zNzQ2ODQ4MzY0MzAzNjIsImV4YW1wbGUtZGVmYXVsdCI6Ni40Mzk0ODAyNTgxNjQ5MDMsImV4YW1wbGUtaG92ZXIiOjExLjMwNDk2NTk0MTU2ODI3NywibW9kdWxlLWRlZmF1bHQiOjEyLjAwMTg3NzQ3MzAwMjk5NSwibW9kdWxlLWhvdmVyIjoxMi4wMDE4Nzc0NzMwMDI5OTUsIm1vZHVsZS1kZXNjcmlwdGlvbi1kZWZhdWx0Ijo1LjY3OTU2MjAxMTc4MzcwNywibW9kdWxlLWRlc2NyaXB0aW9uLWhvdmVyIjo1LjY3OTU2MjAxMTc4MzcwNywic3RlcC1kZWZhdWx0Ijo2LjAxMTEzODIyOTI1NDEzOCwic3RlcC1ob3ZlciI6MTIuNzAyNTU0MjM3NjUyMzM2fQ=="
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1100143d48ed63870e54-51b15a9528083a480574",
+          "file": "public-quality.frozen.spec.ts",
+          "line": 30,
+          "column": 5
+        },
+        {
+          "title": "core public pages fit 390px and retain their primary action",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "live-chromium",
+              "projectName": "live-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3101,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T10:05:58.852Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "/platform/promo-390",
+                      "contentType": "image/png",
+                      "path": "/Users/johncollins/Documents/Codex/2026-10-20/task/bounded-pass/live-smoke/release-final-smoke-core-p-bd53c-retain-their-primary-action-live-chromium/attachments/-platform-promo-390-187434dc368eb7a0eeff0859cb1d46aebf6bf836.png"
+                    },
+                    {
+                      "name": "/platform/plans-390",
+                      "contentType": "image/png",
+                      "path": "/Users/johncollins/Documents/Codex/2026-10-20/task/bounded-pass/live-smoke/release-final-smoke-core-p-bd53c-retain-their-primary-action-live-chromium/attachments/-platform-plans-390-a8f4bdd0d28087ee623f389efbabc9ccac4177f5.png"
+                    },
+                    {
+                      "name": "/platform/start-390",
+                      "contentType": "image/png",
+                      "path": "/Users/johncollins/Documents/Codex/2026-10-20/task/bounded-pass/live-smoke/release-final-smoke-core-p-bd53c-retain-their-primary-action-live-chromium/attachments/-platform-start-390-0e07bad014f0734cf93dcb94329a87e4f86ace6f.png"
+                    },
+                    {
+                      "name": "responsive-pages",
+                      "contentType": "application/json",
+                      "body": "W3sicGF0aCI6Ii9wbGF0Zm9ybS9wcm9tbyIsInZpZXdwb3J0IjozOTAsImNvbnRlbnQiOjM5MCwicHJpbWFyeUFjdGlvbiI6IkdldCBzdGFydGVkIn0seyJwYXRoIjoiL3BsYXRmb3JtL3BsYW5zIiwidmlld3BvcnQiOjM5MCwiY29udGVudCI6MzkwLCJwcmltYXJ5QWN0aW9uIjoiR2V0IHN0YXJ0ZWQifSx7InBhdGgiOiIvcGxhdGZvcm0vc3RhcnQiLCJ2aWV3cG9ydCI6MzkwLCJjb250ZW50IjozOTAsInByaW1hcnlBY3Rpb24iOiJSZXF1ZXN0IHByb2R1Y3Rpb24gYWNjZXNzIn0seyJwYXRoIjoiL3BsYXRmb3JtL2RlbW8iLCJ2aWV3cG9ydCI6MzkwLCJjb250ZW50IjozOTAsInByaW1hcnlBY3Rpb24iOiJSZXF1ZXN0IGRlbW8gYWNjZXNzIn0seyJwYXRoIjoiL3BsYXRmb3JtL2NvbnRhY3QiLCJ2aWV3cG9ydCI6MzkwLCJjb250ZW50IjozOTAsInByaW1hcnlBY3Rpb24iOiJTZW5kIG1lc3NhZ2UifSx7InBhdGgiOiIvZXhwbG9yZS9tb2R1bGVzIiwidmlld3BvcnQiOjM5MCwiY29udGVudCI6MzkwLCJwcmltYXJ5QWN0aW9uIjoiQ2hvb3NlIHlvdXIgYnJhbmNoZXMifSx7InBhdGgiOiIvcGxhdGZvcm0vZXhhbXBsZXMvZmllbGQiLCJ2aWV3cG9ydCI6MzkwLCJjb250ZW50IjozOTAsInByaW1hcnlBY3Rpb24iOiJHZXQgc3RhcnRlZCDihpcifV0="
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            },
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "live-webkit",
+              "projectName": "live-webkit",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 3596,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T10:05:59.322Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "/platform/promo-390",
+                      "contentType": "image/png",
+                      "path": "/Users/johncollins/Documents/Codex/2026-10-20/task/bounded-pass/live-smoke/release-final-smoke-core-p-bd53c-retain-their-primary-action-live-webkit/attachments/-platform-promo-390-e4e196820ec7e278ba55e227dde611cde37afe8b.png"
+                    },
+                    {
+                      "name": "/platform/plans-390",
+                      "contentType": "image/png",
+                      "path": "/Users/johncollins/Documents/Codex/2026-10-20/task/bounded-pass/live-smoke/release-final-smoke-core-p-bd53c-retain-their-primary-action-live-webkit/attachments/-platform-plans-390-68df21515aeeda3f881cf1b0f2dd161b93f6b8d4.png"
+                    },
+                    {
+                      "name": "/platform/start-390",
+                      "contentType": "image/png",
+                      "path": "/Users/johncollins/Documents/Codex/2026-10-20/task/bounded-pass/live-smoke/release-final-smoke-core-p-bd53c-retain-their-primary-action-live-webkit/attachments/-platform-start-390-2d85e4d47cfe87ef8245f52fdbc9ae5213cc9240.png"
+                    },
+                    {
+                      "name": "responsive-pages",
+                      "contentType": "application/json",
+                      "body": "W3sicGF0aCI6Ii9wbGF0Zm9ybS9wcm9tbyIsInZpZXdwb3J0IjozOTAsImNvbnRlbnQiOjM5MCwicHJpbWFyeUFjdGlvbiI6IkdldCBzdGFydGVkIn0seyJwYXRoIjoiL3BsYXRmb3JtL3BsYW5zIiwidmlld3BvcnQiOjM5MCwiY29udGVudCI6MzkwLCJwcmltYXJ5QWN0aW9uIjoiR2V0IHN0YXJ0ZWQifSx7InBhdGgiOiIvcGxhdGZvcm0vc3RhcnQiLCJ2aWV3cG9ydCI6MzkwLCJjb250ZW50IjozOTAsInByaW1hcnlBY3Rpb24iOiJSZXF1ZXN0IHByb2R1Y3Rpb24gYWNjZXNzIn0seyJwYXRoIjoiL3BsYXRmb3JtL2RlbW8iLCJ2aWV3cG9ydCI6MzkwLCJjb250ZW50IjozOTAsInByaW1hcnlBY3Rpb24iOiJSZXF1ZXN0IGRlbW8gYWNjZXNzIn0seyJwYXRoIjoiL3BsYXRmb3JtL2NvbnRhY3QiLCJ2aWV3cG9ydCI6MzkwLCJjb250ZW50IjozOTAsInByaW1hcnlBY3Rpb24iOiJTZW5kIG1lc3NhZ2UifSx7InBhdGgiOiIvZXhwbG9yZS9tb2R1bGVzIiwidmlld3BvcnQiOjM5MCwiY29udGVudCI6MzkwLCJwcmltYXJ5QWN0aW9uIjoiQ2hvb3NlIHlvdXIgYnJhbmNoZXMifSx7InBhdGgiOiIvcGxhdGZvcm0vZXhhbXBsZXMvZmllbGQiLCJ2aWV3cG9ydCI6MzkwLCJjb250ZW50IjozOTAsInByaW1hcnlBY3Rpb24iOiJHZXQgc3RhcnRlZCDihpcifV0="
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1100143d48ed63870e54-5c4b41e8911b39d02f8b",
+          "file": "public-quality.frozen.spec.ts",
+          "line": 66,
+          "column": 9
+        },
+        {
+          "title": "core public pages fit 820px and retain their primary action",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "live-chromium",
+              "projectName": "live-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3982,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T10:06:01.957Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "/platform/promo-820",
+                      "contentType": "image/png",
+                      "path": "/Users/johncollins/Documents/Codex/2026-10-20/task/bounded-pass/live-smoke/release-final-smoke-core-p-2b529-retain-their-primary-action-live-chromium/attachments/-platform-promo-820-8b0d3f913737d84083ee50019b7bb22749ed5c71.png"
+                    },
+                    {
+                      "name": "/platform/plans-820",
+                      "contentType": "image/png",
+                      "path": "/Users/johncollins/Documents/Codex/2026-10-20/task/bounded-pass/live-smoke/release-final-smoke-core-p-2b529-retain-their-primary-action-live-chromium/attachments/-platform-plans-820-fd8c67e2622f30049e47da190797394c8f5e4a6f.png"
+                    },
+                    {
+                      "name": "/platform/start-820",
+                      "contentType": "image/png",
+                      "path": "/Users/johncollins/Documents/Codex/2026-10-20/task/bounded-pass/live-smoke/release-final-smoke-core-p-2b529-retain-their-primary-action-live-chromium/attachments/-platform-start-820-a830042e694619488f018c80edbf5637464a4383.png"
+                    },
+                    {
+                      "name": "responsive-pages",
+                      "contentType": "application/json",
+                      "body": "W3sicGF0aCI6Ii9wbGF0Zm9ybS9wcm9tbyIsInZpZXdwb3J0Ijo4MjAsImNvbnRlbnQiOjgyMCwicHJpbWFyeUFjdGlvbiI6IkdldCBzdGFydGVkIn0seyJwYXRoIjoiL3BsYXRmb3JtL3BsYW5zIiwidmlld3BvcnQiOjgyMCwiY29udGVudCI6ODIwLCJwcmltYXJ5QWN0aW9uIjoiR2V0IHN0YXJ0ZWQifSx7InBhdGgiOiIvcGxhdGZvcm0vc3RhcnQiLCJ2aWV3cG9ydCI6ODIwLCJjb250ZW50Ijo4MjAsInByaW1hcnlBY3Rpb24iOiJSZXF1ZXN0IHByb2R1Y3Rpb24gYWNjZXNzIn0seyJwYXRoIjoiL3BsYXRmb3JtL2RlbW8iLCJ2aWV3cG9ydCI6ODIwLCJjb250ZW50Ijo4MjAsInByaW1hcnlBY3Rpb24iOiJSZXF1ZXN0IGRlbW8gYWNjZXNzIn0seyJwYXRoIjoiL3BsYXRmb3JtL2NvbnRhY3QiLCJ2aWV3cG9ydCI6ODIwLCJjb250ZW50Ijo4MjAsInByaW1hcnlBY3Rpb24iOiJTZW5kIG1lc3NhZ2UifSx7InBhdGgiOiIvZXhwbG9yZS9tb2R1bGVzIiwidmlld3BvcnQiOjgyMCwiY29udGVudCI6ODIwLCJwcmltYXJ5QWN0aW9uIjoiQ2hvb3NlIHlvdXIgYnJhbmNoZXMifSx7InBhdGgiOiIvcGxhdGZvcm0vZXhhbXBsZXMvZmllbGQiLCJ2aWV3cG9ydCI6ODIwLCJjb250ZW50Ijo4MjAsInByaW1hcnlBY3Rpb24iOiJHZXQgc3RhcnRlZCDihpcifV0="
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            },
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "live-webkit",
+              "projectName": "live-webkit",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 4361,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T10:06:02.925Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "/platform/promo-820",
+                      "contentType": "image/png",
+                      "path": "/Users/johncollins/Documents/Codex/2026-10-20/task/bounded-pass/live-smoke/release-final-smoke-core-p-2b529-retain-their-primary-action-live-webkit/attachments/-platform-promo-820-fe2c73e2b2792cbb759f85ef4d747500742e8b04.png"
+                    },
+                    {
+                      "name": "/platform/plans-820",
+                      "contentType": "image/png",
+                      "path": "/Users/johncollins/Documents/Codex/2026-10-20/task/bounded-pass/live-smoke/release-final-smoke-core-p-2b529-retain-their-primary-action-live-webkit/attachments/-platform-plans-820-0f5a4e41c676699413086ddc97ba9b7632dc9f87.png"
+                    },
+                    {
+                      "name": "/platform/start-820",
+                      "contentType": "image/png",
+                      "path": "/Users/johncollins/Documents/Codex/2026-10-20/task/bounded-pass/live-smoke/release-final-smoke-core-p-2b529-retain-their-primary-action-live-webkit/attachments/-platform-start-820-b4e8285cc7b6528fc2145c363d7f00cb2b095105.png"
+                    },
+                    {
+                      "name": "responsive-pages",
+                      "contentType": "application/json",
+                      "body": "W3sicGF0aCI6Ii9wbGF0Zm9ybS9wcm9tbyIsInZpZXdwb3J0Ijo4MjAsImNvbnRlbnQiOjgyMCwicHJpbWFyeUFjdGlvbiI6IkdldCBzdGFydGVkIn0seyJwYXRoIjoiL3BsYXRmb3JtL3BsYW5zIiwidmlld3BvcnQiOjgyMCwiY29udGVudCI6ODIwLCJwcmltYXJ5QWN0aW9uIjoiR2V0IHN0YXJ0ZWQifSx7InBhdGgiOiIvcGxhdGZvcm0vc3RhcnQiLCJ2aWV3cG9ydCI6ODIwLCJjb250ZW50Ijo4MjAsInByaW1hcnlBY3Rpb24iOiJSZXF1ZXN0IHByb2R1Y3Rpb24gYWNjZXNzIn0seyJwYXRoIjoiL3BsYXRmb3JtL2RlbW8iLCJ2aWV3cG9ydCI6ODIwLCJjb250ZW50Ijo4MjAsInByaW1hcnlBY3Rpb24iOiJSZXF1ZXN0IGRlbW8gYWNjZXNzIn0seyJwYXRoIjoiL3BsYXRmb3JtL2NvbnRhY3QiLCJ2aWV3cG9ydCI6ODIwLCJjb250ZW50Ijo4MjAsInByaW1hcnlBY3Rpb24iOiJTZW5kIG1lc3NhZ2UifSx7InBhdGgiOiIvZXhwbG9yZS9tb2R1bGVzIiwidmlld3BvcnQiOjgyMCwiY29udGVudCI6ODIwLCJwcmltYXJ5QWN0aW9uIjoiQ2hvb3NlIHlvdXIgYnJhbmNoZXMifSx7InBhdGgiOiIvcGxhdGZvcm0vZXhhbXBsZXMvZmllbGQiLCJ2aWV3cG9ydCI6ODIwLCJjb250ZW50Ijo4MjAsInByaW1hcnlBY3Rpb24iOiJHZXQgc3RhcnRlZCDihpcifV0="
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1100143d48ed63870e54-78464eb2458b561ae14a",
+          "file": "public-quality.frozen.spec.ts",
+          "line": 66,
+          "column": 9
+        },
+        {
+          "title": "core public pages fit 1440px and retain their primary action",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "live-chromium",
+              "projectName": "live-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3138,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T10:06:05.943Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "/platform/promo-1440",
+                      "contentType": "image/png",
+                      "path": "/Users/johncollins/Documents/Codex/2026-10-20/task/bounded-pass/live-smoke/release-final-smoke-core-p-8ca49-retain-their-primary-action-live-chromium/attachments/-platform-promo-1440-ef4fd04dc843f89154c3ca8be42bb32d46ba6f02.png"
+                    },
+                    {
+                      "name": "/platform/plans-1440",
+                      "contentType": "image/png",
+                      "path": "/Users/johncollins/Documents/Codex/2026-10-20/task/bounded-pass/live-smoke/release-final-smoke-core-p-8ca49-retain-their-primary-action-live-chromium/attachments/-platform-plans-1440-d0d0d088304cd4e878204662b3b110f65e3395c2.png"
+                    },
+                    {
+                      "name": "/platform/start-1440",
+                      "contentType": "image/png",
+                      "path": "/Users/johncollins/Documents/Codex/2026-10-20/task/bounded-pass/live-smoke/release-final-smoke-core-p-8ca49-retain-their-primary-action-live-chromium/attachments/-platform-start-1440-c97e388a9fee2e76d68f1720074f7d66d52535d6.png"
+                    },
+                    {
+                      "name": "responsive-pages",
+                      "contentType": "application/json",
+                      "body": "W3sicGF0aCI6Ii9wbGF0Zm9ybS9wcm9tbyIsInZpZXdwb3J0IjoxNDQwLCJjb250ZW50IjoxNDQwLCJwcmltYXJ5QWN0aW9uIjoiR2V0IHN0YXJ0ZWQifSx7InBhdGgiOiIvcGxhdGZvcm0vcGxhbnMiLCJ2aWV3cG9ydCI6MTQ0MCwiY29udGVudCI6MTQ0MCwicHJpbWFyeUFjdGlvbiI6IkdldCBzdGFydGVkIn0seyJwYXRoIjoiL3BsYXRmb3JtL3N0YXJ0Iiwidmlld3BvcnQiOjE0NDAsImNvbnRlbnQiOjE0NDAsInByaW1hcnlBY3Rpb24iOiJSZXF1ZXN0IHByb2R1Y3Rpb24gYWNjZXNzIn0seyJwYXRoIjoiL3BsYXRmb3JtL2RlbW8iLCJ2aWV3cG9ydCI6MTQ0MCwiY29udGVudCI6MTQ0MCwicHJpbWFyeUFjdGlvbiI6IlJlcXVlc3QgZGVtbyBhY2Nlc3MifSx7InBhdGgiOiIvcGxhdGZvcm0vY29udGFjdCIsInZpZXdwb3J0IjoxNDQwLCJjb250ZW50IjoxNDQwLCJwcmltYXJ5QWN0aW9uIjoiU2VuZCBtZXNzYWdlIn0seyJwYXRoIjoiL2V4cGxvcmUvbW9kdWxlcyIsInZpZXdwb3J0IjoxNDQwLCJjb250ZW50IjoxNDQwLCJwcmltYXJ5QWN0aW9uIjoiQ2hvb3NlIHlvdXIgYnJhbmNoZXMifSx7InBhdGgiOiIvcGxhdGZvcm0vZXhhbXBsZXMvZmllbGQiLCJ2aWV3cG9ydCI6MTQ0MCwiY29udGVudCI6MTQ0MCwicHJpbWFyeUFjdGlvbiI6IkdldCBzdGFydGVkIOKGlyJ9XQ=="
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            },
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "live-webkit",
+              "projectName": "live-webkit",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 4116,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T10:06:07.291Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "/platform/promo-1440",
+                      "contentType": "image/png",
+                      "path": "/Users/johncollins/Documents/Codex/2026-10-20/task/bounded-pass/live-smoke/release-final-smoke-core-p-8ca49-retain-their-primary-action-live-webkit/attachments/-platform-promo-1440-4e3e51004c8fdf874f11bfe195bd872df93976f6.png"
+                    },
+                    {
+                      "name": "/platform/plans-1440",
+                      "contentType": "image/png",
+                      "path": "/Users/johncollins/Documents/Codex/2026-10-20/task/bounded-pass/live-smoke/release-final-smoke-core-p-8ca49-retain-their-primary-action-live-webkit/attachments/-platform-plans-1440-2b821746c5b7e06e2c15337cc3586e9a29d9bded.png"
+                    },
+                    {
+                      "name": "/platform/start-1440",
+                      "contentType": "image/png",
+                      "path": "/Users/johncollins/Documents/Codex/2026-10-20/task/bounded-pass/live-smoke/release-final-smoke-core-p-8ca49-retain-their-primary-action-live-webkit/attachments/-platform-start-1440-b5dc02de7ed2a304e8b32fddd9de332edcd2ccc4.png"
+                    },
+                    {
+                      "name": "responsive-pages",
+                      "contentType": "application/json",
+                      "body": "W3sicGF0aCI6Ii9wbGF0Zm9ybS9wcm9tbyIsInZpZXdwb3J0IjoxNDQwLCJjb250ZW50IjoxNDQwLCJwcmltYXJ5QWN0aW9uIjoiR2V0IHN0YXJ0ZWQifSx7InBhdGgiOiIvcGxhdGZvcm0vcGxhbnMiLCJ2aWV3cG9ydCI6MTQ0MCwiY29udGVudCI6MTQ0MCwicHJpbWFyeUFjdGlvbiI6IkdldCBzdGFydGVkIn0seyJwYXRoIjoiL3BsYXRmb3JtL3N0YXJ0Iiwidmlld3BvcnQiOjE0NDAsImNvbnRlbnQiOjE0NDAsInByaW1hcnlBY3Rpb24iOiJSZXF1ZXN0IHByb2R1Y3Rpb24gYWNjZXNzIn0seyJwYXRoIjoiL3BsYXRmb3JtL2RlbW8iLCJ2aWV3cG9ydCI6MTQ0MCwiY29udGVudCI6MTQ0MCwicHJpbWFyeUFjdGlvbiI6IlJlcXVlc3QgZGVtbyBhY2Nlc3MifSx7InBhdGgiOiIvcGxhdGZvcm0vY29udGFjdCIsInZpZXdwb3J0IjoxNDQwLCJjb250ZW50IjoxNDQwLCJwcmltYXJ5QWN0aW9uIjoiU2VuZCBtZXNzYWdlIn0seyJwYXRoIjoiL2V4cGxvcmUvbW9kdWxlcyIsInZpZXdwb3J0IjoxNDQwLCJjb250ZW50IjoxNDQwLCJwcmltYXJ5QWN0aW9uIjoiQ2hvb3NlIHlvdXIgYnJhbmNoZXMifSx7InBhdGgiOiIvcGxhdGZvcm0vZXhhbXBsZXMvZmllbGQiLCJ2aWV3cG9ydCI6MTQ0MCwiY29udGVudCI6MTQ0MCwicHJpbWFyeUFjdGlvbiI6IkdldCBzdGFydGVkIOKGlyJ9XQ=="
+                    }
+                  ]
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1100143d48ed63870e54-55f45e712884cc4cb1b9",
+          "file": "public-quality.frozen.spec.ts",
+          "line": 66,
+          "column": 9
+        },
+        {
+          "title": "public forms expose accessible labels including optional fields",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "live-chromium",
+              "projectName": "live-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4514,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T10:06:09.085Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            },
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "live-webkit",
+              "projectName": "live-webkit",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 3664,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T10:06:11.415Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1100143d48ed63870e54-19058fa35615347c1a22",
+          "file": "public-quality.frozen.spec.ts",
+          "line": 94,
+          "column": 5
+        },
+        {
+          "title": "the current offer and conditional fees are visible before requesting access",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "live-chromium",
+              "projectName": "live-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2128,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T10:06:13.602Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            },
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "live-webkit",
+              "projectName": "live-webkit",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 2154,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T10:06:15.084Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1100143d48ed63870e54-ac58f0550432de2ffaf7",
+          "file": "public-quality.frozen.spec.ts",
+          "line": 106,
+          "column": 5
+        },
+        {
+          "title": "released electrician intake remains selectable on /platform/start",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "live-chromium",
+              "projectName": "live-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 549,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T10:06:18.071Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            },
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "live-webkit",
+              "projectName": "live-webkit",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 668,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T10:06:19.816Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1100143d48ed63870e54-1273fae69f2f5a40e99b",
+          "file": "release-final-smoke.spec.ts",
+          "line": 7,
+          "column": 7
+        },
+        {
+          "title": "released electrician intake remains selectable on /platform/demo",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "live-chromium",
+              "projectName": "live-chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 513,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T10:06:18.624Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            },
+            {
+              "timeout": 45000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "live-webkit",
+              "projectName": "live-webkit",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 675,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-20T10:06:20.489Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1100143d48ed63870e54-a46de3843f8ff42c2c51",
+          "file": "release-final-smoke.spec.ts",
+          "line": 7,
+          "column": 7
+        }
+      ],
+      "suites": [
+        {
+          "title": "Everbranch public studio",
+          "file": "studio-landing.frozen.spec.ts",
+          "line": 3,
+          "column": 6,
+          "specs": [
+            {
+              "title": "keeps the current offer path and primary navigation available",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 45000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "live-chromium",
+                  "projectName": "live-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 707,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-20T10:06:15.734Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                },
+                {
+                  "timeout": 45000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "live-webkit",
+                  "projectName": "live-webkit",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 801,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-20T10:06:17.242Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "1100143d48ed63870e54-cc14438455c885edca17",
+              "file": "studio-landing.frozen.spec.ts",
+              "line": 4,
+              "column": 9
+            },
+            {
+              "title": "supports keyboard workflow and story-dialog controls",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 45000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "live-chromium",
+                  "projectName": "live-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 917,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-20T10:06:16.446Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                },
+                {
+                  "timeout": 45000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "live-webkit",
+                  "projectName": "live-webkit",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 1019,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-20T10:06:18.047Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "1100143d48ed63870e54-c49f2d92aba5db5dc79f",
+              "file": "studio-landing.frozen.spec.ts",
+              "line": 14,
+              "column": 9
+            },
+            {
+              "title": "honors reduced motion",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 45000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "live-chromium",
+                  "projectName": "live-chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 699,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-20T10:06:17.368Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                },
+                {
+                  "timeout": 45000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "live-webkit",
+                  "projectName": "live-webkit",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 740,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-10-20T10:06:19.071Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "1100143d48ed63870e54-7885996d99cc2c8b5072",
+              "file": "studio-landing.frozen.spec.ts",
+              "line": 39,
+              "column": 9
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-20T10:05:56.974Z",
+    "duration": 24232.946,
+    "expected": 22,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

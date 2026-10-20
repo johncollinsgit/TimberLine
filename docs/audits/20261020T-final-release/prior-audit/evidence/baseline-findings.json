@@ -1,0 +1,110 @@
+[
+  {
+    "id": "F01",
+    "title": "Public header links disappear against a white navigation bar",
+    "severity": "High (P1)",
+    "customer": "Any first-time desktop visitor trying to find plans, modules, examples or login.",
+    "consequence": "People can miss the primary information links and believe the navigation is empty. The dark launch-partner CTA remains usable.",
+    "evidence": [
+      "E07",
+      "E08",
+      "E11",
+      "E12"
+    ],
+    "reproduction": "Open /platform/promo at 1440 px in Chromium or WebKit, or Safari desktop. Read computed styles for .eb-studio-nav and its ordinary anchors.",
+    "observed": "Foreground and background are both rgb(255,255,255), giving 1:1 contrast. Safari visual inspection confirms effectively invisible links/logo. The existing interaction tests pass because visibility/role assertions do not assert readable contrast. Lighthouse also flags a separate workflow-button contrast of 3.58:1.",
+    "expected": "All shown navigation labels remain legible and meet the applicable contrast threshold in default, hover and focus states.",
+    "cause": "Confirmed CSS name collision: Marketing Desk globally reuses .eb-studio-nav with background:white after public-studio.css has set white foreground.",
+    "confidence": "High; reproduced live and locally in two engines, plus Safari.",
+    "remedy": "Scope or rename Marketing Desk selectors; preserve the intended public header theme; add a meaningful cross-surface contrast regression."
+  },
+  {
+    "id": "F02",
+    "title": "Public package and Messaging price descriptions disagree",
+    "severity": "High (P1)",
+    "customer": "An owner comparing Starter, Growth, Pro and messaging costs.",
+    "consequence": "A buyer cannot reliably decide what the quoted plan includes or what Messaging costs; staff must explain conflicting pages.",
+    "evidence": [
+      "E08",
+      "E11"
+    ],
+    "reproduction": "Compare /platform/start with /platform/plans, then compare Messaging in /explore/modules with the Messaging add-on card.",
+    "observed": "The start comparison describes Starter as including everything while plans reserve loyalty/birthdays and wishlist for higher tiers. Messaging shows $19.99/month on plans and $99/month plus $99 setup in Explorer. The first-six-month Launch Partner offer is internally consistent on current live pages; the older checkout has different historical post-introductory terms.",
+    "expected": "The same product has one unambiguous inclusion and price explanation, with bundle distinctions made explicit.",
+    "cause": "Confirmed separate display/config paths; modulePurchaseMetadata returns the first add-on containing a module, which selects SMS before the standalone Messaging add-on. The Starter wording conflict is a separate duplicated content problem.",
+    "confidence": "High for mismatch and source mechanism. No actual mischarge was tested or alleged.",
+    "remedy": "Use an explicit canonical purchase identity for standalone Messaging versus the SMS bundle and derive comparison wording from the catalog. Preserve every current price and accepted agreement."
+  },
+  {
+    "id": "F03",
+    "title": "Plans and intake expose internal, placeholder and legacy add-ons",
+    "severity": "Medium (P2)",
+    "customer": "A new owner selecting requested capabilities.",
+    "consequence": "Customers can request obsolete or internal options without understanding whether they exist or can be supplied. This increases manual triage and contradicts the safe public catalog.",
+    "evidence": [
+      "E03",
+      "E08",
+      "E11"
+    ],
+    "reproduction": "Open plans and expand the commercial interests on start. Compare AI Branch, aliases and future products with the canonical public/internal catalog.",
+    "observed": "AI Branch Starter/Growth/Pro appear publicly despite INTERNAL_ONLY module state. Legacy aliases and placeholder options are listed. The plans page can simultaneously claim no coming-soon modules are exposed while showing coming-soon add-on pills.",
+    "expected": "A single public visibility/purchase policy filters cards and interest inputs; roadmap interest, if intentionally offered later, is a distinct explicit product decision.",
+    "cause": "publicPlansPayload enumerates compatibility add-ons without the Explorer policy, and its options are reused in intake.",
+    "confidence": "High. This is choice exposure; automatic entitlement activation, charging or data exposure was not demonstrated.",
+    "remedy": "Apply fail-closed catalog visibility and canonical identity filtering to plans, option rendering and submitted interest validation; retain aliases internally."
+  },
+  {
+    "id": "F04",
+    "title": "Electrician prospects are filtered out with a hidden tutorial",
+    "severity": "Medium (P2)",
+    "customer": "Tradespeople whose business is an electrical contractor.",
+    "consequence": "A currently demonstrated audience cannot accurately choose its business type during public intake; Other is a workaround.",
+    "evidence": [
+      "E04",
+      "E08",
+      "E11"
+    ],
+    "reproduction": "Inspect public start business types. Run PlatformPlansAndAccessRequestsTest with the default customer_electrician_tutorial flag off. Compare the supported post-login electrician workspace setup.",
+    "observed": "Electrician is absent and a submitted electrician key is rejected. The post-login wizard and field workspace support it.",
+    "expected": "Industry selection follows supported customer types independently of whether an optional customer tutorial is enabled.",
+    "cause": "filteredPublicBusinessTypes couples industry availability to features.customer_electrician_tutorial.",
+    "confidence": "High for local render/validation and source. A production submission was intentionally not made.",
+    "remedy": "Separate industry eligibility from tutorial rollout; keep the tutorial hidden and add a focused field-prospect intake test."
+  },
+  {
+    "id": "F05",
+    "title": "Failed integration-health reads look like zero open issues",
+    "severity": "Medium (P2)",
+    "customer": "Staff responsible for noticing delayed imports and integration failures.",
+    "consequence": "A failing probe can look clean, delaying investigation and producing a misleading quality report.",
+    "evidence": [
+      "E03",
+      "E10"
+    ],
+    "reproduction": "In a disposable in-memory database without integration_health_events, bootstrap the application and call OperationalStatusService::openIssues. Trace the returned value to the developer view.",
+    "observed": "The aggregator rescues read exceptions into total=0, empty severity and recent lists, with no known/error marker. The view renders the number as Integration health.",
+    "expected": "A failed probe displays unknown/unavailable, with safe diagnostic evidence and a last-success timestamp when available.",
+    "cause": "rescue fallback values encode legitimate zero data rather than an explicit failed observation.",
+    "confidence": "High for reproduced local failure semantics. Production database failure was not observed.",
+    "remedy": "Return a typed known/unknown status and display it truthfully; include a fault-injection verification for the aggregator and view."
+  },
+  {
+    "id": "F06",
+    "title": "Current setup guidance competes with historical doctrine and technical copy",
+    "severity": "Medium (P2)",
+    "customer": "Prospective owners, newly approved users and future maintainers.",
+    "consequence": "Buyers do not get one clear request-to-first-value explanation, and maintainers can mistake old readiness/ownership claims for present rules.",
+    "evidence": [
+      "E03",
+      "E04",
+      "E11",
+      "E15"
+    ],
+    "reproduction": "Read the current public plans/start copy and its tests, then compare the dated master readiness document and README_FOR_AGENTS with October first-workspace/mobile code and public company branding.",
+    "observed": "Plans uses implementation language about deferred billing writes. The start tests explicitly exclude a what-happens-next explanation. May readiness claims and old Fire Forge Tech ownership text coexist with October capabilities and Evergrove branding. Current documents span thousands of lines with multiple dated release assertions.",
+    "expected": "One short current product/setup map distinguishes request, approval, login, setup and first useful task; historical documents remain clearly historical.",
+    "cause": "Accumulated release notes and parallel public/technical descriptions without a single maintained current entry point.",
+    "confidence": "High for the conflicting text; no assumption that historical documents describe current production failure.",
+    "remedy": "Add concise current guidance and mark historical readiness sections by scope/date; replace implementation language on customer pages without rewriting legal or historical evidence."
+  }
+]

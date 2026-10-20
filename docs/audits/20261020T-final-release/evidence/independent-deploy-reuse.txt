@@ -1,0 +1,2 @@
+Setup	Resolve release verification plan	2026-10-20T10:03:56.6486215Z Reusing approved PR #440 for an identical release tree.
+Setup	Resolve release verification plan	2026-10-20T10:03:57.1614721Z Release verification mode: verified_pr_tree; full gate: false; migration safety: false.

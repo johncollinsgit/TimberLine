@@ -1,0 +1,19 @@
+{
+  "validation": "PASS",
+  "criterion_count": 27,
+  "rubric_unchanged": true,
+  "original_audit_and_accepted_previous_43_files_byte_preserved": true,
+  "raw_score": "97.0",
+  "half_up_score": 97.0,
+  "unverified_weight": 3.0,
+  "unknown_ids": [
+    "I2"
+  ],
+  "flow_count": 83,
+  "canonical_module_count": 57,
+  "audited_release": "0169e0e85cb08b83dc50e072bde9672db4e3d94e",
+  "checked_tree_equals_live_release_tree": true,
+  "audit_only_changes": true,
+  "source_tips_and_original_dirty_fingerprint_preserved": true,
+  "note": "Artifact/provenance/arithmetic validation only, not app/provider/device acceptance."
+}

@@ -1,0 +1,11 @@
+{
+  "release": "df9469eadaff3a857e95c4e711aac80e1e20cd67",
+  "created_utc": "2026-10-20T08:30:22+00:00",
+  "compressed_bytes": 106677164,
+  "uncompressed_bytes": 1092244453,
+  "sha256": "97f099c6cce1050a370585b72a4163c3f928b1b4356d27ef0dc3c86d7b0225cb",
+  "mode": "0600",
+  "gzip_verified": true,
+  "restore_drill": "not performed",
+  "private_backup_path_omitted": true
+}

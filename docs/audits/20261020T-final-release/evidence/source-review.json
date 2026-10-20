@@ -1,0 +1,56 @@
+{
+  "audited_release": "0169e0e85cb08b83dc50e072bde9672db4e3d94e",
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "4bcbf2e894474f6237d95f0bee41d269d51a9658c7a9b6078ea1fd52afcef81b"
+    },
+    {
+      "path": "README_FOR_AGENTS.md",
+      "sha256": "20172098ba94bd2b98ba116e4383c58854eb3e104927daa5176b66e9716110c7"
+    },
+    {
+      "path": "SYSTEM_SNAPSHOT.md",
+      "sha256": "ace653f754ae55ad468ea405df31e2532c5f9ba8aeada40501675a8dbf4bbf84"
+    },
+    {
+      "path": "docs/operations/everbranch-current-state.md",
+      "sha256": "801a2a37e335f424ce7e686286794e704ac20c986c9c0564d98e26ae29ea1343"
+    },
+    {
+      "path": "docs/operations/standard-public-offer.md",
+      "sha256": "ee6881e0af52861a332b30763f4fd3efdf0d68cf414cfb4f585cd07e064efee0"
+    },
+    {
+      "path": "docs/operations/coordinated-release-2026-10-20.md",
+      "sha256": "a4a564c7ca88499d2808fded1733959f61fc26b4b381a093aa98c211c30502c2"
+    },
+    {
+      "path": "app/Services/Tenancy/TenantModuleAccessResolver.php",
+      "sha256": "e069ada1988b644c1dc7884d0b018d8515b654c1bca506a88bd852f767da65f9"
+    },
+    {
+      "path": "app/Services/Tenancy/TenantPremiumProductSummaryService.php",
+      "sha256": "1889b8203907bba12423323f2d6a0ee7a3cb81f503616ce2bf86cc8793968105"
+    },
+    {
+      "path": "app/Http/Controllers/Marketing/MarketingModuleStoreController.php",
+      "sha256": "bc1b66b84329765d2bdeb5b54eed9d6002d36971b1fc500cfb30c3ce15ebd64d"
+    },
+    {
+      "path": "resources/views/marketing/modules.blade.php",
+      "sha256": "0533fb76570ff7b11fb6a9896433c6f62e15a649cde962ba84837d5ae747b1af"
+    },
+    {
+      "path": "tests/Feature/Everbranch/PremiumProductSummaryTest.php",
+      "sha256": "bf8fe2ade6e23a372267cc1a49b4ed5964b256d52398d19607ee0c5eb983efee"
+    },
+    {
+      "path": "tests/e2e/workspace/branch-settings.spec.ts",
+      "sha256": "a910dcf9b5cf40a7e7127677c9c944341fa186820b06a67d624add51f7c1c1d9"
+    }
+  ],
+  "F06": "Maintained map is linked first by README/agent/snapshot; old checkpoint explicitly dated, later readiness/deploy/audit authoritative. Exact offer, assisted activation, immutable audit and private performance collection limitations are explicit.",
+  "F07": "Canonical recorded assignment separate from effective authorization/public visibility. Owned/gated/setup/restricted/available/unknown summary uses existing product policies. Optional Teams component independent. No write helper/provider activation. Deployed same-tree 27 feature contracts and 22 synthetic UI/browser cases refresh scoped readiness evidence.",
+  "review_boundary": "Source review and exact-tree CI; no production authenticated customer journey or real provider call."
+}

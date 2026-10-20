@@ -1,0 +1,309 @@
+[
+  {
+    "id": "F01",
+    "title": "Public header links disappear against a white navigation bar",
+    "severity": "High (P1)",
+    "customer": "Any first-time desktop visitor trying to find plans, modules, examples or login.",
+    "consequence": "People can miss the primary information links and believe the navigation is empty. The dark launch-partner CTA remains usable.",
+    "evidence": [
+      "E07",
+      "E08",
+      "E11",
+      "E12"
+    ],
+    "reproduction": "Open /platform/promo at 1440 px in Chromium or WebKit, or Safari desktop. Read computed styles for .eb-studio-nav and its ordinary anchors.",
+    "observed": "Foreground and background are both rgb(255,255,255), giving 1:1 contrast. Safari visual inspection confirms effectively invisible links/logo. The existing interaction tests pass because visibility/role assertions do not assert readable contrast. Lighthouse also flags a separate workflow-button contrast of 3.58:1.",
+    "expected": "All shown navigation labels remain legible and meet the applicable contrast threshold in default, hover and focus states.",
+    "cause": "Confirmed CSS name collision: Marketing Desk globally reuses .eb-studio-nav with background:white after public-studio.css has set white foreground.",
+    "confidence": "High; reproduced live and locally in two engines, plus Safari.",
+    "remedy": "Scope or rename Marketing Desk selectors; preserve the intended public header theme; add a meaningful cross-surface contrast regression.",
+    "baseline_finding": true,
+    "status": "RESOLVED WITHIN STATED SCOPE",
+    "current_evidence": [
+      "P01",
+      "P03"
+    ],
+    "resolution_limit": "Fix exists in exact live tree and current scoped contracts. No claim of every authenticated production role/provider/device path.",
+    "previous_status": "RESOLVED WITHIN STATED SCOPE"
+  },
+  {
+    "id": "F02",
+    "title": "Public package and Messaging price descriptions disagree",
+    "severity": "High (P1)",
+    "customer": "An owner comparing Starter, Growth, Pro and messaging costs.",
+    "consequence": "A buyer cannot reliably decide what the quoted plan includes or what Messaging costs; staff must explain conflicting pages.",
+    "evidence": [
+      "E08",
+      "E11"
+    ],
+    "reproduction": "Compare /platform/start with /platform/plans, then compare Messaging in /explore/modules with the Messaging add-on card.",
+    "observed": "The start comparison describes Starter as including everything while plans reserve loyalty/birthdays and wishlist for higher tiers. Messaging shows $19.99/month on plans and $99/month plus $99 setup in Explorer. The first-six-month Launch Partner offer is internally consistent on current live pages; the older checkout has different historical post-introductory terms.",
+    "expected": "The same product has one unambiguous inclusion and price explanation, with bundle distinctions made explicit.",
+    "cause": "Confirmed separate display/config paths; modulePurchaseMetadata returns the first add-on containing a module, which selects SMS before the standalone Messaging add-on. The Starter wording conflict is a separate duplicated content problem.",
+    "confidence": "High for mismatch and source mechanism. No actual mischarge was tested or alleged.",
+    "remedy": "Use an explicit canonical purchase identity for standalone Messaging versus the SMS bundle and derive comparison wording from the catalog. Preserve every current price and accepted agreement.",
+    "baseline_finding": true,
+    "status": "RESOLVED WITHIN STATED SCOPE",
+    "current_evidence": [
+      "P01",
+      "P03",
+      "P04",
+      "P10"
+    ],
+    "resolution_limit": "Fix exists in exact live tree and current scoped contracts. No claim of every authenticated production role/provider/device path.",
+    "previous_status": "RESOLVED WITHIN STATED SCOPE"
+  },
+  {
+    "id": "F03",
+    "title": "Plans and intake expose internal, placeholder and legacy add-ons",
+    "severity": "Medium (P2)",
+    "customer": "A new owner selecting requested capabilities.",
+    "consequence": "Customers can request obsolete or internal options without understanding whether they exist or can be supplied. This increases manual triage and contradicts the safe public catalog.",
+    "evidence": [
+      "E03",
+      "E08",
+      "E11"
+    ],
+    "reproduction": "Open plans and expand the commercial interests on start. Compare AI Branch, aliases and future products with the canonical public/internal catalog.",
+    "observed": "AI Branch Starter/Growth/Pro appear publicly despite INTERNAL_ONLY module state. Legacy aliases and placeholder options are listed. The plans page can simultaneously claim no coming-soon modules are exposed while showing coming-soon add-on pills.",
+    "expected": "A single public visibility/purchase policy filters cards and interest inputs; roadmap interest, if intentionally offered later, is a distinct explicit product decision.",
+    "cause": "publicPlansPayload enumerates compatibility add-ons without the Explorer policy, and its options are reused in intake.",
+    "confidence": "High. This is choice exposure; automatic entitlement activation, charging or data exposure was not demonstrated.",
+    "remedy": "Apply fail-closed catalog visibility and canonical identity filtering to plans, option rendering and submitted interest validation; retain aliases internally.",
+    "baseline_finding": true,
+    "status": "RESOLVED WITHIN STATED SCOPE",
+    "current_evidence": [
+      "P01",
+      "P03",
+      "P06"
+    ],
+    "resolution_limit": "Fix exists in exact live tree and current scoped contracts. No claim of every authenticated production role/provider/device path.",
+    "previous_status": "RESOLVED WITHIN STATED SCOPE"
+  },
+  {
+    "id": "F04",
+    "title": "Electrician prospects are filtered out with a hidden tutorial",
+    "severity": "Medium (P2)",
+    "customer": "Tradespeople whose business is an electrical contractor.",
+    "consequence": "A currently demonstrated audience cannot accurately choose its business type during public intake; Other is a workaround.",
+    "evidence": [
+      "E04",
+      "E08",
+      "E11"
+    ],
+    "reproduction": "Inspect public start business types. Run PlatformPlansAndAccessRequestsTest with the default customer_electrician_tutorial flag off. Compare the supported post-login electrician workspace setup.",
+    "observed": "Electrician is absent and a submitted electrician key is rejected. The post-login wizard and field workspace support it.",
+    "expected": "Industry selection follows supported customer types independently of whether an optional customer tutorial is enabled.",
+    "cause": "filteredPublicBusinessTypes couples industry availability to features.customer_electrician_tutorial.",
+    "confidence": "High for local render/validation and source. A production submission was intentionally not made.",
+    "remedy": "Separate industry eligibility from tutorial rollout; keep the tutorial hidden and add a focused field-prospect intake test.",
+    "baseline_finding": true,
+    "status": "RESOLVED WITHIN STATED SCOPE",
+    "current_evidence": [
+      "P01",
+      "P03",
+      "P04",
+      "P10"
+    ],
+    "resolution_limit": "Fix exists in exact live tree and current scoped contracts. No claim of every authenticated production role/provider/device path.",
+    "previous_status": "RESOLVED WITHIN STATED SCOPE"
+  },
+  {
+    "id": "F05",
+    "title": "Failed integration-health reads look like zero open issues",
+    "severity": "Medium (P2)",
+    "customer": "Staff responsible for noticing delayed imports and integration failures.",
+    "consequence": "A failing probe can look clean, delaying investigation and producing a misleading quality report.",
+    "evidence": [
+      "E03",
+      "E10"
+    ],
+    "reproduction": "In a disposable in-memory database without integration_health_events, bootstrap the application and call OperationalStatusService::openIssues. Trace the returned value to the developer view.",
+    "observed": "The aggregator rescues read exceptions into total=0, empty severity and recent lists, with no known/error marker. The view renders the number as Integration health.",
+    "expected": "A failed probe displays unknown/unavailable, with safe diagnostic evidence and a last-success timestamp when available.",
+    "cause": "rescue fallback values encode legitimate zero data rather than an explicit failed observation.",
+    "confidence": "High for reproduced local failure semantics. Production database failure was not observed.",
+    "remedy": "Return a typed known/unknown status and display it truthfully; include a fault-injection verification for the aggregator and view.",
+    "baseline_finding": true,
+    "status": "RESOLVED WITHIN STATED SCOPE",
+    "current_evidence": [
+      "P01",
+      "P05"
+    ],
+    "resolution_limit": "Fix exists in exact live tree and current scoped contracts. No claim of every authenticated production role/provider/device path.",
+    "previous_status": "RESOLVED WITHIN STATED SCOPE"
+  },
+  {
+    "id": "F06",
+    "title": "Current setup/product/release entry points are coherent",
+    "severity": "Medium (P2)",
+    "customer": "Prospective owners, newly approved users and future maintainers.",
+    "consequence": "Buyers do not get one clear request-to-first-value explanation, and maintainers can mistake old readiness/ownership claims for present rules.",
+    "evidence": [
+      "E03",
+      "E04",
+      "E11",
+      "E15"
+    ],
+    "reproduction": "Read the current public plans/start copy and its tests, then compare the dated master readiness document and README_FOR_AGENTS with October first-workspace/mobile code and public company branding.",
+    "observed": "README, agent and snapshot entry points lead to one maintained product/setup/release map. Exact offer, staff-assisted activation, current vs dated checkpoint, historical agreements and source vs live evidence are explicit. Protected CI/tree-reused deploy, MySQL guards and immutable evidence are version-pinned. This new audit records the later release without a recursive docs deployment.",
+    "expected": "One short current product/setup map distinguishes request, approval, login, setup and first useful task; historical documents remain clearly historical.",
+    "cause": "Accumulated release notes and parallel public/technical descriptions without a single maintained current entry point.",
+    "confidence": "High for the conflicting text; no assumption that historical documents describe current production failure.",
+    "remedy": "Add concise current guidance and mark historical readiness sections by scope/date; replace implementation language on customer pages without rewriting legal or historical evidence.",
+    "baseline_finding": true,
+    "status": "RESOLVED WITHIN STATED SCOPE",
+    "current_evidence": [
+      "Q01",
+      "Q02",
+      "Q05"
+    ],
+    "current_observation": "README, agent and snapshot entry points lead to one maintained product/setup/release map. Exact offer, staff-assisted activation, current vs dated checkpoint, historical agreements and source vs live evidence are explicit. Protected CI/tree-reused deploy, MySQL guards and immutable evidence are version-pinned. This new audit records the later release without a recursive docs deployment.",
+    "previous_status": "PARTIALLY RESOLVED / DOCUMENTATION OPEN",
+    "resolution_limit": "Historical dated checkpoint remains historical; source/docs alone never prove later live state. No legal/entity verification.",
+    "title_at_previous_audit": "Current setup guidance competes with historical doctrine and technical copy",
+    "observed_at_previous_audit": "Plans uses implementation language about deferred billing writes. The start tests explicitly exclude a what-happens-next explanation. May readiness claims and old Fire Forge Tech ownership text coexist with October capabilities and Evergrove branding. Current documents span thousands of lines with multiple dated release assertions."
+  },
+  {
+    "id": "F07",
+    "title": "Assigned premium software shows authorized ownership/readiness",
+    "classification": "VERIFIED PRESENTATION GAP",
+    "severity": "P2",
+    "customer": "Existing advanced-software workspace owner/member",
+    "consequence": "An entitled customer cannot use this screen to tell whether premium software is owned, gated, awaiting setup or ready.",
+    "reproduction": "Run evidence/premium-ownership-probe.php in a network-denied testing/SQLite :memory: environment; compare canonical access=true, tenant catalog inclusion=false and key/name-only premium payload. Trace controller/view.",
+    "observed": "Current canonical assigned inventory is distinct from purchasable/public filtering. Your plan/Your branches/Add software/Setup show owned, gated, setup, restricted, available and unknown states; actual-policy open links, independent Teams components, member/financial boundaries and small-step guides have exact-tree synthetic/browser evidence. Production persistent login is not established by those fixtures.",
+    "expected": "An authorized ownership/readiness summary derived from canonical access and rollout state, without exposing internal software in the public/Add catalog or granting access.",
+    "evidence": [
+      "P07",
+      "P08"
+    ],
+    "confidence": "High for exact-source synthetic/config behavior; not a live authenticated customer session.",
+    "suggested_fix": "Separate authorized owned-product inventory from purchasable catalog filtering. Reuse canonical module mapping, access/financial gates and actual rollout state. Keep provider and entitlement state unchanged.",
+    "acceptance": [
+      "Owned premium fixture shows identity and accurate gated/setup/ready state.",
+      "Non-owner and foreign-tenant data stays hidden; financial terms retain existing policy.",
+      "Internal/default-off product never becomes a public choice or automatic activation.",
+      "Core tabs/search/guides and no-mutation preview behavior retain browser coverage."
+    ],
+    "effort": "1\u20132 engineer-days",
+    "previous_status": "VERIFIED PRESENTATION GAP",
+    "status": "RESOLVED WITHIN STATED SCOPE",
+    "current_evidence": [
+      "Q01",
+      "Q02",
+      "Q04"
+    ],
+    "current_observation": "Current canonical assigned inventory is distinct from purchasable/public filtering. Your plan/Your branches/Add software/Setup show owned, gated, setup, restricted, available and unknown states; actual-policy open links, independent Teams components, member/financial boundaries and small-step guides have exact-tree synthetic/browser evidence. Production persistent login is not established by those fixtures.",
+    "resolution_limit": "Exact-tree synthetic feature/browser acceptance, no persistent production customer/device/provider claim.",
+    "title_at_previous_audit": "Owned premium software is missing from Your branches and generic premium cards lack readiness",
+    "observed_at_previous_audit": "marketplace_in_your_branches_catalog=false despite canonical enabled entitlement. Marketplace remains intentionally internal/default-off and premium card remains generic discussion copy."
+  },
+  {
+    "id": "F08",
+    "title": "Simple paid activation remains an assisted commercial prerequisite",
+    "classification": "KNOWN COMMERCIAL LIMIT / NOT A NEW REGRESSION",
+    "severity": "P1 before unattended paid launch",
+    "customer": "New Simple customer and operator",
+    "consequence": "The visible offer is consistent, but a turnkey provider-confirmed $499/$299 purchase/fulfillment path has not been established.",
+    "observed": "standard is prospective metadata without an automatic checkout/fulfillment mapping; hosted billing fails closed rather than selecting an old tier. Existing customer agreements remain authoritative.",
+    "expected": "A reviewed exact-price agreement/usage disclosure and verified billing/activation handoff before collecting money or promising instant access.",
+    "evidence": [
+      "P01",
+      "P08"
+    ],
+    "confidence": "High for documented/source contract; real collection deliberately not exercised.",
+    "suggested_fix": "Define and validate the assisted agreement/setup runbook first. A separate approved sandbox billing/receipt/fulfillment effort can then prove exact terms and duplicate/failure behavior without altering legacy contracts.",
+    "acceptance": [
+      "Setup49900 and recurring29900 USD are exact for the new offer; usage terms and any premium/custom services are explicitly accepted.",
+      "Provider-confirmed successful and failed/retried/abandoned states do not grant early or duplicate access.",
+      "Existing subscriptions/agreements do not silently convert; no legacy price fallback.",
+      "Actual sandbox receipt, payment and activation reconcile; staff can explain pending next step."
+    ],
+    "effort": "0.5\u20131 day for assisted process; 2\u20134 days for separately scoped sandbox billing acceptance, access dependent",
+    "previous_status": "KNOWN COMMERCIAL LIMIT / NOT A NEW REGRESSION",
+    "current_evidence": [
+      "Q01",
+      "Q05"
+    ],
+    "status": "ASSISTED COMMERCIAL LIMIT / OPEN"
+  },
+  {
+    "id": "F09",
+    "title": "Disposable MySQL/customer snapshot recovery verified; production-backup assurance separate",
+    "classification": "ACCEPTANCE UNKNOWN (R4)",
+    "severity": "P1 before broad production reliance",
+    "observed": "Actual MySQL 8.4.11 disposable dump and guarded restore reconcile all 475 table row identities, schema, two-tenant customer/job/task/invoice/ledger graphs and totals. Actual authorized export/download bytes, supported customer snapshot checksums/dry-run/apply and six negative boundaries pass. Literal disposable-recovery criterion is satisfied. This is fictional rehearsal and an 11-table marketing/customer snapshot (3 populated), not production-provider backup assurance or universal export/import.",
+    "evidence": [
+      "P06"
+    ],
+    "confidence": "Confirmed absence of required acceptance evidence; not a claim that backup is broken.",
+    "suggested_fix": "Restore a synthetic/redacted backup to disposable MySQL8.4 and export a representative tenant. Reconcile row/relationship totals and prove restore procedure without touching production.",
+    "acceptance": [
+      "Disposable restore completes and representative customer/job/ledger relationships reconcile.",
+      "Export is tenant-scoped, complete for the chosen scenario and can be independently read.",
+      "Evidence contains version/backup identity and reconciliation results, with no private backup contents or credentials committed."
+    ],
+    "effort": "1\u20132 engineer-days once target and approved fixture exist",
+    "previous_status": "ACCEPTANCE UNKNOWN (R4)",
+    "status": "RESOLVED WITHIN STATED SCOPE",
+    "current_evidence": [
+      "Q06"
+    ],
+    "current_observation": "Actual MySQL 8.4.11 disposable dump and guarded restore reconcile all 475 table row identities, schema, two-tenant customer/job/task/invoice/ledger graphs and totals. Actual authorized export/download bytes, supported customer snapshot checksums/dry-run/apply and six negative boundaries pass. Literal disposable-recovery criterion is satisfied. This is fictional rehearsal and an 11-table marketing/customer snapshot (3 populated), not production-provider backup assurance or universal export/import.",
+    "resolution_limit": "Literal fictional disposable-backup/customer-export criterion satisfied. Production-provider backup restore/retention/disaster recovery remains unverified; customer snapshot not universal job/ledger export/import.",
+    "title_at_previous_audit": "Backup data restore and representative customer export are still unverified",
+    "observed_at_previous_audit": "A private pre-M backup is gzip-verified; real MySQL migration recovery, baseline and upgrade checks passed. No backup-data restore and reconciled customer export was performed."
+  },
+  {
+    "id": "F10",
+    "title": "Genuine provider and Marketplace launch acceptance remain unverified",
+    "classification": "ACCEPTANCE UNKNOWN (I2)",
+    "severity": "P1 before enabling affected collection or delivery",
+    "observed": "Current contract suites use fakes. All eight effective Marketplace flags are off, host unset; provider-write gates remain off. Migrations and mock payments/refunds do not establish an actual merchant/store/mailbox/device flow.",
+    "evidence": [
+      "P01",
+      "P06"
+    ],
+    "suggested_fix": "Use dedicated approved sandbox merchant/store/mailbox/queue and, where needed, bank/device fixtures. Prove signed event, uncertain outcome, retry, delivery/refund and reconciliation behavior before considering rollout gates.",
+    "acceptance": [
+      "Actual sandbox checkout/refund/invite delivery and representative queue/retry outcomes are independently observed.",
+      "Merchant/tenant/store/account and callback signatures reconcile to the original operation.",
+      "Domain/TLS, policies, merchant readiness, usage/rates and relevant device wallet acceptance have explicit evidence before enabling Marketplace."
+    ],
+    "effort": "2\u20135 engineer-days plus external provider/account review time",
+    "previous_status": "ACCEPTANCE UNKNOWN (I2)",
+    "current_evidence": [
+      "Q01",
+      "Q06",
+      "Q07"
+    ],
+    "status": "UNVERIFIED EXTERNAL ACCEPTANCE"
+  },
+  {
+    "id": "F11",
+    "title": "Lab measurements verified; physical-device/realistic-network performance remains open",
+    "classification": "X3 LAB MEASUREMENT ACCEPTANCE COMPLETE; BROADER JOURNEY PARTIAL",
+    "severity": "P2",
+    "observed": "Repeatable final-release anonymous local browser timings cover four representative routes, desktop and explicitly emulated mobile, three samples each. All 48 raw samples and failures are retained with readiness SHA before/after, versions, cache/network context and metric limits. Corrected48 samples permit local images, record complete in-viewport images and form the filtered lab baseline in both engines. Initial 48 samples with 84 WebKit blocked blob images/132 failed resources remain diagnostics; 48 analytics scripts remain excluded in the corrected run. Criterion credit measures timing/limitations completeness, not speed, full-page WebKit, real phone, budget, Lighthouse score or user percentile acceptance.",
+    "evidence": [
+      "P03",
+      "P09"
+    ],
+    "suggested_fix": "Use full application images and realistic network/CPU profiles, then actual phone/tablet/assistive-technology tasks. Preserve prior filtered runs as diagnostics; diagnose actual production bottlenecks before changing assets.",
+    "acceptance": [
+      "Versioned repeatable representative route timing and actual network/cache/device conditions are recorded.",
+      "Primary interaction and accessibility tasks work on representative physical devices.",
+      "Metrics distinguish local, emulated and production observations; accessibility100 is never substituted for performance."
+    ],
+    "effort": "0.5\u20131.5 engineer-days for baseline; optimization effort follows measured bottleneck",
+    "previous_status": "ACCEPTANCE UNKNOWN (X3)",
+    "status": "PARTIALLY RESOLVED / DEVICE AND FULL-PAGE PERFORMANCE OPEN",
+    "current_evidence": [
+      "Q08"
+    ],
+    "current_observation": "Repeatable final-release anonymous local browser timings cover four representative routes, desktop and explicitly emulated mobile, three samples each. All 48 raw samples and failures are retained with readiness SHA before/after, versions, cache/network context and metric limits. Corrected48 samples permit local images, record complete in-viewport images and form the filtered lab baseline in both engines. Initial 48 samples with 84 WebKit blocked blob images/132 failed resources remain diagnostics; 48 analytics scripts remain excluded in the corrected run. Criterion credit measures timing/limitations completeness, not speed, full-page WebKit, real phone, budget, Lighthouse score or user percentile acceptance.",
+    "title_at_previous_audit": "Final representative production/device performance is still unverified",
+    "observed_at_previous_audit": "Historical local simulated-mobile performance was around59\u201361 with poor LCP; final live functional/contrast smoke has no controlled production timing or physical-device acceptance."
+  }
+]

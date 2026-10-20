@@ -1,0 +1,286 @@
+{
+  "E01": {
+    "layer": "HISTORICAL_PREVIOUS_AUDIT/HISTORICAL_BASELINE",
+    "source": "prior-audit/evidence/baseline-original-artifacts.tar.gz",
+    "description": "evidence/environment.json \u2014 original branch/HEAD, preserved dirty-file list and diff fingerprint.",
+    "limit": "Evidence retained from the accepted 87.3 report at 00acdc1b or original baseline; not refreshed merely by this copy. Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E02": {
+    "layer": "HISTORICAL_PREVIOUS_AUDIT/HISTORICAL_BASELINE",
+    "source": "prior-audit/evidence/baseline-original-artifacts.tar.gz",
+    "description": "evidence/public-http.json \u2014 dated anonymous HTTP observations, including /ready release; no cookies/tokens retained.",
+    "limit": "Evidence retained from the accepted 87.3 report at 00acdc1b or original baseline; not refreshed merely by this copy. Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E03": {
+    "layer": "HISTORICAL_PREVIOUS_AUDIT/HISTORICAL_BASELINE",
+    "source": "prior-audit/evidence/baseline-original-artifacts.tar.gz",
+    "description": "evidence/source-manifest.json, document-index*.csv and module-inventory.json \u2014 production-version source and documentation inventory.",
+    "limit": "Evidence retained from the accepted 87.3 report at 00acdc1b or original baseline; not refreshed merely by this copy. Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E04": {
+    "layer": "HISTORICAL_PREVIOUS_AUDIT/HISTORICAL_BASELINE",
+    "source": "prior-audit/evidence/baseline-original-artifacts.tar.gz",
+    "description": "evidence/full-junit.xml, evidence/test-case-index.json \u2014 initial full isolated PHP run; 3,799 cases, 3,784 pass, 14 fail, one skipped.",
+    "limit": "Evidence retained from the accepted 87.3 report at 00acdc1b or original baseline; not refreshed merely by this copy. Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E05": {
+    "layer": "HISTORICAL_PREVIOUS_AUDIT/HISTORICAL_BASELINE",
+    "source": "prior-audit/evidence/baseline-original-artifacts.tar.gz",
+    "description": "evidence/targeted-recheck.xml, targeted-dns-recheck.xml, dns-fixtures-recheck.xml and test-summary.json \u2014 all 14 initial failures subsequently pass in focused environment-corrected reruns; no app patch.",
+    "limit": "Evidence retained from the accepted 87.3 report at 00acdc1b or original baseline; not refreshed merely by this copy. Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E06": {
+    "layer": "HISTORICAL_PREVIOUS_AUDIT/HISTORICAL_BASELINE",
+    "source": "prior-audit/evidence/baseline-original-artifacts.tar.gz",
+    "description": "Build/typecheck/node test summary recorded below; build.log hash in evidence/checks.json. Build output generated in temporary source only.",
+    "limit": "Evidence retained from the accepted 87.3 report at 00acdc1b or original baseline; not refreshed merely by this copy. Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E07": {
+    "layer": "HISTORICAL_PREVIOUS_AUDIT/HISTORICAL_BASELINE",
+    "source": "prior-audit/evidence/baseline-original-artifacts.tar.gz",
+    "description": "evidence/public-interactions.json \u2014 14/14 public interaction checks, Chromium and mobile WebKit.",
+    "limit": "Evidence retained from the accepted 87.3 report at 00acdc1b or original baseline; not refreshed merely by this copy. Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E08": {
+    "layer": "HISTORICAL_PREVIOUS_AUDIT/HISTORICAL_BASELINE",
+    "source": "prior-audit/evidence/baseline-original-artifacts.tar.gz",
+    "description": "evidence/browser-checks.json \u2014 24 local public-page viewport visits plus four production homepage observations, with computed styles/options.",
+    "limit": "Evidence retained from the accepted 87.3 report at 00acdc1b or original baseline; not refreshed merely by this copy. Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E09": {
+    "layer": "HISTORICAL_PREVIOUS_AUDIT/HISTORICAL_BASELINE",
+    "source": "prior-audit/evidence/baseline-original-artifacts.tar.gz",
+    "description": "evidence/auth-browser-create.json and synthetic-persistence.json \u2014 synthetic browser login/customer/job save/reload and independent DB read.",
+    "limit": "Evidence retained from the accepted 87.3 report at 00acdc1b or original baseline; not refreshed merely by this copy. Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E10": {
+    "layer": "HISTORICAL_PREVIOUS_AUDIT/HISTORICAL_BASELINE",
+    "source": "prior-audit/evidence/baseline-original-artifacts.tar.gz",
+    "description": "evidence/ops-failure-probe.json \u2014 absent health table causes misleading zero from aggregator; paired view traced in source.",
+    "limit": "Evidence retained from the accepted 87.3 report at 00acdc1b or original baseline; not refreshed merely by this copy. Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E11": {
+    "layer": "HISTORICAL_PREVIOUS_AUDIT/HISTORICAL_BASELINE",
+    "source": "prior-audit/evidence/baseline-original-artifacts.tar.gz",
+    "description": "evidence/source-observations.md \u2014 current public commercial/industry observations reconciled with source.",
+    "limit": "Evidence retained from the accepted 87.3 report at 00acdc1b or original baseline; not refreshed merely by this copy. Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E12": {
+    "layer": "HISTORICAL_PREVIOUS_AUDIT/HISTORICAL_BASELINE",
+    "source": "prior-audit/evidence/baseline-original-artifacts.tar.gz",
+    "description": "evidence/lighthouse-*.json \u2014 isolated local desktop and simulated-mobile diagnostics, with limitations.",
+    "limit": "Evidence retained from the accepted 87.3 report at 00acdc1b or original baseline; not refreshed merely by this copy. Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E13": {
+    "layer": "HISTORICAL_PREVIOUS_AUDIT/HISTORICAL_BASELINE",
+    "source": "prior-audit/evidence/baseline-original-artifacts.tar.gz",
+    "description": "route-inventory.csv, navigation-inventory.csv, screen-inventory.csv and jobs-and-flags.json \u2014 inventory, not proof of hands-on execution.",
+    "limit": "Evidence retained from the accepted 87.3 report at 00acdc1b or original baseline; not refreshed merely by this copy. Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E14": {
+    "layer": "HISTORICAL_PREVIOUS_AUDIT/HISTORICAL_BASELINE",
+    "source": "prior-audit/evidence/baseline-original-artifacts.tar.gz",
+    "description": "evidence/test-case-index.json \u2014 Tenancy, Auth, Search, FieldService, Mobile, Shopify surface and provider guard contract cases.",
+    "limit": "Evidence retained from the accepted 87.3 report at 00acdc1b or original baseline; not refreshed merely by this copy. Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "E15": {
+    "layer": "HISTORICAL_PREVIOUS_AUDIT/HISTORICAL_BASELINE",
+    "source": "prior-audit/evidence/baseline-original-artifacts.tar.gz",
+    "description": "evidence/source-observations.md \u2014 dated README/operating-document conflicts; historical claims not treated as current deployment proof.",
+    "limit": "Evidence retained from the accepted 87.3 report at 00acdc1b or original baseline; not refreshed merely by this copy. Original evidence at b0ff0c0a; not a fresh live authenticated observation."
+  },
+  "P01": {
+    "layer": "HISTORICAL_PREVIOUS_AUDIT/CURRENT_COMBINED_CI",
+    "sources": [
+      "prior-audit/evidence/checked-ci-metadata.json",
+      "prior-audit/evidence/checked-ci-result-lines.txt",
+      "prior-audit/evidence/followup-final-ci-summary.json"
+    ],
+    "description": "Same-tree Linux PHP 8.4 full regression: 4093 passing, 29247 assertions, three fixture-export skips; 8 synthetic settings and 34 public browser cases; synthetic provider contracts. Not real provider/production login proof.",
+    "limit": "Evidence retained from the accepted 87.3 report at 00acdc1b or original baseline; not refreshed merely by this copy. "
+  },
+  "P02": {
+    "layer": "HISTORICAL_PREVIOUS_AUDIT/DEPLOYMENT_AND_SOURCE_IDENTITY",
+    "sources": [
+      "prior-audit/evidence/source-and-preservation.json",
+      "prior-audit/evidence/production-deploy-metadata.json",
+      "prior-audit/evidence/deploy-reuse-plan.txt",
+      "prior-audit/evidence/followup-merge.json"
+    ],
+    "description": "Checked head and live merge have identical tree dfb891e7. Deploy reused passed exact-tree PR gates; final deploy Test/Build and Migration jobs were skipped, not rerun. Independent /ready confirms audited release.",
+    "limit": "Evidence retained from the accepted 87.3 report at 00acdc1b or original baseline; not refreshed merely by this copy. "
+  },
+  "P03": {
+    "layer": "HISTORICAL_PREVIOUS_AUDIT/LIVE_PUBLIC_BROWSER",
+    "sources": [
+      "prior-audit/evidence/final-live-smoke.json",
+      "prior-audit/evidence/final-live-smoke.log",
+      "prior-audit/evidence/release-final-smoke.spec.ts",
+      "prior-audit/evidence/release-smoke.spec.ts"
+    ],
+    "description": "22/22 coordinator GET/HEAD-only Chromium/WebKit cases at live release, including keyboard, dialogs, contrast, reduced motion, labels, responsive pages and electrician selection. No POST, production login or physical device.",
+    "limit": "Evidence retained from the accepted 87.3 report at 00acdc1b or original baseline; not refreshed merely by this copy. "
+  },
+  "P04": {
+    "layer": "HISTORICAL_PREVIOUS_AUDIT/FRESH_LIVE_PUBLIC_HTTP",
+    "sources": [
+      "prior-audit/evidence/fresh-public-http.json"
+    ],
+    "description": "Fresh independent anonymous GET: exact /ready plus /up, canonical start/plans/explorer and parent site return 200. Offer/fee/industry markers; no submission or credentials retained.",
+    "limit": "Evidence retained from the accepted 87.3 report at 00acdc1b or original baseline; not refreshed merely by this copy. "
+  },
+  "P05": {
+    "layer": "HISTORICAL_PREVIOUS_AUDIT/CURRENT_FAILURE_CONTRACTS",
+    "sources": [
+      "evidence/historical-related/docs/audits/20261020T-health-unknown/report.md",
+      "evidence/historical-related/tests/Feature/Landlord/DeveloperDashboardTest.php",
+      "prior-audit/evidence/checked-ci-result-lines.txt"
+    ],
+    "description": "Current full CI includes fault injection for count/severity/recent queries, first failure, successful zero/nonzero, provenance/cache failure, sanitized evidence and non-operator denial; no live fault injection.",
+    "limit": "Evidence retained from the accepted 87.3 report at 00acdc1b or original baseline; not refreshed merely by this copy. "
+  },
+  "P06": {
+    "layer": "HISTORICAL_PREVIOUS_AUDIT/COORDINATOR_RUNTIME_AND_MYSQL",
+    "sources": [
+      "prior-audit/evidence/final-runtime.json",
+      "prior-audit/evidence/combined-schema-review.json",
+      "prior-audit/evidence/marketplace-deploy-summary.json",
+      "prior-audit/evidence/backup-metadata-redacted.json"
+    ],
+    "description": "Effective Marketplace flags all off and host unset; Teams rollout unchanged. 55 actual MySQL migration recovery cases/352 assertions and baseline/upgrade/concurrency checks pass. Private backup metadata is gzip-verified; no data restore/export or real provider acceptance.",
+    "limit": "Evidence retained from the accepted 87.3 report at 00acdc1b or original baseline; not refreshed merely by this copy. "
+  },
+  "P07": {
+    "layer": "HISTORICAL_PREVIOUS_AUDIT/CURRENT_SYNTHETIC_OWNERSHIP_PROBE",
+    "sources": [
+      "prior-audit/evidence/premium-ownership-probe.php",
+      "prior-audit/evidence/premium-ownership-probe.json"
+    ],
+    "description": "Fresh isolated SQLite :memory: exact-source fixture: canonical M entitlement resolves true, but signed-in catalog omits it and premium payload has only key/name. No HTTP sent. This is a settings ownership/readiness gap, not activation proof.",
+    "limit": "Evidence retained from the accepted 87.3 report at 00acdc1b or original baseline; not refreshed merely by this copy. "
+  },
+  "P08": {
+    "layer": "HISTORICAL_PREVIOUS_AUDIT/CURRENT_SOURCE_AND_DOCUMENT_REVIEW",
+    "sources": [
+      "prior-audit/evidence/source-review.json",
+      "prior-audit/module-inventory.json"
+    ],
+    "description": "Current source/README/runbook/test assertions reviewed against exact release. Source inventory is not hands-on coverage. Retired offer/deployed-state drift remains in entry points.",
+    "limit": "Evidence retained from the accepted 87.3 report at 00acdc1b or original baseline; not refreshed merely by this copy. "
+  },
+  "P09": {
+    "layer": "HISTORICAL_PREVIOUS_AUDIT/HISTORICAL_LOCAL_PERFORMANCE",
+    "sources": [
+      "evidence/historical-related/docs/audits/20261020T-public-quality/evidence/lighthouse-summary.json",
+      "evidence/historical-related/docs/audits/20261020T-public-quality/report.md"
+    ],
+    "description": "Prior candidate local Lighthouse: accessibility 100 in 12 runs, mobile performance around59\u201361. Uncompressed loopback and simulated network do not prove final production/device performance; X3 remains unknown.",
+    "limit": "Evidence retained from the accepted 87.3 report at 00acdc1b or original baseline; not refreshed merely by this copy. "
+  },
+  "P10": {
+    "layer": "HISTORICAL_PREVIOUS_AUDIT/CURRENT_SETTINGS_AND_INTAKE_CONTRACTS",
+    "sources": [
+      "evidence/historical-related/docs/audits/20261020T-branch-settings/report.md",
+      "evidence/historical-related/docs/audits/20261020T-electrician-intake/report.md",
+      "prior-audit/evidence/checked-ci-result-lines.txt"
+    ],
+    "description": "Settings/role/tenant/price/wizard and electrician flag\u00d7intent cases included in final combined CI; browser settings use actual Blade exports with intercepted effects, not persistent production sessions.",
+    "limit": "Evidence retained from the accepted 87.3 report at 00acdc1b or original baseline; not refreshed merely by this copy. "
+  },
+  "Q01": {
+    "layer": "CURRENT_EXACT_TREE_CI",
+    "sources": [
+      "evidence/final-ci-metadata.json",
+      "evidence/ci-result-lines.txt",
+      "evidence/code-quality-metadata.json"
+    ],
+    "description": "4120 PHP/29511 assertions, six deliberate export skips, 22 settings and 34 public browser checks, actual MySQL55/352 and baseline/prior-upgrade/concurrency.",
+    "limit": "CI uses synthetic fixtures/provider fakes; no genuine external acceptance."
+  },
+  "Q02": {
+    "layer": "CURRENT_DEPLOYMENT",
+    "sources": [
+      "evidence/deployment.json",
+      "evidence/merge-result.json",
+      "evidence/merge-preview.json",
+      "evidence/source-and-preservation.json",
+      "evidence/independent-deploy-reuse.txt"
+    ],
+    "description": "0169 merge shares tree155f20 with checked19abee and R4 rehearsal; protected run39405227615 succeeded.",
+    "limit": "Final TestAndBuild/Migration jobs skipped through exact-PR-tree reuse; actual same-tree CI is separate."
+  },
+  "Q03": {
+    "layer": "CURRENT_LIVE_PUBLIC",
+    "sources": [
+      "evidence/live-ready.json",
+      "evidence/live-smoke.json",
+      "evidence/live-smoke.log"
+    ],
+    "description": "Exact ready release and up200; 22 GET/HEAD-only Chromium/WebKit public checks pass.",
+    "limit": "Coordinator collected, independently inspected recorded results; no production authenticated lifecycle or real device."
+  },
+  "Q04": {
+    "layer": "CURRENT_SOURCE_AND_SYNTHETIC_UI",
+    "sources": [
+      "evidence/source-review.json",
+      "evidence/implementation-evidence/report.md",
+      "evidence/implementation-evidence/premium-final-contracts.txt",
+      "evidence/implementation-evidence/browser-premium-evidence.txt",
+      "evidence/implementation-evidence/preservation.json"
+    ],
+    "description": "F07 canonical assignment/readiness summary, actual policy reuse and synthetic owner/member/unknown/optional-component/browser boundaries.",
+    "limit": "Implementation evidence labels candidate state historically; Q01/Q02 establish final same-tree release. No persistent production login."
+  },
+  "Q05": {
+    "layer": "CURRENT_DOCUMENTATION",
+    "sources": [
+      "evidence/source-review.json",
+      "evidence/implementation-evidence/documentation-validation.json",
+      "evidence/implementation-evidence/documentation-followup.md",
+      "evidence/independent-source-validation.json"
+    ],
+    "description": "F06 current map, exact offer, assisted setup and dated checkpoint/source/live distinctions.",
+    "limit": "Historical legal/entity language is not newly legally verified; later live release is identified by Q02/Q03."
+  },
+  "Q06": {
+    "layer": "CURRENT_SYNTHETIC_MYSQL_BACKUP_AND_CUSTOMER_EXPORT",
+    "sources": [
+      "evidence/r4/protocol.txt",
+      "evidence/r4/summary.json",
+      "evidence/r4/independent-validation.json",
+      "evidence/r4/commands.json",
+      "evidence/r4/source-sql-identity.json",
+      "evidence/r4/restored-sql-identity.json",
+      "evidence/r4/run.py",
+      "evidence/r4/probe.php",
+      "evidence/r4/cleanup.json"
+    ],
+    "description": "Actual MySQL8.4.11 dump/guarded restore; all475 table identities equal, linked SQL/app reads, real operator export/download, snapshot recovery and six rejection boundaries.",
+    "limit": "All records fictional. Independent review validates published scripts/results/hashes, not excluded raw SQL/export payload rerun. 11-table marketing/customer snapshot (3 populated), not universal job/ledger import. Production-provider backup assurance remains unknown."
+  },
+  "Q07": {
+    "layer": "CURRENT_READ_ONLY_RUNTIME",
+    "sources": [
+      "evidence/runtime-before.json",
+      "evidence/runtime-after.json",
+      "evidence/schema-after.txt"
+    ],
+    "description": "Marketplace eight effective flags off/host unset, Teams gates unchanged, approved schema fingerprint and retained rollback metadata.",
+    "limit": "Read-only coordinator observations, not provider operation/launch acceptance."
+  },
+  "Q08": {
+    "layer": "CURRENT_FILTERED_LAB_TIMINGS",
+    "sources": [
+      "evidence/timing-independent-validation.json",
+      "evidence/timings/samples.json",
+      "evidence/timings/summary.json",
+      "evidence/timings/collector.cjs",
+      "evidence/timings/independent-validation.json",
+      "evidence/timings/initial-image-filtered/samples.json",
+      "evidence/timings/initial-image-filtered/summary.json",
+      "evidence/timings/initial-image-filtered/measurement-limits.txt"
+    ],
+    "description": "Corrected48 sequential samples:4 routes/4 engine-profile combinations/3 each; before/after release pinned. All200, visible images complete; all16 min/median/max groups independently recomputed. Initial48 image-filtered samples with132failed resources preserved.",
+    "limit": "Mac connection/unthrottled/new context cache-disabled; mobile emulated.48 analytics scripts intentionally excluded in corrected run. Initial84 blob images blocked in WebKit and incomplete-image timings superseded. LCP bounded3sec; no real-user percentile, physical-device, full unfiltered speed budget or speed100 claim."
+  }
+}

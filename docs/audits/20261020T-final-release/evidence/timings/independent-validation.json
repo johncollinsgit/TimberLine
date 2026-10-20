@@ -1,0 +1,32 @@
+{
+  "checked_at_utc": "2026-10-20T10:16:22.516332+00:00",
+  "release": "0169e0e85cb08b83dc50e072bde9672db4e3d94e",
+  "collector_sha256": "a6a25ef394bb72c8845c7845aac4c360142d050d4e4e33eb43fea1cba43d666d",
+  "raw_samples_sha256": "a5426cdf9c93e4f9ab8e9b9d736836c0d64c99875147e008bec497751384d6ce",
+  "sample_count": 48,
+  "route_profile_groups": 16,
+  "all_status_200": true,
+  "load_errors": 0,
+  "http_error_responses": 0,
+  "page_errors": 0,
+  "local_image_reads_permitted": 84,
+  "in_viewport_images_complete": true,
+  "only_failed_resources": "48 intentionally blocked Cloudflare Insights analytics-script GETs",
+  "non_get_requests_seen": 0,
+  "websockets_seen": 0,
+  "lcp_nonnull_by_profile": {
+    "chromium-desktop": 12,
+    "chromium-emulated-mobile": 12,
+    "webkit-desktop": 12,
+    "webkit-emulated-mobile": 12
+  },
+  "all_samples_preserved": true,
+  "initial_v1": {
+    "samples": 48,
+    "failed_resource_entries": 132,
+    "blocked_local_blob_image_reads": 84,
+    "purpose": "retained incomplete-image diagnostics; superseded by V2 acceptance baseline",
+    "raw_samples_sha256": "26365d4efbba95d8368277de1fb6dac7f590a172527c2953077d76c8fae2ca66"
+  },
+  "physical_device_or_user_percentile_acceptance": false
+}

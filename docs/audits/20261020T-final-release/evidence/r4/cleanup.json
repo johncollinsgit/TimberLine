@@ -1,0 +1,14 @@
+{
+  "completed_at_utc": "2026-10-20T09:57:12.012502+00:00",
+  "only_verified_private_instance_used": true,
+  "fictional_databases_removed": [
+    "everbranch_r4_source_test",
+    "everbranch_r4_restore_test",
+    "everbranch_r4_guard_production"
+  ],
+  "server_shutdown_exit": 0,
+  "shutdown_complete_log_verified": true,
+  "socket_and_pid_removed": true,
+  "private_generated_datadir_removed": true,
+  "production_or_existing_database_touched": false
+}

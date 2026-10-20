@@ -1,0 +1,937 @@
+{
+  "release": "0169e0e85cb08b83dc50e072bde9672db4e3d94e",
+  "raw_samples_sha256": "26365d4efbba95d8368277de1fb6dac7f590a172527c2953077d76c8fae2ca66",
+  "sample_count": 48,
+  "groups": [
+    {
+      "profile": "chromium-desktop",
+      "route": "/explore/modules",
+      "samples": 3,
+      "status_samples": [
+        200,
+        200,
+        200
+      ],
+      "load_failure_count": 0,
+      "blocked_request_count": 3,
+      "failed_resource_count": 3,
+      "error_response_count": 0,
+      "page_error_count": 0,
+      "metrics_ms": {
+        "responseStart": {
+          "count": 3,
+          "min": 301.39999997615814,
+          "median": 326.09999999403954,
+          "max": 492.69999998807907
+        },
+        "domContentLoadedEventEnd": {
+          "count": 3,
+          "min": 379.5,
+          "median": 430.2999999821186,
+          "max": 575.6999999880791
+        },
+        "loadEventEnd": {
+          "count": 3,
+          "min": 379.5,
+          "median": 430.40000000596046,
+          "max": 576
+        },
+        "duration": {
+          "count": 3,
+          "min": 379.5,
+          "median": 430.40000000596046,
+          "max": 576
+        },
+        "lcpObservedMs": {
+          "count": 3,
+          "min": 384,
+          "median": 436,
+          "max": 580
+        },
+        "first-paint": {
+          "count": 3,
+          "min": 384,
+          "median": 436,
+          "max": 580
+        },
+        "first-contentful-paint": {
+          "count": 3,
+          "min": 384,
+          "median": 436,
+          "max": 580
+        }
+      },
+      "unsupported_or_unobserved_reasons": []
+    },
+    {
+      "profile": "chromium-desktop",
+      "route": "/platform/plans",
+      "samples": 3,
+      "status_samples": [
+        200,
+        200,
+        200
+      ],
+      "load_failure_count": 0,
+      "blocked_request_count": 3,
+      "failed_resource_count": 3,
+      "error_response_count": 0,
+      "page_error_count": 0,
+      "metrics_ms": {
+        "responseStart": {
+          "count": 3,
+          "min": 304.89999997615814,
+          "median": 359.09999999403954,
+          "max": 380.09999999403954
+        },
+        "domContentLoadedEventEnd": {
+          "count": 3,
+          "min": 417.5,
+          "median": 471,
+          "max": 490.59999999403954
+        },
+        "loadEventEnd": {
+          "count": 3,
+          "min": 418.09999999403954,
+          "median": 471.59999999403954,
+          "max": 491.09999999403954
+        },
+        "duration": {
+          "count": 3,
+          "min": 418.09999999403954,
+          "median": 471.59999999403954,
+          "max": 491.09999999403954
+        },
+        "lcpObservedMs": {
+          "count": 3,
+          "min": 420,
+          "median": 472,
+          "max": 492
+        },
+        "first-paint": {
+          "count": 3,
+          "min": 420,
+          "median": 472,
+          "max": 492
+        },
+        "first-contentful-paint": {
+          "count": 3,
+          "min": 420,
+          "median": 472,
+          "max": 492
+        }
+      },
+      "unsupported_or_unobserved_reasons": []
+    },
+    {
+      "profile": "chromium-desktop",
+      "route": "/platform/promo",
+      "samples": 3,
+      "status_samples": [
+        200,
+        200,
+        200
+      ],
+      "load_failure_count": 0,
+      "blocked_request_count": 3,
+      "failed_resource_count": 3,
+      "error_response_count": 0,
+      "page_error_count": 0,
+      "metrics_ms": {
+        "responseStart": {
+          "count": 3,
+          "min": 307.40000000596046,
+          "median": 314.90000000596046,
+          "max": 368.09999999403954
+        },
+        "domContentLoadedEventEnd": {
+          "count": 3,
+          "min": 433.40000000596046,
+          "median": 442.80000001192093,
+          "max": 541.0999999940395
+        },
+        "loadEventEnd": {
+          "count": 3,
+          "min": 445,
+          "median": 451.59999999403954,
+          "max": 550.3000000119209
+        },
+        "duration": {
+          "count": 3,
+          "min": 445,
+          "median": 451.59999999403954,
+          "max": 550.3000000119209
+        },
+        "lcpObservedMs": {
+          "count": 3,
+          "min": 448,
+          "median": 460,
+          "max": 556
+        },
+        "first-paint": {
+          "count": 3,
+          "min": 448,
+          "median": 460,
+          "max": 556
+        },
+        "first-contentful-paint": {
+          "count": 3,
+          "min": 448,
+          "median": 460,
+          "max": 556
+        }
+      },
+      "unsupported_or_unobserved_reasons": []
+    },
+    {
+      "profile": "chromium-desktop",
+      "route": "/platform/start",
+      "samples": 3,
+      "status_samples": [
+        200,
+        200,
+        200
+      ],
+      "load_failure_count": 0,
+      "blocked_request_count": 3,
+      "failed_resource_count": 3,
+      "error_response_count": 0,
+      "page_error_count": 0,
+      "metrics_ms": {
+        "responseStart": {
+          "count": 3,
+          "min": 301,
+          "median": 359.5,
+          "max": 363.39999997615814
+        },
+        "domContentLoadedEventEnd": {
+          "count": 3,
+          "min": 415.40000000596046,
+          "median": 434.19999998807907,
+          "max": 439.59999999403954
+        },
+        "loadEventEnd": {
+          "count": 3,
+          "min": 416.19999998807907,
+          "median": 434.89999997615814,
+          "max": 440.30000001192093
+        },
+        "duration": {
+          "count": 3,
+          "min": 416.19999998807907,
+          "median": 434.89999997615814,
+          "max": 440.30000001192093
+        },
+        "lcpObservedMs": {
+          "count": 3,
+          "min": 432,
+          "median": 448,
+          "max": 456
+        },
+        "first-paint": {
+          "count": 3,
+          "min": 432,
+          "median": 448,
+          "max": 456
+        },
+        "first-contentful-paint": {
+          "count": 3,
+          "min": 432,
+          "median": 448,
+          "max": 456
+        }
+      },
+      "unsupported_or_unobserved_reasons": []
+    },
+    {
+      "profile": "chromium-emulated-mobile",
+      "route": "/explore/modules",
+      "samples": 3,
+      "status_samples": [
+        200,
+        200,
+        200
+      ],
+      "load_failure_count": 0,
+      "blocked_request_count": 3,
+      "failed_resource_count": 3,
+      "error_response_count": 0,
+      "page_error_count": 0,
+      "metrics_ms": {
+        "responseStart": {
+          "count": 3,
+          "min": 306.7999999821186,
+          "median": 310.90000000596046,
+          "max": 454
+        },
+        "domContentLoadedEventEnd": {
+          "count": 3,
+          "min": 390.80000001192093,
+          "median": 405.90000000596046,
+          "max": 549.4000000059605
+        },
+        "loadEventEnd": {
+          "count": 3,
+          "min": 390.80000001192093,
+          "median": 405.90000000596046,
+          "max": 549.4000000059605
+        },
+        "duration": {
+          "count": 3,
+          "min": 390.80000001192093,
+          "median": 405.90000000596046,
+          "max": 549.4000000059605
+        },
+        "lcpObservedMs": {
+          "count": 3,
+          "min": 392,
+          "median": 408,
+          "max": 548
+        },
+        "first-paint": {
+          "count": 3,
+          "min": 392,
+          "median": 408,
+          "max": 548
+        },
+        "first-contentful-paint": {
+          "count": 3,
+          "min": 392,
+          "median": 408,
+          "max": 548
+        }
+      },
+      "unsupported_or_unobserved_reasons": []
+    },
+    {
+      "profile": "chromium-emulated-mobile",
+      "route": "/platform/plans",
+      "samples": 3,
+      "status_samples": [
+        200,
+        200,
+        200
+      ],
+      "load_failure_count": 0,
+      "blocked_request_count": 3,
+      "failed_resource_count": 3,
+      "error_response_count": 0,
+      "page_error_count": 0,
+      "metrics_ms": {
+        "responseStart": {
+          "count": 3,
+          "min": 306.30000001192093,
+          "median": 315.5,
+          "max": 362
+        },
+        "domContentLoadedEventEnd": {
+          "count": 3,
+          "min": 383.09999999403954,
+          "median": 395.19999998807907,
+          "max": 451.40000000596046
+        },
+        "loadEventEnd": {
+          "count": 3,
+          "min": 383.2000000178814,
+          "median": 395.30000001192093,
+          "max": 452
+        },
+        "duration": {
+          "count": 3,
+          "min": 383.2000000178814,
+          "median": 395.30000001192093,
+          "max": 452
+        },
+        "lcpObservedMs": {
+          "count": 3,
+          "min": 384,
+          "median": 396,
+          "max": 452
+        },
+        "first-paint": {
+          "count": 3,
+          "min": 384,
+          "median": 396,
+          "max": 452
+        },
+        "first-contentful-paint": {
+          "count": 3,
+          "min": 384,
+          "median": 396,
+          "max": 452
+        }
+      },
+      "unsupported_or_unobserved_reasons": []
+    },
+    {
+      "profile": "chromium-emulated-mobile",
+      "route": "/platform/promo",
+      "samples": 3,
+      "status_samples": [
+        200,
+        200,
+        200
+      ],
+      "load_failure_count": 0,
+      "blocked_request_count": 3,
+      "failed_resource_count": 3,
+      "error_response_count": 0,
+      "page_error_count": 0,
+      "metrics_ms": {
+        "responseStart": {
+          "count": 3,
+          "min": 302.7999999821186,
+          "median": 308.80000001192093,
+          "max": 312
+        },
+        "domContentLoadedEventEnd": {
+          "count": 3,
+          "min": 386.80000001192093,
+          "median": 391.09999999403954,
+          "max": 406.69999998807907
+        },
+        "loadEventEnd": {
+          "count": 3,
+          "min": 470.60000002384186,
+          "median": 477,
+          "max": 477.09999999403954
+        },
+        "duration": {
+          "count": 3,
+          "min": 470.60000002384186,
+          "median": 477,
+          "max": 477.09999999403954
+        },
+        "lcpObservedMs": {
+          "count": 3,
+          "min": 388,
+          "median": 392,
+          "max": 408
+        },
+        "first-paint": {
+          "count": 3,
+          "min": 388,
+          "median": 392,
+          "max": 408
+        },
+        "first-contentful-paint": {
+          "count": 3,
+          "min": 388,
+          "median": 392,
+          "max": 408
+        }
+      },
+      "unsupported_or_unobserved_reasons": []
+    },
+    {
+      "profile": "chromium-emulated-mobile",
+      "route": "/platform/start",
+      "samples": 3,
+      "status_samples": [
+        200,
+        200,
+        200
+      ],
+      "load_failure_count": 0,
+      "blocked_request_count": 3,
+      "failed_resource_count": 3,
+      "error_response_count": 0,
+      "page_error_count": 0,
+      "metrics_ms": {
+        "responseStart": {
+          "count": 3,
+          "min": 304.19999998807907,
+          "median": 311.80000001192093,
+          "max": 321.19999998807907
+        },
+        "domContentLoadedEventEnd": {
+          "count": 3,
+          "min": 379.19999998807907,
+          "median": 396.59999999403954,
+          "max": 399.89999997615814
+        },
+        "loadEventEnd": {
+          "count": 3,
+          "min": 379.30000001192093,
+          "median": 396.80000001192093,
+          "max": 400
+        },
+        "duration": {
+          "count": 3,
+          "min": 379.30000001192093,
+          "median": 396.80000001192093,
+          "max": 400
+        },
+        "lcpObservedMs": {
+          "count": 3,
+          "min": 384,
+          "median": 400,
+          "max": 404
+        },
+        "first-paint": {
+          "count": 3,
+          "min": 384,
+          "median": 400,
+          "max": 404
+        },
+        "first-contentful-paint": {
+          "count": 3,
+          "min": 384,
+          "median": 400,
+          "max": 404
+        }
+      },
+      "unsupported_or_unobserved_reasons": []
+    },
+    {
+      "profile": "webkit-desktop",
+      "route": "/explore/modules",
+      "samples": 3,
+      "status_samples": [
+        200,
+        200,
+        200
+      ],
+      "load_failure_count": 0,
+      "blocked_request_count": 3,
+      "failed_resource_count": 3,
+      "error_response_count": 0,
+      "page_error_count": 0,
+      "metrics_ms": {
+        "responseStart": {
+          "count": 3,
+          "min": 308,
+          "median": 389,
+          "max": 483
+        },
+        "domContentLoadedEventEnd": {
+          "count": 3,
+          "min": 437,
+          "median": 510,
+          "max": 608
+        },
+        "loadEventEnd": {
+          "count": 3,
+          "min": 437,
+          "median": 510,
+          "max": 608
+        },
+        "duration": {
+          "count": 3,
+          "min": 437,
+          "median": 510,
+          "max": 608
+        },
+        "lcpObservedMs": {
+          "count": 3,
+          "min": 433,
+          "median": 513,
+          "max": 605
+        },
+        "first-paint": null,
+        "first-contentful-paint": {
+          "count": 3,
+          "min": 433,
+          "median": 513,
+          "max": 605
+        }
+      },
+      "unsupported_or_unobserved_reasons": []
+    },
+    {
+      "profile": "webkit-desktop",
+      "route": "/platform/plans",
+      "samples": 3,
+      "status_samples": [
+        200,
+        200,
+        200
+      ],
+      "load_failure_count": 0,
+      "blocked_request_count": 3,
+      "failed_resource_count": 3,
+      "error_response_count": 0,
+      "page_error_count": 0,
+      "metrics_ms": {
+        "responseStart": {
+          "count": 3,
+          "min": 310,
+          "median": 321,
+          "max": 341
+        },
+        "domContentLoadedEventEnd": {
+          "count": 3,
+          "min": 431,
+          "median": 435,
+          "max": 470
+        },
+        "loadEventEnd": {
+          "count": 3,
+          "min": 435,
+          "median": 481,
+          "max": 485
+        },
+        "duration": {
+          "count": 3,
+          "min": 435,
+          "median": 481,
+          "max": 485
+        },
+        "lcpObservedMs": {
+          "count": 3,
+          "min": 437,
+          "median": 455,
+          "max": 479
+        },
+        "first-paint": null,
+        "first-contentful-paint": {
+          "count": 3,
+          "min": 427,
+          "median": 439,
+          "max": 467
+        }
+      },
+      "unsupported_or_unobserved_reasons": []
+    },
+    {
+      "profile": "webkit-desktop",
+      "route": "/platform/promo",
+      "samples": 3,
+      "status_samples": [
+        200,
+        200,
+        200
+      ],
+      "load_failure_count": 0,
+      "blocked_request_count": 45,
+      "failed_resource_count": 45,
+      "error_response_count": 0,
+      "page_error_count": 0,
+      "metrics_ms": {
+        "responseStart": {
+          "count": 3,
+          "min": 274,
+          "median": 279,
+          "max": 282
+        },
+        "domContentLoadedEventEnd": {
+          "count": 3,
+          "min": 446,
+          "median": 448,
+          "max": 453
+        },
+        "loadEventEnd": {
+          "count": 3,
+          "min": 459,
+          "median": 463,
+          "max": 475
+        },
+        "duration": {
+          "count": 3,
+          "min": 459,
+          "median": 463,
+          "max": 475
+        },
+        "lcpObservedMs": {
+          "count": 3,
+          "min": 442,
+          "median": 456,
+          "max": 470
+        },
+        "first-paint": null,
+        "first-contentful-paint": {
+          "count": 3,
+          "min": 420,
+          "median": 431,
+          "max": 438
+        }
+      },
+      "unsupported_or_unobserved_reasons": []
+    },
+    {
+      "profile": "webkit-desktop",
+      "route": "/platform/start",
+      "samples": 3,
+      "status_samples": [
+        200,
+        200,
+        200
+      ],
+      "load_failure_count": 0,
+      "blocked_request_count": 3,
+      "failed_resource_count": 3,
+      "error_response_count": 0,
+      "page_error_count": 0,
+      "metrics_ms": {
+        "responseStart": {
+          "count": 3,
+          "min": 286,
+          "median": 311,
+          "max": 346
+        },
+        "domContentLoadedEventEnd": {
+          "count": 3,
+          "min": 407,
+          "median": 438,
+          "max": 474
+        },
+        "loadEventEnd": {
+          "count": 3,
+          "min": 421,
+          "median": 454,
+          "max": 491
+        },
+        "duration": {
+          "count": 3,
+          "min": 421,
+          "median": 454,
+          "max": 491
+        },
+        "lcpObservedMs": {
+          "count": 3,
+          "min": 426,
+          "median": 450,
+          "max": 485
+        },
+        "first-paint": null,
+        "first-contentful-paint": {
+          "count": 3,
+          "min": 404,
+          "median": 435,
+          "max": 471
+        }
+      },
+      "unsupported_or_unobserved_reasons": []
+    },
+    {
+      "profile": "webkit-emulated-mobile",
+      "route": "/explore/modules",
+      "samples": 3,
+      "status_samples": [
+        200,
+        200,
+        200
+      ],
+      "load_failure_count": 0,
+      "blocked_request_count": 3,
+      "failed_resource_count": 3,
+      "error_response_count": 0,
+      "page_error_count": 0,
+      "metrics_ms": {
+        "responseStart": {
+          "count": 3,
+          "min": 315,
+          "median": 329,
+          "max": 422
+        },
+        "domContentLoadedEventEnd": {
+          "count": 3,
+          "min": 432,
+          "median": 443,
+          "max": 542
+        },
+        "loadEventEnd": {
+          "count": 3,
+          "min": 432,
+          "median": 443,
+          "max": 542
+        },
+        "duration": {
+          "count": 3,
+          "min": 432,
+          "median": 443,
+          "max": 542
+        },
+        "lcpObservedMs": {
+          "count": 3,
+          "min": 428,
+          "median": 440,
+          "max": 530
+        },
+        "first-paint": null,
+        "first-contentful-paint": {
+          "count": 3,
+          "min": 428,
+          "median": 440,
+          "max": 530
+        }
+      },
+      "unsupported_or_unobserved_reasons": []
+    },
+    {
+      "profile": "webkit-emulated-mobile",
+      "route": "/platform/plans",
+      "samples": 3,
+      "status_samples": [
+        200,
+        200,
+        200
+      ],
+      "load_failure_count": 0,
+      "blocked_request_count": 3,
+      "failed_resource_count": 3,
+      "error_response_count": 0,
+      "page_error_count": 0,
+      "metrics_ms": {
+        "responseStart": {
+          "count": 3,
+          "min": 279,
+          "median": 285,
+          "max": 351
+        },
+        "domContentLoadedEventEnd": {
+          "count": 3,
+          "min": 402,
+          "median": 408,
+          "max": 475
+        },
+        "loadEventEnd": {
+          "count": 3,
+          "min": 403,
+          "median": 408,
+          "max": 475
+        },
+        "duration": {
+          "count": 3,
+          "min": 403,
+          "median": 408,
+          "max": 475
+        },
+        "lcpObservedMs": {
+          "count": 3,
+          "min": 416,
+          "median": 425,
+          "max": 487
+        },
+        "first-paint": null,
+        "first-contentful-paint": {
+          "count": 3,
+          "min": 399,
+          "median": 405,
+          "max": 477
+        }
+      },
+      "unsupported_or_unobserved_reasons": []
+    },
+    {
+      "profile": "webkit-emulated-mobile",
+      "route": "/platform/promo",
+      "samples": 3,
+      "status_samples": [
+        200,
+        200,
+        200
+      ],
+      "load_failure_count": 0,
+      "blocked_request_count": 45,
+      "failed_resource_count": 45,
+      "error_response_count": 0,
+      "page_error_count": 0,
+      "metrics_ms": {
+        "responseStart": {
+          "count": 3,
+          "min": 277,
+          "median": 290,
+          "max": 301
+        },
+        "domContentLoadedEventEnd": {
+          "count": 3,
+          "min": 435,
+          "median": 447,
+          "max": 450
+        },
+        "loadEventEnd": {
+          "count": 3,
+          "min": 454,
+          "median": 464,
+          "max": 474
+        },
+        "duration": {
+          "count": 3,
+          "min": 454,
+          "median": 464,
+          "max": 474
+        },
+        "lcpObservedMs": {
+          "count": 3,
+          "min": 431,
+          "median": 444,
+          "max": 454
+        },
+        "first-paint": null,
+        "first-contentful-paint": {
+          "count": 3,
+          "min": 417,
+          "median": 431,
+          "max": 432
+        }
+      },
+      "unsupported_or_unobserved_reasons": []
+    },
+    {
+      "profile": "webkit-emulated-mobile",
+      "route": "/platform/start",
+      "samples": 3,
+      "status_samples": [
+        200,
+        200,
+        200
+      ],
+      "load_failure_count": 0,
+      "blocked_request_count": 3,
+      "failed_resource_count": 3,
+      "error_response_count": 0,
+      "page_error_count": 0,
+      "metrics_ms": {
+        "responseStart": {
+          "count": 3,
+          "min": 294,
+          "median": 306,
+          "max": 391
+        },
+        "domContentLoadedEventEnd": {
+          "count": 3,
+          "min": 417,
+          "median": 430,
+          "max": 509
+        },
+        "loadEventEnd": {
+          "count": 3,
+          "min": 432,
+          "median": 472,
+          "max": 526
+        },
+        "duration": {
+          "count": 3,
+          "min": 432,
+          "median": 472,
+          "max": 526
+        },
+        "lcpObservedMs": {
+          "count": 3,
+          "min": 431,
+          "median": 442,
+          "max": 524
+        },
+        "first-paint": null,
+        "first-contentful-paint": {
+          "count": 3,
+          "min": 414,
+          "median": 420,
+          "max": 511
+        }
+      },
+      "unsupported_or_unobserved_reasons": []
+    }
+  ],
+  "limits": [
+    "Emulated mobile viewport/UA/DPR on a Mac; no physical phone or assistive technology acceptance",
+    "Unsupported metrics remain null; no inferred zeros, speed score, user percentile or performance-budget acceptance",
+    "Blocked and failed resources remain in each sample; filtered resources can affect complete-page measurements"
+  ],
+  "not_a_lighthouse_speed_score": true,
+  "not_real_user_percentiles": true,
+  "physical_device_acceptance": false,
+  "all_slow_failed_samples_preserved": true,
+  "ready_pinned_before_after": true
+}

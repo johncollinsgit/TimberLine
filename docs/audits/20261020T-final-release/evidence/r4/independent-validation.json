@@ -1,0 +1,31 @@
+{
+  "checked_at_utc": "2026-10-20T09:56:06.597574+00:00",
+  "source_sha": "19abee58d6d4e5c275f15adc2f54b24b12fb6e69",
+  "source_tree": "155f20cb69f71b7af67aa53302a117c1cc0a3a96",
+  "tables_independently_equal": 475,
+  "sql_relationships_verified": true,
+  "two_tenant_app_graphs_verified": true,
+  "two_tenant_export_data_and_checksums_verified": true,
+  "actual_export_download_bytes_verified": true,
+  "negative_boundaries": {
+    "foreign_target": true,
+    "tamper": true,
+    "tenant_owner_not_operator": true,
+    "tenant_owner_download_denied": true,
+    "foreign_download_denied": true,
+    "route_context_mismatch": true
+  },
+  "raw_backup_or_export_payload_published": false,
+  "manifest": {
+    "summary.json": "0ecc64a2c95433275f1664937d11694f3f653fcdbfb227ac7690552ffb81a8d7",
+    "run.py": "9e149a54e7d6370225bd933f0c0f2f95834e26e8316ad8fc11e60727feff3dfe",
+    "source-fingerprint.stdout": "0a3eea8c6150fb6cb0a4bd329ac731cb11400196148d40016ace31d17d7246f9",
+    "reject-non-test-target.stderr": "d84f2908ae02f79d362bfc1d9b181b2a77f3bf71dc2d80e45173ea1bde0e90b8",
+    "protocol.txt": "7306857bc1a911d14d9e0fff83d58e471763ead962a4d98059346ce16fdd9b57",
+    "commands.json": "f9ab175d27de0bd6078e3994fef58a595f491df178cb4949dc0127fc15a7d24b",
+    "restored-sql-identity.json": "6a87064dd293d8db60658569b28eba94e87a660425ab37fc199d5c565e5ab2d2",
+    "probe.php": "d61d91c693d377e88a8aff9710fdba6cc52b420ec1547a73be240a1930bc5e8d",
+    "source-sql-identity.json": "6a87064dd293d8db60658569b28eba94e87a660425ab37fc199d5c565e5ab2d2",
+    "restore-fingerprint.stdout": "0a3eea8c6150fb6cb0a4bd329ac731cb11400196148d40016ace31d17d7246f9"
+  }
+}

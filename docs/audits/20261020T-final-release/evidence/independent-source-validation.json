@@ -1,0 +1,84 @@
+{
+  "unchanged_authorities_verified": true,
+  "checks": [
+    {
+      "path": "README.md",
+      "local_links": [
+        {
+          "target": "docs/operations/everbranch-current-state.md",
+          "exists": true
+        },
+        {
+          "target": "docs/operations/collins-fleet-selected-routes.md",
+          "exists": true
+        },
+        {
+          "target": "docs/operations/everbranch-mail-service.md",
+          "exists": true
+        },
+        {
+          "target": "SYSTEM_SNAPSHOT.md",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "path": "SYSTEM_SNAPSHOT.md",
+      "local_links": [
+        {
+          "target": "docs/operations/everbranch-current-state.md",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "path": "README_FOR_AGENTS.md",
+      "local_links": [
+        {
+          "target": "docs/operations/everbranch-current-state.md",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "path": "docs/operations/coordinated-release-2026-10-20.md",
+      "local_links": [
+        {
+          "target": "everbranch-current-state.md",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "path": "docs/operations/standard-public-offer.md",
+      "local_links": [
+        {
+          "target": "everbranch-current-state.md",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "path": "docs/operations/everbranch-current-state.md",
+      "local_links": [
+        {
+          "target": "standard-public-offer.md",
+          "exists": true
+        },
+        {
+          "target": "../audits/20261020T-premium-readiness-candidate/report.md",
+          "exists": true
+        },
+        {
+          "target": "coordinated-release-2026-10-20.md",
+          "exists": true
+        }
+      ]
+    },
+    {
+      "path": "docs/ui/UI_CHANGELOG.md",
+      "local_links": []
+    }
+  ],
+  "note": "Read-only hash/link validation, no app/unit/provider test."
+}

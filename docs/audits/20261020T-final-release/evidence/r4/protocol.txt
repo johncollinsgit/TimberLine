@@ -1,0 +1,64 @@
+R4 disposable MySQL backup/customer-export recovery protocol
+
+Scope: the original rubric-v1 R4 wording, not production-provider backup or
+retention/disaster-recovery assurance. Every record is fictional. No production
+backup, merchant key, private customer row, provider call or email is used.
+
+Environment: a newly initialized private MySQL8.4 datadir, bound only to
+127.0.0.1:33318, separate socket and PID. --no-defaults avoids existing server or
+client profiles. The runner checks @@datadir against its own private directory
+before resetting only its three fixed fictional databases. The application
+checkout is clean, version-pinned, and uses its own storage/compiled-view paths,
+testing key, array mail/session/cache and prevented outgoing HTTP.
+
+Commands (substitute only the isolated checkout/root; no real credentials):
+  mysqld --no-defaults --initialize-insecure --datadir=<drill-root>/mysql-private-data
+  mysqld --no-defaults --datadir=<drill-root>/mysql-private-data
+    --socket=<private-socket> --port=33318 --bind-address=127.0.0.1
+    --mysqlx=0 --skip-log-bin --pid-file=<private-pid>
+    --log-error=<private-log> --daemonize
+  python3 <drill-root>/run.py
+
+The machine's default sandbox initializer crashed before creating a database.
+The standard approved execution context initialized the new datadir successfully.
+The first standalone PHP harness completed its checks but hit PHPUnit-registry
+teardown without a PHPUnit runner; it was corrected to disconnect explicitly.
+These are harness/environment observations, not hidden application failures.
+Only a fully successful final version-pinned run is acceptance evidence.
+
+Runner phases (exact commands and exit statuses are recorded locally; published
+summary excludes private absolute paths and raw backup/export payloads):
+1. Pin git HEAD and tree, assert a clean checkout. Migrate the source test DB from
+   the actual repository schema and verify its committed metadata fingerprint.
+2. Canonical app models create two fictional tenants, owners, two customers each,
+   external identity links, assigned jobs/tasks, draft invoices, and independent
+   messaging-credit ledger/account pairs. No bespoke proof tables are substituted
+   for the application's data. A sentinel exists only to prove the target guard.
+3. A real authorized landlord export route writes the current11-table marketing
+   customer snapshot. Its authorized download route must return the exact bytes.
+4. An independent Python/mysql reader records every table's sorted row identity,
+   counts and hashes, plus explicit customer/job/task/invoice/user SQL joins and
+   both tenants' invoice/ledger totals. The app separately reads Eloquent graphs.
+5. Actual mysqldump --single-transaction --quick --skip-lock-tables --routines
+   --triggers --events --no-tablespaces --set-gtid-purged=OFF produces data+DDL.
+   gzip bytes, decompression and SHA256 are verified locally.
+6. The repository's unmodified scripts/ops/verify-mysql-backup-restore.sh must
+   reject a non-test-like name with exit1 and leave its sentinel unchanged. It
+   then restores the actual dump into the distinct empty restore_test target.
+7. Every table row identity, schema fingerprint, explicit SQL joins/totals, app
+   graphs and both tenants' actual customer-export data must equal the source.
+   Python independently checks export hashes, tenant scope, identities and links.
+8. In the restored fictional target only, damage tenantA customer fields and
+   delete its supported customer links. The existing snapshot service dry-run
+   must not mutate; actual apply must recover all exported data. TenantB is
+   unchanged. Foreign-target/tamper/unauthorized-owner/mismatched-route and
+   foreign-download attempts must fail through existing policy/guards.
+9. Record source/tree, versions, timings, commands, hashes and checks, then remove
+   the fictional databases and stop only the verified private server. Do not
+   commit raw SQL, generated private keys, passwords or customer payload files.
+
+The customer export is the existing marketing/customer snapshot, with11 declared
+tables and3 populated in this chosen scenario. It is not a universal job/ledger
+export/import. Linked job and ledger recovery is proved separately by the full
+database backup and both independent SQL and application reads. The successful
+synthetic rehearsal does not prove a production-provider backup can be restored.

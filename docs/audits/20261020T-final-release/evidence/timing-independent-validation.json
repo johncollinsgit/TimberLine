@@ -1,0 +1,19 @@
+{
+  "validation": "PASS",
+  "reviewed_at_utc": "2026-10-20T10:17:46.383423+00:00",
+  "release": "0169e0e85cb08b83dc50e072bde9672db4e3d94e",
+  "selected_protocol": "2-local-image-reads",
+  "selected_samples": 48,
+  "initial_samples_preserved": 48,
+  "initial_failed_resource_entries": 132,
+  "initial_blocked_blob_images": 84,
+  "corrected_only_failed_resource_entries": 48,
+  "corrected_blocked_blob_images": 0,
+  "in_viewport_images_complete": true,
+  "all_16_group_min_median_max_independently_recomputed": true,
+  "ready_sha_before_after_equal": true,
+  "criterion_X3_rating": 4,
+  "acceptance_judgment": "Original criterion requires repeatable representative local browser/Lighthouse timing with explicit limits, not a speed threshold or physical phone. Corrected48 samples satisfy that measurement check. Analytics exclusions and original incomplete-image failures remain explicit. No full unfiltered, real-device, real-user percentile or speed100 claim. WebKit exposes LCP/FCP here, but no first-paint entry; its absent first-paint summary remains null.",
+  "raw_samples_sha256": "a5426cdf9c93e4f9ab8e9b9d736836c0d64c99875147e008bec497751384d6ce",
+  "initial_raw_samples_sha256": "26365d4efbba95d8368277de1fb6dac7f590a172527c2953077d76c8fae2ca66"
+}

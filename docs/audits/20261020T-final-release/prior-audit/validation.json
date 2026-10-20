@@ -1,0 +1,24 @@
+{
+  "validation": "PASS",
+  "criteria_count": 27,
+  "original_rubric_bytes_unchanged": true,
+  "raw_score": "87.25",
+  "half_up_score": 87.3,
+  "baseline_raw_score": "75.25",
+  "baseline_half_up_score": 75.3,
+  "assessed_weight": 91.5,
+  "unknown_weight": 8.5,
+  "unknown_ids": [
+    "R4",
+    "I2",
+    "X3"
+  ],
+  "flow_count": 83,
+  "canonical_module_count": 57,
+  "audit_only_worktree_diff": true,
+  "evidence_paths_exist": true,
+  "production_release": "00acdc1b05b04e81356c53601f6a6f653dd6f843",
+  "checked_tree_equals_release_tree": true,
+  "source_tips_and_dirty_fingerprint_preserved": true,
+  "note": "Artifact consistency check, not an app/provider/restore/device test."
+}

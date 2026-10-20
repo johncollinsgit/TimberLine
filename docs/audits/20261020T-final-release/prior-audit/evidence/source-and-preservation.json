@@ -1,0 +1,18 @@
+{
+  "audited_release": "00acdc1b05b04e81356c53601f6a6f653dd6f843",
+  "audited_tree": "dfb891e758e0d4ce6824a2920be2d32171a72dbc",
+  "checked_head": "5d590371b2145b07acd642f8bca61de4b3f928f4",
+  "checked_tree": "dfb891e758e0d4ce6824a2920be2d32171a72dbc",
+  "audit_branch": "codex/everbranch-post-release-audit-20261020",
+  "original_rubric_sha256": "f4ecefe6861587da7b611eca3a7016f9597f74d8037b276a507eaa701ac71048",
+  "rubric_copy_sha256": "f4ecefe6861587da7b611eca3a7016f9597f74d8037b276a507eaa701ac71048",
+  "source_tips": {
+    "codex/everbranch-public-quality": "fb0a6cfa89fb5d785baf9b6b5ce72cf18ee4acde",
+    "codex/everbranch-branch-settings": "dc57b1dec023d5d445d6f13fc6d21175c955169a",
+    "codex/everbranch-electrician-intake": "1a6f1af0b400a7c80cdcfe7a70b46e03bf08498a",
+    "codex/everbranch-health-unknown": "63e48025f8a0458168ef50b5c56f5cc2a5f02e84"
+  },
+  "original_dirty_diff_sha256": "b3a08d4f7b42156b1ad3df2879f63104110c56673354b7879e82c8ed33dbc874",
+  "branch_scope": "Audit artifacts only; original work/stashes left untouched",
+  "captured_utc": "2026-10-20T09:01:03.674707+00:00"
+}

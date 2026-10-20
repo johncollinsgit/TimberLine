@@ -1,0 +1,16 @@
+{
+  "full_run_cases": 4126,
+  "passed": 4118,
+  "skipped": 6,
+  "failures": [
+    {
+      "name": "landlord can email a secure agreement to its customer from the agreement screen",
+      "class": "Tests.Feature.Agreements.AgreementWorkflowTest"
+    },
+    {
+      "name": "controlled website enrichment stores concise public evidence and updates explained fit",
+      "class": "Tests.Feature.Wholesale.WholesaleProspectDiscoveryTest"
+    }
+  ],
+  "failed_case_rerun": "The two inspected DNS-dependent fake-provider cases pass in dns-rerun.xml.gz; no real sends."
+}
