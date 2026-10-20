@@ -148,3 +148,14 @@ test('invalid preferences fail validation and daily emails resume next day only 
     expect($this->emails->send($this->owner->id, $this->space->id))->toBe('skipped');
     Mail::assertSentCount(2);
 });
+
+test('financial review requires confirmed SES acceptance and fails closed while the pilot is off', function (): void {
+    config(['trajectory.review_email_mailer' => 'ses_platform']);
+    expect($this->emails->deliveryReady())->toBeFalse();
+    config(['trajectory.review_email_mailer' => 'ses_platform_confirmed']);
+    expect($this->emails->deliveryReady())->toBeFalse();
+    config(['ses_migration.platform_enabled' => true, 'ses_migration.platform_key' => 'fixture',
+        'ses_migration.platform_secret' => 'fixture', 'ses_migration.platform_configuration_set' => 'platform-fixture',
+        'ses_migration.approved_attempt_cost_micros' => 1000]);
+    expect($this->emails->deliveryReady())->toBeTrue();
+});

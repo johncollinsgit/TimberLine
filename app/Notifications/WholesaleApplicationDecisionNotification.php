@@ -19,6 +19,7 @@ class WholesaleApplicationDecisionNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         $mail = (new MailMessage)->greeting('Hello '.$this->request->name.',');
+        $mail->withSymfonyMessage(fn ($message) => $message->getHeaders()->addTextHeader('X-Everbranch-Logical-Message-ID', \App\Support\Mail\PlatformMailIdentity::wholesale($this->request, 'decision')));
         if ($this->request->status === 'approved') {
             return $mail->subject('Your wholesale application is approved')
                 ->line('Welcome! Your shop is approved to order from our wholesale store.')

@@ -6,10 +6,14 @@ use Illuminate\Mail\Mailable;
 
 class TrajectoryReviewMail extends Mailable
 {
-    public function __construct(public string $recipientName, public string $spaceName, public int $spaceId, public int $reviewCount, public array $transactions) {}
+    public function __construct(public string $recipientName, public string $spaceName, public int $spaceId, public int $reviewCount, public array $transactions, public ?int $claimId = null) {}
 
     public function build(): self
     {
+        if ($this->claimId) {
+            $this->withSymfonyMessage(fn ($message) => $message->getHeaders()->addTextHeader('X-Everbranch-Logical-Message-ID', 'trajectory-review:'.$this->spaceId.':'.$this->claimId));
+        }
+
         return $this->from(config('mail.from.address'), 'Trajectory')
             ->subject('Trajectory: '.$this->reviewCount.' transaction'.($this->reviewCount === 1 ? '' : 's').' to review')
             ->view('emails.trajectory-review')->text('emails.trajectory-review-text')

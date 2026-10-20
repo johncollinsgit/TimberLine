@@ -180,23 +180,19 @@ Zero-rate contracts still record units/provider cost with zero customer charge;
 zero-charge periods do not produce overage invoices. Email overage invoicing and
 prepaid/postpaid billing remain the existing billing service's responsibility.
 
-The user's actual excluded-customer list has not yet been verified. There is no
-new hardcoded exception list in this migration. The legacy-provider tenant
-allowlist is a routing setting, not proof of a billing exemption. Verify actual
-tenant contract/exemption records and an invoice preview before any customer SES
-allowlist expansion; preserve those terms rather than inferring charges from AWS
-usage. Production's tenant messaging platform was disabled at baseline, so code
-tests do not prove live customer invoicing is active.
+The user confirmed the production email usage exclusions on October 20: Modern
+Forestry (1), Green Shield Pest Control (6), Evergrove Software LLC (10), and
+Fictional Cedar Works - Voice Pilot (14). Everbranch Admin is the landlord console
+with no tenant ID. See the explicit email-only policy below. Provider costs still
+belong to Evergrove for these sends. The legacy provider allowlist is routing,
+not billing policy; comped module access is not an overage exemption.
 
 Read-only production inspection found no explicit usage-exemption flags and no
-email usage settlements. Collins Electric has an active postpaid agreement with
-1,000 included emails and 5,000 micros ($0.005) per overage email. Front Yard Foods
-has the same usage terms but no active postpaid agreement. Modern Forestry's
-email/messaging module entitlements are `add_on_comped`; Front Yard Foods module
-access is `complimentary`; Wren's email entitlement has no explicit billing status.
-These module statuses do not establish free usage overages. No contract, rate,
-entitlement or exclusion was changed. Keep the user's exclusion clarification
-pending and all customer SES sends disabled until this ambiguity is resolved.
+email usage settlements before this policy. Collins Electric has an active
+postpaid agreement with 1,000 included emails and 5,000 micros ($0.005) per overage
+email. Front Yard Foods has those same usage terms but no active postpaid
+agreement. These contracts remain unchanged. Customer SES sending stays disabled
+until the policy is deployed/verified and provider acceptance tests pass.
 
 Defaults cap account attempts at 1,000/day, each tenant at 100/day, and aggregate
 rate at 1/second. `SES_APPROVED_ATTEMPT_COST_MICROS=0` blocks sending until an
@@ -210,7 +206,8 @@ Published October 20 pricing: selectable a-la-carte outbound $0.10/1,000 plus
 $0.005/tenant/month and $0.005/1,000 tenant emails; Essentials starts at
 $0.16/1,000 and may be the default for newly active account/region combinations.
 This account's current `us-east-1` plan is Essentials. Native tenants are an
-add-on under that plan; no native tenant has been created. Do not silently enroll
+add-on under that plan; the explicitly approved fictional tenant 900000001 is
+created with tenant-level BOUNCE/COMPLAINT suppression. Do not silently enroll
 in add-ons, change the plan or change buyer-facing pricing based on public rates.
 
 ### Prepared AWS approval scope
@@ -292,3 +289,196 @@ CI or actual SES delivery/event acceptance.
 - https://docs.aws.amazon.com/ses/latest/dg/tenants.html
 - https://docs.aws.amazon.com/ses/latest/dg/sending-email-suppression-list-tenant-level.html
 - https://aws.amazon.com/ses/pricing/
+
+## Platform application-mail outbox (separate, default off)
+
+The opt-in `ses_platform` named Laravel mailer freezes fully rendered MIME in
+`platform_email_messages` before sending. Both MIME and recipient addresses are
+encrypted; queue jobs contain delivery IDs only. One child record is created for
+each envelope recipient so quota, cost and event evidence are recipient-specific.
+Bcc and caller-supplied SES headers are removed from the frozen MIME. Sender,
+configuration set, content fingerprint, recipients and cost estimates cannot be
+replaced after enqueue. New additive tables have explicit named constraints,
+restart guards, retained-evidence recovery tests and a data-free MySQL baseline.
+
+The existing SendGrid SMTP default is unchanged. Platform AWS credentials and a
+separate configuration set are intentionally blank/unprovisioned. The existing
+simulator IAM user is not a production credential. Critical reset, verification,
+agreement, invoice and operator messages are platform expenses; this outbox never
+writes the tenant usage billing ledger or changes marketing consent. All customer
+marketing continues through its existing consent/unsubscribe and tenant billing
+lane. Native SES tenant selective pausing does not isolate the account's combined
+reputation, quotas or global account pause from platform mail. Separate AWS
+accounts would be required for a stronger reputation/account-failure boundary;
+no new account or paid resource is silently provisioned here.
+
+`SES_PLATFORM_SENDING_ENABLED=false` and the current default mailer preserve the
+rollback path. A pilot additionally needs separate reviewed runtime permissions,
+a non-marketing configuration set with approved signed event routing, an exact
+sender, explicit recipient allowlist, asynchronous queue connection and reviewed
+all-in attempt cost. The shared account limiter covers marketing and platform
+attempts; each lane has its own daily allowance. The platform defaults to 100
+attempts/day and 1 MiB frozen messages, requiring at least 1,000 micros of reviewed
+cost per recipient attempt (a conservative estimate, not a reconciled AWS bill).
+The approved account cost still defaults to zero, blocking sends. Do not lower
+estimates or reset daily limiter counters during an active budget period.
+
+The dedicated `ses-platform` queue is drained by the existing scheduler while
+its gate is on. A supervised worker may use the same queue instead; never use a
+sync queue or nest this transport in Laravel failover/round-robin mailers.
+`email:ses-platform-dispatch --limit=100` recovers only never-submitted `queued`
+records after lost queue dispatch. Gate-off jobs leave the outbox queued. Pilot
+recipient removal or frozen-context mismatch moves a record to `held` with a
+reason, so recovery cannot endlessly enqueue an invalid intent. Review backlog
+and token age before enabling/resuming a critical-mail pilot.
+
+Each submission durably claims before HTTP, disables SDK retries and uses
+5-second connection/20-second total SDK timeouts. A received opaque SES receipt
+means provider acceptance; it does not mean delivery. A network/5xx/empty receipt
+stays `unknown` or `submitting`; workers never resubmit it. Confirmed 4xx rejection
+is terminal. Signed, exact-topic/account SNS events bind the original submitted
+recipient, sender, configuration set, delivery tag and full opaque receipt, and
+can reconcile acceptance. Duplicate and late events cannot remove suppression or
+regress delivery. Permanent bounces and complaints hold that platform recipient;
+they do not silently alter tenant marketing opt-in.
+
+Rollback first disables platform enqueue, keeps `MAIL_MAILER=smtp`, and retains
+all outbox rows, event routing and credentials needed for reconciliation. The
+SMTP guard still blocks recipients with unknown/submitting SES attempts, and
+blocks repeated explicit logical IDs, so rollback cannot become blind failover.
+Retain `APP_PREVIOUS_KEYS` while any encrypted outbox evidence or recipient holds
+uses a prior key. Never delete evidence, set unknown/submitting back to queued,
+or resend just because a job failed. Resolve actual provider/event evidence
+before any operator-approved replacement; there is no automatic release of a
+held/unknown attempt in this change.
+
+Laravel's normal queued mailables/notifications use the stable queue UUID as
+logical identity. On retry, their already-frozen original job is acknowledged
+before rendering, preventing a second reset token from invalidating the frozen
+one. Arbitrary business queue jobs must supply a stable
+`X-Everbranch-Logical-Message-ID` (16–200 alphanumeric/colon/underscore/hyphen
+characters) for each logical mail; changed content/recipients under an existing
+ID fail closed. Synchronous user requests receive a new ID per invocation and
+are separate sends. Before a global default switch, audit all business-job mail
+calls and add stable IDs, including per-recipient/per-purpose distinctions.
+Do not switch the default until that inventory and actual non-customer delivery,
+bounce, complaint, retry, event and rollback acceptance evidence are recorded.
+
+### Application flow inventory and cutover order
+
+| Flow | Current implementation | SES cutover condition |
+| --- | --- | --- |
+| Tenant campaigns, direct messages, workflow email, rewards/reminders | `SendGridEmailService` → tenant gateway/dispatch adapter | Native tenant + verified sender/config set + consent/unsubscribe + durable delivery + usage reservation + explicit tenant gate; billing policy validated separately |
+| Password reset/verification, account approval, wholesale notices | Laravel notifications and ordinary mailables | Platform sender/recipient pilot, frozen token content and queue identity; actual delivery/event proof before expansion |
+| Operator snapshots, scent/rewards reports, product review alerts, mobile reminders | Scheduled/service Laravel mailables | Platform pilot after reviewing recipient purpose, existing delivery records and content identity; preserve per-tenant billing where the current gateway meters it |
+| Native Website order updates | Separate immutable notification snapshot and explicitly configured named mailer, with provider-acceptance receipt semantics | Remains on its current approved mailer. Its readiness accepts only `ses_platform_confirmed` with a reviewed matching sender, gates and cost. Stable order-transition identity preserves the existing provider receipt contract |
+| Trajectory financial review email | Separate configured mailer/readiness allowlist and durable finance-space claim | Remains on its current mailer. `ses_platform` remains rejected; `ses_platform_confirmed` preserves provider acceptance and uses the immutable finance claim as logical identity |
+| Soccer sign-in and registration/admin email | Laravel mailables; registration records inspect `getMessageId()` | Keep current provider during initial platform pilot. Registration has stable delivery IDs and must use the confirmed mailer for provider receipt semantics |
+
+The transport returns `outbox:<delivery-id>` with a `queued` header for local
+acceptance, never a generated ID that could be mistaken for an AWS receipt.
+Provider acceptance and lifecycle evidence live on the child delivery. A named
+non-customer pilot can test this core without changing every consumer. A global
+`MAIL_MAILER` switch is not approved or ready until actual provider acceptance,
+delivery/event and rollback pilots pass. Queue-only `ses_platform` is rejected as
+a global default, preventing receipt consumers from treating a local queue ID as
+provider acceptance. Use `ses_platform_confirmed` for reviewed receipt consumers.
+Queue services reached indirectly from `SendWebsiteOrderNotification`,
+`Trajectory/SendReviewEmail`, `SendMarketingDirectMessageBatch` and automation jobs
+were inspected; no unrelated pending feature was enabled or released.
+
+
+### Provider-acceptance compatibility
+
+`ses_platform_confirmed` uses the same immutable outbox, SDK and signed events,
+but returns only the actual persisted SES receipt for one recipient. It requires
+zero caller transaction depth. A `prepared` intent is committed before HTTP and
+is never picked up by the queued-intent recovery command. If the process stops
+before submission or rate admission blocks it, the originating business flow
+must revalidate its current state before any further operator action; the
+scheduler cannot later send a stale Website transition or financial review.
+Unknown/submitting outcomes keep the same quarantine and rollback fences.
+
+Website order transitions and Trajectory finance claims now supply stable logical
+identities and their readiness checks require the confirmed transport plus the
+reviewed SES sender, credentials, queue and budget configuration. Soccer
+registration/admin deliveries and rewards operator reports have stable IDs too.
+Wholesale application retries preserve a persistent logical generation (a new
+one only on an explicit enqueue/resend). When an outbox intent already exists,
+accepted outcomes are reconciled before rendering; pending/unknown ones are held
+without creating a replacement activation link. This does not alter Shopify
+credentials, storefronts, checkout, account policies or other paused releases.
+
+The current default remains SendGrid SMTP. The queue-only mode is for explicitly
+selected callers that understand queued acceptance. The confirmed mode preserves
+existing provider-acceptance semantics on a reviewed per-flow/default cutover.
+Multi-recipient messages require separate recipient sends or the explicit queue
+mode; they fail before a provider attempt in confirmed mode. Neither mode may
+participate in automatic cross-provider failover.
+
+### Isolated simulator application records
+
+The approved native tenant `everbranch-tenant-900000001` must not be inserted in
+the production tenants table, which would advance its auto-increment sequence.
+Simulator records instead live in a customer-free SQLite database at shared
+`storage/app/private/ses-simulator.sqlite`, mode 0600. Prepare it from the current
+migrations on this Mac with only tenant 900000001 (`ses-simulator-fixture`), then
+review/upload that nonsecret fixture. No production customer table is migrated,
+cloned, truncated or reset. Preserve fixture evidence after the test.
+
+`SES_SIMULATOR_FIXTURE_ENABLED=false` is default. When explicitly enabled for the
+approved test, the public webhook still verifies the exact SNS account/topic and
+AWS signature first. Only the exact native test tenant, marketing configuration
+set, sender and one of the three simulator addresses can enter the fixture lane.
+The database wrapper validates that the file is private and contains only that
+fictional tenant, selects it for the ordinary application event handler, then
+restores the production connection in `finally`. Invalid/missing fixture state
+fails instead of falling through to customer writes. SQLite support was verified
+on Forge. Local tests cover database restoration and rejection of customer-like
+fixture contents and any mismatched recipient/native context.
+
+The restricted simulator key may be read from the user-downloaded CSV and passed
+ephemerally to the approved simulator process. Never print it, commit it, put it
+in shell arguments, save it in Forge `.env` or a customer account, or broaden its
+permissions. The test process must use the private database and exact reviewed
+application release; runtime-only gates cap it at 20 attempts, one per second and
+a $1 variable budget with a conservative 1,000-micro attempt estimate. Production
+runtime credentials and customer sending remain separately unapproved.
+
+
+### Customer email usage exemptions (2026-10-20)
+
+`MARKETING_EMAIL_BILLING_EXEMPT_TENANT_IDS` is an explicit, email-only billing
+policy. The default is empty in source so numeric production IDs cannot exempt
+unrelated tenants in another environment. The user-confirmed production list is
+`1,6,10,14`: Modern Forestry, Green Shield Pest Control, Evergrove Software LLC,
+and Fictional Cedar Works - Voice Pilot. Everbranch Admin is the landlord console
+(`tenant_id = null`), not a tenant to charge; application mail is a platform cost.
+The user confirmed that AWS still charges Evergrove for excluded customer sends.
+
+Activate the exact list only after verifying the deployed code and those tenant
+IDs. This changes prospective customer email reservation charges to zero, while
+retaining sent units, allowance consumption, provider-cost estimates and an
+immutable `explicit-email-exclusion-v1` reservation/settlement audit. Existing
+reservations retain their original billing decision across configuration changes;
+review reconciliation before changing the list. Contracts, nonexcluded rates,
+SMS/MMS, module subscriptions and historic invoices are unchanged. Comped module
+status and the legacy provider routing list are not email usage exclusions.
+Provider-cost estimates are not a reconciled AWS bill.
+
+Acceptance covers both SES and SendGrid, included allowances, original contract
+rates, exactly-once credit/ledger settlement, excluded usage closing without an
+invoice, and nonexcluded reservation → settlement → one invoice across repeated
+billing runs. The scheduled invoice retry path uses the explicit tenant filter
+supported by `TenantDirectInvoice`; it must not call the unavailable
+`forAllTenants()` scope on that model.
+
+
+The foundation is deployed as commit `ad002aca3eeb9c01d524673ca3ef687451d302d5`,
+Forge release `80737576`, through the protected production workflow. The approved
+account `894665396752` and exact SNS topic are pinned in application configuration.
+The webhook authenticated a fresh AWS confirmation, and the approved HTTPS SNS
+subscription is confirmed. This proves subscription authentication only: no SES
+simulator delivery or application delivery/bounce/complaint event has yet been
+verified. SendGrid SMTP remains the application default and tenant SES sending
+remains off. The separate platform-outbox work is not in this release.

@@ -23,6 +23,7 @@ class TenantRewardsWishlistWeeklySummaryMail extends Mailable
     {
         if ($this->deliveryId !== null) {
             $this->withSymfonyMessage(function (\Symfony\Component\Mime\Email $message): void {
+                $message->getHeaders()->addTextHeader('X-Everbranch-Logical-Message-ID', 'operator-report:'.$this->deliveryId);
                 $message->getHeaders()->addTextHeader('X-SMTPAPI', json_encode(['unique_args' => [
                     'marketing_email_delivery_id' => (string) $this->deliveryId,
                     'tenant_id' => (string) data_get($this->report, 'tenant.id'),

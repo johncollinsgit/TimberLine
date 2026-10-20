@@ -19,7 +19,7 @@ class WebsiteOrderUpdateMail extends Mailable
 
     public function headers(): Headers
     {
-        return new Headers(messageId: $this->messageId);
+        return new Headers(messageId: $this->messageId, text: ['X-Everbranch-Logical-Message-ID' => 'website-order:'.hash('sha256', $this->messageId)]);
     }
 
     public function content(): Content

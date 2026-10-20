@@ -332,3 +332,15 @@ test('the explicit Laravel array transport renders one MIME message with the app
         ->and($message->getTextBody())->toContain('Total paid: $12.99')->toContain('&token=')->not->toContain('&amp;token=');
     Http::assertNothingSent();
 });
+
+test('platform order mail requires the confirmed mode and reviewed SES sender configuration', function (): void {
+    config(['managed_website.order_notifications_mailer' => 'ses_platform',
+        'managed_website.order_notifications_from_address' => 'no-reply@theeverbranch.com']);
+    expect($this->notifications->readiness($this->tenant)['ready'])->toBeFalse();
+    config(['managed_website.order_notifications_mailer' => 'ses_platform_confirmed']);
+    expect($this->notifications->readiness($this->tenant)['ready'])->toBeFalse();
+    config(['ses_migration.platform_enabled' => true, 'ses_migration.platform_key' => 'fixture',
+        'ses_migration.platform_secret' => 'fixture', 'ses_migration.platform_configuration_set' => 'platform-fixture',
+        'ses_migration.approved_attempt_cost_micros' => 1000]);
+    expect($this->notifications->readiness($this->tenant)['ready'])->toBeTrue();
+});

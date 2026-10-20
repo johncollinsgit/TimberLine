@@ -104,6 +104,7 @@ class TenantMessagingUsageService
             }
             $includedAvailable = max(0, $period->included_units - $period->used_units - $period->reserved_units);
             $chargedUnits = max(0, $units - $includedAvailable);
+            $exempt = $this->emailBillingExempt($tenantId, $channel);
             $rate = $this->buyerRate($tenantId, $channel);
             $amount = $chargedUnits * $rate;
             $providerCost = $units * $this->providerCost($provider, $channel);
@@ -130,7 +131,9 @@ class TenantMessagingUsageService
                 'idempotency_key' => 'reserve:'.$idempotencyKey,
                 'source_type' => $sourceType,
                 'source_id' => $sourceId,
-                'metadata' => ['charged_units' => $chargedUnits, 'rate_micros' => $rate, 'provider' => $provider],
+                'metadata' => ['charged_units' => $exempt ? 0 : $chargedUnits, 'rate_micros' => $rate, 'provider' => $provider,
+                    'email_billing_exempt' => $exempt, 'unbilled_overage_units' => $exempt ? $chargedUnits : 0,
+                    'billing_policy' => $exempt ? 'explicit-email-exclusion-v1' : 'existing-allowance-and-rate'],
                 'occurred_at' => now(),
             ]);
 
@@ -283,6 +286,7 @@ class TenantMessagingUsageService
             'credit_available_micros' => (int) ($credit?->availableMicros() ?? 0),
             'billing_mode' => $this->billingMode($tenantId),
             'overage_rate_micros' => $this->buyerRate($tenantId, $channel),
+            'email_billing_exempt' => $this->emailBillingExempt($tenantId, $channel),
             'pricing_version' => $this->pricingVersion($tenantId),
         ];
     }
@@ -429,8 +433,17 @@ class TenantMessagingUsageService
         return $channel === 'sms' && in_array('sms', $addons, true) ? 1000 : 0;
     }
 
+    public function emailBillingExempt(int $tenantId, string $channel = 'email'): bool
+    {
+        return $tenantId > 0 && strtolower(trim($channel)) === 'email'
+            && in_array($tenantId, array_map('intval', (array) config('marketing.messaging.platform.email_billing_exempt_tenant_ids', [])), true);
+    }
+
     protected function buyerRate(int $tenantId, string $channel): int
     {
+        if ($this->emailBillingExempt($tenantId, $channel)) {
+            return 0;
+        }
         $contractRate = data_get($this->activeUsageContract($tenantId)?->metadata, 'overage_rates_micros.'.$channel);
         if (is_numeric($contractRate)) {
             return max(0, (int) $contractRate);

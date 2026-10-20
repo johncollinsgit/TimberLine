@@ -87,7 +87,9 @@ class SoccerDeliveryService
                     return;
                 }
                 $summary = app(SoccerRegistrationSummaryService::class)->forEvent($tenant, $event);
-                $sent = \Illuminate\Support\Facades\Mail::to($payload['email'])->send(new \App\Mail\SoccerRegistrationSummaryMail($summary));
+                $mail = new \App\Mail\SoccerRegistrationSummaryMail($summary);
+                $mail->withSymfonyMessage(fn ($message) => $message->getHeaders()->addTextHeader('X-Everbranch-Logical-Message-ID', 'soccer-email:'.$tenant.':'.$delivery->id));
+                $sent = \Illuminate\Support\Facades\Mail::to($payload['email'])->send($mail);
                 if (! $sent) {
                     throw new \RuntimeException('Admin email was not accepted by the configured mailer.');
                 }
@@ -100,7 +102,9 @@ class SoccerDeliveryService
                     return;
                 }
                 $conversation = $service->findOrCreateEmailConversation($tenant, null, null, $payload['email'], 'Wren Family Soccer registration', ['source_type' => 'soccer_waitlist']);
-                $sent = \Illuminate\Support\Facades\Mail::to($payload['email'])->send(new \App\Mail\SoccerRegistrationMail($payload['body']));
+                $mail = new \App\Mail\SoccerRegistrationMail($payload['body']);
+                $mail->withSymfonyMessage(fn ($message) => $message->getHeaders()->addTextHeader('X-Everbranch-Logical-Message-ID', 'soccer-email:'.$tenant.':'.$delivery->id));
+                $sent = \Illuminate\Support\Facades\Mail::to($payload['email'])->send($mail);
                 if (! $sent) {
                     throw new \RuntimeException('Email was not accepted by the configured mailer.');
                 }

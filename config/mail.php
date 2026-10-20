@@ -53,6 +53,13 @@ return [
             'transport' => 'ses',
         ],
 
+        'ses_platform' => [
+            'transport' => 'ses_platform',
+        ],
+        'ses_platform_confirmed' => [
+            'transport' => 'ses_platform_confirmed',
+        ],
+
         'postmark' => [
             'transport' => 'postmark',
             // 'message_stream_id' => env('POSTMARK_MESSAGE_STREAM_ID'),
