@@ -53,6 +53,14 @@ class LaunchTeamWorkspace extends Command
 
             return self::FAILURE;
         }
+        if ($this->option('activate-config')) {
+            $release = (string) config('app.release_id');
+            if (! preg_match('/^[a-f0-9]{40}$/D', $release) || ! hash_equals($release, (string) getenv('RELEASE_ID'))) {
+                $this->error('Configuration activation requires the deployed RELEASE_ID from protected maintenance.');
+
+                return self::FAILURE;
+            }
+        }
         $areas = DB::transaction(function () use ($tenant, $owner, $authorization) {
             Tenant::whereKey($tenant->id)->lockForUpdate()->firstOrFail();
             $commercial = app(LandlordCommercialConfigService::class);
