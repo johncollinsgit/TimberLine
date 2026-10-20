@@ -8,6 +8,7 @@ use App\Models\TenantSiteMedia;
 use App\Models\User;
 use App\Models\WebsiteProduct;
 use App\Services\ManagedWebsite\ManagedWebsiteService;
+use App\Services\ManagedWebsite\WebsitePilotService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -150,7 +151,7 @@ test('bootstrap advertises only the currently available read-only preview capabi
     $this->getJson($bootstrap)->assertOk()->assertJsonPath('product_visualization.available', false);
 });
 
-test('native viewer URLs use only active verified routing and honor an included-domain-only setup', function (): void {
+test('native viewer URLs use only active routing and honor the setup record host restriction', function (): void {
     TenantSiteDomain::query()->create(['tenant_id' => $this->previewTenant->id, 'tenant_site_id' => $this->previewSite->id,
         'hostname' => 'reviewed-shop.example', 'status' => 'pending', 'is_primary' => true, 'verification_token' => 'synthetic-not-a-real-token']);
     $this->getJson($this->previewUrl)->assertOk()->assertJsonPath('allowed_hosts', ['app.theeverbranch.test', 'preview-fixture.theeverbranch.test']);
@@ -160,6 +161,25 @@ test('native viewer URLs use only active verified routing and honor an included-
         ->assertJsonPath('products.0.public_viewer_url', 'https://reviewed-shop.example/products/synthetic-barrel/visualize');
     $this->previewSite->setup()->create(['tenant_id' => $this->previewTenant->id, 'domain_choice' => 'everbranch_subdomain']);
     $this->getJson($this->previewUrl)->assertOk()->assertJsonPath('allowed_hosts', ['app.theeverbranch.test', 'preview-fixture.theeverbranch.test']);
+});
+
+test('a normal physical preview feed URL resolves through the actual public product viewer route', function (): void {
+    $response = $this->getJson($this->previewUrl)->assertOk()->assertJsonCount(1, 'products');
+    $this->get($response->json('products.0.public_viewer_url'))->assertOk()->assertSeeText($this->previewProduct->title);
+});
+
+test('a real included Website pilot cannot advertise physical preview routes excluded by its public policy', function (): void {
+    app(WebsitePilotService::class)->saveSetup($this->previewTenant, $this->previewSite, [], $this->previewActor);
+    $this->previewSite = $this->previewSite->fresh();
+    expect(data_get($this->previewSite->settings, 'domain_choice'))->toBe('everbranch_subdomain')
+        ->and($this->previewSite->setup->domain_choice)->toBe('everbranch_subdomain');
+    $publicUrl = 'https://preview-fixture.theeverbranch.test/products/'.$this->previewProduct->handle.'/visualize';
+    $this->get($publicUrl)->assertNotFound();
+    $this->getJson($this->previewUrl)->assertNotFound();
+    $this->getJson('/api/mobile/v1/workspaces/'.$this->previewTenant->slug.'/bootstrap')
+        ->assertOk()->assertJsonPath('product_visualization.available', false);
+    expect($this->previewProduct->fresh()->product_type)->toBe('physical');
+    Http::assertNothingSent();
 });
 
 test('connected renderer sites cannot advertise the native Website public viewer route', function (): void {

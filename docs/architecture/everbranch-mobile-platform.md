@@ -54,6 +54,9 @@ Only canonical eligible published native Website products and verified allowed
 HTTPS viewer/asset hosts are returned, in bounded pages of 25 scanned records.
 Descriptors contain finite data and no executable bundle URLs. Gates default
 off; native app inclusion is separate from merchant/model/device acceptance.
+Quote-only included Website pilots stay unavailable because their canonical
+public product policy excludes physical viewer routes; no commerce policy is
+widened by the native preview utility.
 See `docs/operations/product-visualization.md` for the connected-renderer limit.
 
 The tenant app is a separate repository at `../everbranch-mobile`, bundled with React/TypeScript and Capacitor for `com.everbranch.app` on iOS and Android. It does not wrap the production web app and does not replace or modify the Modern Forestry SwiftUI customer app. The initial lane is a US B2B pilot.

@@ -64,7 +64,10 @@ class MobileProductVisualizationService
     {
         $site = TenantSite::query()->forTenant($tenant)->where('status', 'published')->where('public_enabled', true)->first();
         $appOrigin = $this->httpsOrigin((string) config('app.url'));
-        if ($site === null || $appOrigin === null || ! $this->visuals->enabledFor($site) || $this->websites->publicPage($tenant, '') === null) {
+        // showVisualization keeps included Website pilots quote-only. Do not
+        // advertise physical viewer links that its public product policy rejects.
+        if ($site === null || data_get($site->settings, 'domain_choice') === 'everbranch_subdomain'
+            || $appOrigin === null || ! $this->visuals->enabledFor($site) || $this->websites->publicPage($tenant, '') === null) {
             return null;
         }
         // Keep the existing included-subdomain restriction authoritative, even

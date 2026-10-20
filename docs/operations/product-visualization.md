@@ -181,7 +181,16 @@ included-domain-only setup stays on its included host. Connected-renderer
 sites are excluded until their separately owned public viewer consumer/route is
 integrated; a backend descriptor alone does not establish that consumer.
 
-Mac source verification: 63 affected PHP cases / 1,069 assertions (18 native
+Included Website pilots prepared by `WebsitePilotService` retain their existing
+quote-only public product policy (`site.settings.domain_choice` is
+`everbranch_subdomain`). They cannot serve physical product viewer URLs, so the
+native capability/feed stays unavailable for those pilots. This does not change
+their commerce policy or treat every first-party hostname as a quote-only pilot.
+The regression prepares the actual pilot and checks its actual public viewer
+route as well as native feed/bootstrap; a setup-row-only host fixture is not
+evidence of physical viewer availability.
+
+Mac source verification: 65 affected PHP cases / 1,081 assertions (20 native
 feed cases, existing mobile platform, visualization and Website catalog); full
 root TypeScript/production build and its 16 Trajectory + 4 voice + 5 viewer Node
 cases; 10 synthetic Chromium/WebKit lifecycle cases at 390 px with strict
