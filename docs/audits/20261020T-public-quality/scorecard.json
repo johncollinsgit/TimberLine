@@ -1,0 +1,591 @@
+{
+  "rubric_version": "1",
+  "rating_scale": {
+    "0": "absent or verified broken for required purpose",
+    "1": "substantial implementation, intended outcome blocked",
+    "2": "useful basic outcome with substantial verified gaps",
+    "3": "expected use and important applicable boundary cases work, minor gaps",
+    "4": "all defined checks satisfied with suitable evidence"
+  },
+  "categories": [
+    {
+      "id": "W",
+      "name": "Customer workflow completeness and usefulness",
+      "weight": 25,
+      "criteria": [
+        {
+          "id": "W1",
+          "name": "Account request to first workspace",
+          "weight": 6,
+          "acceptance_checks": "Synthetic registration, approval/invite/setup and first useful task; validation/duplicate/inactive-account checks.",
+          "rating": 3,
+          "status": "ASSESSED",
+          "subtopic_score_out_of_100": 75,
+          "earned_points": 4.5,
+          "evidence_ids": [
+            "E04",
+            "E05",
+            "E09",
+            "E11"
+          ],
+          "reason": "Synthetic request, approval/setup and first-login contracts pass; electrician discovery remains a verified gap (F04).",
+          "rechecked_in_this_release": false
+        },
+        {
+          "id": "W2",
+          "name": "Field job lifecycle",
+          "weight": 7,
+          "acceptance_checks": "Synthetic tenant job create, read, edit, notes/material/time, completion/archive/restore; role and persistence checks.",
+          "rating": 4,
+          "status": "ASSESSED",
+          "subtopic_score_out_of_100": 100,
+          "earned_points": 7.0,
+          "evidence_ids": [
+            "E04",
+            "E09"
+          ],
+          "reason": "Job create/reload is browser-verified with linked customer persistence; field suites cover edit, notes, time, resources, archive/recycle/restore and negative roles.",
+          "rechecked_in_this_release": false
+        },
+        {
+          "id": "W3",
+          "name": "Retail operations",
+          "weight": 6,
+          "acceptance_checks": "Synthetic order/import/rewards/wholesale contract checks; invalid signatures, replay and store separation.",
+          "rating": 4,
+          "status": "ASSESSED",
+          "subtopic_score_out_of_100": 100,
+          "earned_points": 6.0,
+          "evidence_ids": [
+            "E04",
+            "E05"
+          ],
+          "reason": "Defined synthetic import/reward/wholesale contracts and signature/store/replay cases pass. Real Shopify storefront and provider acceptance are separately unverified in I2.",
+          "rechecked_in_this_release": false
+        },
+        {
+          "id": "W4",
+          "name": "Shared customer, team and class work",
+          "weight": 6,
+          "acceptance_checks": "Synthetic customer persistence, team messaging attachments, class enrollment/capacity and handoffs.",
+          "rating": 4,
+          "status": "ASSESSED",
+          "subtopic_score_out_of_100": 100,
+          "earned_points": 6.0,
+          "evidence_ids": [
+            "E04",
+            "E05"
+          ],
+          "reason": "Customer, team channel/attachment, class enrollment/capacity and cross-module server contracts pass in synthetic tests.",
+          "rechecked_in_this_release": false
+        }
+      ],
+      "earned_points": 23.5,
+      "unverified_weight": 0,
+      "verified_minimum_out_of_100": 94.0,
+      "possible_maximum_out_of_100": 94.0
+    },
+    {
+      "id": "R",
+      "name": "Reliability and data correctness",
+      "weight": 15,
+      "criteria": [
+        {
+          "id": "R1",
+          "name": "Persistence and validation",
+          "weight": 4,
+          "acceptance_checks": "Reviewed feature tests exercise save/reload and invalid input in representative core tasks.",
+          "rating": 4,
+          "status": "ASSESSED",
+          "subtopic_score_out_of_100": 100,
+          "earned_points": 4.0,
+          "evidence_ids": [
+            "E04",
+            "E09"
+          ],
+          "reason": "Representative feature assertions check persisted records, reload, invalid inputs and ownership; local browser save is independently read from SQLite.",
+          "rechecked_in_this_release": false
+        },
+        {
+          "id": "R2",
+          "name": "Retry and idempotency",
+          "weight": 4,
+          "acceptance_checks": "Reviewed duplicate/retry tests for provider events, messages and payments retain one intended result.",
+          "rating": 4,
+          "status": "ASSESSED",
+          "subtopic_score_out_of_100": 100,
+          "earned_points": 4.0,
+          "evidence_ids": [
+            "E04",
+            "E05"
+          ],
+          "reason": "Relevant duplicate event, clock, message, payment and workflow receipt contracts pass after fixture-only environment corrections.",
+          "rechecked_in_this_release": false
+        },
+        {
+          "id": "R3",
+          "name": "Failures and health visibility",
+          "weight": 3,
+          "acceptance_checks": "Observe public health and run history/failure contracts; errors must stay distinguishable from success.",
+          "rating": 2,
+          "status": "ASSESSED",
+          "subtopic_score_out_of_100": 50,
+          "earned_points": 1.5,
+          "evidence_ids": [
+            "E02",
+            "E04",
+            "E10"
+          ],
+          "reason": "Live readiness works and run-history tests pass, but failed integration-health reads become an apparently factual zero (F05).",
+          "rechecked_in_this_release": false
+        },
+        {
+          "id": "R4",
+          "name": "Recovery and customer export",
+          "weight": 4,
+          "acceptance_checks": "Restore a disposable MySQL backup and verify representative customer data export and recovery.",
+          "rating": null,
+          "status": "UNVERIFIED",
+          "subtopic_score_out_of_100": null,
+          "earned_points": null,
+          "evidence_ids": [
+            "E03"
+          ],
+          "reason": "No disposable MySQL backup/restore or complete customer export-and-recovery rehearsal was performed. Runbooks are not completion evidence.",
+          "rechecked_in_this_release": false
+        }
+      ],
+      "earned_points": 9.5,
+      "unverified_weight": 4,
+      "verified_minimum_out_of_100": 63.3,
+      "possible_maximum_out_of_100": 90.0
+    },
+    {
+      "id": "U",
+      "name": "Usability, onboarding, and navigation",
+      "weight": 15,
+      "criteria": [
+        {
+          "id": "U1",
+          "name": "First value and approval guidance",
+          "weight": 5,
+          "acceptance_checks": "Visitor understands request vs instant access; synthetic first-login/setup flow identifies useful next action.",
+          "rating": 2,
+          "status": "ASSESSED",
+          "subtopic_score_out_of_100": 50,
+          "earned_points": 2.5,
+          "evidence_ids": [
+            "E04",
+            "E09",
+            "E11"
+          ],
+          "reason": "Login/setup and a useful job work; public intake lacks a clear approval-to-first-task explanation and omits electricians (F04/F06).",
+          "rechecked_in_this_release": false
+        },
+        {
+          "id": "U2",
+          "name": "Navigation and module discovery",
+          "weight": 4,
+          "acceptance_checks": "Public links and filters work; canonical module visibility and authorized shell navigation have evidence.",
+          "rating": 3,
+          "status": "ASSESSED",
+          "subtopic_score_out_of_100": 75,
+          "earned_points": 3.0,
+          "evidence_ids": [
+            "Q01",
+            "Q02",
+            "Q03",
+            "Q04"
+          ],
+          "reason": "Public header and branch links are usable, choices carry into signup and internal/retired selections are rejected. The signed-in plan/branches/setup hierarchy still needs the requested progressive tab structure.",
+          "rechecked_in_this_release": true
+        },
+        {
+          "id": "U3",
+          "name": "Form feedback and recovery",
+          "weight": 3,
+          "acceptance_checks": "Core invalid/expired/duplicate submissions produce actionable feedback; public controls are usable.",
+          "rating": 4,
+          "status": "ASSESSED",
+          "subtopic_score_out_of_100": 100,
+          "earned_points": 3.0,
+          "evidence_ids": [
+            "E04",
+            "E05",
+            "E07",
+            "E09"
+          ],
+          "reason": "Defined synthetic validation, expired/invalid auth and form feedback checks pass; keyboard public controls work. This does not assert every form was manually exercised.",
+          "rechecked_in_this_release": false
+        },
+        {
+          "id": "U4",
+          "name": "Daily home and search",
+          "weight": 3,
+          "acceptance_checks": "Synthetic role-aware dashboard/search identify available next actions and suppress inaccessible content.",
+          "rating": 4,
+          "status": "ASSESSED",
+          "subtopic_score_out_of_100": 100,
+          "earned_points": 3.0,
+          "evidence_ids": [
+            "E04",
+            "E09"
+          ],
+          "reason": "Defined dashboard, authorized navigation and search contracts pass; empty field workspace provides create-job action and honest disconnected financial state.",
+          "rechecked_in_this_release": false
+        }
+      ],
+      "earned_points": 11.5,
+      "unverified_weight": 0,
+      "verified_minimum_out_of_100": 76.7,
+      "possible_maximum_out_of_100": 76.7
+    },
+    {
+      "id": "S",
+      "name": "Security, permissions, and tenant isolation",
+      "weight": 15,
+      "criteria": [
+        {
+          "id": "S1",
+          "name": "Tenant and object boundaries",
+          "weight": 6,
+          "acceptance_checks": "Synthetic A/B tenant host, membership, object and mobile API negative tests; no real-record enumeration.",
+          "rating": 4,
+          "status": "ASSESSED",
+          "subtopic_score_out_of_100": 100,
+          "earned_points": 6.0,
+          "evidence_ids": [
+            "E04",
+            "E14"
+          ],
+          "reason": "Defined synthetic A/B tenant, host, object, mobile and store negative contracts pass. This is scoped contract evidence, not a universal route audit.",
+          "rechecked_in_this_release": false
+        },
+        {
+          "id": "S2",
+          "name": "Role and financial boundaries",
+          "weight": 4,
+          "acceptance_checks": "Synthetic member/manager/owner/landlord and financial-field negative tests for representative workflows.",
+          "rating": 4,
+          "status": "ASSESSED",
+          "subtopic_score_out_of_100": 100,
+          "earned_points": 4.0,
+          "evidence_ids": [
+            "E04",
+            "E14"
+          ],
+          "reason": "Defined owner/admin/member/landlord and financial payload negative cases pass; no customer records were probed in production.",
+          "rechecked_in_this_release": false
+        },
+        {
+          "id": "S3",
+          "name": "Authentication and session controls",
+          "weight": 3,
+          "acceptance_checks": "Synthetic login, registration, verification, reset, 2FA and signed/expired-token contracts.",
+          "rating": 4,
+          "status": "ASSESSED",
+          "subtopic_score_out_of_100": 100,
+          "earned_points": 3.0,
+          "evidence_ids": [
+            "E04",
+            "E09",
+            "E14"
+          ],
+          "reason": "Synthetic password login/logout/reset/verification/2FA/signed-token tests pass; local browser cookie login succeeds.",
+          "rechecked_in_this_release": false
+        },
+        {
+          "id": "S4",
+          "name": "Sensitive data and integration gates",
+          "weight": 2,
+          "acceptance_checks": "Synthetic secret/private-field, unsigned-webhook and disabled-provider/host checks.",
+          "rating": 4,
+          "status": "ASSESSED",
+          "subtopic_score_out_of_100": 100,
+          "earned_points": 2.0,
+          "evidence_ids": [
+            "E04",
+            "E14"
+          ],
+          "reason": "Defined private-field, signed webhook, disabled-provider and host fail-closed cases pass in local tests.",
+          "rechecked_in_this_release": false
+        }
+      ],
+      "earned_points": 15.0,
+      "unverified_weight": 0,
+      "verified_minimum_out_of_100": 100.0,
+      "possible_maximum_out_of_100": 100.0
+    },
+    {
+      "id": "C",
+      "name": "Clarity of purpose, audience, and customer value",
+      "weight": 10,
+      "criteria": [
+        {
+          "id": "C1",
+          "name": "Purpose, audience and brand",
+          "weight": 3,
+          "acceptance_checks": "Public platform and parent explain business outcomes; demos are labeled and product families are not falsely conflated.",
+          "rating": 4,
+          "status": "ASSESSED",
+          "subtopic_score_out_of_100": 100,
+          "earned_points": 3.0,
+          "evidence_ids": [
+            "E02",
+            "E07",
+            "E11"
+          ],
+          "reason": "The public parent/platform distinction and business outcomes are understandable; industry examples explicitly identify fictional data. Separate products are not falsely assumed integrated.",
+          "rechecked_in_this_release": false
+        },
+        {
+          "id": "C2",
+          "name": "Prices and package promises",
+          "weight": 4,
+          "acceptance_checks": "Homepage, plans, start and explorer agree on seat limits, included modules, add-on prices and offer terms.",
+          "rating": 4,
+          "status": "ASSESSED",
+          "subtopic_score_out_of_100": 100,
+          "earned_points": 4.0,
+          "evidence_ids": [
+            "Q01",
+            "Q02",
+            "Q03",
+            "Q04"
+          ],
+          "reason": "One canonical $499 setup / $299 monthly Simple offer, conditional text/email/AI usage disclosure, included core branch list and separate unpriced premium products now agree across public landing, Plans, signup, Explorer and parent pricing. No invented seat/capacity or premium-rate promises.",
+          "rechecked_in_this_release": true
+        },
+        {
+          "id": "C3",
+          "name": "Availability and next steps",
+          "weight": 3,
+          "acceptance_checks": "Public discovery suppresses internal/legacy options and distinguishes live, assisted, gated and future capabilities.",
+          "rating": 3,
+          "status": "ASSESSED",
+          "subtopic_score_out_of_100": 75,
+          "earned_points": 2.25,
+          "evidence_ids": [
+            "Q01",
+            "Q02",
+            "Q03",
+            "Q04"
+          ],
+          "reason": "Only explicit safe included branches are displayed and accepted as selections; premium/internal/roadmap choices and retired offers fail closed. Fine-grained setup/readiness guidance in the signed-in branch experience remains a follow-up.",
+          "rechecked_in_this_release": true
+        }
+      ],
+      "earned_points": 9.25,
+      "unverified_weight": 0,
+      "verified_minimum_out_of_100": 92.5,
+      "possible_maximum_out_of_100": 92.5
+    },
+    {
+      "id": "A",
+      "name": "Shared platform architecture and maintainability",
+      "weight": 10,
+      "criteria": [
+        {
+          "id": "A1",
+          "name": "Canonical catalog and shared services",
+          "weight": 4,
+          "acceptance_checks": "Routes/UI reuse centralized module access, navigation and commercial contracts; exceptions are identified.",
+          "rating": 3,
+          "status": "ASSESSED",
+          "subtopic_score_out_of_100": 75,
+          "earned_points": 3.0,
+          "evidence_ids": [
+            "Q01",
+            "Q02",
+            "Q03",
+            "Q04"
+          ],
+          "reason": "Public offer and included branch choices reuse the canonical catalog and services. The legacy signed-in first-matching add-on display can still select a bundle price for Messaging and is a scoped follow-up.",
+          "rechecked_in_this_release": true
+        },
+        {
+          "id": "A2",
+          "name": "Ownership and domain separation",
+          "weight": 3,
+          "acceptance_checks": "Representative tenant policies/services/models and provider lanes have explicit ownership without parallel mutations.",
+          "rating": 4,
+          "status": "ASSESSED",
+          "subtopic_score_out_of_100": 100,
+          "earned_points": 3.0,
+          "evidence_ids": [
+            "Q01",
+            "Q02",
+            "Q03",
+            "Q04"
+          ],
+          "reason": "Existing backend tenant/provider ownership contracts continue to pass; the demonstrated cross-surface navigation collision is now scoped to its owning Workflow Studio. No provider or entitlement mutations were introduced.",
+          "rechecked_in_this_release": true
+        },
+        {
+          "id": "A3",
+          "name": "Documentation and release discipline",
+          "weight": 3,
+          "acceptance_checks": "Current doc entry points, setup, CI migration/release guards and evidence versioning are coherent and reproducible.",
+          "rating": 2,
+          "status": "ASSESSED",
+          "subtopic_score_out_of_100": 50,
+          "earned_points": 1.5,
+          "evidence_ids": [
+            "E03",
+            "E04",
+            "E05",
+            "E15"
+          ],
+          "reason": "Protected CI/release and migration practices are substantial; historical/current documentation and setup/test fixtures drift (F06).",
+          "rechecked_in_this_release": false
+        }
+      ],
+      "earned_points": 7.5,
+      "unverified_weight": 0,
+      "verified_minimum_out_of_100": 75.0,
+      "possible_maximum_out_of_100": 75.0
+    },
+    {
+      "id": "I",
+      "name": "Integrations and operational readiness",
+      "weight": 5,
+      "criteria": [
+        {
+          "id": "I1",
+          "name": "Integration contract behavior",
+          "weight": 2,
+          "acceptance_checks": "Synthetic mocked-provider tests cover signed events, failures, retries and disconnected/disabled state.",
+          "rating": 4,
+          "status": "ASSESSED",
+          "subtopic_score_out_of_100": 100,
+          "earned_points": 2.0,
+          "evidence_ids": [
+            "E04",
+            "E05"
+          ],
+          "reason": "Synthetic provider signature, replay, uncertain-state and disconnect contracts pass. All provider HTTP/mail in the focused DNS checks were faked.",
+          "rechecked_in_this_release": false
+        },
+        {
+          "id": "I2",
+          "name": "Live sandbox and recovery operations",
+          "weight": 3,
+          "acceptance_checks": "Verified disposable merchant/store and mailbox sandbox, queue/retry visibility and backup evidence; actual provider acceptance.",
+          "rating": null,
+          "status": "UNVERIFIED",
+          "subtopic_score_out_of_100": null,
+          "earned_points": null,
+          "evidence_ids": [
+            "E03"
+          ],
+          "reason": "No verified disposable merchant/store, provider mailbox, bank-link device, delivery/queue or restore acceptance environment was supplied or used.",
+          "rechecked_in_this_release": false
+        }
+      ],
+      "earned_points": 2.0,
+      "unverified_weight": 3,
+      "verified_minimum_out_of_100": 40.0,
+      "possible_maximum_out_of_100": 100.0
+    },
+    {
+      "id": "X",
+      "name": "Accessibility, responsiveness, and performance",
+      "weight": 5,
+      "criteria": [
+        {
+          "id": "X1",
+          "name": "Keyboard, labels and contrast",
+          "weight": 2,
+          "acceptance_checks": "Public keyboard activation/dialog focus/escape, readable header links and labeled forms have browser evidence.",
+          "rating": 4,
+          "status": "ASSESSED",
+          "subtopic_score_out_of_100": 100,
+          "earned_points": 2.0,
+          "evidence_ids": [
+            "Q01",
+            "Q02",
+            "Q03",
+            "Q04"
+          ],
+          "reason": "Header collision, demo pill, workflow controls, module descriptions and illustrated-workspace text now meet measured contrast checks. Keyboard, focus, form labels, reduced motion and 12 Lighthouse accessibility scores of 100 are verified locally.",
+          "rechecked_in_this_release": true
+        },
+        {
+          "id": "X2",
+          "name": "Responsive public surfaces",
+          "weight": 1.5,
+          "acceptance_checks": "Phone 390px, tablet 820px, desktop 1440px checks for core public pages; no horizontal overflow or lost primary CTA.",
+          "rating": 4,
+          "status": "ASSESSED",
+          "subtopic_score_out_of_100": 100,
+          "earned_points": 1.5,
+          "evidence_ids": [
+            "Q01",
+            "Q02",
+            "Q03",
+            "Q04"
+          ],
+          "reason": "Seven core public routes plus parent pricing are rechecked in Chromium/WebKit at 390, 820 and 1440px; no horizontal overflow or lost primary action. Visual baselines and public screenshots reviewed.",
+          "rechecked_in_this_release": true
+        },
+        {
+          "id": "X3",
+          "name": "Representative performance",
+          "weight": 1.5,
+          "acceptance_checks": "Record repeatable local browser/Lighthouse timings for representative public routes and note limits; no invented production percentile.",
+          "rating": null,
+          "status": "UNVERIFIED",
+          "subtopic_score_out_of_100": null,
+          "earned_points": null,
+          "evidence_ids": [
+            "Q01",
+            "Q02",
+            "Q03",
+            "Q04"
+          ],
+          "reason": "Repeated local Lighthouse measurements now exist, but simulated-mobile speed is poor and production/device performance remains unverified. Preserve the original unverified treatment; local evidence does not establish production performance.",
+          "rechecked_in_this_release": true
+        }
+      ],
+      "earned_points": 3.5,
+      "unverified_weight": 1.5,
+      "verified_minimum_out_of_100": 70.0,
+      "possible_maximum_out_of_100": 100.0
+    }
+  ],
+  "timestamp": "2026-10-20T07:33:18.454048+00:00",
+  "scope": "Release 1 candidate on latest Teams production source; local synthetic tests and public browser evidence. Production verification is recorded separately after release.",
+  "identifiers": {
+    "working_checkout_commit": "Commit containing this report; exact deployed SHA recorded after release",
+    "working_branch": "codex/everbranch-public-quality",
+    "source_test_commit": "b0ff0c0af2dbcb4edd07d98347dac0a39b7c8617",
+    "observed_production_release": "b0ff0c0af2dbcb4edd07d98347dac0a39b7c8617",
+    "php": "8.5.2 local; repository CI uses 8.4",
+    "database": "disposable SQLite; in-memory for PHP tests, separate file for browser fixtures",
+    "candidate_base_commit": "1912ae104b44e3687f74a7af823973b047abd7fa"
+  },
+  "raw_score_unrounded": 81.75,
+  "raw_score": 81.8,
+  "unverified_weight": 8.5,
+  "assessed_weight": 91.5,
+  "evidence_coverage_percent": 91.5,
+  "evidence_coverage_definition": "Weight of assessed rubric criteria, not line/branch/route/automated-test coverage.",
+  "possible_score_interval_unrounded": [
+    81.75,
+    90.25
+  ],
+  "possible_score_interval": [
+    81.8,
+    90.3
+  ],
+  "provisional": true,
+  "readiness_cap": null,
+  "gate_findings": [],
+  "gate_assessment": {
+    "cross_tenant_or_authorization_or_destructive_loss": "No triggering defect verified in the defined synthetic checks. Untested production behavior is not declared safe.",
+    "blocked_core_promised_workflow": "No total inability verified in the exercised core tasks. Broken public discovery and messaging are recorded, but a working request CTA and synthetic first-value flow remain."
+  },
+  "adjusted_score_unrounded": 81.75,
+  "adjusted_score": 81.8,
+  "readiness_assessment": "Public accessibility and pricing/branch discovery improved; production performance, real provider acceptance and backup/restore remain unverified. New commercial interest is staff-reviewed and does not activate billing."
+}

@@ -1,0 +1,157 @@
+[
+  {
+    "path": "evidence/baseline-scorecard.json",
+    "bytes": 22397,
+    "sha256": "cadab48337748d6ff94da33d7e6a0dac6ceecaf518197aed183675c5579b837e"
+  },
+  {
+    "path": "evidence/browser-results.json",
+    "bytes": 14121,
+    "sha256": "c0ce6aa0769717e552701339fd77154c7fc5ffb9b6fb131ca24cc94d8d50ad5c"
+  },
+  {
+    "path": "evidence/build.log",
+    "bytes": 15622,
+    "sha256": "d362a5ee633a38616d9b5b5271bc2de837d1b7b029deadb337443fcaacdfc42a"
+  },
+  {
+    "path": "evidence/catalog-preservation.json",
+    "bytes": 202,
+    "sha256": "c703d16cdc3c4e1ba380413a060d5078fa8f9cc666e102a89ec3e978f5baa233"
+  },
+  {
+    "path": "evidence/dns-rerun.xml",
+    "bytes": 1470,
+    "sha256": "d9fe69c697fc4e50a8bd9e6a1240e0ed2545f891adf7794c5dc250fb596d5a1f"
+  },
+  {
+    "path": "evidence/full-junit.xml",
+    "bytes": 1827468,
+    "sha256": "ee5d44ce1c150bef7b09922845c6015763ee56ef72b4b6ce6aa3a3df022b93d7"
+  },
+  {
+    "path": "evidence/lighthouse/explorer-desktop-1.json.gz",
+    "bytes": 185997,
+    "sha256": "a77ac5c94ae15b83ee54f5c0da650b9d637807b39ba83164f686085697604dd1"
+  },
+  {
+    "path": "evidence/lighthouse/explorer-desktop-2.json.gz",
+    "bytes": 185913,
+    "sha256": "81ed364e872cfcf5e20609f887f36f90dd50be4c87990e82caff5ce5a3aec06a"
+  },
+  {
+    "path": "evidence/lighthouse/explorer-mobile-1.json.gz",
+    "bytes": 204428,
+    "sha256": "3c43e25396dc6261b3052b64bd8e02510a6c3fcbdc31686aa625eadb71ebfe69"
+  },
+  {
+    "path": "evidence/lighthouse/explorer-mobile-2.json.gz",
+    "bytes": 187062,
+    "sha256": "d7190615923e8742be705a56de4413e8069b43db65b59f7b4b2a0f72144047b7"
+  },
+  {
+    "path": "evidence/lighthouse/home-desktop-1.json.gz",
+    "bytes": 534598,
+    "sha256": "1337ce8cff6e2c85bda6175672c104dea17747bc2cbb444652649b1919706380"
+  },
+  {
+    "path": "evidence/lighthouse/home-desktop-2.json.gz",
+    "bytes": 529038,
+    "sha256": "f355091a69a0b6ccf6c67b80863d1fd4986ade5266fdfb3dd53a6c0f66431194"
+  },
+  {
+    "path": "evidence/lighthouse/home-mobile-1.json.gz",
+    "bytes": 459731,
+    "sha256": "a9d1a98445c3f097fc7368db2dd2ecaa5d457b2de746ce2e1746eeff78cd3bc2"
+  },
+  {
+    "path": "evidence/lighthouse/home-mobile-2.json.gz",
+    "bytes": 456399,
+    "sha256": "e70d4f7f3eff54df34973914061e0133763de0440b8921a3cd6f0c8fa31eaf64"
+  },
+  {
+    "path": "evidence/lighthouse/plans-desktop-1.json.gz",
+    "bytes": 180724,
+    "sha256": "a8229dc7c062e1e734a455c0e74f24fcf5eef13aa5e646c562df3f517abaef50"
+  },
+  {
+    "path": "evidence/lighthouse/plans-desktop-2.json.gz",
+    "bytes": 183512,
+    "sha256": "5056dcc453a575f04d4db5317d5de39b371e98eb8532551234ba192328e88416"
+  },
+  {
+    "path": "evidence/lighthouse/plans-mobile-1.json.gz",
+    "bytes": 204125,
+    "sha256": "7b6d27c1c88c45809715825be5ad2d08804e965065769ad79c05e785c5077e6e"
+  },
+  {
+    "path": "evidence/lighthouse/plans-mobile-2.json.gz",
+    "bytes": 201471,
+    "sha256": "ef902512cf2c7d9337068487f251b006f1dd8a433cb52bf2eff2afddfc5b5d6d"
+  },
+  {
+    "path": "evidence/lighthouse-summary.json",
+    "bytes": 3495,
+    "sha256": "5de2ffb32cb60947f8970793a53c257aa0050eabbd9f06728aa7edfa5150cbe3"
+  },
+  {
+    "path": "evidence/lint.log",
+    "bytes": 318,
+    "sha256": "e73080f6bbdfef0d8b783e352cba3fd2a341dbd087094c305d0d8fdb18dbc73f"
+  },
+  {
+    "path": "evidence/measure-local-lighthouse.py",
+    "bytes": 2475,
+    "sha256": "47db9422f87323569ea30540ac14e53debba01e83b9d6e9a38412b269701623b"
+  },
+  {
+    "path": "evidence/php-summary.json",
+    "bytes": 625,
+    "sha256": "4febd9006c9ccad060621201eeed4305b5c62a23a39d6b888a74783a70f5d375"
+  },
+  {
+    "path": "evidence/screenshots/evergrove-pricing-390.png",
+    "bytes": 175845,
+    "sha256": "dd762fe41bcdeef6078c8b6b3186ed8205b19e63947a8052941fe9a7b945d844"
+  },
+  {
+    "path": "evidence/screenshots/plans-1440.png",
+    "bytes": 108523,
+    "sha256": "dfbf660913078159d94c2ab240364c1a32723f69e0a5e7f5e4468e50aed2600f"
+  },
+  {
+    "path": "evidence/screenshots/start-390.png",
+    "bytes": 85061,
+    "sha256": "6da9f782ea9e33810d24385b92d44c602da5f337f5f6e905e86d92b754c52f5d"
+  },
+  {
+    "path": "evidence/workspace-preservation.json",
+    "bytes": 195,
+    "sha256": "dae2627e9b33078dd4a8509c385b62979bfa9cc1cf4f529e0c41b4522d6197da"
+  },
+  {
+    "path": "implementation-scope.md",
+    "bytes": 2278,
+    "sha256": "dc99bee79c87ced727d5ae0275e2882d4a0e9f94e4ad7fab7ffe9dab40a247f3"
+  },
+  {
+    "path": "report.md",
+    "bytes": 9979,
+    "sha256": "b3180be32ad2bf3e52cf060402ca339b62ecbf1dad36af32602713a3294aff45"
+  },
+  {
+    "path": "rubric-v1.json",
+    "bytes": 8477,
+    "sha256": "f4ecefe6861587da7b611eca3a7016f9597f74d8037b276a507eaa701ac71048"
+  },
+  {
+    "path": "scorecard.json",
+    "bytes": 24132,
+    "sha256": "3ad5c89fbe7b10e668520ce8cf22665e2b06988d064a8c349421e279daaf8173"
+  },
+  {
+    "path": "validation.json",
+    "bytes": 278,
+    "sha256": "5978d375eb1d53c5e6493c9913779b33462bc90a6ec53bc01ae1eed3fa27d60e"
+  }
+]

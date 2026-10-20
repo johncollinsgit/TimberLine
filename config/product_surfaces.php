@@ -6,8 +6,41 @@ $contactDomain = $contactDomain !== '' ? $contactDomain : 'theeverbranch.com';
 $salesContact = 'sales@'.$contactDomain;
 $upgradesContact = 'upgrades@'.$contactDomain;
 $helloContact = 'hello@'.$contactDomain;
+$standardOffer = (require __DIR__.'/module_catalog.php')['offers']['standard'];
+$money = static fn (int $cents): string => '$'.number_format($cents / 100, $cents % 100 === 0 ? 0 : 2);
+$monthly = $money($standardOffer['monthly_cents']);
+$setup = $money($standardOffer['setup_cents']);
+$usageFeesNote = $standardOffer['usage_fees_note'];
+$offerSummary = $setup.' one-time setup + '.$monthly.'/month. '.$usageFeesNote;
 
 return [
+    'public_offer' => [
+        'summary' => $offerSummary,
+        'included_note' => 'Choose the core branches your business needs. They are included in the simple plan.',
+        'premium_note' => 'Teams, Trajectory, and Markets & Makers are separate premium software with separate pricing.',
+    ],
+    // Public acquisition copy is separate from existing tenant plan presentation.
+    'public_plans' => [
+        'headline' => 'Everbranch pricing',
+        'subtitle' => $offerSummary,
+        'billing_note' => 'We review your selected branches and any connections with you before activation. Premium software and custom development are priced separately. Existing customer agreements retain their terms.',
+        'recommended_plan_key' => 'standard',
+        'plan_order' => ['standard'],
+        'cards' => [
+            'standard' => [
+                'name' => $standardOffer['name'],
+                'price_display' => $monthly.'/month per business',
+                'summary' => 'One workspace for your customers, work, messages, files, and next steps.',
+                'highlights' => [
+                    $setup.' one-time setup',
+                    $usageFeesNote,
+                    'Your choice of included core branches',
+                    'Premium software and custom development priced separately',
+                ],
+                'cta' => ['label' => 'Get started', 'href' => '/platform/start'],
+            ],
+        ],
+    ],
     'promo' => [
         'eyebrow' => 'Built for busy small businesses',
         'headline' => 'One app for the work that keeps slipping through the cracks.',
@@ -72,11 +105,7 @@ return [
                 'description' => 'Your team gets a simple place to see what is ready, what needs setup, and what to do next.',
             ],
         ],
-        'plan_order' => [
-            'starter',
-            'growth',
-            'pro',
-        ],
+        'plan_order' => ['standard'],
         'ctas' => [
             'install' => [
                 'label' => 'Shopify setup',
@@ -87,11 +116,11 @@ return [
                 'href' => '/platform/contact?intent=walkthrough',
             ],
             'start_client' => [
-                'label' => 'Start as a client',
+                'label' => 'Get started',
                 'href' => '/platform/start',
             ],
             'plans' => [
-                'label' => 'Compare plans',
+                'label' => 'View pricing',
                 'href' => '/platform/plans',
             ],
             'contact' => [
@@ -346,52 +375,28 @@ return [
         'headline' => "Simplify your life,\nGet more time with your family.",
         'submit_label' => 'Request production access',
         'plan_comparison' => [
-            'eyebrow' => 'One platform. Everything you need.',
-            'title' => 'Launch partner pricing',
-            'subtitle' => 'Starter includes everything. Growth gives you more capacity.',
-            'savings_note' => 'Launch partners save $360 in the first 6 months compared with regular Starter setup and monthly pricing.',
-            'recommended' => 'launch_partner',
+            'eyebrow' => 'One workspace for your business',
+            'title' => 'Everbranch pricing',
+            'subtitle' => $offerSummary,
+            'savings_note' => 'Core branches are included: choose what you need. Teams, Trajectory, and Markets & Makers have separate pricing. Existing customer agreements retain their terms.',
+            'recommended' => 'standard',
             'plans' => [
-                'starter' => [
-                    'label' => 'Starter',
-                    'descriptor' => 'Regular',
-                    'price' => '$149',
-                    'cadence' => '/mo',
-                    'badge' => null,
-                ],
-                'launch_partner' => [
-                    'label' => 'Launch Partner',
-                    'descriptor' => 'First 10 businesses',
-                    'price' => '$89',
-                    'cadence' => '/mo',
-                    'badge' => 'Limited to 10',
-                ],
-                'growth' => [
-                    'label' => 'Growth',
-                    'descriptor' => 'More capacity',
-                    'price' => '$249',
-                    'cadence' => '/mo',
+                'standard' => [
+                    'label' => $standardOffer['name'],
+                    'descriptor' => 'Per business',
+                    'price' => $monthly,
+                    'cadence' => '/month',
                     'badge' => null,
                 ],
             ],
             'features' => [
-                ['label' => 'Setup', 'starter' => '$499 one-time', 'launch_partner' => '$499 one-time', 'growth' => '$999 one-time'],
-                ['label' => 'First 6 months', 'starter' => '$149/mo', 'launch_partner' => '$89/mo', 'growth' => '$249/mo'],
-                ['label' => 'After 6 months', 'starter' => '$149/mo', 'launch_partner' => '$149/mo', 'growth' => '$249/mo'],
-                ['label' => '6-month total', 'starter' => '$1,393', 'launch_partner' => '$1,033', 'growth' => '$2,493'],
-                ['label' => 'Team members', 'starter' => 'Up to 3 users', 'launch_partner' => 'Up to 3 users', 'growth' => 'Unlimited users'],
-                ['label' => 'Email contacts', 'starter' => 'Up to 2,000 contacts', 'launch_partner' => 'Up to 2,000 contacts', 'growth' => 'Up to 15,000 contacts'],
-                ['label' => 'Automation workflows', 'starter' => 'Basic automations', 'launch_partner' => 'Basic automations', 'growth' => 'Advanced automations'],
-                ['label' => 'Custom branding', 'starter' => 'Basic branding', 'launch_partner' => 'Basic branding', 'growth' => 'Full custom branding'],
-                ['label' => 'Customer support', 'starter' => 'Email support', 'launch_partner' => 'Priority partner support', 'growth' => 'Priority support'],
-                ['label' => 'Text messaging', 'starter' => 'Available as an add-on', 'launch_partner' => 'Available as an add-on', 'growth' => 'Available as an add-on'],
+                ['label' => 'Setup', 'standard' => $setup.' one-time'],
+                ['label' => 'Monthly service', 'standard' => $monthly.'/month'],
+                ['label' => 'Core branches', 'standard' => 'Included — choose what you need'],
+                ['label' => 'Setup + first month, before usage or additional services', 'standard' => $money($standardOffer['setup_cents'] + $standardOffer['monthly_cents'])],
+                ['label' => 'Usage', 'standard' => $usageFeesNote],
             ],
-            'partner_terms' => [
-                'Join a 30-minute feedback call each month',
-                'Report bugs and share honest feedback',
-                'Allow us to feature your business with permission',
-                'Commit to at least 6 months',
-            ],
+            'partner_terms' => [],
         ],
     ],
 

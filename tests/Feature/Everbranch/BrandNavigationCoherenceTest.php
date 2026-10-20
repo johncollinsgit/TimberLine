@@ -50,7 +50,7 @@ test('public product pages display Everbranch as the platform brand', function (
 
     $this->get(route('platform.plans'))
         ->assertOk()
-        ->assertSeeText('Plans & Add-ons');
+        ->assertSeeText('Everbranch pricing');
 });
 
 test('public auth uses Everbranch identity while the resolved tenant context stays separate', function (): void {

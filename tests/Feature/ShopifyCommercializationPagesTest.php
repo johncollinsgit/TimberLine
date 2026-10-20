@@ -40,7 +40,7 @@ test('promo page renders the public studio story and preserves conversion paths'
         ->assertSeeText('Who it helps')
         ->assertSeeText('A platform that expands with you')
         ->assertSeeText('Open a fictional website and operations-workspace example')
-        ->assertSeeText('Become a launch partner')
+        ->assertSeeText('Get started')
         ->assertSee(route('platform.plans'), false)
         ->assertSee(route('platform.start'), false)
         ->assertDontSee('data-public-tabs', false)
@@ -56,7 +56,7 @@ test('industry example route is public presentation only', function () {
         ->assertSeeText('Community teams')
         ->assertSeeText('Fictional workspace')
         ->assertSeeText('not a live customer website or workspace')
-        ->assertSeeText('Request launch-partner access')
+        ->assertSeeText('Get started')
         ->assertDontSee('shopify.app', false);
 });
 

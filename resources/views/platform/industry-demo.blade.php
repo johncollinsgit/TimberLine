@@ -18,7 +18,7 @@
     <header class="eb-industry-page-header">
         <a class="eb-industry-page-back" href="{{ route('platform.promo') }}#industries"><span aria-hidden="true">←</span> Back to Everbranch</a>
         <a class="eb-industry-page-brand" href="{{ route('platform.promo') }}" aria-label="Everbranch home"><img src="{{ asset($brandLockupPath) }}?v={{ $brandAssetVersion }}" alt="Everbranch" /></a>
-        <a class="eb-industry-page-cta" href="{{ route('platform.start') }}">Request launch-partner access <span aria-hidden="true">↗</span></a>
+        <a class="eb-industry-page-cta" href="{{ route('platform.start') }}">Get started <span aria-hidden="true">↗</span></a>
         <section class="eb-industry-page-controls" aria-label="Example controls">
             <div class="eb-industry-page-control-group">
                 <span>Example business type</span>
@@ -66,7 +66,7 @@
             </section>
         </section>
 
-        <aside class="eb-industry-page-note"><strong>Ready to see this for your business?</strong><span>This is a fictional, public-only example. A launch partner gets a system shaped around the way their team actually works.</span><a href="{{ route('platform.start') }}">Request launch-partner access <span aria-hidden="true">↗</span></a></aside>
+        <aside class="eb-industry-page-note"><strong>Ready to see this for your business?</strong><span>This is a fictional, public-only example. Your workspace setup is agreed with your team before activation.</span><a href="{{ route('platform.start') }}">Get started <span aria-hidden="true">↗</span></a></aside>
     </main>
 </body>
 </html>

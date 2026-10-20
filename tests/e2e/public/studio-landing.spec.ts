@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("Everbranch public studio", () => {
-    test("keeps the launch-partner path and primary navigation available", async ({ page }) => {
+    test("keeps the current offer path and primary navigation available", async ({ page }) => {
         await page.goto("/platform/promo");
         await expect(page.getByRole("heading", { name: /your business has a rhythm/i })).toBeVisible();
-        await expect(page.getByRole("link", { name: /become a launch partner/i }).first()).toHaveAttribute("href", /start/);
+        await expect(page.getByRole("link", { name: /get started/i }).first()).toHaveAttribute("href", /start/);
         await expect(page.getByRole("link", { name: "Plans" }).first()).toBeVisible();
         await expect(page.getByRole("link", { name: "Customer Loop", exact: true, includeHidden: true })).toHaveAttribute("href", "#customer-loop");
         await expect(page.getByRole("link", { name: /plan your customer loop/i })).toHaveAttribute("href", /start/);
@@ -70,7 +70,7 @@ test.describe("Everbranch public studio", () => {
         await expect(page.getByRole("tab", { name: "Website" })).toHaveAttribute("aria-selected", "true");
         await expect(page.getByText("Northline Build", { exact: true })).toBeVisible();
         await expect(page.getByText(/not a live customer website or workspace/i)).toBeVisible();
-        await expect(page.getByRole("link", { name: /request launch-partner access/i }).first()).toHaveAttribute("href", /start/);
+        await expect(page.getByRole("link", { name: /get started/i }).first()).toHaveAttribute("href", /start/);
 
         await page.getByRole("button", { name: /start a project conversation/i }).click();
         await expect(page.getByText(/request received/i)).toBeVisible();
@@ -98,7 +98,15 @@ test.describe("Everbranch public studio", () => {
 
     test("has a stable public landing visual", async ({ page }) => {
         await page.emulateMedia({ reducedMotion: "reduce" });
+        await page.route("https://fonts.bunny.net/**", (route) => route.abort());
         await page.goto("/platform/promo");
+        await page.evaluate(async () => {
+            await document.fonts.ready;
+            await Promise.all(Array.from(document.images).map((image) => {
+                image.loading = "eager";
+                return image.decode().catch(() => {});
+            }));
+        });
         await page.locator(".eb-studio-photo-card").scrollIntoViewIfNeeded();
         await expect(page.locator(".eb-studio-photo-card img")).toBeVisible();
         await expect(page).toHaveScreenshot("studio-landing.png", { fullPage: true, animations: "disabled" });
@@ -106,7 +114,9 @@ test.describe("Everbranch public studio", () => {
 
     test("has a stable public industry-system visual", async ({ page }) => {
         await page.emulateMedia({ reducedMotion: "reduce" });
+        await page.route("https://fonts.bunny.net/**", (route) => route.abort());
         await page.goto("/platform/examples/field");
+        await page.evaluate(async () => { await document.fonts.ready; });
         await expect(page.locator("[data-industry-page-frame]")).toBeVisible();
         await expect(page).toHaveScreenshot("industry-system.png", { fullPage: true, animations: "disabled" });
     });

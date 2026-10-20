@@ -1,6 +1,33 @@
 <?php
 
 $catalog = [
+    // Prospective public offer only. Existing plans and signed terms remain intact.
+    'offers' => [
+        'standard' => [
+            'key' => 'standard',
+            'version' => 'standard-299-499-v1',
+            'name' => 'Everbranch Simple',
+            'currency' => 'USD',
+            'monthly_cents' => 29900,
+            'setup_cents' => 49900,
+            'interval' => 'month',
+            'usage_fees_note' => 'Additional text, email, and AI usage fees may apply.',
+            'included_module_keys' => [
+                'customers', 'field_service', 'everbranch_billing', 'class_scheduling',
+                'rewards', 'birthdays', 'reviews', 'lead_capture', 'wishlist',
+                'campaigns', 'reporting', 'diagnostics_advanced', 'integrations',
+                'quickbooks', 'documents', 'workflow_automations', 'managed_website',
+                'sms', 'ai', 'bulk_email_marketing', 'messaging', 'subscriptions',
+                'additional_channels',
+            ],
+            'premium_products' => [
+                ['key' => 'teams', 'name' => 'Teams', 'module_keys' => ['team_work', 'teams_wholesale_workspace']],
+                ['key' => 'trajectory', 'name' => 'Trajectory', 'module_keys' => ['trajectory']],
+                ['key' => 'markets_makers', 'name' => 'Markets & Makers', 'module_keys' => ['markets_makers']],
+            ],
+        ],
+    ],
+
     'defaults' => [
         'plan' => env('TENANT_ENTITLEMENTS_DEFAULT_PLAN', 'starter'),
         'operating_mode' => env('TENANT_ENTITLEMENTS_DEFAULT_MODE', 'shopify'),
