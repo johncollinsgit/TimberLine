@@ -10,6 +10,9 @@ use App\Http\Middleware\MarketplaceAppHost;
 use App\Http\Middleware\MarketplacePublicHost;
 use Illuminate\Support\Facades\Route;
 
+Route::get('/marketplace/preview', \App\Http\Controllers\Marketplace\AccountPreviewController::class)
+    ->middleware('auth')->name('marketplace.preview');
+
 if (config('marketplace.host')) {
     Route::domain(config('marketplace.host'))->middleware(MarketplacePublicHost::class)->name('marketplace.public.')->group(function (): void {
         Route::get('/', [StorefrontController::class, 'index'])->name('home');

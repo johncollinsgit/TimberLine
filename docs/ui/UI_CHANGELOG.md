@@ -1,3 +1,10 @@
+## 2026-10-20 - Private Marketplace account preview
+
+- Add an explicitly assigned account-only Markets & Makers console entry.
+- Browse thirteen example-data sections without changing the selected workspace.
+- Keep public/store/merchant/payment routes and existing roles/entitlements unchanged.
+- The account preview is read only; merchant launch and provider checks stay separate.
+
 ## 2026-10-20 - Current product/setup documentation checkpoint
 
 - Add one current product/setup/release map, with dated independently verified 00acdc1b evidence.

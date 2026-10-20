@@ -34,6 +34,9 @@ current instruction to replay an old source branch or reprice a customer.
 
 ## Markets and Makers marketplace (2026-10-20; default off)
 
+- `/marketplace/preview` is a separate private example-data console, explicitly
+  assigned by account ID with an empty source default. It grants no tenant,
+  merchant, provider or payment access and does not change public launch gates.
 - `marketplace_*` is the dedicated Everbranch merchant retailer/supplier lane.
   Do not reuse legacy, Modern Forestry or Website Commerce orders/customers.
   Domain ownership requires the verified Store; operators require current active

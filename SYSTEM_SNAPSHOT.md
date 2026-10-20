@@ -34,6 +34,9 @@ current instruction to replay an old source branch or reprice a customer.
 
 ## Markets and Makers marketplace (2026-10-20; default off)
 
+- A separate account-assigned `/marketplace/preview` console shows read-only
+  example data without selecting a tenant or granting merchant/payment access.
+  Its source allowlist is empty; a deployed route alone makes no account eligible.
 - A dedicated Everbranch merchant workspace owns the independently verified domain,
   catalog, allocated inventory, checkout snapshots, orders, and supplier statements.
   Public/maker screens follow the Android tablet Showcase appearance. Standalone
