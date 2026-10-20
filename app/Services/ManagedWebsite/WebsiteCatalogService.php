@@ -179,10 +179,11 @@ class WebsiteCatalogService
     public function publicCatalog(TenantSite $site): array
     {
         return WebsiteProduct::query()->forTenantId($site->tenant_id)->where('tenant_site_id', $site->id)->where('status', 'active')
-            ->with(['variants' => fn ($q) => $q->where('tenant_id', $site->tenant_id)->orderBy('id'), 'collections' => fn ($q) => $q->where('website_collections.tenant_id', $site->tenant_id)->where('status', 'active')])->orderBy('id')->get()->map(function ($product) {
+            ->with(['variants' => fn ($q) => $q->where('tenant_id', $site->tenant_id)->orderBy('id'), 'collections' => fn ($q) => $q->where('website_collections.tenant_id', $site->tenant_id)->where('status', 'active')])->orderBy('id')->get()->map(function ($product) use ($site) {
                 $variant = $product->variants->firstWhere('is_available', true) ?? $product->variants->first();
 
                 return ['id' => $product->id, 'slug' => $product->handle, 'name' => $product->title, 'shortName' => $product->title,
+                    'visualization' => app(ProductVisualizationService::class)->descriptor($site, $product),
                     'summary' => $product->description ?? '', 'image' => $product->media[0] ?? '', 'images' => $product->media ?? [],
                     'alt' => data_get($product->service_details, 'image_alt') ?: $product->title, 'quoteOnly' => true,
                     'details' => preg_split('/\R/', (string) data_get($product->service_details, 'details', ''), -1, PREG_SPLIT_NO_EMPTY),

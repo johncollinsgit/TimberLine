@@ -475,6 +475,18 @@ class WebsiteCommerceController extends Controller
         return view('managed-website.shop', compact('tenant', 'site', 'products') + ['category' => $category ?? 'all', 'search' => $search ?? '']);
     }
 
+    public function showVisualization(Request $request, string $handle, ManagedWebsiteService $websites): View
+    {
+        [$tenant, $site] = $this->publicSite($request, $websites);
+        $product = WebsiteProduct::query()->forTenant($tenant)->where('tenant_site_id', $site->id)
+            ->where('handle', $handle)->where('status', 'active')->where('product_type', 'physical')
+            ->when(data_get($site->settings, 'domain_choice') === 'everbranch_subdomain', fn ($query) => $query->where('product_type', 'quote'))->firstOrFail();
+        $visualization = app(\App\Services\ManagedWebsite\ProductVisualizationService::class)->descriptor($site, $product);
+        abort_unless($visualization, 404);
+
+        return view('managed-website.visualization.public', compact('site', 'product', 'visualization'));
+    }
+
     public function showProduct(Request $request, string $handle, ManagedWebsiteService $websites): View
     {
         [$tenant, $site] = $this->publicSite($request, $websites);
