@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'simulator_fixture_enabled' => (bool) env('SES_SIMULATOR_FIXTURE_ENABLED', false),
     // Critical application mail has a separate opt-in outbox and credential scope.
     'platform_enabled' => (bool) env('SES_PLATFORM_SENDING_ENABLED', false),
     'platform_queue_connection' => env('SES_PLATFORM_QUEUE_CONNECTION', 'database'),

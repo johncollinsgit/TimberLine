@@ -69,7 +69,7 @@ class PlatformSesOutbox
     }
 
     /** Freeze rendered content before queue dispatch, including inside a caller transaction. */
-    public function enqueue(Email $message, Envelope $envelope): array
+    public function enqueue(Email $message, Envelope $envelope, bool $queue = true): array
     {
         $this->assertConfiguration();
         $recipients = array_values(array_unique(array_map(fn ($address) => strtolower(trim($address->getAddress())), $envelope->getRecipients())));
@@ -88,7 +88,7 @@ class PlatformSesOutbox
         $fingerprint = $this->fingerprint($message, $envelope);
         $copy = clone $message;
         foreach ($copy->getHeaders()->all() as $header) {
-            if (str_starts_with(strtolower($header->getName()), 'x-ses-') || in_array(strtolower($header->getName()), ['bcc', 'x-everbranch-logical-message-id'], true)) {
+            if (str_starts_with(strtolower($header->getName()), 'x-ses-') || in_array(strtolower($header->getName()), ['bcc', 'x-smtpapi', 'x-everbranch-logical-message-id'], true)) {
                 $copy->getHeaders()->remove($header->getName());
             }
         }
@@ -97,7 +97,7 @@ class PlatformSesOutbox
             throw new RuntimeException('Platform email exceeds its reviewed payload limit.');
         }
 
-        return DB::transaction(function () use ($recipients, $group, $fingerprint, $mime, $from): array {
+        return DB::transaction(function () use ($recipients, $group, $fingerprint, $mime, $from, $queue): array {
             $intent = PlatformEmailMessage::firstOrCreate(['group_key' => $group], [
                 'payload_hash' => $fingerprint, 'mime' => $mime, 'tenant_id' => app(TenantContext::class)->id(),
                 'from_email' => $from, 'configuration_set' => config('ses_migration.platform_configuration_set'),
@@ -112,10 +112,13 @@ class PlatformSesOutbox
                 $delivery = PlatformEmailDelivery::where('platform_email_message_id', $intent->id)->whereIn('recipient_hash', $this->recipientHashes($recipient))->first();
                 $delivery ??= PlatformEmailDelivery::create(['platform_email_message_id' => $intent->id, 'recipient_hash' => $hash,
                     'recipient' => $recipient,
-                    'state' => 'queued', 'provider_cost_micros' => (int) config('ses_migration.approved_attempt_cost_micros'),
+                    'state' => $queue ? 'queued' : 'prepared', 'provider_cost_micros' => (int) config('ses_migration.approved_attempt_cost_micros'),
                 ]);
+                if (($queue && $delivery->state === 'prepared') || (! $queue && $delivery->state === 'queued')) {
+                    throw new RuntimeException('A platform intent cannot change its acceptance mode.');
+                }
                 $ids[] = $delivery->id;
-                if ($delivery->wasRecentlyCreated) {
+                if ($queue && $delivery->wasRecentlyCreated) {
                     SendPlatformEmail::dispatch($delivery->id)->afterCommit();
                 }
             }
@@ -124,7 +127,7 @@ class PlatformSesOutbox
         });
     }
 
-    public function submit(int $id): string
+    public function submit(int $id, bool $prepared = false): string
     {
         if (! config('ses_migration.platform_enabled')) {
             return 'paused';
@@ -134,7 +137,8 @@ class PlatformSesOutbox
             throw new RuntimeException('Platform SES submission cannot run inside a caller transaction.');
         }
         $delivery = PlatformEmailDelivery::with('message')->findOrFail($id);
-        if ($delivery->state !== 'queued') {
+        $readyStates = $prepared ? ['prepared'] : ['queued'];
+        if (! in_array($delivery->state, $readyStates, true)) {
             return $delivery->state;
         }
         $allowed = array_map('strtolower', (array) config('ses_migration.platform_recipients', []));
@@ -147,9 +151,9 @@ class PlatformSesOutbox
         if (! app(SesSendSafety::class)->admit(0)) {
             return 'rate_limited';
         }
-        $claimed = Cache::store()->lock('ses:platform-claim', 10)->block(2, fn () => DB::transaction(function () use ($id): bool {
+        $claimed = Cache::store()->lock('ses:platform-claim', 10)->block(2, fn () => DB::transaction(function () use ($id, $readyStates): bool {
             $row = PlatformEmailDelivery::lockForUpdate()->findOrFail($id);
-            if ($row->state !== 'queued') {
+            if (! in_array($row->state, $readyStates, true)) {
                 return false;
             }
             if ($this->heldAddress($row->recipient)) {
@@ -199,6 +203,9 @@ class PlatformSesOutbox
     {
         $connection = (string) config('ses_migration.platform_queue_connection', 'database');
         $queue = (string) config('ses_migration.platform_queue', 'ses-platform');
+        if (config('mail.mailers.'.config('mail.default').'.transport') === 'ses_platform') {
+            throw new RuntimeException('Queue-only platform mail requires explicit selection; provider-receipt callers require the confirmed mailer.');
+        }
         if (! config('ses_migration.platform_enabled') || ! in_array(config('queue.connections.'.$connection.'.driver'), ['database', 'redis', 'sqs'], true)
             || ! preg_match('/^[A-Za-z0-9_-]{1,64}$/D', $queue) || $queue === 'default'
             || (int) config('ses_migration.approved_attempt_cost_micros') < max(1, (int) config('ses_migration.platform_min_attempt_cost_micros', 1000))) {
@@ -218,7 +225,7 @@ class PlatformSesOutbox
     {
         return DB::transaction(function () use ($id, $reason): string {
             $row = PlatformEmailDelivery::lockForUpdate()->findOrFail($id);
-            if ($row->state === 'queued') {
+            if (in_array($row->state, ['queued', 'prepared'], true)) {
                 $row->update(['state' => 'held', 'hold_reason' => $reason]);
             }
 

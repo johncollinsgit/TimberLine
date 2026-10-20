@@ -30,6 +30,7 @@ class PlatformEmailDelivery extends Model
             }
             $allowed = match ($stored->state) {
                 'queued' => ['queued', 'held', 'submitting'], 'submitting' => ['submitting', 'unknown', 'accepted', 'rejected'],
+                'prepared' => ['prepared', 'held', 'submitting'],
                 'unknown', 'rejected' => [$stored->state, 'accepted'], 'accepted' => ['accepted'], 'held' => ['held'], default => [],
             };
             if (! in_array($delivery->state, $allowed, true)

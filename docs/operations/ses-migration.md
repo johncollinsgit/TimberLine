@@ -374,16 +374,76 @@ bounce, complaint, retry, event and rollback acceptance evidence are recorded.
 | Tenant campaigns, direct messages, workflow email, rewards/reminders | `SendGridEmailService` → tenant gateway/dispatch adapter | Native tenant + verified sender/config set + consent/unsubscribe + durable delivery + usage reservation + explicit tenant gate; billing policy validated separately |
 | Password reset/verification, account approval, wholesale notices | Laravel notifications and ordinary mailables | Platform sender/recipient pilot, frozen token content and queue identity; actual delivery/event proof before expansion |
 | Operator snapshots, scent/rewards reports, product review alerts, mobile reminders | Scheduled/service Laravel mailables | Platform pilot after reviewing recipient purpose, existing delivery records and content identity; preserve per-tenant billing where the current gateway meters it |
-| Native Website order updates | Separate immutable notification snapshot and explicitly configured named mailer, with provider-acceptance receipt semantics | Remains on its current approved mailer. Its transport readiness allowlist rejects `ses_platform`; adapt queue-acceptance versus provider receipt/event linkage before moving it |
-| Trajectory financial review email | Separate configured mailer/readiness allowlist and durable finance-space claim | Remains on its current mailer. `ses_platform` is rejected until its claim/event audit distinguishes queue acceptance from provider acceptance |
-| Soccer sign-in and registration/admin email | Laravel mailables; registration records inspect `getMessageId()` | Keep current provider during initial platform pilot. Registration needs explicit outbox/event linkage and queued status before a global default change |
+| Native Website order updates | Separate immutable notification snapshot and explicitly configured named mailer, with provider-acceptance receipt semantics | Remains on its current approved mailer. Its readiness accepts only `ses_platform_confirmed` with a reviewed matching sender, gates and cost. Stable order-transition identity preserves the existing provider receipt contract |
+| Trajectory financial review email | Separate configured mailer/readiness allowlist and durable finance-space claim | Remains on its current mailer. `ses_platform` remains rejected; `ses_platform_confirmed` preserves provider acceptance and uses the immutable finance claim as logical identity |
+| Soccer sign-in and registration/admin email | Laravel mailables; registration records inspect `getMessageId()` | Keep current provider during initial platform pilot. Registration has stable delivery IDs and must use the confirmed mailer for provider receipt semantics |
 
 The transport returns `outbox:<delivery-id>` with a `queued` header for local
 acceptance, never a generated ID that could be mistaken for an AWS receipt.
 Provider acceptance and lifecycle evidence live on the child delivery. A named
 non-customer pilot can test this core without changing every consumer. A global
-`MAIL_MAILER` switch is not approved or ready: native Website/Trajectory/registration
-receipt consumers and marketing reports need the scoped integration above first.
+`MAIL_MAILER` switch is not approved or ready until actual provider acceptance,
+delivery/event and rollback pilots pass. Queue-only `ses_platform` is rejected as
+a global default, preventing receipt consumers from treating a local queue ID as
+provider acceptance. Use `ses_platform_confirmed` for reviewed receipt consumers.
 Queue services reached indirectly from `SendWebsiteOrderNotification`,
 `Trajectory/SendReviewEmail`, `SendMarketingDirectMessageBatch` and automation jobs
 were inspected; no unrelated pending feature was enabled or released.
+
+
+### Provider-acceptance compatibility
+
+`ses_platform_confirmed` uses the same immutable outbox, SDK and signed events,
+but returns only the actual persisted SES receipt for one recipient. It requires
+zero caller transaction depth. A `prepared` intent is committed before HTTP and
+is never picked up by the queued-intent recovery command. If the process stops
+before submission or rate admission blocks it, the originating business flow
+must revalidate its current state before any further operator action; the
+scheduler cannot later send a stale Website transition or financial review.
+Unknown/submitting outcomes keep the same quarantine and rollback fences.
+
+Website order transitions and Trajectory finance claims now supply stable logical
+identities and their readiness checks require the confirmed transport plus the
+reviewed SES sender, credentials, queue and budget configuration. Soccer
+registration/admin deliveries and rewards operator reports have stable IDs too.
+Wholesale application retries preserve a persistent logical generation (a new
+one only on an explicit enqueue/resend). When an outbox intent already exists,
+accepted outcomes are reconciled before rendering; pending/unknown ones are held
+without creating a replacement activation link. This does not alter Shopify
+credentials, storefronts, checkout, account policies or other paused releases.
+
+The current default remains SendGrid SMTP. The queue-only mode is for explicitly
+selected callers that understand queued acceptance. The confirmed mode preserves
+existing provider-acceptance semantics on a reviewed per-flow/default cutover.
+Multi-recipient messages require separate recipient sends or the explicit queue
+mode; they fail before a provider attempt in confirmed mode. Neither mode may
+participate in automatic cross-provider failover.
+
+### Isolated simulator application records
+
+The approved native tenant `everbranch-tenant-900000001` must not be inserted in
+the production tenants table, which would advance its auto-increment sequence.
+Simulator records instead live in a customer-free SQLite database at shared
+`storage/app/private/ses-simulator.sqlite`, mode 0600. Prepare it from the current
+migrations on this Mac with only tenant 900000001 (`ses-simulator-fixture`), then
+review/upload that nonsecret fixture. No production customer table is migrated,
+cloned, truncated or reset. Preserve fixture evidence after the test.
+
+`SES_SIMULATOR_FIXTURE_ENABLED=false` is default. When explicitly enabled for the
+approved test, the public webhook still verifies the exact SNS account/topic and
+AWS signature first. Only the exact native test tenant, marketing configuration
+set, sender and one of the three simulator addresses can enter the fixture lane.
+The database wrapper validates that the file is private and contains only that
+fictional tenant, selects it for the ordinary application event handler, then
+restores the production connection in `finally`. Invalid/missing fixture state
+fails instead of falling through to customer writes. SQLite support was verified
+on Forge. Local tests cover database restoration and rejection of customer-like
+fixture contents and any mismatched recipient/native context.
+
+The restricted simulator key may be read from the user-downloaded CSV and passed
+ephemerally to the approved simulator process. Never print it, commit it, put it
+in shell arguments, save it in Forge `.env` or a customer account, or broaden its
+permissions. The test process must use the private database and exact reviewed
+application release; runtime-only gates cap it at 20 attempts, one per second and
+a $1 variable budget with a conservative 1,000-micro attempt estimate. Production
+runtime credentials and customer sending remain separately unapproved.

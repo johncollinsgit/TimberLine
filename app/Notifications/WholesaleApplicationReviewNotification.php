@@ -34,6 +34,7 @@ class WholesaleApplicationReviewNotification extends Notification
         $location = implode(', ', $locationParts);
 
         return (new MailMessage)
+            ->withSymfonyMessage(fn ($message) => $message->getHeaders()->addTextHeader('X-Everbranch-Logical-Message-ID', \App\Support\Mail\PlatformMailIdentity::wholesale($this->request, 'review')))
             ->subject('New wholesale application submitted')
             ->greeting('A new wholesale application just came in.')
             ->line('Use the link below to review and approve the applicant.')

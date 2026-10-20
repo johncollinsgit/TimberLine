@@ -56,6 +56,9 @@ return [
         'ses_platform' => [
             'transport' => 'ses_platform',
         ],
+        'ses_platform_confirmed' => [
+            'transport' => 'ses_platform_confirmed',
+        ],
 
         'postmark' => [
             'transport' => 'postmark',

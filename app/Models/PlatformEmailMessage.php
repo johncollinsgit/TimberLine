@@ -7,6 +7,11 @@ use LogicException;
 
 class PlatformEmailMessage extends Model
 {
+    public function deliveries(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PlatformEmailDelivery::class);
+    }
+
     protected $guarded = [];
 
     protected $hidden = ['mime', 'payload_hash'];

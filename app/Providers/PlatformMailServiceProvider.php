@@ -25,18 +25,27 @@ class PlatformMailServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        Mail::extend('ses_platform', function () {
-            // Laravel failover runs inside one MessageSending event. Reject
-            // nested transport configurations before any outbox side effect.
-            foreach ((array) config('mail.mailers') as $name => $mailer) {
-                if (in_array($mailer['transport'] ?? '', ['failover', 'roundrobin'], true)
-                    && $this->containsPlatform((array) ($mailer['mailers'] ?? []), [])) {
-                    throw new RuntimeException('Platform SES cannot participate in cross-provider failover or rotation.');
-                }
-            }
+        Mail::extend('ses_platform', fn () => $this->transport(false));
+        Mail::extend('ses_platform_confirmed', fn () => $this->transport(true));
+        $this->registerGuards();
+    }
 
-            return new PlatformSesTransport;
-        });
+    private function transport(bool $providerAcceptance): PlatformSesTransport
+    {
+        // Laravel failover runs inside one MessageSending event. Reject
+        // nested transport configurations before any outbox side effect.
+        foreach ((array) config('mail.mailers') as $name => $mailer) {
+            if (in_array($mailer['transport'] ?? '', ['failover', 'roundrobin'], true)
+                && $this->containsPlatform((array) ($mailer['mailers'] ?? []), [])) {
+                throw new RuntimeException('Platform SES cannot participate in cross-provider failover or rotation.');
+            }
+        }
+
+        return new PlatformSesTransport($providerAcceptance);
+    }
+
+    private function registerGuards(): void
+    {
         Queue::before(fn ($event) => app(PlatformMailQueueContext::class)->start($event->job));
         Queue::after(fn () => app(PlatformMailQueueContext::class)->reset());
         Queue::exceptionOccurred(fn () => app(PlatformMailQueueContext::class)->reset());
@@ -72,7 +81,7 @@ class PlatformMailServiceProvider extends ServiceProvider
                 continue;
             }
             $mailer = (array) config('mail.mailers.'.$name, []);
-            if (($mailer['transport'] ?? '') === 'ses_platform' || $this->containsPlatform((array) ($mailer['mailers'] ?? []), [...$visited, $name])) {
+            if (in_array($mailer['transport'] ?? '', ['ses_platform', 'ses_platform_confirmed'], true) || $this->containsPlatform((array) ($mailer['mailers'] ?? []), [...$visited, $name])) {
                 return true;
             }
         }

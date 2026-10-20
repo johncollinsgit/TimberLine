@@ -48,9 +48,18 @@ class ReviewEmailService
 
     public function deliveryReady(): bool
     {
+        $transport = config('mail.mailers.'.config('trajectory.review_email_mailer', config('mail.default')).'.transport');
+        if ($transport === 'ses_platform_confirmed') {
+            try {
+                app(\App\Services\Mail\PlatformSesOutbox::class)->assertConfiguration();
+            } catch (\Throwable) {
+                return false;
+            }
+        }
+
         // Never silently copy financial emails into a log or treat a log fallback as delivery.
-        return in_array(config('mail.mailers.'.config('trajectory.review_email_mailer', config('mail.default')).'.transport'),
-            ['smtp', 'ses', 'ses-v2', 'postmark', 'resend', 'sendmail'], true);
+        return in_array($transport,
+            ['smtp', 'ses', 'ses-v2', 'postmark', 'resend', 'sendmail', 'ses_platform_confirmed'], true);
     }
 
     public function send(int $userId, int $spaceId, bool $now = false): string
@@ -92,7 +101,7 @@ class ReviewEmailService
         [$user, $space, $rows, $count, $claim] = $prepared;
         try {
             Mail::mailer(config('trajectory.review_email_mailer', config('mail.default')))->to($user->email)
-                ->send(new TrajectoryReviewMail($user->name, $space->name, $space->id, $count, $rows));
+                ->send(new TrajectoryReviewMail($user->name, $space->name, $space->id, $count, $rows, $claim->id));
             $status = 'accepted';
         } catch (\Throwable) {
             // Do not log provider exceptions: they may contain addresses or message bodies.

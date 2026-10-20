@@ -86,7 +86,7 @@ class WebsiteOrderNotificationService
         $identity = $this->identity();
         $config = (array) config('mail.mailers.'.$identity['mailer'], []);
         $transport = (string) ($config['transport'] ?? '');
-        $allowed = ['smtp', 'sendmail', 'ses', 'ses-v2', 'postmark', 'resend', 'mailgun'];
+        $allowed = ['smtp', 'sendmail', 'ses', 'ses-v2', 'postmark', 'resend', 'mailgun', 'ses_platform_confirmed'];
         if (app()->environment('testing')) {
             $allowed[] = 'array';
         }
@@ -94,6 +94,16 @@ class WebsiteOrderNotificationService
             || ! in_array($transport, $allowed, true) || ! filter_var($identity['from_address'], FILTER_VALIDATE_EMAIL)
             || preg_match('/[\r\n]/', $identity['from_address'].$identity['from_name']) || $identity['from_name'] === '') {
             $blockers[] = 'Select and approve a native transactional mailer and verified sender identity.';
+        }
+        if ($transport === 'ses_platform_confirmed') {
+            try {
+                app(\App\Services\Mail\PlatformSesOutbox::class)->assertConfiguration();
+                if (strtolower($identity['from_address']) !== strtolower((string) config('ses_migration.platform_from'))) {
+                    throw new \RuntimeException('The frozen native sender does not match the reviewed platform sender.');
+                }
+            } catch (\Throwable) {
+                $blockers[] = 'The approved platform SES sender, rollout and budget are not ready.';
+            }
         }
         if (! app()->environment('testing') && in_array(config('queue.default'), ['sync', 'null', null, ''], true)) {
             $blockers[] = 'Native order updates require a persistent queue worker.';

@@ -167,6 +167,7 @@ it('requires reviewed sender queue cost and configuration before enqueue', funct
     ['ses_migration.platform_configuration_set', 'everbranch-marketing'], ['ses_migration.platform_queue_connection', 'sync'],
     ['ses_migration.approved_attempt_cost_micros', 175], ['ses_migration.platform_recipients', []],
     ['ses_migration.platform_from', 'other@example.test'], ['ses_migration.platform_max_bytes', 10],
+    ['mail.default', 'ses_platform'],
 ]);
 
 it('rejects a changed payload or recipient set under the original message identity', function (): void {
@@ -316,3 +317,72 @@ it('acknowledges held jobs and retries only pre HTTP rate admission while recove
     Bus::assertDispatched(SendPlatformEmail::class, fn ($dispatched) => $dispatched->deliveryId === $queued);
     Bus::assertNotDispatched(SendPlatformEmail::class, fn ($dispatched) => $dispatched->deliveryId === $id);
 });
+
+it('preserves provider receipt semantics for confirmed transactional mail without a second queue send', function (): void {
+    Bus::fake([SendPlatformEmail::class]);
+    $calls = 0;
+    platformFixtureOutbox(function () use (&$calls) {
+        $calls++;
+
+        return new Result(['MessageId' => 'actual-ses-fixture-receipt']);
+    });
+    $sent = Mail::mailer('ses_platform_confirmed')->raw('Fixture confirmed acceptance', fn ($mail) => $mail->to('fixture@example.test'));
+    expect($sent->getMessageId())->toBe('actual-ses-fixture-receipt')
+        ->and(PlatformEmailDelivery::sole()->provider_message_id)->toBe('actual-ses-fixture-receipt')
+        ->and(PlatformEmailDelivery::sole()->state)->toBe('accepted')->and($calls)->toBe(1);
+    Bus::assertNothingDispatched();
+});
+
+it('never recovers a confirmed intent that stopped before provider submission', function (): void {
+    Bus::fake([SendPlatformEmail::class]);
+    $calls = 0;
+    platformFixtureOutbox(function () use (&$calls) {
+        $calls++;
+
+        return new Result(['MessageId' => 'must-not-send']);
+    });
+    config()->set('ses_migration.account_daily_attempts', 0);
+    expect(fn () => Mail::mailer('ses_platform_confirmed')->raw('No automatic stale business replay', fn ($mail) => $mail->to('fixture@example.test')))
+        ->toThrow(Symfony\Component\Mailer\Exception\TransportException::class);
+    $row = PlatformEmailDelivery::sole();
+    expect($row->state)->toBe('prepared')->and($row->submitted_at)->toBeNull()->and($calls)->toBe(0);
+    $this->artisan('email:ses-platform-dispatch')->assertSuccessful();
+    Bus::assertNothingDispatched();
+    expect(app(PlatformSesOutbox::class)->submit($row->id))->toBe('prepared');
+});
+
+it('requires a single recipient and committed caller context for provider acceptance', function (): void {
+    $mailer = Mail::mailer('ses_platform_confirmed');
+    expect(fn () => $mailer->raw('Multiple recipients', fn ($mail) => $mail->to('fixture@example.test')->cc('cc@example.test')))
+        ->toThrow(Symfony\Component\Mailer\Exception\TransportException::class);
+    DB::beginTransaction();
+    try {
+        expect(fn () => $mailer->raw('Caller transaction', fn ($mail) => $mail->to('fixture@example.test')))
+            ->toThrow(Symfony\Component\Mailer\Exception\TransportException::class);
+    } finally {
+        DB::rollBack();
+    }
+    expect(PlatformEmailMessage::count())->toBe(0);
+});
+
+it('reconciles frozen wholesale notifications before regenerating activation links or tokens', function (string $state): void {
+    Bus::fake([SendPlatformEmail::class]);
+    config()->set('mail.default', 'ses_platform_confirmed');
+    $request = App\Models\CustomerAccessRequest::create(['name' => 'Fictional applicant', 'email' => 'fixture@example.test',
+        'status' => 'approved', 'application_kind' => 'wholesale_application', 'metadata' => []]);
+    $service = app(App\Services\Onboarding\WholesaleApplicationDeliveryService::class);
+    $service->enqueue($request, 'decision');
+    $identity = App\Support\Mail\PlatformMailIdentity::wholesale($request, 'decision');
+    $email = platformFixtureEmail($identity);
+    $id = app(PlatformSesOutbox::class)->enqueue($email, Envelope::create($email), false)[0];
+    $row = PlatformEmailDelivery::findOrFail($id);
+    $row->update(['state' => 'submitting', 'submitted_at' => now()]);
+    $row->update(['state' => $state, 'provider_message_id' => $state === 'accepted' ? 'actual-receipt' : null, 'accepted_at' => $state === 'accepted' ? now() : null]);
+    Mail::fake();
+    Illuminate\Support\Facades\Notification::fake();
+    Illuminate\Support\Facades\Http::preventStrayRequests();
+    $service->deliver($request->id);
+    expect(data_get($request->fresh()->metadata, 'delivery.decision.status'))->toBe($state === 'accepted' ? 'sent' : 'held');
+    Illuminate\Support\Facades\Notification::assertNothingSent();
+    Illuminate\Support\Facades\Http::assertNothingSent();
+})->with(['accepted', 'unknown']);
