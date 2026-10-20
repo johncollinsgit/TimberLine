@@ -51,7 +51,12 @@ class UnifiedAppNavigationService
         $profile = $this->experienceProfileService->forTenant($tenantId, $user, $tenant);
 
         if (($profile['workspace_focus'] ?? null) === 'soccer' && $tenant && $user && app(\App\Services\Soccer\SoccerAccess::class)->enabled($tenant)) {
-            return app(\App\Services\Soccer\SoccerWorkspaceService::class)->navigation($request, $tenant, $user, $profile);
+            $shell = app(\App\Services\Soccer\SoccerWorkspaceService::class)->navigation($request, $tenant, $user, $profile);
+            if (app(\App\Services\AiBranch\AiBranchAccess::class)->visible($tenant, $user)) {
+                $shell['items'][] = ['key' => 'ai-branch', 'icon' => 'sparkles', 'href' => app(\App\Services\AiBranch\AiWorkspacePage::class)->launcherUrl($request, $tenant), 'label' => 'AI Branch', 'current' => $request->routeIs('ai-branch.*')];
+            }
+
+            return $shell;
         }
 
         if (($profile['workspace_focus'] ?? null) === 'website_sales' && $tenant && $user) {

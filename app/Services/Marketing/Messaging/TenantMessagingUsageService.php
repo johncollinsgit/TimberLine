@@ -12,6 +12,57 @@ use RuntimeException;
 
 class TenantMessagingUsageService
 {
+    /** AI uses the existing service credit account, with its own immutable meter. */
+    public function reserveAi(\App\Models\TenantAiUsageEvent $event, int $amount, array $settings): TenantMessagingLedgerEntry
+    {
+        return DB::transaction(function () use ($event, $amount, $settings) {
+            $credit = $this->lockedCreditAccount($event->tenant_id);
+            $key = 'ai-branch:'.$event->client_uuid;
+            $existing = TenantMessagingLedgerEntry::forAllTenants()->where('tenant_id', $event->tenant_id)->where('idempotency_key', 'reserve:'.$key)->first();
+            if ($existing) {
+                abort_unless($existing->source_id === $event->id && $existing->amount_micros === $amount, 409);
+
+                return $existing;
+            }
+            abort_unless($amount > 0 && $amount <= $credit->availableMicros(), 429, 'Add prepaid Everbranch service credit before starting AI.');
+            $credit->increment('reserved_micros', $amount);
+
+            return TenantMessagingLedgerEntry::forAllTenants()->create([
+                'tenant_id' => $event->tenant_id, 'tenant_messaging_credit_account_id' => $credit->id,
+                'entry_type' => 'usage_reservation', 'status' => 'reserved', 'channel' => 'ai', 'unit_type' => 'request',
+                'units' => 1, 'amount_micros' => $amount, 'provider_cost_micros' => $event->provider_cost_micros,
+                'pricing_version' => $settings['rates_version'], 'idempotency_key' => 'reserve:'.$key,
+                'source_type' => 'ai_branch_chat', 'source_id' => $event->id, 'metadata' => ['model' => $settings['model'], 'buyer_multiplier' => 2], 'occurred_at' => now('UTC'),
+            ]);
+        }, 3);
+    }
+
+    public function settleAi(\App\Models\TenantAiUsageEvent $event, int $providerCost): TenantMessagingLedgerEntry
+    {
+        return DB::transaction(function () use ($event, $providerCost) {
+            $key = 'ai-branch:'.$event->client_uuid;
+            $reservation = $this->lockedReservation($event->tenant_id, $key);
+            $credit = TenantMessagingCreditAccount::forAllTenants()->whereKey($reservation->tenant_messaging_credit_account_id)->lockForUpdate()->firstOrFail();
+            $existing = $this->settledEntry($event->tenant_id, $key);
+            if ($existing) {
+                abort_unless($existing->provider_cost_micros === $providerCost, 409);
+
+                return $existing;
+            }
+            $charge = $providerCost * 2;
+            abort_unless($reservation->channel === 'ai' && $reservation->source_id === $event->id && $providerCost >= 0
+                && $charge <= $reservation->amount_micros && $charge <= $credit->balance_micros
+                && $credit->reserved_micros >= $reservation->amount_micros, 409, 'AI usage requires billing reconciliation.');
+            $credit->update(['reserved_micros' => $credit->reserved_micros - $reservation->amount_micros, 'balance_micros' => $credit->balance_micros - $charge]);
+
+            return TenantMessagingLedgerEntry::forAllTenants()->create([
+                ...$reservation->only(['tenant_id', 'tenant_messaging_credit_account_id', 'channel', 'unit_type', 'units', 'pricing_version', 'source_type', 'source_id']),
+                'entry_type' => 'usage_settlement', 'status' => 'settled', 'amount_micros' => $charge, 'provider_cost_micros' => $providerCost,
+                'idempotency_key' => 'settle:'.$key, 'metadata' => [...$reservation->metadata, 'provider_request_id' => $event->provider_request_id], 'occurred_at' => now('UTC'),
+            ]);
+        }, 3);
+    }
+
     /**
      * @return array{ledger_id:int,idempotency_key:string,units:int,amount_micros:int,provider_cost_micros:int,channel:string}
      */

@@ -31,12 +31,20 @@ it('serializes independent MySQL processes at the final quota slot and at note a
     TenantBillingSubscription::query()->create(['tenant_id' => $tenant->id, 'provider' => 'stripe', 'provider_subscription_reference' => 'sub_'.$slug, 'purchase_key' => 'addon.ai_branch_growth', 'status' => 'active', 'current_period_ends_at' => now()->addMonth()]);
     AiBranchAccount::query()->create(['tenant_id' => $tenant->id, 'enabled' => true, 'budget_cents' => 1500]);
     config()->set(['ai_branch.enabled' => true, 'ai_branch.actions_enabled' => true, 'ai_branch.tenant_ids' => [$tenant->id]]);
+    if ($mode === 'wallet') {
+        \App\Models\TenantModuleEntitlement::create(['tenant_id' => $tenant->id, 'module_key' => 'ai_branch', 'enabled_status' => 'enabled',
+            'availability_status' => 'available', 'billing_status' => 'included', 'entitlement_source' => \App\Services\AiBranch\AiBranchOffer::INCLUDED_SOURCE]);
+        TenantAccessProfile::where('tenant_id', $tenant->id)->firstOrFail()->update(['metadata' => ['ai_branch' => ['model' => 'gpt-6-luna', 'usage_terms' => ['multiplier' => 2, 'version' => config('ai_branch.rates_version'),
+            'rates_digest' => hash('sha256', json_encode(config('ai_branch.models')['gpt-6-luna'], JSON_THROW_ON_ERROR))]]]]);
+        config(['ai_branch.standard_enabled' => true, 'ai_branch.existing_tenants' => [$tenant->id => $tenant->slug]]);
+        app(\App\Services\Marketing\Messaging\TenantMessagingUsageService::class)->fund($tenant->id, 6000, 'fictional-wallet-race');
+    }
     $dir = sys_get_temp_dir().'/'.$slug;
     mkdir($dir);
     $processes = [];
     try {
         $requests = [];
-        if ($mode === 'quota') {
+        if (in_array($mode, ['quota', 'wallet'], true)) {
             foreach ([1, 2] as $number) {
                 $conversation = app(AiBranchChat::class)->start($tenant, $user);
                 $requests[] = ['conversation' => $conversation->id];
@@ -56,6 +64,9 @@ $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 $d = json_decode(stream_get_contents(STDIN), true);
 config()->set(['ai_branch.enabled' => true, 'ai_branch.actions_enabled' => true, 'ai_branch.tenant_ids' => [$d['tenant']], 'ai_branch.api_key' => 'fake', 'ai_branch.model' => 'fake', 'ai_branch.input_micros_per_million' => 1000000, 'ai_branch.output_micros_per_million' => 4000000, 'module_catalog.addons.ai_branch_growth.ai_limits.responses' => 1]);
 config()->set(['ai_branch.workspace_context_enabled' => str_starts_with($d['mode'], 'briefing'), 'ai_branch.workspace_context_tenant_ids' => [$d['tenant']]]);
+if ($d['mode'] === 'wallet') {
+    config(['ai_branch.standard_enabled' => true, 'ai_branch.existing_tenants' => [$d['tenant'] => App\Models\Tenant::findOrFail($d['tenant'])->slug], 'ai_branch.rates_valid_until' => now()->addDay()->toIso8601String()]);
+}
 Illuminate\Support\Facades\Http::preventStrayRequests();
 Illuminate\Support\Facades\Http::fake(function () use ($d) {
     file_put_contents($d['calls'], "dispatch\n", FILE_APPEND | LOCK_EX);
@@ -66,7 +77,7 @@ for ($n = 0; ! file_exists($d['barrier']) && $n < 500; $n++) { usleep(10000); }
 $tenant = App\Models\Tenant::findOrFail($d['tenant']);
 $user = App\Models\User::findOrFail($d['user']);
 try {
-    if ($d['mode'] === 'quota') {
+    if (in_array($d['mode'], ['quota', 'wallet'], true)) {
         app(App\Services\AiBranch\AiBranchChat::class)->ask($tenant, $user, $d['conversation'], 'Fictional question', (string) Illuminate\Support\Str::uuid());
     } elseif (str_starts_with($d['mode'], 'briefing')) {
         app(App\Services\AiBranch\AiBranchChat::class)->briefing($tenant, $user, $d['uuid']);
@@ -95,9 +106,14 @@ PHP;
             $results[] = $process->getOutput();
         }
         sort($results);
-        if (in_array($mode, ['quota', 'briefing_quota'], true)) {
+        if (in_array($mode, ['quota', 'briefing_quota', 'wallet'], true)) {
             expect($results)->toBe(['ok', 'quota_blocked'])
                 ->and(TenantAiUsageEvent::query()->where('tenant_id', $tenant->id)->count())->toBe(1);
+            if ($mode === 'wallet') {
+                expect(\App\Models\TenantMessagingCreditAccount::forAllTenants()->where('tenant_id', $tenant->id)->value('reserved_micros'))->toBe(0)
+                    ->and(\App\Models\TenantMessagingLedgerEntry::forAllTenants()->where('tenant_id', $tenant->id)->where('entry_type', 'usage_settlement')->count())->toBe(1)
+                    ->and(file($dir.'/calls'))->toHaveCount(1);
+            }
         } elseif ($mode === 'briefing_replay') {
             expect($results)->toBeIn([['ok', 'ok'], ['ok', 'pending']])
                 ->and(TenantAiUsageEvent::query()->where('tenant_id', $tenant->id)->count())->toBe(1);
@@ -115,6 +131,9 @@ PHP;
                 $process->stop();
             }
         }
+        DB::table('tenant_messaging_ledger_entries')->where('tenant_id', $tenant->id)->delete();
+        DB::table('tenant_messaging_credit_accounts')->where('tenant_id', $tenant->id)->delete();
+        \App\Models\TenantModuleEntitlement::where('tenant_id', $tenant->id)->delete();
         foreach ([TenantAiUsageEvent::class, AiBranchAction::class, AiBranchConversation::class, AiBranchAccount::class, FieldServiceJobNote::class, FieldServiceJob::class, TenantBillingSubscription::class, TenantAccessAddon::class, TenantAccessProfile::class] as $model) {
             $model::query()->where('tenant_id', $tenant->id)->delete();
         }
@@ -128,4 +147,4 @@ PHP;
         }
         rmdir($dir);
     }
-})->with(['quota', 'approval', 'briefing_quota', 'briefing_replay']);
+})->with(['quota', 'approval', 'briefing_quota', 'briefing_replay', 'wallet']);

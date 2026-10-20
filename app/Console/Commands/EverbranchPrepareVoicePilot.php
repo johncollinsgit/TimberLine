@@ -25,12 +25,14 @@ class EverbranchPrepareVoicePilot extends Command
     protected $signature = 'everbranch:prepare-voice-pilot
         {--owner-email= : Existing verified account receiving this fictional workspace}
         {--authorization= : Human approval reference, without secrets}
-        {--verify : Read-only check of the grant, canonical access and scripted provider}
-        {--apply : Create or renew the seven-day scripted pilot grant}
+        {--provider= : scripted or openai; omitted renewals retain the approved provider}
+        {--budget-dollars= : Explicit total lifetime provider cap for an openai pilot, at most 15.00}
+        {--verify : Read-only check of the grant, canonical access and approved provider}
+        {--apply : Create or renew the seven-day pilot grant}
         {--revoke : Revoke the pilot instead of provisioning}
         {--force-production : Acknowledge provisioning synthetic records in production}';
 
-    protected $description = 'Preview or provision an isolated, no-charge scripted Ask Everbranch pilot; never provisions a subscription or live provider.';
+    protected $description = 'Preview or provision an isolated Ask Everbranch pilot with scripted or explicitly capped AI answers; never provisions a subscription.';
 
     public function handle(LandlordCommercialConfigService $commercial, LandlordOperatorActionAuditService $audit): int
     {
@@ -48,12 +50,36 @@ class EverbranchPrepareVoicePilot extends Command
 
             return self::FAILURE;
         }
-        $this->line('Workspace: '.AiFictionalPilot::SLUG.'; existing owner #'.$owner->id.'; provider: scripted; real provider cost: zero.');
+        $provider = $this->option('provider') ?: data_get($previous?->result, 'provider', 'scripted');
+        if (! in_array($provider, ['scripted', 'openai'], true)) {
+            $this->error('Provider must be scripted or openai.');
+
+            return self::FAILURE;
+        }
+        $budget = null;
+        $providerSettings = null;
+        if ($provider === 'openai' && ! $this->option('revoke') && ! $this->option('verify')) {
+            $amount = (string) $this->option('budget-dollars');
+            if (! preg_match('/^\d{1,2}(\.\d{1,2})?$/', $amount) || ($budget = (int) round((float) $amount * 100)) < 1 || $budget > 1500) {
+                $this->error('Real AI requires an explicit total --budget-dollars between 0.01 and 15.00, including renewals.');
+
+                return self::FAILURE;
+            }
+            try {
+                $providerSettings = app(\App\Services\AiBranch\AiBranchProvider::class)->pilotSettings();
+            } catch (\Throwable) {
+                $this->error('Dedicated AI Branch credentials, model and verified rates must be configured before granting real AI.');
+
+                return self::FAILURE;
+            }
+        }
+        $this->line('Workspace: '.AiFictionalPilot::SLUG.'; existing owner #'.$owner->id.'; provider: '.$provider
+            .($budget !== null ? '; total lifetime provider cap: $'.number_format($budget / 100, 2).'.' : '.'));
         $this->line('Only synthetic jobs, notes, tasks and follow-ups. No subscription, payment, email, SMS, phone call or integration connection.');
         if ($this->option('verify')) {
             $pilot = app(AiFictionalPilot::class);
             if (! $existing || ! $pilot->grant($existing, $owner)) {
-                $this->error('No active scripted grant for this owner.');
+                $this->error('No active pilot grant for this owner.');
 
                 return self::FAILURE;
             }
@@ -63,9 +89,9 @@ class EverbranchPrepareVoicePilot extends Command
                 $pilot->during($existing, $owner, function () use ($existing, $owner) {
                     app(\App\Services\AiBranch\AiAssistantAccess::class)->authorize($existing, $owner);
                     $settings = app(\App\Services\AiBranch\AiBranchProvider::class)->settings();
-                    abort_unless(isset($settings['fictional_scope']) && $settings['input_rate'] === 0 && $settings['output_rate'] === 0, 403);
+                    abort_unless(isset($settings['fictional_scope']), 403);
                     $snapshot = app(\App\Services\AiBranch\AiWorkspaceContext::class)->capture($existing, $owner);
-                    $this->info('Verified active scripted grant; canonical access passed; no provider dispatched. Permitted sample records: '.count($snapshot['sources']));
+                    $this->info('Verified active '.($settings['fictional_provider'] ?? 'scripted').' grant; canonical access passed; no provider dispatched. Permitted sample records: '.count($snapshot['sources']));
                 });
             } finally {
                 request()->setUserResolver($resolver);
@@ -94,7 +120,7 @@ class EverbranchPrepareVoicePilot extends Command
 
             return self::SUCCESS;
         }
-        $grant = DB::transaction(function () use ($owner, $commercial, $audit) {
+        $grant = DB::transaction(function () use ($owner, $commercial, $audit, $provider, $budget, $providerSettings) {
             User::whereKey($owner->id)->lockForUpdate()->firstOrFail();
             $tenant = Tenant::firstOrCreate(['slug' => AiFictionalPilot::SLUG], ['name' => 'Fictional Cedar Works - Voice Pilot']);
             $tenant = Tenant::whereKey($tenant->id)->lockForUpdate()->firstOrFail();
@@ -114,7 +140,7 @@ class EverbranchPrepareVoicePilot extends Command
                     }
                     $commercial->setTenantModuleEntitlement($tenant->id, $module, ['availability_status' => 'available', 'enabled_status' => 'enabled',
                         'billing_status' => 'trial', 'currency' => 'USD', 'entitlement_source' => AiFictionalPilot::SOURCE,
-                        'notes' => 'Synthetic scripted pilot only. No paid subscription or automated charge.', 'ends_at' => now()->addDays(7)]);
+                        'notes' => 'Synthetic pilot only. No paid subscription or automated customer charge.', 'ends_at' => now()->addDays(7)]);
                 }
                 AiBranchAccount::create(['tenant_id' => $tenant->id, 'enabled' => true, 'budget_cents' => 1]);
                 $customer = MarketingProfile::create(['tenant_id' => $tenant->id, 'first_name' => 'Fictional', 'last_name' => 'Jordan']);
@@ -134,13 +160,19 @@ class EverbranchPrepareVoicePilot extends Command
                     $commercial->setTenantModuleEntitlement($tenant->id, $entitlement->module_key, [
                         'availability_status' => 'available', 'enabled_status' => 'enabled', 'billing_status' => 'trial',
                         'currency' => 'USD', 'entitlement_source' => AiFictionalPilot::SOURCE, 'ends_at' => now()->addDays(7),
-                        'notes' => 'Renewed synthetic scripted pilot. No paid subscription or automated charge.']);
+                        'notes' => 'Renewed synthetic pilot. No paid subscription or automated customer charge.']);
                 }
+            }
+            if ($provider === 'openai') {
+                $account = AiBranchAccount::where('tenant_id', $tenant->id)->lockForUpdate()->firstOrFail();
+                $account->forceFill(['budget_cents' => $budget, 'approved_by' => $owner->id, 'approved_at' => now()])->save();
             }
 
             return $audit->record($tenant->id, null, 'ai_voice.pilot.grant', targetType: 'fictional_workspace', targetId: $tenant->id,
                 context: ['channel' => 'privileged_console'], confirmation: ['explicit' => true, 'reference' => $this->option('authorization')],
-                result: ['version' => 1, 'owner_user_id' => (int) $owner->id, 'provider' => 'scripted', 'synthetic_only' => true, 'expires_at' => now()->addDays(7)->toIso8601String()]);
+                result: ['version' => 2, 'owner_user_id' => (int) $owner->id, 'provider' => $provider, 'synthetic_only' => true,
+                    ...($provider === 'openai' ? ['provider_budget_cents' => $budget, 'provider_settings' => $providerSettings, 'cap_window' => 'workspace_lifetime'] : []),
+                    'expires_at' => now()->addDays(7)->toIso8601String()]);
         });
         $this->info('Prepared audited pilot grant #'.$grant->id.'. Expires '.$grant->result['expires_at']);
         $this->line(url('/dashboard?tenant='.AiFictionalPilot::SLUG));

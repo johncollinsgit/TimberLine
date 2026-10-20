@@ -1,5 +1,21 @@
 # Fictional Ask Everbranch pilot
 
+## October 20 real-model authorization
+
+The owner subsequently approved real AI for this existing named pilot with a
+**$5 total lifetime provider cap**. See
+`ai-voice-pricing-and-rollout.md` for current controls and the separate ordinary
+tenant pricing policy. `--provider=openai --budget-dollars=5.00` explicitly records
+that mode, current provider settings and the cap. Omitting those options never
+silently activates a paid provider. A real-model renewal requires the explicit
+cap again and does not reset existing usage. The exact grant and current model
+configuration are rechecked immediately before dispatch. Synthetic practice has
+no customer credit debit, subscription or invoice. The historical zero-dispatch
+description below applies to scripted mode only. Protected maintenance workflow
+now accepts the explicit provider and total-cap inputs.
+
+## Original scripted mode
+
 The user selected a fictional workspace and named an existing account to own it.
 Production web navigation was deployed through
 PR 417 at `f15fc65`; the full Linux suite passed 3,609 tests / 24,893 assertions,

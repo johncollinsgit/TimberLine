@@ -72,7 +72,7 @@ class StripeWebhookIngestService
         }
 
         if (($metadata['purpose'] ?? null) === 'messaging_credit') {
-            return $this->fulfillMessagingCredit($eventId, $eventType, $object, $metadata);
+            return $this->fulfillMessagingCredit($eventId, $eventType, $object, $metadata, $livemode);
         }
 
         if (! $this->supportsEventType($eventType)) {
@@ -768,7 +768,7 @@ class StripeWebhookIngestService
     }
 
     /** @param array<string,mixed> $object @param array<string,mixed> $metadata */
-    protected function fulfillMessagingCredit(string $eventId, string $eventType, array $object, array $metadata): array
+    protected function fulfillMessagingCredit(string $eventId, string $eventType, array $object, array $metadata, bool $livemode): array
     {
         if (! in_array($eventType, ['checkout.session.completed', 'checkout.session.async_payment_succeeded'], true)) {
             return ['ok' => true, 'status_code' => 200, 'message' => 'ignored'];
@@ -783,7 +783,14 @@ class StripeWebhookIngestService
             return ['ok' => false, 'status_code' => 400, 'message' => 'Invalid messaging credit checkout.'];
         }
 
-        $this->messagingUsage->fund($tenantId, $packCents * 10000, $eventId, [
+        $ai = ($metadata['credit_scope'] ?? null) === 'ai_shared';
+        if ($ai && ($livemode !== str_starts_with((string) config('services.stripe.secret'), 'sk_live_')
+            || ($object['mode'] ?? '') !== 'payment' || ($object['currency'] ?? '') !== 'usd' || $paymentStatus !== 'paid'
+            || ! preg_match('/^cs_[A-Za-z0-9_]+$/', $object['id'] ?? '') || ! Tenant::whereKey($tenantId)->exists())) {
+            return ['ok' => false, 'status_code' => 400, 'message' => 'Invalid AI service credit payment.'];
+        }
+        $source = $ai ? 'ai-credit-checkout:'.$object['id'] : $eventId;
+        $this->messagingUsage->fund($tenantId, $packCents * 10000, $source, [
             'stripe_event_id' => $eventId,
             'stripe_checkout_session_id' => $object['id'] ?? null,
             'pack_cents' => $packCents,

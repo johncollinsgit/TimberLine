@@ -689,5 +689,5 @@ test('workspace daylight savings boundaries do not change UTC billing windows', 
     foreach (['2026-10-31 23:59:59', '2026-11-01 00:00:00'] as $time) {
         App\Models\TenantAiUsageEvent::create(['tenant_id' => $tenant->id, 'user_id' => $user->id, 'client_uuid' => (string) Illuminate\Support\Str::uuid(), 'feature' => 'ai_branch_chat', 'context' => 'workspace', 'model' => 'fake', 'status' => 'settled', 'duration_seconds' => 0, 'provider_cost_micros' => 50, 'buyer_charge_micros' => 0, 'occurred_at' => $time]);
     }
-    expect(app(App\Services\AiBranch\AiBranchChat::class)->usage($tenant))->toBe(['responses' => 1, 'provider_micros' => 50]);
+    expect(app(App\Services\AiBranch\AiBranchChat::class)->usage($tenant))->toBe(['responses' => 1, 'provider_micros' => 50, 'buyer_micros' => 0]);
 });

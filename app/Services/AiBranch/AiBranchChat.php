@@ -49,9 +49,9 @@ class AiBranchChat
     public function usage(Tenant $tenant): array
     {
         $events = TenantAiUsageEvent::query()->where('tenant_id', $tenant->id)->where('feature', 'ai_branch_chat')
-            ->where('occurred_at', '>=', now('UTC')->startOfMonth());
+            ->when(! app(AiFictionalPilot::class)->reserved($tenant), fn ($query) => $query->where('occurred_at', '>=', now('UTC')->startOfMonth()));
 
-        return ['responses' => (clone $events)->count(), 'provider_micros' => (int) $events->sum('provider_cost_micros')];
+        return ['responses' => (clone $events)->count(), 'provider_micros' => (int) (clone $events)->sum('provider_cost_micros'), 'buyer_micros' => (int) $events->sum('buyer_charge_micros')];
     }
 
     public function ask(Tenant $tenant, User $user, int $conversationId, string $question, string $uuid, array $origin = []): array
@@ -84,7 +84,7 @@ class AiBranchChat
         abort_unless(Str::isUuid($uuid) && trim($question) !== '' && mb_strlen($question) <= 3000, 422);
         abort_if(! $enhanced && $origin !== [], 422, 'Page context is unavailable.');
         $origin = $enhanced ? app(AiWorkspacePage::class)->normalize($origin) : [];
-        $settings = $this->provider->settings();
+        $settings = $this->provider->settings($tenant);
         $fingerprint = hash('sha256', json_encode($enhanced
             ? [$user->id, $conversationId, $question, $purpose, $origin]
             : [$user->id, $conversationId, $question], JSON_THROW_ON_ERROR));
@@ -122,15 +122,24 @@ class AiBranchChat
                 $usage = $this->usage($tenant);
                 $reservedMicros = $this->provider->cost($settings['max_input'], $settings['max_output'], $settings);
                 $cap = min($account->budget_cents, (int) $tier['ai_limits']['provider_budget_cents']) * 10000;
-                abort_unless($usage['responses'] < $tier['ai_limits']['responses'] && $cap > 0 && $cap >= $usage['provider_micros'] + $reservedMicros, 429, 'This workspace has reached its AI allowance.');
+                if (isset($settings['pilot_budget_cents'])) {
+                    $cap = min($cap, $settings['pilot_budget_cents'] * 10000);
+                }
+                $multiplier = (int) ($settings['buyer_multiplier'] ?? 0);
+                $reservedBuyer = $reservedMicros * $multiplier;
+                abort_unless($usage['responses'] < $tier['ai_limits']['responses'] && $cap > 0
+                    && $cap >= ($multiplier ? $usage['buyer_micros'] + $reservedBuyer : $usage['provider_micros'] + $reservedMicros), 429, 'This workspace has reached its AI allowance.');
                 $counts = array_map(fn ($entry) => $entry['returned'], $snapshot['coverage'] ?? []);
                 $event = TenantAiUsageEvent::query()->create([
                     'tenant_id' => $tenant->id, 'user_id' => $user->id, 'client_uuid' => $uuid, 'feature' => 'ai_branch_chat',
                     'context' => 'workspace', 'model' => $settings['model'], 'status' => 'reserved', 'duration_seconds' => 0,
-                    'provider_cost_micros' => $reservedMicros, 'buyer_charge_micros' => 0, 'occurred_at' => now('UTC'),
+                    'provider_cost_micros' => $reservedMicros, 'buyer_charge_micros' => $reservedBuyer, 'occurred_at' => now('UTC'),
                     'metadata' => ['request_hash' => $fingerprint, 'conversation_id' => $conversation->id, 'settings' => $settings,
-                        'billing_scope' => isset($settings['fictional_scope']) ? 'fictional_no_charge' : 'included_subscription', 'purpose' => $purpose, 'context_version' => $snapshot['version'] ?? 1, 'adapter_counts' => $counts],
+                        'billing_scope' => $multiplier ? 'ai_prepaid' : (isset($settings['fictional_scope']) ? (($settings['fictional_provider'] ?? '') === 'openai' ? 'fictional_capped_provider' : 'fictional_no_charge') : 'included_subscription'), 'purpose' => $purpose, 'context_version' => $snapshot['version'] ?? 1, 'adapter_counts' => $counts],
                 ]);
+                if ($multiplier) {
+                    app(\App\Services\Marketing\Messaging\TenantMessagingUsageService::class)->reserveAi($event, $reservedBuyer, $settings);
+                }
                 $conversation->forceFill(['pending_uuid' => $uuid])->save();
 
                 return compact('event', 'input', 'sources', 'snapshot', 'counts');
@@ -163,13 +172,20 @@ class AiBranchChat
             $conversation = AiBranchConversation::query()->where('tenant_id', $tenant->id)->where('user_id', $user->id)->whereKey($conversationId)->lockForUpdate()->firstOrFail();
             $event = TenantAiUsageEvent::query()->where('tenant_id', $tenant->id)->whereKey($reservation['event']->id)->lockForUpdate()->firstOrFail();
             abort_unless($event->status === 'reserved' && $conversation->pending_uuid === $uuid, 409);
+            $cost = $this->provider->cost($result['input_tokens'], $result['output_tokens'], $settings, $result['cached_input_tokens'] ?? 0);
+            if (isset($settings['buyer_multiplier'])) {
+                $event->provider_request_id = $result['provider_id'];
+                app(\App\Services\Marketing\Messaging\TenantMessagingUsageService::class)->settleAi($event, $cost);
+            }
             $message = ['role' => 'assistant', 'uuid' => $uuid, 'text' => $result['reply'], 'sources' => $reservation['sources'],
                 'conversation_id' => $conversationId, 'purpose' => $purpose, 'generated_at' => now('UTC')->toIso8601String(),
+                ...(isset($settings['buyer_multiplier']) ? ['usage' => ['model' => $settings['model'], 'input_tokens' => $result['input_tokens'],
+                    'cached_input_tokens' => $result['cached_input_tokens'] ?? 0, 'output_tokens' => $result['output_tokens'], 'charge_micros' => $cost * 2]] : []),
                 ...($reservation['snapshot'] ? ['workspace_context' => $reservation['snapshot']] : [])];
             $conversation->forceFill(['messages' => [...(array) $conversation->messages, ['role' => 'user', 'uuid' => $uuid, 'text' => $question], $message], 'pending_uuid' => null])->save();
             $event->forceFill(['status' => 'settled', 'provider_request_id' => $result['provider_id'],
-                'provider_cost_micros' => $this->provider->cost($result['input_tokens'], $result['output_tokens'], $settings),
-                'metadata' => [...$event->metadata, 'input_tokens' => $result['input_tokens'], 'output_tokens' => $result['output_tokens']],
+                'provider_cost_micros' => $cost, 'buyer_charge_micros' => $cost * (int) ($settings['buyer_multiplier'] ?? 0),
+                'metadata' => [...$event->metadata, 'input_tokens' => $result['input_tokens'], 'output_tokens' => $result['output_tokens'], 'cached_input_tokens' => $result['cached_input_tokens'] ?? 0],
             ])->save();
 
             return $message;
@@ -183,7 +199,7 @@ class AiBranchChat
             throw $exception;
         }
         if ($enhanced) {
-            $this->metric($tenant, $user, $uuid, $purpose, 'settled', $started, $reservation['counts'], [...$result, 'provider_cost_micros' => $this->provider->cost($result['input_tokens'], $result['output_tokens'], $settings)]);
+            $this->metric($tenant, $user, $uuid, $purpose, 'settled', $started, $reservation['counts'], [...$result, 'provider_cost_micros' => $this->provider->cost($result['input_tokens'], $result['output_tokens'], $settings, $result['cached_input_tokens'] ?? 0)]);
         }
 
         return $message;

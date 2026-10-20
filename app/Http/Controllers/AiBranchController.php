@@ -35,7 +35,15 @@ class AiBranchController extends Controller
     public function index(Request $request)
     {
         $tenant = $this->tenant($request);
-        $tier = $this->access->authorize($tenant, $request->user(), false);
+        try {
+            $tier = $this->access->authorize($tenant, $request->user(), false);
+        } catch (HttpException $exception) {
+            if (! config('ai_branch.standard_enabled') || app(\App\Services\AiBranch\AiFictionalPilot::class)->reserved($tenant)) {
+                throw $exception;
+            }
+
+            return response()->view('ai-branch.offer', ['tenant' => $tenant, 'existing' => (config('ai_branch.existing_tenants')[$tenant->id] ?? null) === $tenant->slug])->header('Cache-Control', 'no-store, private');
+        }
         $account = AiBranchAccount::query()->where('tenant_id', $tenant->id)->first();
         $conversation = null;
         $contextNotice = null;
@@ -57,6 +65,12 @@ class AiBranchController extends Controller
         $workspace = $enhanced ? ($snapshot['workspace'] ?? $workspaceContext->profile($tenant, $request->user())) : null;
 
         return response()->view('ai-branch.index', [
+            'canApproveAi' => $this->access->canApprove($tenant, $request->user()),
+            'metered' => app(\App\Services\AiBranch\AiBranchOffer::class)->metered($tenant),
+            'commercial' => app(\App\Services\AiBranch\AiBranchOffer::class)->presentation($tenant),
+            'selectedModel' => app(\App\Services\AiBranch\AiBranchOffer::class)->model($tenant),
+            'pilotGrant' => app(\App\Services\AiBranch\AiFictionalPilot::class)->current()
+                ? app(\App\Services\AiBranch\AiFictionalPilot::class)->grant($tenant, $request->user()) : null,
             'tenant' => $tenant, 'tier' => $tier, 'account' => $account,
             'enhanced' => $enhanced, 'snapshot' => $snapshot, 'workspace' => $workspace, 'origin' => $origin, 'contextNotice' => $contextNotice,
             'usage' => $this->chat->usage($tenant), 'conversation' => $conversation,
@@ -85,29 +99,63 @@ class AiBranchController extends Controller
             $request->validate(['budget_dollars' => ['required', 'regex:/^\d{1,4}(\.\d{1,2})?$/']]);
             $request->merge(['budget_cents' => (int) round((float) $request->input('budget_dollars') * 100)]);
         }
-        $data = $request->validate(['enabled' => ['required', 'boolean'], 'budget_cents' => ['required', 'integer', 'min:0', 'max:'.$tier['ai_limits']['provider_budget_cents']], 'confirmed' => ['accepted'], 'timezone' => ['sometimes', 'required', 'string', 'timezone:all']]);
+        $metered = app(\App\Services\AiBranch\AiBranchOffer::class)->metered($tenant);
+        if ($metered) {
+            abort_unless($this->access->canApprove($tenant, $request->user()), 403, 'A workspace owner must approve AI pricing, model and cap.');
+        }
+        $data = $request->validate(['enabled' => ['required', 'boolean'], 'budget_cents' => ['required', 'integer', 'min:0', 'max:'.$tier['ai_limits']['provider_budget_cents']], 'confirmed' => ['accepted'], 'timezone' => ['sometimes', 'required', 'string', 'timezone:all'],
+            'model' => [$metered ? 'required' : 'sometimes', \Illuminate\Validation\Rule::in(array_keys(config('ai_branch.models')))]]);
+        abort_if($metered && $data['enabled'] && $data['budget_cents'] === 0, 422, 'Choose a positive spending cap before enabling AI.');
         if (isset($data['timezone'])) {
             app(AiWorkspaceContext::class)->authorize($tenant, $request->user(), false);
         }
-        DB::transaction(function () use ($tenant, $request, $data): void {
+        DB::transaction(function () use ($tenant, $request, $data, $metered): void {
             $account = AiBranchAccount::query()->firstOrCreate(['tenant_id' => $tenant->id]);
             $account = AiBranchAccount::query()->whereKey($account->id)->lockForUpdate()->firstOrFail();
             $before = $account->only(['enabled', 'budget_cents']);
-            if (isset($data['timezone'])) {
+            if (isset($data['timezone']) || $metered) {
                 $profile = TenantAccessProfile::query()->where('tenant_id', $tenant->id)->lockForUpdate()->firstOrFail();
                 $metadata = (array) $profile->metadata;
                 $before['timezone'] = data_get($metadata, 'ai_branch.timezone', 'UTC');
-                data_set($metadata, 'ai_branch.timezone', $data['timezone']);
+                if (isset($data['timezone'])) {
+                    data_set($metadata, 'ai_branch.timezone', $data['timezone']);
+                }
+                if ($metered) {
+                    data_set($metadata, 'ai_branch.model', $data['model']);
+                    data_set($metadata, 'ai_branch.usage_terms', ['version' => config('ai_branch.rates_version'), 'multiplier' => 2,
+                        'rates_digest' => hash('sha256', json_encode(config('ai_branch.models')[$data['model']], JSON_THROW_ON_ERROR)),
+                        'approved_by' => $request->user()->id, 'approved_at' => now()->toIso8601String()]);
+                }
                 $profile->forceFill(['metadata' => $metadata])->save();
             }
             $account->fill(['enabled' => $data['enabled'], 'budget_cents' => $data['budget_cents'], 'approved_by' => $request->user()->id, 'approved_at' => now()])->save();
             app(LandlordOperatorActionAuditService::class)->record($tenant->id, $request->user()->id, 'ai_branch.opt_in',
                 targetType: 'ai_branch_account', targetId: $account->id,
                 confirmation: ['explicit' => true], beforeState: $before, afterState: [...$account->only(['enabled', 'budget_cents']), ...(isset($data['timezone']) ? ['timezone' => $data['timezone']] : [])],
-                context: ['billing_impact' => 'No subscription change or overage charge; provider cap only.']);
+                context: ['billing_impact' => $metered ? 'Prepaid AI usage at approved model rates (2x provider cost); no subscription change.' : 'No subscription change or overage charge; provider cap only.',
+                    ...($metered ? ['model' => $data['model'], 'pricing_version' => config('ai_branch.rates_version')] : [])]);
         }, 3);
 
         return redirect()->route('ai-branch.index', ['tenant' => $tenant->slug])->with('status', 'AI workspace settings saved.');
+    }
+
+    public function checkout(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        $request->validate(['confirmed' => ['accepted']]);
+        $result = app(\App\Services\AiBranch\AiBranchAccessPurchase::class)->prepare($tenant, $request->user(), 'owner-reviewed-ai-access-'.$request->user()->id);
+
+        return redirect()->away($result['url']);
+    }
+
+    public function creditCheckout(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        $data = $request->validate(['pack_cents' => ['required', 'integer'], 'confirmed' => ['accepted']]);
+        $result = app(\App\Services\Billing\StripeMessagingCreditService::class)->createAiCheckout($tenant, $request->user(), $data['pack_cents']);
+        abort_unless($result['ok'] ?? false, 422, $result['message'] ?? 'Choose a valid credit pack.');
+
+        return redirect()->away($result['url']);
     }
 
     public function start(Request $request)
@@ -130,6 +178,9 @@ class AiBranchController extends Controller
     {
         $tenant = $this->tenant($request);
         $data = $request->validate(['question' => ['required', 'string', 'max:3000'], 'request_id' => ['required', 'uuid']]);
+        if ($request->has('model')) {
+            abort_unless($request->input('model') === app(\App\Services\AiBranch\AiBranchOffer::class)->model($tenant), 409, 'The selected AI model changed. Refresh before asking again.');
+        }
         $result = $this->chat->ask($tenant, $request->user(), $conversation, $data['question'], $data['request_id'], $this->origin($request));
         if ($request->expectsJson()) {
             return response()->json($result)->header('Cache-Control', 'no-store');

@@ -3,9 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npm run typecheck && npm run test:trajectory && vite build",
+    "build": "npm run typecheck && npm run test:trajectory && npm run test:ai-voice && vite build",
     "test:highlevel-fleet": "node --test tests/e2e/highlevel-fleet.test.mjs",
     "test:trajectory": "node --test tests/e2e/trajectory-money.test.mjs tests/e2e/trajectory-charts.test.mjs tests/e2e/trajectory-bank-link.test.mjs",
+    "test:ai-voice": "node --test tests/e2e/ai-voice-conversation.test.mjs",
     "media:optimize-public": "node scripts/media/optimize-public-image.mjs",
     "test:visual": "playwright test --config=playwright.public.config.ts",
     "test:lighthouse:public": "lhci autorun --config=lighthouserc.public.cjs",

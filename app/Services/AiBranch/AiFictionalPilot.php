@@ -9,7 +9,7 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use Closure;
 
-/** Audited, expiring access to one synthetic workspace. Never grants a live provider. */
+/** Audited, expiring access to one synthetic workspace and its approved provider. */
 class AiFictionalPilot
 {
     public const SLUG = 'everbranch-voice-pilot';
@@ -37,9 +37,15 @@ class AiFictionalPilot
             ->whereIn('action_type', ['ai_voice.pilot.grant', 'ai_voice.pilot.revoke'])->latest('id')->first();
         if (! $grant || $grant->action_type !== 'ai_voice.pilot.grant' || $grant->status !== 'success'
             || (int) data_get($grant->result, 'owner_user_id') !== (int) $user->id
-            || data_get($grant->result, 'provider') !== 'scripted'
+            || ! in_array(data_get($grant->result, 'provider'), ['scripted', 'openai'], true)
             || data_get($grant->result, 'synthetic_only') !== true
             || ! is_string(data_get($grant->result, 'expires_at'))) {
+            return null;
+        }
+        if (data_get($grant->result, 'provider') === 'openai'
+            && (! is_int(data_get($grant->result, 'provider_budget_cents'))
+                || $grant->result['provider_budget_cents'] < 1 || $grant->result['provider_budget_cents'] > 1500
+                || ! is_array(data_get($grant->result, 'provider_settings')))) {
             return null;
         }
         try {
@@ -95,6 +101,7 @@ class AiFictionalPilot
     {
         $scope = $this->current();
         abort_unless($scope && ($settings['fictional_scope'] ?? null) === $scope, 403, 'Fictional pilot access changed.');
+        abort_unless(($settings['fictional_provider'] ?? 'scripted') === 'scripted', 403);
         $evidence = json_decode((string) ($input[0]['content'] ?? ''), true);
         $sources = data_get($evidence, 'untrusted_workspace_context.sources', []);
         $lines = ['Scripted fictional practice — no language model or external provider was contacted.',
