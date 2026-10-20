@@ -189,3 +189,49 @@ routing. Carolina still requires its owner's genuine account connection or
 onboarding, and direct-charge/refund callback acceptance before collection. OAuth
 registration and payout-setting inspection do not prove a bank connection,
 merchant verification, Plaid OAuth, customer ACH or signed payment delivery.
+
+### Provider acceptance follow-up (2026-10-20)
+
+Protected PR 430 activated the Stripe client configuration at production release
+`6c5afc858d83f6c0441c0103f6b6a2ba45b77e52`. Runtime configuration matches the
+verified platform and exact shared return URL. Carolina's real existing-account
+button now reaches Stripe's account selector. Choosing Return to Evergrove
+returns through the saved owner/session state and displays the cancellation
+message in Carolina. No account was selected or bound. The earlier blank Stripe
+pane did not reproduce; its original cause remains unproven. Do not label this a
+code fix or merchant-onboarding/payment acceptance.
+
+The original owner-only PayPal sandbox Platform Partner App credentials still
+obtain a genuine OAuth token (HTTP 200). They remain local and sandbox-only;
+production PayPal credentials and activation flags are absent/off. The existing
+October 16 partner application must be reviewed rather than submitted again.
+Live approval is not reverified until authenticated provider evidence is
+available. The Developer dashboard requires a fresh platform-account sign-in;
+Safari offered Sarah's passkey, which must not be presumed to identify the
+platform business. Wren's own seller connection remains separate. Verification
+now retains the connection's payment_processing purpose rather than losing it
+when provider readiness metadata is refreshed.
+
+Plaid production rejected a Transactions-only Link-token readiness request with
+HTTP 400 INVALID_FIELD; the error identifies redirect-URI Dashboard
+configuration. The exact required return remains
+`https://app.theeverbranch.com/trajectory`. No Link token or bank item was
+created. Do not set PLAID_REDIRECT_URI until Dashboard registration succeeds,
+then activate configuration through the protected release and perform the
+original-token mobile return, real institution, consent, reconnection and mapping
+checks. An API key alone is not Link readiness or permission to import accounts.
+
+Evergrove's dedicated Wallet merchant still passes API identity inspection. A
+fresh fictional unpaid Wallet session was created without a buyer or submit
+call. The Admin API's exact-source receipt reconciliation query also returned
+HTTP 200 with zero receipts for that unsubmitted session, as expected. No charge,
+order, tenant binding or revenue was created. This proves API access for
+evergrove-11.myshopify.com only. It does not prove merchant-specific SDK origins,
+signed webhooks, tax, capture/refund or fulfillment. Wren and Carolina each need
+their own verified Wallet store; Evergrove is never their payment fallback.
+Shopify's current configuration guide uses OAuth installation for new custom
+apps. The older manual-token Website prototype is not a validated one-click
+merchant connection and remains unreleased.
+
+Local verification: 73 payment-setup, soccer PayPal, Plaid Link-session and Wallet
+preflight tests passed (342 assertions). No schema or rollout setting changed.

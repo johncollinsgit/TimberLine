@@ -15,6 +15,13 @@ merchant checkout product/Venmo eligibility, complete Wren's own seller onboardi
 and verify sandbox/live app ownership, domains, seller permissions and callbacks.
 No other business may reuse Evergrove's merchant account for its own receipts.
 
+The October 20 follow-up reverified genuine sandbox app authentication, but live
+partner approval and Wren merchant/callback acceptance remain unverified. Reuse
+the existing October 16 partner application; do not submit another. See the
+provider acceptance follow-up in `self-service-payments.md`. Connection
+verification retains its payment_processing purpose and grants no bank-feed
+access.
+
 Configuration belongs in the server secret environment:
 
 - Existing `TENANT_PAYMENT_SETUP_ENABLED` and exact tenant allowlist plus canonical
