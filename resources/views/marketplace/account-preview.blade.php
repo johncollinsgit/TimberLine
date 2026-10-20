@@ -1,66 +1,31 @@
-<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="robots" content="noindex,nofollow">
-    <title>{{ $tabs[$tab] }} — Markets & Makers preview</title>
-    @vite('resources/css/marketplace.css')
-    <style>
-        .preview-header{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;padding:22px 5%;border-bottom:1px solid var(--line)}
-        .preview-header p{font-size:12px;margin:0}.preview-name{font:28px Georgia,serif;letter-spacing:-.6px}.preview-sample{display:grid;grid-template-columns:1fr 1fr;gap:24px}.preview-sample img{width:100%;height:250px;border-radius:11px}.preview-sample h3{margin:20px 0 10px}.preview-label{display:block;font-size:12px;font-weight:600;margin-bottom:8px}.preview-note{font-size:13px;max-width:740px}.preview-checks{display:grid;gap:12px;list-style:none;padding:0;font-size:14px}.preview-checks li{padding:14px;background:var(--paper);border-radius:8px}.preview-footer{font-size:12px;padding:25px 5%;border-top:1px solid var(--line)}.preview-header a,.section-tabs a{min-height:44px;display:inline-flex;align-items:center}.section-tabs a[aria-current=page]{background:var(--leaf);color:var(--white)}
-        @media(max-width:700px){.preview-sample{grid-template-columns:1fr}.preview-header{align-items:flex-start}.preview-header .button{width:100%}.section-tabs{gap:5px}.section-tabs a{padding:10px 12px}.page-shell{padding-top:28px}}
-    </style>
-</head>
-<body class="workspace-screen">
-<a class="skip-link" href="#main">Skip to content</a>
-<div class="announcement">Private account preview · Example data · Payments and public storefront off</div>
-<header class="preview-header">
-    <div><a class="preview-name" href="{{ route('marketplace.preview') }}">markets & makers</a><p>Connected by Everbranch</p></div>
-    <a class="button secondary compact" href="{{ route('dashboard') }}">Back to Everbranch</a>
-</header>
-<main id="main" class="page-shell">
-    <span class="eyebrow">YOUR PRIVATE PREVIEW</span>
-    <h1>Your marketplace, taking shape.</h1>
-    <p class="preview-note">Browse the workspace with fictional examples. Nothing here changes a business, connects a provider, or collects money. Your existing Everbranch workspaces stay separate.</p>
-    <nav class="section-tabs" aria-label="Marketplace preview sections">
-        @foreach($tabs as $key => $label)
-            <a href="{{ route('marketplace.preview', ['tab' => $key]) }}" @if($tab === $key) aria-current="page" @endif>{{ $label }}</a>
-        @endforeach
-    </nav>
-    <section aria-labelledby="section-title">
-        <span class="preview-label">Example workspace · Read only</span>
-        <h2 id="section-title">{{ $tabs[$tab] }}</h2>
-        @if($tab === 'overview')
-            <div class="metrics">
-                <div class="metric"><span>Example makers</span><strong>2</strong><small>Fictional businesses</small></div>
-                <div class="metric"><span>Public storefront</span><strong>Off</strong><small>Private to your account</small></div>
-                <div class="metric"><span>Payment collection</span><strong>Off</strong><small>No purchases or payouts</small></div>
-            </div>
-            <div class="panel"><h3>Explore the whole workspace</h3><p>Meet example makers, browse products, review sales and pickup flows, and see the separate launch checks. Use the sections above to look around.</p><a class="button compact" href="{{ route('marketplace.preview', ['tab' => 'makers']) }}">Meet the example makers</a></div>
-        @elseif(in_array($tab, ['makers', 'listings']))
-            <div class="preview-sample">
-                <article class="panel"><img src="{{ asset('images/marketplace/studio.jpg') }}" alt="A light-filled creative studio" width="600" height="400"><h3>{{ $tab === 'makers' ? 'Cedar & Clay Studio' : 'Handmade ceramic collection' }}</h3><p>Fictional example · Ceramics and everyday goods</p><span class="badge">Preview only</span></article>
-                <article class="panel"><img src="{{ asset('images/marketplace/retail.jpg') }}" alt="A thoughtfully arranged independent shop" width="600" height="400"><h3>{{ $tab === 'makers' ? 'Willow Workshop' : 'Small-batch home collection' }}</h3><p>Fictional example · Gifts and homewares</p><span class="badge">Preview only</span></article>
-            </div>
-        @elseif($tab === 'markets')
-            <article class="panel"><span class="badge">Example draft</span><h3>Neighborhood Makers Market</h3><p>Preview a market lineup, maker participation and collection details. No event is published and no location or date is reserved.</p><ul class="preview-checks"><li>Cedar & Clay Studio · Example maker</li><li>Willow Workshop · Example maker</li></ul></article>
-        @elseif($tab === 'pickups')
-            <article class="panel"><h3>Keep each pickup clear</h3><p>The merchant workspace tracks market locations, approved makers, collection windows and order handoff. There are no real pickup orders in this preview.</p><span class="badge">No collection scheduled</span></article>
-        @elseif($tab === 'rates')
-            <article class="panel"><h3>Clear maker agreements</h3><p>Each maker accepts versioned terms before selling. The marketplace's default fee is 15%; actual merchant and maker terms still need review and acceptance. This preview creates no agreement or charge.</p><span class="badge">No agreement accepted</span></article>
-        @elseif($tab === 'payments')
-            <article class="panel"><h3>Payment collection is off</h3><p>This preview cannot connect merchant accounts, take a payment, issue a refund, or send a payout. Cards, wallets and PayPal each require their own verified merchant and acceptance checks.</p><ul class="preview-checks"><li>Cards and device wallets · Not connected</li><li>Shop Pay Wallet · Not connected</li><li>PayPal · Not connected</li></ul></article>
-        @elseif($tab === 'connections')
-            <article class="panel"><h3>Your businesses stay separate</h3><p>No other workspace's products, customers, provider accounts or credentials are loaded here. Shared store links do not mean catalog publishing or synchronization.</p><span class="badge">No connection made</span></article>
-        @elseif($tab === 'activity')
-            <article class="panel"><h3>Look around without changing records</h3><p>Switching preview sections does not create merchant activity, orders, inventory changes, messages or provider requests.</p><span class="badge">Read-only preview</span></article>
-        @else
-            <article class="panel"><h3>{{ match($tab) { 'orders' => 'See how sales will come together', 'customers' => 'Keep customer details private', 'discounts' => 'Plan promotions with clear funding', 'statements' => 'Review maker earnings before payment', default => 'Explore your workspace' } }}</h3><p>{{ match($tab) { 'orders' => 'The merchant workspace brings orders, fulfillment and refunds into one view. No real sale or customer order is loaded in this preview.', 'customers' => 'Only authorized merchant operations can show actual buyers and their purchases. This account preview contains no customer records.', 'discounts' => 'Marketplace-funded promotions preserve accepted maker terms. This preview does not create discounts or change prices.', 'statements' => 'Accepted rates, order evidence and reviewed supplier records support statements. This preview creates no balance, bank instruction or payout.', default => 'This section is available as a read-only example.' } }}</p><span class="badge">Example data only</span></article>
-        @endif
-    </section>
-    <aside class="panel" aria-label="Before real trading"><h3>Before real trading</h3><p>A dedicated merchant workspace, domain, policies, tax and pickup setup, approved makers, and actual provider checks are separate next steps. Opening this preview does not enable them.</p></aside>
-</main>
-<footer class="preview-footer">Markets & Makers · Private account preview · No public storefront or payment collection</footer>
-</body>
-</html>
+@extends('marketplace.management-layout', ['consoleRole'=>'preview', 'consoleContext'=>'Neighborhood collective', 'consoleTab'=>$tab, 'consoleBase'=>route('marketplace.preview', [], false)])
+@section('title', 'Markets & Makers · Private preview')
+@section('content')
+@if($tab === 'overview')
+    <span class="eyebrow">A SMALL MARKETPLACE, CONNECTED</span>
+    <h1>Good things. Moving together.</h1>
+    <p>Follow makers from their first product to a market pickup and a reviewed supplier statement. Everything here is fictional.</p>
+    <section class="mm-next"><div><h2>Give the next good product a place.</h2><p>Cedar & Clay’s speckled morning mug is waiting for a product review.</p></div><a class="button" href="?tab=listings&amp;detail=product-mug">Review example product →</a></section>
+    <div class="mm-attention"><a href="?tab=makers&amp;status=Pending"><strong>1</strong><span>Maker application to review →</span></a><a href="?tab=pickups&amp;status=Ready"><strong>1</strong><span>Example pickup ready →</span></a><a href="?tab=statements&amp;detail=statement-willow"><strong>1</strong><span>Supplier statement in review →</span></a></div>
+    <div class="operator-grid"><section class="panel"><div class="heading-row"><h2>The next market</h2><span class="badge">Illustrative</span></div><div class="mm-agenda"><div class="mm-date">NOV<strong>14</strong></div><div><h3>Neighborhood Makers Market</h3><p>10 AM–2 PM Eastern · example Greenville venue<br>2 approved example makers · 1 ready pickup</p><a class="text-link" href="?tab=markets&amp;detail=market-neighborhood">See the example lineup →</a></div></div><p class="fine-print">No real date, venue or booth is reserved.</p></section><section class="panel"><h2>From sale to supplier</h2><p>Two Willow Workshop totes were collected in example order EX-103. Their $40.80 maker earnings are ready for statement review.</p><a class="text-link" href="?tab=statements&amp;detail=statement-willow">Follow the example statement →</a><p class="fine-print">Review and approval come before an external bank payment. No automatic payouts.</p></section></div>
+    <details class="mm-readiness"><summary>Preview boundaries & launch readiness</summary><p>Private account preview. No public storefront or payment collection. No merchant workspace, provider, entitlement or real customer records are loaded. Navigation and filters are read only.</p><a class="text-link" href="?tab=payments">See setup requirements →</a></details>
+    <details class="mm-readiness"><summary>Where live selling fits · Planned</summary><p>Live selling is planned. A future session could connect approved makers, published products and a real market event to native orders. Video, chat, stream scheduling and stream checkout are not available.</p></details>
+@elseif($tab === 'payments')
+    <span class="eyebrow">SETUP, WITHOUT GUESSWORK</span><h1>Ready before the first real sale.</h1><p>This is a read-only launch checklist. It does not connect providers or activate a store.</p>
+    <div class="dashboard-list">@foreach(['Merchant workspace'=>'A dedicated retailer workspace and verified public host must be approved separately.','Payment collection'=>'Off. Original-account provider setup, signed payment events and verified test evidence are required.','Products & stock'=>'Makers accept their applicable terms; operators approve products and explicitly allocated stock.','Markets & pickups'=>'Approve participation and confirm dates, location, cutoff and buyer-code collection instructions.','Supplier payments'=>'Review fulfilled earnings, approve a statement, transfer through the bank separately and record the reference.'] as $title=>$copy)<section class="panel"><div class="heading-row"><h2>{{ $title }}</h2><span class="badge">Not verified</span></div><p>{{ $copy }}</p></section>@endforeach</div>
+    <p class="fine-print">No public storefront or payment collection. This account-only preview grants no merchant role or software entitlement. Commercial offers and existing agreements stay unchanged.</p>
+@else
+    <span class="eyebrow">NEIGHBORHOOD COLLECTIVE · EXAMPLE WORKSPACE</span><h1>{{ $tabs[$tab] }}</h1>
+    <p>{{ ['makers'=>'The people behind the goods, with a clear place for applications and approved suppliers.','listings'=>'Products, availability and approval state. Open a row for its maker and order context.','orders'=>'Illustrative orders with coherent items, fulfillment and totals. These are not sales or payment evidence.','customers'=>'Fictional buyer labels only. No real customer account or personal information.','markets'=>'Bring the online catalog into a real-world market, one lineup and pickup window at a time.','pickups'=>'See what is ready and what has been collected, with the order and event together.','statements'=>'Earnings review, approval and payment recording are distinct steps.','rates'=>'Clear maker terms, before a real product can sell.','discounts'=>'Promotions are funded by the marketplace and protect accepted maker earnings.','connections'=>'Independent makers and explicitly approved Everbranch sources can both take part.','activity'=>'A small example of the work that needs attention. This is not a real audit log.'][$tab] ?? '' }}</p>
+    @php($rows = $examples[$tab] ?? [])
+    @include('marketplace.partials.management-search', ['searchLabel'=>strtolower($tabs[$tab]), 'searchScope'=>'Search covers only these fictional loaded examples. No real business data is searched.', 'searchStatuses'=>collect($rows)->pluck('status')->unique()->mapWithKeys(fn($status)=>[$status=>$status])->all()])
+    <div class="dashboard-list">
+    @foreach($rows as $row)
+        <details class="mm-record" data-mm-row data-mm-status="{{ $row['status'] }}" data-mm-detail="{{ $row['id'] }}" data-mm-search="{{ $row['title'].' '.$row['subtitle'].' '.$row['status'] }}" @if(request('detail') === $row['id']) open @endif>
+            <summary>@if($row['image'])<img class="mm-thumb" src="{{ asset('images/marketplace/'.$row['image']) }}" alt="" loading="lazy">@else<span class="mm-thumb" aria-hidden="true">{{ mb_substr($row['title'],0,1) }}</span>@endif<span class="mm-record-copy"><strong>{{ $row['title'] }}</strong><small>{{ $row['subtitle'] }}</small></span><span class="mm-record-meta">{{ $row['amount'] }}<span class="badge {{ in_array($row['status'],['Pending','Review']) ? 'warning' : '' }}">{{ $row['status'] }}</span></span></summary>
+            <div class="mm-record-body"><p class="fine-print">Example data · Read only</p><dl class="mm-details-grid">@foreach($row['details'] as $label=>$value)<div><dt>{{ $label }}</dt><dd>{{ $value }}</dd></div>@endforeach</dl><div class="inline-actions">@foreach($row['links'] as $label=>$query)<a class="text-link" href="?tab={{ $query }}">{{ $label }} →</a>@endforeach</div></div>
+        </details>
+    @endforeach
+    </div>
+@endif
+@endsection

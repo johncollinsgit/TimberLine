@@ -1,0 +1,148 @@
+{
+  "captured_utc": "2026-10-20T17:29:14.346999+00:00",
+  "branch": "codex/markets-makers-premium-console-20261020",
+  "source_base": "abacc4e08143cfaaa2d7a0a2e3585b29d65056cf",
+  "unmerged_phase1_correction_head": "b769733e123d3047021a9f7ec5f4cfc8b331a08d",
+  "required_reconciliation": "Coordinator owns integration of phase1 corrections/current main and shared workflows/Vite/docs. This source does not merge them.",
+  "validation": {
+    "marketplace-management-accepted-export": [
+      "  Tests:    98 passed (1127 assertions)"
+    ],
+    "marketplace-team-navigation-regression": [
+      "  Tests:    212 passed (2085 assertions)"
+    ],
+    "marketplace-scope-regression": [
+      "  Tests:    35 passed (269 assertions)"
+    ],
+    "browser-marketplace-management-accepted": [
+      "  22 passed (8.6s)"
+    ]
+  },
+  "production_build": "PASS: typecheck, existing JS tests, Vite; existing Rollup annotation warnings",
+  "pint": "8 affected PHP files pass",
+  "schema_changes": false,
+  "protected_authority_sources": [
+    {
+      "path": "config/module_catalog.php",
+      "sha256": "98fc4a4f08992b8b46fc92b3df02648453f6283e1f782074ee5ac51daf45b51b",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "config/ai_branch.php",
+      "sha256": "a5263b5109cb5e0fb054376601780d3021de319000fe9e1453d6eccbe73c4a53",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "config/marketplace.php",
+      "sha256": "93cc05ecff8ef036f3d00d0aa6b68702a8ee6a8985b3eead6423de0175cbd71a",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "app/Services/Billing/TenantAiUsageService.php",
+      "sha256": "6c517c9cfc8b4c567ebb554e343863068d8438256f525ad697ed0dde20966157",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "app/Services/AiBranch/AiBranchOffer.php",
+      "sha256": "3633105d96bd573831f102b7b836035bac096d69b06ad9ea546e3ece653a608e",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "app/Services/AiBranch/AiBranchAccess.php",
+      "sha256": "cfdc8e8e29154f2cec9cd279a242ab318dd90a4fc2b2d93a1b54667e15293b0a",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "app/Services/AiBranch/AiFictionalPilot.php",
+      "sha256": "784a35a140adc44784c5afcdf668ddd08aeede371af1a757a6eec500f5d41775",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "app/Services/Marketplace/MarketplaceAccess.php",
+      "sha256": "6526a5a1603b75010afef9cebd3c18d4f09cf5dcbdeb13ba5bbeb173404706e0",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "routes/marketplace.php",
+      "sha256": "8d680316557eb6b1b3bcb9ae326f244726c22ab494ebdef391122334a2ef2227",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "resources/views/marketplace/layout.blade.php",
+      "sha256": "794530ba9d84b405d56ff4d49022dbeca8771656e5fb419c5c5977082bfa1f26",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "resources/css/marketplace.css",
+      "sha256": "3f016fa963e46d77ca1eed12d9949356e44ed85ea80e94478be4ac4b75f97983",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "resources/css/team-premium.css",
+      "sha256": "f0738af9fefb3e7fff430265f1d276d0960cba3ca67f3aef2a44f4b798f292e8",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "resources/js/team/premium.js",
+      "sha256": "5c63ee11f762464b600745371903467c4ddb0bee370b48e77547920421f2d3f0",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "resources/views/team/app.blade.php",
+      "sha256": "d60b18de3f8584cd4216de8d55409cef144699b8c452bf05d0f7bf4a5284d1fd",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "app/Http/Controllers/Marketplace/MakerController.php",
+      "sha256": "6d155ede8efc3fecae6b186df5565dbfd70b7eb575ea7c30b851e8f07326d892",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "app/Services/Marketplace/MarketplaceCatalog.php",
+      "sha256": "6c1b6c468e1868b0d6fec4e222374930e5446ad4577fd1d804abdd842e5699b8",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "app/Services/Marketplace/MarketplaceOrders.php",
+      "sha256": "a3817a60694747147eac2e3d825fe78101c7d4ffe2852355032af5086263363e",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "app/Services/Marketplace/MarketplaceRates.php",
+      "sha256": "f60ba59c6a66f236d5158f62f0ec7f6e3786a01beae6d5bceacf38fb5f1caa89",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "app/Services/Marketplace/MarketplaceReporting.php",
+      "sha256": "b54fc96cc4b771dc42471610b708bef9797fd8da7f430c57e3c9f93997d3977d",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "app/Services/Marketplace/MarketplaceFulfillment.php",
+      "sha256": "51327eff6a93679f2c5881db9fc7d1f1f76f544e04bc3120e54d0a56985560e2",
+      "unchanged_from_base": true
+    },
+    {
+      "path": "app/Http/Controllers/Marketplace/OperatorController.php",
+      "region": "settings and all following commerce commands",
+      "sha256": "c4d7d31bc33710da09fa549627991212fdfc93784152db22c047ed53d72a1e6d",
+      "unchanged_from_base": true
+    }
+  ],
+  "operator_command_methods_unchanged": true,
+  "original_user_checkout_tracked_diff_sha256": "b3a08d4f7b42156b1ad3df2879f63104110c56673354b7879e82c8ed33dbc874",
+  "preserved_refs": {
+    "codex/everbranch-guided-settings-20261020": "b769733e123d3047021a9f7ec5f4cfc8b331a08d",
+    "codex/everbranch-post-release-audit-20261020": "fb2a5550e177e18aebbe755440ad55ec09625b34",
+    "codex/everbranch-final-quality-audit-20261020": "d52793c8b3850aa302e44fa64e69e17632e48144"
+  },
+  "production_acceptance": false,
+  "live_score_changed": false,
+  "fixture_limitations": [
+    "Actual Blade rendered by authorized fictional feature requests; no persistent production identity.",
+    "Loopback fixture router has no Laravel bootstrap, DB or writes; one header-guarded fictional POST returns303 solely for browser fragment verification.",
+    "No real merchant, provider, message, payment, DNS, entitlement or customer changes.",
+    "Emulated viewports; no physical Galaxy/iPhone.",
+    "Livestream is planned; no video/chat/stream checkout."
+  ]
+}

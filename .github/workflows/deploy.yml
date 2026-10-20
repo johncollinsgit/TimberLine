@@ -191,6 +191,11 @@ jobs:
           BRANCH_SETTINGS_FIXTURES=1 php vendor/bin/pest --compact tests/Feature/Everbranch/BranchSettingsTest.php
           npx playwright test -c playwright.branches.config.ts
 
+      - name: Verify Marketplace management in Chromium and WebKit
+        run: |
+          MARKETPLACE_CONSOLE_FIXTURES=1 php vendor/bin/pest --compact tests/Feature/Marketplace/MarketManagementTest.php
+          npx playwright test -c playwright.marketplace.config.ts
+
       - name: Verify public offer and accessibility in Chromium and WebKit
         run: npx playwright test -c playwright.public.config.ts --grep-invert 'stable public'
 

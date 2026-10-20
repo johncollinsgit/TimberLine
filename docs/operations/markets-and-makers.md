@@ -15,11 +15,19 @@ an actual merchant, create a business entity, change DNS, deploy production, or
 verify real payments on customer devices. The local preview contains fictional
 makers, products, and markets, and checkout stays disabled.
 
-The appearance follows the Android tablet Everbranch Showcase sample: forest,
-sage, ivory, Avenir/system interface text, editorial headings, rounded photography,
-and touch-sized controls. Source photographs and illustrative product images are
-documented in `public/images/marketplace/README.md`. No physical Android tablet
-was attached during browser checks.
+Public shopping keeps the Android tablet Everbranch Showcase presentation.
+Management follows the user's newer Teams preference: a scoped forest sidebar,
+compact white header, warm canvas, loaded-list search and expandable details.
+The account preview, operator and maker surfaces share presentation only, never
+the Teams task runtime or a tenant-resolving shell. Read the
+[management capability map](../architecture/markets-makers-management-console.md).
+Source photographs are documented in `public/images/marketplace/README.md`.
+Browser checks use emulated viewports; no physical Android tablet was attached.
+
+Live selling is planned, not implemented. A future session would reference
+approved makers, published products and optional market events; resulting orders
+would still use native stock, accepted terms and original-provider payment gates.
+There is no working video, chat, stream schedule or live-session checkout.
 
 ## Workspace, domain, and access
 

@@ -1,3 +1,13 @@
+## Markets & Makers management (source candidate, October 20)
+
+The [management console map](docs/architecture/markets-makers-management-console.md)
+documents a scoped Teams-style shell shared by the account-only preview and
+authorized operator/maker views. Preview examples are static and linked; no
+tenant shell or operational records are read. Directory filters state loaded
+bounds; reports retain Eastern periods and test/refund distinctions. Maker
+identity requires no staff tenant or subscription. Public shopping, existing
+commerce commands and all launch gates remain separate. Live selling is planned.
+
 ## Guided onboarding and settings (source candidate, October 20)
 
 See [workspace settings and onboarding](docs/operations/workspace-settings-and-onboarding.md).

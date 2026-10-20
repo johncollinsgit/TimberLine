@@ -1,3 +1,10 @@
+## 2026-10-20 — Markets & Makers management candidate
+
+- Replace wrapped management tabs with grouped persistent navigation and a mobile drawer.
+- Connect fictional preview makers/products/orders/market/pickup/statement details.
+- Add bounded loaded-list search and focused operator/maker editing and fulfillment.
+- Preserve shopper styles, commerce/authentication boundaries and planned livestream wording.
+
 ## 2026-10-20 — Guided workspace settings candidate
 
 - Add scoped categorized settings discovery with metadata-only search.
