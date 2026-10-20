@@ -18,11 +18,19 @@ class WebsiteStripeService
         $key = (string) config('services.stripe.secret');
         abort_unless(str_starts_with($key, 'sk_test_') || str_starts_with($key, 'sk_live_'), 423, 'Stripe is not configured.');
         if ($payment) {
-            abort_unless(hash_equals((string) data_get($payment->metadata, 'platform_fingerprint', ''), $this->fingerprint()), 423, 'The payment account changed. Review this checkout before retrying.');
+            $fingerprint = data_get($payment->metadata, 'fingerprint_version') === 2 ? $this->accountFingerprint() : $this->fingerprint();
+            abort_unless(hash_equals((string) data_get($payment->metadata, 'platform_fingerprint', ''), $fingerprint), 423, 'The payment account changed. Review this checkout before retrying.');
         }
 
-        return Http::asForm()->withBasicAuth($key, '')->acceptJson()->timeout(20)
+        $client = Http::asForm()->withBasicAuth($key, '')->acceptJson()->timeout(20)
             ->withHeaders(['Stripe-Version' => (string) data_get($payment?->metadata, 'api_version', self::API_VERSION)]);
+        if (data_get($payment?->metadata, 'routing_mode', 'destination') === 'direct') {
+            $account = (string) data_get($payment->metadata, 'account_id');
+            abort_unless(preg_match('/^acct_[A-Za-z0-9]+$/D', $account), 423, 'The merchant account needs verification.');
+            $client = $client->withHeaders(['Stripe-Account' => $account]);
+        }
+
+        return $client;
     }
 
     public function fingerprint(): string
@@ -33,6 +41,14 @@ class WebsiteStripeService
     public function live(): bool
     {
         return str_starts_with((string) config('services.stripe.secret'), 'sk_live_');
+    }
+
+    public function accountFingerprint(): string
+    {
+        $platform = (string) config('services.stripe.account_id');
+        abort_unless(preg_match('/^acct_[A-Za-z0-9]+$/D', $platform), 423, 'The Stripe platform identity is not configured.');
+
+        return hash('sha256', $platform.'|'.($this->live() ? 'live' : 'test'));
     }
 
     public function metadata(WebsitePayment $payment): array

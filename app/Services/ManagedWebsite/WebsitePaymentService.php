@@ -22,15 +22,22 @@ class WebsitePaymentService
     {
         abort_unless($order->payment_status === 'paid' && $order->cancelled_at === null, 422, 'Only paid Website orders can be fulfilled.');
         $payment = $order->payments()->forTenantId($order->tenant_id)->where('provider', 'stripe')->latest('id')->first();
-        if ($payment && data_get($payment->metadata, 'checkout_version') === 1) {
+        if ($payment && in_array(data_get($payment->metadata, 'checkout_version'), [1, 2], true)) {
             abort_unless(data_get($payment->metadata, 'paid_confirmed') && data_get($payment->metadata, 'inventory_committed'), 422, 'Payment and inventory verification is required before fulfillment.');
             $pending = collect((array) data_get($payment->metadata, 'refunds', []))->contains(fn ($operation) => ! in_array($operation['status'], ['succeeded', 'failed', 'canceled'], true));
             abort_if($pending, 422, 'Resolve the pending refund before fulfillment.');
+            if (data_get($payment->metadata, 'checkout_version') === 2) {
+                abort_unless(data_get($order->service_request, 'invoice.inventory_committed')
+                    && ! app(WebsiteInvoicePaymentService::class)->hasRefundActivity($order), 422, 'Resolve invoice inventory and refunds before fulfillment.');
+            }
         }
     }
 
     public function processEvent(array $payload): void
     {
+        if (app(WebsiteInvoicePaymentService::class)->processEvent($payload)) {
+            return;
+        }
         $type = (string) ($payload['type'] ?? '');
         $object = (array) data_get($payload, 'data.object', []);
         $sessionEvent = in_array($type, ['checkout.session.completed', 'checkout.session.expired', 'checkout.session.async_payment_succeeded', 'checkout.session.async_payment_failed'], true);
@@ -58,7 +65,8 @@ class WebsitePaymentService
             $query->where('provider_payment_intent_id', $intent);
         }
         $payment = $query->first();
-        if (! $payment || array_key_exists('account', $payload) || ! is_bool($payload['livemode'] ?? null)
+        if (! $payment || (data_get($payment->metadata, 'routing_mode', 'destination') === 'direct'
+                ? ($payload['account'] ?? null) !== data_get($payment->metadata, 'account_id') : array_key_exists('account', $payload)) || ! is_bool($payload['livemode'] ?? null)
             || $payload['livemode'] !== data_get($payment->metadata, 'livemode')) {
             return;
         }
@@ -185,6 +193,12 @@ class WebsitePaymentService
         $customer = (array) ($session['customer'] ?? []);
         $expectedCustomer = data_get($payment->metadata, 'customer_id');
         $address = data_get($order->service_request, 'checkout.tax_address');
+        $direct = data_get($payment->metadata, 'routing_mode', 'destination') === 'direct';
+        $routingValid = $direct
+            ? data_get($intent, 'transfer_data.destination') === null && empty($intent['on_behalf_of'])
+                && data_get($session, 'automatic_tax.liability.type') === 'self'
+            : data_get($intent, 'transfer_data.destination') === $account && ($intent['on_behalf_of'] ?? '') === $account
+                && data_get($session, 'automatic_tax.liability.type') === 'account' && data_get($session, 'automatic_tax.liability.account') === $account;
         if (($session['status'] ?? '') !== 'complete' || ($session['currency'] ?? '') !== $order->currency
             || ($session['client_reference_id'] ?? '') !== (string) $order->id
             || ($session['amount_subtotal'] ?? null) !== $order->subtotal_cents
@@ -192,11 +206,10 @@ class WebsitePaymentService
             || data_get($session, 'total_details.amount_discount') !== 0
             || ! is_int($tax) || $tax < 0 || ! is_int($total) || $total !== $order->subtotal_cents + $order->shipping_cents + $tax
             || data_get($session, 'automatic_tax.enabled') !== true || data_get($session, 'automatic_tax.status') !== 'complete'
-            || data_get($session, 'automatic_tax.liability.type') !== 'account' || data_get($session, 'automatic_tax.liability.account') !== $account
+            || ! $routingValid
             || ! preg_match('/^pi_[A-Za-z0-9_]+$/', (string) ($intent['id'] ?? '')) || ($intent['status'] ?? '') !== 'succeeded'
             || ($intent['currency'] ?? '') !== $order->currency || ($intent['amount_received'] ?? null) !== $total || ($intent['amount'] ?? null) !== $total
             || ($intent['livemode'] ?? null) !== data_get($payment->metadata, 'livemode')
-            || data_get($intent, 'transfer_data.destination') !== $account || ($intent['on_behalf_of'] ?? '') !== $account
             || (int) ($intent['application_fee_amount'] ?? 0) !== (int) data_get($payment->metadata, 'application_fee_cents', 0)
             || ! $stripe->matches($payment, (array) ($intent['metadata'] ?? []))
             || ! $expectedCustomer || ($customer['id'] ?? '') !== $expectedCustomer || ($intent['customer'] ?? '') !== $expectedCustomer) {
@@ -214,7 +227,7 @@ class WebsitePaymentService
         return true;
     }
 
-    private function commitInventory(WebsiteOrder $order): bool
+    public function commitInventory(WebsiteOrder $order): bool
     {
         if ($order->cancelled_at) {
             return false;
@@ -277,9 +290,10 @@ class WebsitePaymentService
         }, 3);
     }
 
-    public function refund(WebsiteOrder $order, User $actor, int $amount, string $reason = '', ?string $requestId = null): WebsiteOrder
+    public function refund(WebsiteOrder $order, User $actor, int $amount, string $reason = '', ?string $requestId = null, ?int $paymentId = null): WebsiteOrder
     {
-        $payment = $order->payments()->forTenantId($order->tenant_id)->where('provider', 'stripe')->where('metadata->paid_confirmed', true)->latest('id')->first();
+        $payment = $order->payments()->forTenantId($order->tenant_id)->where('provider', 'stripe')->where('metadata->paid_confirmed', true)
+            ->when($paymentId, fn ($query) => $query->whereKey($paymentId))->latest('id')->first();
         abort_unless($payment, 422, 'This order has no verified refundable native Stripe payment.');
         $requestId ??= (string) Str::uuid();
         abort_unless(Str::isUuid($requestId), 422, 'A refund request ID is required.');
@@ -292,7 +306,11 @@ class WebsitePaymentService
                 return $operations[$requestId];
             }
             $pending = collect($operations)->filter(fn ($op) => ! in_array($op['status'], ['succeeded', 'failed', 'canceled'], true))->sum('amount_cents');
-            abort_if($amount < 1 || $amount > $payment->amount_cents - $order->refunded_cents - $pending, 422, 'Refund exceeds the balance available after pending refunds.');
+            abort_if(data_get($payment->metadata, 'payment_method') === 'us_bank_account' && $amount !== $payment->amount_cents,
+                422, 'This bank payment requires a full-payment refund.');
+            $confirmed = data_get($payment->metadata, 'checkout_version') === 2
+                ? collect($operations)->where('status', 'succeeded')->unique('provider_id')->sum('amount_cents') : $order->refunded_cents;
+            abort_if($amount < 1 || $amount > $payment->amount_cents - $confirmed - $pending, 422, 'Refund exceeds this payment’s balance after pending refunds.');
             $operation = ['amount_cents' => $amount, 'status' => 'requesting', 'requested_at' => now()->timestamp];
             $metadata['refunds'][$requestId] = $operation;
             $payment->update(['metadata' => $metadata]);
@@ -306,6 +324,9 @@ class WebsitePaymentService
             abort_if(now()->timestamp - $operation['requested_at'] >= 23 * 3600, 409, 'This refund needs provider reconciliation before retrying.');
             $data = ['payment_intent' => $payment->provider_payment_intent_id, 'amount' => $amount, 'reverse_transfer' => 'true',
                 'metadata[website_payment_id]' => (string) $payment->id, 'metadata[website_refund_request]' => $requestId];
+            if (data_get($payment->metadata, 'routing_mode', 'destination') === 'direct') {
+                unset($data['reverse_transfer']);
+            }
             if ((int) data_get($payment->metadata, 'application_fee_cents') > 0) {
                 $data['refund_application_fee'] = 'true';
             }
@@ -375,7 +396,14 @@ class WebsitePaymentService
             $metadata['refunds'] = $operations;
             $status = $confirmed >= $payment->amount_cents ? 'refunded' : ($confirmed > 0 ? 'partially_refunded' : $payment->status);
             $payment->update(['metadata' => $metadata, 'status' => $status]);
-            $order->update(['refunded_cents' => max($order->refunded_cents, $confirmed), 'payment_status' => $status]);
+            if (data_get($metadata, 'checkout_version') === 2) {
+                $receipts = $order->payments()->where('metadata->paid_confirmed', true)->get();
+                $aggregate = $receipts->sum(fn ($receipt) => collect(data_get($receipt->metadata, 'refunds', []))->where('status', 'succeeded')->unique('provider_id')->sum('amount_cents'));
+                $order->update(['refunded_cents' => $aggregate,
+                    'payment_status' => $aggregate >= $receipts->sum('amount_cents') ? 'refunded' : ($aggregate > 0 ? 'partially_refunded' : $order->payment_status)]);
+            } else {
+                $order->update(['refunded_cents' => max($order->refunded_cents, $confirmed), 'payment_status' => $status]);
+            }
             if ($status === 'refunded' && ! data_get($metadata, 'inventory_committed')) {
                 // A reviewed payment never decremented inventory. Release its
                 // uncommitted hold after the full refund, without adding stock.

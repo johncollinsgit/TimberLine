@@ -40,4 +40,9 @@ class TenantPaymentAccount extends Model
             && $this->charges_enabled
             && $this->payouts_enabled;
     }
+
+    public function routingMode(): string
+    {
+        return data_get($this->metadata, 'routing_mode', 'destination');
+    }
 }

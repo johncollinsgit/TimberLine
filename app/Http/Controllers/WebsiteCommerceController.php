@@ -278,8 +278,8 @@ class WebsiteCommerceController extends Controller
     {
         $tenant = $this->tenant($request);
         abort_unless((int) $order->tenant_id === (int) $tenant->id, 404);
-        $data = $request->validate(['request_id' => ['required', 'uuid'], 'amount' => ['required', 'decimal:0,2', 'min:0.01', 'max:1000000'], 'reason' => ['nullable', 'string', 'max:1000']]);
-        $commerce->refund($order, $request->user(), app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->cents($data['amount']), (string) ($data['reason'] ?? ''), $data['request_id']);
+        $data = $request->validate(['payment_id' => ['nullable', 'integer'], 'request_id' => ['required', 'uuid'], 'amount' => ['required', 'decimal:0,2', 'min:0.01', 'max:1000000'], 'reason' => ['nullable', 'string', 'max:1000']]);
+        $commerce->refund($order, $request->user(), app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->cents($data['amount']), (string) ($data['reason'] ?? ''), $data['request_id'], isset($data['payment_id']) ? (int) $data['payment_id'] : null);
 
         return back()->with('status', 'Refund submitted to Stripe.');
     }
@@ -288,9 +288,12 @@ class WebsiteCommerceController extends Controller
     {
         $tenant = $this->tenant($request);
         abort_unless((int) $order->tenant_id === (int) $tenant->id, 404);
-        $payment = $order->payments()->forTenantId($tenant->id)->where('provider', 'stripe')
-            ->where('metadata->checkout_version', 1)->where('metadata->paid_confirmed', true)->latest('id')->firstOrFail();
-        app(\App\Services\ManagedWebsite\WebsitePaymentService::class)->reconcileRefunds($payment);
+        $payments = $order->payments()->forTenantId($tenant->id)->where('provider', 'stripe')
+            ->whereIn('metadata->checkout_version', [1, 2])->where('metadata->paid_confirmed', true)->get();
+        abort_if($payments->isEmpty(), 404);
+        foreach ($payments as $payment) {
+            app(\App\Services\ManagedWebsite\WebsitePaymentService::class)->reconcileRefunds($payment);
+        }
 
         return back()->with('status', 'Refund status checked with Stripe.');
     }
@@ -713,7 +716,9 @@ class WebsiteCommerceController extends Controller
 
     private function validSignature(string $payload, string $header): bool
     {
-        $secret = trim((string) config('managed_website.stripe_webhook_secret'));
+        $event = json_decode($payload, true);
+        $secret = trim((string) config(is_array($event) && array_key_exists('account', $event)
+            ? 'managed_website.stripe_connect_webhook_secret' : 'managed_website.stripe_webhook_secret'));
         if ($secret === '' || ! preg_match('/(?:^|,)\s*t=(\d+)(?:,|$)/', $header, $timestamp) || abs(now()->timestamp - (int) $timestamp[1]) > 300) {
             return false;
         }

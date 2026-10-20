@@ -287,7 +287,7 @@ class DashboardService
             'cash_history' => Snapshot::where('space_id', $space->id)->orderBy('observed_on')->get()->filter(fn ($s) => isset($s->data['imported_cash_cents']))->map(fn ($s) => ['date' => $s->observed_on->toDateString(), 'cash_cents' => $s->data['imported_cash_cents'], 'accounts' => $s->data['imported_cash_accounts'], 'source' => $s->data['cash_source']])->values()->all(),
             'net_worth_history' => Snapshot::where('space_id', $space->id)->orderBy('observed_on')->get()->filter(fn ($s) => isset($s->data['net_worth_cents']))->map(fn ($s) => ['date' => $s->observed_on->toDateString(), ...$s->data])->values()->all(),
             'business' => $space->kind === 'business' ? $this->business($space, $start, $end, $records) : null,
-            'providers' => ['plaid' => app(PlaidService::class)->ready(), 'metals' => filled(config('trajectory.goldapi_key')), 'sms' => (bool) config('trajectory.sms_enabled')],
+            'providers' => ['plaid' => app(PlaidService::class)->linkReady(), 'metals' => filled(config('trajectory.goldapi_key')), 'sms' => (bool) config('trajectory.sms_enabled')],
             'settings' => [
                 'discretionary_categories' => $space->settings['discretionary_categories'] ?? config('trajectory.discretionary_defaults'),
                 'pending_bank_connections' => $space->settings['pending_bank_connections'] ?? [],

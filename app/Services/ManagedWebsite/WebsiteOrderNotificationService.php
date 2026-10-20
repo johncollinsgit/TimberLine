@@ -19,6 +19,7 @@ use Illuminate\Support\Str;
 class WebsiteOrderNotificationService
 {
     private const COPY = [
+        'invoice_payment' => ['Invoice payment received', 'Your payment has been received against your invoice. Open your private invoice to review the receipt and any remaining balance.'],
         'confirmed' => ['Order confirmed', 'Your payment is confirmed. We will update you when your order is ready or on its way.'],
         'payment_review' => ['Your order needs review', 'The store is reviewing your order. Please contact the store before trying another payment.'],
         'preparing' => ['Preparing your package', 'A shipping label is ready. Your package has not yet been handed to the carrier.'],
@@ -31,7 +32,7 @@ class WebsiteOrderNotificationService
     /** Called inside the transaction that accepts a real order/shipment transition. */
     public function record(WebsiteOrder $order, string $transitionKey, string $kind, ?WebsiteShipment $shipment = null): void
     {
-        if ($order->source !== 'native') {
+        if (! in_array($order->source, ['native', 'staff_quote', 'staff_draft_invoice'], true)) {
             return;
         }
         if (DB::transactionLevel() < 1 || ! isset(self::COPY[$kind]) || trim($transitionKey) === '') {
@@ -118,7 +119,7 @@ class WebsiteOrderNotificationService
             $tenant = Tenant::query()->find($row->tenant_id);
             $readiness = $tenant ? $this->readiness($tenant) : ['ready' => false, 'public_url' => null];
             $expectedUrl = $order && $readiness['public_url'] ? $this->orderUrl($order, $readiness['public_url']) : null;
-            if (! $order || $order->source !== 'native' || ! $readiness['ready'] || $expectedUrl !== data_get($row->snapshot, 'order_url')
+            if (! $order || ! in_array($order->source, ['native', 'staff_quote', 'staff_draft_invoice'], true) || ! $readiness['ready'] || $expectedUrl !== data_get($row->snapshot, 'order_url')
                 || ! hash_equals((string) data_get($row->snapshot, 'identity_fingerprint', ''), $this->identityFingerprint())) {
                 $row->update(['status' => 'blocked', 'failure_code' => 'readiness_changed', 'next_attempt_at' => null]);
 
@@ -271,18 +272,22 @@ class WebsiteOrderNotificationService
 
     private function orderUrl(WebsiteOrder $order, string $base): string
     {
+        if (in_array($order->source, ['staff_quote', 'staff_draft_invoice'], true)) {
+            return rtrim($base, '/').'/invoices/'.$order->lookup_token;
+        }
+
         return rtrim($base, '/').'/orders/track?'.http_build_query(['order' => $order->number, 'token' => $order->lookup_token], '', '&', PHP_QUERY_RFC3986);
     }
 
     private function current(WebsiteOrderNotification $row, WebsiteOrder $order): bool
     {
-        if ($order->source !== 'native') {
+        if (! in_array($order->source, ['native', 'staff_quote', 'staff_draft_invoice'], true)) {
             return false;
         }
         if ($row->kind === 'payment_review') {
             return in_array($order->payment_status, ['payment_review', 'paid_review'], true);
         }
-        if ($row->kind === 'confirmed') {
+        if (in_array($row->kind, ['confirmed', 'invoice_payment'], true)) {
             return true; // A delayed receipt remains useful after fulfillment/refund.
         }
         $shipment = WebsiteShipment::query()->forTenantId($order->tenant_id)->where('website_order_id', $order->id)->find($row->website_shipment_id);

@@ -4,6 +4,7 @@ import { chartPresentation } from './chart-theme.js';
 import { outlookUI } from './outlook.js';
 import './app.css';
 import { minor, percentShare, rateMillis } from './money.js';
+import {saveBankLinkSession, restoreBankLinkSession, clearBankLinkSession, bankOAuthReturnUrl, bankLinkExitMessage} from './bank-link-session.js';
 
 const root = document.querySelector('#trajectory');
 if (root) boot();
@@ -16,7 +17,12 @@ function boot() {
   const title = (s) => (data?.workspace_settings?.income_categories?.[s] || s).replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
   const spaces = JSON.parse(root.dataset.spaces || '[]');
   const incoming = new URLSearchParams(window.location.search);
-  const requestedSpace = spaces.find(s=>s.id===Number(incoming.get('space')));
+  let bankStorage;
+  try {bankStorage = window.sessionStorage;} catch {bankStorage = null;}
+  const oauthReturn = incoming.has('oauth_state_id');
+  const receivedRedirectUri = oauthReturn ? bankOAuthReturnUrl(window.location.href) : null;
+  const resumedBankLink = receivedRedirectUri ? restoreBankLinkSession(bankStorage, spaces) : null;
+  const requestedSpace = oauthReturn ? spaces.find(s=>s.id===resumedBankLink?.space_id) : spaces.find(s=>s.id===Number(incoming.get('space')));
   const spaceFor = (kind) => requestedSpace?.kind===kind ? requestedSpace : spaces.find(s=>s.kind===kind);
   const personalSpace = spaceFor('household');
   let businessSpace = spaceFor('business');
@@ -26,6 +32,7 @@ function boot() {
   let scope = requestedSpace?.kind==='business' ? 'business' : personalSpace ? 'personal' : 'business';
   let active = (scope==='personal' ? personalSpace : businessSpace)?.id, data, evidenceRows=null, tab = 'overview', charts = [], chartTables = {}, filter = {}, scenarioId = '', historyMonth = '', budgetSource = null, seasonal = false, formAction;
   if (['transactions','accounts','planning','anomalies','tax','profit','companies','bud'].includes(incoming.get('tab'))) {tab=incoming.get('tab');filter=tab==='transactions'?{review:true}:{};}
+  if (oauthReturn) tab = 'accounts';
   const endpoint = (path, spaceId=active) => `/trajectory/spaces/${spaceId}${path}`;
   const renderSpaceTabs = () => {
     const tabs = [personalSpace&&['personal','Personal'], businessSpace&&['business','Business'], personalSpace&&businessSpace&&['both','Both']].filter(Boolean);
@@ -347,23 +354,26 @@ function boot() {
   function forecastDetail(row) {
     dialog(`Projected ${date(row.date)}`,`<div class="tr-block"><div class="tr-row">Cash <strong>${money(row.cash_cents)}</strong></div><div class="tr-row">Available after reserves <strong>${money(row.available_cents)}</strong></div><div class="tr-row">Reserved for goals <strong>${money(row.goal_reserve_cents)}</strong></div><div class="tr-row">Reserved for medical bills <strong>${money(row.medical_reserve_cents||0)}</strong></div>${data.bills.filter(b=>b.date===row.date).map(b=>`<div class="tr-row">${esc(b.name)}<strong>${money(b.amount_cents)}</strong></div>`).join('')}<p class="tr-subtle">This projection includes confirmed schedules, estimated variable spending, debt payments, and goal reserves. Edit those inputs in Bills & goals or Wealth & debt.</p></div>`,null);
   }
-  async function mapBankAccounts(id) {
-    const result=await api(endpoint(`/banks/${id}/accounts`));
+  async function mapBankAccounts(id, spaceId=active) {
+    const result=await api(endpoint(`/banks/${id}/accounts`, spaceId));
     const fresh=result.accounts.filter(a=>!a.existing);
     if(!fresh.length){notice('All returned accounts already have owners. Use Assign owner to move an imported account.');return;}
-    dialog('Choose who owns each bank account',`<p class="tr-subtle">Transactions will be imported only into the company or household you choose. Its authorized financial members can see that account. Unassigned new accounts remain outside your books.</p>${fresh.map((a,i)=>field('bank-'+i,a.name+(a.mask?' (…'+a.mask+')':''),'text','',[{value:'',label:'Leave unassigned'},...spaces.map(s=>({value:s.id,label:s.name}))],true)).join('')}`,async values=>{const assignments=fresh.flatMap((a,i)=>values.get('bank-'+i)?[{id:a.id,space_id:Number(values.get('bank-'+i))}]:[]);if(!assignments.length)throw new Error('Choose an owner for at least one account.');await api(endpoint(`/banks/${id}/accounts`),'POST',{assignments});notice('Account ownership saved. History is being synchronized.');},'Assign accounts & import');
+    dialog('Choose who owns each bank account',`<p class="tr-subtle">Transactions will be imported only into the company or household you choose. Its authorized financial members can see that account. Unassigned new accounts remain outside your books.</p>${fresh.map((a,i)=>field('bank-'+i,a.name+(a.mask?' (…'+a.mask+')':''),'text','',[{value:'',label:'Leave unassigned'},...spaces.map(s=>({value:s.id,label:s.name}))],true)).join('')}`,async values=>{const assignments=fresh.flatMap((a,i)=>values.get('bank-'+i)?[{id:a.id,space_id:Number(values.get('bank-'+i))}]:[]);if(!assignments.length)throw new Error('Choose an owner for at least one account.');await api(endpoint(`/banks/${id}/accounts`, spaceId),'POST',{assignments});notice('Account ownership saved. History is being synchronized.');},'Assign accounts & import');
   }
-  async function connect(connectionId=null) {
+  async function connect(connectionId=null, resume=null, redirectUri=null) {
     if(linkInProgress){notice('A bank connection window is already open. Finish or close it before starting another one.');return;}
+    const targetSpaceId = resume?.space_id ?? active;
+    if(!spaces.some(space=>space.id===targetSpaceId))throw new Error('This financial workspace is no longer available. Refresh to check your access.');
+    const bankEndpoint = path => endpoint(path, targetSpaceId);
     linkInProgress=true;
-    let handler;
-    const finish=()=>{handler?.destroy();linkInProgress=false;};
+    let handler, finished=false, completing=false;
+    const finish=()=>{if(finished)return;finished=true;clearBankLinkSession(bankStorage);handler?.destroy();linkInProgress=false;if(new URLSearchParams(window.location.search).has('oauth_state_id'))window.history.replaceState(window.history.state,'','/trajectory');};
     try {
-      const token=await api(endpoint('/banks/link'),'POST',{connection_id:connectionId});
+      const token=resume ?? saveBankLinkSession(bankStorage, {...await api(bankEndpoint('/banks/link'),'POST',{connection_id:connectionId}),space_id:targetSpaceId});
       if(!window.Plaid)await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='https://cdn.plaid.com/link/v2/stable/link-initialize.js';script.onload=resolve;script.onerror=()=>reject(new Error('Unable to load bank linking.'));document.head.appendChild(script);});
-      handler=window.Plaid.create({token:token.link_token,onSuccess:async (publicToken,metadata)=>{try{if(connectionId)await api(endpoint(`/banks/${connectionId}/sync`),'POST',{institution_name:metadata?.institution?.name||null});else {const result=await api(endpoint('/banks/exchange'),'POST',{public_token:publicToken,institution_name:metadata?.institution?.name||null});if(result.needs_mapping){finish();await load();await mapBankAccounts(result.connection_id);return;}}notice('Bank connected. History is being synchronized.');await load();}catch(e){notice(e.message);}finally{finish();}},onExit:finish});
+      handler=window.Plaid.create({token:token.link_token,...(redirectUri?{receivedRedirectUri:redirectUri}:{}),onSuccess:async (publicToken,metadata)=>{if(completing||finished)return;completing=true;try{if(token.connection_id)await api(bankEndpoint(`/banks/${token.connection_id}/sync`),'POST',{link_session:token.link_session,institution_name:metadata?.institution?.name||null});else {const result=await api(bankEndpoint('/banks/exchange'),'POST',{public_token:publicToken,link_session:token.link_session,institution_name:metadata?.institution?.name||null});if(result.needs_mapping){finish();await load();await mapBankAccounts(result.connection_id,targetSpaceId);return;}}notice('Bank connected. History is being synchronized.');await load();}catch(e){notice(e.message);}finally{finish();}},onExit:(error,metadata)=>{finish();notice(bankLinkExitMessage(error,metadata));}});
       handler.open();
-    } catch(e) {linkInProgress=false;throw e;}
+    } catch(e) {finish();throw e;}
   }
   root.addEventListener('click',async e=>{
     const target=e.target.closest('[data-action]');if(!target)return;
@@ -469,5 +479,9 @@ function boot() {
   if(root.dataset.invite){$('#tr-invite').hidden=false;$('#tr-accept').onclick=async()=>{try{await api('/trajectory/invites/accept','POST',{token:root.dataset.invite});location.href='/trajectory';}catch(e){notice(e.message);}};}
   document.addEventListener('visibilitychange',()=>{if(!document.hidden && tab==='assets' && data?.metals.length && !$('#tr-dialog').open)load();});
   setInterval(()=>{if(!document.hidden && tab==='assets' && data?.metals.length && !$('#tr-dialog').open)load();},60000);
-  load();
+  load().then(()=>{
+    if(!oauthReturn)return;
+    if(resumedBankLink&&receivedRedirectUri)void connect(resumedBankLink.connection_id,resumedBankLink,receivedRedirectUri).catch(error=>notice(error.message));
+    else {clearBankLinkSession(bankStorage);window.history.replaceState(window.history.state,'','/trajectory');notice('Your bank sign-in expired or is no longer available. Choose Connect a bank to start again.');}
+  });
 }

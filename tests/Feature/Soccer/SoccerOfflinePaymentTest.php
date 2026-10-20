@@ -41,6 +41,13 @@ function fakeOfflineCardExpiration($test): void
     Http::fake(['api.stripe.com/v1/checkout/sessions/*' => Http::sequence()->push($test->session)->push([...$test->session, 'status' => 'expired'])->push([...$test->session, 'status' => 'expired'])]);
 }
 
+function existingOfflineVenmoReceipt($test): object
+{
+    $test->payments->paid($test->tenant->id, $test->invoice, 'venmo', 'fictional-legacy-transfer', 6000, ['verified_by' => 25]);
+
+    return $test->store->query('payments', $test->tenant->id)->sole();
+}
+
 it('waives the remaining family fees once without inventing payments or enrolling an unregistered sibling', function () {
     fakeOfflineCardExpiration($this);
     $this->payments->waive($this->tenant->id, $this->invoice, 'Organizer family fee waiver', $this->actor->id, 6000);
@@ -71,6 +78,97 @@ it('records organizer attestation as such and deduplicates receipt and notificat
     expect($this->store->query('registrations', $this->tenant->id)->where('payment_status', 'paid')->count())->toBe(2)
         ->and($this->store->query('registrations', $this->tenant->id)->where('payment_status', 'waived')->count())->toBe(2)
         ->and($this->store->query('events', $this->tenant->id)->where('action', 'payment_confirmed')->count())->toBe(1);
+    Http::assertSentCount(3);
+});
+
+it('attests an existing Venmo receipt after retiring its open card checkout without duplicating money places or notices', function () {
+    $receipt = existingOfflineVenmoReceipt($this);
+    $originalInvoice = (array) $this->store->row('invoices', $this->tenant->id, $this->invoice);
+    $originalRegistrations = $this->store->query('registrations', $this->tenant->id)->orderBy('id')->get()->toJson();
+    $deliveries = $this->store->query('deliveries', $this->tenant->id)->count();
+    fakeOfflineCardExpiration($this);
+    expect($this->payments->confirmVenmo($this->tenant->id, $this->invoice, 6000, null, 'Owner verified the previously recorded receipt', $this->actor->id))->toBe('paid');
+    expect($this->payments->confirmVenmo($this->tenant->id, $this->invoice, 6000, null, 'Replay should preserve the original attestation', $this->actor->id))->toBe('paid');
+    $saved = $this->store->row('payments', $this->tenant->id, $receipt->id);
+    $evidence = $this->store->decrypt($saved->evidence);
+    expect($this->store->query('payments', $this->tenant->id)->count())->toBe(1)
+        ->and((int) $this->store->query('payments', $this->tenant->id)->sum('amount_cents'))->toBe(6000)
+        ->and($saved->provider_key)->toBe($receipt->provider_key)->and($saved->created_at)->toBe($receipt->created_at)
+        ->and($evidence['verified_by'])->toBe(25)->and($evidence['organizer_attestations'])->toHaveCount(1)
+        ->and($evidence['organizer_attestations'][0])->toMatchArray(['verified_by' => $this->actor->id,
+            'verification_source' => 'organizer_attestation', 'reason' => 'Owner verified the previously recorded receipt'])
+        ->and((array) $this->store->row('invoices', $this->tenant->id, $this->invoice))->toBe($originalInvoice)
+        ->and($this->store->query('registrations', $this->tenant->id)->orderBy('id')->get()->toJson())->toBe($originalRegistrations)
+        ->and($this->store->query('deliveries', $this->tenant->id)->count())->toBe($deliveries)
+        ->and($this->store->query('events', $this->tenant->id)->where('action', 'payment_confirmed')->count())->toBe(1);
+    $event = $this->store->query('events', $this->tenant->id)->where('action', 'venmo_existing_receipt_attested')->sole();
+    expect($event->actor_id)->toBe($this->actor->id)
+        ->and($this->store->decrypt($event->data))->toMatchArray(['payment_id' => $receipt->id, 'invoice_id' => $this->invoice,
+            'retired_checkout_id' => 'cs_offline_fixture', 'amount_cents' => 6000]);
+    Http::assertSentCount(3);
+    Http::assertSent(fn ($request) => $request->method() === 'POST' && str_ends_with($request->url(), '/expire'));
+});
+
+it('requires review for ambiguous existing Venmo receipts or refunds without manufacturing an attestation', function (string $case) {
+    $receipt = existingOfflineVenmoReceipt($this);
+    $amount = 6000;
+    if ($case === 'invoice amount mismatch') {
+        $amount = 5999;
+    } elseif ($case === 'receipt amount mismatch') {
+        $this->store->query('payments', $this->tenant->id)->where('id', $receipt->id)->update(['amount_cents' => 5999]);
+    } elseif ($case === 'competing receipt') {
+        $this->store->insert('payments', $this->tenant->id, ['invoice_id' => $this->invoice, 'provider' => 'stripe',
+            'provider_key' => 'fictional-competing-receipt', 'amount_cents' => 6000, 'evidence' => $this->store->encrypt([])]);
+    } elseif ($case === 'refund record') {
+        $this->store->insert('refunds', $this->tenant->id, ['invoice_id' => $this->invoice, 'amount_cents' => 1,
+            'status' => 'pending', 'evidence' => $this->store->encrypt(['payment_id' => $receipt->id])]);
+    } else {
+        $this->store->query('invoices', $this->tenant->id)->where('id', $this->invoice)->update(['refunded_cents' => 1]);
+    }
+    $payments = $this->store->query('payments', $this->tenant->id)->orderBy('id')->get()->toJson();
+    $deliveries = $this->store->query('deliveries', $this->tenant->id)->count();
+    expect($this->payments->confirmVenmo($this->tenant->id, $this->invoice, $amount, null, 'Owner confirmation requiring review', $this->actor->id))->toBe('review');
+    expect($this->store->query('payments', $this->tenant->id)->orderBy('id')->get()->toJson())->toBe($payments)
+        ->and($this->store->decrypt($this->store->row('payments', $this->tenant->id, $receipt->id)->evidence))->toBe(['verified_by' => 25])
+        ->and($this->store->query('events', $this->tenant->id)->where('action', 'venmo_existing_receipt_attested')->count())->toBe(0)
+        ->and($this->store->query('deliveries', $this->tenant->id)->count())->toBe($deliveries);
+    Http::assertNothingSent();
+})->with(['invoice amount mismatch', 'receipt amount mismatch', 'competing receipt', 'refund record', 'refunded invoice']);
+
+it('keeps the existing Venmo receipt unchanged when card checkout cannot be verified', function () {
+    $receipt = existingOfflineVenmoReceipt($this);
+    Http::fake(['api.stripe.com/v1/checkout/sessions/*' => fn () => throw new ConnectionException('Fictional uncertain card checkout')]);
+    expect(fn () => $this->payments->confirmVenmo($this->tenant->id, $this->invoice, 6000, null, 'Owner confirmed receipt', $this->actor->id))->toThrow(HttpException::class);
+    expect($this->store->query('payments', $this->tenant->id)->count())->toBe(1)
+        ->and($this->store->row('payments', $this->tenant->id, $receipt->id)->evidence)->toBe($receipt->evidence)
+        ->and($this->store->query('events', $this->tenant->id)->where('action', 'venmo_existing_receipt_attested')->count())->toBe(0);
+});
+
+it('commits a real competing Stripe receipt for review rather than attesting an already paid Venmo invoice', function () {
+    $receipt = existingOfflineVenmoReceipt($this);
+    $registrations = $this->store->query('registrations', $this->tenant->id)->orderBy('id')->get()->toJson();
+    Http::fake(['api.stripe.com/v1/checkout/sessions/*' => Http::response([...$this->session, 'status' => 'complete',
+        'payment_status' => 'paid', 'payment_intent' => 'pi_competing_existing_venmo'])]);
+    expect($this->payments->confirmVenmo($this->tenant->id, $this->invoice, 6000, null, 'Owner confirmed existing Venmo', $this->actor->id))->toBe('review');
+    expect($this->store->query('payments', $this->tenant->id)->count())->toBe(2)
+        ->and($this->store->row('payments', $this->tenant->id, $receipt->id)->evidence)->toBe($receipt->evidence)
+        ->and($this->store->row('invoices', $this->tenant->id, $this->invoice)->provider)->toBe('venmo')
+        ->and($this->store->query('registrations', $this->tenant->id)->orderBy('id')->get()->toJson())->toBe($registrations)
+        ->and($this->store->query('events', $this->tenant->id)->where('action', 'payment_confirmed')->count())->toBe(1)
+        ->and($this->store->query('events', $this->tenant->id)->where('action', 'payment_needs_review')->count())->toBe(1)
+        ->and($this->store->query('events', $this->tenant->id)->where('action', 'venmo_existing_receipt_attested')->count())->toBe(0);
+});
+
+it('rechecks ambiguity before replaying an earlier existing receipt attestation', function () {
+    $receipt = existingOfflineVenmoReceipt($this);
+    fakeOfflineCardExpiration($this);
+    $this->payments->confirmVenmo($this->tenant->id, $this->invoice, 6000, null, 'Owner confirmation', $this->actor->id);
+    $evidence = $this->store->row('payments', $this->tenant->id, $receipt->id)->evidence;
+    $this->store->insert('refunds', $this->tenant->id, ['invoice_id' => $this->invoice, 'amount_cents' => 1,
+        'status' => 'succeeded', 'evidence' => $this->store->encrypt(['payment_id' => $receipt->id])]);
+    expect($this->payments->confirmVenmo($this->tenant->id, $this->invoice, 6000, null, 'Replay after refund', $this->actor->id))->toBe('review');
+    expect($this->store->row('payments', $this->tenant->id, $receipt->id)->evidence)->toBe($evidence)
+        ->and($this->store->query('events', $this->tenant->id)->where('action', 'venmo_existing_receipt_attested')->count())->toBe(1);
     Http::assertSentCount(3);
 });
 

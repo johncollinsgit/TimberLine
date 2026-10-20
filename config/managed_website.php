@@ -16,6 +16,9 @@ $tenantIds = static function (string $key): array {
 };
 
 return [
+    'invoices_enabled' => $bool('MANAGED_WEBSITE_INVOICES_ENABLED'),
+    'invoice_tenant_ids' => $tenantIds('MANAGED_WEBSITE_INVOICE_TENANT_IDS'),
+    'invoice_bank_payments_enabled' => $bool('MANAGED_WEBSITE_INVOICE_BANK_PAYMENTS_ENABLED'),
     // Every gate defaults to false. Empty allowlists never mean "everyone".
     'commerce_enabled' => $bool('MANAGED_WEBSITE_COMMERCE_ENABLED'),
     // A tenant-specific catalog/cart preview without live payment checkout.
@@ -55,6 +58,7 @@ return [
     // fail closed until the global gate, tenant entitlement, Connect readiness,
     // tax decision, and dedicated endpoint secret are all present.
     'stripe_webhook_secret' => env('MANAGED_WEBSITE_STRIPE_WEBHOOK_SECRET'),
+    'stripe_connect_webhook_secret' => env('MANAGED_WEBSITE_STRIPE_CONNECT_WEBHOOK_SECRET'),
     'allowed_blocks' => ['announcement', 'header', 'hero', 'text', 'image', 'services', 'testimonial', 'faq', 'contact_form', 'cta', 'product_grid', 'footer', 'image_with_text', 'service_cards', 'trust_bar', 'gallery', 'faq_list'],
     'media_max_bytes' => max(1024 * 1024, (int) env('MANAGED_WEBSITE_MEDIA_MAX_BYTES', 10 * 1024 * 1024)),
     'screenshot_enabled' => $bool('MANAGED_WEBSITE_SCREENSHOT_ENABLED'),

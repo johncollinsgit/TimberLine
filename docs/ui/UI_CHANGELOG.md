@@ -1,3 +1,12 @@
+## 2026-10-19 - Bank sign-in continuity
+
+- Trajectory resumes the same bank sign-in after mobile OAuth, preserving its
+  authorized company/household and reconnect mode. Missing or expired sign-in
+  state explains how to restart; unsupported banks and cancellation have clear
+  next steps. New linking is gated until the mobile return is configured.
+- Accounts remains the connection surface. Existing finance permissions,
+  ownership mapping, navigation and visual treatment are unchanged.
+
 ## 2026-10-19 - Wren parent help answers
 
 - Common toddler, human-contact, move-up, schedule and address questions now

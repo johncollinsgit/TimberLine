@@ -10,6 +10,7 @@
                 <x-ui.status-badge :tone="$order->payment_status === 'paid' ? 'success' : 'neutral'">{{ str($order->payment_status)->headline() }}</x-ui.status-badge>
                 <x-ui.status-badge :tone="$order->fulfillment_status === 'fulfilled' ? 'success' : 'warning'">{{ str($order->fulfillment_status)->headline() }}</x-ui.status-badge>
             </x-ui.operational-header>
+            @if(in_array($order->source,['staff_quote','staff_draft_invoice'],true) && app(\App\Services\ManagedWebsite\WebsiteQuoteOrderService::class)->enabledFor($tenant))<a class="fb-btn fb-btn-secondary" href="{{ route('managed-website.invoices.show',$order) }}">Open quote and invoice details</a>@endif
 
             @if($order->order_status === 'draft')<div class="border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-5 text-amber-950"><strong>Draft only.</strong> This order has not charged a customer, reserved inventory, created a label, or sent a message.</div>@endif
             <div class="grid gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(280px,.75fr)]">

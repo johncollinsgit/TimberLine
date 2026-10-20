@@ -16,12 +16,17 @@ class ReconcileWebsitePayments extends Command
     public function handle(WebsitePaymentService $payments): int
     {
         $failed = 0;
-        $attempts = WebsitePayment::query()->where('provider', 'stripe')->where('metadata->checkout_version', 1)
+        $attempts = WebsitePayment::query()->where('provider', 'stripe')->whereIn('metadata->checkout_version', [1, 2])
             ->whereNotIn('status', ['expired', 'cancelled', 'failed', 'refunded'])
             ->orderBy('updated_at')->orderBy('id')->limit(max(1, min(500, (int) $this->option('limit'))))->get();
         foreach ($attempts as $payment) {
             try {
-                $payments->reconcile($payment);
+                if (data_get($payment->metadata, 'checkout_version') === 2) {
+                    app(\App\Services\ManagedWebsite\WebsiteInvoicePaymentService::class)->reconcile($payment);
+                    $payments->reconcileRefunds($payment);
+                } else {
+                    $payments->reconcile($payment);
+                }
                 if (in_array($payment->fresh()->status, ['payment_review', 'paid_review'], true)) {
                     $failed++;
                 }

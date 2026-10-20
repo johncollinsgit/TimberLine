@@ -166,17 +166,20 @@ test('combined view respects the selected reporting period and keeps unmatched o
 });
 
 test('shared bank logins stage new accounts until ownership is explicitly assigned', function () {
+    $this->withCredentials()->withCookie(config('session.cookie'), str_repeat('b', 40));
     $business = ($this->business)('relay-staged-company');
-    config(['trajectory.plaid.client_id' => 'test', 'trajectory.plaid.secret' => 'test']);
+    config(['trajectory.plaid.client_id' => 'test', 'trajectory.plaid.secret' => 'test', 'app.url' => 'https://trajectory.test', 'trajectory.plaid.redirect_uri' => 'https://trajectory.test/trajectory']);
     $remote = [['account_id' => 'software', 'name' => 'Software operating', 'type' => 'depository', 'balances' => ['current' => 200, 'iso_currency_code' => 'USD']], ['account_id' => 'forestry', 'name' => 'Forestry operating', 'type' => 'depository', 'balances' => ['current' => 500, 'iso_currency_code' => 'USD']]];
     Http::fake([
+        '*/link/token/create' => Http::response(['link_token' => 'link-sandbox-test', 'expiration' => now()->addHour()->toIso8601String()]),
         '*/item/public_token/exchange' => Http::response(['item_id' => 'joint-relay', 'access_token' => 'private-test']),
         '*/accounts/get' => Http::response(['accounts' => $remote]),
         '*/transactions/sync' => Http::response(['accounts' => $remote, 'added' => [['account_id' => 'software', 'transaction_id' => 'deposit', 'date' => '2026-09-18', 'amount' => -200, 'iso_currency_code' => 'USD', 'name' => 'Customer', 'pending' => false]], 'modified' => [], 'removed' => [], 'next_cursor' => 'next', 'has_more' => false]),
         '*/liabilities/get' => Http::response(['liabilities' => []]),
         '*/investments/holdings/get' => Http::response(['accounts' => []]),
     ]);
-    $this->actingAs($this->owner)->postJson("/trajectory/spaces/{$this->space->id}/banks/exchange", ['public_token' => 'test', 'institution_name' => 'Relay'])->assertOk()->assertJsonPath('needs_mapping', true);
+    $link = $this->actingAs($this->owner)->postJson("/trajectory/spaces/{$this->space->id}/banks/link")->assertOk();
+    $this->postJson("/trajectory/spaces/{$this->space->id}/banks/exchange", ['public_token' => 'test', 'institution_name' => 'Relay', 'link_session' => $link->json('link_session')])->assertOk()->assertJsonPath('needs_mapping', true);
     $connection = Connection::first();
     app(PlaidService::class)->sync($connection);
     expect(Account::where('connection_id', $connection->id)->count())->toBe(0)->and(Transaction::count())->toBe(0);
