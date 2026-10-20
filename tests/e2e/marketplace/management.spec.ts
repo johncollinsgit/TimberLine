@@ -13,7 +13,7 @@ async function fixture(page: Page, role = 'preview', tab = 'overview', simulated
         if (url.pathname === '/marketplace/preview') name='preview-'+(url.searchParams.get('tab') || 'overview');
         if (url.pathname === '/marketplace/operations') name='operator-'+(url.searchParams.get('tab') || 'overview');
         if (url.pathname.startsWith('/marketplace/operations/makers/')) name='operator-maker';
-        if (/^\/maker\/\d+$/.test(url.pathname)) name='maker';
+        if (/^\/maker\/\d+$/.test(url.pathname)) name=url.searchParams.has('page') ? 'maker-orders-page-'+url.searchParams.get('page') : 'maker';
         if (url.pathname === '/qa/shopper') name='shopper';
         if (!name) return route.continue();
         const html=fs.readFileSync('storage/framework/testing/marketplace-console/'+name+'.html','utf8')
@@ -157,3 +157,34 @@ for(const width of [390,1024,1440]){
         expect(errors).toEqual([]);expect(writes).toEqual([]);
     });
 }
+
+
+test('maker fulfillment Next and Previous retain the orders pane for more than twenty lines',async({page},info)=>{
+    const {errors,writes}=await fixture(page,'maker');
+    await page.goto('/maker/1?page=1#orders');await expect(page.locator('#orders .mm-record')).toHaveCount(20);
+    await expect(page.locator('#orders a[rel=next]:visible')).toHaveCount(1);await noOverflow(page);
+    await page.locator('#orders a[rel=next]').last().click();await expect(page).toHaveURL(/page=2#orders$/);
+    await expect(page.locator('#orders')).toBeVisible();await expect(page.locator('#products')).toBeHidden();
+    await expect(page.locator('#orders .mm-record')).toHaveCount(1);await noOverflow(page);
+    await page.screenshot({path:'storage/framework/testing/marketplace-console/maker-orders-pagination-'+info.project.name+'.png',fullPage:true});
+    await page.locator('#orders a[rel=prev]').last().click();await expect(page).toHaveURL(/page=1#orders$/);
+    await expect(page.locator('#orders')).toBeVisible();await expect(page.locator('#orders .mm-record')).toHaveCount(20);
+    expect(errors).toEqual([]);expect(writes).toEqual([]);
+});
+
+test('interactive maker search status and selected row survive the profile round trip',async({page})=>{
+    const {errors,writes}=await fixture(page,'operator','makers');
+    await page.getByRole('searchbox').fill('Fieldwork');await page.getByLabel('Status',{exact:true}).selectOption('approved');
+    await page.locator('[data-mm-detail="maker-1"]>summary').click();await expect(page).toHaveURL(/detail=maker-1/);
+    await page.locator('[data-mm-profile-link]').click();
+    await expect(page).toHaveURL(/\/marketplace\/operations\/makers\/1\?/);
+    expect(new URL(page.url()).searchParams.get('q')).toBe('Fieldwork');
+    expect(new URL(page.url()).searchParams.get('status')).toBe('approved');
+    expect(new URL(page.url()).searchParams.get('detail')).toBe('maker-1');
+    await page.locator('[data-mm-directory-back]').click();
+    await expect(page.getByRole('searchbox')).toHaveValue('Fieldwork');
+    await expect(page.getByLabel('Status',{exact:true})).toHaveValue('approved');
+    await expect(page.locator('[data-mm-detail="maker-1"]')).toHaveAttribute('open','');
+    await expect(page.locator('[data-mm-row]:visible')).toHaveCount(1);
+    expect(errors).toEqual([]);expect(writes).toEqual([]);
+});

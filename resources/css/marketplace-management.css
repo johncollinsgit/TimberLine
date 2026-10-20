@@ -143,3 +143,13 @@ body.mm-console { --forest:#183e32; --ink:#233a32; --muted:#61736a; --line:#e3e7
 .mm-section-links { display:flex; gap:6px; overflow-x:auto; white-space:nowrap; max-width:100%; border-bottom:1px solid var(--line); padding:10px 0; margin:14px 0 20px; }
 .mm-section-links a { flex-shrink:0; display:inline-flex; align-items:center; min-height:44px; padding:8px 12px; font-size:12px; border:1px solid var(--line); border-radius:6px; text-decoration:none; background:#fff; }
 .mm-section-links a:hover { background:#edf2e6; }
+/* The independent maker shell does not load Tailwind's paginator utilities. */
+.mm-main #orders>nav[role=navigation] { margin-top:20px; }
+.mm-main #orders>nav[role=navigation]>div:first-child { display:none; }
+.mm-main #orders>nav[role=navigation]>div:last-child { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.mm-main #orders>nav[role=navigation]>div:last-child>div:last-child { max-width:100%; overflow-x:auto; }
+.mm-main #orders>nav[role=navigation]>div:last-child>div:last-child>span { display:inline-flex; gap:4px; white-space:nowrap; }
+.mm-main #orders>nav[role=navigation] a,.mm-main #orders>nav[role=navigation] [aria-current=page]>span,.mm-main #orders>nav[role=navigation] [aria-disabled=true]>span { display:inline-flex; justify-content:center; align-items:center; min-width:44px; min-height:44px; border:1px solid var(--line); border-radius:5px; padding:8px; background:#fff; text-decoration:none; font-size:12px; }
+.mm-main #orders>nav[role=navigation] [aria-current=page]>span { background:#edf2e6; font-weight:650; }
+.mm-main #orders>nav[role=navigation] svg { width:20px; height:20px; }
+.mm-main #orders>nav[role=navigation] [aria-disabled=true]>span { color:#81907e; background:#f4f6f0; }

@@ -22,6 +22,12 @@
     ],
     "browser-marketplace-management-profile": [
       "  28 passed (10.7s)"
+    ],
+    "marketplace-management-review-acceptance-export": [
+      "  Tests:    99 passed (1141 assertions)"
+    ],
+    "browser-marketplace-management-review-acceptance": [
+      "  32 passed (12.3s)"
     ]
   },
   "production_build": "PASS: typecheck, existing JS tests, Vite; existing Rollup annotation warnings",
@@ -155,6 +161,21 @@
     "preserved_initial_candidate": "590edd42709538c4f4dc8837106475eaa7fe6686",
     "scope": "Only focused maker-profile local section links become one scrollable row; six viewport/engine cases added.",
     "browser_final_passed": 28,
+    "application_shared_integration_changed": false
+  },
+  "reviewed_followups_captured_utc": "2026-10-20T17:40:32.084863+00:00",
+  "review_corrections": {
+    "preserved_heads": [
+      "590edd42709538c4f4dc8837106475eaa7fe6686",
+      "fa4c3674a82f23dcca944c5447b665b2f2d6d664"
+    ],
+    "maker_pagination": "Existing paginator retains #orders; actual21-line feature/page membership and both-engine Next/Previous verified. Scoped paginator styling avoids duplicate responsive variants or oversized SVGs without Tailwind.",
+    "profile_round_trip": "Explicit same-origin profile/back link markers synchronize only bounded permitted q/status/detail and existing report parameters from current URL state, including restore. Browser applies filters and opens a row before navigating/returning.",
+    "final_browser_passed": 32,
+    "final_marketplace_php": {
+      "passed": 99,
+      "assertions": 1141
+    },
     "application_shared_integration_changed": false
   }
 }

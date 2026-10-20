@@ -33,7 +33,7 @@ if (! is_string($tab) || ! in_array($tab, ['overview', 'makers', 'listings', 'or
 $name = match (true) {
     $path === '/marketplace/preview' => 'preview-'.$tab,
     $path === '/marketplace/operations' => 'operator-'.$tab,
-    (bool) preg_match('~^/maker/\d+$~', $path) => 'maker',
+    (bool) preg_match('~^/maker/\d+$~', $path) => isset($_GET['page']) && in_array($_GET['page'], ['1', '2'], true) ? 'maker-orders-page-'.$_GET['page'] : 'maker',
     (bool) preg_match('~^/marketplace/operations/makers/\d+$~', $path) => 'operator-maker',
     $path === '/qa/shopper' => 'shopper',
     default => null,

@@ -160,6 +160,15 @@ test('export marketplace management browser fixtures', function (): void {
     file_put_contents($directory.'/maker.html', $response->getContent());
     $response = $this->get('https://marketsandmakers.test/')->assertOk();
     file_put_contents($directory.'/shopper.html', $response->getContent());
+    // Distinct >20-line fixtures exercise the existing authorized paginator.
+    for ($i = 0; $i < 20; $i++) {
+        $sale = marketTestSale($f);
+        OrderLine::where('order_id', $sale->id)->update(['title' => 'Fictional additional item '.$i]);
+    }
+    foreach ([1, 2] as $page) {
+        $response = $this->withSession(['marketplace_identity' => $f['identity']->id])->get('https://marketsandmakers.test/maker/'.$f['maker']->id.'?page='.$page)->assertOk();
+        file_put_contents($directory.'/maker-orders-page-'.$page.'.html', $response->getContent());
+    }
     config(['marketplace.account_preview_user_ids' => [$f['owner']->id], 'marketplace.enabled' => false, 'marketplace.checkout_enabled' => false, 'marketplace.host' => '']);
     foreach (array_keys(array_merge(...array_values(\App\Services\Marketplace\MarketplaceManagementPresentation::groups()))) as $tab) {
         $response = $this->get('https://app.theeverbranch.test/marketplace/preview?tab='.$tab)->assertOk();
@@ -179,5 +188,20 @@ test('management reads confirmed business context and existing branding without 
     $this->assertDatabaseCount('tenant_brand_profiles', 1);
     $response = $this->get('https://app.theeverbranch.test/marketplace/operations/makers/'.$f['maker']->id.'?q=Fieldwork&status=approved&detail=maker-'.$f['maker']->id.'&from=2026-10-01&to=2026-10-31')->assertOk();
     $response->assertSee('q=Fieldwork', false)->assertSee('status=approved', false)->assertSee('detail=maker-'.$f['maker']->id, false);
+    Http::assertNothingSent();
+});
+
+test('maker fulfillment pagination retains the orders section across more than twenty owned lines', function (): void {
+    $f = marketAdminFixture();
+    for ($i = 1; $i <= 21; $i++) {
+        $sale = marketTestSale($f);
+        OrderLine::where('order_id', $sale->id)->update(['title' => 'Fictional owned item '.$i]);
+    }
+    $this->withSession(['marketplace_identity' => $f['identity']->id]);
+    $url = 'https://marketsandmakers.test/maker/'.$f['maker']->id;
+    $first = $this->get($url)->assertOk()->assertSee('page=2#orders', false)->assertSeeText('Fictional owned item 21');
+    expect($first->viewData('lines')->count())->toBe(20)->and($first->viewData('lines')->pluck('title')->all())->not->toContain('Fictional owned item 1');
+    $response = $this->get($url.'?page=2')->assertOk()->assertSee('page=1#orders', false)->assertSeeText('Fictional owned item 1')->assertDontSeeText('Fictional owned item 21');
+    expect($response->viewData('lines')->total())->toBe(21)->and($response->viewData('lines')->count())->toBe(1);
     Http::assertNothingSent();
 });
