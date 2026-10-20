@@ -1954,7 +1954,7 @@ $catalog = [
                 'settings',
             ],
             'eligible_addons' => [
-                'ai_branch_starter', 'ai_branch_growth', 'ai_branch_pro',
+                'ai_branch_starter', 'ai_branch_growth', 'ai_branch_pro', 'ai_branch_access',
                 'sms',
                 'messaging',
                 'order_calendar',
@@ -1993,7 +1993,7 @@ $catalog = [
                 'square',
             ],
             'eligible_addons' => [
-                'ai_branch_starter', 'ai_branch_growth', 'ai_branch_pro',
+                'ai_branch_starter', 'ai_branch_growth', 'ai_branch_pro', 'ai_branch_access',
                 'referrals',
                 'sms',
                 'messaging',
@@ -2039,7 +2039,7 @@ $catalog = [
                 'ai',
             ],
             'eligible_addons' => [
-                'ai_branch_starter', 'ai_branch_growth', 'ai_branch_pro',
+                'ai_branch_starter', 'ai_branch_growth', 'ai_branch_pro', 'ai_branch_access',
                 'referrals',
                 'sms',
                 'messaging',
@@ -2087,7 +2087,7 @@ $catalog = [
                 'ai',
             ],
             'eligible_addons' => [
-                'ai_branch_starter', 'ai_branch_growth', 'ai_branch_pro',
+                'ai_branch_starter', 'ai_branch_growth', 'ai_branch_pro', 'ai_branch_access',
                 'referrals',
                 'sms',
                 'messaging',
@@ -2102,6 +2102,15 @@ $catalog = [
     ],
 
     'addons' => [
+        'ai_branch_access' => [
+            'display_name' => 'AI Voice Branch', 'label' => 'AI Voice Branch',
+            // Reviewed AI Branch checkout verifies the exact price and preserves existing included access.
+            'purchase_key' => 'addon.ai_branch_access', 'billing_mode' => 'add_on', 'is_public' => false, 'purchase_enabled' => false,
+            'pricing' => ['currency' => 'USD', 'recurring_price_cents' => 2000, 'setup_price_cents' => 0],
+            'stripe' => ['product_lookup_key' => 'addon_ai_branch_access', 'recurring_price_lookup_key' => 'addon_ai_branch_access_monthly'],
+            'modules' => ['ai_branch'], 'legacy_grants' => [],
+            'ai_limits' => ['responses' => 1000, 'provider_budget_cents' => 10000, 'actions' => true],
+        ],
         'ai_branch_pro' => [
             'display_name' => 'AI Branch Pro', 'label' => 'AI Branch Pro',
             'purchase_key' => 'addon.ai_branch_pro', 'billing_mode' => 'add_on', 'is_public' => false, 'purchase_enabled' => false,

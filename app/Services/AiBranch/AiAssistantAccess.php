@@ -10,7 +10,8 @@ class AiAssistantAccess
 {
     public function authorize(Tenant $tenant, User $user): void
     {
-        abort_unless(config('ai_branch.assistant_enabled') && in_array((int) $tenant->id, config('ai_branch.assistant_tenant_ids', []), true), 404);
+        abort_unless(app(AiBranchOffer::class)->metered($tenant)
+            || (config('ai_branch.assistant_enabled') && in_array((int) $tenant->id, config('ai_branch.assistant_tenant_ids', []), true)), 404);
         app(AiBranchAccess::class)->authorize($tenant, $user);
         // AiBranchAccess refreshes the user: do not trust an earlier verification.
         abort_unless($user->hasVerifiedEmail(), 403);

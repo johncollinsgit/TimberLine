@@ -8,10 +8,22 @@ on:
         required: true
         type: string
       confirm_provision:
-        description: Apply the isolated seven-day scripted grant (no paid provider or subscription)
+        description: Apply the isolated seven-day grant (no subscription or customer charge)
         required: true
         default: false
         type: boolean
+      provider:
+        description: Approved answer provider
+        required: true
+        default: scripted
+        type: choice
+        options:
+          - scripted
+          - openai
+      budget_dollars:
+        description: Total lifetime provider cap; required for openai (does not reset prior spend)
+        required: false
+        type: string
       revoke:
         description: Revoke the existing fictional grant instead of provisioning
         required: false
@@ -27,7 +39,7 @@ concurrency:
 
 jobs:
   provision:
-    name: Provision audited scripted pilot
+    name: Provision audited pilot
     if: ${{ inputs.confirm_provision == true && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     environment:
@@ -42,6 +54,8 @@ jobs:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           OWNER_EMAIL: ${{ inputs.owner_email }}
           EXPECTED_RELEASE: ${{ github.sha }}
+          PILOT_PROVIDER: ${{ inputs.provider }}
+          PILOT_BUDGET: ${{ inputs.budget_dollars }}
         run: |
           set -euo pipefail
           for var in DEPLOY_HOST DEPLOY_USER DEPLOY_PORT DEPLOY_PATH DEPLOY_SSH_KEY; do
@@ -52,6 +66,11 @@ jobs:
           done
           if ! printf '%s' "$OWNER_EMAIL" | grep -Eiq '^[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}$'; then
             echo "::error::Invalid owner email."
+            exit 1
+          fi
+          case "$PILOT_PROVIDER" in scripted|openai) ;; *) exit 1 ;; esac
+          if [ "$PILOT_PROVIDER" = "openai" ] && ! printf '%s' "$PILOT_BUDGET" | grep -Eq '^[0-9]{1,2}(\.[0-9]{1,2})?$'; then
+            echo "::error::An explicit numeric total provider cap is required."
             exit 1
           fi
           ready="$(curl --fail --silent --show-error --max-time 20 https://app.theeverbranch.com/ready)"
@@ -78,12 +97,15 @@ jobs:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           OWNER_EMAIL: ${{ inputs.owner_email }}
           REVOKE: ${{ inputs.revoke }}
+          PILOT_PROVIDER: ${{ inputs.provider }}
+          PILOT_BUDGET: ${{ inputs.budget_dollars }}
         run: |
           set -euo pipefail
-          extra=""
+          extra="--provider='$PILOT_PROVIDER'"
+          if [ "$PILOT_PROVIDER" = "openai" ]; then extra="$extra --budget-dollars='$PILOT_BUDGET'"; fi
           if [ "$REVOKE" = "true" ]; then extra="--revoke"; fi
           ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
-            "set -euo pipefail; cd '$DEPLOY_PATH'; php artisan everbranch:prepare-voice-pilot --owner-email='$OWNER_EMAIL'; php artisan everbranch:prepare-voice-pilot --owner-email='$OWNER_EMAIL' --authorization='approved-fictional-pilot-run-$GITHUB_RUN_ID' --force-production --apply $extra"
+            "set -euo pipefail; cd '$DEPLOY_PATH'; php artisan everbranch:prepare-voice-pilot --owner-email='$OWNER_EMAIL' $extra; php artisan everbranch:prepare-voice-pilot --owner-email='$OWNER_EMAIL' --authorization='approved-fictional-pilot-run-$GITHUB_RUN_ID' --force-production --apply $extra"
           if [ "$REVOKE" != "true" ]; then
             ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
               "set -euo pipefail; cd '$DEPLOY_PATH'; php artisan everbranch:prepare-voice-pilot --owner-email='$OWNER_EMAIL' --verify"

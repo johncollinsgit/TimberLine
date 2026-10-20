@@ -1,5 +1,15 @@
 # Ask Everbranch voice implementation
 
+## October 20 web conversation and pricing increment
+
+Read `ai-voice-pricing-and-rollout.md` for the current included-existing/$20-future
+offer, 2x shared-credit usage, approved models/caps and total-$5 synthetic pilot.
+The web panel now has an explicit **Start voice conversation** loop; final speech
+sends a turn, playback pauses the microphone, and listening resumes after the
+reply. Editable dictation still requires Ask. Stop/hiding/view changes invalidate
+late callbacks. No phone or OpenAI audio transport is introduced. The older
+dictation-only and included-usage claims below describe the retained legacy lane.
+
 ## Restoration
 
 The October 16 Mac handoff was restored at backend base

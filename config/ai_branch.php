@@ -1,6 +1,19 @@
 <?php
 
 return [
+    // October 20 owner-approved offer; caps/opt-in and paid access remain separate.
+    'standard_enabled' => (bool) env('EVERBRANCH_AI_STANDARD_ENABLED', true),
+    'existing_tenants' => [1 => 'modern-forestry', 2 => 'modern-forestry-team', 3 => 'collins-electric', 4 => 'front-yard-foods',
+        5 => 'everbranch-review', 6 => 'green-shield-pest-control', 7 => 'levelfoundations', 8 => 'carolina-barrel-co',
+        9 => 'trajectory-household-1', 10 => 'evergrove-software', 11 => 'sawyer-naturals', 12 => 'everbranch-fleet-test-client-a-fleet',
+        13 => 'wren-family-soccer', 15 => 'avery-knifeworks'], // #14 retains its separately audited pilot.
+    'models' => [
+        'gpt-6-luna' => ['label' => 'Luna · economical', 'input_rate' => 100000, 'cached_input_rate' => 10000, 'output_rate' => 500000, 'max_output' => 1024, 'reasoning' => 'none'],
+        'gpt-6.1-sol' => ['label' => 'Sol · capable', 'input_rate' => 2000000, 'cached_input_rate' => 100000, 'output_rate' => 10000000, 'max_output' => 4096, 'reasoning' => 'low'],
+        'gpt-6-astra' => ['label' => 'Astra · advanced', 'input_rate' => 10000000, 'cached_input_rate' => 1000000, 'output_rate' => 50000000, 'max_output' => 4096, 'reasoning' => 'low'],
+    ],
+    'rates_version' => 'openai-standard-2026-10-20',
+    'rates_valid_until' => '2026-11-20T00:00:00Z',
     // No grant means disabled; this emergency switch also revokes existing pilot grants.
     'fictional_pilot_disabled' => (bool) env('EVERBRANCH_AI_FICTIONAL_PILOT_DISABLED', false),
     'assistant_enabled' => (bool) env('EVERBRANCH_AI_ASSISTANT_ENABLED', false),

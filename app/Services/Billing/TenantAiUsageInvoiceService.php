@@ -28,6 +28,7 @@ class TenantAiUsageInvoiceService
         }
 
         $events = TenantAiUsageEvent::query()->withoutGlobalScopes()->where('status', 'settled')
+            ->where('feature', '!=', 'ai_branch_chat') // AI Branch settles once from shared prepaid credit.
             ->where('feature', 'not like', 'marketing_%')
             ->whereNull('tenant_direct_invoice_id')->where('buyer_charge_micros', '>', 0)
             ->where('occurred_at', '<', now()->startOfMonth())

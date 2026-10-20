@@ -1,3 +1,16 @@
+## AI Voice Branch — October 20 owner-approved rollout
+
+See `docs/operations/ai-voice-pricing-and-rollout.md`. This source increment adds
+automatic browser voice turns over scoped chat, persistent private memory controls,
+fixed existing-tenant included access and future $20/month access. Both ordinary
+lanes meter model usage at 2x actual cost from the existing shared service-credit
+account. Owner-approved model/rates and a positive customer cap are required;
+ordinary accounts start off/$0. The fictional pilot may separately use an audited
+$5 total provider allowance. Legacy paid tiers and the tablet Realtime demo remain
+separate. Source/build/fixture results do not establish deployment or activation.
+The older included-request/buyer-charge-zero descriptions below apply to the
+retained legacy lane, not this new shared-credit offer. No new schema.
+
 ## Current product map and verified checkpoint
 
 Read [the current product/setup/release map](docs/operations/everbranch-current-state.md)

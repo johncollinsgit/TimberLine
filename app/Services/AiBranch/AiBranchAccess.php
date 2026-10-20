@@ -26,11 +26,20 @@ class AiBranchAccess
 
             return config('module_catalog.addons.ai_branch_growth');
         }
-        abort_unless(config('ai_branch.enabled') && in_array((int) $tenant->id, config('ai_branch.tenant_ids', []), true), 404);
+        $offer = app(AiBranchOffer::class);
+        $standard = $offer->metered($tenant);
+        abort_unless($standard || (config('ai_branch.enabled') && in_array((int) $tenant->id, config('ai_branch.tenant_ids', []), true)), 404);
         $this->member($tenant, $user);
         abort_unless(app(TenantModuleAccessResolver::class)->canAccess($tenant->id, 'ai_branch'), 403);
+        if ($offer->included($tenant)) {
+            if ($optedIn) {
+                abort_unless(AiBranchAccount::where('tenant_id', $tenant->id)->where('enabled', true)->where('budget_cents', '>', 0)->exists(), 403, 'An owner must approve AI usage and a spending cap.');
+            }
+
+            return $offer->tier($tenant);
+        }
         $addons = TenantAccessAddon::query()->where('tenant_id', $tenant->id)->where('enabled', true)
-            ->where('source', 'stripe_fulfillment')->whereIn('addon_key', ['ai_branch_starter', 'ai_branch_growth', 'ai_branch_pro'])
+            ->where('source', 'stripe_fulfillment')->whereIn('addon_key', ['ai_branch_starter', 'ai_branch_growth', 'ai_branch_pro', ...($standard ? [AiBranchOffer::ADDON] : [])])
             ->where(fn ($q) => $q->whereNull('starts_at')->orWhere('starts_at', '<=', now()))
             ->where(fn ($q) => $q->whereNull('ends_at')->orWhere('ends_at', '>', now()))->get();
         abort_unless($addons->count() === 1, 403, 'One confirmed AI subscription is required.');
@@ -64,6 +73,11 @@ class AiBranchAccess
             return false;
         }
         try {
+            if (config('ai_branch.standard_enabled') && ! app(AiFictionalPilot::class)->reserved($tenant)) {
+                $this->member($tenant, $user);
+
+                return $user->hasVerifiedEmail();
+            }
             $this->authorize($tenant, $user, false);
 
             return true;

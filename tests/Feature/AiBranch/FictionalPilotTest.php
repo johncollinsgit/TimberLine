@@ -130,3 +130,85 @@ test('production provisioning requires its explicit flag and refuses a preexisti
     expect(LandlordOperatorAction::count())->toBe(0);
     Http::assertNothingSent();
 });
+
+function approveLiveFictionalPilot($test, User $owner, string $cap = '5.00'): void
+{
+    config(['ai_branch.api_key' => 'test-dedicated-branch-key', 'ai_branch.model' => 'test-model',
+        'ai_branch.input_micros_per_million' => 1000000, 'ai_branch.output_micros_per_million' => 4000000]);
+    $test->artisan('everbranch:prepare-voice-pilot', ['--owner-email' => $owner->email, '--provider' => 'openai', '--budget-dollars' => $cap,
+        '--authorization' => 'owner-approved-five-dollar-total-pilot', '--apply' => true])->assertSuccessful();
+}
+
+test('real fictional AI requires an explicit cap and provider setup and never creates a subscription', function () {
+    [$tenant, $owner] = prepareFictionalVoicePilot($this);
+    $this->artisan('everbranch:prepare-voice-pilot', ['--owner-email' => $owner->email, '--provider' => 'openai', '--apply' => true, '--authorization' => 'test'])->assertFailed();
+    $this->artisan('everbranch:prepare-voice-pilot', ['--owner-email' => $owner->email, '--provider' => 'openai', '--budget-dollars' => '5', '--apply' => true, '--authorization' => 'test'])->assertFailed();
+    approveLiveFictionalPilot($this, $owner);
+    $this->artisan('everbranch:prepare-voice-pilot', ['--owner-email' => $owner->email, '--verify' => true])->assertSuccessful();
+    $base = '/ai-branch';
+    $query = '?tenant='.$tenant->slug;
+    $this->actingAs($owner)->getJson($base.'/assistant'.$query)->assertOk()->assertJsonPath('provider_mode', 'openai');
+    $this->get($base.$query)->assertOk()->assertSeeText('Open voice conversation')->assertSeeText('Total provider allowance')->assertDontSee('$99/month');
+    Http::assertNothingSent();
+    $this->postJson($base.'/memories'.$query, ['body' => 'Use concise fictional summaries.', 'confirmed' => true])->assertCreated();
+    $conversation = $this->postJson($base.'/conversations'.$query)->json('conversation_id');
+    Http::fake(['api.openai.com/*' => Http::response(['id' => 'resp_pilot', 'status' => 'completed',
+        'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => 'A real model response from permitted evidence.']]]],
+        'usage' => ['input_tokens' => 100, 'output_tokens' => 30]])]);
+    $uuid = (string) Str::uuid();
+    $input = ['question' => 'What should I do next?', 'request_id' => $uuid];
+    $this->postJson($base.'/conversations/'.$conversation.'/messages'.$query, $input)->assertOk()->assertJsonPath('text', 'A real model response from permitted evidence.');
+    $this->postJson($base.'/conversations/'.$conversation.'/messages'.$query, $input)->assertOk();
+    Http::assertSentCount(1);
+    Http::assertSent(fn ($request) => str_contains(json_encode($request->data()), 'Use concise fictional summaries.')
+        && str_contains(json_encode($request->data()), 'Fictional workshop entrance lighting') && $request['store'] === false);
+    $event = TenantAiUsageEvent::sole();
+    expect($event->provider_cost_micros)->toBe(220)->and($event->buyer_charge_micros)->toBe(0)
+        ->and($event->metadata['billing_scope'])->toBe('fictional_capped_provider')
+        ->and(TenantBillingSubscription::count())->toBe(0)->and(TenantAccessAddon::count())->toBe(0);
+});
+
+test('the voice readiness audit visits all tenants without model calls or access changes', function () {
+    [$tenant, $owner] = prepareFictionalVoicePilot($this);
+    Tenant::create(['name' => 'Unconfigured', 'slug' => 'unconfigured-voice-tenant']);
+    $grants = LandlordOperatorAction::count();
+    $this->artisan('ai-branch:audit-voice')->expectsOutputToContain('everbranch-voice-pilot')->expectsOutputToContain('unconfigured-voice-tenant')->assertSuccessful();
+    expect(LandlordOperatorAction::count())->toBe($grants)->and(config('ai_branch.assistant_enabled'))->toBeFalse();
+    Http::assertNothingSent();
+});
+
+test('the total pilot cap survives month boundaries renewal and a larger account setting', function () {
+    [$tenant, $owner] = prepareFictionalVoicePilot($this);
+    approveLiveFictionalPilot($this, $owner);
+    TenantAiUsageEvent::create(['tenant_id' => $tenant->id, 'user_id' => $owner->id, 'client_uuid' => (string) Str::uuid(),
+        'feature' => 'ai_branch_chat', 'context' => 'workspace', 'model' => 'test-model', 'status' => 'uncertain', 'duration_seconds' => 0,
+        'provider_cost_micros' => 4990000, 'buyer_charge_micros' => 0, 'occurred_at' => now()->subMonths(2)]);
+    approveLiveFictionalPilot($this, $owner);
+    AiBranchAccount::where('tenant_id', $tenant->id)->update(['budget_cents' => 1500]);
+    $this->actingAs($owner);
+    $query = '?tenant='.$tenant->slug;
+    $conversation = $this->postJson('/ai-branch/conversations'.$query)->json('conversation_id');
+    $this->postJson('/ai-branch/conversations/'.$conversation.'/messages'.$query, ['question' => 'Over the cap?', 'request_id' => (string) Str::uuid()])->assertStatus(429);
+    Http::assertNothingSent();
+});
+
+test('real pilot revocation expiry and provider changes block captured settings without fallback', function () {
+    foreach (['revoke', 'expiry', 'model'] as $change) {
+        [$tenant, $owner] = isset($tenant) ? [$tenant, $owner] : prepareFictionalVoicePilot($this);
+        approveLiveFictionalPilot($this, $owner);
+        $this->actingAs($owner);
+        request()->setUserResolver(fn () => $owner);
+        app(AiFictionalPilot::class)->during($tenant, $owner, function () use ($tenant, $change) {
+            $settings = app(AiBranchProvider::class)->settings();
+            if ($change === 'revoke') {
+                LandlordOperatorAction::create(['tenant_id' => $tenant->id, 'action_type' => 'ai_voice.pilot.revoke', 'status' => 'success']);
+            } elseif ($change === 'expiry') {
+                $this->travel(8)->days();
+            } else {
+                config(['ai_branch.model' => 'different-price-unapproved-model']);
+            }
+            expect(fn () => app(AiBranchProvider::class)->complete([], $settings))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+        });
+        Http::assertNothingSent();
+    }
+});

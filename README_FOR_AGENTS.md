@@ -1,3 +1,18 @@
+## AI Voice Branch — October 20 approved commercial policy
+
+Read `docs/operations/ai-voice-pricing-and-rollout.md` before changing this lane.
+Existing tenants receive included access and 2x metered usage; future tenants pay
+$20/month access plus 2x usage. Pin the approved existing ID/slug boundary: never
+grandfather newly created tenants on renewal. Default ordinary accounts are off
+with a $0 customer cap; only owners approve model/rates/caps. Use the existing
+service-credit account and immutable AI meter; do not create a second wallet or
+invoice settled prepaid usage again. Unknown outcomes keep reservations until
+provider-evidence reconciliation. The separately audited synthetic pilot supports
+scripted or explicitly approved capped model answers; revoked/expired grants never
+fall through. The user's $5 pilot cap is total lifetime provider spend. Preserve
+legacy accepted subscriptions, the tablet demo and all data/action boundaries.
+Protected release and exact readiness evidence remain required. No new schema.
+
 ## Current product map and verified checkpoint
 
 Read [the current product/setup/release map](docs/operations/everbranch-current-state.md)

@@ -20,21 +20,24 @@ class AiBranchPurchase
 {
     public const ADDON = 'ai_branch_growth';
 
+    public const MONTHLY_CENTS = 9900;
+
     public function preview(Tenant $tenant, User $operator): array
     {
+        abort_if(config('ai_branch.standard_enabled') && (config('ai_branch.existing_tenants')[$tenant->id] ?? null) === $tenant->slug, 409, 'AI access is included for this existing workspace; no access subscription is required.');
         $operator->refresh();
         abort_unless(HomeRedirect::isPlatformOperator($operator) && $operator->is_active !== false, 403);
         abort_unless(config('ai_branch.purchase_enabled') && in_array((int) $tenant->id, config('ai_branch.purchase_tenant_ids', []), true), 403, 'This workspace is not approved for an AI purchase.');
-        $tier = (array) config('module_catalog.addons.'.self::ADDON);
-        abort_unless(data_get($tier, 'pricing.recurring_price_cents') === 9900 && data_get($tier, 'pricing.currency') === 'USD', 409, 'Review the approved AI offer after a catalog price change.');
+        $tier = (array) config('module_catalog.addons.'.static::ADDON);
+        abort_unless(data_get($tier, 'pricing.recurring_price_cents') === static::MONTHLY_CENTS && data_get($tier, 'pricing.currency') === 'USD', 409, 'Review the approved AI offer after a catalog price change.');
         $profile = TenantAccessProfile::query()->where('tenant_id', $tenant->id)->firstOrFail();
-        abort_unless(in_array(self::ADDON, config('module_catalog.plans.'.$profile->plan_key.'.eligible_addons', []), true), 409);
-        abort_if(TenantAccessAddon::query()->where('tenant_id', $tenant->id)->where('enabled', true)->whereIn('addon_key', ['ai_branch_starter', self::ADDON, 'ai_branch_pro'])->exists(), 409, 'An AI tier is already enabled; review its billing before another purchase.');
-        abort_if(TenantBillingSubscription::withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('provider', 'stripe')->whereIn('purchase_key', ['addon.ai_branch_starter', 'addon.'.self::ADDON, 'addon.ai_branch_pro'])->whereNotIn('status', ['canceled', 'incomplete_expired'])->exists(), 409, 'Existing AI billing requires review before another purchase.');
+        abort_unless(in_array(static::ADDON, config('module_catalog.plans.'.$profile->plan_key.'.eligible_addons', []), true), 409);
+        abort_if(TenantAccessAddon::query()->where('tenant_id', $tenant->id)->where('enabled', true)->whereIn('addon_key', ['ai_branch_starter', static::ADDON, 'ai_branch_pro'])->exists(), 409, 'An AI tier is already enabled; review its billing before another purchase.');
+        abort_if(TenantBillingSubscription::withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('provider', 'stripe')->whereIn('purchase_key', ['addon.ai_branch_starter', 'addon.'.static::ADDON, 'addon.ai_branch_pro'])->whereNotIn('status', ['canceled', 'incomplete_expired'])->exists(), 409, 'Existing AI billing requires review before another purchase.');
         app(AiBranchProvider::class)->settings();
         abort_unless(config('commercial.billing_readiness.lifecycle_mutations_enabled'), 503, 'Verified billing fulfillment must be available before checkout.');
 
-        return ['tenant_id' => (int) $tenant->id, 'tenant_slug' => $tenant->slug, 'addon_key' => self::ADDON, 'currency' => 'USD', 'monthly_cents' => 9900, 'setup_cents' => 0, 'base_service_included' => false];
+        return ['tenant_id' => (int) $tenant->id, 'tenant_slug' => $tenant->slug, 'addon_key' => static::ADDON, 'currency' => 'USD', 'monthly_cents' => static::MONTHLY_CENTS, 'setup_cents' => 0, 'base_service_included' => false];
     }
 
     public function prepare(Tenant $tenant, User $operator, string $authorization): array
@@ -52,12 +55,12 @@ class AiBranchPurchase
         $fingerprint = hash('sha256', $secret);
         $saved = data_get(TenantAccessProfile::query()->where('tenant_id', $tenant->id)->firstOrFail()->metadata, 'ai_branch_purchase');
         if (! is_array($saved)) {
-            $lookup = (string) config('module_catalog.addons.'.self::ADDON.'.stripe.recurring_price_lookup_key');
+            $lookup = (string) config('module_catalog.addons.'.static::ADDON.'.stripe.recurring_price_lookup_key');
             $prices = $this->call('get', '/v1/prices', ['active' => 'true', 'lookup_keys[0]' => $lookup, 'limit' => 2]);
             $rows = (array) ($prices['data'] ?? []);
             abort_unless(count($rows) === 1 && ($prices['has_more'] ?? false) === false, 409, 'Exactly one approved Stripe price is required.');
             $price = $rows[0];
-            abort_unless(($price['active'] ?? false) === true && ($price['livemode'] ?? null) === $live && ($price['currency'] ?? '') === 'usd' && ($price['unit_amount'] ?? null) === $offer['monthly_cents'] && ($price['billing_scheme'] ?? '') === 'per_unit' && data_get($price, 'recurring.interval') === 'month' && data_get($price, 'recurring.interval_count') === 1 && ($price['lookup_key'] ?? '') === $lookup && data_get($price, 'metadata.purchase_key') === 'addon.'.self::ADDON && preg_match('/^price_[A-Za-z0-9]+$/', $price['id'] ?? ''), 409, 'Stripe price does not match the exact approved monthly AI offer.');
+            abort_unless(($price['active'] ?? false) === true && ($price['livemode'] ?? null) === $live && ($price['currency'] ?? '') === 'usd' && ($price['unit_amount'] ?? null) === $offer['monthly_cents'] && ($price['billing_scheme'] ?? '') === 'per_unit' && data_get($price, 'recurring.interval') === 'month' && data_get($price, 'recurring.interval_count') === 1 && ($price['lookup_key'] ?? '') === $lookup && data_get($price, 'metadata.purchase_key') === 'addon.'.static::ADDON && preg_match('/^price_[A-Za-z0-9]+$/', $price['id'] ?? ''), 409, 'Stripe price does not match the exact approved monthly AI offer.');
             $customer = trim((string) data_get(TenantCommercialOverride::query()->where('tenant_id', $tenant->id)->first()?->billing_mapping, 'stripe.customer_reference'));
             $invalidCustomer = false;
             if ($customer !== '') {
@@ -86,9 +89,9 @@ class AiBranchPurchase
             });
         }
         abort_unless(hash_equals($fingerprint, (string) ($saved['stripe_key_fingerprint'] ?? '')) && ($saved['monthly_cents'] ?? null) === $offer['monthly_cents'] && ($saved['tenant_id'] ?? null) === (int) $tenant->id && ($saved['created_at'] ?? 0) > now()->subHours(23)->timestamp, 409, 'The existing checkout attempt requires operator reconciliation; another will not be created.');
-        $metadata = ['purpose' => 'addon_checkout', 'tenant_id' => (string) $tenant->id, 'tenant_slug' => $tenant->slug, 'checkout_addons_interest' => self::ADDON, 'ai_branch_purchase' => '1', 'ai_purchase_request_id' => $saved['request_id']];
+        $metadata = ['purpose' => 'addon_checkout', 'tenant_id' => (string) $tenant->id, 'tenant_slug' => $tenant->slug, 'checkout_addons_interest' => static::ADDON, 'ai_branch_purchase' => '1', 'ai_purchase_request_id' => $saved['request_id']];
         $return = $saved['return_url'];
-        $payload = ['mode' => 'subscription', 'success_url' => $return.'&payment=return', 'cancel_url' => $return.'&payment=cancel', 'client_reference_id' => 'tenant-'.$tenant->id, 'line_items[0][price]' => $saved['price_id'], 'line_items[0][quantity]' => 1, 'payment_method_types[0]' => 'card', 'billing_address_collection' => 'required', 'automatic_tax[enabled]' => $saved['automatic_tax'] ? 'true' : 'false', 'expires_at' => $saved['expires_at'], 'custom_text[submit][message]' => 'AI Branch Growth for '.$saved['display_name'].': USD 99 per month before applicable tax. Separate from your Everbranch base service. No setup fee.'];
+        $payload = ['mode' => 'subscription', 'success_url' => $return.'&payment=return', 'cancel_url' => $return.'&payment=cancel', 'client_reference_id' => 'tenant-'.$tenant->id, 'line_items[0][price]' => $saved['price_id'], 'line_items[0][quantity]' => 1, 'payment_method_types[0]' => 'card', 'billing_address_collection' => 'required', 'automatic_tax[enabled]' => $saved['automatic_tax'] ? 'true' : 'false', 'expires_at' => $saved['expires_at'], 'custom_text[submit][message]' => static::ADDON === AiBranchOffer::ADDON ? 'AI Branch for '.$saved['display_name'].': USD 20 per month before applicable tax. Model usage is charged separately at the approved rate. No setup fee.' : 'AI Branch Growth for '.$saved['display_name'].': USD 99 per month before applicable tax. Separate from your Everbranch base service. No setup fee.'];
         if ($saved['customer_id'] !== '') {
             $payload['customer'] = $saved['customer_id'];
         }
@@ -100,12 +103,12 @@ class AiBranchPurchase
         $session = filled($saved['session_id'] ?? null)
             ? $this->call('get', '/v1/checkout/sessions/'.urlencode($saved['session_id']))
             : $this->call('post', '/v1/checkout/sessions', $payload, 'ai-branch-purchase-'.$saved['request_id']);
-        abort_unless(($session['livemode'] ?? null) === $live && ($session['mode'] ?? '') === 'subscription' && ($session['currency'] ?? '') === 'usd' && ($session['amount_subtotal'] ?? null) === 9900 && ($session['status'] ?? '') === 'open' && data_get($session, 'metadata.ai_purchase_request_id') === $saved['request_id'] && preg_match('/^cs_[A-Za-z0-9_]+$/', $session['id'] ?? '') && parse_url($session['url'] ?? '', PHP_URL_SCHEME) === 'https' && parse_url($session['url'] ?? '', PHP_URL_HOST) === 'checkout.stripe.com', 409, 'Stripe checkout requires review; no payment has been confirmed locally.');
+        abort_unless(($session['livemode'] ?? null) === $live && ($session['mode'] ?? '') === 'subscription' && ($session['currency'] ?? '') === 'usd' && ($session['amount_subtotal'] ?? null) === static::MONTHLY_CENTS && ($session['status'] ?? '') === 'open' && data_get($session, 'metadata.ai_purchase_request_id') === $saved['request_id'] && preg_match('/^cs_[A-Za-z0-9_]+$/', $session['id'] ?? '') && parse_url($session['url'] ?? '', PHP_URL_SCHEME) === 'https' && parse_url($session['url'] ?? '', PHP_URL_HOST) === 'checkout.stripe.com', 409, 'Stripe checkout requires review; no payment has been confirmed locally.');
         DB::transaction(function () use ($tenant, $operator, $saved, $session): void {
             $profile = TenantAccessProfile::query()->where('tenant_id', $tenant->id)->lockForUpdate()->firstOrFail();
             abort_unless(data_get($profile->metadata, 'ai_branch_purchase.request_id') === $saved['request_id'], 409);
             $profile->forceFill(['metadata' => [...(array) $profile->metadata, 'ai_branch_purchase' => [...$saved, 'session_id' => $session['id'], 'state' => 'checkout_open']]])->save();
-            app(LandlordOperatorActionAuditService::class)->record($tenant->id, $operator->id, 'ai_branch.purchase.prepare', targetType: 'tenant', targetId: $tenant->id, context: ['request_id' => $saved['request_id'], 'session_id' => $session['id'], 'monthly_cents' => 9900, 'status' => 'checkout_open']);
+            app(LandlordOperatorActionAuditService::class)->record($tenant->id, $operator->id, 'ai_branch.purchase.prepare', targetType: 'tenant', targetId: $tenant->id, context: ['request_id' => $saved['request_id'], 'session_id' => $session['id'], 'monthly_cents' => static::MONTHLY_CENTS, 'status' => 'checkout_open']);
         });
 
         return [...$offer, 'request_id' => $saved['request_id'], 'session_id' => $session['id'], 'url' => $session['url'], 'expires_at' => $session['expires_at'] ?? $saved['expires_at'], 'paid' => false];

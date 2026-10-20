@@ -32,6 +32,9 @@
         @endif
         <div class="teams-bottom">
             <a href="{{ route('team.index', ['tenant' => $tenant->slug]) }}" data-team-surface-link>Back to Everbranch</a>
+            @if(app(\App\Services\AiBranch\AiBranchAccess::class)->visible($tenant, auth()->user()))
+            <a href="{{ route('ai-branch.index', ['tenant' => $tenant->slug]) }}" data-team-surface-link>AI Voice Branch</a>
+            @endif
             <a href="{{ route('profile.edit', ['tenant' => $tenant->slug]) }}">Account settings</a>
             <div class="teams-user">@if(config('team_work.premium_enabled'))<span class="teams-avatar" aria-hidden="true">{{ mb_substr(auth()->user()->name, 0, 1) }}</span>@endif<span>{{ auth()->user()->name }}<br>{{ $tenant->name }}</span></div>
         </div>

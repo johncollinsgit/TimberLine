@@ -13,7 +13,7 @@ use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 beforeEach(function () {
-    config()->set(['soccer.enabled' => true, 'soccer.notification_mode' => 'email', 'soccer.groupme_notifications_enabled' => false, 'soccer.admin_notification_emails' => ['organizer@example.com']]);
+    config()->set(['soccer.enabled' => true, 'soccer.notification_mode' => 'email', 'soccer.groupme_notifications_enabled' => false, 'soccer.admin_notification_emails' => ['organizer@example.com'], 'services.stripe.secret' => 'sk_test_offline_fixture_only']);
     Http::preventStrayRequests();
     $this->tenant = Tenant::create(['name' => 'Wren', 'slug' => 'wren-family-soccer']);
     TenantAccessProfile::create(['tenant_id' => $this->tenant->id, 'plan_key' => 'starter', 'operating_mode' => 'direct', 'metadata' => ['workspace_focus' => 'soccer']]);

@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified', 'tenant.access', 'throttle:20,1'])->prefix('ai-branch')->name('ai-branch.')->group(function (): void {
     Route::get('/', [AiBranchController::class, 'index'])->name('index');
+    Route::post('/checkout', [AiBranchController::class, 'checkout'])->middleware('throttle:3,1,ai-access-checkout:')->name('checkout');
     Route::get('/assistant', [\App\Http\Controllers\AiAssistantController::class, 'session'])->name('assistant.session');
     Route::post('/reports', [\App\Http\Controllers\AiReportController::class, 'store'])->middleware('throttle:5,1,ai-reports:')->name('assistant.reports.store');
     Route::get('/commitments/sources', [\App\Http\Controllers\AiCommitmentController::class, 'sources'])->name('assistant.commitments.sources');

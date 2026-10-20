@@ -20,6 +20,7 @@
     <php>
         <ini name="memory_limit" value="1G"/>
         <env name="APP_ENV" value="testing"/>
+        <env name="EVERBRANCH_AI_STANDARD_ENABLED" value="false"/>
         <env name="APP_KEY" value="base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI="/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>

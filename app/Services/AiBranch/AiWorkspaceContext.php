@@ -19,8 +19,8 @@ class AiWorkspaceContext
 
     public function enabled(Tenant $tenant): bool
     {
-        return (bool) config('ai_branch.workspace_context_enabled')
-            && in_array((int) $tenant->id, config('ai_branch.workspace_context_tenant_ids', []), true);
+        return app(AiBranchOffer::class)->metered($tenant) || ((bool) config('ai_branch.workspace_context_enabled')
+            && in_array((int) $tenant->id, config('ai_branch.workspace_context_tenant_ids', []), true));
     }
 
     public function authorize(Tenant $tenant, User $user, bool $optedIn = true): void
@@ -68,6 +68,7 @@ class AiWorkspaceContext
 
         return hash('sha256', json_encode([
             self::VERSION, $this->enabled($tenant), $this->permissions($tenant, $user), $access,
+            app(AiBranchOffer::class)->metered($tenant) ? app(AiBranchOffer::class)->model($tenant) : null,
             app(FieldServiceAccessService::class)->role($user, $tenant), $user->role, $this->timezone($tenant),
             AiBranchMemory::query()->where('tenant_id', $tenant->id)->where('user_id', $user->id)->where('expires_at', '>', now())
                 ->orderBy('id')->get(['id', 'body'])->map(fn ($memory) => [$memory->id, hash('sha256', $memory->body)])->all(),

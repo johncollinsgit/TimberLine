@@ -71,7 +71,12 @@ class AiAssistantController extends Controller
         }
         unset($message);
         $payload = [
+            'commercial' => app(\App\Services\AiBranch\AiBranchOffer::class)->presentation($tenant),
             'fictional_pilot' => app(\App\Services\AiBranch\AiFictionalPilot::class)->current() !== null,
+            'provider_mode' => app(\App\Services\AiBranch\AiFictionalPilot::class)->current() !== null
+                ? data_get(app(\App\Services\AiBranch\AiFictionalPilot::class)->grant($tenant, $user)?->result, 'provider', 'scripted') : 'openai',
+            'pilot_budget_cents' => app(\App\Services\AiBranch\AiFictionalPilot::class)->current() !== null
+                ? data_get(app(\App\Services\AiBranch\AiFictionalPilot::class)->grant($tenant, $user)?->result, 'provider_budget_cents', 0) : null,
             'commitments_available' => $commitmentsAvailable,
             'phone_practice_available' => app(\App\Services\Voice\PhonePractice::class)->available($tenant, $user),
             'attention_available' => (bool) config('ai_branch.assistant_attention_enabled') && $context->enabled($tenant) && $context->permissions($tenant, $user)['followups'],
