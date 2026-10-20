@@ -1,4 +1,23 @@
-# Modern Forestry Backstage
+# Everbranch
+
+Read the [current product, setup and release map](docs/operations/everbranch-current-state.md)
+for the supported offer, request-to-workspace steps, access/readiness distinctions
+and versioned evidence. The last independently verified checkpoint is
+`00acdc1b05b04e81356c53601f6a6f653dd6f843` at 2026-10-20 08:58 UTC;
+[production readiness](https://app.theeverbranch.com/ready) and protected deployment
+evidence identify the actual live release after that observation.
+
+Everbranch Simple is **$499 one-time setup + $299/month** for new offers.
+Additional text, email, and AI usage fees may apply. Customers choose included
+core branches; Teams, Trajectory and Markets & Makers have separate pricing.
+Requests are reviewed before access/billing setup. Existing accepted customer
+agreements and subscriptions keep their recorded terms.
+
+The dated implementation and client-specific notes below retain their original
+scope. Historical release/offer claims are superseded by the current map; active
+customer isolation, provider guardrails and recorded agreements remain in force.
+A deployed module or a passing synthetic test does not establish provider,
+collection, physical-device or production-backup recovery readiness.
 
 ## Company vehicle locator
 
@@ -14,7 +33,7 @@ Everbranch Mail now has tenant-scoped shared inboxes and guided domain setup. A 
 ## Everbranch public marketing site
 
 The platform marketing site is a separate public-only surface with a warm
-product-studio visual system. Its launch-partner request remains the primary
+product-studio visual system. Its Simple access request is the primary
 conversion path; plans, demo/start access, contact, and the public module
 explorer share its navigation language. This work must never change Modern
 Forestry Shopify, embedded apps, tenant sites, customers, orders, rewards, or
@@ -35,7 +54,9 @@ Managed Website, Shopify, messaging, or marketing APIs.
 For public-site changes, run the focused visual and interaction suite with
 `npm run test:visual`, the public click audit with
 `CLICK_PATH_CONFIG=tests/e2e/click-path-public-routes.json npm run qa:click-path`,
-and the Lighthouse budgets with `npm run test:lighthouse:public`.
+and local Lighthouse collection/assertions following the offer runbook.
+`test:lighthouse:public` currently invokes LHCI autorun with temporary public
+storage upload; do not use that upload path for private audit evidence.
 
 ## Modern Forestry production guard (audit updated 2026-08-06)
 
@@ -113,7 +134,7 @@ php artisan everbranch:prepare-accounting-command-center \
 Add `--enable` only after the QuickBooks prerequisite and rollout review are
 ready. See `docs/operations/accounting-command-center-rollout.md`.
 
-## Current Everbranch Structure and Release State (2026-07-25)
+## Historical structure/release note (2026-07-25; see current checkpoint above)
 
 Everbranch is a Laravel multi-workspace platform. The canonical production
 operator surface is `https://app.theeverbranch.com/landlord`; tenant workspaces
@@ -183,7 +204,11 @@ implemented and remains inert until its read-scoped token and site identifiers
 are configured; it never replaces exact-release `/ready` verification or
 authorizes deployment changes.
 
-## Teams workspace rollout (2026-10-20 candidate)
+## Teams workspace rollout (dated implementation notes, 2026-10-20)
+
+The candidate/deployment context here is historical. Use the current map and
+protected release evidence to determine the shipped version; existing Teams
+rollout, membership and external-write gates remain independent.
 
 Teams shares native authorization and commands across `/teams` and embedded `/team`.
 Events and Wholesale add profile-specific workflows, reviewed email templates and
@@ -1268,7 +1293,7 @@ Intentionally deferred after this phase:
 - Additional module implementation depth beyond current entitlement/discovery visibility
 - Advanced visual regression tooling (behavioral/rendering tests remain the primary guardrail today)
 
-## Current Release State (2026-03-27)
+## Historical release state (2026-03-27; superseded)
 
 This branch now includes the first commercialization/operator shell on top of tenant entitlements.
 
@@ -1359,7 +1384,7 @@ Do not start yet:
 - Shopify App Store packaging
 - speculative AI automation work
 
-Current backend release-order note:
+Historical backend release-order note (superseded by the current release map):
 - treat `docs/architecture/backend-release-order-2026-04-01.md` as the active split plan for the waiting backend branch
 - do not promote mixed commercialization/unified-shell work to `main` until Release A stabilization is green and the later releases are separated
 - prepared split branches now exist:

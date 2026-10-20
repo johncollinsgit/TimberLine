@@ -1,30 +1,36 @@
-## Coordinated October 20 release state
+## Current product map and verified checkpoint
 
-- Public offer/quality PR #436 is live at `df9469eadaff3a857e95c4e711aac80e1e20cd67`
-  (protected run 39392281921, exact `/ready`, Forge release 80667328, 18 read-only
-  Chromium/WebKit checks). Historical sections below retain their original evidence.
-- Marketplace code is integrated onto that release with its collection/availability
-  defaults off. The marketing product `markets_makers` maps to the internal
-  `markets_and_makers` module; marketing selection never activates it. Preserve
-  the shipped Teams migrations and both Teams/Marketplace MySQL recovery gates.
-- Settings, electrician intake and truthful health candidates remain separately
-  preserved until serialized release. See `docs/operations/coordinated-release-2026-10-20.md`.
+Read [the current product/setup/release map](docs/operations/everbranch-current-state.md)
+first. It separates source capabilities, a dated verified deployment and actual
+provider/customer readiness. `/ready`, the protected deployment evidence and the
+latest versioned audit determine the current live release; a source checkout or
+old release note does not.
 
-## Public offer and quality candidate (2026-10-20; not deployed)
+- Last independently verified checkpoint: **2026-10-20 08:58 UTC**,
+  `00acdc1b05b04e81356c53601f6a6f653dd6f843` (Forge 80669972, protected run 39396530459).
+  This is a dated observation, not a promise that production will stay on that SHA.
+- New public **Everbranch Simple** offers: **$499 one-time setup + $299/month**.
+  Additional text, email, and AI usage fees may apply. Choose included core
+  branches; Teams, Trajectory and Markets & Makers are separate premium software.
+  Existing accepted agreements/subscriptions, including Launch Partner terms,
+  retain their recorded prices and conditions.
+- The checkpoint includes the consistent public offer, tabbed plan/branches/add/
+  setup screen, supported electrician intake and truthful unknown health state.
+  Premium ownership/readiness work added after that checkpoint is source behavior,
+  not deployment evidence; verify a later protected release before claiming it live.
+- Marketplace code is deployed at the checkpoint, with all eight effective launch/
+  collection flags off and host unset. Entitlement, configured workspace, rollout,
+  provider readiness and payment confirmation are distinct. Never activate one
+  from a marketing selection or infer paid/provider readiness from a grant.
+- Original 75.3 and accepted 87.3 audit reports remain immutable. New acceptance
+  evidence belongs in a new audit after release, using unchanged rubric v1.
 
-- The Simple public acquisition offer uses `module_catalog.offers.standard`: $499
-  one-time setup and $299/month per business. Additional text, email, and AI
-  usage fees may apply. This supersedes historical public Launch Partner and
-  tier advertising; recorded customer terms remain authoritative. Core branches
-  are included by choice; Teams, Trajectory and Markets & Makers are separate
-  premium software with separate pricing.
-- `product_surfaces.public_plans` separates acquisition cards from existing
-  tenant plan presentation. Access requests store `standard` interest only;
-  this metadata has no checkout/fulfillment mapping and does not activate billing.
-- Public header/step/module contrast and focus are corrected; Workflow Studio
-  navigation styles stay scoped to the tool. See
-  `docs/operations/standard-public-offer.md` and
-  `docs/audits/20261020T-public-quality/` for validation and limits.
+### Superseded October 20 planning notes
+
+Earlier headers described the public offer as an undeployed candidate and settings,
+electrician intake and health fixes as pending. Those planning states ended at the
+verified checkpoint above. Their dated evidence remains historical; it is not a
+current instruction to replay an old source branch or reprice a customer.
 
 ## Markets and Makers marketplace (2026-10-20; default off)
 
@@ -861,10 +867,10 @@ release ID preservation.
   adjustment separately. The public Birthday Club page still links to the
   retired `/apps/birthday` path, which returns 404.
 
-## Public launch partner offer (2026-10-13)
+## Historical public launch-partner offer (2026-10-13; superseded for new offers)
 
-- Historical public offer (superseded by the October 20 candidate above; retained for context): Evergrove and Everbranch shared the Launch Partner offer in `config/product_surfaces.php`: $499 one-time setup, $89/month for the first six billing months, then $149/month. The first six months total $1,033 and the first year totals $1,927 before taxes or add-ons. Starter and Growth public prices are unchanged.
-- This is prospective public pricing. Existing client agreements, subscription authorizations, Stripe subscriptions, and the client-specific Front Yard Foods and Collins Electric agreement templates retain their recorded terms and rates.
+- Historical public offer (superseded for new public acquisition by the released Simple offer at the verified checkpoint above; retained for context): Evergrove and Everbranch shared the Launch Partner offer in `config/product_surfaces.php`: $499 one-time setup, $89/month for the first six billing months, then $149/month. The first six months total $1,033 and the first year totals $1,927 before taxes or add-ons. At that publication, Starter and Growth public prices had not been changed.
+- At publication, this was prospective public pricing for that historical offer. Existing client agreements, subscription authorizations, Stripe subscriptions, and the client-specific Front Yard Foods and Collins Electric agreement templates retain their recorded terms and rates.
 
 ## Website Commerce encrypted storage repair (2026-10-02)
 
@@ -1711,7 +1717,7 @@ Trajectory now opens with Personal, Business, and, when both authorized spaces e
 - SMS and email delivery are not automatic. Reminders remain scheduled/preview-only until consent, provider readiness, and an explicit send action are verified.
 
 ## Project Overview
-- Fire Forge Tech is the platform owner.
+- Historical ownership wording retained from earlier documentation: Fire Forge Tech is the platform owner. This is not a newly verified legal-entity statement. Use the current map for product branding; do not change legal/payment entities or recorded agreements from marketing copy.
 - The Forestry Studio is the flagship tenant, not the architectural center of the platform.
 - Flagship customization is allowed, but platform architecture must remain reusable for future tenants.
 - This is a Laravel + Shopify integration project

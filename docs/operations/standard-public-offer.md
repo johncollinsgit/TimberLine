@@ -1,5 +1,9 @@
 # Everbranch Simple — October 20, 2026
 
+For the dated verified deployment and the current request/setup map, read
+[Everbranch current state](everbranch-current-state.md). This document defines
+source/commercial behavior; it does not make a candidate or provider live.
+
 The owner selected **$499 one-time setup + $299/month per business** for new
 Everbranch Simple offers, with **“Additional text, email, and AI usage fees may
 apply.”** Core branches are included; the customer chooses which branches they
@@ -42,8 +46,12 @@ Snapshot baselines use blocked external fonts for repeatability; Linux CI skips
 Darwin screenshot comparisons. For Lighthouse use local JSON output or collect
 and assert separately; do not invoke its public evidence upload target.
 
-The release must use the protected GitHub test/build and Forge readiness gates.
+Any release must use the protected GitHub test/build and Forge readiness gates;
+the dated verified checkpoint is in the current-state map.
 See `../audits/20261020T-public-quality/report.md` for measured scores, release
-verification and remaining unknowns. This task also authorizes subsequent fixes,
-one at a time, and a tab-based plan/branches/premium/setup experience reusing the
-canonical tenant catalog, role policy and audited action services.
+verification and remaining unknowns. The current source uses the existing
+plan/branches/add/setup tabs. Assigned
+premium summaries reuse canonical module assignment, product access and setup
+policies without broadening public/internal catalog visibility. Workspace access
+never implies payment or provider readiness. Future follow-ups remain separately
+scoped and reviewed; a source note is not an authorization to change production.
