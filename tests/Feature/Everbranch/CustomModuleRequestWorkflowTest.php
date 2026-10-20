@@ -217,7 +217,7 @@ test('module store can launch request form with safe related module key', functi
         ->get('http://acme.theeverbranch.com/marketing/modules?tenant=acme')
         ->assertOk()
         ->assertSeeText('Request something custom')
-        ->assertSeeText('Request customization');
+        ->assertSee(route('custom-module-requests.create'), false);
 
     $this->actingAs($user)
         ->get('http://acme.theeverbranch.com/custom-module-requests/create?tenant=acme&related_module_key=sms')

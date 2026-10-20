@@ -202,7 +202,7 @@ test('tenant module store renders metadata as guidance without billing checkout 
     $this->actingAs($user)
         ->get(route('marketing.modules'))
         ->assertOk()
-        ->assertSeeText('Choose what helps your business grow next.')
+        ->assertSeeText('Your plan. Your branches. Your next step.')
         ->assertSee('placeholder="Search Branches"', false)
         ->assertSeeText('Browse Branches')
         ->assertSee('data-branch-card', false)
