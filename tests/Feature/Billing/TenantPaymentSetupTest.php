@@ -290,7 +290,8 @@ it('binds existing Stripe sign-in to the owner session and verifies the provider
     expect($account->routingMode())->toBe('direct')->and($account->isReady())->toBeTrue();
     $connection = IntegrationConnection::where('provider', 'tenant_stripe_oauth')->sole();
     expect($connection->getRawOriginal('external_account_secret'))->not->toContain('never-display-this-token');
-    $this->get(paymentSetupUrl($this))->assertOk()->assertDontSee('never-display-this-token')->assertSeeText('Connect bank transactions');
+    $this->get(paymentSetupUrl($this))->assertOk()->assertDontSee('never-display-this-token')->assertSeeText('Connect bank transactions')
+        ->assertSee('https://dashboard.stripe.com/acct_owned/dashboard', false);
     $sent = count(Http::recorded());
     $this->get('/payments/stripe/return?state='.$oauth['state'].'&code=abc')->assertForbidden();
     expect(count(Http::recorded()))->toBe($sent);
