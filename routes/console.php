@@ -320,3 +320,11 @@ Schedule::command('ai-branch:prune --apply')->dailyAt('03:40')->withoutOverlappi
 
 // Read-only provider reconciliation continues for accepted events while checkout is off.
 Schedule::command('marketplace:reconcile --limit=25')->everyFiveMinutes()->withoutOverlapping(10)->runInBackground();
+
+// Default off; only recovers never-submitted durable platform email intents.
+Schedule::command('email:ses-platform-dispatch')->everyMinute()->withoutOverlapping(5)->runInBackground();
+Schedule::command('queue:work', [
+    (string) config('ses_migration.platform_queue_connection', 'database'),
+    '--queue' => (string) config('ses_migration.platform_queue', 'ses-platform'),
+    '--stop-when-empty' => true, '--tries' => 0, '--sleep' => 1, '--timeout' => 35,
+])->everyMinute()->when(fn (): bool => (bool) config('ses_migration.platform_enabled'))->withoutOverlapping(10)->runInBackground();

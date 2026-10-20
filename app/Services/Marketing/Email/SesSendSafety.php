@@ -164,7 +164,7 @@ class SesSendSafety
             $spend = (int) config('ses_migration.daily_spend_cap_micros');
             $limits = [
                 'ses:account:'.$day => [min((int) config('ses_migration.account_daily_attempts'), $cost > 0 ? intdiv(max(0, $spend), $cost) : 0), 172800],
-                'ses:tenant:'.$tenantId.':'.$day => [(int) config('ses_migration.tenant_daily_attempts'), 172800],
+                'ses:tenant:'.$tenantId.':'.$day => [(int) config($tenantId === 0 ? 'ses_migration.platform_daily_attempts' : 'ses_migration.tenant_daily_attempts'), 172800],
                 'ses:second' => [(int) config('ses_migration.max_per_second'), 1],
             ];
             foreach ($limits as $key => [$max, $ttl]) {

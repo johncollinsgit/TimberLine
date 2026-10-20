@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_20_200000_create_platform_email_deliveries.php' => [
+        'test' => 'tests/Integration/PlatformMailMySqlRecoveryTest.php',
+        'scenarios' => ['encrypted MIME retained before child table creation', 'recipient, unknown claim and event hashes retained before every named index and parent constraint', 'completed DDL replay before migration bookkeeping', 'duplicate identities or changed named constraints stop without deleting evidence'],
+    ],
     '2026_10_20_140000_add_marketplace_markets_and_reporting.php' => [
         'test' => 'tests/Integration/MarketplaceMySqlRecoveryTest.php',
         'scenarios' => ['market, participation, encrypted maker details and storefront sharing survive partial table/index repair'],

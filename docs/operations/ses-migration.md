@@ -292,3 +292,98 @@ CI or actual SES delivery/event acceptance.
 - https://docs.aws.amazon.com/ses/latest/dg/tenants.html
 - https://docs.aws.amazon.com/ses/latest/dg/sending-email-suppression-list-tenant-level.html
 - https://aws.amazon.com/ses/pricing/
+
+## Platform application-mail outbox (separate, default off)
+
+The opt-in `ses_platform` named Laravel mailer freezes fully rendered MIME in
+`platform_email_messages` before sending. Both MIME and recipient addresses are
+encrypted; queue jobs contain delivery IDs only. One child record is created for
+each envelope recipient so quota, cost and event evidence are recipient-specific.
+Bcc and caller-supplied SES headers are removed from the frozen MIME. Sender,
+configuration set, content fingerprint, recipients and cost estimates cannot be
+replaced after enqueue. New additive tables have explicit named constraints,
+restart guards, retained-evidence recovery tests and a data-free MySQL baseline.
+
+The existing SendGrid SMTP default is unchanged. Platform AWS credentials and a
+separate configuration set are intentionally blank/unprovisioned. The existing
+simulator IAM user is not a production credential. Critical reset, verification,
+agreement, invoice and operator messages are platform expenses; this outbox never
+writes the tenant usage billing ledger or changes marketing consent. All customer
+marketing continues through its existing consent/unsubscribe and tenant billing
+lane. Native SES tenant selective pausing does not isolate the account's combined
+reputation, quotas or global account pause from platform mail. Separate AWS
+accounts would be required for a stronger reputation/account-failure boundary;
+no new account or paid resource is silently provisioned here.
+
+`SES_PLATFORM_SENDING_ENABLED=false` and the current default mailer preserve the
+rollback path. A pilot additionally needs separate reviewed runtime permissions,
+a non-marketing configuration set with approved signed event routing, an exact
+sender, explicit recipient allowlist, asynchronous queue connection and reviewed
+all-in attempt cost. The shared account limiter covers marketing and platform
+attempts; each lane has its own daily allowance. The platform defaults to 100
+attempts/day and 1 MiB frozen messages, requiring at least 1,000 micros of reviewed
+cost per recipient attempt (a conservative estimate, not a reconciled AWS bill).
+The approved account cost still defaults to zero, blocking sends. Do not lower
+estimates or reset daily limiter counters during an active budget period.
+
+The dedicated `ses-platform` queue is drained by the existing scheduler while
+its gate is on. A supervised worker may use the same queue instead; never use a
+sync queue or nest this transport in Laravel failover/round-robin mailers.
+`email:ses-platform-dispatch --limit=100` recovers only never-submitted `queued`
+records after lost queue dispatch. Gate-off jobs leave the outbox queued. Pilot
+recipient removal or frozen-context mismatch moves a record to `held` with a
+reason, so recovery cannot endlessly enqueue an invalid intent. Review backlog
+and token age before enabling/resuming a critical-mail pilot.
+
+Each submission durably claims before HTTP, disables SDK retries and uses
+5-second connection/20-second total SDK timeouts. A received opaque SES receipt
+means provider acceptance; it does not mean delivery. A network/5xx/empty receipt
+stays `unknown` or `submitting`; workers never resubmit it. Confirmed 4xx rejection
+is terminal. Signed, exact-topic/account SNS events bind the original submitted
+recipient, sender, configuration set, delivery tag and full opaque receipt, and
+can reconcile acceptance. Duplicate and late events cannot remove suppression or
+regress delivery. Permanent bounces and complaints hold that platform recipient;
+they do not silently alter tenant marketing opt-in.
+
+Rollback first disables platform enqueue, keeps `MAIL_MAILER=smtp`, and retains
+all outbox rows, event routing and credentials needed for reconciliation. The
+SMTP guard still blocks recipients with unknown/submitting SES attempts, and
+blocks repeated explicit logical IDs, so rollback cannot become blind failover.
+Retain `APP_PREVIOUS_KEYS` while any encrypted outbox evidence or recipient holds
+uses a prior key. Never delete evidence, set unknown/submitting back to queued,
+or resend just because a job failed. Resolve actual provider/event evidence
+before any operator-approved replacement; there is no automatic release of a
+held/unknown attempt in this change.
+
+Laravel's normal queued mailables/notifications use the stable queue UUID as
+logical identity. On retry, their already-frozen original job is acknowledged
+before rendering, preventing a second reset token from invalidating the frozen
+one. Arbitrary business queue jobs must supply a stable
+`X-Everbranch-Logical-Message-ID` (16–200 alphanumeric/colon/underscore/hyphen
+characters) for each logical mail; changed content/recipients under an existing
+ID fail closed. Synchronous user requests receive a new ID per invocation and
+are separate sends. Before a global default switch, audit all business-job mail
+calls and add stable IDs, including per-recipient/per-purpose distinctions.
+Do not switch the default until that inventory and actual non-customer delivery,
+bounce, complaint, retry, event and rollback acceptance evidence are recorded.
+
+### Application flow inventory and cutover order
+
+| Flow | Current implementation | SES cutover condition |
+| --- | --- | --- |
+| Tenant campaigns, direct messages, workflow email, rewards/reminders | `SendGridEmailService` → tenant gateway/dispatch adapter | Native tenant + verified sender/config set + consent/unsubscribe + durable delivery + usage reservation + explicit tenant gate; billing policy validated separately |
+| Password reset/verification, account approval, wholesale notices | Laravel notifications and ordinary mailables | Platform sender/recipient pilot, frozen token content and queue identity; actual delivery/event proof before expansion |
+| Operator snapshots, scent/rewards reports, product review alerts, mobile reminders | Scheduled/service Laravel mailables | Platform pilot after reviewing recipient purpose, existing delivery records and content identity; preserve per-tenant billing where the current gateway meters it |
+| Native Website order updates | Separate immutable notification snapshot and explicitly configured named mailer, with provider-acceptance receipt semantics | Remains on its current approved mailer. Its transport readiness allowlist rejects `ses_platform`; adapt queue-acceptance versus provider receipt/event linkage before moving it |
+| Trajectory financial review email | Separate configured mailer/readiness allowlist and durable finance-space claim | Remains on its current mailer. `ses_platform` is rejected until its claim/event audit distinguishes queue acceptance from provider acceptance |
+| Soccer sign-in and registration/admin email | Laravel mailables; registration records inspect `getMessageId()` | Keep current provider during initial platform pilot. Registration needs explicit outbox/event linkage and queued status before a global default change |
+
+The transport returns `outbox:<delivery-id>` with a `queued` header for local
+acceptance, never a generated ID that could be mistaken for an AWS receipt.
+Provider acceptance and lifecycle evidence live on the child delivery. A named
+non-customer pilot can test this core without changing every consumer. A global
+`MAIL_MAILER` switch is not approved or ready: native Website/Trajectory/registration
+receipt consumers and marketing reports need the scoped integration above first.
+Queue services reached indirectly from `SendWebsiteOrderNotification`,
+`Trajectory/SendReviewEmail`, `SendMarketingDirectMessageBatch` and automation jobs
+were inspected; no unrelated pending feature was enabled or released.

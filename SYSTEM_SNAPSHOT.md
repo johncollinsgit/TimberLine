@@ -1,3 +1,4 @@
+<!-- SES platform mail: default-off ses_platform encrypted outbox, dedicated queue and signed events; SendGrid stays default. See docs/operations/ses-migration.md before activation. -->
 ## Markets & Makers management (source candidate, October 20)
 
 The [management console map](docs/architecture/markets-makers-management-console.md)

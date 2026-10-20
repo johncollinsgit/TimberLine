@@ -1,3 +1,4 @@
+<!-- SES platform mail: default-off ses_platform encrypted outbox, dedicated queue and signed events; SendGrid stays default. See docs/operations/ses-migration.md before activation. -->
 ## Guided onboarding and settings (source candidate, October 20)
 
 See [workspace settings and onboarding](docs/operations/workspace-settings-and-onboarding.md).
