@@ -185,6 +185,20 @@ authorizes deployment changes.
 
 ## Everbranch Direct Stripe Invoices (2026-07-17)
 
+## Teams workspace rollout (2026-10-20 candidate)
+
+Teams shares native authorization and commands across `/teams` and embedded `/team`.
+Events and Wholesale add profile-specific workflows, reviewed email templates and
+permission-filtered internal reminders. Connections and provider writes remain
+independent. See `docs/operations/everbranch-team-connected-operations-runbook.md`.
+Use the protected PR/MySQL/Forge path above. After exact-release verification,
+the production `Launch approved Teams workspace` maintenance workflow can preview
+and apply `team:launch` for an existing approved tenant. It records entitlement
+and area setup without changing subscriptions, preserves existing commercial
+fields, and enables only Teams UI/read configuration. It does not create provider
+credentials, grant source access or enable external sends, AI or spreadsheet writes.
+
+
 - Status: direct invoices are production-ready pending live gates after an internal paid Stripe sandbox invoice smoke test. Live customer invoicing remains blocked until production secrets, webhook signing, Relay payout verification, tax/accounting approval, production mail, and first-tenant allowlisting pass. Evidence: `docs/operations/evidence/2026-07-17/direct-stripe-invoice-sandbox-smoke.md`.
 - Landlord operators can draft tenant-scoped direct invoices from `/landlord/invoices` or `/landlord/tenants/{tenant}/invoices/create` for approved Everbranch service, Evergrove implementation, supplemental work, or milestone charges.
 - Direct invoices are separate from accepted-proposal Checkout and from future Shopify App Store billing. Shopify plan costs, Shopify processing charges, taxes collected by Shopify, and third-party app subscriptions must stay informational and must not be entered as Everbranch invoice lines.

@@ -2929,3 +2929,14 @@
   merchant and payout destination, matching native storefront payments. Card
   wallets, registration/jersey totals, zero platform fees and launch gates stay
   unchanged. No live charge or registration opening is performed.
+## 2026-10-20 - Teams Events and Wholesale workflows
+
+- Shared Forestry Teams presentation, dense task views, responsive navigation and
+  source-aware work areas across the standalone and embedded application.
+- Events follows planning, preparation, execution and review; Wholesale groups
+  relationship work, orders/follow-up and growth tools.
+- Area-specific reusable email templates provide formatted/plain-text previews,
+  current recipient checks, missing-field protection and retained drafts.
+- Internal reminder options include schedules, quiet hours, previews and paused
+  state. External sequences and real provider acceptance remain separate gates.
+
