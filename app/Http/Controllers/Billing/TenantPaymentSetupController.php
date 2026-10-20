@@ -30,6 +30,8 @@ class TenantPaymentSetupController extends Controller
             'paypalConfigured' => $paypal->configured(), 'paypalSandbox' => config('tenant_payments.paypal.environment') === 'sandbox',
             'paypalFresh' => $connection?->last_synced_at?->gt(now()->subMinutes(15)) ?? false,
             'stripeOAuthAvailable' => filled(config('tenant_payments.stripe_oauth_client_id')),
+            'accountingConnected' => \App\Models\IntegrationConnection::query()->forTenant($tenant)
+                ->where('provider', 'quickbooks')->where('status', 'connected')->exists(),
             'bankSpace' => app(\App\Services\Trajectory\FinanceAccess::class)->spaces($request->user())
                 ->first(fn ($space) => $space->kind === 'business' && (int) $space->tenant_id === (int) $tenant->id),
         ])->header('Cache-Control', 'no-store, private')->header('Referrer-Policy', 'no-referrer');

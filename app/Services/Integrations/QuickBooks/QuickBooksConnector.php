@@ -110,7 +110,7 @@ class QuickBooksConnector implements ProviderConnector
                 'token_type' => (string) ($tokens['token_type'] ?? 'bearer'),
                 'expires_at' => Carbon::now()->addSeconds((int) ($tokens['expires_in'] ?? 3600)),
                 'scopes' => array_values(array_filter(explode(' ', (string) config('services.quickbooks.scopes')))),
-                'metadata' => ['source' => 'quickbooks_oauth'],
+                'metadata' => ['source' => 'quickbooks_oauth', 'purpose' => 'accounting'],
                 'connected_at' => now(),
                 'last_error_code' => null,
                 'last_error_message' => null,

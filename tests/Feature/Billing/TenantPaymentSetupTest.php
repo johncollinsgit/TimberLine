@@ -290,3 +290,14 @@ it('binds existing Stripe sign-in to the owner session and verifies the provider
     expect($connection->getRawOriginal('external_account_secret'))->not->toContain('never-display-this-token');
     $this->get(paymentSetupUrl($this))->assertOk()->assertDontSee('never-display-this-token')->assertSeeText('Connect bank transactions');
 });
+
+it('recognizes only this workspace accounting connection without granting payment or bank-feed authority', function () {
+    $other = Tenant::create(['name' => 'Other Accounting Merchant', 'slug' => 'other-accounting-merchant']);
+    IntegrationConnection::create(['tenant_id' => $other->id, 'provider' => 'quickbooks', 'status' => 'connected', 'external_account_id' => 'fictional-other']);
+    $this->actingAs($this->owner)->get(paymentSetupUrl($this))->assertOk()->assertDontSeeText('QuickBooks is already connected');
+    IntegrationConnection::create(['tenant_id' => $this->tenant->id, 'provider' => 'quickbooks', 'status' => 'connected', 'external_account_id' => 'fictional-own', 'metadata' => ['purpose' => 'accounting']]);
+    $this->get(paymentSetupUrl($this))->assertOk()->assertSeeText('QuickBooks is already connected for read-only accounting')
+        ->assertSeeText('additional transaction detail');
+    expect($this->tenant->paymentAccount()->exists())->toBeFalse();
+    Http::assertNothingSent();
+});
