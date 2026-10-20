@@ -16,6 +16,12 @@
     ],
     "browser-marketplace-management-accepted": [
       "  22 passed (8.6s)"
+    ],
+    "marketplace-management-profile-export": [
+      "  Tests:    98 passed (1127 assertions)"
+    ],
+    "browser-marketplace-management-profile": [
+      "  28 passed (10.7s)"
     ]
   },
   "production_build": "PASS: typecheck, existing JS tests, Vite; existing Rollup annotation warnings",
@@ -144,5 +150,11 @@
     "No real merchant, provider, message, payment, DNS, entitlement or customer changes.",
     "Emulated viewports; no physical Galaxy/iPhone.",
     "Livestream is planned; no video/chat/stream checkout."
-  ]
+  ],
+  "profile_followup": {
+    "preserved_initial_candidate": "590edd42709538c4f4dc8837106475eaa7fe6686",
+    "scope": "Only focused maker-profile local section links become one scrollable row; six viewport/engine cases added.",
+    "browser_final_passed": 28,
+    "application_shared_integration_changed": false
+  }
 }
