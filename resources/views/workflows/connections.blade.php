@@ -1,6 +1,6 @@
 <x-layouts::app :title="'Automation connections'">
     <div class="min-h-full bg-stone-50"><div class="mx-auto max-w-7xl space-y-6 px-4 py-7 sm:px-6 lg:px-8">
-        <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><span class="text-xs font-black uppercase tracking-[0.2em] text-emerald-700">Connected apps</span><h1 class="mt-2 text-3xl font-black text-zinc-950">Connections</h1><p class="mt-2 max-w-2xl text-sm text-zinc-600">Connect once, reuse the account in multiple workflows. Everbranch never shows stored tokens or app secrets here.</p></div></header>
+        <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><span class="text-xs font-black uppercase tracking-[0.2em] text-emerald-700">Connected apps</span><h1 class="mt-2 text-3xl font-black text-zinc-950">Connections</h1><p class="mt-2 max-w-2xl text-sm text-zinc-600">Connect the apps you already use. Sign in with the provider, choose the account for this workspace, and approve access. You can use that connection in multiple workflows.</p></div></header>
         <x-workflows.partials.nav />
         <div class="grid gap-5 lg:grid-cols-2">
             @foreach($providers as $key => $provider)
@@ -35,7 +35,7 @@
                             @endforeach
                             <form method="POST" action="{{ route('workflows.connections.commerce.connect', $key) }}" class="flex flex-col gap-2 sm:flex-row">@csrf<input type="hidden" name="return_path" value="{{ $returnPath ?? route('workflows.connections', absolute: false) }}"> @if($key === 'shopify')<label class="sr-only" for="shop-domain">Shopify store domain</label><input id="shop-domain" name="shop_domain" placeholder="store-name.myshopify.com" required class="min-w-0 flex-1 rounded-xl border-zinc-200 bg-zinc-50 text-sm" />@endif<button class="rounded-xl bg-zinc-950 px-4 py-2 text-sm font-bold text-white">{{ $connected ? 'Connect another' : 'Connect' }} {{ $provider['label'] }}</button></form>
                         </div>
-                    @else<p class="mt-4 text-xs leading-5 text-zinc-500">The workflow registry recognizes this provider, but publishing stays fail-closed until Everbranch’s provider app registration and callback are production-ready.</p>@endif
+                    @else<p class="mt-4 text-xs leading-5 text-zinc-500">This connection is not available yet. Your existing accounts and workflows can continue.</p>@endif
                 </article>
             @endforeach
         </div>
@@ -44,7 +44,7 @@
                 <div class="flex flex-col gap-1">
                     <span class="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-500">Connections roadmap</span>
                     <h2 class="text-lg font-black text-zinc-950">Not selectable in workflows yet</h2>
-                    <p class="text-sm text-zinc-600">These apps stay outside the step picker until their OAuth scopes, tests, execution, retries, and run history are production-ready.</p>
+                    <p class="text-sm text-zinc-600">These apps are planned. Choose an available connection above to get started.</p>
                 </div>
                 <div class="mt-4 grid gap-2 sm:grid-cols-2">
                     @foreach($roadmapProviders as $provider)

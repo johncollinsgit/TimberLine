@@ -6,6 +6,21 @@ Accept payments is the main setup action. New non-Wren accounts use Standard/ful
 
 ## Guided setup screen (2026-10-19)
 
+The owner clarified the standard for existing and future clients on October 20:
+use familiar provider sign-in, explain what will connect and why, reuse existing
+accounts, and keep ordinary setup free of API credentials and technical setup
+language. Customers should see familiar eligible payment methods at checkout;
+tenants should see the next action and saved progress. Platform configuration,
+payment readiness, bank transactions and accounting authorization remain distinct.
+Shop Pay is scoped to Evergrove only for now.
+
+The Stripe screen leads with Sign in to Stripe and a secondary Create a Stripe
+account option. An existing connection has one Continue setup action without
+asking for its email again. The existing-account service still reuses the same
+account and frozen attempt. Connection screens describe provider sign-in and
+availability in plain language; internal registration, scope and callback details
+belong in operator documentation.
+
 The Payments page shows account creation, submitted business details and Stripe
 approval as separate steps, using saved provider evidence. Cards and payouts have
 separate statuses and a last-checked time. The secure handoff can be resumed;

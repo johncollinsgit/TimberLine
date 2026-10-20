@@ -1,6 +1,8 @@
 # Shop Pay Wallet readiness
 
-The owner requested Shop Pay for soccer and tenant storefronts. This is active
+The owner originally requested Shop Pay for soccer and tenant storefronts, then
+limited the current pilot to **Evergrove only** on October 20. Do not provision
+or bind Carolina or Wren during this pilot. This is active
 integration preparation, not an available buyer payment method. Do not treat a
 Wallet session as a payment, order, tenant connection, payout or registration.
 
