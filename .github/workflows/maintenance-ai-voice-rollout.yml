@@ -11,8 +11,9 @@ on:
         options:
           - audit
           - prepare-access-price
+          - verify-fictional-conversation
       confirm_apply:
-        description: Apply only the approved $20/month price mapping (no customer or subscription)
+        description: Apply the fixed price or run two capped fictional questions; neither creates a customer or subscription
         required: true
         default: false
         type: boolean
@@ -31,6 +32,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
+      - name: Checkout the public audit encryption recipient
+        uses: actions/checkout@v6
+
       - name: Validate exact deployed release
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
@@ -74,7 +78,6 @@ jobs:
           case "$OPERATION" in
             audit)
               "${remote[@]}" "set -euo pipefail; cd '$DEPLOY_PATH'; php artisan ai-branch:audit-voice --json" > "$RUNNER_TEMP/ai-voice-audit.json"
-              cat "$RUNNER_TEMP/ai-voice-audit.json"
               ;;
             prepare-access-price)
               "${remote[@]}" "set -euo pipefail; cd '$DEPLOY_PATH'; php artisan ai-branch:prepare-access-price"
@@ -82,14 +85,33 @@ jobs:
                 "${remote[@]}" "set -euo pipefail; cd '$DEPLOY_PATH'; php artisan ai-branch:prepare-access-price --apply --authorization='owner-approved-ai-20-monthly-20261020-run-$GITHUB_RUN_ID'"
               fi
               ;;
+            verify-fictional-conversation)
+              args="--owner-id=1 --acceptance-id='pilot-acceptance-$GITHUB_RUN_ID'"
+              if [ "$APPLY" = "true" ]; then args="$args --apply --force-production --authorization='owner-approved-five-dollar-pilot-run-$GITHUB_RUN_ID'"; fi
+              "${remote[@]}" "set -euo pipefail; cd '$DEPLOY_PATH'; php artisan ai-branch:verify-fictional-conversation $args" > "$RUNNER_TEMP/ai-voice-acceptance.txt"
+              ;;
             *) echo 'Unsupported operation'; exit 1 ;;
           esac
 
+      - name: Encrypt private audit output for the owner
+        if: inputs.operation == 'audit' || inputs.operation == 'verify-fictional-conversation'
+        run: |
+          set -euo pipefail
+          for file in "$RUNNER_TEMP/ai-voice-audit.json" "$RUNNER_TEMP/ai-voice-acceptance.txt"; do
+            if [ -f "$file" ]; then
+              openssl cms -encrypt -binary -aes-256-gcm -in "$file" -outform DER -out "$file.cms" -recip resources/operations/ai-voice-audit-recipient.pem -keyopt rsa_padding_mode:oaep -keyopt rsa_oaep_md:sha256
+              rm -- "$file"
+            fi
+          done
+          echo 'Private audit encrypted for the owner; no tenant data or model reply printed.'
+
       - name: Retain read-only tenant audit
-        if: inputs.operation == 'audit'
+        if: inputs.operation == 'audit' || inputs.operation == 'verify-fictional-conversation'
         uses: actions/upload-artifact@v4
         with:
           name: ai-voice-audit-${{ github.run_id }}
-          path: ${{ runner.temp }}/ai-voice-audit.json
+          path: |
+            ${{ runner.temp }}/ai-voice-audit.json.cms
+            ${{ runner.temp }}/ai-voice-acceptance.txt.cms
           if-no-files-found: error
           retention-days: 7

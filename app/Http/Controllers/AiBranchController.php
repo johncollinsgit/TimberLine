@@ -101,7 +101,7 @@ class AiBranchController extends Controller
         }
         $metered = app(\App\Services\AiBranch\AiBranchOffer::class)->metered($tenant);
         if ($metered) {
-            abort_unless($this->access->canApprove($tenant, $request->user()), 403, 'A workspace owner must approve AI pricing, model and cap.');
+            abort_unless($this->access->canApprove($tenant, $request->user()), 403, 'A workspace owner or verified billing admin must approve AI pricing, model and cap.');
         }
         $data = $request->validate(['enabled' => ['required', 'boolean'], 'budget_cents' => ['required', 'integer', 'min:0', 'max:'.$tier['ai_limits']['provider_budget_cents']], 'confirmed' => ['accepted'], 'timezone' => ['sometimes', 'required', 'string', 'timezone:all'],
             'model' => [$metered ? 'required' : 'sometimes', \Illuminate\Validation\Rule::in(array_keys(config('ai_branch.models')))]]);

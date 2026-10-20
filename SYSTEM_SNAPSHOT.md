@@ -4,7 +4,8 @@ See `docs/operations/ai-voice-pricing-and-rollout.md`. This source increment add
 automatic browser voice turns over scoped chat, persistent private memory controls,
 fixed existing-tenant included access and future $20/month access. Both ordinary
 lanes meter model usage at 2x actual cost from the existing shared service-credit
-account. Owner-approved model/rates and a positive customer cap are required;
+account. Model/rates and a positive customer cap require approval from an owner
+or verified workspace admin with existing billing authority;
 ordinary accounts start off/$0. The fictional pilot may separately use an audited
 $5 total provider allowance. Legacy paid tiers and the tablet Realtime demo remain
 separate. Source/build/fixture results do not establish deployment or activation.

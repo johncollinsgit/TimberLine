@@ -28,7 +28,7 @@
                 <p>{{ $commercial['label'] }}: ${{ number_format($commercial['input_per_million_micros'] / 1000000, 2) }} input, ${{ number_format($commercial['cached_input_per_million_micros'] / 1000000, 2) }} cached input, ${{ number_format($commercial['output_per_million_micros'] / 1000000, 2) }} output per million tokens. Each request reserves up to ${{ number_format($commercial['max_request_charge_micros'] / 1000000, 4) }} and settles actual usage.</p>
                 @if($canApproveAi)
                 <form method="post" action="{{ route('ai-branch.credit-checkout', ['tenant' => $tenant->slug]) }}" class="flex gap-3">@csrf<label>Buy optional service credit<select name="pack_cents">@foreach(config('marketing.messaging.platform.credit_packs_cents') as $pack)<option value="{{ $pack }}">${{ number_format($pack / 100, 0) }}</option>@endforeach</select></label><label><input type="checkbox" name="confirmed" value="1" required> I approve buying this credit pack.</label><button class="fb-btn fb-btn-secondary">Review credit purchase</button></form>
-                @else<p>A workspace owner must approve the model and cap before buying AI service credit.</p>@endif
+                @else<p>A workspace owner or verified billing admin must approve the model and cap before buying AI service credit.</p>@endif
             </section>
             @endif
             @if($errors->any())<div role="alert" class="text-red-800">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif
@@ -47,7 +47,7 @@
                     <label class="text-sm"><input type="checkbox" name="confirmed" value="1" required> I approve sharing permitted context with the AI provider under this cap. @if($metered) I approve the displayed model usage rates and prepaid credit charges. @endif</label>
                     <button class="fb-btn fb-btn-primary">Save settings</button>
                 </form>
-                @else<p class="mt-3">Only a workspace owner can approve AI models and spending caps. Your current membership can use AI after that approval.</p>@endif
+                @else<p class="mt-3">Only a workspace owner or verified billing admin can approve AI models and spending caps. Your current membership can use AI after that approval.</p>@endif
             </details>
             @if($account?->enabled)
             @if($enhanced)

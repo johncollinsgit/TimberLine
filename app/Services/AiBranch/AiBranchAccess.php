@@ -33,7 +33,7 @@ class AiBranchAccess
         abort_unless(app(TenantModuleAccessResolver::class)->canAccess($tenant->id, 'ai_branch'), 403);
         if ($offer->included($tenant)) {
             if ($optedIn) {
-                abort_unless(AiBranchAccount::where('tenant_id', $tenant->id)->where('enabled', true)->where('budget_cents', '>', 0)->exists(), 403, 'An owner must approve AI usage and a spending cap.');
+                abort_unless(AiBranchAccount::where('tenant_id', $tenant->id)->where('enabled', true)->where('budget_cents', '>', 0)->exists(), 403, 'A workspace owner or billing admin must approve AI usage and a spending cap.');
             }
 
             return $offer->tier($tenant);
@@ -54,7 +54,7 @@ class AiBranchAccess
             ->count();
         abort_unless($subscriptions === 1, 403, 'A current paid AI subscription is required.');
         if ($optedIn) {
-            abort_unless(AiBranchAccount::query()->where('tenant_id', $tenant->id)->where('enabled', true)->exists(), 403, 'An owner must enable AI for this workspace.');
+            abort_unless(AiBranchAccount::query()->where('tenant_id', $tenant->id)->where('enabled', true)->exists(), 403, 'A workspace owner or billing admin must enable AI for this workspace.');
         }
 
         return $tier;
@@ -63,7 +63,8 @@ class AiBranchAccess
     public function canApprove(Tenant $tenant, User $user): bool
     {
         return $user->is_active && $user->hasVerifiedEmail() && $user->tenants()->whereKey($tenant->id)
-            ->wherePivotIn('role', ['owner', 'tenant_owner'])->wherePivot('membership_active', true)->exists();
+            ->wherePivotIn('role', ['owner', 'tenant_owner', 'admin'])->wherePivot('membership_active', true)->exists()
+            && app(\App\Services\Tenancy\TenantFinancialAccess::class)->allows($user, $tenant);
     }
 
     public function member(Tenant $tenant, User $user): void
