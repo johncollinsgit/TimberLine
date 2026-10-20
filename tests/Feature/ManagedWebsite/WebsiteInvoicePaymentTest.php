@@ -573,3 +573,18 @@ it('keeps household and deliberately disconnected feeds out of business health w
         ->and(data_get($event->context, 'count'))->toBe(1);
     Http::assertNothingSent();
 });
+
+it('recovers delayed settlement detail without counting another payment or committing stock again', function () {
+    $order = ($this->issued)();
+    $payment = ($this->begin)($order, 'deposit');
+    $this->overrides[$payment->id] = ['payment_intent' => ['latest_charge' => ['balance_transaction' => null]]];
+    ($this->settle)($payment);
+    expect($this->invoices->summary($this->site)['fees_pending'])->toBe(1);
+    $events = $order->events()->count();
+    unset($this->overrides[$payment->id]);
+    $this->invoices->reconcile($payment);
+    $summary = $this->invoices->summary($this->site);
+    expect($summary['fees_pending'])->toBe(0)->and($summary['fees'])->toBe(100)->and($summary['charge_net'])->toBe(2150)
+        ->and($summary['collections'])->toBe(2250)->and($order->payments()->count())->toBe(1)
+        ->and($this->variant->fresh()->inventory_quantity)->toBe(3)->and($order->events()->count())->toBe($events);
+});

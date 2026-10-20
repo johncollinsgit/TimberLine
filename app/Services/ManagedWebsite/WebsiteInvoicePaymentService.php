@@ -270,6 +270,22 @@ class WebsiteInvoicePaymentService
                 $order->update(['service_request' => $details]);
             }
             if (! empty($metadata['paid_confirmed'])) {
+                // Asynchronous capture can publish settlement detail after the receipt.
+                // Refresh only the original verified charge; never repeat fulfillment.
+                $settlement = data_get($intent, 'latest_charge.balance_transaction', []);
+                if (($intent['id'] ?? null) === $payment->provider_payment_intent_id
+                    && ($intent['customer'] ?? null) === ($metadata['customer_id'] ?? null)
+                    && $stripe->matches($payment, (array) ($intent['metadata'] ?? []))
+                    && data_get($intent, 'latest_charge.id') === data_get($metadata, 'receipt.charge_id')
+                    && filled(data_get($metadata, 'receipt.charge_id'))
+                    && ($settlement['currency'] ?? null) === 'usd' && is_int($settlement['fee'] ?? null)
+                    && is_int($settlement['net'] ?? null) && $settlement['fee'] >= 0
+                    && $payment->amount_cents === $settlement['fee'] + $settlement['net']) {
+                    $metadata['receipt'] = ['charge_id' => data_get($intent, 'latest_charge.id'),
+                        'provider_fee_cents' => $settlement['fee'], 'provider_net_cents' => $settlement['net'], 'settlement_currency' => 'usd'];
+                    $payment->update(['metadata' => $metadata]);
+                }
+
                 return;
             }
             if (($session['payment_status'] ?? '') !== 'paid') {
