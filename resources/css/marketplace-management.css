@@ -139,3 +139,7 @@ body.mm-console { --forest:#183e32; --ink:#233a32; --muted:#61736a; --line:#e3e7
 }
 
 .mm-main .form-grid>button { align-self:end; justify-self:start; }
+
+.mm-section-links { display:flex; gap:6px; overflow-x:auto; white-space:nowrap; max-width:100%; border-bottom:1px solid var(--line); padding:10px 0; margin:14px 0 20px; }
+.mm-section-links a { flex-shrink:0; display:inline-flex; align-items:center; min-height:44px; padding:8px 12px; font-size:12px; border:1px solid var(--line); border-radius:6px; text-decoration:none; background:#fff; }
+.mm-section-links a:hover { background:#edf2e6; }

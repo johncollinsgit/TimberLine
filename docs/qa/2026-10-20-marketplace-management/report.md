@@ -42,7 +42,7 @@ no video, chat, stream scheduling or checkout was invented.
 | Marketplace suite with opt-in rendered fixture export | 98 passed / 1,127 assertions |
 | Teams and navigation regression | 212 passed / 2,085 assertions |
 | Tenant experience and preview scope checks (overlaps above) | 35 passed / 269 assertions |
-| Chromium + WebKit browser checks | 22 passed |
+| Chromium + WebKit browser checks | 28 passed |
 | Production build, typecheck and existing JS tests | Pass; existing Rollup annotation warnings |
 | Pint | 8 affected PHP files pass |
 | Whitespace | `git diff --check` passes |
@@ -53,7 +53,7 @@ maker hash destinations, 390/1024/1440 widths, actual row expansion, filtering,
 Back/Forward, empty search, mobile keyboard trap/Escape/close/opener restoration,
 review-held maker fulfillment, business forms, add-product disclosure and public
 shopper separation. Screenshots in this directory show the three roles at all
-three widths, plus the WebKit phone preview. Desktop/phone/tablet renders were
+three widths, the WebKit phone preview and the focused operator maker profile. Desktop/phone/tablet renders were
 inspected; the shipping button's stretched grid treatment was corrected.
 
 The first browser run exposed control-label targeting and the second caught
@@ -95,3 +95,13 @@ claim is made. Existing rollout, commercial terms, independent maker fees and
 payment gates remain authoritative. The existing $499 setup + $299/month Simple
 offer and “Additional text, email, and AI usage fees may apply” remain unchanged;
 no premium software rate is invented. The prior quality rubric/audits are untouched.
+
+## Focused profile follow-up
+
+The original Marketplace candidate `590edd42` is preserved. Final self-review
+found the maker detail page still used six wrapping local section anchors. A
+narrow follow-up makes that row horizontally scrollable, retains every anchor
+and adds six viewport/engine checks for one-row geometry, the final Connections
+anchor, reachability and no page overflow. The full browser suite now passes
+28/28; Marketplace remains 98/1,127. The follow-up changes no commerce, shared
+workflow, Vite, route or integration behavior.

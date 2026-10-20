@@ -141,3 +141,19 @@ test('maker form redirects retain the selected section without changing the comm
     await expect(page.locator('#business-details')).toBeVisible();
     expect(writes).toEqual(['/maker/1/details']);expect(errors).toEqual([]);
 });
+
+for(const width of [390,1024,1440]){
+    test('focused maker profile keeps useful section links in one row at '+width+'px',async({page},info)=>{
+        await page.setViewportSize({width,height:1000});const {errors,writes}=await fixture(page,'operator');
+        await page.goto('/marketplace/operations/makers/1');await expect(page.locator('body')).toHaveAttribute('data-mm-ready','true');
+        const nav=page.getByRole('navigation',{name:'Maker profile sections'});
+        await expect(nav.getByRole('link')).toHaveCount(6);
+        const tops=await nav.getByRole('link').evaluateAll(links=>links.map(el=>Math.round(el.getBoundingClientRect().top)));
+        expect(new Set(tops).size).toBe(1);
+        await nav.getByRole('link',{name:'Connections',exact:true}).click();await expect(page).toHaveURL(/#connections$/);
+        await expect(page.getByRole('heading',{name:'Shared storefronts and sources.'})).toBeVisible();
+        await page.goto('/marketplace/operations/makers/1');await noOverflow(page);
+        await page.screenshot({path:'storage/framework/testing/marketplace-console/maker-profile-'+width+'-'+info.project.name+'.png',fullPage:true});
+        expect(errors).toEqual([]);expect(writes).toEqual([]);
+    });
+}
