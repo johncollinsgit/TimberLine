@@ -22,6 +22,7 @@ beforeEach(function () {
     config(['trajectory.enabled' => true]);
     $this->owner = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
     [$this->space] = app(PilotService::class)->prepare($this->owner, null, true);
+    config(['trajectory.plaid.link_space_ids' => [$this->space->id]]);
     $this->account = Account::create(['space_id' => $this->space->id, 'source_key' => 'test:controls', 'name' => 'Checking', 'kind' => 'cash', 'balance_cents' => 500000, 'observed_at' => now(), 'history_start' => now()->subDays(90)]);
     $this->business = function (string $slug) {
         $tenant = Tenant::create(['slug' => $slug, 'name' => $slug]);

@@ -27,6 +27,13 @@ Wallet session as a payment, order, tenant connection, payout or registration.
 
 ## Operator diagnostic
 
+On October 20, the existing Evergrove merchant again passed identity inspection,
+an unpaid fictional Wallet session, and an exact-source Admin receipt query
+(zero receipts for the unsubmitted probe). No payment or tenant connection was
+created. See `self-service-payments.md` for this evidence and the unverified
+merchant-specific requirements. These checks do not authorize use by Wren or
+Carolina.
+
 `payments:shop-pay-preflight --credentials=/private/path/wallet.json` checks the
 merchant identity through Admin GraphQL. `--probe-session` additionally creates
 a fictional $1 unpaid Wallet session without personal data. This command never

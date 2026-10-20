@@ -21,9 +21,11 @@ class PlaidService
         return filled(config('trajectory.plaid.client_id')) && filled(config('trajectory.plaid.secret'));
     }
 
-    public function linkReady(): bool
+    public function linkReady(?Space $space = null): bool
     {
-        return $this->ready() && $this->redirectUri() !== null;
+        return $this->ready() && $this->redirectUri() !== null
+            && $space?->enabled === true
+            && in_array((int) $space->id, (array) config('trajectory.plaid.link_space_ids', []), true);
     }
 
     private function redirectUri(): ?string
@@ -69,7 +71,7 @@ class PlaidService
 
     public function link(Space $space, ?Connection $connection = null, ?int $actorId = null): array
     {
-        abort_unless($this->linkReady(), 503, 'Bank sign-in is being prepared for mobile. Existing feeds and statement imports remain available.');
+        abort_unless($this->linkReady($space), 503, 'Bank sign-in is being prepared for mobile. Existing feeds and statement imports remain available.');
         abort_if($connection && ($connection->space_id !== $space->id || $connection->status === 'disconnected'), 410, 'Reconnect this bank with a new sign-in.');
         $payload = ['client_name' => 'Everbranch Trajectory', 'language' => 'en', 'country_codes' => ['US'], 'user' => ['client_user_id' => 'trajectory:user:'.($actorId ?? $space->owner_user_id).':space:'.$space->id]];
         if ($connection) {

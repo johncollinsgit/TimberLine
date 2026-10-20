@@ -118,7 +118,7 @@ class TenantPayPalConnectionService
             }
             $locked->update(['status' => $ready ? 'connected' : 'pending', 'external_account_secret' => json_encode($secret, JSON_THROW_ON_ERROR),
                 'last_synced_at' => now(), 'connected_at' => $ready ? ($locked->connected_at ?? now()) : null,
-                'metadata' => ['environment' => config('tenant_payments.paypal.environment'), 'payments_receivable' => $owned && ($data['payments_receivable'] ?? false) === true,
+                'metadata' => ['environment' => config('tenant_payments.paypal.environment'), 'purpose' => 'payment_processing', 'payments_receivable' => $owned && ($data['payments_receivable'] ?? false) === true,
                     'email_confirmed' => $owned && ($data['primary_email_confirmed'] ?? false) === true, 'permissions_verified' => $owned && $permissions]]);
             app(\App\Services\Tenancy\LandlordOperatorActionAuditService::class)->record($connection->tenant_id, $actor->id, 'tenant_payments.paypal.checked',
                 targetType: 'integration_connection', targetId: $connection->id, result: ['connected' => $ready]);

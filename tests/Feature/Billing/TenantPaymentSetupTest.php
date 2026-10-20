@@ -98,7 +98,8 @@ it('connects PayPal only from server-owned tracking and verified partner permiss
     Http::fake(['*/v1/oauth2/token' => Http::response(['access_token' => 'fictional-access']),
         '*/merchant-integrations*' => Http::response(paypalSetupEvidence($connection))]);
     $this->post(paymentSetupUrl($this, '/paypal/refresh'), ['merchant_id' => 'ATTACKER'])->assertRedirect();
-    expect($connection->fresh()->status)->toBe('connected');
+    expect($connection->fresh()->status)->toBe('connected')
+        ->and($connection->fresh()->metadata['purpose'])->toBe('payment_processing');
     Http::assertSent(fn ($request) => str_contains($request->url(), '/merchant-integrations?tracking_id='.$tracking));
     expect(TenantPaymentAccount::count())->toBe(0);
 });

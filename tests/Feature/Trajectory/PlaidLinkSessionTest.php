@@ -24,6 +24,7 @@ beforeEach(function (): void {
     ]);
     $this->owner = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
     [$this->space] = app(PilotService::class)->prepare($this->owner, null, true);
+    config(['trajectory.plaid.link_space_ids' => [$this->space->id]]);
     Queue::fake();
     $this->exchangeFails = false;
     Http::preventStrayRequests();
@@ -37,6 +38,7 @@ beforeEach(function (): void {
         TenantAccessProfile::create(['tenant_id' => $tenant->id, 'plan_key' => 'base', 'operating_mode' => 'direct']);
         $this->owner->tenants()->attach($tenant->id, ['role' => 'owner', 'membership_active' => true]);
         [, $space] = app(PilotService::class)->prepare($this->owner, $tenant, true);
+        config(['trajectory.plaid.link_space_ids' => [...config('trajectory.plaid.link_space_ids'), $space->id]]);
         app()->forgetInstance(\App\Services\Tenancy\TenantModuleAccessResolver::class);
 
         return $space;
@@ -59,6 +61,22 @@ test('new links fail closed without a same-origin HTTPS callback while existing 
         expect(app(PlaidService::class)->ready())->toBeTrue()->and(app(PlaidService::class)->linkReady())->toBeFalse();
         $this->actingAs($this->owner)->postJson("/trajectory/spaces/{$this->space->id}/banks/link")->assertStatus(503)->assertSee('Existing feeds and statement imports remain available');
     }
+    Http::assertNothingSent();
+});
+
+test('registering a callback does not open bank sign-in outside the named-space pilot', function (): void {
+    $business = ($this->business)();
+    config(['trajectory.plaid.link_space_ids' => []]);
+    expect(app(PlaidService::class)->ready())->toBeTrue()
+        ->and(app(PlaidService::class)->linkReady($this->space))->toBeFalse();
+    $this->actingAs($this->owner)->getJson("/trajectory/spaces/{$this->space->id}/dashboard")->assertOk()->assertJsonPath('providers.plaid', false);
+    $this->postJson("/trajectory/spaces/{$this->space->id}/banks/link")->assertStatus(503);
+    config(['trajectory.plaid.link_space_ids' => [$business->id]]);
+    expect(app(PlaidService::class)->linkReady($business))->toBeTrue()
+        ->and(app(PlaidService::class)->linkReady($this->space))->toBeFalse();
+    $this->postJson("/trajectory/spaces/{$this->space->id}/banks/link")->assertStatus(503);
+    $business->update(['enabled' => false]);
+    expect(app(PlaidService::class)->linkReady($business))->toBeFalse();
     Http::assertNothingSent();
 });
 
@@ -86,6 +104,8 @@ test('issued token evidence is encrypted and exchanges require the original acto
 test('successful completion is idempotent without exchanging the public token twice', function (): void {
     $link = $this->actingAs($this->owner)->postJson("/trajectory/spaces/{$this->space->id}/banks/link")->assertOk()->json();
     $body = ['public_token' => 'public-fixture', 'institution_name' => 'Fictional Bank', 'link_session' => $link['link_session']];
+    // Pausing new sign-ins must not discard the original, still-authorized return.
+    config(['trajectory.plaid.link_space_ids' => []]);
     $first = $this->postJson("/trajectory/spaces/{$this->space->id}/banks/exchange", $body)->assertOk()->assertJsonPath('needs_mapping', true)->json();
     $this->postJson("/trajectory/spaces/{$this->space->id}/banks/exchange", $body)->assertOk()->assertExactJson($first);
     $this->postJson("/trajectory/spaces/{$this->space->id}/banks/exchange", [...$body, 'public_token' => 'another-public-token'])->assertConflict();
@@ -138,6 +158,7 @@ test('completed update mode queues one sync and preserves household consent beha
 test('business sync does not request household investment or debt products', function (): void {
     $space = ($this->business)();
     $connection = Connection::create(['space_id' => $space->id, 'external_id' => 'business-only-item', 'access_token' => 'private-existing-token', 'status' => 'connected']);
+    config(['trajectory.plaid.link_space_ids' => []]);
     Http::fake(['*/transactions/sync' => Http::response(['accounts' => [], 'added' => [], 'modified' => [], 'removed' => [], 'next_cursor' => 'next', 'has_more' => false])]);
     app(PlaidService::class)->sync($connection);
     Http::assertSentCount(1);

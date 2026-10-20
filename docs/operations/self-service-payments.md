@@ -40,7 +40,12 @@ summaries and bank deposits must not be added again as revenue.
 Reuse Plaid Transactions and account mapping. Business Link requests Transactions
 only; household optional products retain their existing consent boundaries.
 Register `https://app.theeverbranch.com/trajectory` in Plaid and set the identical
-PLAID_REDIRECT_URI. The app refuses new bank sign-in without this registered,
+PLAID_REDIRECT_URI. New bank sign-ins additionally require the exact Trajectory
+space IDs in PLAID_LINK_SPACE_IDS (not tenant IDs); the default empty list keeps
+new sign-ins off. Registering a callback does not open the feature globally.
+Existing feed sync and original, already-issued owner/session-bound returns stay
+available when new sign-ins are paused; normal space authorization still applies.
+The app refuses new bank sign-in without this registered,
 HTTPS, same-origin return configuration. A browser OAuth handoff resumes the
 original unexpired Link token and server-issued user/space/browser-bound session.
 It cannot silently connect into another selected company. Cache evidence is
@@ -189,3 +194,62 @@ routing. Carolina still requires its owner's genuine account connection or
 onboarding, and direct-charge/refund callback acceptance before collection. OAuth
 registration and payout-setting inspection do not prove a bank connection,
 merchant verification, Plaid OAuth, customer ACH or signed payment delivery.
+
+### Provider acceptance follow-up (2026-10-20)
+
+Protected PR 430 activated the Stripe client configuration at production release
+`6c5afc858d83f6c0441c0103f6b6a2ba45b77e52`. Runtime configuration matches the
+verified platform and exact shared return URL. Carolina's real existing-account
+button now reaches Stripe's account selector. Choosing Return to Evergrove
+returns through the saved owner/session state and displays the cancellation
+message in Carolina. No account was selected or bound. The earlier blank Stripe
+pane did not reproduce; its original cause remains unproven. Do not label this a
+code fix or merchant-onboarding/payment acceptance.
+
+The original owner-only PayPal sandbox Platform Partner App credentials still
+obtain a genuine OAuth token (HTTP 200). They remain local and sandbox-only;
+production PayPal credentials and activation flags are absent/off. The existing
+October 16 partner application must be reviewed rather than submitted again.
+Live approval is not reverified until authenticated provider evidence is
+available. The Developer dashboard requires a fresh platform-account sign-in;
+Safari offered Sarah's passkey, which must not be presumed to identify the
+platform business. Wren's own seller connection remains separate. Verification
+now retains the connection's payment_processing purpose rather than losing it
+when provider readiness metadata is refreshed.
+
+Plaid's initial Transactions-only Link-token readiness request returned HTTP 400
+INVALID_FIELD because the return URI was not registered. The authenticated
+Dashboard client ID was compared by hash against production and matched; no keys
+were rotated. The existing Evergrove Software LLC team requires verification
+with its business Google identity before saving API settings. After that
+verification, the exact `https://app.theeverbranch.com/trajectory` URI was saved
+and independently re-opened to verify persistence. The same production request
+now returns HTTP 200 with a Link token. No bank item was created.
+
+Activate the registered PLAID_REDIRECT_URI together with PLAID_LINK_SPACE_IDS=3
+through a protected release containing the named-space gate. Space 3 is the
+already-enabled, owner-managed Evergrove Software LLC business pilot; no new
+space, entitlement or household access is created. Preserve the existing client
+and secret. Merge the gate into main before staging the shared environment, so
+an unrelated older release cannot activate the URI without pilot isolation.
+Verify runtime configuration and that other enabled spaces still cannot start
+new sign-ins. Original-token mobile return, real institution, consent,
+reconnection and mapping acceptance remain required before widening this pilot.
+An API key or Link token alone is not permission to import accounts.
+
+Evergrove's dedicated Wallet merchant still passes API identity inspection. A
+fresh fictional unpaid Wallet session was created without a buyer or submit
+call. The Admin API's exact-source receipt reconciliation query also returned
+HTTP 200 with zero receipts for that unsubmitted session, as expected. No charge,
+order, tenant binding or revenue was created. This proves API access for
+evergrove-11.myshopify.com only. It does not prove merchant-specific SDK origins,
+signed webhooks, tax, capture/refund or fulfillment. Wren and Carolina each need
+their own verified Wallet store; Evergrove is never their payment fallback.
+Shopify's current configuration guide uses OAuth installation for new custom
+apps. The older manual-token Website prototype is not a validated one-click
+merchant connection and remains unreleased.
+
+Local verification: 170 payment-setup, soccer PayPal, Trajectory and Wallet
+preflight tests passed (817 assertions), including pilot isolation, disabled
+spaces, existing-feed sync and issued-session completion while new sign-ins are
+paused. No schema or customer collection setting changed.
