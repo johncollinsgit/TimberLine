@@ -47,8 +47,12 @@ Galaxy/iPhone, persistent production-login or provider-acceptance claims. No rea
 messages, payments, provider connections, customer changes or public-site
 publishing were performed.
 
-`.github/workflows/tests.yml` adds the opt-in guided fixture export before the
-existing workspace browser configuration; it retains the voice/browser/build
+Both `.github/workflows/tests.yml` and `.github/workflows/deploy.yml` add the
+opt-in guided fixture export before the existing workspace browser configuration.
+The full deployment gate therefore prepares these fixtures on a clean checkout,
+including when verified-PR-tree reuse is unavailable. Coordinator review caught
+the missing deployment export in the original candidate `abacc4e0`; this narrow
+correction preserves that original commit. Both workflows retain the voice/browser/build
 steps introduced by #442/#443. The entire required exact-head CI and protected
 release remain pending coordinator review. Rollback uses the protected prior
 release and retains additive JSON; no migration, destructive rollback or backfill
