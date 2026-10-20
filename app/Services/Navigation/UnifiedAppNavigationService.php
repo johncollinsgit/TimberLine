@@ -602,6 +602,17 @@ class UnifiedAppNavigationService
             ];
         }
 
+        $marketplacePreview = app(\App\Services\Marketplace\MarketplaceAccountPreview::class);
+        if ($marketplacePreview->allows($user)) {
+            $switches[] = [
+                'key' => 'marketplace-preview',
+                'label' => 'Markets & Makers',
+                'descriptor' => 'Private account preview',
+                'href' => $marketplacePreview->url(),
+                'active' => request()->routeIs('marketplace.preview'),
+            ];
+        }
+
         return collect($switches)
             ->unique('key')
             ->values()

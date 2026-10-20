@@ -23,6 +23,27 @@ was attached during browser checks.
 
 ## Workspace, domain, and access
 
+### Private account preview
+
+`/marketplace/preview` is a separate, read-only example-data console on the
+canonical app host. Verified active accounts explicitly listed by numeric ID in
+`MARKETPLACE_ACCOUNT_PREVIEW_USER_IDS` receive a **Markets & Makers** Switch Console
+entry. The source default is empty. Resolve the exact existing user from actual
+data before granting one ID; never infer access from an email pattern or role.
+An account must use normal Everbranch login. Inactive/unverified/unlisted accounts
+are denied; tenant/store query parameters cannot select another workspace.
+
+This preview does not read merchant/customer/provider records, select a tenant,
+create memberships or entitlements, connect providers, or accept mutations. It
+does not grant the merchant operations routes. Keep `MARKETPLACE_ENABLED`, all
+collection flags and the verified host unchanged. Deployment of this route alone
+does not grant anyone access. An authorized operator may set the exact account
+allowlist and rebuild the active release's cached configuration; verify the
+resolved IDs, unchanged runtime guards and actual account response afterward.
+Remove the ID and rebuild configuration to withdraw only this preview.
+
+### Merchant workspace (separate launch)
+
 Prepare the dedicated workspace using a verified existing owner:
 
 ```sh
