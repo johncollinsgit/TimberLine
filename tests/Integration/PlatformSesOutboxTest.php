@@ -134,6 +134,32 @@ it('claims before SDK HTTP and never resends an accepted or ambiguous attempt', 
     }
 })->with(['accepted', 'network', '503', '400', 'empty']);
 
+it('retains bounded AWS failure evidence without raw provider data or another send', function (int $status, string $code, string $expectedCode): void {
+    Bus::fake([SendPlatformEmail::class]);
+    $calls = 0;
+    $outbox = platformFixtureOutbox(function ($command) use (&$calls, $status, $code) {
+        $calls++;
+        throw new AwsException('private-provider-body-and-credential-fixture', $command, [
+            'code' => $code, 'response' => new \GuzzleHttp\Psr7\Response($status, [], 'private-provider-response-fixture'),
+        ]);
+    });
+    $email = platformFixtureEmail();
+    $id = $outbox->enqueue($email, Envelope::create($email))[0];
+    $expectedState = $status < 500 ? 'rejected' : 'unknown';
+    expect($outbox->submit($id))->toBe($expectedState)
+        ->and(PlatformEmailDelivery::findOrFail($id)->hold_reason)->toBe('aws_http_'.$status.':'.$expectedCode)
+        ->and(PlatformEmailDelivery::findOrFail($id)->provider_message_id)->toBeNull()
+        ->and($outbox->submit($id))->toBe($expectedState)->and($calls)->toBe(1)
+        ->and(json_encode(DB::table('platform_email_deliveries')->find($id)))->not->toContain('private-provider', 'fixture-secret')
+        ->and(DB::table('tenant_messaging_ledger_entries')->count())->toBe(0);
+})->with([
+    'access denied' => [403, 'AccessDeniedException', 'AccessDeniedException'],
+    'rate rejected' => [429, 'TooManyRequestsException', 'TooManyRequestsException'],
+    'ambiguous service failure' => [503, 'ServiceUnavailableException', 'ServiceUnavailableException'],
+    'untrusted code' => [400, 'private@example.test\nraw-provider-data', 'UnclassifiedAwsError'],
+    'oversized code' => [400, str_repeat('X', 49), 'UnclassifiedAwsError'],
+]);
+
 it('rechecks pilot recipients and rollout before HTTP and shares the account cap', function (): void {
     Bus::fake([SendPlatformEmail::class]);
     $calls = 0;

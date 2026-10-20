@@ -557,3 +557,24 @@ credential scope, configuration-set association and tenant-suppression setup.
 The two narrowly restricted pilot IAM users are not an approval to install a
 broad provisioning key or activate that legacy path. Preserve all existing
 customer consent, contract rates and the exact email exclusions `1,6,10,14`.
+
+## Rejected platform attempt diagnostics
+
+Platform SDK failures retain a bounded `aws_http_<status>:<AWS error code>` in
+the existing delivery `hold_reason`. Codes must be 1–48 ASCII identifier
+characters; missing, malformed or oversized codes become `UnclassifiedAwsError`.
+Raw exception messages, response bodies, recipients and credentials are not
+stored there. This adds no schema, permission, sending or retry change. Rejected
+and unknown delivery records remain immutable send attempts and are not resent.
+
+The first platform simulator attempt on 20 October returned an AWS 4xx and was
+stored as rejected with no acceptance receipt or event. Its exact error code was
+discarded by the earlier implementation, so it cannot be reconstructed from that
+row. Read-only investigation found no CloudTrail trails or Lake event stores.
+SES SendEmail is a data event; default CloudTrail Event history does not retain
+it ([AWS logging guidance](https://docs.aws.amazon.com/ses/latest/dg/logging-using-cloudtrail.html)).
+No paid logging was enabled to investigate an event that had already occurred.
+The existing SendEmail policy simulated Allowed for the approved context and
+Denied for an unapproved source IP; simulation is not the missing service
+response and does not prove the original rejection's cause. Never backfill a
+guessed error code, resend the rejected intent, or broaden IAM on that basis.
