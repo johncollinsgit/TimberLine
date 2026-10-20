@@ -109,13 +109,13 @@ test('an uncertain model request holds both cap and wallet reservation until rev
     Http::assertSentCount(1);
 });
 
-test('model changes invalidate old context and an admin cannot approve owner usage terms', function () {
+test('model changes invalidate old context and managers cannot approve billing terms', function () {
     [$tenant, $owner] = standardAiTenant($this);
     approveStandardAi($this, $tenant, $owner);
     $conversation = app(AiBranchChat::class)->start($tenant, $owner);
     approveStandardAi($this, $tenant, $owner, 'gpt-6.1-sol');
     expect(fn () => app(AiBranchChat::class)->conversation($tenant, $owner, $conversation->id))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
-    $owner->tenants()->updateExistingPivot($tenant->id, ['role' => 'admin']);
+    $owner->tenants()->updateExistingPivot($tenant->id, ['role' => 'manager']);
     $this->actingAs($owner)->postJson('/ai-branch/settings?tenant='.$tenant->slug,
         ['enabled' => true, 'budget_dollars' => '10', 'model' => 'gpt-6-astra', 'confirmed' => true])->assertForbidden();
     Http::assertNothingSent();
@@ -205,7 +205,7 @@ test('an owner funds shared AI credit through a guarded checkout while messaging
     $this->actingAs($owner)->postJson($url, $args)->assertForbidden();
     approveStandardAi($this, $tenant, $owner);
     $admin = User::factory()->tenantAdmin()->create(['is_active' => true, 'email_verified_at' => now()]);
-    $admin->tenants()->attach($tenant->id, ['role' => 'admin', 'membership_active' => true]);
+    $admin->tenants()->attach($tenant->id, ['role' => 'manager', 'membership_active' => true]);
     $this->actingAs($admin)->postJson($url, $args)->assertForbidden();
     Http::assertNothingSent();
     $owner->update(['role' => 'employee']);
@@ -234,14 +234,17 @@ test('an owner funds shared AI credit through a guarded checkout while messaging
         ->and(TenantMessagingLedgerEntry::where('entry_type', 'credit_funding')->count())->toBe(1);
 });
 
-test('admin views explain owner-only setup and the tenant audit records the missing cap approver', function () {
+test('verified billing admins can approve setup using existing authority without membership promotion', function () {
     [$tenant, $owner] = standardAiTenant($this);
     $tenant->users()->updateExistingPivot($owner->id, ['role' => 'admin']);
     $this->actingAs($owner)->get('/ai-branch?tenant='.$tenant->slug)->assertOk()
-        ->assertSeeText('Only a workspace owner can approve AI models and spending caps.')
-        ->assertDontSeeText('Save settings')->assertDontSeeText('Review credit purchase');
+        ->assertSeeText('Save settings')->assertSeeText('Review credit purchase');
+    approveStandardAi($this, $tenant, $owner);
+    expect($tenant->users()->whereKey($owner->id)->first()->pivot->role)->toBe('admin');
     expect(\Illuminate\Support\Facades\Artisan::call('ai-branch:audit-voice', ['--json' => true]))->toBe(0);
     $audit = json_decode(\Illuminate\Support\Facades\Artisan::output(), true);
-    expect($audit['tenants'][0]['cap_approvers'])->toBe(0)->and($audit['tenants'][0]['setup_ready'])->toBeFalse();
+    expect($audit['tenants'][0]['cap_approvers'])->toBe(1)->and($audit['tenants'][0]['setup_ready'])->toBeTrue();
+    $owner->forceFill(['email_verified_at' => null])->save();
+    expect(app(\App\Services\AiBranch\AiBranchAccess::class)->canApprove($tenant, $owner->fresh()))->toBeFalse();
     Http::assertNothingSent();
 });

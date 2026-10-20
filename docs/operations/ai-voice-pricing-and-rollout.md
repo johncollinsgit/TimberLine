@@ -5,7 +5,7 @@
 Existing tenants have included AI access and pay **2× actual model cost** for
 usage. Future tenants pay **$20/month access plus 2× model usage**. No setup fee
 is added for this Branch. Every ordinary tenant starts **off with a $0 cap**;
-the workspace owner chooses the model, approves the displayed rates and sets a
+the workspace owner or verified workspace billing admin chooses the model, approves the displayed rates and sets a
 positive monthly customer spending cap before use. The cap excludes the fixed
 access subscription. No automatic top-up, model upgrade or customer charge occurs
 from this rollout.
@@ -72,7 +72,7 @@ AI account lock and shared credit lock, then settles exactly 2× trusted token c
 Unused reserved credit is released. Settled prepaid AI is excluded from the older
 monthly AI invoice path. Customer credit is funded only by the existing verified
 payment path; this rollout creates no purchased credit. The dedicated AI credit
-checkout requires current owner membership, approved model/cap, explicit pack
+checkout requires current owner or verified billing-admin membership, approved model/cap, explicit pack
 confirmation and verified Stripe configuration. It supports the shared balance
 without enabling the separate messaging checkout/send flags. Card payment and a
 verified webhook add credit; a browser return never does.
@@ -122,11 +122,27 @@ zero-dispatch option; revoked grants cannot fall through to a paid provider.
 Run `ai-branch:audit-voice --json` for a read-only inventory of every tenant's
 module/access, owner opt-in/cap, provider, context, memory and prepaid readiness.
 `setup_ready` distinguishes available setup from activated model use and requires
-an active verified owner who can approve a cap. `cap_approvers` exposes legacy
-admin-only or missing-owner setup blockers without promoting memberships. No model
+an active verified owner or workspace admin with existing billing authority who
+can approve a cap. The owner explicitly approved this admin authority on October
+20; memberships are not promoted. `cap_approvers` exposes missing/inactive or
+unverified operator blockers. No model
 request is made by this audit. Record deployment SHA and actual provider evidence
 separately from fixture/browser results. Use protected GitHub/Forge release gates;
 no schema changes, direct production file replacement or broad cache clearing.
+The protected `Audit AI Voice Rollout` workflow can run the same read-only audit
+and retain its JSON, or preview/apply only the fixed approved $20 price. Both
+operations require `main` and the exact active `/ready` release; the price path
+cannot create a customer, subscription or charge. Its separate fixed fictional
+conversation acceptance operation requires explicit apply, the existing verified
+pilot owner and an active real-model grant capped at $5 total. It reserves at
+most $0.02 for two synthetic workspace/history questions; retries reuse the same
+request IDs and uncertain outcomes cannot dispatch again. It creates no business
+action and retains usage receipts. This repository is public: detailed audit and
+acceptance output is encrypted with the owner's public audit recipient before
+upload, and plaintext/replies are not printed. The private decryption key stays
+outside this checkout in the owner's local `.private-ai-audit` folder. Use OpenSSL
+CMS decryption locally; never commit that key. These checks exercise model and
+history wiring, not physical microphone quality.
 
 Focused acceptance: AI feature/billing tests; voice lifecycle unit tests; local
 browser automatic-turn, Stop, denial, hiding, memory reload/forget and revocation

@@ -17,7 +17,9 @@ class AiBranchProvider
             $grant = app(AiFictionalPilot::class)->grant(\App\Models\Tenant::findOrFail($scope['tenant_id']), request()->user());
             if (data_get($grant->result, 'provider') === 'openai') {
                 $settings = $this->pilotSettings();
-                abort_unless($settings === data_get($grant->result, 'provider_settings'), 503, 'The approved pilot provider configuration changed. Operator review is required.');
+                $approved = data_get($grant->result, 'provider_settings');
+                // MySQL JSON canonicalizes object key order; compare exact values and types.
+                abort_unless(is_array($approved) && \Illuminate\Support\Arr::sortRecursive($settings) === \Illuminate\Support\Arr::sortRecursive($approved), 503, 'The approved pilot provider configuration changed. Operator review is required.');
 
                 return [...$settings, 'fictional_scope' => $scope, 'fictional_provider' => 'openai', 'pilot_budget_cents' => $grant->result['provider_budget_cents']];
             }
@@ -38,7 +40,7 @@ class AiBranchProvider
             abort_unless(filled(config('ai_branch.api_key')) && is_array($card) && now()->lt(\Carbon\CarbonImmutable::parse(config('ai_branch.rates_valid_until'))), 503, 'AI model pricing requires review.');
             $terms = data_get(\App\Models\TenantAccessProfile::where('tenant_id', $tenant->id)->value('metadata'), 'ai_branch.usage_terms');
             abort_unless(is_array($terms) && ($terms['multiplier'] ?? null) === 2 && ($terms['version'] ?? '') === config('ai_branch.rates_version')
-                && hash_equals((string) ($terms['rates_digest'] ?? ''), hash('sha256', json_encode($card, JSON_THROW_ON_ERROR))), 403, 'An owner must approve the current model pricing.');
+                && hash_equals((string) ($terms['rates_digest'] ?? ''), hash('sha256', json_encode($card, JSON_THROW_ON_ERROR))), 403, 'A workspace owner or verified billing admin must approve the current model pricing.');
 
             return ['model' => $model, 'input_rate' => $card['input_rate'], 'cached_input_rate' => $card['cached_input_rate'],
                 'output_rate' => $card['output_rate'], 'max_input' => 24000, 'max_output' => $card['max_output'],

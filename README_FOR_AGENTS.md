@@ -4,7 +4,7 @@ Read `docs/operations/ai-voice-pricing-and-rollout.md` before changing this lane
 Existing tenants receive included access and 2x metered usage; future tenants pay
 $20/month access plus 2x usage. Pin the approved existing ID/slug boundary: never
 grandfather newly created tenants on renewal. Default ordinary accounts are off
-with a $0 customer cap; only owners approve model/rates/caps. Use the existing
+with a $0 customer cap; owners or verified workspace admins with existing billing authority approve model/rates/caps. Use the existing
 service-credit account and immutable AI meter; do not create a second wallet or
 invoice settled prepaid usage again. Unknown outcomes keep reservations until
 provider-evidence reconciliation. The separately audited synthetic pilot supports
