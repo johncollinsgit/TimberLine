@@ -46,6 +46,16 @@ Android push delivery stays disabled until `EVERBRANCH_FCM_ENABLED=true` and the
 
 ## Boundaries
 
+Product visualization adds a read-only Website-associated utility, not a new
+paid Branch. Bootstrap `product_visualization.available` is server-computed;
+`GET /api/mobile/v1/workspaces/{tenant}/product-visualizations` requires the
+existing Sanctum `mobile:read`, active account/membership and tenant guards.
+Only canonical eligible published native Website products and verified allowed
+HTTPS viewer/asset hosts are returned, in bounded pages of 25 scanned records.
+Descriptors contain finite data and no executable bundle URLs. Gates default
+off; native app inclusion is separate from merchant/model/device acceptance.
+See `docs/operations/product-visualization.md` for the connected-renderer limit.
+
 The tenant app is a separate repository at `../everbranch-mobile`, bundled with React/TypeScript and Capacitor for `com.everbranch.app` on iOS and Android. It does not wrap the production web app and does not replace or modify the Modern Forestry SwiftUI customer app. The initial lane is a US B2B pilot.
 
 ## Trust and Session Contract

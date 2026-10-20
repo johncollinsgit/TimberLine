@@ -197,6 +197,9 @@ jobs:
           MARKETPLACE_CONSOLE_FIXTURES=1 php vendor/bin/pest --compact tests/Feature/Marketplace/MarketManagementTest.php
           npx playwright test -c playwright.marketplace.config.ts
 
+      - name: Verify synthetic product visualization lifecycle in Chromium and WebKit
+        run: npx playwright test -c playwright.product-visualization.config.ts
+
       - name: Verify public offer and accessibility in Chromium and WebKit
         run: npx playwright test -c playwright.public.config.ts --grep-invert 'stable public'
 

@@ -92,6 +92,7 @@ class EverbranchMobileController extends Controller
             ],
             'branding' => $branding,
             'ai_assistant' => ['available' => app(\App\Services\AiBranch\AiAssistantAccess::class)->allows($tenant, $user), 'context_available' => app(\App\Services\AiBranch\AiWorkspaceContext::class)->enabled($tenant)],
+            'product_visualization' => ['available' => app(\App\Services\Mobile\MobileProductVisualizationService::class)->available($tenant)],
             'voice_navigation' => app(\App\Services\Navigation\VoiceNavigationRegistry::class)->mobile($request, $user, $primaryNavigation, $manifest, $branding),
             'experience_profile' => $experienceProfiles->forTenant((int) $tenant->id, $user, $tenant),
             'work_profile' => $workProfiles->forTenant($tenant),

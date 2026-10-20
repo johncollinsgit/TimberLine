@@ -2258,3 +2258,7 @@ this candidate did not activate tenants or deploy. Preserve unrelated work.
 Mac review corrections retain same-model readiness/scale, enforce the canonical
 editor gate for private GLBs, and suppress Scene Viewer when it cannot preserve
 a saved size correction. Read the runbook before changing fallback policy.
+The native read-only preview feed uses existing `mobile:read` and tenant guards,
+canonical published Website access and finite data-only descriptors. Bootstrap
+advertises capability only; no new Branch or grant. Connected renderers stay
+excluded until their real public viewer consumer exists. All gates stay off.

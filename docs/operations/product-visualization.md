@@ -149,11 +149,40 @@ checkout; do not overwrite current auth/offline work with an older PC checkout.
 `docs/integrations/product-visualization/mobile/ProductVisualization.tsx` is a
 supplied adapter; it is not yet wired, typechecked or built in the native app.
 
-1. Mount it on the existing tenant product/catalog screen using current authorized
-   data. If that app has no Website product feed, add a narrow read-only endpoint
-   using `auth:sanctum`, `mobile:read`, `mobile.tenant`, canonical Website access
-   and current public site/product checks. Do not substitute Field Service or
-   legacy Shopify data. Do not persist descriptors across tenant changes/logout.
+The Mac backend integration now supplies
+`GET /api/mobile/v1/workspaces/{tenant}/product-visualizations` under the existing
+Sanctum, `mobile:read`, active account/membership and `mobile.tenant` guards.
+Bootstrap adds `product_visualization.available`; it never grants an entitlement.
+The read-only utility is associated with the existing Website capability, not a
+new paid Branch. It returns at most 25 scanned active physical products per
+stable ID cursor: `{version:1, products:[{id,title,handle,descriptor,
+public_viewer_url}], allowed_hosts, next_cursor}`. Missing/disabled capability
+must hide the app entry; refresh after tenant changes and never retain another
+tenant's descriptors. Native descriptors contain finite data fields, no remote
+executable module/style URLs, prices, private media paths or editor details.
+
+Only actually published native Website pages with current canonical access,
+visualization rollout and allowed HTTPS public routing enter this feed. The
+canonical editor freeze does not unpublish approved public models. Hand mode
+retains its independent switch. Pending custom hosts are excluded and an
+included-domain-only setup stays on its included host. Connected-renderer
+sites are excluded until their separately owned public viewer consumer/route is
+integrated; a backend descriptor alone does not establish that consumer.
+
+Mac source verification: 63 affected PHP cases / 1,069 assertions (18 native
+feed cases, existing mobile platform, visualization and Website catalog); full
+root TypeScript/production build and its 16 Trajectory + 4 voice + 5 viewer Node
+cases; 8 synthetic Chromium/WebKit lifecycle cases at 390 px; Pint and migration
+lint with zero schema changes. Both workflow build paths run the synthetic
+viewer checks after assets and browsers are installed. These are local code/
+fixture checks, not protected combined-head CI, native APK or physical-device
+acceptance. The narrow Vite patch removed the reported high dev-server
+advisories; a low esbuild Windows dev-server advisory remains outside the
+packaged runtime. No development server is bundled or deployed.
+
+1. Mount it on a capability-gated Product previews screen using the current
+   authorized endpoint above. Do not substitute Field Service or legacy Shopify
+   data. Do not persist descriptors across tenant changes/logout.
 2. Copy the complete built viewer folder (chunks plus runtime) into mobile
    `public/product-visualization/` before Vite/Capacitor build. The adapter imports
    this packaged code, not downloaded executable code. Published model bytes

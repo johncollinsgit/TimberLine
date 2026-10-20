@@ -15,6 +15,7 @@ use App\Http\Controllers\Mobile\EverbranchMobileFieldServiceController;
 use App\Http\Controllers\Mobile\EverbranchMobileInvoiceController;
 use App\Http\Controllers\Mobile\EverbranchMobileLandlordController;
 use App\Http\Controllers\Mobile\EverbranchMobileMaterialEvidenceController;
+use App\Http\Controllers\Mobile\EverbranchMobileProductVisualizationController;
 use App\Http\Controllers\Mobile\EverbranchMobileTeamController;
 use App\Http\Controllers\Mobile\EverbranchMobileTimeClockController;
 use App\Http\Controllers\Mobile\EverbranchMobileTimeHoursController;
@@ -71,6 +72,7 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
             ->middleware('mobile.tenant')
             ->group(function (): void {
                 Route::get('/bootstrap', [EverbranchMobileController::class, 'bootstrap'])->middleware('abilities:mobile:read')->name('workspace.bootstrap');
+                Route::get('/product-visualizations', [EverbranchMobileProductVisualizationController::class, 'index'])->middleware('abilities:mobile:read')->name('workspace.product-visualizations');
                 Route::patch('/branding', [EverbranchMobileController::class, 'updateBranding'])->middleware(['abilities:mobile:write', 'throttle:20,1'])->name('workspace.branding.update');
                 Route::get('/support-tickets', [EverbranchMobileController::class, 'supportTickets'])->middleware('abilities:mobile:read')->name('workspace.support.index');
                 Route::post('/support-tickets', [EverbranchMobileController::class, 'createSupportTicket'])->middleware(['abilities:mobile:write', 'throttle:20,1'])->name('workspace.support.create');

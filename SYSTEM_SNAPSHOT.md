@@ -2941,3 +2941,7 @@ QA models and AI concept imagery are not merchant assets or device evidence.
 Mac source review fixes preserve loaded-model readiness and scale, align private
 model reads with the Website editor freeze, and omit Scene Viewer for models
 needing a saved size correction. Published model reads remain independent.
+An additive native read API and bootstrap capability expose only eligible
+published native Website previews with current tenant membership, `mobile:read`,
+canonical gates and verified HTTPS routing. Data-only descriptors are bounded;
+connected-renderer and device acceptance remain separate. No rollout enabled.
