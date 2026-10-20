@@ -3,9 +3,12 @@
 namespace App\Services\Marketing\Email;
 
 use App\Models\MarketingEmailDelivery;
+use App\Models\TenantMessagingLedgerEntry;
+use App\Services\Marketing\Messaging\TenantMessagingUsageService;
 use Illuminate\Cache\RateLimiter;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 class SesSendSafety
@@ -39,7 +42,7 @@ class SesSendSafety
     }
 
     /** Persist the claim before HTTP. A crash or lost response leaves it held. */
-    public function claim(int $deliveryId, int $tenantId, string $email, array $payload): ?array
+    public function claim(int $deliveryId, int $tenantId, string $email, array $payload, array $usageReservation = []): ?array
     {
         if (DB::transactionLevel() !== 0) {
             throw new RuntimeException('SES cannot send inside a caller transaction.');
@@ -55,7 +58,7 @@ class SesSendSafety
             throw new RuntimeException('SES attempt cap reached.');
         }
 
-        return DB::transaction(function () use ($deliveryId, $tenantId, $email, $payload): ?array {
+        return DB::transaction(function () use ($deliveryId, $tenantId, $email, $payload, $usageReservation): ?array {
             \App\Models\Tenant::query()->whereKey($tenantId)->lockForUpdate()->firstOrFail();
             $delivery = MarketingEmailDelivery::query()->where('tenant_id', $tenantId)->lockForUpdate()->findOrFail($deliveryId);
             if (strtolower(trim($delivery->email)) !== strtolower(trim($email)) || $delivery->provider !== 'ses_tenant') {
@@ -79,11 +82,19 @@ class SesSendSafety
                 ->whereIn('metadata->ses_attempt->state', ['submitting', 'unknown'])->exists()) {
                 throw new RuntimeException('A prior SES attempt for this recipient needs reconciliation.');
             }
+            if ($usageReservation !== []) {
+                $this->assertUsageBinding($tenantId, $usageReservation);
+                if (MarketingEmailDelivery::query()->where('tenant_id', $tenantId)
+                    ->where('metadata->ses_attempt->usage_reservation->ledger_id', (int) $usageReservation['ledger_id'])->exists()) {
+                    throw new RuntimeException('SES usage reservation is already bound to a delivery.');
+                }
+            }
             $delivery->forceFill(['metadata' => [...(array) $delivery->metadata, 'ses_attempt' => [
                 'state' => 'submitting', 'claimed_at' => now()->toIso8601String(),
                 'fingerprint' => hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR)),
                 'tenant_name' => $payload['TenantName'], 'configuration_set' => $payload['ConfigurationSetName'],
                 'from' => preg_match('/<([^>]+)>$/', $payload['FromEmailAddress'], $address) ? $address[1] : $payload['FromEmailAddress'],
+                'usage_reservation' => $usageReservation,
             ]]]);
             DB::table('marketing_email_deliveries')->where('id', $deliveryId)->update(['metadata' => json_encode($delivery->metadata, JSON_THROW_ON_ERROR), 'updated_at' => now()]);
 
@@ -93,11 +104,11 @@ class SesSendSafety
 
     public function complete(int $deliveryId, int $tenantId, array $result): void
     {
-        DB::transaction(function () use ($deliveryId, $tenantId, $result): void {
+        $accepted = DB::transaction(function () use ($deliveryId, $tenantId, $result): ?array {
             $delivery = MarketingEmailDelivery::query()->where('tenant_id', $tenantId)->lockForUpdate()->findOrFail($deliveryId);
             $attempt = (array) data_get($delivery->metadata, 'ses_attempt', []);
             if (($attempt['result']['success'] ?? false) && ! ($result['success'] ?? false)) {
-                return;
+                return $attempt;
             }
             $delivery->forceFill([
                 'provider_message_id' => $delivery->provider_message_id ?: ($result['message_id'] ?? null),
@@ -106,7 +117,34 @@ class SesSendSafety
                 ]],
             ]);
             DB::table('marketing_email_deliveries')->where('id', $deliveryId)->update(['provider_message_id' => $delivery->provider_message_id, 'metadata' => json_encode($delivery->metadata, JSON_THROW_ON_ERROR), 'updated_at' => now()]);
+
+            return data_get($delivery->metadata, 'ses_attempt');
         });
+        // Provider receipts and authenticated events resolve the same immutable
+        // reservation. The usage service makes duplicate settlements harmless.
+        $binding = (array) ($accepted['usage_reservation'] ?? []);
+        if (($accepted['result']['success'] ?? false) && $binding !== []) {
+            try {
+                $this->assertUsageBinding($tenantId, $binding);
+                app(TenantMessagingUsageService::class)->settle($tenantId, $binding['key'], ['provider_result' => $accepted['result']]);
+            } catch (\Throwable $exception) {
+                Log::critical('SES accepted usage requires settlement reconciliation', [
+                    'tenant_id' => $tenantId, 'delivery_id' => $deliveryId, 'ledger_id' => $binding['ledger_id'] ?? null,
+                    'error_class' => $exception::class,
+                ]);
+            }
+        }
+    }
+
+    protected function assertUsageBinding(int $tenantId, array $binding): void
+    {
+        if (empty($binding['key']) || ! TenantMessagingLedgerEntry::query()->forAllTenants()
+            ->whereKey((int) ($binding['ledger_id'] ?? 0))->where('tenant_id', $tenantId)
+            ->where('channel', 'email')->where('entry_type', 'usage_reservation')
+            ->where('idempotency_key', 'reserve:'.$binding['key'])
+            ->where('metadata->provider', 'ses_tenant')->exists()) {
+            throw new RuntimeException('SES usage reservation ownership does not match.');
+        }
     }
 
     /** Shared cache required in production; all attempted sends consume capacity. */

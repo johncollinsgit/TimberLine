@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Marketing;
 use App\Http\Controllers\Controller;
 use App\Services\Marketing\Email\SesDeliveryEvents;
 use App\Services\Marketing\Email\SesSnsVerifier;
+use App\Services\Marketing\Email\SesSubscriptionConfirmation;
 use Aws\Sns\Message;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,6 +28,8 @@ class SesWebhookController extends Controller
         if ((string) $message['Type'] !== 'Notification') {
             // Confirm subscriptions separately after reviewing the exact topic.
             // Never follow the caller-supplied SubscribeURL.
+            app(SesSubscriptionConfirmation::class)->remember($message);
+
             return response()->json(['ok' => true, 'status' => 'confirmation_required'], 202);
         }
         $event = json_decode((string) $message['Message'], true);

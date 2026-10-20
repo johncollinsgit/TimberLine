@@ -1,0 +1,18 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowOnlyEverbranchMarketingSES",
+      "Effect": "Allow",
+      "Principal": { "Service": "ses.amazonaws.com" },
+      "Action": "sns:Publish",
+      "Resource": "arn:aws:sns:us-east-1:894665396752:everbranch-ses-tenant-events",
+      "Condition": {
+        "StringEquals": {
+          "AWS:SourceAccount": "894665396752",
+          "AWS:SourceArn": "arn:aws:ses:us-east-1:894665396752:configuration-set/everbranch-marketing"
+        }
+      }
+    }
+  ]
+}

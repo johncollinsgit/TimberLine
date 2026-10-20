@@ -12,7 +12,7 @@ use App\Services\Billing\MessagingUsageInvoiceService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
-test('closed contract usage creates one auditable invoice and cannot be billed twice', function (): void {
+test('closed contract usage creates one auditable invoice and cannot be billed twice', function (string $channel, string $unitLabel): void {
     config()->set('services.stripe.secret', 'sk_test_messaging');
     config()->set('services.stripe.api_base', 'https://stripe.test');
     $tenant = Tenant::query()->create(['name' => 'Collins Electric', 'slug' => 'collins-invoice']);
@@ -66,7 +66,7 @@ test('closed contract usage creates one auditable invoice and cannot be billed t
     ]);
     $period = TenantMessagingUsagePeriod::query()->forAllTenants()->create([
         'tenant_id' => $tenant->id,
-        'channel' => 'sms',
+        'channel' => $channel,
         'period_start' => now()->subMonthNoOverflow()->startOfMonth(),
         'period_end' => now()->subMonthNoOverflow()->endOfMonth(),
         'included_units' => 250,
@@ -80,8 +80,8 @@ test('closed contract usage creates one auditable invoice and cannot be billed t
         'tenant_messaging_usage_period_id' => $period->id,
         'entry_type' => 'usage_settlement',
         'status' => 'settled',
-        'channel' => 'sms',
-        'unit_type' => 'segment',
+        'channel' => $channel,
+        'unit_type' => $channel === 'email' ? 'email' : 'segment',
         'units' => 254,
         'amount_micros' => 200000,
         'provider_cost_micros' => 3378200,
@@ -109,7 +109,23 @@ test('closed contract usage creates one auditable invoice and cannot be billed t
         ->and($first['failures'])->toBe(0)
         ->and($second['groups'])->toBe(0)
         ->and($invoice->authorized_subtotal_cents)->toBe(20)
-        ->and($invoice->line_items[0]['description'])->toContain('4 SMS segments')
+        ->and($invoice->line_items[0]['description'])->toContain('4 '.$unitLabel)
         ->and($period->fresh()->tenant_direct_invoice_id)->toBe($invoice->id)
         ->and($period->fresh()->invoiced_at)->not->toBeNull();
+})->with(['SMS' => ['sms', 'SMS segments'], 'email' => ['email', 'emails']]);
+
+test('zero customer charge email usage never becomes a customer invoice', function (): void {
+    Http::preventStrayRequests();
+    $tenant = Tenant::create(['name' => 'Excluded billing fixture', 'slug' => 'excluded-billing-fixture']);
+    TenantMessagingUsagePeriod::query()->forAllTenants()->create([
+        'tenant_id' => $tenant->id, 'channel' => 'email',
+        'period_start' => now()->subMonthNoOverflow()->startOfMonth(),
+        'period_end' => now()->subMonthNoOverflow()->endOfMonth(),
+        'included_units' => 0, 'used_units' => 100, 'reserved_units' => 0,
+        'provider_cost_micros' => 17500, 'buyer_charge_micros' => 0,
+    ]);
+    $result = app(MessagingUsageInvoiceService::class)->invoiceClosedPeriods($tenant->slug, false);
+    expect($result['groups'])->toBe(0)->and($result['drafts_created'])->toBe(0);
+    expect(TenantDirectInvoice::query()->count())->toBe(0);
+    Http::assertNothingSent();
 });

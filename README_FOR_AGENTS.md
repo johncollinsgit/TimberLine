@@ -2254,6 +2254,14 @@ behind `SES_TENANT_SENDING_ENABLED` and `SES_TENANT_IDS`, independently of SMS.
 Claims survive stale delivery saves; unknown outcomes require reconciliation and
 cannot blind retry. Signed SNS events require the exact account/region/topic and
 tenant/delivery binding. Attempt/cost gates default closed. `email:ses-readiness`
-is read-only. Platform SMTP remains SendGrid; actual AWS simulator delivery,
-application event acceptance, account/pricing/DNS/IAM review and a separate
-platform retry/event contract remain required before completion.
+is read-only. SES claims bind the original tenant usage reservation; authenticated
+acceptance settles it once without repricing. Zero-rate contracts retain usage
+and provider-cost tracking without a customer charge. Review actual billing
+exemptions before customer cutover. `email:ses-reconcile-usage` previews internal
+settlement recovery; `email:ses-confirm-subscription` previews an encrypted,
+authenticated pending SNS confirmation and requires explicit `--confirm`.
+AWS account 894665396752/us-east-1 is sandbox on Essentials; theeverbranch.com
+and DKIM are verified. Approved simulator resources are being configured.
+Platform SMTP remains SendGrid; actual AWS delivery/application event acceptance,
+runtime credentials, production access and a separate platform retry/event
+contract remain required before completion.

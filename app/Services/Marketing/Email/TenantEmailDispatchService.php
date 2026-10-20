@@ -34,6 +34,19 @@ class TenantEmailDispatchService
             && ($prior = app(SesSendSafety::class)->priorResult($tenantId, $toEmail, $this->positiveInt($options['delivery_id'] ?? null)))) {
             return [...$prior, 'tenant_id' => $tenantId];
         }
+        if ($provider->key() === 'ses_tenant') {
+            // Every tenant SES entry point uses the same consent, reservation
+            // and settlement path. Calling this legacy dispatcher cannot bypass
+            // usage tracking. Require a ready account to avoid legacy recursion.
+            $account = $tenantId ? \App\Models\TenantMessagingAccount::query()->forAllTenants()
+                ->where('tenant_id', $tenantId)->where('channel', 'email')->where('provider', 'ses_tenant')->first() : null;
+            if (! $account?->isReady() || ! config('ses_migration.tenant_enabled')
+                || ! in_array($tenantId, config('ses_migration.tenant_ids', []), true)) {
+                return $this->failure('ses_tenant', 'ses_rollout_disabled', 'A ready, explicitly enabled tenant SES account is required.', false, [], (bool) ($options['dry_run'] ?? false), $tenantId);
+            }
+
+            return app(\App\Services\Marketing\Messaging\TenantMessagingGateway::class)->sendEmail($tenantId, $toEmail, $subject, $textBody, $options);
+        }
         $unsubscribe = app(\App\Services\Marketing\MarketingEmailUnsubscribeService::class);
         if ($tenantId !== null && $unsubscribe->isMarketing($options)) {
             if ($unsubscribe->suppressed($tenantId, $toEmail)) {

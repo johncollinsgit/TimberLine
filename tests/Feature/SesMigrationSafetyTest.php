@@ -192,11 +192,20 @@ class SesMigrationSafetyTest extends TestCase
         $this->assertFalse(config('features.tenant_messaging_platform'));
     }
 
-    public function test_gateway_and_resolver_use_ses_with_the_email_only_gate_and_hold_unknown_usage(): void
+    public static function emailBillingRates(): array
+    {
+        return ['billable tenant' => [5000], 'zero rate excluded tenant' => [0]];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('emailBillingRates')]
+    public function test_gateway_and_resolver_hold_then_settle_usage_once_at_the_original_tenant_rate(int $rate): void
     {
         [$delivery, $message, $config] = $this->fixture();
         config(['features.tenant_messaging_platform' => false]);
         \App\Models\TenantAccessAddon::create(['tenant_id' => $delivery->tenant_id, 'addon_key' => 'messaging', 'enabled' => true]);
+        \App\Models\TenantAccessAddon::create(['tenant_id' => $delivery->tenant_id, 'addon_key' => 'messaging_usage', 'enabled' => true,
+            'metadata' => ['included_units' => ['email' => 0], 'overage_rates_micros' => ['email' => $rate]]]);
+        app(\App\Services\Marketing\Messaging\TenantMessagingUsageService::class)->fund($delivery->tenant_id, 1000000, 'fixture-credit');
         $account = \App\Models\TenantMessagingAccount::query()->forAllTenants()->create([
             'tenant_id' => $delivery->tenant_id, 'channel' => 'email', 'provider' => 'ses_tenant', 'status' => 'ready',
             'provider_account_id' => $config['tenant_name'], 'authenticated_domain' => 'example.test', 'provider_config' => $config,
@@ -217,13 +226,78 @@ class SesMigrationSafetyTest extends TestCase
         $this->assertTrue($resolution['settings']['email_enabled']);
         $options = ['tenant_id' => $delivery->tenant_id, 'delivery_id' => $delivery->id, 'idempotency_key' => 'fixture-delivery:'.$delivery->id];
         $sender = app(\App\Services\Marketing\SendGridEmailService::class);
-        $result = $sender->sendEmail($delivery->email, 'Fixture', 'Fixture only', $options);
+        $result = app(\App\Services\Marketing\Email\TenantEmailDispatchService::class)->sendEmail($delivery->email, 'Fixture', 'Fixture only', $options);
         $this->assertSame('unknown', $result['status']);
         $this->assertSame('unknown', $sender->sendEmail($delivery->email, 'Fixture', 'Fixture only', $options)['status']);
         $this->assertSame(1, $calls);
-        $this->assertDatabaseCount('tenant_messaging_ledger_entries', 1);
+        $this->assertDatabaseCount('tenant_messaging_ledger_entries', 2);
         $this->assertDatabaseHas('tenant_messaging_ledger_entries', ['tenant_id' => $delivery->tenant_id, 'entry_type' => 'usage_reservation']);
         $this->assertFalse(config('features.tenant_messaging_platform'));
+        $event = $this->event($delivery, 'Send');
+        app(SesDeliveryEvents::class)->handle($event, 'usage-send-1');
+        app(SesDeliveryEvents::class)->handle($event, 'usage-send-1');
+        $this->assertTrue($sender->sendEmail($delivery->email, 'Fixture', 'Fixture only', $options)['success']);
+        $this->assertSame(1, $calls);
+        $settlements = \App\Models\TenantMessagingLedgerEntry::query()->forAllTenants()->where('entry_type', 'usage_settlement')->get();
+        $this->assertCount(1, $settlements);
+        $this->assertSame($rate, $settlements->first()->amount_micros);
+        $this->assertGreaterThan(0, $settlements->first()->provider_cost_micros);
+        $this->assertDatabaseHas('tenant_messaging_usage_periods', ['tenant_id' => $delivery->tenant_id, 'used_units' => 1,
+            'reserved_units' => 0, 'buyer_charge_micros' => $rate]);
+        $this->assertDatabaseHas('tenant_messaging_credit_accounts', ['tenant_id' => $delivery->tenant_id,
+            'reserved_micros' => 0, 'balance_micros' => 1000000 - $rate]);
+    }
+
+    public function test_a_usage_reservation_cannot_be_reused_for_another_ses_delivery(): void
+    {
+        [$delivery, $message, $config] = $this->fixture();
+        config(['ses_migration.max_per_second' => 10]);
+        $usage = app(\App\Services\Marketing\Messaging\TenantMessagingUsageService::class);
+        \App\Models\TenantAccessAddon::create(['tenant_id' => $delivery->tenant_id, 'addon_key' => 'messaging', 'enabled' => true]);
+        $reservation = $usage->reserve($delivery->tenant_id, 'email', 1, 'first-only', 'ses_tenant');
+        $message['metadata']['ses_usage_reservation'] = ['ledger_id' => $reservation['ledger_id'], 'key' => 'first-only'];
+        $calls = 0;
+        $provider = $this->provider(function () use (&$calls) {
+            $calls++;
+
+            return \GuzzleHttp\Promise\Create::promiseFor(new Result(['MessageId' => 'ses.opaque-id']));
+        });
+        $this->assertTrue($provider->sendEmail($message, $config)['success']);
+        $second = MarketingEmailDelivery::create(['tenant_id' => $delivery->tenant_id, 'provider' => 'ses_tenant', 'email' => 'second@example.test', 'status' => 'sending']);
+        $this->assertSame('ses_delivery_not_ready', $provider->sendEmail([...$message, 'to_email' => $second->email,
+            'custom_args' => ['marketing_email_delivery_id' => $second->id]], $config)['error_code']);
+        $this->assertSame(1, $calls);
+        $this->assertNull(data_get($second->fresh()->metadata, 'ses_attempt'));
+    }
+
+    public function test_operator_reconciles_failed_settlement_without_resend_or_repricing(): void
+    {
+        [$delivery, $message, $config] = $this->fixture();
+        $usage = app(\App\Services\Marketing\Messaging\TenantMessagingUsageService::class);
+        $contract = \App\Models\TenantAccessAddon::create(['tenant_id' => $delivery->tenant_id, 'addon_key' => 'messaging_usage', 'enabled' => true,
+            'metadata' => ['included_units' => ['email' => 0], 'overage_rates_micros' => ['email' => 5000]]]);
+        $usage->fund($delivery->tenant_id, 1000000, 'fixture-credit');
+        $reservation = $usage->reserve($delivery->tenant_id, 'email', 1, 'recover-once', 'ses_tenant');
+        $message['metadata']['ses_usage_reservation'] = ['ledger_id' => $reservation['ledger_id'], 'key' => 'recover-once'];
+        $this->mock(\App\Services\Marketing\Messaging\TenantMessagingUsageService::class)->shouldReceive('settle')->once()->andThrow(new RuntimeException('fixture storage failure'));
+        $calls = 0;
+        $provider = $this->provider(function () use (&$calls) {
+            $calls++;
+
+            return \GuzzleHttp\Promise\Create::promiseFor(new Result(['MessageId' => 'ses.opaque-id']));
+        });
+        $this->assertTrue($provider->sendEmail($message, $config)['success']);
+        $this->assertTrue(data_get($delivery->fresh()->metadata, 'ses_attempt.result.success'));
+        $this->app->instance(\App\Services\Marketing\Messaging\TenantMessagingUsageService::class, $usage);
+        $contract->update(['metadata' => ['included_units' => ['email' => 0], 'overage_rates_micros' => ['email' => 9000]]]);
+        $this->artisan('email:ses-reconcile-usage', ['tenant' => $delivery->tenant_id])->assertExitCode(0);
+        $this->assertDatabaseMissing('tenant_messaging_ledger_entries', ['entry_type' => 'usage_settlement']);
+        $this->artisan('email:ses-reconcile-usage', ['tenant' => $delivery->tenant_id, '--apply' => true])->assertExitCode(0);
+        $this->artisan('email:ses-reconcile-usage', ['tenant' => $delivery->tenant_id, '--apply' => true])->assertExitCode(0);
+        $this->assertTrue($provider->sendEmail($message, $config)['success']);
+        $this->assertSame(1, $calls);
+        $this->assertSame(1, \App\Models\TenantMessagingLedgerEntry::query()->forAllTenants()->where('entry_type', 'usage_settlement')->count());
+        $this->assertDatabaseHas('tenant_messaging_ledger_entries', ['entry_type' => 'usage_settlement', 'amount_micros' => 5000]);
     }
 
     public function test_rollback_to_sendgrid_cannot_replay_an_unresolved_ses_attempt(): void

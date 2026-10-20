@@ -22,8 +22,37 @@ Preserve SendGrid `s1._domainkey` → `s1.domainkey.u61143478.wl229.sendgrid.net
 `s2._domainkey` → `s2.domainkey.u61143478.wl229.sendgrid.net`, and `em6596` →
 `u61143478.wl229.sendgrid.net`. `info@theeverbranch.com` is a verified alias of
 `john@evergrovesoftware.com`; Gmail send-as is ready. No mailbox test was sent.
-Exact SES DNS additions still require scoped approval. Workspace remains the human
+The exact SES DKIM additions below were explicitly approved. Workspace remains the human
 inbox. Do not change apex MX, cancel SendGrid or remove its authentication.
+
+### AWS checkpoint, October 20
+
+The new Evergrove Software AWS console account is `894665396752`. SES in
+`us-east-1` reports Healthy, sandbox, 200 messages per day and 1 message per
+second. Its current plan is **Essentials**, verified in the region's Pricing
+plans screen; no plan or optional paid feature was changed. Production runtime
+still has no SES credentials. After specific user approval, this task created
+`everbranch-marketing`, native test tenant `everbranch-tenant-900000001` and
+Standard SNS topic `arn:aws:sns:us-east-1:894665396752:everbranch-ses-tenant-events`.
+The native tenant has the verified identity and configuration set assigned,
+Standard reputation policy, and tenant-level BOUNCE/COMPLAINT suppression. The
+configuration set inherits suppression settings and does not enable optional
+reputation metrics, archiving or validation. Native tenant suppression skips the
+account list; the application suppression checks remain required.
+
+Approved IAM user `everbranch-ses-simulator` exists with console login disabled and
+only inline policy `EverbranchSesSimulatorOnly`, matching the simulator policy
+below. No access key has been created by the agent; user key-creation handoff is
+pending. The topic publishing grant is applied, alongside topic-owner
+administration. Event destination and HTTPS subscription setup remain pending.
+
+Identity `arn:aws:ses:us-east-1:894665396752:identity/theeverbranch.com` was
+created with Easy DKIM RSA 2048 signing enabled and automatic Route 53 publishing
+disabled. The user approved the exact three Cloudflare records below; all three
+were saved DNS-only, TTL Auto, and independently resolved from the authoritative
+Cloudflare nameserver. SES now reports identity **Verified** and DKIM
+**Successful** in the `us-east-1` console.
+No simulator or real message has been submitted.
 
 ## Inventory and blast radius
 
@@ -65,7 +94,14 @@ was found in the inspected checkout; historical context is not launch authority.
 4. **Authenticated events and simulator.** Bind the exact SNS ARN to
    `SES_SNS_TOPIC_ARNS`; require the configured SES account and region, AWS SNS
    signature and fixed HTTPS certificate host/path. Never follow SubscribeURL.
-   Confirm the exact subscription separately with reviewed AWS access. Subscribe
+   Confirm the exact subscription separately with reviewed AWS access. The
+   webhook keeps a fresh authenticated confirmation envelope encrypted in cache
+   for one hour and never follows SubscribeURL. Preview with
+   `php artisan email:ses-confirm-subscription '<exact-approved-topic-arn>'`;
+   after checking the subscription's exact HTTPS endpoint in AWS, use `--confirm`.
+   This sends the verified token to the fixed regional AWS ConfirmSubscription
+   API, without creating credentials or printing the token. Do not rerun after
+   an uncertain response before checking the subscription in AWS. Subscribe
    Send, Delivery, Bounce, Complaint, Reject, Rendering Failure, DeliveryDelay and
    optional Open/Click events. Configure native tenant and configuration-set
    associations. Verify simulator success, bounce and complaint receipts reach
@@ -87,18 +123,23 @@ was found in the inspected checkout; historical context is not launch authority.
 
 ## Exact DNS coordination contract
 
-No DNS writes were made by this task. Initially prefer SES Easy DKIM with the
-existing MAIL FROM behavior, which requires no MX change. `getEmailIdentity`
-returns the real DKIM tokens; the readiness command prints the exact three CNAME
-names/values. Never invent them. For a returned token `T`, the required record is
-`T._domainkey.theeverbranch.com CNAME T.dkim.amazonses.com`, DNS-only (not proxied).
-These selectors coexist with Workspace and SendGrid selectors.
+The following exact DNS-only CNAME records were approved and added in Cloudflare:
+
+| Name under `theeverbranch.com` | Target |
+| --- | --- |
+| `2bx2bcvxcwnjlbir6bkpjjxr2pjs4zcy._domainkey` | `2bx2bcvxcwnjlbir6bkpjjxr2pjs4zcy.dkim.amazonses.com` |
+| `3re7pd4xucv4hvomhhlfm2te6vqrlknq._domainkey` | `3re7pd4xucv4hvomhhlfm2te6vqrlknq.dkim.amazonses.com` |
+| `yckwqn76ttrkx3he2zo6oizpwkuoiazx._domainkey` | `yckwqn76ttrkx3he2zo6oizpwkuoiazx.dkim.amazonses.com` |
+
+These tokens came from the actual account/region identity. They coexist with
+Workspace and SendGrid selectors. Existing SES MAIL FROM behavior needs no MX
+change. The read-only readiness command can recheck the identity and its tokens.
 
 Do not add another apex SPF record or replace Workspace/SendGrid SPF/DMARC. If a
 custom MAIL FROM subdomain is later approved, propose its exact domain/region
 first: a subdomain MX to `feedback-smtp.<region>.amazonses.com` (priority 10) and
 subdomain TXT `v=spf1 include:amazonses.com -all`. This would be a separate reviewed
-DNS change owned by the DNS task. Root MX remains Workspace. Identity changes for
+DNS change requiring scoped approval. Root MX remains Workspace. Identity changes for
 customer domains require that customer's verified authority.
 
 ## Suppression, retries, queues and cost controls
@@ -123,9 +164,39 @@ admission failures before HTTP with bounded existing backoff. Provider-submitted
 attempts remain immutable, including definitive rejections; a new attempt requires
 review, not a queue retry with a new delivery ID. Unresolved prior attempts for the
 same tenant/address also block replacement SES deliveries. Unknown usage
-reservations stay held; reconcile them against provider evidence before settlement
-or refund. Callback evidence must resolve uncertainty before a recipient is sent
-again. Never refund an unknown as though AWS rejected it.
+reservations stay held. Each metered SES claim binds its exact tenant-owned usage
+reservation before HTTP. Provider receipts and authenticated events settle that
+same reservation once, including a send first classified unknown. Customer rates,
+included allowance and provider-cost estimate come from the original reservation;
+late events do not recalculate a changed rate. Callback evidence must resolve
+uncertainty before a recipient is sent again. Never refund an unknown as though
+AWS rejected it.
+
+If accepted usage could not settle because of a storage failure, inspect
+`php artisan email:ses-reconcile-usage <tenant-id>` and then use `--apply` after
+review. This settles only existing accepted SES reservations, never sends another
+email or creates an invoice. Duplicate events/reconciliation cannot double charge.
+Zero-rate contracts still record units/provider cost with zero customer charge;
+zero-charge periods do not produce overage invoices. Email overage invoicing and
+prepaid/postpaid billing remain the existing billing service's responsibility.
+
+The user's actual excluded-customer list has not yet been verified. There is no
+new hardcoded exception list in this migration. The legacy-provider tenant
+allowlist is a routing setting, not proof of a billing exemption. Verify actual
+tenant contract/exemption records and an invoice preview before any customer SES
+allowlist expansion; preserve those terms rather than inferring charges from AWS
+usage. Production's tenant messaging platform was disabled at baseline, so code
+tests do not prove live customer invoicing is active.
+
+Read-only production inspection found no explicit usage-exemption flags and no
+email usage settlements. Collins Electric has an active postpaid agreement with
+1,000 included emails and 5,000 micros ($0.005) per overage email. Front Yard Foods
+has the same usage terms but no active postpaid agreement. Modern Forestry's
+email/messaging module entitlements are `add_on_comped`; Front Yard Foods module
+access is `complimentary`; Wren's email entitlement has no explicit billing status.
+These module statuses do not establish free usage overages. No contract, rate,
+entitlement or exclusion was changed. Keep the user's exclusion clarification
+pending and all customer SES sends disabled until this ambiguity is resolved.
 
 Defaults cap account attempts at 1,000/day, each tenant at 100/day, and aggregate
 rate at 1/second. `SES_APPROVED_ATTEMPT_COST_MICROS=0` blocks sending until an
@@ -138,8 +209,41 @@ Watch its persistence/evictions; AWS quotas and budget alerts supplement it.
 Published October 20 pricing: selectable a-la-carte outbound $0.10/1,000 plus
 $0.005/tenant/month and $0.005/1,000 tenant emails; Essentials starts at
 $0.16/1,000 and may be the default for newly active account/region combinations.
-Account-specific plan and all add-ons remain unverified. Do not silently enroll or
-change buyer-facing pricing based on these public rates.
+This account's current `us-east-1` plan is Essentials. Native tenants are an
+add-on under that plan; no native tenant has been created. Do not silently enroll
+in add-ons, change the plan or change buyer-facing pricing based on public rates.
+
+### Prepared AWS approval scope
+
+The user specifically approved this test setup, a maximum of 20 simulator sends
+and a $1 total test budget. Some resources above are now applied; the files below
+record the approved scope:
+
+- [`ses-simulator-iam-policy.json`](ses-simulator-iam-policy.json): applied to
+  `everbranch-ses-simulator` user with no console login, send permission restricted
+  to `no-reply@theeverbranch.com`, the three simulator addresses, API v2 and TLS,
+  plus account/identity readiness reads. No provisioning or customer sends.
+  Access-key creation/secure entry remains a user handoff. IAM accepted the policy;
+  prove its effective restrictions before using it. Production credentials
+  need a separate reviewed policy.
+- [`ses-marketing-sns-policy.json`](ses-marketing-sns-policy.json): applied to
+  Standard topic `everbranch-ses-tenant-events`, accepting SES publishing only
+  from this account's `everbranch-marketing` configuration set. Preserve any
+  topic-owner administrative statement; this file is the SES publishing grant.
+  Proposed HTTPS subscription is
+  `https://app.theeverbranch.com/webhooks/ses/events`, with raw delivery disabled
+  so SNS's signature envelope reaches the application. Confirmation must be
+  performed through reviewed AWS access, not an arbitrary SubscribeURL.
+- Created one fictional native tenant `everbranch-tenant-900000001`, associated
+  with the approved identity/configuration set; no customer tenant activation.
+  Initial tests are limited to 20 simulator messages and a $1 total test budget.
+  Native tenant and SNS fees received explicit approval; Essentials stays selected.
+
+Do not broaden these grants or create credentials merely because the files exist.
+The application must be deployed with the exact topic/account configured before
+event acceptance can be proven. A fictional application fixture with the matching
+tenant binding must be reviewed before any send. Do not replace or repurpose a
+customer tenant for this test.
 
 ## Rollback and release
 
@@ -164,12 +268,24 @@ achieve rollback. Application SMTP remains SendGrid throughout this preparation.
 
 ## Outstanding acceptance
 
-AWS console authentication/account completion; exact account and pricing review;
-scoped IAM/runtime credential approval; exact DKIM coordination and DNS approval;
-SNS policy/subscription approval; sandbox production-access submission if needed;
+User simulator-key creation/secure configuration; event destination/subscription
+setup and confirmation; separate production runtime credential approval;
+sandbox production-access submission; verified customer billing exemptions;
 actual simulator send plus application event evidence; platform mail durable
 retry/event implementation; controlled mailbox and tenant acceptance; protected
 CI and scoped deployment. Until these are satisfied, the migration is incomplete.
+
+Local validation: 95 focused SES/marketing/billing tests passed (481 assertions);
+after routing the legacy SES dispatcher through metering, 22 affected tests
+passed (163 assertions). Real
+MySQL concurrency passed (3 tests, 15 assertions), frontend typecheck/tests/build
+passed, changed PHP formatting and migration safety lint passed (no schema
+change). The full PHP run completed with 4,202 passes, 8 skips and two DNS-bound
+failures (30,316 assertions). Both failures reproduce unchanged on live baseline
+`f8da53c0`; each passes separately when DNS is available, with mail/HTTP faked.
+Earlier full runs exhausted the repository's 1G PHPUnit limit; the completed run
+used a local-only 2G configuration. These results do not substitute for protected
+CI or actual SES delivery/event acceptance.
 
 ## Primary references
 

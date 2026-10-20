@@ -79,7 +79,7 @@ class SesTenantEmailProvider implements EmailProvider
 
         $safety = app(SesSendSafety::class);
         try {
-            if ($replay = $safety->claim($deliveryId, $tenantId, $to, $payload)) {
+            if ($replay = $safety->claim($deliveryId, $tenantId, $to, $payload, (array) data_get($message, 'metadata.ses_usage_reservation', []))) {
                 return $replay;
             }
         } catch (\Throwable $exception) {

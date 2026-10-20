@@ -59,8 +59,9 @@ class TenantMessagingGateway
                 $this->positiveInt($options['delivery_id'] ?? null),
             );
             $dryRun = (bool) ($options['dry_run'] ?? false);
+            $reservation = null;
             if (! $dryRun) {
-                $this->usage->reserve(
+                $reservation = $this->usage->reserve(
                     $tenantId,
                     'email',
                     1,
@@ -100,7 +101,8 @@ class TenantMessagingGateway
                 'from_name' => $sender['from_name'],
                 'reply_to_email' => $sender['reply_to_email'],
                 'headers' => (array) ($options['headers'] ?? []),
-                'metadata' => [...(array) ($options['metadata'] ?? []), 'tenant_id' => (string) $tenantId, 'marketing_email_delivery_id' => (string) ($options['delivery_id'] ?? '')],
+                'metadata' => [...(array) ($options['metadata'] ?? []), 'tenant_id' => (string) $tenantId, 'marketing_email_delivery_id' => (string) ($options['delivery_id'] ?? ''),
+                    ...($account->provider === 'ses_tenant' && $reservation ? ['ses_usage_reservation' => ['ledger_id' => $reservation['ledger_id'], 'key' => $idempotencyKey]] : [])],
                 'custom_args' => (array) ($options['custom_args'] ?? []),
                 'categories' => (array) ($options['categories'] ?? []),
                 'dry_run' => $dryRun,
