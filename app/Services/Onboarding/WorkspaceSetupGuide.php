@@ -77,7 +77,7 @@ class WorkspaceSetupGuide
                     Log::warning('workspace.setup.read_unavailable', ['exception_type' => class_basename($exception)]);
                 }
                 $steps[] = ['id' => $id, 'label' => $goal['label'], 'description' => $goal['description'], 'state' => $state,
-                    'url' => route($complete ? $goal['destination'] : $goal['route'], ['tenant' => $tenant->slug], false),
+                    'url' => route($complete ? $goal['destination'] : $goal['route'], ['tenant' => $tenant->slug, ...($complete && $id === 'product' ? ['status' => 'all'] : [])], false),
                     'required' => $id === array_key_first($goals), 'note' => $state === 'unknown' ? 'We could not verify existing records. Check your workspace before adding another.' : null];
             }
         } catch (Throwable $exception) {

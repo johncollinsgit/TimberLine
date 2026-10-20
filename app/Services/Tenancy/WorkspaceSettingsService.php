@@ -3,9 +3,13 @@
 namespace App\Services\Tenancy;
 
 use App\Models\Tenant;
+use App\Models\TenantSite;
 use App\Models\User;
 use App\Services\FieldService\CollinsClientAccessService;
 use App\Services\FieldService\FieldServiceAccessService;
+use App\Services\ManagedWebsite\ConnectedWebsiteService;
+use App\Services\ManagedWebsite\ManagedWebsiteDomainService;
+use App\Services\ManagedWebsite\ManagedWebsiteService;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 
@@ -64,6 +68,26 @@ class WorkspaceSettingsService
         }
         if ($marketing && $enabled('integrations')) {
             $add('connections', 'integrations', 'Store & provider connections', 'Check connection status and available reconnect steps.', 'shopify square store connection email disconnected', 'marketing.providers-integrations', [], 'Branch');
+        }
+        if ($marketing && $enabled('managed_website')) {
+            $site = TenantSite::query()->forTenant($tenant)->first();
+            $connected = app(ConnectedWebsiteService::class)->connected($site);
+            $editor = app(ManagedWebsiteService::class)->editorEnabledFor($tenant);
+            $connectedRole = $connected ? $user->tenants()->whereKey($tenant->id)->first()?->pivot?->role : null;
+            // Reuse the existing route: its middleware selects the native or
+            // connected editor and retains every editor/domain mutation gate.
+            if ($editor && (! $connected || in_array($connectedRole, ['owner', 'tenant_owner', 'admin', 'manager', 'marketing_manager'], true))) {
+                $description = $connected
+                    ? 'Open your connected site editor and review its existing website address.'
+                    : 'Open your website setup and review its existing website address.';
+                if (! $connected && $owner && app(ManagedWebsiteDomainService::class)->enabledFor($tenant)) {
+                    $description .= ' Custom domain setup is available; activation is checked separately.';
+                } else {
+                    $description .= ' Custom domain changes are not offered here.';
+                }
+                $add('website', 'organization', 'Website & address', $description,
+                    'domain website address public site url custom domain publishing', 'managed-website.index', [], 'Branch');
+            }
         }
         if ($enabled('field_service') && app(FieldServiceAccessService::class)->canManageJobs($user, $tenant)
             && app(CollinsClientAccessService::class)->allows($user, $tenant)) {

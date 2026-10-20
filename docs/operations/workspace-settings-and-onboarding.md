@@ -97,3 +97,14 @@ then the existing workspace Playwright configuration. Build first so the manifes
 contains the new entry points. Standard CI retains opt-in fixture export skips.
 No migration/backfill/provider configuration is required. Roll back through the
 protected release process; retain additive JSON and existing customer records.
+
+## Website discovery and retail first value
+
+Website discovery reuses the existing authorized Website route. Search terms
+include “domain” and “website address”; native and connected editors retain
+module, editor, role and tenant checks. Native domain setup is described as
+available only under its separate domain rollout; activation is separate.
+Connected sites retain their external address/domain process. The hub never
+changes a domain. A retail workspace with an eligible existing Website can
+prepare a draft product. Completion returns to all product statuses so the draft
+stays visible. This proves catalog preparation, not publishing or payment readiness.

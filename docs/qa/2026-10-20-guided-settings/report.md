@@ -65,3 +65,17 @@ Teams-style navigation, useful role-specific operator/maker workspaces, coherent
 fictional account-only preview, progressive detail, unchanged commerce/access
 boundaries and honestly planned livestream. This candidate does not implement or
 claim completion of that second task.
+
+## Coordinator acceptance correction
+
+Website/domain metadata discovery now reuses the existing authorized route.
+Four additional feature cases cover native availability, separate domain rollout,
+member/tenant/disabled-entitlement isolation, connected-editor distinctions and
+a real retail draft-product journey. The retailer opens the existing editor,
+saves a fictional draft, sees completion and returns to a list including drafts;
+the site stays unpublished and HTTP/mail remain faked. This exposed and fixed
+the completion link's active-only default. The focused corrected run passes
+30 tests / 387 assertions with one intentional export skip (guided settings,
+Website catalog and Website sales navigation). Pint passes on all three changed
+PHP files. Full-suite/browser evidence above predates this bounded correction;
+exact-head CI remains required.

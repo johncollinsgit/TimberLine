@@ -223,3 +223,76 @@ test('a newly created owner completes a real first customer action and sees reco
     Http::assertNothingSent();
     Mail::assertNothingSent();
 });
+
+function settingsWebsiteFixture(Tenant $tenant, User $user): \App\Models\TenantSite
+{
+    TenantModuleEntitlement::create(['tenant_id' => $tenant->id, 'module_key' => 'managed_website', 'availability_status' => 'available', 'enabled_status' => 'enabled', 'billing_status' => 'add_on_comped', 'entitlement_source' => 'test', 'price_source' => 'catalog']);
+    config(['managed_website.editor_enabled' => true, 'managed_website.editor_tenant_ids' => [$tenant->id], 'managed_website.custom_domains_enabled' => true, 'managed_website.custom_domain_tenant_ids' => [$tenant->id]]);
+
+    return app(\App\Services\ManagedWebsite\ManagedWebsiteService::class)->createSite($tenant, $user);
+}
+
+test('website address and domain search reuses authorized native settings with independent domain availability', function () {
+    [$tenant,$user] = workspaceSettingsFixture();
+    settingsWebsiteFixture($tenant, $user);
+    $service = app(WorkspaceSettingsService::class);
+    foreach (['domain', 'website address'] as $query) {
+        $row = $service->search($service->catalog($tenant->fresh(), $user), $query, '')[0];
+        expect($row['id'])->toBe('website')->and($row['description'])->toContain('Custom domain setup is available');
+        $this->actingAs($user)->get($row['url'])->assertOk();
+    }
+    config(['managed_website.custom_domains_enabled' => false]);
+    expect($service->search($service->catalog($tenant->fresh(), $user), 'domain', '')[0]['description'])->toContain('Custom domain changes are not offered');
+    config(['managed_website.editor_enabled' => false]);
+    expect($service->search($service->catalog($tenant->fresh(), $user), 'domain', ''))->toBeEmpty();
+    Http::assertNothingSent();
+});
+
+test('website metadata discovery remains role tenant and entitlement scoped', function () {
+    [$tenant,$owner] = workspaceSettingsFixture();
+    settingsWebsiteFixture($tenant, $owner);
+    $member = User::factory()->create(['role' => 'member', 'is_active' => true, 'email_verified_at' => now()]);
+    $member->tenants()->attach($tenant, ['role' => 'member', 'membership_active' => true]);
+    $service = app(WorkspaceSettingsService::class);
+    expect($service->search($service->catalog($tenant, $member), 'domain', ''))->toBeEmpty();
+    $other = Tenant::create(['name' => 'Unprovisioned retailer', 'slug' => 'unprovisioned-retailer']);
+    $owner->tenants()->attach($other, ['role' => 'owner', 'membership_active' => true]);
+    expect($service->search($service->catalog($other, $owner), 'domain', ''))->toBeEmpty();
+    TenantModuleEntitlement::where('tenant_id', $tenant->id)->update(['enabled_status' => 'disabled']);
+    app()->forgetInstance(\App\Services\Tenancy\TenantModuleAccessResolver::class);
+    expect($service->search($service->catalog($tenant->fresh(), $owner), 'domain', ''))->toBeEmpty();
+    Http::assertNothingSent();
+});
+
+test('connected website discovery retains its editor and external domain distinction', function () {
+    [$tenant,$user] = workspaceSettingsFixture();
+    $site = settingsWebsiteFixture($tenant, $user);
+    $tenant->update(['slug' => \App\Services\ManagedWebsite\ConnectedWebsiteService::SLUG]);
+    $site->update(['settings' => ['connected_renderer' => \App\Services\ManagedWebsite\ConnectedWebsiteService::RENDERER]]);
+    $service = app(WorkspaceSettingsService::class);
+    $row = $service->search($service->catalog($tenant->fresh(), $user), 'website address', '')[0];
+    expect($row['description'])->toContain('connected site editor', 'Custom domain changes are not offered')->and($row['url'])->toContain('/website');
+    config(['managed_website.editor_enabled' => false]);
+    expect($service->search($service->catalog($tenant->fresh(), $user), 'domain', ''))->toBeEmpty();
+    Http::assertNothingSent();
+});
+
+test('a retailer prepares a real draft product and sees first-value completion without publishing', function () {
+    [$tenant,$user] = workspaceSettingsFixture();
+    $site = settingsWebsiteFixture($tenant, $user);
+    settingsSaveProfile($this, $tenant, $user, ['step' => 'business', 'category' => 'retail', 'specialty' => 'Handmade goods']);
+    settingsSaveProfile($this, $tenant, $user, ['step' => 'model', 'model' => 'products', 'channels' => ['online', 'in_person']]);
+    settingsSaveProfile($this, $tenant, $user, ['step' => 'goal', 'goal' => 'product']);
+    $step = collect(app(WorkspaceSetupGuide::class)->forTenant($tenant->fresh(), $user)['steps'])->firstWhere('id', 'product');
+    expect($step['state'])->toBe('not_started')->and($step['required'])->toBeTrue();
+    $this->get($step['url'])->assertOk();
+    $this->post(route('managed-website.products.store', ['tenant' => $tenant->slug]), ['catalog_form' => 1, 'title' => 'Fictional handmade bowl', 'handle' => 'fictional-handmade-bowl', 'status' => 'draft', 'product_type' => 'physical', 'track_inventory' => true, 'variants' => [['title' => 'Natural', 'sku' => 'EX-BOWL', 'price' => '36.00', 'inventory_quantity' => 4, 'is_available' => true]], 'collection_ids' => []])->assertSessionHasNoErrors()->assertRedirect();
+    $product = \App\Models\WebsiteProduct::where('tenant_id', $tenant->id)->sole();
+    expect($product->status)->toBe('draft')->and($product->tenant_site_id)->toBe($site->id);
+    $step = collect(app(WorkspaceSetupGuide::class)->forTenant($tenant->fresh(), $user)['steps'])->firstWhere('id', 'product');
+    expect($step['state'])->toBe('complete');
+    $this->get($step['url'])->assertOk()->assertSeeText('Fictional handmade bowl');
+    expect($site->fresh()->public_enabled)->toBeFalse();
+    Http::assertNothingSent();
+    Mail::assertNothingSent();
+});
