@@ -50,6 +50,7 @@ echo "Building the prior-release schema from ${base_sha}..."
 php artisan migrate \
     --force \
     --no-interaction \
+    --schema-path="$rehearsal_dir/no-current-schema.sql" \
     --path="$rehearsal_dir/database/migrations" \
     --realpath
 

@@ -128,8 +128,10 @@ class WebsiteCheckoutService
                 'status' => 'creating', 'amount_cents' => $order->total_cents, 'currency' => $order->currency,
                 'metadata' => ['checkout_version' => 1, 'api_version' => WebsiteStripeService::API_VERSION, 'cart_id' => $cart->id, 'fingerprint' => $fingerprint,
                     'nonce' => Str::random(40), 'expires_at' => $expiresAt->timestamp,
-                    'account_id' => $account->provider_account_id, 'livemode' => app(WebsiteStripeService::class)->live(),
-                    'platform_fingerprint' => app(WebsiteStripeService::class)->fingerprint(),
+                    'account_id' => $account->provider_account_id, 'routing_mode' => $account->routingMode(), 'livemode' => app(WebsiteStripeService::class)->live(),
+                    'fingerprint_version' => $account->routingMode() === 'direct' ? 2 : 1,
+                    'platform_fingerprint' => $account->routingMode() === 'direct'
+                        ? app(WebsiteStripeService::class)->accountFingerprint() : app(WebsiteStripeService::class)->fingerprint(),
                     'application_fee_cents' => intdiv($order->total_cents * $feeBps, 10000)],
             ]);
             $this->freeze($order->load('lines'), $payment, $successUrl, $cancelUrl);
@@ -197,6 +199,10 @@ class WebsiteCheckoutService
             'client_reference_id' => (string) $order->id, 'payment_intent_data[transfer_data][destination]' => $payment->metadata['account_id'],
             'payment_intent_data[on_behalf_of]' => $payment->metadata['account_id'],
         ];
+        if (data_get($payment->metadata, 'routing_mode', 'destination') === 'direct') {
+            unset($payload['automatic_tax[liability][account]'], $payload['payment_intent_data[transfer_data][destination]'], $payload['payment_intent_data[on_behalf_of]']);
+            $payload['automatic_tax[liability][type]'] = 'self';
+        }
         foreach ($metadata as $key => $value) {
             $payload['metadata['.$key.']'] = $value;
             $payload['payment_intent_data[metadata]['.$key.']'] = $value;

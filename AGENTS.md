@@ -1,3 +1,10 @@
+## Self-service payment accounts, bank linking and native invoices (2026-10-19)
+
+- New Stripe accounts use full Dashboard access and direct charges; owner-session OAuth can connect an existing Standard account. Frozen request/routing/environment/account context prevents cross-merchant retries. Existing Express reservations and Wren routing stay unchanged. Direct payments require their own connected-event signing secret and live proof gate; new direct attempts use stable platform-account/environment fingerprints across key rotation.
+- The shared Accept payments screen separates optional bank feeds from payout setup. Plaid business links request Transactions only; encrypted user/space/browser Link sessions support the original-token OAuth return, safe reconnects and mapped ownership. A registered HTTPS return URL and genuine institution checks gate bank sign-in. No new subscription or accounting writeback.
+- Native Website quote/draft/invoice authoring supports immutable issued terms, catalog/custom lines, nonstacking discounts, full payment or deposit+balance, private host-scoped links, one-time stock commitment, receipts and original-account refunds. Customer ACH remains independently default-off and processing until provider confirmation. Never infer paid status from a bank feed or redirect. One additive website_discounts table has durable MySQL recovery and data-free baseline evidence.
+- Preserve provider/domain authority and existing entitlement/rollout gates. See `docs/operations/self-service-payments.md`; real merchant onboarding/provider acceptance remain required before customer collection.
+
 ## Wren payment choices and offline reconciliation (2026-10-19)
 
 - The family portal offers explicit card and canonical WrenFamilySoccer Venmo choices. Link clicks are audit events only. Organizer-confirmed receipts and reasoned fee waivers serialize with checkout, retire/reconcile open Stripe sessions, preserve actual receipts for review and never fabricate revenue. Preview-first `soccer:reconcile-offline` applies a reviewed invoice/family/amount with an active verified organizer.

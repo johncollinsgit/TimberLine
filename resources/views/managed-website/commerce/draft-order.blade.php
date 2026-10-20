@@ -3,6 +3,7 @@
         <div class="mx-auto max-w-4xl space-y-5 pb-10">
             @include('managed-website.catalog.nav')
             <x-ui.operational-header title="Create draft order" description="Save an internal native Website order for review. This does not charge, reserve inventory, buy shipping, or contact anyone." :back="['href' => route('managed-website.orders.index'), 'label' => 'Orders']" />
+            @if(app(\App\Services\ManagedWebsite\WebsiteQuoteOrderService::class)->enabledFor($site->tenant))<p class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">Need custom items, a quote, or a deposit? <a class="font-semibold underline" href="{{ route('managed-website.invoices.create') }}">Create a quote or invoice</a>.</p>@endif
             @if($errors->any())<div class="border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-950" role="alert">{{ $errors->first() }}</div>@endif
             <form method="POST" action="{{ route('managed-website.orders.drafts.store') }}" class="border border-zinc-200 bg-white">@csrf
                 <div class="grid gap-6 p-5 lg:grid-cols-[1.4fr_.8fr]">

@@ -54,6 +54,11 @@ class SoccerPaymentService
 
         return DB::transaction(function () use ($tenant, $id, $amount, $reference, $reason, $actor, $key) {
             $invoice = $this->lockedInvoice($tenant, $id);
+            if ($reference === '' && $invoice->status === 'paid' && $invoice->provider === 'venmo') {
+                app(SoccerPayPalService::class)->assertNoInFlightPayment($tenant, $id);
+
+                return $this->attestRecordedVenmo($tenant, $invoice, $amount, $reason, $actor);
+            }
             if ($existing = $this->store->query('payments', $tenant)->where('provider', 'venmo')->where('provider_key', $key)->first()) {
                 abort_unless($existing->invoice_id === $id && (int) $existing->amount_cents === $amount, 409, 'This verification already belongs to another payment.');
 
@@ -67,10 +72,60 @@ class SoccerPaymentService
                 'transfer_reference' => $reference !== '' ? $reference : null,
                 'reason' => trim($reason),
                 'verified_at' => now()->toIso8601String(),
+                'retired_checkout_id' => $invoice->checkout_id,
             ], $actor);
 
             return $this->store->row('invoices', $tenant, $id)->provider === 'venmo' && $this->store->row('invoices', $tenant, $id)->status === 'paid' ? 'paid' : 'review';
         }, 3);
+    }
+
+    /** Add evidence to an unambiguous receipt without inventing another payment or repeating fulfillment. */
+    private function attestRecordedVenmo(int $tenant, object $invoice, int $amount, string $reason, int $actor): string
+    {
+        $receipts = $this->store->query('payments', $tenant)->where('invoice_id', $invoice->id)->lockForUpdate()->get();
+        if ((int) $invoice->amount_cents !== $amount || (int) $invoice->refunded_cents !== 0 || $receipts->count() !== 1
+            || $this->store->query('refunds', $tenant)->where('invoice_id', $invoice->id)->exists()) {
+            return 'review';
+        }
+        $receipt = $receipts->first();
+        if ($receipt->provider !== 'venmo' || (int) $receipt->amount_cents !== $amount) {
+            return 'review';
+        }
+        $evidence = $this->store->decrypt($receipt->evidence);
+        $attestations = $evidence['organizer_attestations'] ?? [];
+        if (! is_array($attestations)) {
+            return 'review';
+        }
+        if ($receipt->provider_key === 'owner-attestation:'.$invoice->id
+            && ($evidence['verification_source'] ?? null) === 'organizer_attestation'
+            && array_key_exists('retired_checkout_id', $evidence) && $evidence['retired_checkout_id'] === $invoice->checkout_id) {
+            return 'paid';
+        }
+        $key = 'venmo-existing-attestation:'.$invoice->id.':'.$receipt->id;
+        $previous = $this->store->query('events', $tenant)->where('event_key', $key)->first();
+        if ($previous && ($this->store->decrypt($previous->data)['retired_checkout_id'] ?? null) === $invoice->checkout_id) {
+            return 'paid';
+        }
+        if ($this->retireStripeCheckout($tenant, $invoice->id)) {
+            // Keep any actual competing card receipt committed, and require review rather than append an attestation.
+            return 'review';
+        }
+        if ($previous) {
+            // An unexpected replacement checkout cannot rewrite the original audited settlement.
+            return 'review';
+        }
+        $verifiedAt = now()->toIso8601String();
+        $eventId = $this->events->record($tenant, $invoice->season_id, $invoice->family_id, 'venmo_existing_receipt_attested', [
+            'invoice_id' => $invoice->id, 'payment_id' => $receipt->id, 'amount_cents' => $amount,
+            'verification_source' => 'organizer_attestation', 'reason' => trim($reason), 'verified_at' => $verifiedAt,
+            'retired_checkout_id' => $invoice->checkout_id,
+            'summary' => 'Organizer confirmed the existing Venmo receipt; no additional payment or registration was created.',
+        ], $actor, key: $key);
+        $evidence['organizer_attestations'] = [...$attestations, ['event_id' => $eventId, 'verified_by' => $actor,
+            'verification_source' => 'organizer_attestation', 'reason' => trim($reason), 'verified_at' => $verifiedAt]];
+        $this->store->query('payments', $tenant)->where('id', $receipt->id)->update(['evidence' => $this->store->encrypt($evidence), 'updated_at' => now()]);
+
+        return 'paid';
     }
 
     /** Waiving fees preserves the original obligation in audit evidence and never invents a receipt. */

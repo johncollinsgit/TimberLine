@@ -34,9 +34,11 @@ finance records are registered with global search or generic tenant exports.
 ## Provider onboarding
 
 - Plaid uses `PLAID_ENVIRONMENT` (`sandbox` or `production`), `PLAID_CLIENT_ID`,
-  `PLAID_SECRET`, `PLAID_WEBHOOK_URL`, and optional `PLAID_REDIRECT_URI`. Configure
-  the webhook at `/api/trajectory/webhooks/plaid`. Link requests Transactions
-  history for 730 days and optionally Liabilities. Actual history dates are shown
+  `PLAID_SECRET`, `PLAID_WEBHOOK_URL`, and `PLAID_REDIRECT_URI`. Configure
+  the webhook at `/api/trajectory/webhooks/plaid`. New bank sign-ins require the
+  registered HTTPS `/trajectory` callback on the configured application origin.
+  Business Link requests Transactions history for 730 days only; household Link
+  retains optional Investments and Liabilities consent. Actual history dates are shown
   per account. Verify USAA, Chase, and Relay institution/product availability in
   the provisioned Plaid environment before promising support. Relay uses this
   adapter, not an invented direct Relay API. Bank login occurs in Plaid Link.
@@ -65,6 +67,45 @@ Provider references checked September 2026: [Plaid Transactions](https://plaid.c
 [Plaid Liabilities](https://plaid.com/docs/api/products/liabilities/),
 [GoldAPI](https://www.goldapi.io/). Production credentials and real institution
 access have not been validated by the local implementation tests.
+
+### Mobile bank sign-in and OAuth return (2026-10-19)
+
+This is a shared core Trajectory capability, scoped to each existing authorized
+finance space and its current entitlement. It adds no billing, migration or new
+module. Bank feeds provide read-only financial evidence; payout-bank setup stays
+inside the payment processor's separate onboarding flow.
+
+Before enabling new bank sign-ins in production, register exactly
+`https://app.theeverbranch.com/trajectory` in the Plaid Dashboard's allowed OAuth
+redirect URIs. Then configure `PLAID_REDIRECT_URI` to that exact value through the
+normal release process. Do not append workspace IDs, query parameters or fragments.
+The production redirect setting was missing during this change's preparation;
+no production/provider setting was changed. Until configured, new sign-ins show a
+setup explanation; existing feeds, manual accounts and statement imports remain
+available. Institution availability and bank-specific provider approval still
+require real provider verification.
+
+Each new Link token has encrypted, expiring server evidence bound to the acting
+user, finance space, browser login session and optional existing connection. The
+browser keeps only the short-lived Link token and opaque session reference in
+tab-scoped `sessionStorage`. After bank-app authentication it reopens the same
+unexpired token with the complete `receivedRedirectUri`; it restores a workspace
+only from the server-authorized space list. An expired, missing, inaccessible or
+changed-browser session shows a restart action and never silently creates a new
+token on the OAuth return. Success and exit clear the browser resume state.
+
+Exchange and update completion recheck current financial access and the issued
+session binding. Completed callbacks replay their saved result without another
+exchange; uncertain/failed exchanges cannot reuse that session. A revoked Item
+reconnects in new-item mode and is never treated as a successful update/sync. New
+accounts still require explicit ownership mapping before their first import.
+Business sync does not fetch household-only debt or investment products.
+
+Verification includes `PlaidLinkSessionTest`, the existing Trajectory feature
+suite and `npm run test:trajectory`. Provider references: [Plaid OAuth return](https://plaid.com/docs/link/oauth/)
+and [Web Link callbacks](https://plaid.com/docs/link/web/). Full non-Hosted-Link
+event retrieval through `/link/token/get` requires separate Plaid Link-events
+enablement; this flow does not assume that extra provider feature is available.
 
 ## Imports and financial semantics
 

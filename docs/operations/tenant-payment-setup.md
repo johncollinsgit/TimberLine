@@ -1,5 +1,9 @@
 # Tenant payment connection setup
 
+## Business-owned payment accounts and optional feeds (2026-10-19)
+
+Accept payments is the main setup action. New non-Wren accounts use Standard/full Dashboard access and direct charges. Existing verified accounts can be reused with owner-bound OAuth once STRIPE_CONNECT_CLIENT_ID and the exact return URL are configured. Wren retains Express and destination charges. Payout bank collection stays inside Stripe onboarding; optional business transaction feeds have separate authorization, account mapping and readiness. See [self-service payments](self-service-payments.md) for exact rollout settings, direct-event proof, Plaid OAuth/mobile acceptance and native invoices.
+
 ## Guided setup screen (2026-10-19)
 
 The Payments page shows account creation, submitted business details and Stripe

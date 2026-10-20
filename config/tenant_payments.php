@@ -6,6 +6,7 @@ return [
     'tenant_slugs' => array_values(array_filter(array_map('trim', explode(',', (string) env('TENANT_PAYMENT_SETUP_TENANTS', ''))))),
     'stripe_embedded_enabled' => (bool) env('TENANT_STRIPE_EMBEDDED_ENABLED', false),
     'stripe_oauth_client_id' => env('STRIPE_CONNECT_CLIENT_ID'),
+    'stripe_direct_webhooks_verified' => (bool) env('TENANT_STRIPE_DIRECT_WEBHOOKS_VERIFIED', false),
     // Existing accounts retain their frozen routing. Only new accounts use this policy.
     'legacy_express_tenants' => ['wren-family-soccer'],
     'paypal' => [

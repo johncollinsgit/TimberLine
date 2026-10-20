@@ -42,6 +42,10 @@ class TenantPaymentsReadinessService
         // Do not rely on a relationship cached before hosted onboarding or a
         // webhook update; collection readiness must see the current database row.
         $account = $tenant->paymentAccount()->first();
+        if ($requireVerifiedLiveWebhooks && str_starts_with($secret, 'sk_live_') && $account?->routingMode() === 'direct'
+            && ! config('tenant_payments.stripe_direct_webhooks_verified')) {
+            $blockers[] = 'Business-account payment callbacks have not been verified.';
+        }
         if ($requireConnectedAccount && ! $account?->isReady()) {
             $blockers[] = 'The tenant has not completed verified Stripe Connect onboarding and payouts.';
         }

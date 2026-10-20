@@ -29,6 +29,11 @@ class TenantPaymentSetupController extends Controller
             'stripeEmbedded' => config('tenant_payments.stripe_embedded_enabled') && filled(config('services.stripe.publishable_key')),
             'paypalConfigured' => $paypal->configured(), 'paypalSandbox' => config('tenant_payments.paypal.environment') === 'sandbox',
             'paypalFresh' => $connection?->last_synced_at?->gt(now()->subMinutes(15)) ?? false,
+            'stripeOAuthAvailable' => filled(config('tenant_payments.stripe_oauth_client_id')),
+            'accountingConnected' => \App\Models\IntegrationConnection::query()->forTenant($tenant)
+                ->where('provider', 'quickbooks')->where('status', 'connected')->exists(),
+            'bankSpace' => app(\App\Services\Trajectory\FinanceAccess::class)->spaces($request->user())
+                ->first(fn ($space) => $space->kind === 'business' && (int) $space->tenant_id === (int) $tenant->id),
         ])->header('Cache-Control', 'no-store, private')->header('Referrer-Policy', 'no-referrer');
     }
 
@@ -47,6 +52,36 @@ class TenantPaymentSetupController extends Controller
         $secret = $this->provider(fn () => $stripe->embedded($tenant, $request->user()));
 
         return response()->json(['client_secret' => $secret])->header('Cache-Control', 'no-store, private');
+    }
+
+    public function stripeConnect(Request $request, TenantStripeConnectionService $stripe)
+    {
+        $tenant = $this->tenant($request);
+        $state = Str::random(48);
+        $request->session()->put('tenant_payments.stripe.'.$tenant->id, ['hash' => hash('sha256', $state),
+            'actor' => $request->user()->id, 'expires' => now()->addMinutes(15)->timestamp]);
+        $url = $this->provider(fn () => $stripe->oauthUrl($tenant, $state, route('tenant-payments.stripe.return', ['tenant' => $tenant->slug])));
+
+        return redirect()->away($url)->header('Referrer-Policy', 'no-referrer');
+    }
+
+    public function stripeReturn(Request $request, TenantStripeConnectionService $stripe)
+    {
+        $tenant = $this->tenant($request);
+        $state = $request->session()->get('tenant_payments.stripe.'.$tenant->id);
+        abort_unless(is_array($state) && ($state['actor'] ?? null) === $request->user()->id
+            && ($state['expires'] ?? 0) > now()->timestamp
+            && hash_equals($state['hash'], hash('sha256', (string) $request->query('state'))), 403, 'Stripe sign-in expired. Start again from Payments.');
+        if ($request->query('error')) {
+            $request->session()->forget('tenant_payments.stripe.'.$tenant->id);
+
+            return to_route('tenant-payments.index', ['tenant' => $tenant->slug])->with('status', 'Stripe connection cancelled. Your existing account is unchanged.');
+        }
+        $data = $request->validate(['code' => ['required', 'string', 'max:500']]);
+        $this->provider(fn () => $stripe->connectExisting($tenant, $request->user(), $data['code'], $state['hash']));
+        $request->session()->forget('tenant_payments.stripe.'.$tenant->id);
+
+        return to_route('tenant-payments.index', ['tenant' => $tenant->slug])->with('status', 'Your existing Stripe account is connected.');
     }
 
     public function stripeRefresh(Request $request, TenantStripeConnectionService $stripe)

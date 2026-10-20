@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_20_020000_create_website_discounts.php' => [
+        'test' => 'tests/Integration/WebsiteDiscountMySqlRecoveryTest.php',
+        'scenarios' => ['discount columns and saved rows retained before unique/site indexes and foreign keys; completed DDL replayed before migration bookkeeping'],
+    ],
     '2026_10_16_120000_create_subscription_recharge_evidence.php' => [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['early connection retained before trailing tables', 'bare tables and encrypted evidence retained before every named index and foreign key', 'partial constraints repaired repeatedly without changing accepted generations', 'wrong-tenant and wrong-connection credential and operation parents rejected', 'duplicate generation or request and orphan scope fail without deleting evidence', 'same-named changed index or referential action fails closed', 'concurrent operation UUID dedupe with recovered fenced lease and immutable request replay'],

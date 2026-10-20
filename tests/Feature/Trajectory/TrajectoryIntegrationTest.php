@@ -90,7 +90,7 @@ it('does not charge credit purchases to cash until the scheduled payment', funct
 });
 
 it('requests two years of transactions and consents to compatible debt and investment data', function (): void {
-    config(['trajectory.plaid.client_id' => 'fixture', 'trajectory.plaid.secret' => 'fixture', 'trajectory.plaid.environment' => 'sandbox']);
+    config(['trajectory.plaid.client_id' => 'fixture', 'trajectory.plaid.secret' => 'fixture', 'trajectory.plaid.environment' => 'sandbox', 'app.url' => 'https://trajectory.test', 'trajectory.plaid.redirect_uri' => 'https://trajectory.test/trajectory']);
     Http::fake(['*/link/token/create' => Http::response(['link_token' => 'link-fixture', 'expiration' => now()->addHour()->toIso8601String()])]);
 
     $link = app(PlaidService::class)->link($this->space);

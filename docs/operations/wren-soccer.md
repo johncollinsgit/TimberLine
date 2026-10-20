@@ -232,6 +232,18 @@ Refunds operate against a selected recorded payment and its remaining refundable
 balance. Stripe requests have a durable idempotency key; completed manual Venmo
 refunds require admin confirmation. Refunding never cancels an admission.
 
+An organizer's no-reference confirmation can attest an already-paid Venmo invoice
+only when exactly one existing Venmo receipt matches its amount and there are no
+competing receipts or refund records. The service verifies and retires any open
+Stripe checkout before appending encrypted organizer evidence and one private
+audit event. It preserves the original receipt ID, provider key and evidence;
+it creates no additional receipt, revenue, registration transition or notification.
+Replay is deduplicated. Unknown card outcomes stop the action; an actual competing
+card receipt is retained for review, without adding an organizer attestation.
+Use the existing offline reconciliation preview with the expected family and
+amount before applying; never manufacture a new Venmo reference for an existing
+receipt.
+
 ## Rollback
 
 Close registration first. Disable soccer processing/SMS if necessary and use the

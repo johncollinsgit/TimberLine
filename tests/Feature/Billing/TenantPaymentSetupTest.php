@@ -54,7 +54,7 @@ function paypalSetupEvidence(IntegrationConnection $connection, array $changes =
 }
 
 it('renders one payment setup page without contacting providers or claiming PayPal checkout is active', function () {
-    $this->actingAs($this->owner)->get(paymentSetupUrl($this))->assertOk()->assertSeeText('Activate card payments')
+    $this->actingAs($this->owner)->get(paymentSetupUrl($this))->assertOk()->assertSeeText('Accept payments')
         ->assertSeeText('Connect PayPal')->assertSeeText('PayPal checkout is not active yet.')
         ->assertHeader('Cache-Control');
     expect($this->get(paymentSetupUrl($this))->headers->get('Cache-Control'))->toContain('no-store')->toContain('private');
@@ -248,4 +248,56 @@ it('verifies Stripe ownership before updating readiness', function () {
     Http::fake(['https://api.stripe.com/v1/accounts/acct_fictional' => Http::response(['id' => 'acct_fictional', 'charges_enabled' => true, 'payouts_enabled' => true, 'metadata' => ['tenant_id' => 'someone-else']])]);
     $this->actingAs($this->owner)->postJson(paymentSetupUrl($this, '/stripe/refresh'))->assertStatus(502);
     expect($this->tenant->paymentAccount()->first()->status)->toBe('onboarding');
+});
+
+it('creates a full-dashboard business account and freezes direct routing for new merchants', function () {
+    Http::fake(['https://api.stripe.com/v1/accounts' => Http::response(['id' => 'acct_newbusiness']),
+        'https://api.stripe.com/v1/account_links' => Http::response(['url' => 'https://connect.stripe.com/setup/business'])]);
+    $this->actingAs($this->owner)->post(paymentSetupUrl($this, '/stripe/start'), ['email' => 'owner@example.com'])->assertRedirect();
+    Http::assertSent(fn ($request) => $request->url() === 'https://api.stripe.com/v1/accounts' && $request['type'] === 'standard');
+    expect($this->tenant->paymentAccount()->sole()->routingMode())->toBe('direct');
+});
+
+it('keeps a legacy Express reservation Express even when the default policy changes', function () {
+    config()->set('tenant_payments.legacy_express_tenants', [$this->tenant->slug]);
+    $attempts = 0;
+    Http::fake(['https://api.stripe.com/v1/accounts' => function () use (&$attempts) {
+        return ++$attempts === 1 ? Http::failedConnection() : Http::response(['id' => 'acct_legacy']);
+    },
+        'https://api.stripe.com/v1/account_links' => Http::response(['url' => 'https://connect.stripe.com/setup/legacy'])]);
+    $this->actingAs($this->owner)->postJson(paymentSetupUrl($this, '/stripe/start'), ['email' => 'owner@example.com'])->assertStatus(502);
+    config()->set('tenant_payments.legacy_express_tenants', []);
+    $this->post(paymentSetupUrl($this, '/stripe/start'), ['email' => 'other@example.com'])->assertRedirect();
+    Http::assertSent(fn ($request) => $request->url() === 'https://api.stripe.com/v1/accounts' && $request['type'] === 'express');
+    expect($this->tenant->paymentAccount()->sole()->routingMode())->toBe('destination');
+});
+
+it('binds existing Stripe sign-in to the owner session and verifies the provider account without foreign metadata', function () {
+    config()->set('tenant_payments.stripe_oauth_client_id', 'ca_fictional');
+    $start = $this->actingAs($this->owner)->post(paymentSetupUrl($this, '/stripe/connect'))->assertRedirect();
+    parse_str(parse_url($start->headers->get('Location'), PHP_URL_QUERY), $oauth);
+    expect($oauth['scope'])->toBe('read_write');
+    $this->get(paymentSetupUrl($this, '/stripe/return').'&state=forged&code=abc')->assertForbidden();
+    Http::assertNothingSent();
+    Http::fake(['https://connect.stripe.com/oauth/token' => Http::response(['stripe_user_id' => 'acct_owned', 'livemode' => false,
+        'scope' => 'read_write', 'access_token' => 'never-display-this-token']),
+        'https://api.stripe.com/v1/accounts/acct_owned' => Http::response(['id' => 'acct_owned', 'type' => 'standard',
+            'charges_enabled' => true, 'payouts_enabled' => true, 'details_submitted' => true, 'requirements' => ['currently_due' => []]])]);
+    $this->get(paymentSetupUrl($this, '/stripe/return').'&state='.$oauth['state'].'&code=abc')->assertRedirect();
+    $account = $this->tenant->paymentAccount()->sole();
+    expect($account->routingMode())->toBe('direct')->and($account->isReady())->toBeTrue();
+    $connection = IntegrationConnection::where('provider', 'tenant_stripe_oauth')->sole();
+    expect($connection->getRawOriginal('external_account_secret'))->not->toContain('never-display-this-token');
+    $this->get(paymentSetupUrl($this))->assertOk()->assertDontSee('never-display-this-token')->assertSeeText('Connect bank transactions');
+});
+
+it('recognizes only this workspace accounting connection without granting payment or bank-feed authority', function () {
+    $other = Tenant::create(['name' => 'Other Accounting Merchant', 'slug' => 'other-accounting-merchant']);
+    IntegrationConnection::create(['tenant_id' => $other->id, 'provider' => 'quickbooks', 'status' => 'connected', 'external_account_id' => 'fictional-other']);
+    $this->actingAs($this->owner)->get(paymentSetupUrl($this))->assertOk()->assertDontSeeText('QuickBooks is already connected');
+    IntegrationConnection::create(['tenant_id' => $this->tenant->id, 'provider' => 'quickbooks', 'status' => 'connected', 'external_account_id' => 'fictional-own', 'metadata' => ['purpose' => 'accounting']]);
+    $this->get(paymentSetupUrl($this))->assertOk()->assertSeeText('QuickBooks is already connected for read-only accounting')
+        ->assertSeeText('additional transaction detail');
+    expect($this->tenant->paymentAccount()->exists())->toBeFalse();
+    Http::assertNothingSent();
 });

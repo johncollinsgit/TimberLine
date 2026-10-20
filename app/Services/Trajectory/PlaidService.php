@@ -6,9 +6,12 @@ use App\Models\Trajectory\Account;
 use App\Models\Trajectory\Connection;
 use App\Models\Trajectory\Space;
 use App\Models\Trajectory\Transaction;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class PlaidService
@@ -16,6 +19,29 @@ class PlaidService
     public function ready(): bool
     {
         return filled(config('trajectory.plaid.client_id')) && filled(config('trajectory.plaid.secret'));
+    }
+
+    public function linkReady(): bool
+    {
+        return $this->ready() && $this->redirectUri() !== null;
+    }
+
+    private function redirectUri(): ?string
+    {
+        $uri = config('trajectory.plaid.redirect_uri');
+        if (! is_string($uri) || ! filter_var($uri, FILTER_VALIDATE_URL)) {
+            return null;
+        }
+        $parts = parse_url($uri);
+        $origin = parse_url((string) config('app.url'));
+        if (($parts['scheme'] ?? '') !== 'https' || strtolower($parts['host'] ?? '') !== strtolower($origin['host'] ?? '')
+            || ($parts['port'] ?? null) !== ($origin['port'] ?? null) || ($parts['path'] ?? '') !== '/trajectory'
+            || isset($parts['query']) || isset($parts['fragment'])
+            || isset($parts['user']) || isset($parts['pass'])) {
+            return null;
+        }
+
+        return $uri;
     }
 
     public function call(string $path, array $payload): array
@@ -41,31 +67,93 @@ class PlaidService
         return $response->json();
     }
 
-    public function link(Space $space, ?Connection $connection = null): array
+    public function link(Space $space, ?Connection $connection = null, ?int $actorId = null): array
     {
-        $payload = ['client_name' => 'Everbranch Trajectory', 'language' => 'en', 'country_codes' => ['US'], 'user' => ['client_user_id' => 'trajectory:'.$space->id]];
+        abort_unless($this->linkReady(), 503, 'Bank sign-in is being prepared for mobile. Existing feeds and statement imports remain available.');
+        abort_if($connection && ($connection->space_id !== $space->id || $connection->status === 'disconnected'), 410, 'Reconnect this bank with a new sign-in.');
+        $payload = ['client_name' => 'Everbranch Trajectory', 'language' => 'en', 'country_codes' => ['US'], 'user' => ['client_user_id' => 'trajectory:user:'.($actorId ?? $space->owner_user_id).':space:'.$space->id]];
         if ($connection) {
             $payload['access_token'] = $connection->access_token;
         } else {
-            // Transactions is required for cash timing. Investments and liabilities are
-            // consented during Link but fetched only for compatible selected accounts,
-            // preserving bank availability and avoiding product charges for accounts
-            // where Trajectory has no applicable evidence to retrieve.
             $payload += [
                 'products' => ['transactions'],
-                'additional_consented_products' => ['investments', 'liabilities'],
                 'transactions' => ['days_requested' => 730],
             ];
+            if ($space->kind === 'household') {
+                $payload['additional_consented_products'] = ['investments', 'liabilities'];
+            }
         }
         if (config('trajectory.plaid.webhook_url')) {
             $payload['webhook'] = config('trajectory.plaid.webhook_url');
         }
-        if (config('trajectory.plaid.redirect_uri')) {
-            $payload['redirect_uri'] = config('trajectory.plaid.redirect_uri');
-        }
+        $payload['redirect_uri'] = $this->redirectUri();
         $result = $this->call('/link/token/create', $payload);
 
         return ['link_token' => $result['link_token'], 'expiration' => $result['expiration']];
+    }
+
+    public function issueLinkSession(Space $space, ?Connection $connection, int $actorId, string $browserSession): array
+    {
+        $link = $this->link($space, $connection, $actorId);
+        $expiresAt = CarbonImmutable::parse($link['expiration'])->min(now()->addHours(4));
+        abort_unless($expiresAt->isFuture(), 503, 'Bank sign-in is temporarily unavailable. Please try again.');
+        $session = (string) Str::uuid();
+        $state = [
+            'actor_id' => $actorId, 'space_id' => $space->id, 'connection_id' => $connection?->id,
+            'browser_session' => hash('sha256', $browserSession), 'link_token' => $link['link_token'],
+            'expires_at' => $expiresAt->toIso8601String(), 'status' => 'issued',
+        ];
+        $this->storeLinkSession($session, $state);
+
+        return [...$link, 'expiration' => $state['expires_at'], 'link_session' => $session, 'connection_id' => $connection?->id];
+    }
+
+    public function completeLinkSession(Space $space, int $actorId, string $browserSession, string $session, ?int $connectionId, ?string $publicToken, callable $complete): array
+    {
+        return Cache::lock($this->linkSessionKey($session).':lock', 60)->block(5, function () use ($space, $actorId, $browserSession, $session, $connectionId, $publicToken, $complete): array {
+            try {
+                $encrypted = Cache::get($this->linkSessionKey($session));
+                $state = is_string($encrypted) ? json_decode(Crypt::decryptString($encrypted), true, 16, JSON_THROW_ON_ERROR) : null;
+            } catch (\Throwable) {
+                $state = null;
+            }
+            abort_unless(is_array($state) && CarbonImmutable::parse($state['expires_at'])->isFuture(), 410, 'Your bank sign-in expired. Choose Connect a bank to start again.');
+            abort_unless($state['actor_id'] === $actorId && $state['space_id'] === $space->id
+                && $state['connection_id'] === $connectionId && hash_equals($state['browser_session'], hash('sha256', $browserSession)), 403, 'This bank sign-in belongs to another session or workspace.');
+            $tokenHash = $publicToken === null ? null : hash('sha256', $publicToken);
+            if ($state['status'] === 'complete') {
+                abort_unless(($state['public_token_hash'] ?? null) === $tokenHash, 409, 'This bank sign-in has already finished.');
+
+                return $state['result'];
+            }
+            abort_unless($state['status'] === 'issued', 409, 'This bank sign-in could not be completed. Choose Connect a bank to start again.');
+            $state['status'] = 'processing';
+            $state['public_token_hash'] = $tokenHash;
+            $this->storeLinkSession($session, $state);
+            try {
+                $state['result'] = $complete();
+                $state['status'] = 'complete';
+            } catch (\Throwable $error) {
+                // An exchanged public token is single-use. An uncertain provider
+                // result must never be silently replayed or assigned elsewhere.
+                $state['status'] = 'failed';
+                $this->storeLinkSession($session, $state);
+                throw $error;
+            }
+            $this->storeLinkSession($session, $state);
+
+            return $state['result'];
+        });
+    }
+
+    private function linkSessionKey(string $session): string
+    {
+        return 'trajectory:plaid:link:'.hash('sha256', $session);
+    }
+
+    private function storeLinkSession(string $session, array $state): void
+    {
+        Cache::put($this->linkSessionKey($session), Crypt::encryptString(json_encode($state, JSON_THROW_ON_ERROR)), CarbonImmutable::parse($state['expires_at']));
     }
 
     public function exchange(Space $space, string $publicToken, ?string $institutionName = null, ?int $ownerId = null): Connection
@@ -73,10 +161,12 @@ class PlaidService
         $result = $this->call('/item/public_token/exchange', ['public_token' => $publicToken]);
         $existing = Connection::where('external_id', $result['item_id'])->first();
         abort_if($existing && $existing->space_id !== $space->id, 409, 'This bank item is already connected in another space.');
+        abort_if($existing && $ownerId && ($existing->coverage['owner_user_id'] ?? $space->owner_user_id) !== $ownerId, 403, 'Only the bank connection owner can reconnect this login.');
 
-        $connection = Connection::updateOrCreate(['external_id' => $result['item_id']], array_filter(['space_id' => $space->id, 'access_token' => $result['access_token'], 'status' => 'connected', 'institution_name' => $institutionName], fn ($value) => $value !== null));
+        $connection = Connection::updateOrCreate(['external_id' => $result['item_id']], array_filter(['space_id' => $space->id, 'access_token' => $result['access_token'], 'status' => 'connected', 'institution_name' => $institutionName,
+            'coverage' => [...($existing?->coverage ?? []), 'purpose' => 'bank_feed']], fn ($value) => $value !== null));
         if (! $existing && $ownerId) {
-            $connection->update(['status' => 'mapping_required', 'coverage' => ['require_account_mapping' => true, 'owner_user_id' => $ownerId, 'account_spaces' => []]]);
+            $connection->update(['status' => 'mapping_required', 'coverage' => ['purpose' => 'bank_feed', 'require_account_mapping' => true, 'owner_user_id' => $ownerId, 'account_spaces' => []]]);
         }
 
         return $connection;
@@ -150,8 +240,10 @@ class PlaidService
                 }
                 $connection->update(['cursor' => $cursor, 'synced_at' => now(), 'status' => $unassigned ? 'mapping_required' : 'connected']);
             });
-            $this->liabilities($connection);
-            $this->investments($connection);
+            if ($space->kind === 'household') {
+                $this->liabilities($connection);
+                $this->investments($connection);
+            }
         });
     }
 

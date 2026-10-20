@@ -29,7 +29,7 @@ Pull requests use MySQL 8.4 and run these checks in order:
 2. `tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php` recreates
    durable partial schemas and proves each registered migration can resume.
 3. `scripts/ci/rehearse-migrations.sh` builds the prior commit's schema in a
-   disposable database, applies the current migrations, and runs the migrator
+   disposable database with an explicit nonexistent schema path (so the current dump cannot preload future migrations), applies the current migrations, and runs the migrator
    again to prove the result is settled.
 4. `scripts/ci/verify-mysql-schema-baseline.sh` proves that both the complete
    migration tree and a blank database booted from the committed MySQL schema

@@ -770,6 +770,10 @@ Route::post('/checkout/website/cancel', [WebsiteCommerceController::class, 'canc
 Route::post('/checkout/website', [WebsiteCommerceController::class, 'checkout'])->middleware('throttle:10,1')->name('managed-website.store.checkout');
 Route::post('/cart/shipping-rates', [WebsiteCommerceController::class, 'shippingRates'])->middleware('throttle:10,1')->name('managed-website.store.shipping-rates');
 Route::get('/checkout/website/success', [WebsiteCommerceController::class, 'success'])->name('managed-website.store.success');
+Route::get('/invoices/{token}', [\App\Http\Controllers\WebsiteInvoicePaymentController::class, 'show'])->middleware('throttle:60,1')->name('website-invoices.public.show');
+Route::post('/invoices/{token}/accept', [\App\Http\Controllers\WebsiteInvoicePaymentController::class, 'accept'])->middleware('throttle:10,1')->name('website-invoices.public.accept');
+Route::post('/invoices/{token}/pay', [\App\Http\Controllers\WebsiteInvoicePaymentController::class, 'pay'])->middleware('throttle:10,1')->name('website-invoices.public.pay');
+Route::post('/invoices/{token}/refresh', [\App\Http\Controllers\WebsiteInvoicePaymentController::class, 'refresh'])->middleware('throttle:10,1')->name('website-invoices.public.refresh');
 Route::get('/orders/track', [\App\Http\Controllers\WebsiteOrderTrackingController::class, 'show'])->middleware('throttle:60,1')->name('managed-website.store.tracking');
 Route::post('/webhooks/website-stripe', [WebsiteCommerceController::class, 'webhook'])->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:120,1')->name('managed-website.store.webhook');
 Route::post('/webhooks/website-easypost', [WebsiteCommerceController::class, 'shippingWebhook'])->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:120,1')->name('managed-website.store.shipping-webhook');
@@ -1045,6 +1049,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware(['tenant.access'])->prefix('payments')->name('tenant-payments.')->group(function (): void {
         Route::get('/', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'index'])->name('index');
         Route::post('/stripe/start', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'stripeStart'])->middleware('throttle:5,1')->name('stripe.start');
+        Route::post('/stripe/connect', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'stripeConnect'])->middleware('throttle:5,1')->name('stripe.connect');
+        Route::get('/stripe/return', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'stripeReturn'])->middleware('throttle:10,1')->name('stripe.return');
         Route::post('/stripe/session', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'stripeSession'])->middleware('throttle:10,1')->name('stripe.session');
         Route::post('/stripe/refresh', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'stripeRefresh'])->middleware('throttle:5,1')->name('stripe.refresh');
         Route::post('/paypal/start', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'paypalStart'])->middleware('throttle:5,1')->name('paypal.start');
@@ -2574,3 +2580,5 @@ Route::post('/email/unsubscribe', [\App\Http\Controllers\Marketing\MarketingEmai
 require __DIR__.'/soccer.php';
 
 require __DIR__.'/ai-branch.php';
+
+require __DIR__.'/website-invoices.php';

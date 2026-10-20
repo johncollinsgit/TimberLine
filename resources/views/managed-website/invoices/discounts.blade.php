@@ -1,0 +1,19 @@
+<x-layouts::app.sidebar title="Discount codes">
+    <flux:main><div class="mx-auto max-w-5xl space-y-5 pb-10">
+        @include('managed-website.catalog.nav')
+        <x-ui.operational-header title="Discount codes" description="Create one code for a fixed amount or percentage off eligible invoice items." :back="['href'=>route('managed-website.invoices.index'),'label'=>'Quotes & invoices']" />
+        @if($errors->any())<p class="rounded-lg bg-rose-50 p-4 text-sm text-rose-950">{{ $errors->first() }}</p>@endif @if(session('status'))<p class="rounded-lg bg-emerald-50 p-4 text-sm text-emerald-950">{{ session('status') }}</p>@endif
+        <form method="POST" action="{{ route('managed-website.invoices.discounts.store') }}" class="grid gap-4 rounded-xl border bg-white p-5 sm:grid-cols-2">@csrf
+            <label class="text-sm font-medium">Code<input required name="code" value="{{ old('code') }}" maxlength="64" class="mt-1 min-h-11 w-full rounded-lg border-zinc-300" placeholder="WELCOME10"></label>
+            <label class="text-sm font-medium">Discount type<select name="type" class="mt-1 min-h-11 w-full rounded-lg border-zinc-300"><option value="percent">Percentage</option><option value="fixed">Fixed dollar amount</option></select></label>
+            <label class="text-sm font-medium">Value<input required name="value" inputmode="decimal" value="{{ old('value') }}" class="mt-1 min-h-11 w-full rounded-lg border-zinc-300"></label>
+            <label class="text-sm font-medium">Minimum invoice subtotal ($)<input name="minimum_subtotal" inputmode="decimal" value="{{ old('minimum_subtotal','0.00') }}" class="mt-1 min-h-11 w-full rounded-lg border-zinc-300"></label>
+            <label class="text-sm font-medium">Starts <span class="font-normal text-zinc-500">(optional)</span><input type="datetime-local" name="starts_at" class="mt-1 min-h-11 w-full rounded-lg border-zinc-300"></label>
+            <label class="text-sm font-medium">Expires <span class="font-normal text-zinc-500">(optional)</span><input type="datetime-local" name="expires_at" class="mt-1 min-h-11 w-full rounded-lg border-zinc-300"></label>
+            <label class="text-sm font-medium">Maximum issued invoices <span class="font-normal text-zinc-500">(optional)</span><input type="number" min="1" name="maximum_issues" class="mt-1 min-h-11 w-full rounded-lg border-zinc-300"><span class="mt-1 block text-xs text-zinc-500">One use is reserved when an invoice is issued, including quotes awaiting acceptance.</span></label>
+            <label class="text-sm font-medium">Eligible catalog items <span class="font-normal text-zinc-500">(optional)</span><select name="eligible_variant_ids[]" multiple class="mt-1 min-h-24 w-full rounded-lg border-zinc-300">@foreach($variants as $variant)<option value="{{ $variant->id }}">{{ $variant->product->title }} · {{ $variant->title }}</option>@endforeach</select><span class="mt-1 block text-xs text-zinc-500">Leave empty to include all items and custom work.</span></label>
+            <button class="fb-btn fb-btn-primary w-fit">Save code</button>
+        </form>
+        <section class="divide-y rounded-xl border bg-white">@forelse($discounts as $discount)<div class="flex flex-wrap items-center justify-between gap-3 p-5"><div><strong>{{ $discount->code }}</strong><p class="mt-1 text-sm text-zinc-600">{{ $discount->type==='percent'?$discount->value.'%':'$'.number_format($discount->value/100,2) }} off · {{ $discount->issued_count }} issued · {{ $discount->enabled?'Enabled':'Disabled' }}</p></div>@if($discount->enabled)<form method="POST" action="{{ route('managed-website.invoices.discounts.disable',$discount->id) }}">@csrf<button class="fb-btn fb-btn-secondary">Disable for new invoices</button></form>@endif</div>@empty<p class="p-5 text-sm text-zinc-600">No codes yet. You can also add a staff discount directly to a draft.</p>@endforelse</section>
+    </div></flux:main>
+</x-layouts::app.sidebar>

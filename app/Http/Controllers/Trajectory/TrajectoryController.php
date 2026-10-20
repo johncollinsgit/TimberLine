@@ -274,32 +274,47 @@ class TrajectoryController extends Controller
             $connection = null;
         }
 
-        return response()->json($plaid->link($space, $connection));
+        return response()->json($plaid->issueLinkSession($space, $connection, $request->user()->id, $request->session()->getId()))->header('Cache-Control', 'private, no-store');
     }
 
     public function exchangeBank(Request $request, Space $space, FinanceAccess $access, PlaidService $plaid)
     {
         $access->authorize($request->user(), $space);
-        $data = $request->validate(['public_token' => 'required|string|max:500', 'institution_name' => 'nullable|string|max:160']);
-        $connection = $plaid->exchange($space, $data['public_token'], $data['institution_name'] ?? null, $request->user()->id);
-        if ($connection->status !== 'mapping_required') {
-            SyncBank::dispatch($connection->id);
-        }
+        $data = $request->validate(['public_token' => 'required|string|max:500', 'institution_name' => 'nullable|string|max:160', 'link_session' => 'required|uuid']);
+        $result = $plaid->completeLinkSession($space, $request->user()->id, $request->session()->getId(), $data['link_session'], null, $data['public_token'], function () use ($plaid, $space, $data, $request): array {
+            $connection = $plaid->exchange($space, $data['public_token'], $data['institution_name'] ?? null, $request->user()->id);
+            if ($connection->status !== 'mapping_required') {
+                SyncBank::dispatch($connection->id);
+            }
 
-        return response()->json(['ok' => true, 'connection_id' => $connection->id, 'needs_mapping' => $connection->status === 'mapping_required']);
+            return ['ok' => true, 'connection_id' => $connection->id, 'needs_mapping' => $connection->status === 'mapping_required'];
+        });
+
+        return response()->json($result)->header('Cache-Control', 'private, no-store');
     }
 
-    public function syncBank(Request $request, Space $space, Connection $connection, FinanceAccess $access)
+    public function syncBank(Request $request, Space $space, Connection $connection, FinanceAccess $access, PlaidService $plaid)
     {
         $access->authorize($request->user(), $space);
         abort_unless($connection->space_id === $space->id, 404);
-        $data = $request->validate(['institution_name' => 'nullable|string|max:160']);
-        if (filled($data['institution_name'] ?? null)) {
-            $connection->update(['institution_name' => $data['institution_name']]);
-        }
-        SyncBank::dispatch($connection->id);
+        abort_if($connection->status === 'disconnected', 410, 'This bank was disconnected. Choose Reconnect to sign in again.');
+        $data = $request->validate(['institution_name' => 'nullable|string|max:160', 'link_session' => 'nullable|uuid']);
+        $sync = function () use ($connection, $data): array {
+            if (filled($data['institution_name'] ?? null)) {
+                $connection->update(['institution_name' => $data['institution_name']]);
+            }
+            SyncBank::dispatch($connection->id);
 
-        return response()->json(['ok' => true]);
+            return ['ok' => true];
+        };
+        if (filled($data['link_session'] ?? null)) {
+            abort_unless(($connection->coverage['owner_user_id'] ?? $space->owner_user_id) === $request->user()->id, 403);
+            $result = $plaid->completeLinkSession($space, $request->user()->id, $request->session()->getId(), $data['link_session'], $connection->id, null, $sync);
+        } else {
+            $result = $sync();
+        }
+
+        return response()->json($result)->header('Cache-Control', 'private, no-store');
     }
 
     public function disconnectBank(Request $request, Space $space, Connection $connection, FinanceAccess $access, PlaidService $plaid)

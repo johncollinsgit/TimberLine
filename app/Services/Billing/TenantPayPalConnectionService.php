@@ -43,7 +43,7 @@ class TenantPayPalConnectionService
                 $connection = IntegrationConnection::create(['tenant_id' => $tenant->id, 'provider' => 'tenant_paypal',
                     'external_account_id' => $this->fingerprint(), 'status' => 'pending', 'connected_by_user_id' => $actor->id,
                     'external_account_secret' => json_encode(['tracking_id' => (string) Str::uuid()], JSON_THROW_ON_ERROR),
-                    'metadata' => ['environment' => config('tenant_payments.paypal.environment')]]);
+                    'metadata' => ['environment' => config('tenant_payments.paypal.environment'), 'purpose' => 'payment_processing']]);
             }
 
             return $connection;

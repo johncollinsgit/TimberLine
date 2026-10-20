@@ -55,6 +55,9 @@ class WebsiteCommerceService
         if (blank(config('managed_website.stripe_webhook_secret'))) {
             $result['blockers'][] = 'Website checkout requires its signed Stripe webhook to be configured.';
         }
+        if ($result['account']?->routingMode() === 'direct' && blank(config('managed_website.stripe_connect_webhook_secret'))) {
+            $result['blockers'][] = 'Business-account checkout requires its dedicated signed webhook.';
+        }
 
         if (! (bool) config('commercial.billing_readiness.tenant_payments.automatic_tax_enabled', false)
             || ! (bool) config('commercial.billing_readiness.tenant_payments.tax_decision_confirmed', false)) {
@@ -346,9 +349,9 @@ class WebsiteCommerceService
         });
     }
 
-    public function refund(WebsiteOrder $order, User $actor, int $amountCents, string $reason = '', ?string $requestId = null): WebsiteOrder
+    public function refund(WebsiteOrder $order, User $actor, int $amountCents, string $reason = '', ?string $requestId = null, ?int $paymentId = null): WebsiteOrder
     {
-        return app(WebsitePaymentService::class)->refund($order, $actor, $amountCents, $reason, $requestId);
+        return app(WebsitePaymentService::class)->refund($order, $actor, $amountCents, $reason, $requestId, $paymentId);
     }
 
     public function addNote(WebsiteOrder $order, User $actor, string $note): void
