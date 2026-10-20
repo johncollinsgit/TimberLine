@@ -1,3 +1,15 @@
+## Coordinated October 20 release state
+
+- Public offer/quality PR #436 is live at `df9469eadaff3a857e95c4e711aac80e1e20cd67`
+  (protected run 39392281921, exact `/ready`, Forge release 80667328, 18 read-only
+  Chromium/WebKit checks). Historical sections below retain their original evidence.
+- Marketplace code is integrated onto that release with its collection/availability
+  defaults off. The marketing product `markets_makers` maps to the internal
+  `markets_and_makers` module; marketing selection never activates it. Preserve
+  the shipped Teams migrations and both Teams/Marketplace MySQL recovery gates.
+- Settings, electrician intake and truthful health candidates remain separately
+  preserved until serialized release. See `docs/operations/coordinated-release-2026-10-20.md`.
+
 ## Public offer and quality candidate (2026-10-20; not deployed)
 
 - The Simple public acquisition offer uses `module_catalog.offers.standard`: $499
