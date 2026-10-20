@@ -92,6 +92,18 @@ class UnifiedAppNavigationService
         $items = [];
         $items[] = ['key' => 'home', 'icon' => 'home', 'href' => $homeHref, 'label' => 'Home', 'current' => request()->routeIs('dashboard')];
 
+        if ($tenant && $user && config('team_work.enabled')) {
+            try {
+                app(\App\Services\Team\TeamWorkAccess::class)->context($user, $tenant);
+                $items[] = ['key' => 'team-work', 'icon' => 'clipboard-document-list', 'href' => route('team.app', ['tenant' => $tenant->slug]),
+                    'label' => app(\App\Services\Team\TeamAppPresentation::class)->name($tenant), 'standalone_app' => true, 'current' => request()->routeIs('team.*')];
+            } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
+                if (! in_array($exception->getStatusCode(), [403, 404], true)) {
+                    throw $exception;
+                }
+            }
+        }
+
         if ($tenant && $user && ($canAccessOps || $roleCanAccessMarketing)
             && $user->tenants()->whereKey($tenant->id)->wherePivot('membership_active', true)->exists()
             && $tenant->clientProjects()->where('metadata->checklist_enabled', true)->exists()) {

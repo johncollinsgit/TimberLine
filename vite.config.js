@@ -10,6 +10,7 @@ export default defineConfig(() => ({
       input: [
         'resources/css/app.css',
         'resources/js/app.js',
+        'resources/js/team/app.js',
         'resources/js/tenant-payment-setup.js',
         'resources/css/evergrove-booking.css',
         'resources/js/evergrove-booking.js',

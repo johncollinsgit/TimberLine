@@ -2530,6 +2530,7 @@ Route::middleware('signed')
     ->name('rewards.policy.exports.signed');
 
 require __DIR__.'/settings.php';
+require __DIR__.'/team.php';
 
 // Published customer pages are resolved only after every explicit platform,
 // Shopify, checkout, webhook, and workspace route has had precedence. A

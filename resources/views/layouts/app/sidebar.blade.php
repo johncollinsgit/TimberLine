@@ -295,7 +295,7 @@
                 @else
                   <a
                     href="{{ $item['href'] }}"
-                    wire:navigate
+                    @if(empty($item['standalone_app'])) wire:navigate @endif
                     data-flux-sidebar-item
                     @if(! empty($item['current'])) data-current="data-current" aria-current="page" @endif
                     class="mf-transition mf-nav-item {{ ! empty($item['current']) ? 'mf-active-pill' : '' }}"

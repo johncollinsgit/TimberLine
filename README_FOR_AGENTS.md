@@ -53,6 +53,160 @@
 - Keep profile saving available for children outside current eligibility. Do not
   auto-enroll future players or change payment/provider launch gates.
 
+## Premium Teams workspace and per-user Asana (local, 2026-10-19)
+
+Read docs/architecture/everbranch-team-premium-workspace.md and
+docs/operations/everbranch-team-premium-verification.md. Independent default-off
+premium/Asana flags retain the shared graph and legacy fallback. Vite modules add
+Forestry navigation, dense sectioned work, inline canonical edits, task selection,
+boards, month calendars and responsive detail tabs; favorites/saved native views
+and initial loaded-page timeline/workload/dashboard projections are personal.
+Per-user/per-tenant encrypted OAuth connections project selected Asana work read
+only, with current source access, identity/cursor fences, background clearing and
+rate-limit/reconnect states. Existing automation credentials remain separate.
+162 Laravel tests/1779 assertions, 60 Node/47 graph, build and migration lint pass.
+Browser evidence uses fictional records/provider fixtures, not live OAuth acceptance.
+Dedicated OAuth setup, real-user connection and MySQL/Linux/release gates remain.
+Later milestone/portfolio/collaboration/forms/automation/time-tracking work remains;
+all 643 clauses are preserved without a native/product completion claim.
+No production deployment, real import, source write or billing change occurred.
+
+## Company Teams standalone web application (local, 2026-10-19)
+
+Read `docs/architecture/everbranch-team-application-packaging.md` and
+`docs/operations/everbranch-team-standalone-application-verification.md`.
+Everbranch links eligible viewers to company-branded `/teams`, an independent
+authenticated shell following Trajectory's own-sidebar pattern. `/team` stays
+embedded. Both include one shared workspace/script and use the same controller,
+APIs, records, current permissions and Fortify login. Task/project/comment and
+workspace links retain the selected surface; draft guards remain in force.
+No new domain/service/PWA/native binary, duplicate store or schema is added.
+240 affected Laravel tests/2871 assertions and 16 new plus94 affected browser
+scenarios pass; native/device/offline durability and real import/release gates
+remain unaccepted. All643 clauses stay:17 server invariants,185 partial,12
+blocked,429 not started; counts never mean product/native completion.
+No real data/credential/billing/grant/deployment or user-file deletion occurs.
+
+## Team task/comment navigation safety (local, 2026-10-19; disabled)
+
+Read `docs/operations/everbranch-team-draft-navigation-verification.md`.
+Shared web navigation now guards pending task/comment/create/field/recurrence
+input; keep-and-close/resume and exact frozen save retries use page memory.
+A stale viewer/workspace header refuses before reads/writes. Auth/access loss
+seals drafts until original-account and current edit-access verification; no
+browser storage, cross-user persistence, automatic replay or purge is added.
+Conflict review and confirmed-save/refresh-failure handling retain other input.
+Reload/accepted Leave/logout/restart/native/offline durability remains unaccepted.
+All requirements and migration/infrastructure/release gates stay in the matrix.
+No real imports, user-file/cache deletion, credentials, payments or release action.
+Final local evidence: 186 affected Laravel tests /2568 assertions, 60 Node,
+47 graph checks, 27 draft plus 67 affected browser scenarios. All 643 clauses
+remain: 17 verified server invariants,179 partial,12 blocked,435 not started.
+These are evidence/inventory counts, not mobile or product completion scores.
+
+## Team minimum replacement workflow assessment (local, 2026-10-19)
+
+Read `docs/operations/everbranch-team-minimum-replacement-verification.md`.
+Authorized project name/description search now opens the existing shared project
+and task workflow. Local evidence separately verifies the daily assignment/date,
+subtask/comment, My Tasks, search and complete/reopen path. Other entity search,
+large-tenant indexing, native renderer/offline and durable input recovery remain
+partial. Safe real import is blocked by reviewed export/identity/privacy/file
+inputs, durable application import and infrastructure/release gates. Keep all
+643 clauses and original notes/history; no native/product completion percentage.
+No real source access/import, deletion, credential, payment or release action.
+Current matrix: 17 verified server invariants, 173 partial, 12 blocked, 441 not
+started. Actual checks: 182 affected Laravel tests /2534 assertions, 60 Node,
+47 graph checks and 40 browser scenarios (14 new plus 26 affected regressions).
+These are local evidence counts, not product/native completion percentages.
+
+## Team project overview and status (local, 2026-10-19; default disabled)
+
+Read `docs/operations/everbranch-team-project-status-verification.md`.
+The existing G: candidate now supports authorized project links, visible-task
+progress, current-owner status posting, reviewed task references and paginated
+immutable status history through the shared graph and native revisions/events.
+No schema, task duplication, source-note rewrite or member notification is added.
+Recovery text requires original-account verification; durable/native recovery
+remains unaccepted and its corrected gates remain off. 176 affected Laravel tests
+/2440 assertions, 60 Node, 47 graph and 53 frozen-source browser scenarios pass.
+All 643 clauses remain: 17 verified server invariants, 168 partial, 12 blocked,
+446 without clause-specific completion evidence. Native/OS, project resources,
+milestones, roster/roles, notifications and remaining A-E scope are unfinished.
+The five inherited Windows failures are unchanged and were not rerun this slice.
+No original files/caches removed, dependency install, import, push, merge, deploy,
+credential change or paid service occurred. This section records the prior project-status checkpoint.
+
+## Team core task links and follow-ups (local, 2026-10-19; default disabled)
+
+Read `docs/operations/everbranch-team-core-workflows-verification.md` and the
+remaining-work backlog. Continue in the existing G: candidate. Task/comment web
+links reauthorize the exact workspace before HTML; reviewed follow-ups create new
+canonical tasks without copying or rewriting original notes/history. Stable retry
+identities, source-version review and sealed copyable new draft text are tested.
+159 affected Laravel tests/2256 assertions, 59 Node, 47 graph and 39 browser
+scenarios pass. Clipboard success is stubbed; native/device acceptance stays open.
+All 643 clauses remain: 17 verified server invariants, 152 partial, 12 blocked,
+462 without clause-specific completion evidence. This is not product completion.
+The history gap was omitted original shallow metadata, now copied exactly on G:;
+163 commits traverse. Original partial-clone promises explain absent old blobs;
+promise-aware connectivity passes without fetch/rewrite. Full history remains
+unavailable locally. Five unchanged Windows assertions reproduce separately;
+no security check or production expectation was weakened. Corrected native
+offline preservation gates remain off. No import/push/merge/deploy/deletion.
+
+## Team multiple-workspace increment (local, 2026-10-19; default disabled)
+
+Continue from `G:\Everbranch\asana-replacement-20261019-01\backend-integration`.
+Read `docs/operations/everbranch-team-workspace-verification.md`. The prior
+staged checkpoint and 3,685 source-file hashes were verified before copying;
+the C: original is preserved. Current eligible Team workspaces have a paginated,
+searchable directory and guarded web navigation through existing tenant access.
+Unsaved task/planning text, comments, selected files and pending saves block
+switching. Native bearer payloads identify their workspace; no new native UI or
+offline recovery is enabled. All 643 clauses remain: 17 verified server invariants,
+142 partial, 12 blocked, 472 without clause-specific completion evidence.
+The inherited Git object store has a missing historical parent; current commit,
+index, source and available objects are preserved, not a complete-history claim.
+No real source import, cache deletion, dependency install, push or deployment.
+
+## Team milestone C (local, 2026-10-17; default disabled)
+
+See `docs/operations/everbranch-team-milestone-c-verification.md` and the generated
+`everbranch-team-parity-status-summary.json`. Reviewed task/project snapshots,
+completion-driven recurrence and cycle-safe dependencies share the existing graph
+/repository. No live scheduler or external notifications are registered or run.
+The existing wall-time resolver is reused unchanged; no new schema or native app.
+All 643 clauses remain: 17 verified server invariants, 140 partial, 12 blocked,
+474 without clause-specific completion evidence. This is not a completion percentage
+or native/production acceptance. Prior full-suite baseline failures remain visible.
+The withdrawn mobile purge candidate remains excluded; offline recovery/write
+gates stay off. No push/deploy/install, real data action or cache deletion.
+
+## Team backend reconciliation (local, 2026-10-17; default disabled)
+
+Read `docs/operations/everbranch-team-reconciled-verification.md` and the 643-clause
+`docs/architecture/everbranch-team-mobile-parity.json` / remaining-work backlog.
+The Team graph, ACLs, native transport, Field references, private files and Home/My
+Tasks candidate are reconciled on backend `79d430c`. Preserve all newer voice,
+payments, soccer, provider and migration-safety contracts below. No real tenant
+activation, source import, provider action or release follows from this checkpoint.
+
+The earlier mobile automatic-purge patch is WITHDRAWN and excluded from release
+handoff. Only the separate corrected preservation patch against `d9b0b31` is the
+native candidate; offline writes/encrypted recovery remain default off pending
+device proof. Current source is local/staged, not installed or production.
+
+Team uses the shared transactional graph/repository, current verified tenant and
+object ACLs, canonical entitlement and exact rollout allowlist. It never grants
+private task access through Field jobs, copies legacy checklists, dispatches
+external notifications, or rewrites source history. Uploads remain quarantined
+without an approved scanner. Native Team renderer/MySQL/device gates remain open.
+
+Historical Team source-preservation utilities/docs removed from this newer base
+are restored from the preserved Team checkpoint for synthetic local review only.
+No real Asana access, credentials, invitations, billing, install or cleanup.
+
 ## Ask Everbranch (2026-10-16; local, disabled)
 
 - The separately audited fictional pilot uses the fixed `everbranch-voice-pilot`
@@ -2001,3 +2155,7 @@ platform SID, belong to that platform, and be exclusive to one tenant. The
 provisioner durably reserves intent outside provider HTTP and must not be wrapped
 in a caller transaction. Do not retry an ambiguous creation or reuse a parent
 binding. Follow `docs/operations/wren-soccer.md` for reviewed Wren reconciliation.
+
+## Teams connected operations candidate (2026-10-20)
+
+Events/Wholesale operations are default-off extensions of the shared Teams Laravel application. Read `docs/architecture/everbranch-team-connected-operations.md` and `docs/operations/everbranch-team-connected-operations-runbook.md`. Preserve authoritative Asana/Sheets/mail/commerce sources, source-generation fences, per-user access and encrypted evidence. Do not send or enable external sequences from template publication or internal rule saves. Reuse the existing email composer, messaging controls and shared AI usage ledger. No legacy Event table reuse without tenant mapping. The complete Phase 2 plan is not yet accepted; live OAuth/source discovery and real MySQL/Linux/protected-release gates remain outstanding.

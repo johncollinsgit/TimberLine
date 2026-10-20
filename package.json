@@ -20,7 +20,14 @@
     "shopify:app:info": "shopify app info",
     "shopify:app:info:wholesale": "shopify app info --config wholesale",
     "qa:click-path": "node scripts/qa/click-path-audit.mjs",
-    "qa:click-path:auth": "CLICK_PATH_CONFIG=tests/e2e/click-path-routes-auth.json node scripts/qa/click-path-audit.mjs"
+    "qa:click-path:auth": "CLICK_PATH_CONFIG=tests/e2e/click-path-routes-auth.json node scripts/qa/click-path-audit.mjs",
+    "test:team-preservation": "node --test scripts/everbranch-team/verify-source-export.test.mjs scripts/everbranch-team/asana-preservation-client.test.mjs scripts/everbranch-team/preview-note-fields.test.mjs",
+    "test:team-work-local": "node --test scripts/everbranch-team/verify-source-export.test.mjs scripts/everbranch-team/asana-preservation-client.test.mjs scripts/everbranch-team/preview-note-fields.test.mjs scripts/everbranch-team/offline-queue.test.mjs scripts/everbranch-team/reconcile-import.test.mjs scripts/everbranch-team/parity-status.test.mjs && php scripts/everbranch-team/work-graph.test.php",
+    "test:team-fixture": "node scripts/everbranch-team/fixture-acceptance.mjs",
+    "test:team-laravel": "php vendor/bin/pest --configuration=phpunit.team.xml --compact",
+    "test:team-laravel-browser": "node scripts/everbranch-team/laravel-acceptance.mjs",
+    "test:team-laravel-views": "node scripts/everbranch-team/laravel-view-smoke.mjs",
+    "team:parity": "node scripts/everbranch-team/build-parity-matrix.mjs"
   },
   "dependencies": {
     "@glideapps/glide-data-grid": "^6.0.3",
