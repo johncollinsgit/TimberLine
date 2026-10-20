@@ -48,6 +48,61 @@ class MarketingEmailDelivery extends Model
         'failed_at' => 'datetime',
     ];
 
+    public function save(array $options = [])
+    {
+        if ($this->exists && ($this->provider === 'ses_tenant' || data_get($this->metadata, 'ses_attempt')
+            || static::query()->whereKey($this->id)->where('provider', 'ses_tenant')->exists())) {
+            return \Illuminate\Support\Facades\DB::transaction(function () use ($options) {
+                static::query()->whereKey($this->id)->lockForUpdate()->first();
+
+                return parent::save($options);
+            });
+        }
+
+        return parent::save($options);
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $delivery): void {
+            if (! $delivery->exists) {
+                return;
+            }
+            $stored = static::query()->find($delivery->id);
+            $attempt = data_get($stored?->metadata, 'ses_attempt');
+            if (! $attempt) {
+                return;
+            }
+            // Legacy callers save models loaded before provider HTTP. The SES
+            // claim and receipt are immutable to those stale model instances.
+            $delivery->metadata = [...(array) $delivery->metadata, 'ses_attempt' => $attempt];
+            $raw = (array) $delivery->raw_payload;
+            $storedRaw = (array) $stored->raw_payload;
+            if (array_diff((array) ($storedRaw['received_event_hashes'] ?? []), (array) ($raw['received_event_hashes'] ?? []))) {
+                foreach (['received_event_hashes', 'events', 'last_event', 'last_event_at'] as $key) {
+                    if (array_key_exists($key, $storedRaw)) {
+                        $raw[$key] = $storedRaw[$key];
+                    }
+                }
+                $delivery->raw_payload = $raw;
+                if (isset($stored->metadata['failure_policy'])) {
+                    $delivery->metadata = [...$delivery->metadata, 'failure_policy' => $stored->metadata['failure_policy']];
+                }
+            }
+            $delivery->provider = 'ses_tenant';
+            $delivery->provider_message_id = $stored->provider_message_id ?: $delivery->provider_message_id;
+            if (in_array($stored->status, ['delivered', 'opened', 'clicked'], true)) {
+                $rank = ['delivered' => 1, 'opened' => 2, 'clicked' => 3];
+                if (($rank[$delivery->status] ?? 0) < $rank[$stored->status]) {
+                    $delivery->status = $stored->status;
+                }
+            } elseif (in_array($attempt['state'] ?? '', ['submitting', 'unknown'], true) && $delivery->status === 'failed') {
+                $delivery->status = 'unknown';
+                $delivery->failed_at = null;
+            }
+        });
+    }
+
     public function recipient(): BelongsTo
     {
         return $this->belongsTo(MarketingCampaignRecipient::class, 'marketing_campaign_recipient_id');

@@ -19,7 +19,9 @@ class TenantMessagingAccountResolver
             ->where('channel', $channel)
             ->first();
 
-        if ((bool) config('features.tenant_messaging_platform') && $account?->isReady()) {
+        $sesEmail = $channel === 'email' && $account?->provider === 'ses_tenant'
+            && config('ses_migration.tenant_enabled') && in_array($tenantId, config('ses_migration.tenant_ids', []), true);
+        if (((bool) config('features.tenant_messaging_platform') || $sesEmail) && $account?->isReady()) {
             if ($channel === 'sms' && $account->provider === 'twilio_subaccount') {
                 $this->assertIsolatedTwilioAccount($account);
             }

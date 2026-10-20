@@ -77,7 +77,7 @@ class MarketingEmailFailurePolicy
             }
             app(MessagingContactChannelStateService::class)->markEmailStatus(
                 tenantId: (int) $delivery->tenant_id, profile: $delivery->profile, email: $delivery->email,
-                status: $decision['email_status'], reason: $decision['category'], providerSource: 'sendgrid_events',
+                status: $decision['email_status'], reason: $decision['category'], providerSource: ($event['provider'] ?? '') === 'ses_tenant' ? 'ses_events' : 'sendgrid_events',
                 metadata: ['marketing_email_delivery_id' => (int) $delivery->id, 'provider_message_id' => $delivery->provider_message_id, 'event' => $event, 'failure_policy' => $decision],
                 occurredAt: $occurredAt
             );

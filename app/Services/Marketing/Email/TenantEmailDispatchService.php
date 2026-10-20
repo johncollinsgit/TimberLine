@@ -30,6 +30,10 @@ class TenantEmailDispatchService
         $settings = $resolution['settings'];
         $tenantId = $resolution['tenant_id'];
 
+        if ($tenantId && ! ($options['dry_run'] ?? false)
+            && ($prior = app(SesSendSafety::class)->priorResult($tenantId, $toEmail, $this->positiveInt($options['delivery_id'] ?? null)))) {
+            return [...$prior, 'tenant_id' => $tenantId];
+        }
         $unsubscribe = app(\App\Services\Marketing\MarketingEmailUnsubscribeService::class);
         if ($tenantId !== null && $unsubscribe->isMarketing($options)) {
             if ($unsubscribe->suppressed($tenantId, $toEmail)) {
@@ -331,7 +335,8 @@ class TenantEmailDispatchService
             : [];
 
         $metadata = array_merge($metadata, [
-            'tenant_id' => $metadata['tenant_id'] ?? $tenantId,
+            'tenant_id' => $tenantId,
+            'marketing_email_delivery_id' => $options['delivery_id'] ?? null,
             'customer_id' => $metadata['customer_id'] ?? $this->positiveInt($options['customer_id'] ?? null),
             'campaign_type' => $metadata['campaign_type'] ?? $this->nullableString($options['campaign_type'] ?? null),
             'coupon_code' => $metadata['coupon_code'] ?? $this->nullableString($options['coupon_code'] ?? null),
