@@ -1,4 +1,36 @@
-# Coordinated October 20 release
+# Coordinated October 20 release record
+
+This is a dated release record. The [current product/setup map](everbranch-current-state.md),
+`/ready`, the protected deployment run and the latest immutable audit identify
+subsequent live state. No docs-only deployment is needed to record its own SHA.
+
+## Last verified checkpoint — 2026-10-20 08:58 UTC
+
+- Public quality #436 merged as `df9469eadaff3a857e95c4e711aac80e1e20cd67`.
+- Marketplace #438 merged as `a10acffaec8aa89f4b6bc64ecf3fa2c7436a70a4`.
+- Settings/electrician/truthful-health #439 merged as
+  `00acdc1b05b04e81356c53601f6a6f653dd6f843`, Forge 80669972.
+  [Protected deployment 39396530459](https://github.com/johncollinsgit/TimberLine/actions/runs/39396530459)
+  succeeded and independent `/ready` returned that exact SHA. The merge tree equals
+  checked integration tree `dfb891e758e0d4ce6824a2920be2d32171a72dbc`.
+- [Checked CI 39394548668](https://github.com/johncollinsgit/TimberLine/actions/runs/39394548668)
+  passed 4,093 PHP / 29,247 assertions, 8 settings and 34 public browser checks, 55 actual MySQL
+  recovery cases / 352 assertions with zero recovery skips, baseline/upgrade and
+  concurrency checks. Three normal-suite skips were deliberate fixture exports.
+  Final deploy Test/Build and Migration jobs reused this identical checked tree;
+  they were skipped rather than executed again. Live public GET/HEAD smoke passed 22.
+- Marketplace's eight effective launch/collection flags remained off and host unset;
+  Teams rollout stayed unchanged. A private gzip-verified pre-M backup was retained.
+  That release did not perform a production-backup data restore drill.
+- The immutable post-release audit scored 87.3 provisional (original 75.3), with
+  R4/I2/X3 unknown at that audit. Subsequent evidence is evaluated in a new audit;
+  neither accepted score is rewritten.
+
+The planning statements below are retained as historical context. In particular,
+references to pending combined CI or preserved candidates are not current release
+status and are not authority to replay the old branches.
+
+## Historical planning sequence
 
 The PC and Mac sessions share one serialized integration/release owner. The
 coordinator uses an isolated clone; original worktrees, source branches, dirty
@@ -43,12 +75,12 @@ and `MarketplaceMySqlRecoveryTest`. Both steps explicitly opt into the isolated
 Teams recovery fixture with `TEAM_WORK_DISPOSABLE_MYSQL=1`; naming a skipped test
 is not execution evidence. Deployment logs must show actual recovery cases pass.
 
-## Remaining releases and acceptance
+## Historical planned follow-ups and continuing acceptance boundaries
 
-Preserved independent quality candidates are settings `dc57b1de`, electrician
-intake `1a6f1af0`, then truthful health `63e48025`. Integrate and verify each final
-combined tree, merge and deploy one at a time, and confirm exact `/ready` before
-the next release. Request a fresh live audit only after all released heads are live.
+The preserved independent candidates were settings `dc57b1de`, electrician
+intake `1a6f1af0`, then truthful health `63e48025`. They were integrated into #439 and verified at
+the checkpoint above. Future changes still require serialized exact-tree CI,
+protected deployment and exact `/ready`, followed by a separately versioned audit.
 
 The original rubric remains unchanged: baseline 75.3 provisional, rubric SHA-256
 `f4ecefe6861587da7b611eca3a7016f9597f74d8037b276a507eaa701ac71048`.

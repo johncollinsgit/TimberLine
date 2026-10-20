@@ -225,6 +225,22 @@ remain behaviorally isolated.
 - Use the same token system and typography as landing/admin.
 - Maintain clear, plain-English login labels and helper text.
 
+## Assigned advanced software in settings
+
+- Your branches shows recorded premium assignment separately from public or
+  purchasable catalog visibility. Internal software stays internal.
+- Recorded access is informational, not permission, purchase or provider/payment
+  readiness. Effective module access and each product's existing workspace policy
+  must authorize any Open link; its own primary workspace must be configured.
+- Keep Teams components independent. A configured optional tool cannot open an
+  unfinished primary workspace or imply another tool is assigned.
+- Show Waiting for rollout, Setup needed, Access managed by owner, Workspace
+  available and Unable to confirm distinctly. Verification failures cannot become
+  false ownership; summaries contain no billing/source/credential/financial data.
+- Use existing tabs and short native details for next steps. No purchase/activation
+  action is introduced by assigned-product summaries. Provider and payment setup
+  remain independently reviewed.
+
 ## Documentation Maintenance Rules
 - Any UI-affecting change must update:
   - `docs/ui/UI_CHANGELOG.md`

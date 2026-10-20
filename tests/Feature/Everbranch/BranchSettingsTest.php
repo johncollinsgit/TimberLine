@@ -69,7 +69,18 @@ test('export synthetic branch settings browser fixtures', function (string $name
         $this->markTestSkipped('Fixture export is opt-in for isolated browser verification.');
     }
     $this->withVite();
-    [$tenant, $user] = branchSettingsFixture($name === 'owner' ? 'admin' : 'member', $name === 'owner' ? 'owner' : 'member');
+    [$tenant, $user] = branchSettingsFixture(in_array($name, ['owner', 'premium-owner', 'premium-unknown'], true) ? 'admin' : 'member', in_array($name, ['owner', 'premium-owner', 'premium-unknown'], true) ? 'owner' : 'member');
+    if (str_starts_with($name, 'premium-')) {
+        foreach (['team_work', 'teams_wholesale_workspace', 'markets_and_makers', 'trajectory'] as $key) {
+            TenantModuleEntitlement::create(['tenant_id' => $tenant->id, 'module_key' => $key, 'enabled_status' => 'enabled', 'availability_status' => 'available', 'billing_status' => 'included']);
+            \App\Models\TenantModuleState::create(['tenant_id' => $tenant->id, 'module_key' => $key, 'setup_status' => $key === 'teams_wholesale_workspace' ? 'not_started' : 'configured']);
+        }
+        config(['team_work.enabled' => true, 'team_work.tenant_allowlist' => [(string) $tenant->id], 'trajectory.enabled' => true, 'marketplace.enabled' => false]);
+        \App\Models\Trajectory\Space::create(['tenant_id' => $tenant->id, 'owner_user_id' => $user->id, 'kind' => 'business', 'name' => 'Private synthetic finance space', 'enabled' => true]);
+        if ($name === 'premium-unknown') {
+            config()->set('module_catalog.offers.standard.premium_products.2.module_keys', ['invalid_fixture_mapping']);
+        }
+    }
     TenantModuleAccessRequest::query()->create(['tenant_id' => $tenant->id, 'module_key' => 'diagnostics_advanced', 'status' => 'pending', 'requested_by' => $user->id, 'source' => 'test']);
     $directory = storage_path('framework/testing/branch-settings');
     if (! is_dir($directory)) {
@@ -79,4 +90,4 @@ test('export synthetic branch settings browser fixtures', function (string $name
     $response->assertOk();
     file_put_contents($directory.'/'.$name.'.html', $response->getContent());
     Http::assertNothingSent();
-})->with(['owner', 'member']);
+})->with(['owner', 'member', 'premium-owner', 'premium-member', 'premium-unknown']);

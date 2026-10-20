@@ -1,0 +1,36 @@
+{
+  "validation": "PASS",
+  "checked_docs": [
+    {
+      "path": "README.md",
+      "new_local_links_resolve": true
+    },
+    {
+      "path": "SYSTEM_SNAPSHOT.md",
+      "new_local_links_resolve": true
+    },
+    {
+      "path": "README_FOR_AGENTS.md",
+      "new_local_links_resolve": true
+    },
+    {
+      "path": "docs/operations/coordinated-release-2026-10-20.md",
+      "new_local_links_resolve": true
+    },
+    {
+      "path": "docs/operations/standard-public-offer.md",
+      "new_local_links_resolve": true
+    },
+    {
+      "path": "docs/operations/everbranch-current-state.md",
+      "new_local_links_resolve": true
+    },
+    {
+      "path": "docs/ui/UI_CHANGELOG.md",
+      "new_local_links_resolve": true
+    }
+  ],
+  "current_checkpoint_is_dated": true,
+  "immutable_audit_branch_preserved": true,
+  "new_score_claimed": false
+}

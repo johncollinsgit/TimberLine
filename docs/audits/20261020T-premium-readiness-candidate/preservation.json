@@ -1,0 +1,70 @@
+{
+  "released_base": "00acdc1b05b04e81356c53601f6a6f653dd6f843",
+  "unchanged_authority_files": [
+    {
+      "path": "config/module_catalog.php",
+      "sha256": "f9fc20ea1f6daeadfa734e7a32ff5771f6342d574a6304af0c8c2d7b24da1ae5",
+      "unchanged_from_released_base": true
+    },
+    {
+      "path": "config/team_work.php",
+      "sha256": "a00a73924f1e0a0caed7f51254347185db88d08b6bf5d4d9e620a3273192d9ae",
+      "unchanged_from_released_base": true
+    },
+    {
+      "path": "config/marketplace.php",
+      "sha256": "200a36bcbb870502b91f8d6be1f6ca7bf25233d7b9e8fe80d4616dac5599a11e",
+      "unchanged_from_released_base": true
+    },
+    {
+      "path": "config/trajectory.php",
+      "sha256": "858bc340328ce7aae5d0643c5cb268ce99fb3af2ca50c801399200a4fa6adff0",
+      "unchanged_from_released_base": true
+    },
+    {
+      "path": "app/Providers/AppServiceProvider.php",
+      "sha256": "4c2188e800e31796ee24cf5d3c45a89e74e3811da3f858e789ade25baef45c54",
+      "unchanged_from_released_base": true
+    },
+    {
+      "path": "app/Services/Team/TeamWorkAccess.php",
+      "sha256": "0c2ad9e79cfa8118eac86194a14ec7cbb0c623e5bf7b987693934e5955801121",
+      "unchanged_from_released_base": true
+    },
+    {
+      "path": "app/Services/Trajectory/FinanceAccess.php",
+      "sha256": "4e1271ba6f70278fe3b24e4b0ee41023ce26d52a73a8dfff2bcddb5392c58553",
+      "unchanged_from_released_base": true
+    },
+    {
+      "path": "app/Services/Marketplace/MarketplaceAccess.php",
+      "sha256": "6526a5a1603b75010afef9cebd3c18d4f09cf5dcbdeb13ba5bbeb173404706e0",
+      "unchanged_from_released_base": true
+    },
+    {
+      "path": "app/Services/Tenancy/TenantFinancialAccess.php",
+      "sha256": "42760568e8a17a48577d38a3fb29281dcc4d0e920d88558e159a9469b43a896f",
+      "unchanged_from_released_base": true
+    },
+    {
+      "path": "routes/marketplace.php",
+      "sha256": "9cb6f61d11f90018c8f702c2ea85c7e2ab588e9fd620649e905523aa874f33b5",
+      "unchanged_from_released_base": true
+    },
+    {
+      "path": "routes/team.php",
+      "sha256": "87a11e328d8a8f6b97018dd233c92382d514a5d6667f23f153332d69f0815065",
+      "unchanged_from_released_base": true
+    },
+    {
+      "path": "routes/trajectory.php",
+      "sha256": "a9d49c73ca7069c858b76639b338a1ff330b329907e75fa401aa01b76e173245",
+      "unchanged_from_released_base": true
+    }
+  ],
+  "canAccess_method_sha256": "8f366cc16c9c620eb4e489d4698570c4f5f6aa0b87cb25792940efbf9f48f54a",
+  "canAccess_method_unchanged": true,
+  "original_dirty_diff_sha256": "b3a08d4f7b42156b1ad3df2879f63104110c56673354b7879e82c8ed33dbc874",
+  "immutable_87_3_audit_commit": "fb2a5550e177e18aebbe755440ad55ec09625b34",
+  "no_production_operations": "This task used no production config, provider, message, merge or deployment mutation; coordinator owns release."
+}

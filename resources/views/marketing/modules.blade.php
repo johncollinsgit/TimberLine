@@ -85,6 +85,9 @@
         $readyCount = $moduleCards->filter(fn (array $card): bool => $card['ready'])->count();
         $setupCount = $moduleCards->where('needs_setup', true)->count();
         $pendingCount = $moduleCards->where('pending', true)->count();
+        $premiumRows = collect((array) ($premiumProducts ?? []));
+        $premiumOwnedCount = $premiumRows->whereStrict('owned', true)->count();
+        $premiumAttentionCount = $premiumRows->whereStrict('owned', true)->where('needs_attention', true)->count();
     @endphp
 
     <style>
@@ -156,6 +159,11 @@
         .branch-directory__summary dd { margin: .4rem 0 0; font-size: 1.65rem; font-weight: 650; }
         .branch-directory__premium-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin: 1rem 0 2rem; }
         .branch-directory__premium h3 { font-size: 1rem; margin: 0; }
+        .branch-directory__premium details { margin: .8rem 0; font-size: .85rem; line-height: 1.5; }
+        .branch-directory__premium summary { cursor: pointer; min-height: 44px; color: #234046; }
+        .branch-directory__premium .branch-directory__button { display: inline-flex; align-items: center; min-height: 44px; }
+        @media (max-width: 1100px) { .branch-directory__premium-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        .branch-directory__premium summary:focus-visible { outline: 3px solid #173e3b; outline-offset: 3px; }
         .branch-directory__premium p { margin: .5rem 0 1rem; font-size: .86rem; line-height: 1.5; color: #526562; }
         dialog.branch-directory__backdrop { border: 0; background: transparent; margin: 0; max-width: none; max-height: none; width: 100vw; height: 100dvh; }
         dialog.branch-directory__backdrop:not([open]) { display: none; }
@@ -229,10 +237,15 @@
         <section id="branch-panel-plan" class="branch-directory__overview" role="tabpanel" aria-labelledby="branch-tab-plan" x-show="tab === 'plan'">
             <div><h2>{{ $currentPlan['label'] ?? 'Your current package' }}</h2><p>Your current workspace package. Your signed agreement defines pricing, usage and any additional services.</p></div>
             <dl class="branch-directory__summary">
-                <div><dt>Ready branches</dt><dd>{{ $readyCount }}</dd></div>
-                <div><dt>Need setup</dt><dd>{{ $setupCount }}</dd></div>
+                <div><dt>Ready core branches</dt><dd>{{ $readyCount }}</dd></div>
+                <div><dt>Core branches needing setup</dt><dd>{{ $setupCount }}</dd></div>
                 <div><dt>Awaiting review</dt><dd>{{ $pendingCount }}</dd></div>
             </dl>
+            @if($premiumSummaryKnown ?? true)
+                <p>{{ $premiumOwnedCount }} advanced {{ $premiumOwnedCount === 1 ? 'product is' : 'products are' }} part of this workspace. {{ $premiumAttentionCount }} {{ $premiumAttentionCount === 1 ? 'needs' : 'need' }} attention.</p>
+            @else
+                <p>Advanced software status needs review. Open Your branches to see the next step.</p>
+            @endif
             <div class="branch-directory__header-links">
                 @if($canViewAgreement ?? false)
                     <a href="{{ route('agreements.index') }}">Review your agreement and receipts</a>
@@ -248,14 +261,36 @@
             @unless($canManage)
                 <p class="branch-directory__copy">You can review this workspace. Ask your workspace administrator to make changes.</p>
             @endunless
-            <div x-show="tab === 'add'">
-                <h2 class="text-xl font-semibold">Separate premium software</h2>
-                <p>Teams, Trajectory, and Markets &amp; Makers have separate pricing and a review before activation.</p>
-                <div class="branch-directory__premium-grid">
-                    @foreach((array) ($premiumProducts ?? []) as $product)
-                        <article class="branch-directory__premium"><h3>{{ $product['name'] }}</h3><p>Separate pricing. We will review your needs and terms with you.</p>@if($canRequestSoftware ?? false)<a class="branch-directory__button branch-directory__button--quiet" href="{{ route('custom-module-requests.create') }}">Discuss this software</a>@else<p>Ask your workspace administrator to discuss this software.</p>@endif</article>
-                    @endforeach
-                </div>
+            <div x-show="tab === 'add'"><h2 class="text-xl font-semibold">Separate premium software</h2><p>Teams, Trajectory, and Markets &amp; Makers have separate pricing and a review before activation.</p></div>
+            <div x-show="tab === 'branches'"><h2 class="text-xl font-semibold">Your advanced software</h2><p>See what is part of this workspace and what still needs attention.</p></div>
+            @unless($premiumSummaryKnown ?? true)
+                <p role="status">Software status could not be confirmed. Ask your workspace owner or try again.</p>
+            @endunless
+            @if(($premiumSummaryKnown ?? true) && $premiumOwnedCount === 0)
+                <p x-show="tab === 'branches'">No advanced software is assigned to this workspace. Review the choices in Add software.</p>
+            @elseif(($premiumSummaryKnown ?? true) && $premiumOwnedCount === $premiumRows->count())
+                <p x-show="tab === 'add'">Your advanced software is already listed in Your branches.</p>
+            @endif
+            <div class="branch-directory__premium-grid" aria-label="Advanced software status">
+                @foreach((array) ($premiumProducts ?? []) as $product)
+                    <article class="branch-directory__premium" data-premium-product="{{ $product['key'] }}" data-premium-owned="{{ $product['owned'] === null ? 'unknown' : ($product['owned'] ? '1' : '0') }}" data-premium-state="{{ $product['state'] }}"
+                        x-show="tab === 'add' ? {{ $product['owned'] !== true ? 'true' : 'false' }} : tab === 'setup' ? {{ $product['needs_attention'] ? 'true' : 'false' }} : {{ $product['owned'] !== false ? 'true' : 'false' }}">
+                        <h3>{{ $product['name'] }}</h3>
+                        <p><strong>{{ $product['state_label'] }}</strong></p>
+                        <p>{{ $product['description'] }}</p>
+                        <details><summary>What happens next</summary>
+                            @if($product['components'] !== [])
+                                <ul>@foreach($product['components'] as $component)<li>{{ $component['name'] }} · {{ $component['label'] }}</li>@endforeach</ul>
+                            @endif
+                            <p>Workspace access does not confirm payment setup or external connections. Your workspace owner can review those separately.</p>
+                        </details>
+                        @if($product['open_url'])
+                            <a class="branch-directory__button branch-directory__button--quiet" href="{{ $product['open_url'] }}">Open {{ $product['name'] }}</a>
+                        @elseif($product['owned'] === false && ($canRequestSoftware ?? false))
+                            <a class="branch-directory__button branch-directory__button--quiet" href="{{ route('custom-module-requests.create') }}">Discuss this software</a>
+                        @endif
+                    </article>
+                @endforeach
             </div>
             <div x-show="tab === 'setup'"><h2 class="text-xl font-semibold">One step at a time.</h2><p>Finish the branches below, or check the requests awaiting review. Open a setup guide to see what you need and what happens next.</p></div>
         <div class="branch-directory__layout">
@@ -274,7 +309,7 @@
 
             <main aria-live="polite" aria-atomic="true">
                 <div class="branch-directory__result-head">
-                    <div><h2 x-text="tab === 'branches' ? 'Your branches' : tab === 'setup' ? 'Setup and requests' : 'Browse Branches'">Browse Branches</h2><p x-text="visibleCount + (visibleCount === 1 ? ' Branch' : ' Branches') + ' shown'"></p></div>
+                    <div><h2 x-text="tab === 'branches' ? 'Your core branches' : tab === 'setup' ? 'Setup and requests' : 'Browse Branches'">Browse Branches</h2><p x-text="visibleCount + (visibleCount === 1 ? ' Branch' : ' Branches') + ' shown'"></p></div>
                     <p>{{ $currentPlan['label'] ?? 'Your current plan' }}</p>
                 </div>
                 <div class="branch-directory__grid">
@@ -314,7 +349,7 @@
                     @endforeach
                 </div>
                 <div class="branch-directory__empty" x-show="visibleCount === 0" x-cloak>
-                    No branches match this view. Try another category or tab; your workspace may already be set up.
+                    No core branches match this view. Try another category or tab.
                 </div>
             </main>
         </div>
