@@ -123,3 +123,61 @@ test('maker withdrawal immediately holds uncollected pickup orders for owner rev
     expect($order->fresh()->review_required)->toBeTrue()->and(app(MarketplaceMarkets::class)->pickupAvailable($f['maker'], $pickup->id))->toBeFalse();
     $this->actingAs($f['owner'])->get('https://app.theeverbranch.test/marketplace/operations?tab=pickups')->assertOk()->assertSee('A maker withdrew');
 });
+
+test('all operator destinations preserve filters and the maker console remains separate from staff membership', function (): void {
+    $f = marketAdminFixture();
+    marketTestSale($f);
+    foreach (array_keys(array_merge(...array_values(\App\Services\Marketplace\MarketplaceManagementPresentation::groups()))) as $tab) {
+        $this->actingAs($f['owner'])->get('https://app.theeverbranch.test/marketplace/operations?tab='.$tab.'&from=2026-10-01&to=2026-10-31')->assertOk()->assertSee('mm-sidebar', false)->assertSee('from=2026-10-01', false);
+    }
+    $this->withSession(['marketplace_identity' => $f['identity']->id])->get('https://marketsandmakers.test/maker/'.$f['maker']->id)->assertOk()->assertSeeText('No Everbranch subscription required')->assertSeeText('Your products')->assertDontSeeText('Account & security');
+    $this->assertDatabaseCount('tenant_user', 1);
+    Http::assertNothingSent();
+});
+
+test('export marketplace management browser fixtures', function (): void {
+    if (! getenv('MARKETPLACE_CONSOLE_FIXTURES')) {
+        $this->markTestSkipped('Synthetic rendered fixtures are opt-in for isolated browser checks.');
+    }
+    $this->withVite();
+    $directory = storage_path('framework/testing/marketplace-console');
+    if (! is_dir($directory)) {
+        mkdir($directory, 0755, true);
+    }
+    $f = marketAdminFixture();
+    $f['listing']->update(['images' => ['/images/marketplace/studio.jpg']]);
+    $order = marketTestSale($f);
+    $order->update(['review_required' => true, 'review_reason' => 'Fictional operator review hold']);
+    \App\Models\Marketplace\Statement::create(['uuid' => (string) Str::uuid(), 'maker_id' => $f['maker']->id, 'status' => 'review', 'amount_cents' => 8500]);
+    $this->actingAs($f['owner']);
+    foreach (array_keys(array_merge(...array_values(\App\Services\Marketplace\MarketplaceManagementPresentation::groups()))) as $tab) {
+        $response = $this->get('https://app.theeverbranch.test/marketplace/operations?tab='.$tab)->assertOk();
+        file_put_contents($directory.'/operator-'.$tab.'.html', $response->getContent());
+    }
+    $response = $this->get('https://app.theeverbranch.test/marketplace/operations/makers/'.$f['maker']->id)->assertOk();
+    file_put_contents($directory.'/operator-maker.html', $response->getContent());
+    $response = $this->withSession(['marketplace_identity' => $f['identity']->id])->get('https://marketsandmakers.test/maker/'.$f['maker']->id)->assertOk();
+    file_put_contents($directory.'/maker.html', $response->getContent());
+    $response = $this->get('https://marketsandmakers.test/')->assertOk();
+    file_put_contents($directory.'/shopper.html', $response->getContent());
+    config(['marketplace.account_preview_user_ids' => [$f['owner']->id], 'marketplace.enabled' => false, 'marketplace.checkout_enabled' => false, 'marketplace.host' => '']);
+    foreach (array_keys(array_merge(...array_values(\App\Services\Marketplace\MarketplaceManagementPresentation::groups()))) as $tab) {
+        $response = $this->get('https://app.theeverbranch.test/marketplace/preview?tab='.$tab)->assertOk();
+        file_put_contents($directory.'/preview-'.$tab.'.html', $response->getContent());
+    }
+    Http::assertNothingSent();
+});
+
+test('management reads confirmed business context and existing branding without initializing profiles', function (): void {
+    $f = marketAdminFixture();
+    \App\Models\TenantAccessProfile::create(['tenant_id' => $f['tenant']->id, 'plan_key' => 'base', 'operating_mode' => 'direct', 'metadata' => ['tenant_blueprint' => ['company_context' => ['category' => 'retail', 'specialty' => 'Fictional maker marketplace', 'model' => 'products', 'confirmed_at' => now()->toIso8601String()]]]]);
+    $this->actingAs($f['owner'])->get('https://app.theeverbranch.test/marketplace/operations')->assertOk()->assertSeeText('Fictional maker marketplace');
+    $this->assertDatabaseCount('tenant_brand_profiles', 0);
+    $brand = app(\App\Services\Tenancy\TenantBrandProfileService::class)->ensureForTenant($f['tenant'], $f['owner']);
+    $brand->update(['display_name' => 'Fictional Collective']);
+    $this->get('https://app.theeverbranch.test/marketplace/operations')->assertOk()->assertSeeText('Fictional Collective');
+    $this->assertDatabaseCount('tenant_brand_profiles', 1);
+    $response = $this->get('https://app.theeverbranch.test/marketplace/operations/makers/'.$f['maker']->id.'?q=Fieldwork&status=approved&detail=maker-'.$f['maker']->id.'&from=2026-10-01&to=2026-10-31')->assertOk();
+    $response->assertSee('q=Fieldwork', false)->assertSee('status=approved', false)->assertSee('detail=maker-'.$f['maker']->id, false);
+    Http::assertNothingSent();
+});
