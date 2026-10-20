@@ -127,6 +127,16 @@ class SesMigrationSafetyTest extends TestCase
         }
     }
 
+    public function test_production_rejects_a_cache_that_can_fall_back_to_process_memory(): void
+    {
+        [$delivery, $message, $config] = $this->fixture();
+        $this->app->instance('env', 'production');
+        config(['cache.default' => 'failover']);
+        $provider = $this->provider(fn () => throw new RuntimeException('Must not send'));
+        $this->assertSame('ses_delivery_not_ready', $provider->sendEmail($message, $config)['error_code']);
+        $this->assertNull(data_get($delivery->fresh()->metadata, 'ses_attempt'));
+    }
+
     public function test_native_tenant_binding_and_durable_delivery_are_required(): void
     {
         [$delivery, $message, $config] = $this->fixture();

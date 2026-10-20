@@ -112,7 +112,8 @@ class SesSendSafety
     /** Shared cache required in production; all attempted sends consume capacity. */
     public function admit(int $tenantId): bool
     {
-        if (app()->isProduction() && in_array(config('cache.default'), ['array', 'file', 'null'], true)) {
+        $driver = config('cache.stores.'.config('cache.default').'.driver');
+        if (app()->isProduction() && ! in_array($driver, ['database', 'redis'], true)) {
             throw new RuntimeException('SES requires a shared persistent cache for attempt caps.');
         }
 
