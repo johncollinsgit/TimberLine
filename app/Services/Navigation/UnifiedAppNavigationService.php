@@ -317,8 +317,11 @@ class UnifiedAppNavigationService
             ];
         }
 
+        if ($tenant && $user) {
+            $items[] = ['key' => 'workspace-settings', 'icon' => 'cog-6-tooth', 'href' => route('workspace-settings.index', ['tenant' => $tenant->slug]), 'label' => 'Settings', 'current' => request()->routeIs('workspace-settings.*')];
+        }
         if ($canAccessOps) {
-            $items[] = ['key' => 'administration', 'icon' => 'cog-6-tooth', 'href' => route('admin.index'), 'label' => 'Settings', 'current' => request()->routeIs('admin.*')];
+            $items[] = ['key' => 'administration', 'icon' => 'adjustments-horizontal', 'href' => route('admin.index'), 'label' => 'Administration', 'current' => request()->routeIs('admin.*')];
             if ($tenantId !== null && Route::has('agreements.index')) {
                 $items[] = ['key' => 'user-agreements', 'icon' => 'document-check', 'href' => route('agreements.index', ['tenant' => $tenant?->slug]), 'label' => 'User Agreements', 'current' => request()->routeIs('agreements.*')];
             }
@@ -404,6 +407,7 @@ class UnifiedAppNavigationService
             $add('payments', 'Payments', 'tenant-payments.index', 'credit-card');
         }
         $add('account-help', 'Account Help', 'account-help.index', 'lifebuoy');
+        $add('workspace-settings', 'Settings', 'workspace-settings.index', 'cog-6-tooth');
         $quickActions = array_map(fn (array $item): array => [
             'label' => $item['label'], 'description' => 'Open '.$item['label'].'.', 'href' => $item['href'],
         ], array_values(array_filter($items, fn (array $item): bool => in_array($item['key'], ['project-checklist', 'website', 'website-products'], true))));
@@ -735,16 +739,15 @@ class UnifiedAppNavigationService
      */
     protected function pinTenantSettingsLast(array $items): array
     {
-        $settings = collect($items)->first(
-            fn (array $item): bool => (string) ($item['key'] ?? '') === 'administration'
-        );
+        $settings = collect($items)->first(fn (array $item): bool => (string) ($item['key'] ?? '') === 'workspace-settings')
+            ?? collect($items)->first(fn (array $item): bool => (string) ($item['key'] ?? '') === 'administration');
 
         if (! is_array($settings)) {
             return $items;
         }
 
         return collect($items)
-            ->reject(fn (array $item): bool => (string) ($item['key'] ?? '') === 'administration')
+            ->reject(fn (array $item): bool => (string) ($item['key'] ?? '') === (string) $settings['key'])
             ->push($settings)
             ->values()
             ->all();

@@ -88,6 +88,7 @@ jobs:
       - name: Verify workspace branch settings in Chromium and WebKit
         run: |
           BRANCH_SETTINGS_FIXTURES=1 php vendor/bin/pest --compact tests/Feature/Everbranch/BranchSettingsTest.php
+          GUIDED_SETTINGS_FIXTURES=1 php vendor/bin/pest --compact tests/Feature/Onboarding/WorkspaceSettingsTest.php
           npx playwright test -c playwright.branches.config.ts
 
       - name: Verify public offer and accessibility in Chromium and WebKit

@@ -51,6 +51,7 @@
 @endphp
 
 <x-layouts::app.sidebar title="Start Here">
+    <div class="mx-auto my-5 max-w-5xl px-4"><a class="inline-flex min-h-11 items-center rounded-lg bg-emerald-900 px-5 py-3 font-semibold text-white" href="{{ route('workspace-settings.setup', ['tenant' => $tenant->slug]) }}">Open your tailored setup guide →</a></div>
     <flux:main>
         <div class="fb-workflow-shell">
             @if($showGuidedFirstLogin)

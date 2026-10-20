@@ -12,6 +12,8 @@ export default defineConfig(() => ({
         'resources/css/marketplace.css',
         'resources/js/marketplace-wallet.js',
         'resources/js/app.js',
+        'resources/js/workspace-settings.js',
+        'resources/js/workspace-draft.js',
         'resources/js/team/app.js',
         'resources/js/tenant-payment-setup.js',
         'resources/css/evergrove-booking.css',

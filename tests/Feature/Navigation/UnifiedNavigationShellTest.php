@@ -120,7 +120,7 @@ test('tenant settings stays immediately above workspace guide', function () {
 
     $agreements = strpos($html, 'data-sidebar-key="user-agreements"');
     $help = strpos($html, 'data-sidebar-key="account-help"');
-    $settings = strpos($html, 'data-sidebar-key="administration"');
+    $settings = strpos($html, 'data-sidebar-key="workspace-settings"');
     $guide = strpos($html, 'data-sidebar-key="wiki-sections"');
 
     expect($agreements)->not->toBeFalse()

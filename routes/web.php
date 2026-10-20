@@ -930,6 +930,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('/workspace/create', [FirstLoginWorkspaceController::class, 'show'])
         ->name('workspace.first-login');
+    Route::put('/workspace/create/draft', [FirstLoginWorkspaceController::class, 'saveDraft'])->middleware('throttle:30,1')->name('workspace.first-login.draft');
     Route::post('/workspace/create', [FirstLoginWorkspaceController::class, 'store'])
         ->name('workspace.first-login.store');
 
@@ -1060,6 +1061,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/paypal/return', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'paypalReturn'])->middleware('throttle:10,1')->name('paypal.return');
         Route::post('/paypal/refresh', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'paypalRefresh'])->middleware('throttle:5,1')->name('paypal.refresh');
         Route::post('/paypal/disconnect', [\App\Http\Controllers\Billing\TenantPaymentSetupController::class, 'paypalDisconnect'])->name('paypal.disconnect');
+    });
+
+    Route::middleware(['tenant.access'])->prefix('workspace')->name('workspace-settings.')->controller(\App\Http\Controllers\WorkspaceSettingsController::class)->group(function (): void {
+        Route::get('/settings', 'index')->name('index');
+        Route::get('/settings/business', 'business')->name('business');
+        Route::put('/settings/business', 'saveBusiness')->name('business.save');
+        Route::get('/setup', 'setup')->name('setup');
+        Route::put('/setup/preferences', 'preferences')->name('preferences');
     });
 
     // Canonical onboarding wizard UI (authenticated, tenant-aware). Uses the onboarding API seams; no redirects.

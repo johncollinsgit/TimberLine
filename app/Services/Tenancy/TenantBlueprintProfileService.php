@@ -50,6 +50,43 @@ class TenantBlueprintProfileService
         'archived' => 'Archived',
     ];
 
+    /** Confirmed customer context lives with the existing business blueprint. */
+    public function companyContext(Tenant $tenant): array
+    {
+        $metadata = $tenant->accessProfile?->metadata ?? [];
+        $context = (array) data_get($metadata, 'tenant_blueprint.company_context', []);
+
+        return array_intersect_key($context, array_flip(['category', 'specialty', 'description', 'model', 'channels', 'customer_types', 'goal', 'confirmed_at']));
+    }
+
+    public function companyContextRevision(Tenant $tenant): string
+    {
+        return hash('sha256', json_encode($this->companyContext($tenant), JSON_THROW_ON_ERROR));
+    }
+
+    /** Updates guidance only; preserve labels, grants, operating mode and accepted terms. */
+    public function saveCompanyContext(Tenant $tenant, User $actor, array $context, string $revision, bool $confirmed = true): void
+    {
+        abort_unless($actor->is_active !== false && $actor->email_verified_at && $actor->tenants()->whereKey($tenant->id)->wherePivot('membership_active', true)->exists()
+            && app(TenantFinancialAccess::class)->allows($actor, $tenant), 403);
+        \Illuminate\Support\Facades\DB::transaction(function () use ($tenant, $actor, $context, $revision, $confirmed): void {
+            $profile = TenantAccessProfile::query()->where('tenant_id', $tenant->id)->lockForUpdate()->firstOrFail();
+            $tenant->setRelation('accessProfile', $profile);
+            if (! hash_equals($this->companyContextRevision($tenant), $revision)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['revision' => 'Your business profile changed in another session. Reload this page before saving again.']);
+            }
+            $metadata = (array) $profile->metadata;
+            data_set($metadata, 'tenant_blueprint.company_context', [...$context, 'confirmed_at' => $confirmed ? now()->toIso8601String() : null]);
+            $profile->metadata = $metadata;
+            $profile->save();
+            app(LandlordOperatorActionAuditService::class)->record(
+                tenantId: $tenant->id, actorUserId: $actor->id, actionType: 'tenant.business_profile.updated',
+                targetType: 'tenant_access_profile', targetId: $profile->id,
+                context: ['changed_fields' => array_keys($context), 'guidance_only' => true]
+            );
+        });
+    }
+
     /**
      * @return array<string,string>
      */
@@ -256,6 +293,7 @@ class TenantBlueprintProfileService
             : $existingBlueprint;
 
         $metadata['account_mode'] = $this->optionOrDefault($accountMode, array_keys($this->accountModeOptions()), 'production');
+        $companyContext = data_get($metadata, 'tenant_blueprint.company_context');
         $metadata['tenant_blueprint'] = $this->withReviewMetadata(
             blueprint: $blueprint,
             input: [],
@@ -263,6 +301,9 @@ class TenantBlueprintProfileService
             operator: null
         );
 
+        if (is_array($companyContext)) {
+            $metadata['tenant_blueprint']['company_context'] = $companyContext;
+        }
         $profile->metadata = $metadata;
         $profile->operating_mode = (string) ($metadata['tenant_blueprint']['operating_mode'] ?? $profile->operating_mode ?? 'custom_or_unknown');
         $profile->save();

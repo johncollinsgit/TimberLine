@@ -97,8 +97,13 @@ class TenantExperienceProfileService
         );
 
         $workspaceFocus = $this->workspaceFocusForTenant($tenantId);
+        $companyContext = app(TenantBlueprintProfileService::class)->companyContext($tenant ?? new Tenant);
         $powerUserMode = $this->powerUserMode($user);
         $workspace = $this->workspacePresentation($channelType, $useCaseProfile, $powerUserMode);
+
+        if (filled($companyContext['confirmed_at'] ?? null)) {
+            $workspace['subtitle'] = 'Tools and next steps for '.(($companyContext['specialty'] ?? '') ?: config('workspace_setup.categories.'.($companyContext['category'] ?? ''), 'your organization')).'.';
+        }
 
         if ($workspaceFocus === 'website_sales') {
             $workspace['label'] = 'Website & sales workspace';
@@ -106,6 +111,7 @@ class TenantExperienceProfileService
         }
 
         return $this->cache[$cacheKey] = [
+            'company_context' => array_intersect_key($companyContext, array_flip(['category', 'specialty', 'model', 'channels', 'customer_types', 'goal', 'confirmed_at'])),
             'workspace_focus' => $workspaceFocus,
             'tenant_id' => $tenantId,
             'tenant_name' => $tenant instanceof Tenant ? (string) $tenant->name : null,

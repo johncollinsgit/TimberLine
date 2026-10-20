@@ -57,6 +57,15 @@ class FirstLoginWorkspaceProvisioner
             &$tenantId,
             &$tenantSlug
         ): void {
+            // Serialize repeated submissions for the same account before creating anything.
+            $user = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+            $existing = $user->tenants()->orderBy('tenants.id')->first();
+            if ($existing) {
+                $tenantId = (int) $existing->id;
+                $tenantSlug = (string) $existing->slug;
+
+                return;
+            }
             if (! in_array((string) $user->role, ['admin', 'manager', 'marketing_manager', 'platform_admin'], true)) {
                 $user->forceFill([
                     'role' => 'admin',

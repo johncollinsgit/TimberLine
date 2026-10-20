@@ -1,3 +1,10 @@
+## 2026-10-20 — Guided workspace settings candidate
+
+- Add scoped categorized settings discovery with metadata-only search.
+- Save business context in three small steps with explicit save and stale-edit protection.
+- Separate organization evidence-based progress from personal optional reminders.
+- Preserve security forms, embedded Shopify routing, commercial terms and provider boundaries.
+
 ## 2026-10-20 - Private Marketplace account preview
 
 - Add an explicitly assigned account-only Markets & Makers console entry.
