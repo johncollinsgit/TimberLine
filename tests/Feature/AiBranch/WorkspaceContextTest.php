@@ -691,3 +691,24 @@ test('workspace daylight savings boundaries do not change UTC billing windows', 
     }
     expect(app(App\Services\AiBranch\AiBranchChat::class)->usage($tenant))->toBe(['responses' => 1, 'provider_micros' => 50, 'buyer_micros' => 0]);
 });
+
+test('confirmed company context refreshes scoped help without changing unconfirmed tenants or exposing descriptions', function () {
+    [$tenant, $user] = workspaceFixture('company-context');
+    [$other] = workspaceFixture('company-context-other');
+    $service = app(AiWorkspaceContext::class);
+    $initial = $service->stamp($tenant, $user);
+    $profile = $tenant->accessProfile;
+    $metadata = $profile->metadata;
+    $metadata['tenant_blueprint']['company_context'] = ['category' => 'field_service', 'specialty' => 'Electrical', 'model' => 'both', 'description' => 'PRIVATE DESCRIPTION', 'confirmed_at' => null];
+    $profile->update(['metadata' => $metadata]);
+    expect($service->stamp($tenant->fresh(), $user))->toBe($initial);
+    $metadata['tenant_blueprint']['company_context']['confirmed_at'] = now()->toIso8601String();
+    $profile->update(['metadata' => $metadata]);
+    expect($service->stamp($tenant->fresh(), $user))->not->toBe($initial);
+    $context = $service->profile($tenant->fresh(), $user);
+    expect($context['company_context'])->toMatchArray(['category' => 'field_service', 'specialty' => 'Electrical', 'model' => 'both'])
+        ->and(json_encode($context))->not->toContain('PRIVATE DESCRIPTION');
+    $otherUser = $other->users()->first();
+    expect($service->profile($other->fresh(), $otherUser))->not->toHaveKey('company_context');
+    Http::assertNothingSent();
+});

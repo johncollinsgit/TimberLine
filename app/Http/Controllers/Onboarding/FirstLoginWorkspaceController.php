@@ -29,11 +29,16 @@ class FirstLoginWorkspaceController extends Controller
             return redirect()->to(route('landlord.dashboard', absolute: false));
         }
 
+        $user->refresh();
+        $savedDraft = (array) data_get($user->onboarding_guide_answers, 'workspace_draft', []);
+        $draftFields = array_replace((array) ($savedDraft['fields'] ?? []), array_intersect_key((array) session()->getOldInput(), array_flip(['workspace_name', 'template_key', 'team_size', 'hardest_part', 'start_path', 'module_choices', 'owner_need'])));
+
         // New personable, popup-based flow (feature-flagged); falls back to the
         // original full-page guide while the flag is off.
         if (config('features.first_login_modal')) {
             return response()->view('onboarding.first-login-workspace', [
-                'workspaceName' => $this->defaultWorkspaceName($user),
+                'workspaceName' => filled($draftFields['workspace_name'] ?? null) ? $draftFields['workspace_name'] : $this->defaultWorkspaceName($user),
+                'draftAnswers' => $draftFields, 'draftRevision' => (int) ($savedDraft['revision'] ?? 0),
                 'businessTypes' => $this->businessTypeCards($blueprintService),
                 'teamSizes' => $this->teamSizeOptions(),
                 'hardestParts' => $this->hardestPartOptions(),
@@ -51,7 +56,8 @@ class FirstLoginWorkspaceController extends Controller
                 'hero_subtitle' => 'A guided setup for owners who have enough tabs open already.',
                 'hero_tagline' => 'Small business setup',
             ],
-            'workspaceName' => $this->defaultWorkspaceName($user),
+            'workspaceName' => filled($draftFields['workspace_name'] ?? null) ? $draftFields['workspace_name'] : $this->defaultWorkspaceName($user),
+            'draftAnswers' => $draftFields, 'draftRevision' => (int) ($savedDraft['revision'] ?? 0),
             'templateOptions' => $this->templateCards($options['business_templates'] ?? []),
             'defaultTemplateKey' => 'trades_electrical',
             'guideQuestions' => $this->guideQuestions(),
@@ -60,6 +66,42 @@ class FirstLoginWorkspaceController extends Controller
             'appointmentSlots' => $this->appointmentSlots(),
             'bookedAppointmentSlots' => $this->bookedAppointmentSlots(),
         ]);
+    }
+
+    /** Save only this account's questionnaire, never create a tenant or grant access. */
+    public function saveDraft(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($user instanceof User && $user->is_active !== false && $user->email_verified_at, 403);
+        $input = $request->validate([
+            'revision' => ['required', 'integer', 'min:0'],
+            'fields' => ['required', 'array:workspace_name,template_key,team_size,hardest_part,start_path,module_choices,owner_need,resume_step,surface'],
+            'fields.workspace_name' => ['nullable', 'string', 'max:120'],
+            'fields.template_key' => ['nullable', Rule::in($this->allowedTemplateKeys())],
+            'fields.team_size' => ['nullable', Rule::in(array_keys($this->teamSizeOptions()))],
+            'fields.hardest_part' => ['nullable', Rule::in(array_keys($this->hardestPartOptions()))],
+            'fields.start_path' => ['nullable', Rule::in(['guided', 'self'])],
+            'fields.module_choices' => ['nullable', 'array', 'max:20'],
+            'fields.module_choices.*' => [Rule::in(array_keys($this->moduleOptions()))],
+            'fields.owner_need' => ['nullable', 'array', 'max:4'],
+            'fields.owner_need.*' => [Rule::in(array_keys($this->ownerNeedOptions()))],
+            'fields.resume_step' => ['nullable', 'integer', 'between:0,7'],
+            'fields.surface' => ['required', Rule::in(['popup', 'page'])],
+        ]);
+        $revision = \Illuminate\Support\Facades\DB::transaction(function () use ($user, $input): int {
+            $locked = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+            abort_if($locked->tenants()->exists(), 409, 'This account already has a workspace.');
+            $answers = (array) $locked->onboarding_guide_answers;
+            $current = (int) data_get($answers, 'workspace_draft.revision', 0);
+            abort_unless($current === (int) $input['revision'], 409, 'This draft changed in another session. Reload to continue.');
+            $answers['workspace_draft'] = ['revision' => $current + 1, 'fields' => $input['fields']];
+            $locked->onboarding_guide_answers = $answers;
+            $locked->save();
+
+            return $current + 1;
+        });
+
+        return response()->json(['saved' => true, 'revision' => $revision]);
     }
 
     public function store(Request $request, FirstLoginWorkspaceProvisioner $provisioner): RedirectResponse
@@ -78,8 +120,8 @@ class FirstLoginWorkspaceController extends Controller
         $validated = $request->validate([
             'workspace_name' => ['required', 'string', 'max:120'],
             'template_key' => ['required', 'string', Rule::in($this->allowedTemplateKeys())],
-            'hardest_part' => ['required', 'string', Rule::in(array_keys($this->hardestPartOptions()))],
-            'team_size' => ['required', 'string', Rule::in(array_keys($this->teamSizeOptions()))],
+            'hardest_part' => ['nullable', 'string', Rule::in(array_keys($this->hardestPartOptions()))],
+            'team_size' => ['nullable', 'string', Rule::in(array_keys($this->teamSizeOptions()))],
             'owner_need' => ['nullable', 'array', 'max:4'],
             'owner_need.*' => ['string', Rule::in(array_keys($this->ownerNeedOptions()))],
             'start_path' => ['required', 'string', Rule::in(['guided', 'self'])],
@@ -252,8 +294,8 @@ class FirstLoginWorkspaceController extends Controller
      */
     protected function guideAnswerPayload(array $validated, array $selectedModuleKeys): array
     {
-        $hardestPart = (string) $validated['hardest_part'];
-        $teamSize = (string) $validated['team_size'];
+        $hardestPart = (string) ($validated['hardest_part'] ?? '');
+        $teamSize = (string) ($validated['team_size'] ?? '');
         $ownerNeeds = array_values(array_map('strval', (array) ($validated['owner_need'] ?? [])));
         $startPath = (string) $validated['start_path'];
         $appointmentSlot = trim((string) ($validated['appointment_slot'] ?? ''));

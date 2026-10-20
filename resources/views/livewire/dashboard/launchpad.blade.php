@@ -41,6 +41,7 @@
 @endphp
 
 <div class="mx-auto w-full max-w-[1800px] px-3 pb-4 pt-2 sm:px-4 sm:pb-6 sm:pt-3 md:px-6 min-w-0">
+    @include('workspace-settings.home-entry')
     <div class="space-y-4 min-w-0 {{ $showcaseWorkspace ? 'eb-dashboard-stack' : '' }}">
         <header class="eb-dashboard-header {{ $showcaseWorkspace ? 'eb-workspace-banner' : '' }}">
             @if(filled($workspacePresentation['photo'] ?? null))

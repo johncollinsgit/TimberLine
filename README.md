@@ -19,6 +19,13 @@ customer isolation, provider guardrails and recorded agreements remain in force.
 A deployed module or a passing synthetic test does not establish provider,
 collection, physical-device or production-backup recovery readiness.
 
+## Workspace setup and settings
+
+The [guided setup and settings map](docs/operations/workspace-settings-and-onboarding.md)
+describes saved business profiles, account-private questionnaire drafts, authorized
+settings search and record-based progress. Source changes require the normal
+protected release before being considered live.
+
 ## Company vehicle locator
 
 The Field Service Location Tracker shows selected company vans and their

@@ -22,7 +22,7 @@
         data-slide-count="{{ count($guideSlides) }}"
         class="-mx-4 -my-8 min-h-screen overflow-hidden bg-white text-zinc-950 sm:-mx-8 lg:-mx-16"
     >
-        <form method="POST" action="{{ route('workspace.first-login.store', absolute: false) }}" class="grid min-h-screen lg:grid-cols-[1.02fr_0.98fr]">
+        <form data-draft-url="{{ route('workspace.first-login.draft') }}" method="POST" action="{{ route('workspace.first-login.store', absolute: false) }}" class="grid min-h-screen lg:grid-cols-[1.02fr_0.98fr]">
             @csrf
 
             <input type="hidden" name="start_path" value="{{ $oldStartPath }}" data-start-path-input>
@@ -298,7 +298,8 @@
             const pathInput = root.querySelector('[data-start-path-input]');
             const progressDots = Array.from(root.querySelectorAll('[data-progress-dot]'));
             const slides = @json($guideSlides);
-            let step = 0;
+            const draft = @json($draftAnswers ?? []);
+            let step = draft.surface === 'page' ? Math.max(0, Math.min(4, Number(draft.resume_step) || 0)) : 0;
             let path = pathInput?.value === 'guided' ? 'guided' : 'self';
             let slide = 0;
 
@@ -342,6 +343,7 @@
                 });
 
                 renderSlides();
+                root.querySelector('form')?.dispatchEvent(new Event('workspace-draft-change'));
             }
 
             root.querySelectorAll('[data-path-choice]').forEach((button) => {
@@ -393,7 +395,23 @@
                 render();
             });
 
+            const form = root.querySelector('form');
+            const fields = ['workspace_name', 'template_key', 'team_size', 'hardest_part', 'module_choices', 'owner_need', 'start_path'];
+            form.querySelectorAll('[name]').forEach(input => {
+                const key = input.name.replace(/\[\]$/, '');
+                if (!fields.includes(key) || !(key in draft) || @json($errors->any())) return;
+                if (input.type === 'checkbox' || input.type === 'radio') input.checked = Array.isArray(draft[key]) ? draft[key].includes(input.value) : draft[key] === input.value;
+                else if (draft[key] !== null) input.value = draft[key];
+            });
+            path = pathInput?.value === 'guided' ? 'guided' : 'self';
+            const connectDraft = () => window.workspaceDraft(form, @json($draftRevision ?? 0), 'page', () => {
+                const data = new FormData(form), result = { resume_step: step };
+                fields.forEach(key => { result[key] = ['module_choices', 'owner_need'].includes(key) ? data.getAll(key + '[]') : data.get(key); });
+                return result;
+            });
+            if (window.workspaceDraft) connectDraft(); else window.addEventListener('workspace-draft-ready', connectDraft, { once: true });
             render();
         })();
     </script>
+@vite('resources/js/workspace-draft.js')
 </x-layouts::auth.simple>

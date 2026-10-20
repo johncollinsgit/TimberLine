@@ -1,0 +1,89 @@
+{
+  "base": "29703b4cbb82d67abc32c2f090a2551302979b39",
+  "branch": "codex/everbranch-guided-settings-20261020",
+  "captured_utc": "2026-10-20T17:01:21.173875+00:00",
+  "validation": {
+    "guided-settings-last-regression": [
+      "  Tests:    6 skipped, 581 passed (4368 assertions)"
+    ],
+    "guided-settings-exports-release": [
+      "  Tests:    15 passed (236 assertions)"
+    ],
+    "branch-settings-exports-final": [
+      "  Tests:    8 passed (45 assertions)"
+    ],
+    "browser-guided-settings-final": [
+      "  36 passed (9.7s)"
+    ],
+    "browser-guided-settings-release": [
+      "  14 passed (9.5s)"
+    ],
+    "guided-settings-pint-acceptance": [
+      "    PASS   .......................................................... 14 files"
+    ]
+  },
+  "regression": {
+    "passed": 581,
+    "assertions": 4368,
+    "intentional_fixture_export_skips": 6
+  },
+  "new_browser_cases": 14,
+  "previous_branch_browser_cases": 22,
+  "production_build": "PASS; typecheck, existing JS tests and Vite; existing Rollup annotation warnings only",
+  "pint": "14 changed PHP files PASS",
+  "schema_changes": false,
+  "authority_preservation": [
+    {
+      "path": "config/module_catalog.php",
+      "sha256": "98fc4a4f08992b8b46fc92b3df02648453f6283e1f782074ee5ac51daf45b51b",
+      "unchanged": true
+    },
+    {
+      "path": "config/ai_branch.php",
+      "sha256": "a5263b5109cb5e0fb054376601780d3021de319000fe9e1453d6eccbe73c4a53",
+      "unchanged": true
+    },
+    {
+      "path": "config/marketplace.php",
+      "sha256": "93cc05ecff8ef036f3d00d0aa6b68702a8ee6a8985b3eead6423de0175cbd71a",
+      "unchanged": true
+    },
+    {
+      "path": "app/Services/Billing/TenantAiUsageService.php",
+      "sha256": "6c517c9cfc8b4c567ebb554e343863068d8438256f525ad697ed0dde20966157",
+      "unchanged": true
+    },
+    {
+      "path": "app/Services/AiBranch/AiBranchOffer.php",
+      "sha256": "3633105d96bd573831f102b7b836035bac096d69b06ad9ea546e3ece653a608e",
+      "unchanged": true
+    },
+    {
+      "path": "app/Services/AiBranch/AiBranchAccess.php",
+      "sha256": "cfdc8e8e29154f2cec9cd279a242ab318dd90a4fc2b2d93a1b54667e15293b0a",
+      "unchanged": true
+    },
+    {
+      "path": "app/Services/AiBranch/AiFictionalPilot.php",
+      "sha256": "784a35a140adc44784c5afcdf668ddd08aeede371af1a757a6eec500f5d41775",
+      "unchanged": true
+    },
+    {
+      "path": "app/Services/Marketplace/MarketplaceAccess.php",
+      "sha256": "6526a5a1603b75010afef9cebd3c18d4f09cf5dcbdeb13ba5bbeb173404706e0",
+      "unchanged": true
+    }
+  ],
+  "production_operations": false,
+  "limitations": [
+    "Browser fixtures use actual Blade/built assets and synthetic HTTP contexts; draft writes intercepted, not a persistent live login. Server persistence tested through actual feature requests.",
+    "1024px/390px tests are emulated tablet/phone layouts, not physical Galaxy/Safari device acceptance.",
+    "No genuine provider, email, charge, customer-site publishing or external invitation performed.",
+    "Full exact-head required CI and protected deployment remain coordinator-owned."
+  ],
+  "historical_audits": {
+    "75.3": "unchanged",
+    "87.3": "fb2a5550e177e18aebbe755440ad55ec09625b34",
+    "97.0": "d52793c8b3850aa302e44fa64e69e17632e48144"
+  }
+}

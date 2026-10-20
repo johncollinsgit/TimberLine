@@ -128,7 +128,7 @@
                 </div>
             @endif
 
-            <form method="POST" action="{{ route('workspace.first-login.store') }}" class="mt-6">
+            <form data-draft-url="{{ route('workspace.first-login.draft') }}" method="POST" action="{{ route('workspace.first-login.store') }}" class="mt-6">
                 @csrf
                 <input type="hidden" name="workspace_name" value="{{ $workspaceName }}">
                 <input type="hidden" name="template_key" value="">
@@ -176,7 +176,7 @@
                 <section data-step="3" class="space-y-4" hidden>
                     <div>
                         <h2 class="text-lg font-semibold text-zinc-900">How big is your team right now?</h2>
-                        <p class="mt-1 text-sm text-zinc-500">This helps us keep the first setup practical instead of overbuilt.</p>
+                        <p class="mt-1 text-sm text-zinc-500">Optional. This helps us keep the first setup practical. You can skip this for now.</p>
                     </div>
                     <div class="grid gap-2.5 sm:grid-cols-2">
                         @foreach ($teamSizes as $key => $label)
@@ -192,7 +192,7 @@
                 <section data-step="4" class="space-y-4" hidden>
                     <div>
                         <h2 class="text-lg font-semibold text-zinc-900">What's the biggest headache right now?</h2>
-                        <p class="mt-1 text-sm text-zinc-500">We'll put the fix for this front and center.</p>
+                        <p class="mt-1 text-sm text-zinc-500">Optional. Tell us what needs attention, or skip this for now.</p>
                     </div>
                     <div class="space-y-2">
                         @foreach ($hardestParts as $key => $opt)
@@ -303,6 +303,10 @@
                 start_path: 'guided',
             };
 
+            var draft = @json($draftAnswers ?? []);
+            ['workspace_name', 'template_key', 'team_size', 'hardest_part', 'start_path'].forEach(function (key) { if (draft[key]) state[key] = draft[key]; });
+            if (Array.isArray(draft.module_choices)) state.module_choices = draft.module_choices;
+            if (draft.surface === 'popup') step = Math.max(1, Math.min(TOTAL, Number(draft.resume_step) || 1));
             var $ = function (sel) { return root.querySelector(sel); };
             var $$ = function (sel) { return Array.prototype.slice.call(root.querySelectorAll(sel)); };
             var hidden = {
@@ -323,6 +327,7 @@
                 hidden.team_size.value = state.team_size;
                 hidden.hardest_part.value = state.hardest_part;
                 hidden.start_path.value = state.start_path;
+                root.querySelector('form').dispatchEvent(new Event('workspace-draft-change'));
                 modulesHolder.innerHTML = '';
                 state.module_choices.forEach(function (k) {
                     var i = document.createElement('input');
@@ -334,8 +339,7 @@
             function canNext() {
                 if (step === 1) return state.workspace_name.trim().length > 0;
                 if (step === 2) return state.template_key !== '';
-                if (step === 3) return state.team_size !== '';
-                if (step === 4) return state.hardest_part !== '';
+                // Team size and business concerns improve guidance, but are optional.
                 return true;
             }
 
@@ -382,7 +386,9 @@
                 $('[data-next]').hidden = step === TOTAL;
                 $('[data-submit]').hidden = step !== TOTAL;
                 $('[data-next]').disabled = !canNext();
+                $('[data-next]').textContent = ((step === 3 && !state.team_size) || (step === 4 && !state.hardest_part)) ? 'Skip for now' : 'Continue';
                 if (step === 7) updateReview();
+                root.querySelector('form').dispatchEvent(new Event('workspace-draft-change'));
             }
 
             // Name
@@ -460,8 +466,24 @@
             $('[data-next]').addEventListener('click', function () { if (canNext() && step < TOTAL) { step++; render(); } });
             $('[data-back]').addEventListener('click', function () { if (step > 1) { step--; render(); } });
 
+            nameInput.value = state.workspace_name;
+            [['data-pick-type', 'template_key', 'template_label'], ['data-pick-team', 'team_size', 'team_label'], ['data-pick-focus', 'hardest_part', null], ['data-pick-help', 'start_path', null]].forEach(function (pair) {
+                $$('[' + pair[0] + ']').forEach(function (node) {
+                    if (node.getAttribute(pair[0]) === state[pair[1]]) {
+                        selectOne($$('[' + pair[0] + ']'), node);
+                        if (pair[2]) state[pair[2]] = node.textContent.trim();
+                    }
+                });
+            });
+            refreshTools();
             syncHidden();
             render();
+            const connectDraft = () => window.workspaceDraft(root.querySelector('form'), @json($draftRevision ?? 0), 'popup', () => ({
+                workspace_name: state.workspace_name, template_key: state.template_key, team_size: state.team_size,
+                hardest_part: state.hardest_part, module_choices: state.module_choices, start_path: state.start_path, resume_step: step,
+            }));
+            if (window.workspaceDraft) connectDraft(); else window.addEventListener('workspace-draft-ready', connectDraft, { once: true });
         })();
     </script>
+@vite('resources/js/workspace-draft.js')
 </x-layouts::auth.simple>

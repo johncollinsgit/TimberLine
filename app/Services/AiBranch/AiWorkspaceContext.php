@@ -66,13 +66,19 @@ class AiWorkspaceContext
         }
         ksort($access);
 
-        return hash('sha256', json_encode([
+        $parts = [
             self::VERSION, $this->enabled($tenant), $this->permissions($tenant, $user), $access,
             app(AiBranchOffer::class)->metered($tenant) ? app(AiBranchOffer::class)->model($tenant) : null,
             app(FieldServiceAccessService::class)->role($user, $tenant), $user->role, $this->timezone($tenant),
             AiBranchMemory::query()->where('tenant_id', $tenant->id)->where('user_id', $user->id)->where('expires_at', '>', now())
                 ->orderBy('id')->get(['id', 'body'])->map(fn ($memory) => [$memory->id, hash('sha256', $memory->body)])->all(),
-        ], JSON_THROW_ON_ERROR));
+        ];
+        $company = app(TenantBlueprintProfileService::class)->companyContext(Tenant::query()->findOrFail($tenant->id));
+        if (filled($company['confirmed_at'] ?? null)) {
+            $parts[] = ['company_context' => array_intersect_key($company, array_flip(['category', 'specialty', 'model', 'channels', 'customer_types', 'goal']))];
+        }
+
+        return hash('sha256', json_encode($parts, JSON_THROW_ON_ERROR));
     }
 
     public function profile(Tenant $tenant, User $user): array
@@ -97,7 +103,7 @@ class AiWorkspaceContext
             }
         }
 
-        return [
+        $result = [
             'name' => mb_substr($tenant->name, 0, 180),
             'business_template' => $configured ? mb_substr((string) ($blueprint['business_template_label'] ?? $blueprint['business_template'] ?? ''), 0, 80) : 'Not configured',
             'operating_mode' => $tenant->accessProfile?->operating_mode ? (string) $profile['operating_mode'] : 'Not configured',
@@ -105,6 +111,11 @@ class AiWorkspaceContext
             'timezone' => $this->timezone($tenant), 'branches' => $enabled,
             'capabilities' => array_values(array_unique($capabilities)),
         ];
+        if (filled(data_get($profile, 'company_context.confirmed_at'))) {
+            $result['company_context'] = array_intersect_key((array) $profile['company_context'], array_flip(['category', 'specialty', 'model', 'channels', 'customer_types', 'goal']));
+        }
+
+        return $result;
     }
 
     public function capture(Tenant $tenant, User $user, array $origin = [], string $purpose = 'chat'): array

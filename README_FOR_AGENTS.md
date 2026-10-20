@@ -1,3 +1,14 @@
+## Guided onboarding and settings (source candidate, October 20)
+
+See [workspace settings and onboarding](docs/operations/workspace-settings-and-onboarding.md).
+The tenant-scoped settings hub links existing authorized forms; a three-step
+business profile extends the canonical blueprint without changing grants/terms.
+Record-derived setup progress is distinct from per-user reminders. First-login
+questionnaire drafts remain account-only until the existing creation transaction.
+Minimal confirmed business context refreshes existing authorized help; absent
+context preserves AI stamps and the approved voice lane. No new schema, provider
+activation or production acceptance is claimed by this source note.
+
 ## AI Voice Branch — October 20 approved commercial policy
 
 Read `docs/operations/ai-voice-pricing-and-rollout.md` before changing this lane.

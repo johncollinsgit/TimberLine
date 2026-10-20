@@ -125,7 +125,7 @@ class EnsureTenantAccess
             return false;
         }
 
-        if ($request->routeIs('app.start', 'app.setup-status.update', 'onboarding.*', 'landlord.*')) {
+        if ($request->routeIs('app.start', 'app.setup-status.update', 'onboarding.*', 'landlord.*', 'workspace-settings.*')) {
             return false;
         }
 
