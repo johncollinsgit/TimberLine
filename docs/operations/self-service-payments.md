@@ -160,7 +160,32 @@ Wren Sites v40 is published. Protected backend PR 427 activated commit 5cf3bdc20
 
 Miriam's $30 manual Venmo receipt and Emily's registered place already existed before this release. Preserve that one receipt; the follow-up attestation path retires/reconciles its old card checkout and audits the owner's confirmation in place. Do not create another $30 receipt. Provider-key-only historical evidence is not a new processor verification.
 
-Carolina-only authoring/setup configuration is staged for the next protected release: payment-setup and tenant-payment slug allowlists add carolina-barrel-co; invoice IDs are [8]; catalog preview preserves [11] and adds 8. Live commerce, direct-event proof, customer bank payments and verified PayPal remain off. The Plaid return URL and Stripe OAuth client ID are still provider-setup requirements. No charge, merchant account, payout bank or bank-feed connection is created by enabling authoring.
+Carolina-only authoring/setup configuration is active: payment-setup and tenant-payment slug allowlists include carolina-barrel-co; invoice IDs are [8]; catalog preview preserves [11] and adds 8. Live commerce, direct-event proof, customer bank payments and verified PayPal remain off. The Plaid return URL is still a provider-setup requirement. No charge, merchant account, payout bank or bank-feed connection is created by enabling authoring.
 
 
 A separate live Connected accounts webhook is registered as we_1USSyDCb0UT6fSMI2dAR1Qzp at https://app.theeverbranch.com/webhooks/website-stripe, API 2025-06-30.basil, for the eight checkout/refund events above. The signing secret is stored only in the owner-only production environment for activation by this protected release. Existing Wren/platform endpoints are unchanged. Registration is not signed-delivery or live direct-charge proof: TENANT_STRIPE_DIRECT_WEBHOOKS_VERIFIED remains false until real merchant acceptance. No payment was created by this setup.
+
+### Stripe platform configuration (2026-10-19)
+
+The owner signed into the existing Evergrove Software LLC platform,
+`acct_1Ttv37Cb0UT6fSMI`. OAuth for Stripe Dashboard accounts is enabled, and the
+single registered default redirect is
+`https://app.theeverbranch.com/payments/stripe/return`. Its live client ID is staged
+in the owner-only production environment as STRIPE_CONNECT_CLIENT_ID. Activate
+cached configuration through a normal protected release, then verify both the
+finished deployment and the runtime configuration; a same-SHA `/ready` response
+alone does not prove a configuration-only redeploy completed. Keep the full
+test/build and migration gates enabled. Never print environment files or tokens.
+
+Connect payout settings already use Financial Connections with manual entry as
+the fallback. The required account/routing permission is enabled; optional
+balances, account ownership details and transactions are disabled. No payout
+settings or bank account were changed. These platform settings apply to the
+accounts for which Stripe exposes platform collection controls; new full
+Dashboard merchants manage their own verification and payout details.
+
+Wren remains on `acct_1USHLXEHU70c1SzP` with its existing Express/destination
+routing. Carolina still requires its owner's genuine account connection or
+onboarding, and direct-charge/refund callback acceptance before collection. OAuth
+registration and payout-setting inspection do not prove a bank connection,
+merchant verification, Plaid OAuth, customer ACH or signed payment delivery.
