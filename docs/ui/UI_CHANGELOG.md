@@ -1,3 +1,9 @@
+## 2026-10-20 - Supported electrician intake
+
+- Decouple configured public business types from optional electrician tutorial rollout.
+- Keep tutorial previews gated and access pending review; clarify the request receipt.
+- Verification: `docs/audits/20261020T-electrician-intake/report.md`.
+
 ## 2026-10-20 - Public quality and current offer (candidate)
 
 - Scoped Workflow Studio navigation styles to the authenticated tool, restoring

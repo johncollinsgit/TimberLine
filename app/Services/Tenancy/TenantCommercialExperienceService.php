@@ -95,12 +95,8 @@ class TenantCommercialExperienceService
      */
     public function publicAccessRequestOptions(): array
     {
-        $options = (array) config('product_surfaces.access_request', []);
-        $options['business_types'] = $this->filteredPublicBusinessTypes(
-            (array) ($options['business_types'] ?? [])
-        );
-
-        return $options;
+        // Supported intake industries are independent of optional tutorial rollout.
+        return (array) config('product_surfaces.access_request', []);
     }
 
     /**
@@ -231,21 +227,6 @@ class TenantCommercialExperienceService
 
             return strtolower(trim((string) ($profile['key'] ?? ''))) !== 'electrician';
         }));
-    }
-
-    /**
-     * @param  array<string,string>  $businessTypes
-     * @return array<string,string>
-     */
-    protected function filteredPublicBusinessTypes(array $businessTypes): array
-    {
-        if ($this->customerElectricianTutorialEnabled()) {
-            return $businessTypes;
-        }
-
-        unset($businessTypes['electrician']);
-
-        return $businessTypes;
     }
 
     protected function customerElectricianTutorialEnabled(): bool
