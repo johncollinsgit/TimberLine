@@ -31,9 +31,11 @@
         $backupAt = $backup['at'] ?? null;
         $importAt = $import['at'] ?? null;
 
-        $issueTotal = (int) ($issues['total'] ?? 0);
+        $issuesKnown = (bool) ($issues['known'] ?? false);
+        $issueTotal = $issuesKnown ? (int) ($issues['total'] ?? 0) : null;
+        $issuesLastSuccess = $issues['last_success_at'] ?? null;
         $bySeverity = (array) ($issues['by_severity'] ?? []);
-        $issueTone = $issueTotal === 0 ? 'emerald' : ($issueTotal > 3 ? 'rose' : 'amber');
+        $issueTone = ! $issuesKnown ? 'amber' : ($issueTotal === 0 ? 'emerald' : ($issueTotal > 3 ? 'rose' : 'amber'));
 
         $impactTone = ['high' => 'rose', 'medium' => 'amber', 'low' => 'sky'];
 
@@ -75,17 +77,17 @@
             [
                 'key' => 'errors',
                 'kicker' => 'Error tracking',
-                'title' => $issueTotal === 0 ? 'All clear' : $issueTotal.' open',
+                'title' => ! $issuesKnown ? 'Unknown' : ($issueTotal === 0 ? 'All clear' : $issueTotal.' open'),
                 'tone' => $issueTone,
-                'blurb' => $issueTotal === 0
+                'blurb' => ! $issuesKnown ? 'Integration health could not be checked. The issue count is unavailable.' : ($issueTotal === 0
                     ? 'No open integration health events right now.'
-                    : $issueTotal.' open integration health event'.($issueTotal === 1 ? '' : 's').' need attention.',
-                'chips' => array_values(array_filter([
+                    : $issueTotal.' open integration health event'.($issueTotal === 1 ? '' : 's').' need attention.'),
+                'chips' => ! $issuesKnown ? ['Read unavailable', $issuesLastSuccess ? 'last checked '.$issuesLastSuccess->diffForHumans() : 'No successful check recorded'] : array_values(array_filter([
                     ($bySeverity['error'] ?? 0).' error',
                     ($bySeverity['warning'] ?? 0).' warning',
                     ($bySeverity['info'] ?? 0).' info',
                 ])),
-                'body' => "Live signal from the integration_health_events table — Shopify imports, webhooks, scheduler, and other integrations open an event when something breaks and auto-resolve when it recovers.\n\n".
+                'body' => ! $issuesKnown ? 'The integration-health read failed. Retry this page or investigate the sanitized operations.integration_health.read_failed log event. No current issue count is available.'.($issuesLastSuccess ? ' Last successful check: '.$issuesLastSuccess->toDayDateTimeString().'.' : ' No successful check is recorded.') : "Live signal from the integration_health_events table — Shopify imports, webhooks, scheduler, and other integrations open an event when something breaks and auto-resolve when it recovers.\n\n".
                     ($issueTotal === 0
                         ? 'Nothing open right now. Deeper application error tracking (Sentry) is on the vision board as the next observability layer.'
                         : 'Review open events with `php artisan integration-health:list-open`. Deeper application error tracking (Sentry) is on the vision board as the next observability layer.'),
@@ -128,8 +130,8 @@
             </article>
             <article class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
                 <p class="text-xs font-medium uppercase tracking-wide text-zinc-500">Open issues</p>
-                <p class="mt-2 text-2xl font-semibold text-zinc-950">{{ number_format($issueTotal) }}</p>
-                <p class="mt-1 text-xs text-zinc-500">Integration health</p>
+                <p class="mt-2 text-2xl font-semibold text-zinc-950">{{ $issuesKnown ? number_format($issueTotal) : 'Unknown' }}</p>
+                <p class="mt-1 text-xs text-zinc-500" data-integration-health-state="{{ $issuesKnown ? 'known' : 'unknown' }}">{{ $issuesKnown ? 'Integration health' : 'Integration health unavailable' }}</p>
             </article>
             <article class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
                 <p class="text-xs font-medium uppercase tracking-wide text-zinc-500">Last import</p>
