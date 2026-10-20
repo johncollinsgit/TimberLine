@@ -136,8 +136,8 @@
   },
   {
     "path": "report.md",
-    "bytes": 9980,
-    "sha256": "78a9677cf5c6f16c50171761713fd626e44ad14d81cbf4ae1d11c0466c5e26c9"
+    "bytes": 9979,
+    "sha256": "b3180be32ad2bf3e52cf060402ca339b62ecbf1dad36af32602713a3294aff45"
   },
   {
     "path": "rubric-v1.json",
@@ -146,12 +146,12 @@
   },
   {
     "path": "scorecard.json",
-    "bytes": 24186,
-    "sha256": "038941e90153d5a99996db9810ab9084a0e68a2bc3ae7f8a9b5842c3579af04e"
+    "bytes": 24132,
+    "sha256": "3ad5c89fbe7b10e668520ce8cf22665e2b06988d064a8c349421e279daaf8173"
   },
   {
     "path": "validation.json",
-    "bytes": 213,
-    "sha256": "22e9848156a0ccb8b47a64a786e6cb426e183ab4d4050caa2965bf4736529103"
+    "bytes": 278,
+    "sha256": "5978d375eb1d53c5e6493c9913779b33462bc90a6ec53bc01ae1eed3fa27d60e"
   }
 ]

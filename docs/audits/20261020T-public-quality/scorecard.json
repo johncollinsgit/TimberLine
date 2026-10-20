@@ -533,23 +533,23 @@
           "name": "Representative performance",
           "weight": 1.5,
           "acceptance_checks": "Record repeatable local browser/Lighthouse timings for representative public routes and note limits; no invented production percentile.",
-          "rating": 4,
-          "status": "ASSESSED",
-          "subtopic_score_out_of_100": 100,
-          "earned_points": 1.5,
+          "rating": null,
+          "status": "UNVERIFIED",
+          "subtopic_score_out_of_100": null,
+          "earned_points": null,
           "evidence_ids": [
             "Q01",
             "Q02",
             "Q03",
             "Q04"
           ],
-          "reason": "Two local Lighthouse runs per route/profile across three routes and desktop/simulated mobile satisfy the saved measurement criterion. Speed remains poor on simulated mobile (59\u201361); production/device percentiles remain unverified. This score is evidence completeness, not a Lighthouse performance score.",
+          "reason": "Repeated local Lighthouse measurements now exist, but simulated-mobile speed is poor and production/device performance remains unverified. Preserve the original unverified treatment; local evidence does not establish production performance.",
           "rechecked_in_this_release": true
         }
       ],
-      "earned_points": 5.0,
-      "unverified_weight": 0,
-      "verified_minimum_out_of_100": 100.0,
+      "earned_points": 3.5,
+      "unverified_weight": 1.5,
+      "verified_minimum_out_of_100": 70.0,
       "possible_maximum_out_of_100": 100.0
     }
   ],
@@ -564,18 +564,18 @@
     "database": "disposable SQLite; in-memory for PHP tests, separate file for browser fixtures",
     "candidate_base_commit": "1912ae104b44e3687f74a7af823973b047abd7fa"
   },
-  "raw_score_unrounded": 83.25,
-  "raw_score": 83.3,
-  "unverified_weight": 7,
-  "assessed_weight": 93,
-  "evidence_coverage_percent": 93,
+  "raw_score_unrounded": 81.75,
+  "raw_score": 81.8,
+  "unverified_weight": 8.5,
+  "assessed_weight": 91.5,
+  "evidence_coverage_percent": 91.5,
   "evidence_coverage_definition": "Weight of assessed rubric criteria, not line/branch/route/automated-test coverage.",
   "possible_score_interval_unrounded": [
-    83.25,
+    81.75,
     90.25
   ],
   "possible_score_interval": [
-    83.3,
+    81.8,
     90.3
   ],
   "provisional": true,
@@ -585,7 +585,7 @@
     "cross_tenant_or_authorization_or_destructive_loss": "No triggering defect verified in the defined synthetic checks. Untested production behavior is not declared safe.",
     "blocked_core_promised_workflow": "No total inability verified in the exercised core tasks. Broken public discovery and messaging are recorded, but a working request CTA and synthetic first-value flow remain."
   },
-  "adjusted_score_unrounded": 83.25,
-  "adjusted_score": 83.3,
+  "adjusted_score_unrounded": 81.75,
+  "adjusted_score": 81.8,
   "readiness_assessment": "Public accessibility and pricing/branch discovery improved; production performance, real provider acceptance and backup/restore remain unverified. New commercial interest is staff-reviewed and does not activate billing."
 }

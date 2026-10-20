@@ -1,8 +1,8 @@
 # Release 1 — public quality and Everbranch Simple
 
-Candidate score: **83.3/100 provisional**, up from **75.3/100** using unchanged rubric v1. Evidence coverage is **93% of rubric weight**, not route/test/code coverage. This report records a candidate; deployment and live checks are recorded separately.
+Candidate score: **81.8/100 provisional**, up from **75.3/100** using unchanged rubric v1. Evidence coverage is **91.5% of rubric weight**, not route/test/code coverage. This report records a candidate; deployment and live checks are recorded separately.
 
-**Public accessibility is 100/100 in the defined checks, with Lighthouse accessibility 100 in all 12 runs.** Responsive checks are 100/100. The saved X3 criterion asks for repeatable local measurements and limitations; it is now complete. Actual simulated-mobile performance is only 59–61/100 and is not described as 100 or production-fast.
+**Public accessibility is 100/100 in the defined checks, with Lighthouse accessibility 100 in all 12 runs.** Responsive checks are 100/100. Repeated local performance measurements are now available, but X3 retains the original unverified treatment until production/device performance is established. Actual simulated-mobile performance is only 59–61/100 and is not described as 100 or production-fast.
 
 | Area | Before | Candidate |
 |---|---:|---:|
@@ -13,9 +13,9 @@ Candidate score: **83.3/100 provisional**, up from **75.3/100** using unchanged 
 | Clarity of purpose, audience, and customer value | 65.0 | 92.5 |
 | Shared platform architecture and maintainability | 57.5 | 75.0 |
 | Integrations and operational readiness | 40.0 | 40.0 |
-| Accessibility, responsiveness, and performance | 50.0 | 100.0 |
+| Accessibility, responsiveness, and performance | 50.0 | 70.0 |
 
-The 7 points still unverified are recovery/export (4) and actual provider/operational acceptance (3). Production/device performance remains a separately explicit unknown; satisfying the local measurement criterion does not verify it. Unchanged subtopics carry forward the original bounded synthetic evidence. No universal penetration, device or customer lifecycle audit is implied.
+The 8.5 points still unverified are recovery/export (4), actual provider/operational acceptance (3), and representative production/device performance (1.5). Production/device performance remains a separately explicit unknown; satisfying the local measurement criterion does not verify it. Unchanged subtopics carry forward the original bounded synthetic evidence. No universal penetration, device or customer lifecycle audit is implied.
 
 ## What changed
 
@@ -37,9 +37,9 @@ The 7 points still unverified are recovery/export (4) and actual provider/operat
 | A2 — Ownership and domain separation | 75 | 100 | Existing backend tenant/provider ownership contracts continue to pass; the demonstrated cross-surface navigation collision is now scoped to its owning Workflow Studio. No provider or entitlement mutations were introduced. |
 | X1 — Keyboard, labels and contrast | 50 | 100 | Header collision, demo pill, workflow controls, module descriptions and illustrated-workspace text now meet measured contrast checks. Keyboard, focus, form labels, reduced motion and 12 Lighthouse accessibility scores of 100 are verified locally. |
 | X2 — Responsive public surfaces | 100 | 100 | Seven core public routes plus parent pricing are rechecked in Chromium/WebKit at 390, 820 and 1440px; no horizontal overflow or lost primary action. Visual baselines and public screenshots reviewed. |
-| X3 — Representative performance | Unverified | 100 | Two local Lighthouse runs per route/profile across three routes and desktop/simulated mobile satisfy the saved measurement criterion. Speed remains poor on simulated mobile (59–61); production/device percentiles remain unverified. This score is evidence completeness, not a Lighthouse performance score. |
+| X3 — Representative performance | Unverified | Unverified | Repeated local measurements exist, but production/device performance is not established. Simulated mobile scores 59–61. |
 
-All 27 subtopic scores and unchanged acceptance checks are in [scorecard.json](scorecard.json); the frozen rubric is [rubric-v1.json](rubric-v1.json). The score increase includes 1.5 points for closing an evidence gap, not a claim that production speed was fixed.
+All 27 subtopic scores and unchanged acceptance checks are in [scorecard.json](scorecard.json); the frozen rubric is [rubric-v1.json](rubric-v1.json). No score credit is assigned for the unverified performance criterion. Local evidence is retained to guide the next improvement without implying production speed was fixed.
 
 ## Local performance evidence
 

@@ -2,7 +2,9 @@
   "timestamp": "2026-10-20T07:34:48.543322+00:00",
   "passed": true,
   "errors": [],
-  "score": 83.3,
+  "score": 81.8,
   "all_27_subtopics_preserve_v1_checks": true,
-  "base_source": "1912ae104b44e3687f74a7af823973b047abd7fa"
+  "base_source": "1912ae104b44e3687f74a7af823973b047abd7fa",
+  "unverified_weight": 8.5,
+  "evidence_coverage_percent": 91.5
 }
