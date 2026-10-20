@@ -123,9 +123,20 @@ test('freezing the editor does not unpublish an already approved visualization',
     $this->site->update(['status' => 'published', 'public_enabled' => true]);
     config()->set('managed_website.editor_enabled', false);
     expect($this->visuals->descriptor($this->site, $saved))->not->toBeNull();
+    $this->get(route('product-visualization.asset', ['product' => $saved, 'media' => $this->media]))->assertOk();
     $this->putJson(route('managed-website.products.visualization.update', $this->product), $this->input)->assertStatus(423);
     config()->set('managed_website.public_render_enabled', false);
     expect($this->visuals->descriptor($this->site, $saved))->toBeNull();
+});
+
+test('private model reads respect the canonical editor freeze without changing stored media', function () {
+    $url = route('product-visualization.asset', ['product' => $this->product, 'media' => $this->media]);
+    expect($this->get($url)->assertOk()->headers->get('Cache-Control'))->toContain('private', 'no-store');
+    config()->set('managed_website.editor_enabled', false);
+    $this->get($url)->assertNotFound();
+    expect(Storage::disk('local')->get($this->media->storage_path))->toBe(visualizationGlb());
+    config()->set('managed_website.editor_enabled', true);
+    $this->get($url)->assertOk();
 });
 
 test('self contained GLB upload is product scoped and never silently enabled', function () {

@@ -2255,3 +2255,6 @@ default-off rollout and hand switches, publication and catalog revisions. Camera
 frames stay on-device. Native and connected-renderer adapters need Mac wiring
 and physical acceptance. Coordinate release actions with the Mac release owner;
 this candidate did not activate tenants or deploy. Preserve unrelated work.
+Mac review corrections retain same-model readiness/scale, enforce the canonical
+editor gate for private GLBs, and suppress Scene Viewer when it cannot preserve
+a saved size correction. Read the runbook before changing fallback policy.

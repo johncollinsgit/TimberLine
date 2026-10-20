@@ -18,3 +18,8 @@ export function millimetersToPixels(span,palmMm=80){
 export function validConfig(config){
   return config && config.version===1 && ['hand','room'].includes(config.placement) && Number.isFinite(config.lengthMm) && config.lengthMm>0 && config.lengthMm<=10000 && typeof config.modelUrl==='string' && Array.isArray(config.grip) && config.grip.length===3 && config.grip.every(v=>Number.isFinite(v)&&v>=0&&v<=1) && Array.isArray(config.rotationDeg) && config.rotationDeg.length===3 && config.rotationDeg.every(v=>Number.isFinite(v)&&Math.abs(v)<=180);
 }
+
+// Scene Viewer fetches the original GLB and cannot apply model-viewer's scale.
+export function roomArModes(scale){
+  return Number.isFinite(scale)&&Math.abs(scale-1)<.0001?'webxr scene-viewer quick-look':'webxr quick-look';
+}

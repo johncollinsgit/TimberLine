@@ -40,6 +40,16 @@ permission follows a deliberate action; close/unmount/background/errors stop
 capture. No microphone, frame upload, paid model service or AI billing is added.
 Skeleton-based finger masking is approximate, not full hand surface segmentation.
 
+Mac integration review corrections (October 20): private/draft model reads also
+obey the canonical Website editor freeze; eligible published models remain
+readable independently. Reopening a loaded model or selecting another option
+with the same model retains readiness and saved scale. Scene Viewer fetches the
+original GLB and cannot apply a browser size correction, so it is excluded for
+models requiring that correction. WebXR / Quick Look remain available where
+supported; otherwise the shopper keeps the corrected 3D view with an explicit
+explanation. No Android fallback may silently claim the configured size. The
+isolated build tool is patched to Vite 7.3.7; runtime dependency pins are unchanged.
+
 ## Backend install on Mac
 
 1. Locate the current `johncollinsgit/TimberLine` checkout. Read its current

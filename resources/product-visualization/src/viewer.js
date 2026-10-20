@@ -1,6 +1,6 @@
 import '@google/model-viewer';
 import './viewer.css';
-import {validConfig} from './pose.js';
+import {validConfig,roomArModes} from './pose.js';
 
 const runtime=new URL('runtime/',new URL('.',import.meta.url)).href;
 const escapeError=error=>error?.name==='NotAllowedError'?'Camera access was declined. Allow it in browser or app settings, then retry.':error?.name==='NotFoundError'?'No camera was found on this device.':error?.message||'The preview could not start. Try the 3D view instead.';
@@ -14,7 +14,7 @@ export class ProductViewer extends HTMLElement{
     this.innerHTML=`<button class="pv-launch" type="button">Explore product</button>
       <dialog class="pv-dialog" aria-label="Product visualization"><header class="pv-header"><strong></strong><button type="button" data-action="close" aria-label="Close product preview">Close</button></header>
       <section class="pv-body"><div class="pv-choices"><label>Option <select aria-label="Product option"></select></label></div>
-      <div class="pv-stage"><model-viewer camera-controls touch-action="pan-y" shadow-intensity="1" ar ar-modes="webxr scene-viewer quick-look" ar-placement="floor" ar-scale="fixed" exposure="1" loading="eager"><button slot="ar-button" class="pv-room-button pv-primary" type="button">Place in your room</button></model-viewer><video muted playsinline hidden></video><canvas hidden aria-label="Live in-hand preview"></canvas></div>
+      <div class="pv-stage"><model-viewer camera-controls touch-action="pan-y" shadow-intensity="1" ar ar-modes="webxr quick-look" ar-placement="floor" ar-scale="fixed" exposure="1" loading="eager"><button slot="ar-button" class="pv-room-button pv-primary" type="button">Place in your room</button></model-viewer><video muted playsinline hidden></video><canvas hidden aria-label="Live in-hand preview"></canvas></div>
       <p class="pv-status" role="status" aria-live="polite"></p><p class="pv-help">Drag to rotate. Pinch or scroll to zoom. Use two fingers to move the 3D view.</p>
       <div class="pv-actions"><button type="button" data-action="camera" class="pv-primary">Try it in your hand</button><button type="button" data-action="stop" hidden>Return to 3D</button><button type="button" data-action="switch" hidden>Switch camera</button><button type="button" data-action="photo" hidden>Save image</button><button type="button" data-action="record" hidden>Record clip</button><button type="button" data-action="room-native" hidden>Open room placement</button></div>
       <div class="pv-controls" hidden><label>Palm width: <output data-output="palm">80</output> mm<input aria-label="Palm width in millimeters" data-setting="palm" type="range" min="40" max="140" value="80"></label><label>Preview size<input aria-label="Preview size" data-setting="scale" type="range" min="50" max="150" value="100"></label><label>Tilt<input aria-label="Tilt" data-setting="pitch" type="range" min="-180" max="180" value="0"></label><label>Turn<input aria-label="Turn" data-setting="yaw" type="range" min="-180" max="180" value="0"></label><label>Roll<input aria-label="Roll" data-setting="roll" type="range" min="-180" max="180" value="0"></label><label><input data-setting="mask" type="checkbox" checked> Approximate finger masking</label><label><button type="button" data-action="reset">Reset adjustments</button></label></div>
@@ -23,7 +23,8 @@ export class ProductViewer extends HTMLElement{
     this.querySelector('.pv-header strong').textContent=config.title;
     this.mv.alt=config.title;
     this.querySelector('.pv-launch').textContent=config.placement==='hand'?'Try it in your hand':'View in 3D / your room';
-    this.querySelector('.pv-note').textContent=config.placement==='hand'?'Camera frames stay on this device. Hand scale and finger masking are approximate; this preview cannot assess grip comfort. Measure palm width across the knuckles for a closer visual scale.':'Room placement uses the saved product dimensions. Confirm measurements before ordering; AR accuracy varies by device and surface.';
+    this.defaultNote=config.placement==='hand'?'Camera frames stay on this device. Hand scale and finger masking are approximate; this preview cannot assess grip comfort. Measure palm width across the knuckles for a closer visual scale.':'Room placement uses the saved product dimensions. Confirm measurements before ordering; AR accuracy varies by device and surface.';
+    this.querySelector('.pv-note').textContent=this.defaultNote;
     const select=this.querySelector('select');
     const variants=config.variants?.length?config.variants:[{id:'default',label:'Default',modelUrl:config.modelUrl}];
     for(const v of variants){const option=document.createElement('option');option.value=String(v.id);option.textContent=v.label;select.append(option);}
@@ -44,24 +45,51 @@ export class ProductViewer extends HTMLElement{
     this.querySelectorAll('[data-setting]').forEach(el=>el.addEventListener('input',()=>this.settings()));
     this.querySelector('[data-action=room-native]').hidden=config.placement!=='room'||!this.hasAttribute('native');
     this.querySelector('[data-action=room-native]').addEventListener('click',()=>Promise.resolve(this.openRoomAR?.()).catch(()=>{this.status.textContent='Room placement could not open. Try the public product page in your phone browser.';}));
-    this.mv.addEventListener('load',()=>{
-      this.modelReady=true;const dim=this.mv.getDimensions();const max=Math.max(dim.x,dim.y,dim.z);
-      if(Number.isFinite(max)&&max>0){const scale=this.config.lengthMm/1000/max;this.mv.scale=`${scale} ${scale} ${scale}`;}
-      this.status.textContent='Drag to explore your product.';
-    });
-    this.mv.addEventListener('error',()=>{this.modelReady=false;this.status.textContent='The product model could not load. Please try again later.';this.stop(false);});
-    this.mv.addEventListener('ar-status',event=>{if(event.detail.status==='failed')this.status.textContent='Room AR is unavailable here. Try Safari on iPhone or Chrome on a compatible Android phone. The 3D viewer is still available.';});
+    this.bindModelEvents(this.mv);
     this.visibility=()=>{if(document.hidden)this.stop();};document.addEventListener('visibilitychange',this.visibility);
     this.pagehide=()=>this.stop();window.addEventListener('pagehide',this.pagehide);
     this.stage.addEventListener('pointerdown',e=>{if(!this.hand)return;this.drag={id:e.pointerId,x:e.clientX,y:e.clientY};this.stage.setPointerCapture(e.pointerId);});
     this.stage.addEventListener('pointermove',e=>{if(!this.drag||e.pointerId!==this.drag.id||!this.hand)return;const mirror=this.front?-1:1;this.hand.offset.x+=(e.clientX-this.drag.x)*mirror;this.hand.offset.y-=e.clientY-this.drag.y;this.drag.x=e.clientX;this.drag.y=e.clientY;});
     for(const name of ['pointerup','pointercancel','lostpointercapture'])this.stage.addEventListener(name,()=>{this.drag=null;});
   }
+  bindModelEvents(mv){
+    mv.addEventListener('load',event=>{
+      const key=new URL(this.currentModelUrl,document.baseURI).href;
+      if(mv!==this.mv||!event.detail?.url||new URL(event.detail.url,document.baseURI).href!==key)return;
+      this.originalDimensions??=new Map();
+      if(!this.originalDimensions.has(key)){
+        const dim=mv.getDimensions();this.originalDimensions.set(key,Math.max(dim.x,dim.y,dim.z));
+      }
+      const max=this.originalDimensions.get(key);
+      this.modelLoading=false;
+      if(!Number.isFinite(max)||max<=0){
+        this.modelReady=false;mv.removeAttribute('ar');this.status.textContent='The complete product dimensions could not be confirmed. Room and hand placement are unavailable.';return;
+      }
+      this.modelReady=true;const scale=this.config.lengthMm/1000/max;
+      mv.scale=`${scale} ${scale} ${scale}`;mv.setAttribute('ar-modes',roomArModes(scale));
+      this.querySelector('.pv-note').textContent=this.config.placement==='room'&&roomArModes(scale)==='webxr quick-look'?'Saved size correction is applied in 3D and supported WebXR / Quick Look. Android Scene Viewer is unavailable for this model because it cannot apply that correction. Use 3D or WebXR where supported; confirm measurements before ordering.':this.defaultNote;
+      this.status.textContent='Drag to explore your product.';
+    });
+    mv.addEventListener('error',()=>{if(mv!==this.mv)return;this.modelReady=false;this.modelLoading=false;this.status.textContent='The product model could not load. Please try again later.';this.stop(false);});
+    mv.addEventListener('ar-status',event=>{if(mv===this.mv&&event.detail.status==='failed')this.status.textContent='Room AR is unavailable here. Try Safari on iPhone or Chrome on a compatible Android phone. The 3D viewer is still available.';});
+  }
   disconnectedCallback(){this.stop();document.removeEventListener('visibilitychange',this.visibility);window.removeEventListener('pagehide',this.pagehide);this.urls?.forEach(u=>URL.revokeObjectURL(u));this.urls=[];}
   open(){if(!this.dialog.open)this.dialog.showModal();this.loadModel(this.currentUrl);}
   loadModel(url){
-    this.currentUrl=url;this.modelReady=false;this.mv.src=url;this.mv.scale='1 1 1';
+    const unchanged=this.currentModelUrl===url;this.currentUrl=url;
+    if(unchanged&&(this.modelReady||this.modelLoading)){
+      if(this.modelReady)this.status.textContent='Drag to explore your product.';
+      return;
+    }
+    this.currentModelUrl=url;this.modelReady=false;this.modelLoading=true;
+    // Isolate source generations, including failed-source retries. Old element
+    // events cannot alter the next model, and model-viewer reloads the new node.
+    if(this.mv.src){const old=this.mv;this.mv=old.cloneNode(true);this.mv.removeAttribute('src');this.bindModelEvents(this.mv);old.replaceWith(this.mv);}
+    this.mv.scale='1 1 1';
+    if(this.config.placement==='room'&&!this.hasAttribute('native'))this.mv.setAttribute('ar','');
+    this.mv.setAttribute('ar-modes','webxr quick-look');
     this.status.textContent='Loading product…';
+    this.mv.src=url;
     if(this.hand){const generation=++this.modelGeneration;this.hand.load(url).then(()=>{if(this.hand&&generation===this.modelGeneration)this.status.textContent='Show one hand clearly to preview the product.';}).catch(error=>{if(generation===this.modelGeneration){this.status.textContent=escapeError(error);this.stop(false);}});}
   }
   settings(){if(!this.hand)return;const get=s=>Number(this.querySelector(`[data-setting=${s}]`).value);this.hand.palmMm=get('palm');this.querySelector('[data-output=palm]').textContent=String(get('palm'));this.hand.zoom=get('scale')/100;this.hand.userRotation=[get('pitch'),get('yaw'),get('roll')];this.hand.masking=this.querySelector('[data-setting=mask]').checked;}

@@ -71,6 +71,7 @@ class ProductVisualizationController extends Controller
         $site = TenantSite::query()->forTenantId($product->tenant_id)->findOrFail($product->tenant_site_id);
         abort_unless($visuals->assets($product)->whereKey($media->id)->exists(), 404);
         $member = $request->user()?->is_active && $visuals->enabledFor($site)
+            && app(ManagedWebsiteService::class)->editorEnabledFor($site->tenant)
             && $request->user()->tenants()->whereKey($site->tenant_id)->wherePivot('membership_active', true)
                 ->wherePivotIn('role', ['admin', 'owner', 'tenant_owner', 'manager', 'marketing_manager'])->exists();
         $descriptor = $visuals->descriptor($site, $product);

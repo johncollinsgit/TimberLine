@@ -3010,3 +3010,12 @@
 - Internal reminder options include schedules, quiet hours, previews and paused
   state. External sequences and real provider acceptance remain separate gates.
 
+# Product visualization review corrections — 2026-10-20
+
+- Loaded previews retain readiness and saved size when reopened or when options
+  share one model. Camera denial keeps the 3D view usable.
+- A room model requiring size correction explains why Android Scene Viewer is
+  unavailable; supported WebXR / Quick Look and corrected 3D remain available.
+- Private GLB reads follow the canonical Website editor freeze, independently
+  of already eligible published models. Rollout switches remain off.
+

@@ -2938,3 +2938,6 @@ Capacitor adapters await Mac integration and physical-device acceptance. All
 rollout flags default off. No schema, checkout, grants or deployment changes.
 Hand orientation, scale and skeleton finger masking are approximate. Synthetic
 QA models and AI concept imagery are not merchant assets or device evidence.
+Mac source review fixes preserve loaded-model readiness and scale, align private
+model reads with the Website editor freeze, and omit Scene Viewer for models
+needing a saved size correction. Published model reads remain independent.

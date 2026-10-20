@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {coverTransform,projectHand,palmSpan,millimetersToPixels,validConfig} from '../src/pose.js';
+import {coverTransform,projectHand,palmSpan,millimetersToPixels,validConfig,roomArModes} from '../src/pose.js';
 
 test('landmarks use the same centered cover crop as a portrait camera video',()=>{
   const transform=coverTransform(1280,720,360,640);
@@ -23,4 +23,9 @@ test('viewer contract supports both modes and rejects malformed placement and gr
   const config={version:1,placement:'room',lengthMm:900,modelUrl:'https://example.test/barrel.glb',grip:[.5,.2,.5],rotationDeg:[0,0,0]};
   assert.ok(validConfig(config));assert.ok(validConfig({...config,placement:'hand'}));
   assert.ok(!validConfig({...config,placement:'face'}));assert.ok(!validConfig({...config,grip:[3,0,0]}));assert.ok(!validConfig({...config,lengthMm:Infinity}));
+});
+
+test('room fallback never sends a size-corrected original GLB to Scene Viewer',()=>{
+  assert.equal(roomArModes(1),'webxr scene-viewer quick-look');
+  for(const scale of [.9,1.1,NaN,Infinity])assert.equal(roomArModes(scale),'webxr quick-look');
 });
