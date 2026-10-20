@@ -104,7 +104,9 @@ class SoccerFamilyService
             'registrations' => $this->store->query('registrations', $tenant)->where('family_id', $family->id)->get(),
             'invoices' => $this->store->query('invoices', $tenant)->where('family_id', $family->id)->latest('created_at')->get()->map(fn ($i) => collect((array) $i)->except(['checkout_id', 'payment_intent_id', 'tenant_id'])->all()),
             'releases' => $this->store->query('releases', $tenant)->where('family_id', $family->id)->get()->map(fn ($r) => ['id' => $r->id, 'player_id' => $r->player_id, 'season_key' => $r->season_key, 'signed_at' => $r->signed_at, 'answers' => $this->store->decrypt($r->answers)]),
-            'venmo' => config('soccer.venmo'), 'soccer_group_url' => $this->store->settings($tenant)['soccer_group_url'] ?? null];
+            'venmo' => config('soccer.venmo'), 'venmo_url' => config('soccer.venmo_url'),
+            'paypal' => app(SoccerPayPalService::class)->publicReadiness($tenant, $family->id),
+            'soccer_group_url' => $this->store->settings($tenant)['soccer_group_url'] ?? null];
     }
 
     public function saveProfile(int $tenant, object $family, array $data): void

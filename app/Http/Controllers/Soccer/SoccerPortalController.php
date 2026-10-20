@@ -31,6 +31,20 @@ class SoccerPortalController extends Controller
             return response()->json(['token' => $token]);
         }
         $f = $this->families->family($tenant, $r->header('X-Wren-Session'));
+        if ($action === 'venmo-click') {
+            abort_unless($r->isMethod('post'), 405);
+            $d = $r->validate(['invoice_id' => 'required|uuid']);
+            \Illuminate\Support\Facades\DB::transaction(function () use ($tenant, $d, $f) {
+                $invoice = $this->store->row('invoices', $tenant, $d['invoice_id']);
+                abort_unless($invoice->family_id === $f->id, 403);
+                $this->store->lockSeason($tenant, $invoice->season_id);
+                $invoice = $this->store->row('invoices', $tenant, $invoice->id);
+                abort_unless($invoice->status === 'unpaid' && \Carbon\CarbonImmutable::parse($invoice->expires_at)->gt(now()), 422, 'This invoice is paid or expired.');
+                app(\App\Services\Soccer\SoccerEvents::class)->record($tenant, $invoice->season_id, $f->id, 'venmo_payment_link_opened', ['invoice_id' => $invoice->id, 'summary' => 'Family opened the Venmo payment link; payment is not confirmed.'], key: 'venmo-link:'.$invoice->id);
+            });
+
+            return response()->json(['ok' => true, 'url' => config('soccer.venmo_url')]);
+        }
         if ($action === 'help-history') {
             return response()->json(['messages' => app(\App\Services\Soccer\SoccerFamilyHelpService::class)->history($tenant, $f->id)]);
         }
@@ -92,6 +106,21 @@ class SoccerPortalController extends Controller
         } elseif ($action === 'register') {
             $d = $r->validate(['season_id' => 'required|uuid', 'volunteer' => 'required|boolean', 'coach_parent' => 'exclude_unless:volunteer,true|required|in:mother,father', 'coach_name' => 'exclude_unless:volunteer,true|required|string|max:160', 'coach_teams' => 'exclude_unless:volunteer,true|required|array|min:1|max:3', 'coach_teams.*' => 'in:green-bears,blue-dragons,red-falcons', 'coach_available_8_of_10' => 'exclude_unless:volunteer,true|required|accepted', 'coach_jersey_size' => 'nullable|string|max:30', 'children' => 'required|array|min:1|max:12', 'children.*.player_id' => 'required|uuid', 'children.*.needs_jersey' => 'required|boolean', 'children.*.jersey_size' => 'nullable|string|max:30', 'expected_due_today_cents' => 'sometimes|required|integer|min:0', 'expected_available_player_ids' => 'sometimes|array', 'expected_available_player_ids.*' => 'uuid']);
             app(SoccerRegistrationService::class)->register($tenant, $f->id, $d);
+        } elseif ($action === 'paypal-create') {
+            abort_unless($r->isMethod('post'), 405);
+            $d = $r->validate(['invoice_id' => 'required|uuid']);
+
+            return response()->json(app(\App\Services\Soccer\SoccerPayPalService::class)->create($tenant, $f->id, $d['invoice_id']));
+        } elseif ($action === 'paypal-status') {
+            abort_unless($r->isMethod('post'), 405);
+            $d = $r->validate(['invoice_id' => 'required|uuid']);
+
+            return response()->json(app(\App\Services\Soccer\SoccerPayPalService::class)->status($tenant, $f->id, $d['invoice_id']));
+        } elseif ($action === 'paypal-capture') {
+            abort_unless($r->isMethod('post'), 405);
+            $d = $r->validate(['invoice_id' => 'required|uuid', 'order_id' => 'required|string|regex:/^[A-Z0-9-]{8,64}$/D']);
+
+            return response()->json(app(\App\Services\Soccer\SoccerPayPalService::class)->capture($tenant, $f->id, $d['invoice_id'], $d['order_id']));
         } elseif ($action === 'checkout') {
             $d = $r->validate(['invoice_id' => 'required|uuid']);
             $i = $this->store->row('invoices', $tenant, $d['invoice_id']);

@@ -13,7 +13,8 @@ Wren Settings links to this shared page when its exact rollout is enabled, so
 owners have one payment setup path. The legacy soccer handoff remains available
 when shared setup is disabled. No account-create, launch, fee or retry rules change.
 
-This is connection setup only. Follow the phased delivery plan in
+This screen is connection setup only. Wren's separate default-off verified Venmo
+checkout is described in `docs/operations/wren-verified-venmo.md`. Follow the phased delivery plan in
 `docs/architecture/stripe-paypal-payments-plan.md`. Never advertise PayPal
 checkout or recurring billing as live on the strength of a connection alone.
 
@@ -53,8 +54,9 @@ No polling or automatic external calls occur when viewing the page.
 
 Disconnect is local; tell the owner they can also revoke Everbranch permissions
 in PayPal. A reconnection gets a fresh tracking ID. In-flight status reads cannot
-override a disconnect or a replacement setup. Revocation webhook handling and
-action-time provider checks are mandatory before checkout is implemented.
+override a disconnect or a replacement setup. Wren's separately gated checkout
+implements verified revocation callbacks and action-time merchant/grant checks;
+other checkout lanes remain unavailable until their own acceptance is complete.
 
 ## Stripe retry recovery
 

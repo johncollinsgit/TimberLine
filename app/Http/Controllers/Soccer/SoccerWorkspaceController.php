@@ -143,8 +143,14 @@ class SoccerWorkspaceController extends Controller
             });
             $svc->promote($id, $reg->season_id);
         } elseif ($action === 'venmo') {
-            $d = $r->validate(['invoice_id' => 'required|uuid', 'reference' => 'required|string|max:190', 'amount_cents' => 'required|integer|min:1']);
-            app(SoccerPaymentService::class)->paid($id, $d['invoice_id'], 'venmo', $d['reference'], $d['amount_cents'], ['verified_by' => $actor], $actor);
+            $d = $r->validate(['invoice_id' => 'required|uuid', 'reference' => 'nullable|string|max:190', 'amount_cents' => 'required|integer|min:1', 'reason' => 'required|string|max:1000', 'confirmed' => 'required|accepted']);
+            $result = app(SoccerPaymentService::class)->confirmVenmo($id, $d['invoice_id'], $d['amount_cents'], $d['reference'] ?? null, $d['reason'], $actor);
+            if ($result === 'review') {
+                return back()->withErrors(['soccer' => 'The Venmo receipt was recorded for review. The current offer was not changed; check for another payment or an expired offer.']);
+            }
+        } elseif ($action === 'waive') {
+            $d = $r->validate(['invoice_id' => 'required|uuid', 'reason' => 'required|string|max:1000']);
+            app(SoccerPaymentService::class)->waive($id, $d['invoice_id'], $d['reason'], $actor);
         } elseif ($action === 'refund') {
             $d = $r->validate(['invoice_id' => 'required|uuid', 'amount_cents' => 'required|integer|min:1', 'reason' => 'required|string|max:1000', 'venmo_completed' => 'nullable|boolean', 'payment_id' => 'nullable|uuid']);
             app(SoccerPaymentService::class)->refund($id, $d['invoice_id'], $d['amount_cents'], $d['reason'], $actor, (bool) ($d['venmo_completed'] ?? false), $d['payment_id'] ?? null);

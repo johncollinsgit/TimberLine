@@ -40,7 +40,11 @@ class SoccerRegistrationSummaryService
         }
 
         return [
-            'headline' => $event->action === 'payment_confirmed' ? 'Payment received' : 'New family registration',
+            'headline' => match ($event->action) {
+                'payment_confirmed' => 'Payment received',
+                'organizer_fee_waived' => 'Registration fees waived',
+                default => 'New family registration',
+            },
             'season' => $season->name,
             'parent' => $profile['parentName'] ?? 'Parent / guardian',
             'email' => $family->email,

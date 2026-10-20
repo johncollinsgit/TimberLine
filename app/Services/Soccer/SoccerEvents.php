@@ -18,7 +18,7 @@ class SoccerEvents
             $data['summary'] = $parent.': '.($data['summary'] ?? 'Review in Everbranch.');
         }
         $id = $this->store->insert('events', $tenant, ['season_id' => $season, 'family_id' => $family, 'actor_id' => $actor, 'action' => $action, 'event_key' => $key, 'data' => $this->store->encrypt($data)]);
-        if ($season && $family && ! empty($data['registration_ids']) && in_array($action, ['family_registration_submitted', 'payment_confirmed'], true)) {
+        if ($season && $family && ! empty($data['registration_ids']) && in_array($action, ['family_registration_submitted', 'payment_confirmed', 'organizer_fee_waived'], true)) {
             foreach (array_unique(config('soccer.admin_notification_emails', [])) as $recipient) {
                 $email = strtolower(trim($recipient));
                 if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
