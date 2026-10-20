@@ -61,7 +61,9 @@ test.describe("Everbranch public studio", () => {
         }
     });
 
-    test("opens a clearly fictional linkable example with immediate view controls", async ({ page }) => {
+    test("opens a clearly fictional linkable example with immediate view controls", async ({ page }, testInfo) => {
+        const activate = (button: ReturnType<typeof page.getByRole>) =>
+            testInfo.project.use.hasTouch ? button.tap() : button.click();
         await page.goto("/platform/examples/projects");
         const demo = page.locator("[data-industry-page]");
         await expect(demo).toHaveAttribute("data-industry-mounted", "true");
@@ -72,16 +74,18 @@ test.describe("Everbranch public studio", () => {
         await expect(page.getByText(/not a live customer website or workspace/i)).toBeVisible();
         await expect(page.getByRole("link", { name: /get started/i }).first()).toHaveAttribute("href", /start/);
 
-        await page.getByRole("button", { name: /start a project conversation/i }).click();
+        await activate(page.getByRole("button", { name: /start a project conversation/i }));
         await expect(page.getByText(/request received/i)).toBeVisible();
-        await page.getByRole("button", { name: /open operations workspace/i }).click();
+        await activate(page.getByRole("button", { name: /open operations workspace/i }));
         await expect(page.getByRole("tab", { name: /operations workspace/i })).toHaveAttribute("aria-selected", "true");
 
-        await page.getByRole("button", { name: "Messages" }).click();
+        await activate(page.getByRole("button", { name: "Messages" }));
+        await expect(page.getByRole("button", { name: "Messages" })).toHaveAttribute("aria-pressed", "true");
         await expect(page.getByRole("heading", { name: /project update gives/i })).toBeVisible();
-        await page.getByRole("button", { name: /send project update/i }).click();
+        await activate(page.getByRole("button", { name: /send project update/i }));
         await expect(page.getByRole("button", { name: "Reply prepared" })).toBeVisible();
-        await page.getByRole("button", { name: "Marketing" }).click();
+        await activate(page.getByRole("button", { name: "Marketing" }));
+        await expect(page.getByRole("button", { name: "Marketing" })).toHaveAttribute("aria-pressed", "true");
         await expect(page.getByText(/before-and-after project journal/i)).toBeVisible();
     });
 
