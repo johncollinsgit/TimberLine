@@ -1,5 +1,12 @@
 import {expect, test} from '@playwright/test';
 
+let pageErrors: string[];
+test.beforeEach(async ({page}) => {
+  pageErrors = [];
+  page.on('pageerror', error => pageErrors.push(error.message));
+});
+test.afterEach(() => expect(pageErrors).toEqual([]));
+
 test('close/reopen and shared-model options retain loaded readiness and saved scale', async ({page}) => {
   await page.goto('/');
   const viewer = page.locator('#knife everbranch-product-viewer');
@@ -73,4 +80,26 @@ test('late source events cannot change the current model and repeated loads do n
   await expect(viewer.locator('model-viewer')).toHaveJSProperty('scale', scale);
   const dimensions = await viewer.locator('model-viewer').evaluate((el: any) => el.getDimensions());
   expect(Math.max(dimensions.x, dimensions.y, dimensions.z)).toBeCloseTo(.3, 3);
+});
+
+test('native-mode mount unmount and remount applies saved dimensions without an AR session', async ({page}) => {
+  await page.goto('/');
+  const config = await page.locator('#knife everbranch-product-viewer').getAttribute('data-config');
+  for (let i = 0; i < 2; i++) {
+    await page.evaluate(config => {
+      const viewer = document.createElement('everbranch-product-viewer');
+      viewer.id = 'native-preview';
+      viewer.setAttribute('native', '');
+      viewer.setAttribute('data-config', config!);
+      document.body.append(viewer);
+    }, config);
+    const viewer = page.locator('#native-preview');
+    await viewer.locator('.pv-launch').click();
+    await expect.poll(() => viewer.evaluate((el: any) => el.modelReady)).toBe(true);
+    const dimensions = await viewer.locator('model-viewer').evaluate((el: any) => el.getDimensions());
+    expect(Math.max(dimensions.x, dimensions.y, dimensions.z)).toBeCloseTo(.3, 3);
+    await expect(viewer.locator('model-viewer')).not.toHaveAttribute('ar');
+    await viewer.getByRole('button', {name: 'Close product preview'}).click();
+    await viewer.evaluate(el => el.remove());
+  }
 });

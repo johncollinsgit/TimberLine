@@ -50,6 +50,18 @@ supported; otherwise the shopper keeps the corrected 3D view with an explicit
 explanation. No Android fallback may silently claim the configured size. The
 isolated build tool is patched to Vite 7.3.7; runtime dependency pins are unchanged.
 
+The real Capacitor wrapper exposed an upstream model-viewer 4.4.0 defect:
+ordinary 3D scale changes call its AR update hook even when no AR scene exists.
+The package's build preparation applies one checksum-pinned compatibility guard
+to `ARRenderer.onUpdateScene`: XR-menu updates require an active presented scene
+and placement box. Original dependency source SHA256 is
+`6d5f3fcb8d4728f579217fd5066263f8ea8c10c1701a4fc73c6ac4fcb1f8b5d1`;
+patched SHA256 is
+`47d420e4d0d9bae43210c3bdcfdf90ebb9465266241292038e1978c72e36ada0`.
+The version/license stay intact; unknown source bytes fail the build. Review and
+remove this compatibility patch when deliberately upgrading the dependency.
+See the [pinned upstream AR implementation](https://raw.githubusercontent.com/google/model-viewer/v4.4.0/packages/model-viewer/src/three-components/ARRenderer.ts).
+
 ## Backend install on Mac
 
 1. Locate the current `johncollinsgit/TimberLine` checkout. Read its current
@@ -172,13 +184,17 @@ integrated; a backend descriptor alone does not establish that consumer.
 Mac source verification: 63 affected PHP cases / 1,069 assertions (18 native
 feed cases, existing mobile platform, visualization and Website catalog); full
 root TypeScript/production build and its 16 Trajectory + 4 voice + 5 viewer Node
-cases; 8 synthetic Chromium/WebKit lifecycle cases at 390 px; Pint and migration
+cases; 10 synthetic Chromium/WebKit lifecycle cases at 390 px with strict
+page-error capture, including native mount/unmount/remount; Pint and migration
 lint with zero schema changes. Both workflow build paths run the synthetic
 viewer checks after assets and browsers are installed. These are local code/
 fixture checks, not protected combined-head CI, native APK or physical-device
 acceptance. The narrow Vite patch removed the reported high dev-server
 advisories; a low esbuild Windows dev-server advisory remains outside the
-packaged runtime. No development server is bundled or deployed.
+packaged runtime. No development server is bundled or deployed. The first native
+mount check reproduced the upstream AR-menu exception in both engines before
+the guard; all final source/browser checks require zero page errors. Earlier
+eight-case results did not capture page errors and are superseded.
 
 1. Mount it on a capability-gated Product previews screen using the current
    authorized endpoint above. Do not substitute Field Service or legacy Shopify

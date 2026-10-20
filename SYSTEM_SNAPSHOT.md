@@ -2945,3 +2945,6 @@ An additive native read API and bootstrap capability expose only eligible
 published native Website previews with current tenant membership, `mobile:read`,
 canonical gates and verified HTTPS routing. Data-only descriptors are bounded;
 connected-renderer and device acceptance remain separate. No rollout enabled.
+An upstream model-viewer 4.4.0 ordinary-scale/AR-menu error is fixed by a narrow
+checksum-guarded build patch; native mount/unmount/remount browser regressions
+now enforce zero page errors. No runtime/provider/tenant setting changed.

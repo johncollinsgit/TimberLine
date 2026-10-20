@@ -2262,3 +2262,6 @@ The native read-only preview feed uses existing `mobile:read` and tenant guards,
 canonical published Website access and finite data-only descriptors. Bootstrap
 advertises capability only; no new Branch or grant. Connected renderers stay
 excluded until their real public viewer consumer exists. All gates stay off.
+Build preparation includes a checksum-pinned model-viewer 4.4.0 AR-menu guard
+for ordinary 3D size updates. Preserve the fail-closed hashes and review the
+runbook when upgrading; native/web regressions reject all page errors.
