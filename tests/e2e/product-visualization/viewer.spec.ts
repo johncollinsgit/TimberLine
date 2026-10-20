@@ -1,4 +1,5 @@
 import {expect, test} from '@playwright/test';
+import type {Page} from '@playwright/test';
 
 let pageErrors: string[];
 test.beforeEach(async ({page}) => {
@@ -6,6 +7,45 @@ test.beforeEach(async ({page}) => {
   page.on('pageerror', error => pageErrors.push(error.message));
 });
 test.afterEach(() => expect(pageErrors).toEqual([]));
+
+async function prepareNativeExports(page: Page) {
+  await page.goto('/');
+  await page.evaluate(() => {
+    const config = document.querySelector('#knife everbranch-product-viewer')!.getAttribute('data-config')!;
+    const viewer = document.createElement('everbranch-product-viewer');
+    viewer.id = 'native-export-preview';
+    viewer.setAttribute('native', ''); viewer.setAttribute('data-config', config);
+    document.body.append(viewer);
+  });
+  const viewer = page.locator('#native-export-preview');
+  await viewer.locator('.pv-launch').click();
+  await expect.poll(() => viewer.evaluate((el: any) => el.modelReady)).toBe(true);
+  await viewer.evaluate((el: any) => {
+    const state: any = {photos: [], stops: [], limits: [], exports: [], stoppedTracks: 0, delayedShares: []};
+    (window as any).nativeExportFixture = state;
+    class Recorder {
+      static isTypeSupported() { return true; }
+      state = 'inactive'; ondataavailable: any; onstop: any; onerror: any;
+      start() { this.state = 'recording'; }
+      stop() { this.state = 'inactive'; state.stops.push(() => { this.ondataavailable?.({data: new Blob(['synthetic clip'])}); this.onstop?.(); }); }
+    }
+    Object.defineProperty(window, 'MediaRecorder', {configurable: true, value: Recorder});
+    const canvas = document.createElement('canvas');
+    Object.defineProperty(canvas, 'captureStream', {value: () => ({getTracks: () => [{stop: () => ++state.stoppedTracks}]})});
+    canvas.toBlob = callback => { state.photos.push(callback); };
+    el.compose = () => canvas;
+    el.savePreview = (blob: Blob, name: string, context?: {isCurrent: () => boolean}) => { state.exports.push({name, bytes: blob.size, current: context?.isCurrent() ?? true}); };
+    const timeout = window.setTimeout.bind(window);
+    window.setTimeout = ((callback: TimerHandler, delay?: number, ...args: any[]) => {
+      if (delay === 20000) {
+        state.limits.push(() => (callback as Function)(...args));
+        return timeout(() => undefined, 3600000);
+      }
+      return timeout(callback, delay, ...args);
+    }) as typeof window.setTimeout;
+  });
+  return viewer;
+}
 
 test('close/reopen and shared-model options retain loaded readiness and saved scale', async ({page}) => {
   await page.goto('/');
@@ -102,4 +142,56 @@ test('native-mode mount unmount and remount applies saved dimensions without an 
     await viewer.getByRole('button', {name: 'Close product preview'}).click();
     await viewer.evaluate(el => el.remove());
   }
+});
+
+for (const interruption of ['background', 'close', 'unmount', 'browser-fallback']) {
+  test(`native recording and pending photo exports are cancelled by ${interruption}`, async ({page}) => {
+    const viewer = await prepareNativeExports(page);
+    const result = await viewer.evaluate((el: any, interruption) => {
+      const state = (window as any).nativeExportFixture;
+      el.record(); el.photo();
+      if (interruption === 'background') {
+        Object.defineProperty(document, 'hidden', {configurable: true, value: true});
+        document.dispatchEvent(new Event('visibilitychange'));
+      } else if (interruption === 'close') {
+        el.dialog.close();
+        // The native close path invokes stop as the close event is delivered.
+        el.dialog.dispatchEvent(new Event('close'));
+      } else if (interruption === 'unmount') el.remove();
+      else el.stop(); // Native Browser handoff stops the viewer before opening.
+      state.photos.forEach((callback: BlobCallback) => callback(new Blob(['synthetic photo'])));
+      state.stops.forEach((callback: Function) => callback());
+      return {exports: state.exports, stoppedTracks: state.stoppedTracks, recording: el.recording};
+    }, interruption);
+    expect(result).toEqual({exports: [], stoppedTracks: 1, recording: false});
+  });
+}
+
+test('foreground photo explicit recording completion and the recording limit still export', async ({page}) => {
+  const viewer = await prepareNativeExports(page);
+  const result = await viewer.evaluate((el: any) => {
+    const state = (window as any).nativeExportFixture;
+    el.photo(); state.photos.shift()(new Blob(['synthetic photo']));
+    el.record(); el.record(); state.stops.shift()(); // Deliberate Stop recording.
+    el.record(); state.limits.at(-1)(); state.stops.shift()(); // Foreground 20s completion.
+    return {exports: state.exports, stoppedTracks: state.stoppedTracks};
+  });
+  expect(result.exports.map((item: any) => [item.name, item.current])).toEqual([
+    ['everbranch-product-preview.png', true], ['everbranch-product-preview.mp4', true], ['everbranch-product-preview.mp4', true],
+  ]);
+  expect(result.stoppedTracks).toBe(2);
+});
+
+test('an already dispatched native export context becomes invalid after cancellation', async ({page}) => {
+  const viewer = await prepareNativeExports(page);
+  await viewer.evaluate((el: any) => {
+    const state = (window as any).nativeExportFixture;
+    el.savePreview = (_blob: Blob, _name: string, context: {isCurrent: () => boolean}) => new Promise((_resolve, reject) => {
+      state.delayedShares.push(() => { if (context.isCurrent()) state.exports.push('late native share'); reject(new Error('Synthetic late native failure')); });
+    });
+    el.photo(); state.photos.shift()(new Blob(['synthetic photo']));
+    el.stop(); state.delayedShares.shift()();
+  });
+  await expect(viewer.locator('.pv-status')).toHaveText('Camera stopped. You can continue exploring in 3D.');
+  expect(await page.evaluate(() => (window as any).nativeExportFixture.exports)).toEqual([]);
 });

@@ -172,19 +172,25 @@ export class ProductViewer extends HTMLElement{
     ctx.fillStyle='rgba(24,47,35,.85)';ctx.fillRect(0,h-36,w,36);ctx.fillStyle='white';ctx.font='14px system-ui';ctx.fillText('Everbranch · visual preview · approximate scale',12,h-13);
     return this.capture;
   }
-  file(blob,name){if(!blob||!this.isConnected)return;if(this.savePreview){Promise.resolve(this.savePreview(blob,name)).catch(()=>{this.status.textContent='The phone could not share this file. Use a screen recording instead.';});return;}const url=URL.createObjectURL(blob);this.urls.push(url);const a=document.createElement('a');a.href=url;a.download=name;a.textContent='Save '+name;a.className='pv-download';this.querySelector('.pv-files').replaceChildren(a);this.status.textContent='Your preview is ready to save. It has not been uploaded.';}
-  photo(){try{this.compose()?.toBlob(blob=>this.file(blob,'everbranch-product-preview.png'),'image/png');}catch{this.status.textContent='This browser could not save an image.';}}
+  canExport(session){return session===this.session&&this.isConnected&&this.dialog?.open&&!document.hidden;}
+  file(blob,name,session){if(!blob||!this.canExport(session))return;if(this.savePreview){const context={isCurrent:()=>this.canExport(session)};Promise.resolve(this.savePreview(blob,name,context)).catch(()=>{if(context.isCurrent())this.status.textContent='The phone could not share this file. Use a screen recording instead.';});return;}const url=URL.createObjectURL(blob);this.urls.push(url);const a=document.createElement('a');a.href=url;a.download=name;a.textContent='Save '+name;a.className='pv-download';this.querySelector('.pv-files').replaceChildren(a);this.status.textContent='Your preview is ready to save. It has not been uploaded.';}
+  photo(){const session=this.session;try{this.compose()?.toBlob(blob=>this.file(blob,'everbranch-product-preview.png',session),'image/png');}catch{if(this.canExport(session))this.status.textContent='This browser could not save an image.';}}
   record(){
     if(this.recorder?.state==='recording'){this.recorder.stop();return;}
     const canvas=this.compose();if(!canvas?.captureStream||!window.MediaRecorder){this.status.textContent='Video export is unavailable here. Use Save image or your phone’s screen recording.';return;}
     const type=['video/mp4;codecs=avc1.42E01E','video/mp4','video/webm;codecs=vp8','video/webm'].find(t=>MediaRecorder.isTypeSupported(t));
     if(!type){this.status.textContent='This browser has no supported video encoder. Use your phone’s screen recording.';return;}
     try{
-      const stream=canvas.captureStream(24);this.recorder=new MediaRecorder(stream,{mimeType:type});const parts=[];
-      this.recorder.ondataavailable=e=>{if(e.data.size)parts.push(e.data);};
-      this.recorder.onstop=()=>{stream.getTracks().forEach(t=>t.stop());this.recording=false;clearTimeout(this.recordTimer);this.querySelector('[data-action=record]').textContent='Record clip';this.file(new Blob(parts,{type}),`everbranch-product-preview.${type.startsWith('video/mp4')?'mp4':'webm'}`);};
-      this.recorder.onerror=()=>{stream.getTracks().forEach(t=>t.stop());this.recording=false;this.status.textContent='Video export failed. Use Save image or your phone’s screen recording.';};
-      this.recorder.start();this.recording=true;this.querySelector('[data-action=record]').textContent='Stop recording';this.status.textContent='Recording this preview locally (up to 20 seconds).';this.recordTimer=setTimeout(()=>{if(this.recorder?.state==='recording')this.recorder.stop();},20000);
+      const stream=canvas.captureStream(24),recorder=new MediaRecorder(stream,{mimeType:type}),session=this.session,parts=[];let failed=false,timer;
+      this.recorder=recorder;
+      recorder.ondataavailable=e=>{if(e.data.size)parts.push(e.data);};
+      recorder.onstop=()=>{
+        stream.getTracks().forEach(t=>t.stop());clearTimeout(timer);
+        if(this.recorder===recorder){this.recorder=null;this.recording=false;if(this.recordTimer===timer)this.recordTimer=null;this.querySelector('[data-action=record]').textContent='Record clip';}
+        if(!failed)this.file(new Blob(parts,{type}),`everbranch-product-preview.${type.startsWith('video/mp4')?'mp4':'webm'}`,session);
+      };
+      recorder.onerror=()=>{failed=true;stream.getTracks().forEach(t=>t.stop());clearTimeout(timer);if(this.recorder===recorder)this.recording=false;if(this.canExport(session))this.status.textContent='Video export failed. Use Save image or your phone’s screen recording.';};
+      recorder.start();this.recording=true;this.querySelector('[data-action=record]').textContent='Stop recording';this.status.textContent='Recording this preview locally (up to 20 seconds).';timer=setTimeout(()=>{if(recorder.state==='recording')recorder.stop();},20000);this.recordTimer=timer;
     }catch{this.status.textContent='Video export could not start on this device.';}
   }
 }

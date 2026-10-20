@@ -193,7 +193,7 @@ evidence of physical viewer availability.
 Mac source verification: 65 affected PHP cases / 1,081 assertions (20 native
 feed cases, existing mobile platform, visualization and Website catalog); full
 root TypeScript/production build and its 16 Trajectory + 4 voice + 5 viewer Node
-cases; 10 synthetic Chromium/WebKit lifecycle cases at 390 px with strict
+cases; 22 synthetic Chromium/WebKit lifecycle cases at 390 px with strict
 page-error capture, including native mount/unmount/remount; Pint and migration
 lint with zero schema changes. Both workflow build paths run the synthetic
 viewer checks after assets and browsers are installed. These are local code/
@@ -204,6 +204,20 @@ packaged runtime. No development server is bundled or deployed. The first native
 mount check reproduced the upstream AR-menu exception in both engines before
 the guard; all final source/browser checks require zero page errors. Earlier
 eight-case results did not capture page errors and are superseded.
+
+Lifecycle cancellation is separate from deliberately completing a local export.
+Background, close, unmount and browser handoff invalidate the capture session;
+pending photo callbacks and interrupted recording `onstop` callbacks cannot
+create a download or invoke native sharing. Deliberate Stop recording and the
+20-second foreground limit still finish the chosen clip. Native adapters receive
+`savePreview(blob, name, {isCurrent})`; recheck that predicate and disposal after
+each asynchronous permission/share-capability/base64/cache step, discard any
+newly staged cache file if cancelled before sharing, and never open Share after
+cancellation. An expired callback must not write a stale error into the viewer.
+The supplied adapter illustrates that contract; the actual app must enforce it
+in its own sharing helper. Synthetic native-mode export regression coverage is
+22 Chromium/WebKit cases total, including delayed photo/recorder/share callbacks;
+this does not establish physical native sharing acceptance.
 
 1. Mount it on a capability-gated Product previews screen using the current
    authorized endpoint above. Do not substitute Field Service or legacy Shopify

@@ -6,7 +6,7 @@ import {Filesystem, Directory} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
 
 type Descriptor = {version: 1; productId: number; title: string; placement: 'hand'|'room'; modelUrl: string; lengthMm: number; grip: number[]; rotationDeg: number[]; variants: {id: number; label: string; modelUrl: string}[]};
-type Viewer = HTMLElement & {beforeCamera?: ()=>Promise<void>; openRoomAR?: ()=>Promise<void>; savePreview?: (blob: Blob,name: string)=>Promise<void>; stop?: ()=>void};
+type Viewer = HTMLElement & {beforeCamera?: ()=>Promise<void>; openRoomAR?: ()=>Promise<void>; savePreview?: (blob: Blob,name: string,context?:{isCurrent:()=>boolean})=>Promise<void>; stop?: ()=>void};
 let viewerBundle: Promise<unknown>|undefined;
 function loadViewer(){
   if(!viewerBundle){
@@ -41,8 +41,13 @@ export function ProductVisualization({descriptor,publicViewerUrl,allowedHosts}:{
       viewer.setAttribute('native','');viewer.setAttribute('data-config',serialized);
       viewer.beforeCamera=async()=>{const permission=await Camera.requestPermissions({permissions:['camera']});if(permission.camera!=='granted')throw new Error('Allow camera access in the app settings, then retry.');};
       viewer.openRoomAR=async()=>{viewer?.stop?.();await Browser.open({url:publicUrl.href});};
-      viewer.savePreview=async(blob,name)=>{
-        const file=await Filesystem.writeFile({path:`product-previews/${Date.now()}-${name}`,directory:Directory.Cache,data:await dataUrl(blob),recursive:true});
+      viewer.savePreview=async(blob,name,context)=>{
+        const current=()=>!disposed&&(context?.isCurrent()??true);
+        if(!current())return;
+        const data=await dataUrl(blob);
+        if(!current())return;
+        const file=await Filesystem.writeFile({path:`product-previews/${Date.now()}-${name}`,directory:Directory.Cache,data,recursive:true});
+        if(!current()){await Filesystem.deleteFile({path:file.uri}).catch(()=>{});return;}
         await Share.share({title:'Product preview',files:[file.uri]});
       };
       host.current?.replaceChildren(viewer);
