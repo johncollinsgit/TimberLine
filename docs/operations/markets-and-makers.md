@@ -54,7 +54,7 @@ owner/admin relationship; this command is not a way to acquire another workspace
 
 ## Merchant operations
 
-The owner view includes live sales by date, maker and customer; merchandise,
+The owner view includes live sales by Eastern date, maker and customer; merchandise,
 marketplace-funded discounts, quantities/refunds, customers, orders, maker business
 profiles and contacts, products and stock, supplier statements and bank references,
 market/show schedules, maker participation and booths, pickups, shared storefront
@@ -67,8 +67,9 @@ Create markets/shows as drafts or published events. Only operator-approved maker
 participation can enable pickup at a market. Published pickup locations require a
 structured US tax address. Pickup ordering stops at the event cutoff/end; that does
 not cancel already paid purchases. Public lineups show approved makers only.
-Changes to a paid order’s market schedule/location create a financial/fulfillment
-review hold. Contact the customer and record a reschedule or refund; saving an event
+Changes to a paid order’s market schedule/location or maker participation create
+a financial/fulfillment review hold. Maker withdrawal immediately marks uncollected
+pickup orders for owner review. Contact the customer and record a reschedule or refund; saving an event
 does not send customer messages. A checkout snapshot preserves the original pickup
 instructions. Operators can save revised instructions on the order after contact.
 
@@ -134,10 +135,36 @@ signing secret. Actual SDK, pickup, discount, tax, fulfillment, refund and devic
 acceptance remain required with the dedicated merchant; local HTTP fakes are not
 provider acceptance.
 
-PayPal business connection setup is available in the shared Everbranch payment
-screen. A native marketplace PayPal buyer create/capture/refund adapter is not
-included in this release, so connecting an account does not show a PayPal checkout
-button. Do not mark it buyer-ready or substitute a link-click receipt.
+### PayPal buyers
+
+Native PayPal approval/capture and original-account refunds are implemented behind
+independent default-off gates. Connect this Store's business PayPal account in the
+shared payment setup. New order/capture requests recheck its current partner
+permissions and original merchant context. Tax and USD amounts are server-generated;
+the provided US delivery address is frozen before approval. A browser return never
+records payment. Canonical capture, merchant, currency, items, address and breakdown
+checks settle inventory once. Pending/unknown payments remain held; definitive
+canonical declines release allocated availability once. Approved unpaid attempts
+may be explicitly cancelled before any capture starts.
+
+Configure the app's /webhooks/marketplace/paypal endpoint and webhook ID for
+CHECKOUT.ORDER.APPROVED, PAYMENT.CAPTURE.COMPLETED/PENDING/DENIED/REFUNDED,
+PAYMENT.REFUND.COMPLETED/PENDING/FAILED, and CUSTOMER.DISPUTE events. Signature
+verification uses PayPal's verification API; merchant-bound events are encrypted
+and deduplicated. Signed callbacks and canonical reads continue while collection
+is off. Refunds require the original capture, amount, immutable local refund
+invoice reference and canonical capture link. Lost responses are reconciled without
+replaying money movement. Native tax transactions/reversals are durable and supplier
+payment remains held while provider/tax work is unresolved.
+
+MARKETPLACE_PAYPAL_ENABLED, MARKETPLACE_PAYPAL_WEBHOOK_VERIFIED, and a configured
+webhook ID gate test-mode buyer availability. Live additionally requires the
+approved platform integration, MARKETPLACE_PAYPAL_LIVE_VERIFIED, exact
+MARKETPLACE_PAYPAL_LIVE_MERCHANT_ID, signed sandbox test proof for the dedicated
+Store, and matching live tax/payment environments. These controls do not assert
+actual PayPal approval, seller onboarding, buyer acceptance or device verification;
+those remain external launch evidence. No real PayPal credentials or payments were
+created during implementation. See the official [partner checkout guide](https://developer.paypal.com/platforms/checkout/standard/integrate/).
 
 An explicit optional `shopify` checkout provider retains a separate hosted-catalog
 adapter and its original signed reconciliation tests. It is not the default native

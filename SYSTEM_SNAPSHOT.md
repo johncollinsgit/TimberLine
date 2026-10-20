@@ -15,8 +15,8 @@
   payments and never sends supplier funds automatically.
 - No real M&M merchant, wallet/device acceptance, DNS or production launch has been
   completed. Checkout stays off until merchant, tax, policies and pilot verification.
-  PayPal seller connection setup does not yet provide native marketplace buyer
-  checkout. Existing Website Commerce and Modern Forestry lanes remain separate.
+  Native PayPal buyer approval/capture/refund is independently gated and mock-tested;
+  actual platform/seller approval and payment acceptance remain launch blockers. Existing Website Commerce and Modern Forestry lanes remain separate.
   See `docs/operations/markets-and-makers.md` for launch and recovery details.
 
 ## Self-service payment accounts, bank linking and native invoices (2026-10-19)

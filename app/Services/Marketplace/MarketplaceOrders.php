@@ -315,7 +315,28 @@ class MarketplaceOrders
 
     private function financialReviewPending(Order $order): bool
     {
-        return $order->review_required || ! $order->shipping_allocated_at || collect($order->shipping_refunds ?? [])->contains(fn ($refund) => $refund['status'] !== 'allocated');
+        return $this->providerWorkPending($order) || $order->review_required || ! $order->shipping_allocated_at || collect($order->shipping_refunds ?? [])->contains(fn ($refund) => $refund['status'] !== 'allocated');
+    }
+
+    public function providerWorkPending(Order $order): bool
+    {
+        if (\App\Models\Marketplace\Operation::where('subject_id', $order->checkout_id)->whereIn('kind', ['wallet_tax_sale', 'wallet_tax_refund', 'paypal_tax_sale', 'paypal_tax_refund'])->whereIn('status', ['prepared', 'sending', 'unknown'])->exists()) {
+            return true;
+        }
+        $lineIds = $order->lines()->pluck('id');
+        foreach (\App\Models\Marketplace\Operation::whereIn('subject_id', $lineIds)->whereIn('kind', ['refund', 'native_refund', 'paypal_refund'])->get() as $operation) {
+            if (in_array($operation->status, ['prepared', 'sending', 'unknown'], true)) {
+                return true;
+            }
+            if ($operation->kind === 'native_refund' && $operation->status === 'completed' && ! in_array($operation->result['status'] ?? '', ['failed', 'canceled'], true) && ! LedgerEntry::where('source_key', 'native-refund:'.($operation->result['id'] ?? '').':'.$operation->subject_id)->exists()) {
+                return true;
+            }
+            if ($operation->kind === 'paypal_refund' && $operation->status === 'completed' && ! in_array($operation->result['status'] ?? '', ['FAILED', 'CANCELLED'], true) && ! LedgerEntry::where('source_key', 'paypal-refund:'.($operation->result['id'] ?? '').':'.$operation->subject_id)->exists()) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function assertSupplierReady(int $makerId): void

@@ -132,7 +132,7 @@ class MarketplaceNativeCheckout
 
                 return $existing;
             }
-            $pending = Checkout::where('session_hash', $owner)->where('group_key', $group)->whereIn('provider', ['stripe', 'shop_pay', 'paypal'])->whereIn('status', ['creating', 'sending', 'ready', 'unknown', 'wallet_ready', 'wallet_session', 'wallet_submitting', 'wallet_submitted', 'wallet_unknown'])->latest('id')->first();
+            $pending = Checkout::where('session_hash', $owner)->where('group_key', $group)->whereIn('provider', ['stripe', 'shop_pay', 'paypal'])->whereIn('status', ['creating', 'sending', 'ready', 'unknown', 'wallet_ready', 'wallet_session', 'wallet_submitting', 'wallet_submitted', 'wallet_unknown', 'paypal_ready', 'paypal_creating', 'paypal_approval', 'paypal_capture_sending', 'paypal_capture_unknown'])->latest('id')->first();
             if ($pending) {
                 abort_unless(($pending->snapshot['fingerprint'] ?? '') === $fingerprint, 409, 'Your earlier checkout is still open. Complete it or wait for its confirmed expiry before starting changed terms.');
 
@@ -162,7 +162,12 @@ class MarketplaceNativeCheckout
     public function begin(Request $request, string $group, string $uuid): Checkout
     {
         $method = $request->input('payment_method', 'card');
-        abort_unless(in_array($method, ['card', 'shop_pay'], true), 422);
+        abort_unless(in_array($method, ['card', 'shop_pay', 'paypal'], true), 422);
+        if ($method === 'paypal') {
+            abort_unless(app(MarketplacePayPal::class)->ready(), 423, 'PayPal is not ready for this merchant.');
+
+            return app(MarketplacePayPal::class)->begin($this->prepare($request, $group, $uuid, 'paypal'), $request);
+        }
         if ($method === 'shop_pay') {
             abort_unless(app(MarketplaceWallet::class)->ready(), 423, 'Shop Pay is not ready for this merchant yet.');
 
@@ -313,7 +318,11 @@ class MarketplaceNativeCheckout
     public function fulfill(OrderLine $line, string $action, array $data, string $uuid): void
     {
         abort_unless(Str::isUuid($uuid), 422);
-        $this->reconcile($line->order->checkout);
+        if ($line->order->provider === 'paypal') {
+            app(MarketplacePayPal::class)->reconcile($line->order->checkout);
+        } else {
+            $this->reconcile($line->order->checkout);
+        }
         DB::transaction(function () use ($line, $action, $data, $uuid): void {
             $line = OrderLine::query()->lockForUpdate()->findOrFail($line->id);
             $order = $line->order;
@@ -337,7 +346,17 @@ class MarketplaceNativeCheckout
 
     public function refundPreview(OrderLine $line, int $quantity, int $shipping): array
     {
-        $this->reconcile($line->order->checkout);
+        if ($line->order->provider === 'paypal') {
+            app(MarketplacePayPal::class)->reconcile($line->order->checkout);
+        } else {
+            $this->reconcile($line->order->checkout);
+        }
+
+        return $this->refundAmounts($line, $quantity, $shipping);
+    }
+
+    public function refundAmounts(OrderLine $line, int $quantity, int $shipping): array
+    {
         $line = $line->fresh();
         $checkout = $line->order->checkout;
         abort_unless($quantity > 0 && $quantity <= $line->quantity - $line->refunded_quantity && $shipping >= 0 && $shipping <= $line->order->shipping_cents, 422);

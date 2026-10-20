@@ -24,7 +24,11 @@ class MarketplaceReconcile extends Command
         }
         if (Schema::hasTable('marketplace_payment_events')) {
             foreach (\App\Models\Marketplace\PaymentEvent::whereIn('status', ['pending', 'failed'])->oldest('updated_at')->limit(max(1, min(100, (int) $this->option('limit'))))->get() as $event) {
-                app(\App\Http\Controllers\Marketplace\StripeWebhookController::class)->process($event);
+                if ($event->provider === 'paypal') {
+                    app(\App\Http\Controllers\Marketplace\PayPalWebhookController::class)->process($event);
+                } else {
+                    app(\App\Http\Controllers\Marketplace\StripeWebhookController::class)->process($event);
+                }
             }
             foreach (\App\Models\Marketplace\Checkout::where('provider', 'stripe')->whereNotNull('provider_session_ref')->whereIn('status', ['ready', 'unknown', 'sending', 'paid'])->oldest('updated_at')->limit(max(1, min(100, (int) $this->option('limit'))))->get() as $checkout) {
                 try {
@@ -41,6 +45,14 @@ class MarketplaceReconcile extends Command
                 $checkout->touch();
             } catch (\Throwable) {
                 $checkout->forceFill(['failure_code' => 'wallet_reconciliation_required'])->save();
+            }
+        }
+        foreach (\App\Models\Marketplace\Checkout::where('provider', 'paypal')->whereNotNull('provider_session_ref')->whereIn('status', ['paypal_approval', 'paypal_capture_sending', 'paypal_capture_unknown', 'paid'])->oldest('updated_at')->limit(max(1, min(100, (int) $this->option('limit'))))->get() as $checkout) {
+            try {
+                app(\App\Services\Marketplace\MarketplacePayPal::class)->reconcile($checkout);
+                $checkout->touch();
+            } catch (\Throwable) {
+                $checkout->update(['failure_code' => 'paypal_reconciliation_required']);
             }
         }
         if ($this->option('order')) {

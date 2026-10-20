@@ -12,8 +12,8 @@
 - Native Everbranch is the default checkout provider. Stripe direct payments and
   separate Shop Pay Wallet require their own configured merchant and test/live
   evidence; never borrow another tenant's account or the Evergrove Wallet binding.
-  Unknown mutations cannot be blindly replayed. PayPal seller setup does not enable
-  native marketplace buyer checkout. Optional hosted Shopify is explicitly opt-in.
+  Unknown mutations cannot be blindly replayed. PayPal buyer approval/capture/refund also has independent default-off merchant,
+  signature, test and live gates; seller setup alone never enables collection. Optional hosted Shopify is explicitly opt-in.
 - Appearance follows the Android tablet Showcase sample. Owner reporting and
   market participation are permission-scoped; shared store links do not imply
   catalog sync. Shopify/Wix reseller publishing remains phase two. See

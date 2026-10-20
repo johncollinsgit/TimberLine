@@ -40,7 +40,7 @@ class OperatorController extends Controller
             'tab' => $tab, 'settings' => $settings, 'connection' => Connection::query()->find($settings->connection_id), 'blockers' => $checkout->blockers(),
             'merchantStore' => $access->store(), 'walletConnection' => app(\App\Services\Marketplace\MarketplaceWallet::class)->connection(),
             'makers' => Maker::query()->with('memberships')->latest('id')->limit(100)->get(), 'listings' => Listing::query()->with('maker', 'levels')->latest('id')->limit(100)->get(),
-            'orders' => $tab === 'orders' ? ($request->boolean('include_test') ? Order::with('lines.maker')->whereBetween('created_at', [$report['from'], $report['to']])->when($request->filled('maker'), fn ($q) => $q->whereHas('lines', fn ($line) => $line->where('maker_id', $request->integer('maker'))))->when($request->filled('customer'), fn ($q) => $q->where('email_hash', hash('sha256', strtolower(trim($request->query('customer'))))))->latest('id')->limit(2000)->get() : $report['salesOrders']) : Order::query()->with('lines.maker')->latest('id')->limit(50)->get(), 'statements' => Statement::query()->with('maker', 'entries')->latest('id')->limit(50)->get(),
+            'orders' => $tab === 'orders' ? ($request->boolean('include_test') ? Order::with('lines.maker')->whereBetween('created_at', [$report['from']->utc(), $report['to']->utc()])->when($request->filled('maker'), fn ($q) => $q->whereHas('lines', fn ($line) => $line->where('maker_id', $request->integer('maker'))))->when($request->filled('customer'), fn ($q) => $q->where('email_hash', hash('sha256', strtolower(trim($request->query('customer'))))))->latest('id')->limit(2000)->get() : $report['salesOrders']) : Order::query()->with('lines.maker')->latest('id')->limit(50)->get(), 'statements' => Statement::query()->with('maker', 'entries')->latest('id')->limit(50)->get(),
             'rates' => RateAgreement::query()->latest('id')->limit(100)->get(), 'locations' => PickupLocation::query()->get(),
             'events' => WebhookEvent::query()->select('id', 'topic', 'status', 'failure_code', 'created_at')->latest('id')->limit(30)->get(),
             'operations' => Operation::query()->select('id', 'uuid', 'kind', 'subject_id', 'status', 'created_at')->latest('id')->limit(30)->get(),
@@ -185,7 +185,9 @@ class OperatorController extends Controller
         $order = Order::query()->with('checkout')->findOrFail($id);
         $action = $request->validate(['action' => 'required|in:reconcile,shipping,shipping_refund,review,cost,pickup_update'])['action'];
         if ($action === 'reconcile') {
-            if ($order->provider === 'stripe') {
+            if ($order->provider === 'paypal') {
+                app(\App\Services\Marketplace\MarketplacePayPal::class)->reconcile($order->checkout);
+            } elseif ($order->provider === 'stripe') {
                 app(\App\Services\Marketplace\MarketplaceNativeCheckout::class)->reconcile($order->checkout);
             } else {
                 $orders->reconcile(Connection::query()->findOrFail($order->connection_id), $order->provider_order_gid);
@@ -200,7 +202,9 @@ class OperatorController extends Controller
             $orders->allocateShipping($order, array_map([MarketplaceShopify::class, 'cents'], $data['credits']), $subsidy, $request->user()->id);
         }
         if ($action === 'review') {
+            abort_if($orders->providerWorkPending($order), 409, 'Reconcile outstanding original-provider operations before resolving this review.');
             abort_if(! empty($order->fulfillment_details['unallocated_refunds']), 409, 'Reconcile external refunds with their original line and supplier obligations before releasing this order.');
+            abort_if($order->provider === 'paypal' && in_array($order->review_reason, ['PayPal tax posting needs reconciliation.', 'PayPal refund needs reconciliation.'], true), 409, 'Complete PayPal reconciliation before resolving this review.');
             abort_if($order->provider === 'shop_pay' && $order->review_reason === 'Wallet tax posting needs reconciliation.', 409, 'Complete the Wallet tax reconciliation first.');
             $reason = $request->validate(['reason' => 'required|string|min:12|max:3000'])['reason'];
             abort_unless($order->lines()->count() === count($order->checkout->snapshot['lines']), 422, 'Resolve the provider item mismatch through the original payment first.');

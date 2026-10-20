@@ -17,7 +17,7 @@ class MarketplaceFulfillment
 
     public function fulfill(OrderLine $line, string $action, array $data, string $uuid): void
     {
-        if ($line->order->provider === 'stripe') {
+        if (in_array($line->order->provider, ['stripe', 'paypal'], true)) {
             app(MarketplaceNativeCheckout::class)->fulfill($line, $action, $data, $uuid);
 
             return;
@@ -63,7 +63,7 @@ class MarketplaceFulfillment
 
     public function refundPreview(OrderLine $line, int $quantity, int $shipping): array
     {
-        if ($line->order->provider === 'stripe') {
+        if (in_array($line->order->provider, ['stripe', 'paypal'], true)) {
             return app(MarketplaceNativeCheckout::class)->refundPreview($line, $quantity, $shipping);
         }
         abort_unless($quantity > 0 && $quantity <= $line->quantity - $line->refunded_quantity && $shipping >= 0 && $shipping <= $line->order->shipping_cents, 422);
@@ -78,6 +78,11 @@ class MarketplaceFulfillment
 
     public function refund(OrderLine $line, int $quantity, int $shipping, int $expected, string $uuid, int $actor): void
     {
+        if ($line->order->provider === 'paypal') {
+            app(MarketplacePayPal::class)->refund($line, $quantity, $shipping, $expected, $uuid, $actor);
+
+            return;
+        }
         if ($line->order->provider === 'stripe') {
             app(MarketplaceNativeCheckout::class)->refund($line, $quantity, $shipping, $expected, $uuid, $actor);
 

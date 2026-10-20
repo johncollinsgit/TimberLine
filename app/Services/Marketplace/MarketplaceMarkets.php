@@ -34,8 +34,17 @@ class MarketplaceMarkets
         }
         $pickup = PickupLocation::find($frozen['id']);
         $market = Market::where('pickup_location_id', $frozen['id'])->first();
-        if (! $pickup || ! $pickup->active || ($market && $market->status !== 'published') || $pickup->name !== $frozen['name'] || $pickup->address !== $frozen['address'] || $pickup->instructions !== $frozen['instructions']) {
+        $departure = $market && $order->lines()->whereNull('fulfilled_at')->whereColumn('refunded_quantity', '<', 'quantity')->get()->contains(fn ($line) => ! DB::table('marketplace_market_makers')->where('market_id', $market->id)->where('maker_id', $line->maker_id)->where('status', 'approved')->exists());
+        if ($departure || ! $pickup || ! $pickup->active || ($market && $market->status !== 'published') || $pickup->name !== $frozen['name'] || $pickup->address !== $frozen['address'] || $pickup->instructions !== $frozen['instructions']) {
             $order->forceFill(['review_required' => true, 'review_reason' => 'The market pickup schedule or location changed. Contact the customer and record a reschedule or refund before fulfillment.'])->save();
         }
+    }
+
+    public function reviewMakerDeparture(Market $market, Maker $maker): void
+    {
+        if (! $market->pickup_location_id) {
+            return;
+        }
+        \App\Models\Marketplace\Order::where('group_key', 'pickup:'.$market->pickup_location_id)->whereHas('lines', fn ($q) => $q->where('maker_id', $maker->id)->whereNull('fulfilled_at')->whereColumn('refunded_quantity', '<', 'quantity'))->update(['review_required' => true, 'review_reason' => 'A maker withdrew from this market. Contact the customer and record a pickup alternative or refund before fulfillment.']);
     }
 }
