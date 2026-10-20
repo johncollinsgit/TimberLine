@@ -1,12 +1,22 @@
+## Wren organizer registration summaries (2026-10-19)
+
+- Owner-approved `WREN_SOCCER_ADMIN_NOTIFICATION_EMAILS` receive private formatted
+  signup and confirmed-payment summaries with current season/team rosters, family
+  and child counts, paid/unpaid/waived/waitlisted totals, receipts, refunds and net.
+  Delivery rechecks the allowlist and excludes medical/emergency details. Replay
+  does not resend. GroupMe automated notifications default off; parent email stays.
+  No schema change. See `docs/operations/wren-soccer.md`.
+
 ## Wren email registration launch (2026-10-19)
 
 - `soccer.notification_mode=email` is an explicit Wren launch path, not a ready
   SMS declaration. Parent operational email uses the existing configured mailer;
-  Head Coaches GroupMe alerts recheck admin access and current group membership.
+  automatic GroupMe alerts are disabled by default with
+  `WREN_SOCCER_GROUPME_NOTIFICATIONS_ENABLED=false`, including queued retries.
   Do not put family names, medical details, invoice links or override reasons in
   shared alerts. Preserve per-event dedupe and stable GroupMe source GUIDs.
 - `launch_verified_mode` binds the smoke checklist to the selected mode. Verify
-  real sign-in/notification email, Head Coaches delivery, existing card/refund
+  real sign-in/notification email, existing card/refund
   evidence and current readiness before opening. SMTP exceptions stay uncertain
   for operator reconciliation rather than blind resend. No schema or new SMS
   registration is involved. See the soccer runbook.

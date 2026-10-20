@@ -238,6 +238,9 @@ class SoccerRegistrationService
                 $this->events->record($tenant, $season->id, $familyId, $reserved ? 'sibling_reserved_spots' : 'family_waitlisted', ['summary' => count($offered).' placed, '.count($waiting).' waiting. '.implode('; ', array_map(fn ($r) => $players[$r['player_id']]->name.' ('.config('soccer.teams.'.$r['team_key'].'.name').'): '.($r['seat_kind'] ? 'placed' : 'waiting'), $pending)), 'registration_ids' => array_merge($offered, $waiting)], waitlist: true);
             }
 
+            $submitted = array_merge($offered, $waiting);
+            $this->events->record($tenant, $season->id, $familyId, 'family_registration_submitted', ['registration_ids' => $submitted, 'summary' => 'Family submitted season registration.'], key: 'registration-submitted:'.hash('sha256', implode(',', $submitted)));
+
             return ['placed' => $offered, 'waitlisted' => $waiting];
         }, 3);
     }

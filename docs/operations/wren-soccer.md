@@ -40,6 +40,25 @@ and confirmed admissions count against the relevant seat pool. A strict public
 majority enables reserve use only when all remaining siblings fit. Automatic
 waitlist offers require each waiting sibling to head its team queue.
 
+## Organizer registration summaries (2026-10-19)
+
+`WREN_SOCCER_ADMIN_NOTIFICATION_EMAILS` is a comma-separated allowlist of the
+owner-approved organizer addresses. Each submitted family registration, including
+waitlist-only and waived registrations, queues one private HTML/plain-text email
+per recipient. Confirmed payments queue refreshed summaries; retries and duplicate
+payment callbacks do not duplicate notifications. These emails work in either
+parent notification mode and recheck the recipient allowlist at delivery time.
+
+Each summary includes the registering family and children plus the latest tally
+for that season: families, children with spots, paid/unpaid/waived/waitlisted counts,
+team rosters, confirmed invoice receipts, refunds and net collected. Family payment
+counts can overlap when siblings have mixed payment states. Exclude cancelled and
+historical roster rows; do not infer payment from parent claims or unreviewed
+provider records. The summary contains no medical, emergency or insurance data.
+Mail acceptance is recorded in durable deliveries; ambiguous SMTP outcomes remain
+uncertain for operator review. Do not replay older registrations or create a live
+test registration just to exercise organizer notifications.
+
 ## Required account setup before opening
 
 ### Email registration while SMS is pending, 2026-10-19
@@ -49,8 +68,13 @@ and selected Head Coaches for waitlist alerts. Explicitly configure
 `WREN_SOCCER_NOTIFICATION_MODE=email`; the default remains `sms`. Parent offers,
 reminders, waived-place notices, general waitlist updates and successful payment
 confirmations use verified family email addresses through the existing mailer.
-The Head Coaches group receives generic change alerts and an authenticated
-Everbranch link, without names, medical details, invoices or override reasons.
+Automatic GroupMe notifications are disabled by default as requested by the
+owner. Keep `WREN_SOCCER_GROUPME_NOTIFICATIONS_ENABLED=false`: new events do not
+queue GroupMe alerts and pending/failed GroupMe deliveries are suppressed with
+`groupme_notifications_disabled` before provider access. Parent registration
+emails and manual GroupMe conversations retain their existing behavior. An
+explicit opt-in can restore generic Head Coaches alerts with an authenticated
+Everbranch link and no names, medical details, invoices or override reasons.
 The saved verifying admin must retain active Wren admin access and provider group
 membership. The GroupMe source GUID remains stable across retries.
 
@@ -63,8 +87,7 @@ reconciliation; do not resend them blindly. Failed GroupMe sends retry with the
 same source GUID. Delivery failures remain visible to admins in Messages.
 
 Mode-specific smoke verification is required: `launch_verified_mode=email`, a
-received sign-in code and registration-update email, a confirmed Head Coaches
-test alert, the existing signed card payment/refund evidence and verified group
+received sign-in code and registration-update email, the existing signed card payment/refund evidence and verified group
 mapping. Preserve the active release ID when caching configuration. Let the
 existing overdue opening schedule open registration only after all selected-mode
 readiness checks pass. SMS remains disabled and its approval is not fabricated;

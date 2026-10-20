@@ -18,17 +18,25 @@ class SoccerEvents
             $data['summary'] = $parent.': '.($data['summary'] ?? 'Review in Everbranch.');
         }
         $id = $this->store->insert('events', $tenant, ['season_id' => $season, 'family_id' => $family, 'actor_id' => $actor, 'action' => $action, 'event_key' => $key, 'data' => $this->store->encrypt($data)]);
+        if ($season && $family && ! empty($data['registration_ids']) && in_array($action, ['family_registration_submitted', 'payment_confirmed'], true)) {
+            foreach (array_unique(config('soccer.admin_notification_emails', [])) as $recipient) {
+                $email = strtolower(trim($recipient));
+                if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $this->queueNotification($tenant, $id, 'admin_email:'.$email, ['channel' => 'admin_email', 'email' => $email]);
+                }
+            }
+        }
         $emailMode = config('soccer.notification_mode') === 'email';
         if ($emailMode && $waitlist && $family && ! $familyText) {
             $familyText = 'Wren Soccer: your family registration has an update. Sign in to review each child’s placement and any next steps: '.config('soccer.origin').'/spring';
         }
-        if ($waitlist && $emailMode) {
+        if ($waitlist && $emailMode && config('soccer.groupme_notifications_enabled')) {
             $settings = $this->store->settings($tenant);
             $group = $settings['groupme_groups']['head_coaches'] ?? null;
             $user = $settings['verified_group_user_id'] ?? null;
             // Shared alerts contain no family names, medical details, invoices, or manual reasons.
             $this->queueNotification($tenant, $id, 'groupme:'.$group, ['channel' => 'groupme', 'group_id' => $group, 'user_id' => $user, 'body' => 'Wren waitlist update: '.str_replace('_', ' ', $action).'. Review the details in Everbranch: '.config('app.url').'/soccer/messages?tenant=wren-family-soccer']);
-        } elseif ($waitlist) {
+        } elseif ($waitlist && ! $emailMode) {
             $this->queue($tenant, $id, config('soccer.sms_recipient'), 'Wren waitlist: '.str_replace('_', ' ', $action).'. '.($data['summary'] ?? 'Review the change in Everbranch.').' '.config('app.url').'/soccer?tenant=wren-family-soccer');
         }
         if ($familyText && $family) {
