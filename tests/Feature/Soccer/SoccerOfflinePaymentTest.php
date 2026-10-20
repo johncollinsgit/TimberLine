@@ -96,6 +96,7 @@ it('fails closed on unknown card outcomes or a session belonging to another invo
         if ($failure === 'timeout') {
             throw new ConnectionException('Fictional timeout');
         }
+
         return Http::response([...$this->session, 'metadata' => ['soccer_invoice_id' => Str::uuid(), 'tenant_id' => (string) $this->tenant->id]]);
     }]);
     expect(fn () => $this->payments->confirmVenmo($this->tenant->id, $this->invoice, 6000, null, 'Verified receipt', $this->actor->id))->toThrow(HttpException::class);

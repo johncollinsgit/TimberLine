@@ -56,6 +56,7 @@ class SoccerPaymentService
             $invoice = $this->lockedInvoice($tenant, $id);
             if ($existing = $this->store->query('payments', $tenant)->where('provider', 'venmo')->where('provider_key', $key)->first()) {
                 abort_unless($existing->invoice_id === $id && (int) $existing->amount_cents === $amount, 409, 'This verification already belongs to another payment.');
+
                 return $invoice->status === 'paid' && $invoice->provider === 'venmo' ? 'paid' : 'review';
             }
             app(SoccerPayPalService::class)->assertNoInFlightPayment($tenant, $id);
