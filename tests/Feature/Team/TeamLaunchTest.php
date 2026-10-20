@@ -40,3 +40,25 @@ test('launch refuses missing authorization and refuses local shared environment 
     expect(TeamArea::count())->toBe(0)->and(TenantModuleEntitlement::count())->toBe(1);
     Http::assertNothingSent();
 });
+
+test('launch accepts an existing verified tenant administrator without granting membership or owner privileges', function () {
+    [$tenant, $administrator] = teamWorkspace();
+    $tenant->users()->updateExistingPivot($administrator->id, ['role' => 'admin']);
+    $this->artisan('team:launch', ['tenant' => $tenant->slug, '--apply' => true, '--authorization' => 'approved-admin-rollout'])->assertSuccessful();
+    expect(TeamArea::where('tenant_id', $tenant->id)->count())->toBe(2)
+        ->and($tenant->users()->count())->toBe(1)
+        ->and($tenant->users()->first()->pivot->role)->toBe('admin');
+    Http::assertNothingSent();
+});
+
+test('launch refuses ordinary members and unverified administrators with a specific read-only prerequisite report', function () {
+    [$tenant, $member] = teamWorkspace();
+    $tenant->users()->updateExistingPivot($member->id, ['role' => 'member']);
+    $options = ['tenant' => $tenant->slug, '--apply' => true, '--authorization' => 'approved-test-rollout'];
+    $this->artisan('team:launch', $options)->expectsOutputToContain('"schema_ready":true,"eligible_administrators":0')->assertFailed();
+    $tenant->users()->updateExistingPivot($member->id, ['role' => 'admin']);
+    $member->forceFill(['email_verified_at' => null])->save();
+    $this->artisan('team:launch', $options)->assertFailed();
+    expect(TeamArea::count())->toBe(0)->and(TenantModuleEntitlement::count())->toBe(1);
+    Http::assertNothingSent();
+});

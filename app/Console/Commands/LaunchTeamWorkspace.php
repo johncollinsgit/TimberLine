@@ -22,9 +22,12 @@ class LaunchTeamWorkspace extends Command
     public function handle(): int
     {
         $tenant = Tenant::where('slug', $this->argument('tenant'))->firstOrFail();
-        $owner = $tenant->users()->wherePivot('membership_active', true)->wherePivotIn('role', ['owner', 'tenant_owner'])->where('users.is_active', true)->whereNotNull('users.email_verified_at')->orderBy('users.id')->first();
-        if (! $owner || ! Schema::hasTable('team_areas')) {
-            $this->error('An existing verified tenant owner and deployed Teams schema are required.');
+        $administrators = $tenant->users()->wherePivot('membership_active', true)->wherePivotIn('role', ['owner', 'tenant_owner', 'admin'])->where('users.is_active', true)->whereNotNull('users.email_verified_at')->orderBy('users.id')->get();
+        $owner = $administrators->first(fn ($user) => in_array($user->pivot->role, ['owner', 'tenant_owner'], true)) ?? $administrators->first();
+        $schemaReady = Schema::hasTable('team_areas');
+        $this->line(json_encode(['tenant_id' => $tenant->id, 'schema_ready' => $schemaReady, 'eligible_administrators' => $administrators->count()]));
+        if (! $owner || ! $schemaReady) {
+            $this->error('An existing active, verified tenant owner or administrator and deployed Teams schema are required. No membership was changed.');
 
             return self::FAILURE;
         }

@@ -191,7 +191,8 @@ permission-filtered internal reminders. Connections and provider writes remain
 independent. See `docs/operations/everbranch-team-connected-operations-runbook.md`.
 Use the protected PR/MySQL/Forge path above. After exact-release verification,
 the production `Launch approved Teams workspace` maintenance workflow can preview
-and apply `team:launch` for an existing approved tenant. It records entitlement
+and apply `team:launch` for an existing approved tenant with an active, verified
+owner or administrator; it never changes user memberships or roles. It records entitlement
 and area setup without changing subscriptions, preserves existing commercial
 fields, and enables only Teams UI/read configuration. It does not create provider
 credentials, grant source access or enable external sends, AI or spreadsheet writes.
