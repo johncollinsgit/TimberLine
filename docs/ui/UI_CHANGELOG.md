@@ -1,3 +1,9 @@
+## 2026-10-20 - Truthful integration-health observations
+
+- Failed issue reads show Unknown with safe diagnostics and last successful check provenance.
+- Successful zero/nonzero observations and landlord authorization are preserved.
+- Verification: `docs/audits/20261020T-health-unknown/report.md`.
+
 ## 2026-10-20 - Supported electrician intake
 
 - Decouple configured public business types from optional electrician tutorial rollout.
