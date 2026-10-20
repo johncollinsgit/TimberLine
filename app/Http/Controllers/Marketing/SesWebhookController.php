@@ -39,10 +39,13 @@ class SesWebhookController extends Controller
         $fixture = app(\App\Services\Marketing\Email\SesSimulatorFixture::class);
         if ($fixture->candidate($event)) {
             $summary = $fixture->handle($event, (string) $message['MessageId'], $events);
+        } elseif (data_get($event, 'mail.tags.everbranch_lane.0') === 'platform') {
+            $summary = app(\App\Services\Mail\PlatformSesDeliveryEvents::class)->handle($event, (string) $message['MessageId']);
+            if (($summary['matched'] ?? 0) === 1) {
+                app(\App\Services\Mail\PlatformSesSimulatorAudit::class)->remember($event, (string) $message['MessageId'], $request->getContent());
+            }
         } else {
-            $summary = data_get($event, 'mail.tags.everbranch_lane.0') === 'platform'
-            ? app(\App\Services\Mail\PlatformSesDeliveryEvents::class)->handle($event, (string) $message['MessageId'])
-            : $events->handle($event, (string) $message['MessageId']);
+            $summary = $events->handle($event, (string) $message['MessageId']);
         }
 
         return response()->json(['ok' => true, 'matched' => $summary['matched'], 'updated' => $summary['updated']]);

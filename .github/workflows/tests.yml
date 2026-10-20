@@ -209,7 +209,7 @@ jobs:
         run: php ./vendor/bin/pest tests/Integration/MarketingDeskConcurrencyTest.php --compact
 
       - name: Verify platform email outbox queues and delivery evidence
-        run: php ./vendor/bin/pest tests/Integration/PlatformSesOutboxTest.php tests/Integration/SesSimulatorFixtureTest.php --compact
+        run: php ./vendor/bin/pest tests/Integration/PlatformSesOutboxTest.php tests/Integration/SesSimulatorFixtureTest.php tests/Integration/PlatformSesSimulatorAuditTest.php --compact
 
       - name: Verify SES durable claims and account attempt concurrency
         run: php ./vendor/bin/pest tests/Integration/SesSendConcurrencyTest.php --compact

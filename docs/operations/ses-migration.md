@@ -520,3 +520,40 @@ updates nothing. Do not export the raw private database, clear suppression or
 resend the accepted messages. Keep the fixture disabled after acceptance and
 retain receipts, encrypted audit evidence and contract fingerprints. The blocked
 raw-database export was not executed; scoped in-place reports are sufficient.
+
+## Separate platform simulator acceptance
+
+PR #451 was released as `36f616c4e9a0d57aea420517e46f31778b131627`, Forge
+`80743294`. The seven retained authenticated tenant-simulator events were
+reprocessed in place: seven initial updates, then zero updates/seven duplicates.
+No message was resent and no customer was emailed or charged. The final protected
+PHP suite passed 4,221 tests with eight skipped. SendGrid remains the default.
+
+The approved next pilot uses `everbranch-platform` and three separately frozen
+platform intents: `ses-platform-simulator-20261020-success`, `-bounce` and
+`-complaint`, addressed only to their corresponding SES simulator mailboxes.
+The production platform handler previously retained event hashes and state,
+which cannot reconstruct a signed notification for replay. This follow-up retains
+the exact SNS envelope encrypted in the existing cache only after signature/topic/
+account verification and a matched platform delivery update. It additionally binds
+the persisted provider receipt, sender, configuration set, recipient, null tenant
+context and exact approved logical intent. Ordinary platform mail and the owner
+mailbox test are outside this retention scope. No schema or sending gate changes.
+
+Audit keys are `ses-platform-simulator:notification:` followed by the SHA256 of
+the SNS MessageId. Use the application cache and encryption service in place to
+replay each original envelope through the unchanged SNS verifier/controller.
+Do not export raw envelopes, recreate signatures, publish synthetic provider
+events, delete prior evidence or resend messages. Verify zero second updates,
+unchanged receipt/state/suppression, no additional SDK sends or customer charges.
+If audit storage fails after the durable delivery update, the webhook fails so
+SNS can retry the same notification; retry can retain it without another update.
+
+Normal tenant onboarding already has an SES API path in
+`TenantMessagingProvisioningService::provisionEmail`. Reuse that path rather than
+requiring manual AWS accounts for customers or introducing a second onboarding
+system. Before enabling it for customers, complete its separate provisioning
+credential scope, configuration-set association and tenant-suppression setup.
+The two narrowly restricted pilot IAM users are not an approval to install a
+broad provisioning key or activate that legacy path. Preserve all existing
+customer consent, contract rates and the exact email exclusions `1,6,10,14`.
