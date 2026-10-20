@@ -180,23 +180,19 @@ Zero-rate contracts still record units/provider cost with zero customer charge;
 zero-charge periods do not produce overage invoices. Email overage invoicing and
 prepaid/postpaid billing remain the existing billing service's responsibility.
 
-The user's actual excluded-customer list has not yet been verified. There is no
-new hardcoded exception list in this migration. The legacy-provider tenant
-allowlist is a routing setting, not proof of a billing exemption. Verify actual
-tenant contract/exemption records and an invoice preview before any customer SES
-allowlist expansion; preserve those terms rather than inferring charges from AWS
-usage. Production's tenant messaging platform was disabled at baseline, so code
-tests do not prove live customer invoicing is active.
+The user confirmed the production email usage exclusions on October 20: Modern
+Forestry (1), Green Shield Pest Control (6), Evergrove Software LLC (10), and
+Fictional Cedar Works - Voice Pilot (14). Everbranch Admin is the landlord console
+with no tenant ID. See the explicit email-only policy below. Provider costs still
+belong to Evergrove for these sends. The legacy provider allowlist is routing,
+not billing policy; comped module access is not an overage exemption.
 
 Read-only production inspection found no explicit usage-exemption flags and no
-email usage settlements. Collins Electric has an active postpaid agreement with
-1,000 included emails and 5,000 micros ($0.005) per overage email. Front Yard Foods
-has the same usage terms but no active postpaid agreement. Modern Forestry's
-email/messaging module entitlements are `add_on_comped`; Front Yard Foods module
-access is `complimentary`; Wren's email entitlement has no explicit billing status.
-These module statuses do not establish free usage overages. No contract, rate,
-entitlement or exclusion was changed. Keep the user's exclusion clarification
-pending and all customer SES sends disabled until this ambiguity is resolved.
+email usage settlements before this policy. Collins Electric has an active
+postpaid agreement with 1,000 included emails and 5,000 micros ($0.005) per overage
+email. Front Yard Foods has those same usage terms but no active postpaid
+agreement. These contracts remain unchanged. Customer SES sending stays disabled
+until the policy is deployed/verified and provider acceptance tests pass.
 
 Defaults cap account attempts at 1,000/day, each tenant at 100/day, and aggregate
 rate at 1/second. `SES_APPROVED_ATTEMPT_COST_MICROS=0` blocks sending until an
@@ -210,7 +206,8 @@ Published October 20 pricing: selectable a-la-carte outbound $0.10/1,000 plus
 $0.005/tenant/month and $0.005/1,000 tenant emails; Essentials starts at
 $0.16/1,000 and may be the default for newly active account/region combinations.
 This account's current `us-east-1` plan is Essentials. Native tenants are an
-add-on under that plan; no native tenant has been created. Do not silently enroll
+add-on under that plan; the explicitly approved fictional tenant 900000001 is
+created with tenant-level BOUNCE/COMPLAINT suppression. Do not silently enroll
 in add-ons, change the plan or change buyer-facing pricing based on public rates.
 
 ### Prepared AWS approval scope
@@ -475,3 +472,13 @@ invoice, and nonexcluded reservation → settlement → one invoice across repea
 billing runs. The scheduled invoice retry path uses the explicit tenant filter
 supported by `TenantDirectInvoice`; it must not call the unavailable
 `forAllTenants()` scope on that model.
+
+
+The foundation is deployed as commit `ad002aca3eeb9c01d524673ca3ef687451d302d5`,
+Forge release `80737576`, through the protected production workflow. The approved
+account `894665396752` and exact SNS topic are pinned in application configuration.
+The webhook authenticated a fresh AWS confirmation, and the approved HTTPS SNS
+subscription is confirmed. This proves subscription authentication only: no SES
+simulator delivery or application delivery/bounce/complaint event has yet been
+verified. SendGrid SMTP remains the application default and tenant SES sending
+remains off. The separate platform-outbox work is not in this release.
