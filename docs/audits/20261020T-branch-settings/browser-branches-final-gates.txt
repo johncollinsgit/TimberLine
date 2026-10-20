@@ -1,0 +1,12 @@
+Running 8 tests using 2 workers
+
+  ✓  2 [chromium] › tests/e2e/workspace/branch-settings.spec.ts:22:5 › tabs, setup guide and cancellation at 390px (423ms)
+  ✓  3 [chromium] › tests/e2e/workspace/branch-settings.spec.ts:22:5 › tabs, setup guide and cancellation at 820px (346ms)
+  ✓  1 [webkit] › tests/e2e/workspace/branch-settings.spec.ts:22:5 › tabs, setup guide and cancellation at 390px (839ms)
+  ✓  4 [chromium] › tests/e2e/workspace/branch-settings.spec.ts:22:5 › tabs, setup guide and cancellation at 1440px (413ms)
+  ✓  6 [chromium] › tests/e2e/workspace/branch-settings.spec.ts:63:1 › member guides expose no final mutation action (303ms)
+  ✓  5 [webkit] › tests/e2e/workspace/branch-settings.spec.ts:22:5 › tabs, setup guide and cancellation at 820px (647ms)
+  ✓  7 [webkit] › tests/e2e/workspace/branch-settings.spec.ts:22:5 › tabs, setup guide and cancellation at 1440px (823ms)
+  ✓  8 [webkit] › tests/e2e/workspace/branch-settings.spec.ts:63:1 › member guides expose no final mutation action (537ms)
+
+  8 passed (3.8s)

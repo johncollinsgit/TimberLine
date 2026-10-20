@@ -25,7 +25,7 @@
             <div class="mt-4 grid gap-3 md:grid-cols-3">
                 <article class="fb-state text-sm">
                     <div class="font-semibold">1. Review</div>
-                    <div class="mt-1">Operator review confirms request intent and routing context.</div>
+                    <div class="mt-1">We review your business needs and the branches you selected.</div>
                 </article>
                 <article class="fb-state text-sm">
                     <div class="font-semibold">2. Activation</div>

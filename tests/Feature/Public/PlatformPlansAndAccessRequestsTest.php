@@ -37,7 +37,7 @@ test('public demo request page renders access request form', function (): void {
         ->assertSeeText('Business type')
         ->assertSeeText('Team size')
         ->assertSeeText('Already have access? Sign in')
-        ->assertDontSeeText('Electrician')
+        ->assertSeeText('Electrician')
         ->assertDontSeeText('We only ask for the basics on this screen.')
         ->assertDontSeeText('What happens next')
         ->assertDontSeeText('Need a different path?');
@@ -69,7 +69,7 @@ test('public start as a client page renders plan interest inputs', function (): 
         ->assertDontSeeText('$149/mo')
         ->assertDontSeeText('Limited to 10')
         ->assertDontSeeText('Starter includes everything')
-        ->assertDontSeeText('Electrician')
+        ->assertSeeText('Electrician')
         ->assertDontSeeText('CLIENT SIGNUP')
         ->assertDontSeeText('Production access request')
         ->assertDontSeeText('Just the basics to start. Optional details stay hidden until you need them.')
@@ -168,7 +168,7 @@ test('demo request captures business context without production commercial write
         ->and((array) data_get($request->metadata, 'branches_interest'))->toBe(['sms']);
 });
 
-test('public access request rejects electrician business type while the customer tutorial is hidden', function (): void {
+test('public access request accepts electrician business type while the customer tutorial is hidden', function (): void {
     $this->from(route('platform.start'))
         ->post(route('platform.access-request'), [
             'intent' => 'production',
@@ -176,8 +176,9 @@ test('public access request rejects electrician business type while the customer
             'email' => 'ops-electrician@acme.example.com',
             'business_type' => 'electrician',
         ])
-        ->assertRedirect(route('platform.start', absolute: false))
-        ->assertSessionHasErrors('business_type');
+        ->assertRedirect(route('platform.request-submitted', ['intent' => 'production'], absolute: false))
+        ->assertSessionHasNoErrors();
+    expect(CustomerAccessRequest::query()->sole()->metadata['business_type'])->toBe('electrician');
 });
 
 test('public access request can still accept electrician business type when the customer tutorial flag is enabled', function (): void {

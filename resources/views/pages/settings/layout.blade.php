@@ -7,6 +7,9 @@
                 <flux:navlist.item :href="route('two-factor.show')" wire:navigate>{{ __('Two-Factor Auth') }}</flux:navlist.item>
             @endif
             <flux:navlist.item :href="route('appearance.edit')" wire:navigate>{{ __('Appearance') }}</flux:navlist.item>
+            @can('view-tenant-module-store', request()->attributes->get('current_tenant_id'))
+                <flux:navlist.item :href="route('marketing.modules', ['tab' => 'plan'])">{{ __('Workspace plan & branches') }}</flux:navlist.item>
+            @endcan
         </flux:navlist>
     </div>
 

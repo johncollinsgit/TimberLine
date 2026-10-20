@@ -39,6 +39,10 @@ class TenantModuleCatalogService
             $moduleDefinitions = array_intersect_key($moduleDefinitions, ['managed_website' => true]);
         }
         $moduleKeys = array_keys($moduleDefinitions);
+        $pendingKeys = $tenantId !== null && Schema::hasTable('tenant_module_access_requests')
+            ? TenantModuleAccessRequest::query()->where('tenant_id', $tenantId)
+                ->where('status', 'pending')->whereIn('module_key', $moduleKeys)->pluck('module_key')->all()
+            : [];
         $resolved = $this->accessResolver->resolveForTenant($tenantId, $moduleKeys);
         $moduleStates = $this->applyDisplayLabels(
             $tenantId,
@@ -99,6 +103,7 @@ class TenantModuleCatalogService
                 'visibility' => is_array($definition['visibility'] ?? null) ? (array) $definition['visibility'] : [],
                 'module_state' => $presented,
                 'state_bucket' => $this->stateBucket($presented),
+                'request_pending' => in_array($moduleKey, $pendingKeys, true),
             ];
         }
 
@@ -721,7 +726,13 @@ class TenantModuleCatalogService
     {
         $moduleKey = strtolower(trim($moduleKey));
 
-        foreach ((array) config('module_catalog.addons', []) as $addonKey => $definition) {
+        $addons = (array) config('module_catalog.addons', []);
+        // Prefer the module's own product over another product that bundles it.
+        // A disabled exact product remains disabled; it must not fall back to a bundle.
+        if (is_array($addons[$moduleKey] ?? null)) {
+            $addons = [$moduleKey => $addons[$moduleKey]] + $addons;
+        }
+        foreach ($addons as $addonKey => $definition) {
             if (! is_array($definition) || ! in_array($moduleKey, array_map('strval', (array) ($definition['modules'] ?? [])), true)) {
                 continue;
             }

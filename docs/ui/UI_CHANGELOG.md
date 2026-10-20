@@ -1,3 +1,24 @@
+## 2026-10-20 - Truthful integration-health observations
+
+- Failed issue reads show Unknown with safe diagnostics and last successful check provenance.
+- Successful zero/nonzero observations and landlord authorization are preserved.
+- Verification: `docs/audits/20261020T-health-unknown/report.md`.
+
+## 2026-10-20 - Supported electrician intake
+
+- Decouple configured public business types from optional electrician tutorial rollout.
+- Keep tutorial previews gated and access pending review; clarify the request receipt.
+- Verification: `docs/audits/20261020T-electrician-intake/report.md`.
+
+## 2026-10-20 - Plan, branches and setup tabs (isolated follow-up)
+
+- Organize the existing authenticated Branches screen into Your plan, Your
+  branches, Add software and Setup, with short guided confirmation steps and
+  canonical access/readiness/pending-request states.
+- Reuse tenant gates and audited handlers; financial links require the existing
+  financial-access policy. Current agreements remain separate from new offers.
+- Scope and verification: `docs/audits/20261020T-branch-settings/`.
+
 ## 2026-10-20 - Public quality and current offer (candidate)
 
 - Scoped Workflow Studio navigation styles to the authenticated tool, restoring

@@ -1,0 +1,8 @@
+Running 4 tests using 2 workers
+
+  ✓  2 [desktop-chromium] › tests/e2e/public/electrician-intake.spec.ts:3:5 › electrician can select the supported industry on /platform/start (337ms)
+  ✓  3 [desktop-chromium] › tests/e2e/public/electrician-intake.spec.ts:3:5 › electrician can select the supported industry on /platform/demo (189ms)
+  ✓  1 [mobile-safari] › tests/e2e/public/electrician-intake.spec.ts:3:5 › electrician can select the supported industry on /platform/start (633ms)
+  ✓  4 [mobile-safari] › tests/e2e/public/electrician-intake.spec.ts:3:5 › electrician can select the supported industry on /platform/demo (348ms)
+
+  4 passed (2.5s)
