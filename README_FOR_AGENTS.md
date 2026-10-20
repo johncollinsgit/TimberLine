@@ -77,7 +77,10 @@ current instruction to replay an old source branch or reprice a customer.
   evidence; never borrow another tenant's account or the Evergrove Wallet binding.
   Unknown mutations cannot be blindly replayed. PayPal buyer approval/capture/refund also has independent default-off merchant,
   signature, test and live gates; seller setup alone never enables collection. Optional hosted Shopify is explicitly opt-in.
-- Appearance follows the Android tablet Showcase sample. Owner reporting and
+- Management uses a scoped Teams-style forest sidebar and focused details;
+  public shopping keeps the tablet Showcase presentation. Preview must use only
+  explicit fictional view data, never the tenant shell or branding initializer.
+  See `docs/architecture/markets-makers-management-console.md`. Owner reporting and
   market participation are permission-scoped; shared store links do not imply
   catalog sync. Shopify/Wix reseller publishing remains phase two. See
   `docs/operations/markets-and-makers.md`; source defaults remain off.

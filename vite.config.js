@@ -11,6 +11,7 @@ export default defineConfig(() => ({
         'resources/css/app.css',
         'resources/css/marketplace.css',
         'resources/js/marketplace-wallet.js',
+        'resources/js/marketplace-management.js',
         'resources/js/app.js',
         'resources/js/workspace-settings.js',
         'resources/js/workspace-draft.js',

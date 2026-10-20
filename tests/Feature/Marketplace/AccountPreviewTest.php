@@ -22,8 +22,8 @@ beforeEach(function (): void {
 test('each section opens only as a private example-data preview with global marketplace off', function (string $tab): void {
     config(['marketplace.account_preview_user_ids' => [$this->viewer->id]]);
     $response = $this->actingAs($this->viewer)->get($this->previewUrl.'?tab='.$tab)
-        ->assertOk()->assertSeeText('Private account preview')->assertSeeText('Example workspace')
-        ->assertSeeText('No public storefront or payment collection')
+        ->assertOk()->assertSeeText('Private preview · Example data')->assertSeeText('Example workspace')
+        ->assertSeeText('Read only · Storefront off · Payments off')
         ->assertHeader('X-Robots-Tag', 'noindex, nofollow')
         ->assertDontSee('name="admin_token"', false)->assertDontSee('name="payment_method_token"', false)
         ->assertDontSee('<form', false);
@@ -133,4 +133,31 @@ test('preview refuses other hosts and invalid sections', function (): void {
     $this->actingAs($this->viewer)->get('https://unknown.example.test/marketplace/preview')->assertNotFound();
     $this->get($this->previewUrl.'?tab=private')->assertNotFound();
     $this->get($this->previewUrl.'?tab[]=payments')->assertNotFound();
+});
+
+test('preview UI parameters cannot select records or inject markup and remain bounded scalars', function (string $query): void {
+    config(['marketplace.account_preview_user_ids' => [$this->viewer->id]]);
+    $this->actingAs($this->viewer)->get($this->previewUrl.'?'.$query)->assertNotFound();
+    Http::assertNothingSent();
+})->with(['q[]=maker', 'status[]=Ready', 'detail[]=1', 'q='.str_repeat('x', 161), 'detail='.str_repeat('x', 81)]);
+
+test('linked preview details use consistent fictional order and statement amounts without tenant reads', function (): void {
+    config(['marketplace.account_preview_user_ids' => [$this->viewer->id]]);
+    $queries = [];
+    DB::listen(function ($query) use (&$queries): void {
+        $queries[] = $query->sql;
+    });
+    foreach (['orders', 'statements', 'listings', 'makers', 'markets', 'pickups'] as $tab) {
+        $this->actingAs($this->viewer)->get($this->previewUrl.'?tab='.$tab.'&detail=statement-willow')->assertOk()->assertDontSee('<form', false);
+    }
+    foreach ($queries as $query) {
+        expect($query)->not->toMatch('/^\s*(insert|update|delete|replace|create|alter|drop)\b/i')
+            ->and($query)->not->toMatch('/(?:from|join)\s+["`]?tenant(?:s|_)/i')
+            ->and($query)->not->toContain('marketplace_', 'website_', 'shopify');
+    }
+    $this->get($this->previewUrl.'?tab=statements')->assertSeeText('$40.80')->assertSeeText('no automatic payout');
+    $this->get($this->previewUrl.'?tab=orders')->assertSeeText('$38.16')->assertSeeText('$67.84')->assertSeeText('$50.88');
+    Http::assertNothingSent();
+    Mail::assertNothingSent();
+    Notification::assertNothingSent();
 });
