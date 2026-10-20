@@ -23,7 +23,7 @@ $catalog = [
             'premium_products' => [
                 ['key' => 'teams', 'name' => 'Teams', 'module_keys' => ['team_work', 'teams_wholesale_workspace']],
                 ['key' => 'trajectory', 'name' => 'Trajectory', 'module_keys' => ['trajectory']],
-                ['key' => 'markets_makers', 'name' => 'Markets & Makers', 'module_keys' => ['markets_makers']],
+                ['key' => 'markets_makers', 'name' => 'Markets & Makers', 'module_keys' => ['markets_and_makers']],
             ],
         ],
     ],

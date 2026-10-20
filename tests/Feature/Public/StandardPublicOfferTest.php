@@ -45,7 +45,8 @@ test('requesting the standard offer records interest without activating a worksp
         ->and(data_get($request->metadata, 'branches_interest'))->toBe(['customers', 'messaging'])
         ->and($request->tenant_id)->toBeNull()
         ->and(Tenant::query()->count())->toBe(0)
-        ->and(TenantAccessProfile::query()->count())->toBe(0);
+        ->and(TenantAccessProfile::query()->count())->toBe(0)
+        ->and(TenantModuleEntitlement::query()->count())->toBe(0);
     Http::assertNothingSent();
 });
 
@@ -54,9 +55,11 @@ test('public branch choices include only configured safe core branches and keep 
     $payload = $service->publicPlansPayload();
     $keys = array_column($payload['branch_cards'], 'key');
     expect($keys)->toContain('messaging', 'sms')
-        ->not->toContain('ai_branch', 'future_niche_modules', 'team_work', 'trajectory', 'markets_makers');
+        ->not->toContain('ai_branch', 'future_niche_modules', 'team_work', 'trajectory', 'markets_makers', 'markets_and_makers');
     expect($payload['addon_cards'])->toBe([])
-        ->and(array_column($payload['premium_products'], 'name'))->toBe(['Teams', 'Trajectory', 'Markets & Makers']);
+        ->and(array_column($payload['premium_products'], 'name'))->toBe(['Teams', 'Trajectory', 'Markets & Makers'])
+        ->and($payload['premium_products'][2]['key'])->toBe('markets_makers')
+        ->and(config('module_catalog.offers.standard.premium_products.2.module_keys'))->toBe(['markets_and_makers']);
 
     config()->set('module_catalog.modules.sms.visibility.public_site', false);
     $hidden = $service->publicPlansPayload();
@@ -71,10 +74,15 @@ test('public requests reject premium or hidden branch selections and retired pai
         'intent' => 'production', 'name' => 'Fictional Owner', 'email' => 'invalid-branch@example.com',
         ...$selection,
     ])->assertSessionHasErrors($error);
-    expect(CustomerAccessRequest::query()->count())->toBe(0);
+    expect(CustomerAccessRequest::query()->count())->toBe(0)
+        ->and(Tenant::query()->count())->toBe(0)
+        ->and(TenantModuleEntitlement::query()->count())->toBe(0);
+    Http::assertNothingSent();
 })->with([
     [['branches_interest' => ['team_work']], 'branches_interest.0'],
     [['branches_interest' => ['trajectory']], 'branches_interest.0'],
+    [['branches_interest' => ['markets_makers']], 'branches_interest.0'],
+    [['branches_interest' => ['markets_and_makers']], 'branches_interest.0'],
     [['branches_interest' => ['future_niche_modules']], 'branches_interest.0'],
     [['addons_interest' => ['sms']], 'addons_interest'],
     [['preferred_plan_key' => 'launch_partner'], 'preferred_plan_key'],
