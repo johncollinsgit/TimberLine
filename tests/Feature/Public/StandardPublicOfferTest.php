@@ -3,6 +3,7 @@
 use App\Models\CustomerAccessRequest;
 use App\Models\Tenant;
 use App\Models\TenantAccessProfile;
+use App\Models\TenantModuleEntitlement;
 use App\Services\Tenancy\TenantCommercialExperienceService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
@@ -79,8 +80,10 @@ test('public requests reject premium or hidden branch selections and retired pai
     [['preferred_plan_key' => 'launch_partner'], 'preferred_plan_key'],
 ]);
 
-test('approved standard offer interest survives the merchant handoff without enabling hosted checkout', function (): void {
-    config()->set('commercial.billing_readiness.checkout_active', true);
+test('approved standard offer interest survives the merchant handoff without enabling hosted checkout', function (bool $checkoutActive, string $stripeSecret, string $expectedMode, string $expectedReason): void {
+    config()->set('commercial.billing_readiness.checkout_active', $checkoutActive);
+    config()->set('commercial.billing_readiness.lifecycle_mutations_enabled', false);
+    config()->set('services.stripe.secret', $stripeSecret);
     $tenant = Tenant::query()->create(['name' => 'Fictional Standard Workshop', 'slug' => 'quality-standard']);
     CustomerAccessRequest::query()->create([
         'intent' => 'production',
@@ -93,7 +96,21 @@ test('approved standard offer interest survives the merchant handoff without ena
 
     $payload = app(TenantCommercialExperienceService::class)->merchantJourneyPayload((int) $tenant->id);
     expect(data_get($payload, 'billing_interest.preferred_plan_key'))->toBe('standard')
-        ->and(data_get($payload, 'billing_next_step.mode'))->toBe('unavailable')
-        ->and(data_get($payload, 'billing_next_step.reason'))->toBe('unknown_plan_key');
+        ->and(data_get($payload, 'billing_interest.addons_interest'))->toBe([])
+        ->and(data_get($payload, 'billing_next_step.mode'))->toBe($expectedMode)
+        ->and(data_get($payload, 'billing_next_step.reason'))->toBe($expectedReason)
+        ->and(data_get($payload, 'billing_next_step.cta_route'))->toBeNull()
+        ->and(data_get($payload, 'billing_next_step.cta_url'))->toBe(route('platform.contact', ['intent' => 'billing']))
+        ->and(data_get($payload, 'billing_next_step.readiness.checkout_active'))->toBe($checkoutActive)
+        ->and(data_get($payload, 'billing_next_step.readiness.stripe_secret_configured'))->toBe($stripeSecret !== '')
+        ->and(config('module_catalog.plans.standard'))->toBeNull()
+        ->and(CustomerAccessRequest::query()->sole()->metadata['preferred_plan_key'])->toBe('standard')
+        ->and(TenantAccessProfile::query()->count())->toBe(0)
+        ->and(TenantModuleEntitlement::query()->count())->toBe(0);
     Http::assertNothingSent();
-});
+})->with([
+    'checkout enabled and provider configured' => [true, 'sk_test_fictional_standard_offer_fixture', 'unavailable', 'unknown_plan_key'],
+    'checkout disabled and provider configured' => [false, 'sk_test_fictional_standard_offer_fixture', 'landlord_follow_up', 'hosted_billing_disabled'],
+    'checkout enabled without provider configuration' => [true, '', 'landlord_follow_up', 'stripe_not_configured'],
+    'checkout disabled without provider configuration' => [false, '', 'landlord_follow_up', 'stripe_not_configured'],
+]);
