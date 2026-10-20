@@ -24,7 +24,7 @@ class PlatformSesDeliveryEvents
             if (! $row || ! $row->submitted_at || $receipt === '' || count($destination) !== 1
                 || ! in_array($row->recipient_hash, app(PlatformSesOutbox::class)->recipientHashes((string) $destination[0]), true)
                 || ($tags['ses:configuration-set'] ?? '') !== $row->message->configuration_set
-                || data_get($event, 'mail.source') !== $row->message->from_email
+                || \App\Services\Marketing\Email\SesEventContext::source($event) !== strtolower($row->message->from_email)
                 || ($row->provider_message_id && $row->provider_message_id !== $receipt)) {
                 return ['matched' => 0, 'updated' => 0];
             }
