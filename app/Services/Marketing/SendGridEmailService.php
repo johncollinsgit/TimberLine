@@ -33,7 +33,12 @@ class SendGridEmailService
     public function sendEmail(string $toEmail, string $subject, string $bodyText, array $options = []): array
     {
         $tenantId = is_numeric($options['tenant_id'] ?? null) ? (int) $options['tenant_id'] : 0;
-        $result = $tenantId > 0 && (bool) config('features.tenant_messaging_platform')
+        if ($tenantId > 0 && ! ($options['dry_run'] ?? false)
+            && ($prior = app(\App\Services\Marketing\Email\SesSendSafety::class)->priorResult($tenantId, $toEmail, $this->positiveInt($options['delivery_id'] ?? null)))) {
+            return [...$prior, 'tenant_id' => $tenantId];
+        }
+        $result = $tenantId > 0 && ((bool) config('features.tenant_messaging_platform')
+            || (config('ses_migration.tenant_enabled') && in_array($tenantId, config('ses_migration.tenant_ids', []), true)))
             ? $this->gateway->sendEmail($tenantId, $toEmail, $subject, $bodyText, $options)
             : ($tenantId > 0 && $this->usage->hasUsageContract($tenantId)
                 ? $this->sendMeteredLegacy($tenantId, $toEmail, $subject, $bodyText, $options)

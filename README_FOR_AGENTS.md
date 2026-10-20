@@ -2246,3 +2246,22 @@ binding. Follow `docs/operations/wren-soccer.md` for reviewed Wren reconciliatio
 ## Teams connected operations candidate (2026-10-20)
 
 Events/Wholesale operations are default-off extensions of the shared Teams Laravel application. Read `docs/architecture/everbranch-team-connected-operations.md` and `docs/operations/everbranch-team-connected-operations-runbook.md`. Preserve authoritative Asana/Sheets/mail/commerce sources, source-generation fences, per-user access and encrypted evidence. Do not send or enable external sequences from template publication or internal rule saves. Reuse the existing email composer, messaging controls and shared AI usage ledger. No legacy Event table reuse without tenant mapping. The complete Phase 2 plan is not yet accepted; live OAuth/source discovery and real MySQL/Linux/protected-release gates remain outstanding.
+
+## SES migration preparation (2026-10-20)
+
+Read `docs/operations/ses-migration.md`. Existing SES tenant sending is hardened
+behind `SES_TENANT_SENDING_ENABLED` and `SES_TENANT_IDS`, independently of SMS.
+Claims survive stale delivery saves; unknown outcomes require reconciliation and
+cannot blind retry. Signed SNS events require the exact account/region/topic and
+tenant/delivery binding. Attempt/cost gates default closed. `email:ses-readiness`
+is read-only. SES claims bind the original tenant usage reservation; authenticated
+acceptance settles it once without repricing. Zero-rate contracts retain usage
+and provider-cost tracking without a customer charge. Review actual billing
+exemptions before customer cutover. `email:ses-reconcile-usage` previews internal
+settlement recovery; `email:ses-confirm-subscription` previews an encrypted,
+authenticated pending SNS confirmation and requires explicit `--confirm`.
+AWS account 894665396752/us-east-1 is sandbox on Essentials; theeverbranch.com
+and DKIM are verified. Approved simulator resources are being configured.
+Platform SMTP remains SendGrid; actual AWS delivery/application event acceptance,
+runtime credentials, production access and a separate platform retry/event
+contract remain required before completion.

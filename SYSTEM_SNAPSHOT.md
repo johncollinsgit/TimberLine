@@ -2929,3 +2929,22 @@ Mobile conversations support up to five private photos/PDFs per message, 50 MB p
 ## Teams connected operations candidate (2026-10-20)
 
 Default-off Events and reusable Wholesale work areas share `/teams` and `/team`, with area permissions, encrypted per-user provider connections, source projections, review evidence and durable attempts. Workflow navigation groups planning, execution and review. Reusable operational email templates use the existing composer; preview/preparation are separate from sending. The automatic executor currently produces permission-checked Teams Inbox reminders with quiet hours and deduplication. External campaign sequences and live pilot acceptance remain incomplete. See `docs/architecture/everbranch-team-connected-operations.md` and `docs/operations/everbranch-team-connected-operations-runbook.md` before enabling any operations/write/AI/weather flag. Runtime OAuth and source access, real MySQL/Linux checks and protected release gates remain prerequisites. Fictional screenshots are not source-data verification.
+
+## SES migration preparation (2026-10-20)
+
+Read `docs/operations/ses-migration.md`. Existing SES tenant sending is hardened
+behind `SES_TENANT_SENDING_ENABLED` and `SES_TENANT_IDS`, independently of SMS.
+Claims survive stale delivery saves; unknown outcomes require reconciliation and
+cannot blind retry. Signed SNS events require the exact account/region/topic and
+tenant/delivery binding. Attempt/cost gates default closed. `email:ses-readiness`
+is read-only. SES claims bind the original tenant usage reservation; authenticated
+acceptance settles it once without repricing. Zero-rate contracts retain usage
+and provider-cost tracking without a customer charge. Review actual billing
+exemptions before customer cutover. `email:ses-reconcile-usage` previews internal
+settlement recovery; `email:ses-confirm-subscription` previews an encrypted,
+authenticated pending SNS confirmation and requires explicit `--confirm`.
+AWS account 894665396752/us-east-1 is sandbox on Essentials; theeverbranch.com
+and DKIM are verified. Approved simulator resources are being configured.
+Platform SMTP remains SendGrid; actual AWS delivery/application event acceptance,
+runtime credentials, production access and a separate platform retry/event
+contract remain required before completion.

@@ -202,6 +202,9 @@ jobs:
       - name: Verify tenant marketing AI budget concurrency
         run: php ./vendor/bin/pest tests/Integration/MarketingDeskConcurrencyTest.php --compact
 
+      - name: Verify SES durable claims and account attempt concurrency
+        run: php ./vendor/bin/pest tests/Integration/SesSendConcurrencyTest.php --compact
+
       - name: Verify AI chat, briefing replay and approval concurrency on MySQL
         run: php ./vendor/bin/pest tests/Integration/AiBranchMySqlConcurrencyTest.php --compact
 

@@ -2323,3 +2323,14 @@ eligibility. Consent is evidence only. A native cutover is a future,
 owner-approved operation after reconciliation and payment, tax, shipping,
 fulfillment-location, and production-preview readiness checks; v1 has no
 two-way catalog, inventory, order, or fulfillment sync.
+
+## SES migration preparation (2026-10-20)
+
+Read `docs/operations/ses-migration.md`. Existing SES tenant sending is hardened
+behind `SES_TENANT_SENDING_ENABLED` and `SES_TENANT_IDS`, independently of SMS.
+Claims survive stale delivery saves; unknown outcomes require reconciliation and
+cannot blind retry. Signed SNS events require the exact account/region/topic and
+tenant/delivery binding. Attempt/cost gates default closed. `email:ses-readiness`
+is read-only. Platform SMTP remains SendGrid; actual AWS simulator delivery,
+application event acceptance, account/pricing/DNS/IAM review and a separate
+platform retry/event contract remain required before completion.

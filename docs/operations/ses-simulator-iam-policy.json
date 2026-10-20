@@ -1,0 +1,40 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "SendOnlyApprovedSimulatorMessages",
+      "Effect": "Allow",
+      "Action": "ses:SendEmail",
+      "Resource": [
+        "arn:aws:ses:us-east-1:894665396752:identity/theeverbranch.com",
+        "arn:aws:ses:us-east-1:894665396752:configuration-set/everbranch-marketing"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "ses:FromAddress": "no-reply@theeverbranch.com",
+          "ses:ApiVersion": "2"
+        },
+        "ForAllValues:StringEquals": {
+          "ses:Recipients": [
+            "success@simulator.amazonses.com",
+            "bounce@simulator.amazonses.com",
+            "complaint@simulator.amazonses.com"
+          ]
+        },
+        "Bool": { "aws:SecureTransport": "true" }
+      }
+    },
+    {
+      "Sid": "ReadAccountReadiness",
+      "Effect": "Allow",
+      "Action": "ses:GetAccount",
+      "Resource": "*"
+    },
+    {
+      "Sid": "ReadApprovedIdentity",
+      "Effect": "Allow",
+      "Action": "ses:GetEmailIdentity",
+      "Resource": "arn:aws:ses:us-east-1:894665396752:identity/theeverbranch.com"
+    }
+  ]
+}

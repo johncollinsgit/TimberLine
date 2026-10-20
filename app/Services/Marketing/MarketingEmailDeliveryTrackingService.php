@@ -40,12 +40,15 @@ class MarketingEmailDeliveryTrackingService
 
             $summary['processed']++;
             $delivery = $this->resolveDelivery($event);
+            if ($delivery && $delivery->provider === 'ses_tenant' && ($event['provider'] ?? '') !== 'ses_tenant') {
+                $delivery = null;
+            }
             if ($delivery && filled($event['email'] ?? null) && strtolower(trim((string) $event['email'])) !== strtolower(trim((string) $delivery->email))) {
                 $delivery = null;
             }
             if (! $delivery) {
                 $summary['unmatched']++;
-                Log::warning('marketing sendgrid callback unmatched', ['event' => $event]);
+                Log::warning('marketing email callback unmatched', ['provider' => $event['provider'] ?? 'sendgrid', 'event' => $event['event'] ?? null]);
 
                 continue;
             }
@@ -82,7 +85,8 @@ class MarketingEmailDeliveryTrackingService
                 && ! $isOlderEvent
                 && ($incomingStatusRank >= $currentStatusRank || ($currentStatus === 'failed' && ($mapped['set_delivered_at'] ?? false)))
                 && (! $isFailureTransition || ! $hasDeliveredEngagement);
-            $normalizedProviderMessageId = $this->normalizedMessageId((string) ($event['sg_message_id'] ?? ''));
+            $normalizedProviderMessageId = ($event['provider'] ?? '') === 'ses_tenant'
+                ? (string) $event['sg_message_id'] : $this->normalizedMessageId((string) ($event['sg_message_id'] ?? ''));
 
             $receivedHashes[] = $hash;
             $receivedHashes = array_slice(array_values(array_unique($receivedHashes)), -60);
@@ -169,6 +173,13 @@ class MarketingEmailDeliveryTrackingService
      */
     protected function resolveDelivery(array $event): ?MarketingEmailDelivery
     {
+        // SES events are pre-bound by SesDeliveryEvents; keep their full opaque
+        // message IDs and never use SendGrid's legacy email/ID fallback.
+        if (($event['provider'] ?? '') === 'ses_tenant') {
+            return MarketingEmailDelivery::query()->where('provider', 'ses_tenant')
+                ->where('tenant_id', (int) data_get($event, 'custom_args.tenant_id'))
+                ->find((int) data_get($event, 'custom_args.marketing_email_delivery_id'));
+        }
         $customArgs = (array) ($event['custom_args'] ?? []);
         $tenantId = (int) ($customArgs['tenant_id'] ?? $event['tenant_id'] ?? 0);
         $deliveryId = (int) ($customArgs['marketing_email_delivery_id'] ?? $event['marketing_email_delivery_id'] ?? 0);

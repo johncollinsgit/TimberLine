@@ -3,7 +3,9 @@
 namespace App\Services\Marketing\Email\Providers;
 
 use App\Services\Marketing\Email\EmailProvider;
+use App\Services\Marketing\Email\SesSendSafety;
 use Aws\Credentials\Credentials;
+use Aws\Exception\AwsException;
 use Aws\SesV2\SesV2Client;
 
 class SesTenantEmailProvider implements EmailProvider
@@ -41,6 +43,18 @@ class SesTenantEmailProvider implements EmailProvider
             return $this->failure('invalid_configuration', implode(' ', $validation['issues']), false, false);
         }
 
+        $tenantId = (int) data_get($message, 'metadata.tenant_id', 0);
+        $deliveryId = (int) (data_get($message, 'custom_args.marketing_email_delivery_id') ?: data_get($message, 'metadata.marketing_email_delivery_id'));
+        if (! config('ses_migration.tenant_enabled') || ! in_array($tenantId, config('ses_migration.tenant_ids', []), true)) {
+            return $this->failure('ses_rollout_disabled', 'SES is not enabled for this tenant.', false, false);
+        }
+        if ($deliveryId < 1 || $tenantId < 1 || ($config['tenant_name'] ?? '') !== 'everbranch-tenant-'.$tenantId) {
+            return $this->failure('ses_delivery_context_required', 'SES requires a tenant-bound durable delivery and native tenant.', false, false);
+        }
+        if (strtolower($from) !== strtolower((string) ($config['from_email'] ?? ''))) {
+            return $this->failure('sender_not_verified', 'SES sender must match the verified tenant sender.', false, false);
+        }
+
         $body = [];
         if ($text !== '') {
             $body['Text'] = ['Data' => $text, 'Charset' => 'UTF-8'];
@@ -60,16 +74,48 @@ class SesTenantEmailProvider implements EmailProvider
             ]],
             'ConfigurationSetName' => $this->nullableString($config['configuration_set'] ?? null),
             'TenantName' => $this->nullableString($config['tenant_name'] ?? null),
-            'EmailTags' => $this->emailTags((array) ($message['metadata'] ?? [])),
+            'EmailTags' => $this->emailTags(['tenant_id' => (string) $tenantId, 'marketing_email_delivery_id' => (string) $deliveryId]),
         ], fn (mixed $value): bool => $value !== null && $value !== []);
 
+        $safety = app(SesSendSafety::class);
         try {
-            $result = $this->client($config)->sendEmail($payload);
-
-            return $this->success($this->nullableString($result->get('MessageId')), false);
+            if ($replay = $safety->claim($deliveryId, $tenantId, $to, $payload, (array) data_get($message, 'metadata.ses_usage_reservation', []))) {
+                return $replay;
+            }
         } catch (\Throwable $exception) {
-            return $this->failure('provider_error', $exception->getMessage(), true, false);
+            return $this->failure(
+                $exception->getMessage() === 'SES attempt cap reached.' ? 'ses_rate_limited' : 'ses_delivery_not_ready',
+                'SES delivery reservation or attempt limits are not ready.',
+                $exception->getMessage() === 'SES attempt cap reached.', false,
+            );
         }
+
+        // SES SendEmail has no idempotency token. Disable SDK retries and hold
+        // any network/5xx/empty-receipt outcome for event reconciliation.
+        try {
+            $receipt = $this->nullableString($this->client($config)->sendEmail($payload)->get('MessageId'));
+            $result = $receipt ? $this->success($receipt, false) : $this->unknown();
+        } catch (AwsException $exception) {
+            $status = $exception->getStatusCode();
+            $result = $status >= 400 && $status < 500
+                ? $this->failure('ses_rejected', 'SES rejected this attempt; correct the provider configuration before a new reviewed attempt.', false, false)
+                : $this->unknown();
+        } catch (\Throwable) {
+            $result = $this->unknown();
+        }
+        try {
+            $safety->complete($deliveryId, $tenantId, $result);
+        } catch (\Throwable) {
+            // A receipt with failed persistence still must never cause a resend.
+            return $result['success'] ? $result : $this->unknown();
+        }
+
+        return $result;
+    }
+
+    protected function unknown(): array
+    {
+        return [...$this->failure('ses_reconciliation_required', 'SES acceptance is unknown. Reconcile delivery events before any retry.', false, false), 'status' => 'unknown'];
     }
 
     public function sendTestEmail(string $toEmail, array $config = [], array $context = []): array
@@ -89,7 +135,7 @@ class SesTenantEmailProvider implements EmailProvider
     public function validateConfiguration(array $config = []): array
     {
         $issues = [];
-        foreach (['region', 'access_key', 'secret_key', 'tenant_name'] as $key) {
+        foreach (['region', 'access_key', 'secret_key', 'tenant_name', 'configuration_set'] as $key) {
             if (trim((string) ($config[$key] ?? '')) === '') {
                 $issues[] = "SES {$key} is missing.";
             }
@@ -97,9 +143,9 @@ class SesTenantEmailProvider implements EmailProvider
 
         return [
             'valid' => $issues === [],
-            'status' => $issues === [] ? 'healthy' : 'unverified',
+            'status' => $issues === [] ? 'configured' : 'unverified',
             'issues' => $issues,
-            'details' => ['provider' => $this->key(), 'tenant_name' => $config['tenant_name'] ?? null],
+            'details' => ['provider' => $this->key(), 'tenant_name' => $config['tenant_name'] ?? null, 'supports_app_sends' => true],
         ];
     }
 
@@ -109,7 +155,7 @@ class SesTenantEmailProvider implements EmailProvider
 
         return [
             'status' => $validation['status'],
-            'message' => $validation['valid'] ? 'SES tenant configuration is ready.' : implode(' ', $validation['issues']),
+            'message' => $validation['valid'] ? 'SES configuration is present; production access, identity and event acceptance remain separate checks.' : implode(' ', $validation['issues']),
             'details' => $validation['details'],
         ];
     }
@@ -119,6 +165,8 @@ class SesTenantEmailProvider implements EmailProvider
         return new SesV2Client([
             'version' => 'latest',
             'region' => (string) $config['region'],
+            'retries' => 0,
+            'http' => ['connect_timeout' => 5, 'timeout' => 20],
             'credentials' => new Credentials(
                 (string) $config['access_key'],
                 (string) $config['secret_key'],

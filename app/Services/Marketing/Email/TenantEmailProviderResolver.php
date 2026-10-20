@@ -30,6 +30,36 @@ class TenantEmailProviderResolver
      */
     public function getEmailProviderForTenant(?int $tenantId): array
     {
+        if ($tenantId && (config('features.tenant_messaging_platform')
+            || (config('ses_migration.tenant_enabled') && in_array($tenantId, config('ses_migration.tenant_ids', []), true)))) {
+            $account = \App\Models\TenantMessagingAccount::query()->forAllTenants()->where('tenant_id', $tenantId)
+                ->where('channel', 'email')->where('provider', 'ses_tenant')->first();
+            if ($account) {
+                $issues = [];
+                $sender = [];
+                try {
+                    $sender = app(\App\Services\Marketing\Messaging\TenantMessagingSenderProfileService::class)->resolveEmailSender($account);
+                } catch (\Throwable) {
+                    $issues[] = 'A verified tenant sender and reply destination are required.';
+                }
+                $enabled = $account->isReady() && config('ses_migration.tenant_enabled')
+                    && in_array($tenantId, config('ses_migration.tenant_ids', []), true);
+                $config = [
+                    'access_key' => config('services.ses.key'), 'secret_key' => config('services.ses.secret'),
+                    'session_token' => config('services.ses.token'), 'region' => config('services.ses.region'),
+                    ...(array) $account->credentials, ...(array) $account->provider_config,
+                ];
+
+                return ['tenant_id' => $tenantId, 'provider' => $this->sesTenantProvider,
+                    'configuration_issues' => $issues, 'settings' => [
+                        'email_provider' => 'ses_tenant', 'email_enabled' => $enabled && $issues === [],
+                        'from_email' => $sender['from_email'] ?? null, 'from_name' => $sender['from_name'] ?? null,
+                        'reply_to_email' => $sender['reply_to_email'] ?? null,
+                        'provider_status' => $enabled ? 'configured' : 'unverified',
+                        'provider_config' => $config, 'source' => 'tenant_email_settings',
+                    ]];
+            }
+        }
         $settings = $this->settingsService->resolvedForRuntime($tenantId);
         $providerKey = strtolower(trim((string) ($settings['email_provider'] ?? 'sendgrid')));
         $provider = $this->providerForKey($providerKey);
