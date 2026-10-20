@@ -33,12 +33,22 @@ class OperatorController extends Controller
         $rates->global();
         $settings = $access->settings();
         $report = app(\App\Services\Marketplace\MarketplaceReporting::class)->overview($request);
+        $merchantStore = $access->store();
+        $merchantTenant = $merchantStore?->tenant;
+        $context = $merchantTenant ? app(\App\Services\Tenancy\TenantBlueprintProfileService::class)->companyContext($merchantTenant) : [];
+        // Read existing branding only. presentationFor() may initialize a profile;
+        // opening this console must not initialize or change business branding.
+        $brandName = $merchantTenant
+            ? ($merchantTenant->brandProfile?->display_name ?: app(\App\Services\Tenancy\TenantBrandProfileService::class)->defaultAttributes($merchantTenant)['display_name'])
+            : 'Dedicated merchant';
 
         return view('marketplace.operator', [
             ...$report,
             'markets' => \App\Models\Marketplace\Market::with('makers', 'pickupLocation')->latest('starts_at')->limit(100)->get(),
             'tab' => $tab, 'settings' => $settings, 'connection' => Connection::query()->find($settings->connection_id), 'blockers' => $checkout->blockers(),
-            'merchantStore' => $access->store(), 'walletConnection' => app(\App\Services\Marketplace\MarketplaceWallet::class)->connection(),
+            'merchantStore' => $merchantStore, 'consoleBusinessName' => $brandName,
+            'consoleBusinessHint' => filled($context['confirmed_at'] ?? null) ? ($context['specialty'] ?? null) : null,
+            'walletConnection' => app(\App\Services\Marketplace\MarketplaceWallet::class)->connection(),
             'makers' => Maker::query()->with('memberships')->latest('id')->limit(100)->get(), 'listings' => Listing::query()->with('maker', 'levels')->latest('id')->limit(100)->get(),
             'orders' => $tab === 'orders' ? ($request->boolean('include_test') ? Order::with('lines.maker')->whereBetween('created_at', [$report['from']->utc(), $report['to']->utc()])->when($request->filled('maker'), fn ($q) => $q->whereHas('lines', fn ($line) => $line->where('maker_id', $request->integer('maker'))))->when($request->filled('customer'), fn ($q) => $q->where('email_hash', hash('sha256', strtolower(trim($request->query('customer'))))))->latest('id')->limit(2000)->get() : $report['salesOrders']) : Order::query()->with('lines.maker')->latest('id')->limit(50)->get(), 'statements' => Statement::query()->with('maker', 'entries')->latest('id')->limit(50)->get(),
             'rates' => RateAgreement::query()->latest('id')->limit(100)->get(), 'locations' => PickupLocation::query()->get(),
@@ -53,9 +63,10 @@ class OperatorController extends Controller
     public function makerDetail(Request $request, int $id)
     {
         $maker = Maker::with('memberships.identity')->findOrFail($id);
+        $returnFilters = $request->only(['q', 'status', 'from', 'to', 'maker', 'customer', 'include_test', 'detail']);
         $request->query->set('maker', $id);
 
-        return view('marketplace.operator-maker', [...app(\App\Services\Marketplace\MarketplaceReporting::class)->overview($request), 'maker' => $maker, 'listings' => $maker->listings()->with('levels')->get(), 'statements' => Statement::where('maker_id', $id)->latest('id')->get(), 'links' => \App\Models\Marketplace\StoreLink::where('maker_id', $id)->where('status', 'shared')->get(), 'markets' => \App\Models\Marketplace\Market::whereHas('makers', fn ($q) => $q->where('marketplace_makers.id', $id))->with(['makers' => fn ($q) => $q->where('marketplace_makers.id', $id)])->orderBy('starts_at')->get()]);
+        return view('marketplace.operator-maker', ['returnFilters' => $returnFilters, ...app(\App\Services\Marketplace\MarketplaceReporting::class)->overview($request), 'maker' => $maker, 'listings' => $maker->listings()->with('levels')->get(), 'statements' => Statement::where('maker_id', $id)->latest('id')->get(), 'links' => \App\Models\Marketplace\StoreLink::where('maker_id', $id)->where('status', 'shared')->get(), 'markets' => \App\Models\Marketplace\Market::whereHas('makers', fn ($q) => $q->where('marketplace_makers.id', $id))->with(['makers' => fn ($q) => $q->where('marketplace_makers.id', $id)])->orderBy('starts_at')->get()]);
     }
 
     public function settings(Request $request, MarketplaceAccess $access)

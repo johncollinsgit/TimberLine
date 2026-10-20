@@ -26,6 +26,13 @@ describes saved business profiles, account-private questionnaire drafts, authori
 settings search and record-based progress. Source changes require the normal
 protected release before being considered live.
 
+## Markets & Makers management
+
+The [management console map](docs/architecture/markets-makers-management-console.md)
+describes the Teams-style sidebar, account-only fictional preview, operator
+queues and independent maker workspace. Native commerce and public shopping
+retain their existing boundaries. Live selling remains planned.
+
 ## Company vehicle locator
 
 The Field Service Location Tracker shows selected company vans and their

@@ -181,7 +181,7 @@ test('standalone makers can apply and use a portal without Everbranch subscripti
     $this->withSession(['marketplace_identity' => $identity->id])->post('https://marketsandmakers.test/sell', ['name' => 'Fictional textile maker', 'city' => 'Easley', 'story' => 'I weave useful goods.'])->assertRedirect();
     $maker = Maker::first();
     expect($maker->tenant_id)->toBeNull()->and($maker->status)->toBe('pending');
-    $this->get('https://marketsandmakers.test/maker/'.$maker->id)->assertOk()->assertSee('Your products')->assertSee('Rate agreements');
+    $this->get('https://marketsandmakers.test/maker/'.$maker->id)->assertOk()->assertSee('Your products')->assertSee('Accepted terms');
 });
 
 test('email link GETs do not consume sign-ins and verified identities see only their own orders', function (): void {
