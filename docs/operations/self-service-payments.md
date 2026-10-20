@@ -11,7 +11,9 @@ proves a customer paid. Canonical entitlements and exact pilot allowlists remain
 can continue hosted Stripe setup, create a business-owned Standard account, or
 connect an existing account using OAuth. The latter needs the platform's
 `STRIPE_CONNECT_CLIENT_ID` and its registered return URL:
-`https://app.theeverbranch.com/payments/stripe/return?tenant=WORKSPACE`.
+`https://app.theeverbranch.com/payments/stripe/return`.
+Register it once for the platform. The workspace comes from owner/session-bound
+state, so adding a merchant never requires another provider redirect entry.
 OAuth state is actor/tenant/session-bound and expiring. Tokens stay encrypted.
 Existing accounts bound to another workspace are rejected rather than borrowed.
 

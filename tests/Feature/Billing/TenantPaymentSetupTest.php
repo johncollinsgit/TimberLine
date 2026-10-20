@@ -277,18 +277,36 @@ it('binds existing Stripe sign-in to the owner session and verifies the provider
     $start = $this->actingAs($this->owner)->post(paymentSetupUrl($this, '/stripe/connect'))->assertRedirect();
     parse_str(parse_url($start->headers->get('Location'), PHP_URL_QUERY), $oauth);
     expect($oauth['scope'])->toBe('read_write');
+    expect($oauth['redirect_uri'])->toBe(route('tenant-payments.stripe.return'))->not->toContain('?');
     $this->get(paymentSetupUrl($this, '/stripe/return').'&state=forged&code=abc')->assertForbidden();
     Http::assertNothingSent();
     Http::fake(['https://connect.stripe.com/oauth/token' => Http::response(['stripe_user_id' => 'acct_owned', 'livemode' => false,
         'scope' => 'read_write', 'access_token' => 'never-display-this-token']),
         'https://api.stripe.com/v1/accounts/acct_owned' => Http::response(['id' => 'acct_owned', 'type' => 'standard',
             'charges_enabled' => true, 'payouts_enabled' => true, 'details_submitted' => true, 'requirements' => ['currently_due' => []]])]);
-    $this->get(paymentSetupUrl($this, '/stripe/return').'&state='.$oauth['state'].'&code=abc')->assertRedirect();
+    $this->get('/payments/stripe/return?tenant=not-the-consented-workspace&state='.$oauth['state'].'&code=abc')
+        ->assertRedirect(route('tenant-payments.index', ['tenant' => $this->tenant->slug]));
     $account = $this->tenant->paymentAccount()->sole();
     expect($account->routingMode())->toBe('direct')->and($account->isReady())->toBeTrue();
     $connection = IntegrationConnection::where('provider', 'tenant_stripe_oauth')->sole();
     expect($connection->getRawOriginal('external_account_secret'))->not->toContain('never-display-this-token');
     $this->get(paymentSetupUrl($this))->assertOk()->assertDontSee('never-display-this-token')->assertSeeText('Connect bank transactions');
+    $sent = count(Http::recorded());
+    $this->get('/payments/stripe/return?state='.$oauth['state'].'&code=abc')->assertForbidden();
+    expect(count(Http::recorded()))->toBe($sent);
+});
+
+it('rejects expired or different-owner OAuth returns before consuming a provider code', function () {
+    config()->set('tenant_payments.stripe_oauth_client_id', 'ca_fictional');
+    $start = $this->actingAs($this->owner)->post(paymentSetupUrl($this, '/stripe/connect'))->assertRedirect();
+    parse_str(parse_url($start->headers->get('Location'), PHP_URL_QUERY), $oauth);
+    $url = '/payments/stripe/return?state='.$oauth['state'].'&code=unused';
+    $stranger = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now(), 'approved_at' => now()]);
+    $this->actingAs($stranger)->get($url)->assertForbidden();
+    $this->actingAs($this->owner);
+    $this->travel(16)->minutes();
+    $this->get($url)->assertForbidden();
+    Http::assertNothingSent();
 });
 
 it('recognizes only this workspace accounting connection without granting payment or bank-feed authority', function () {
