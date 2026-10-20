@@ -1,5 +1,7 @@
 <?php
 
+\Illuminate\Support\Facades\Route::post('/team/operations/push/{connection}', \App\Http\Controllers\TeamOperationsPushController::class)->whereUuid('connection')->middleware('throttle:120,1')->name('team.operations.push');
+
 use App\Http\Controllers\AiAssistantController;
 use App\Http\Controllers\Integrations\LevelFoundationsTranscriptionController;
 use App\Http\Controllers\Mobile\EverbranchMobileAssetUploadController;
@@ -258,3 +260,5 @@ Route::post('/connected-website/carolina-barrel/inquiries', [\App\Http\Controlle
 
     return response()->json(['playerName' => $player?->name ?? ($store->decrypt($release->answers)['child1Name'] ?? 'Player'), 'answers' => $store->decrypt($release->answers), 'season_key' => $release->season_key, 'signed_at' => $release->signed_at])->header('Cache-Control', 'private, no-store')->header('Referrer-Policy', 'no-referrer');
 })->middleware('signed:relative')->name('soccer.release-data');
+
+require __DIR__.'/team-mobile.php';

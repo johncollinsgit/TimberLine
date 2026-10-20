@@ -1,0 +1,46 @@
+{
+  "scope": "Full supplied clause, including platform specificity. Renderer-independent server invariants may be implemented_and_verified; web/API approximations of mobile actions remain partial. Not-started means no clause-specific completion evidence in this Team workstream, not proof a legacy capability is absent.",
+  "counts": {
+    "implemented_and_verified": 17,
+    "partial": 185,
+    "blocked": 12,
+    "not_started": 429
+  },
+  "by_milestone": {
+    "A": {
+      "implemented_and_verified": 13,
+      "partial": 67,
+      "blocked": 0,
+      "not_started": 89
+    },
+    "B": {
+      "implemented_and_verified": 3,
+      "partial": 54,
+      "blocked": 1,
+      "not_started": 83
+    },
+    "C": {
+      "implemented_and_verified": 1,
+      "partial": 22,
+      "blocked": 0,
+      "not_started": 61
+    },
+    "D": {
+      "implemented_and_verified": 0,
+      "partial": 41,
+      "blocked": 11,
+      "not_started": 167
+    },
+    "E": {
+      "implemented_and_verified": 0,
+      "partial": 1,
+      "blocked": 0,
+      "not_started": 29
+    }
+  },
+  "total": 643,
+  "source_sections": 36,
+  "production_accepted": false,
+  "native_renderer_implemented": false,
+  "completion_percentage": null
+}

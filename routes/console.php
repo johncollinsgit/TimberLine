@@ -313,4 +313,7 @@ Schedule::command('website:dispatch-order-notifications')->everyMinute()->withou
 \Illuminate\Support\Facades\Schedule::command('marketing:dispatch-desk')->everyMinute()->withoutOverlapping();
 
 // Retention also applies while the paid AI runtime is disabled.
+Schedule::command('team:sync-operations')->everyMinute()->when(fn () => (bool) config('team_operations.enabled'))->withoutOverlapping(5);
+Schedule::command('team:remind-operations')->everyMinute()->when(fn () => (bool) config('team_operations.enabled'))->withoutOverlapping(5);
+
 Schedule::command('ai-branch:prune --apply')->dailyAt('03:40')->withoutOverlapping(20);

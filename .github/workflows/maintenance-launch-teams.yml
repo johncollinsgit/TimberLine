@@ -1,0 +1,60 @@
+name: Launch approved Teams workspace
+
+on:
+  workflow_dispatch:
+    inputs:
+      tenant_slug:
+        description: Existing tenant approved for Teams rollout
+        required: true
+        default: modern-forestry
+        type: string
+      confirm_launch:
+        description: Enable Teams UI and work areas; no provider sends or subscription changes
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: teams-workspace-launch
+  cancel-in-progress: false
+
+jobs:
+  launch:
+    if: ${{ inputs.confirm_launch == true && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Verify deployed release and requested workspace
+        env:
+          EXPECTED_RELEASE: ${{ github.sha }}
+          TARGET_TENANT: ${{ inputs.tenant_slug }}
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_TENANT" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]
+          ready="$(curl --fail --silent --show-error --max-time 20 https://app.theeverbranch.com/ready)"
+          printf '%s' "$ready" | jq -e --arg expected "$EXPECTED_RELEASE" '.status == "ok" and .release == $expected' >/dev/null
+
+      - name: Apply audited rollout through production maintenance
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          TARGET_TENANT: ${{ inputs.tenant_slug }}
+        run: |
+          set -euo pipefail
+          for var in DEPLOY_HOST DEPLOY_USER DEPLOY_PORT DEPLOY_PATH DEPLOY_SSH_KEY; do test -n "${!var}"; done
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "set -euo pipefail; cd '$DEPLOY_PATH'; php artisan team:launch '$TARGET_TENANT'; php artisan team:launch '$TARGET_TENANT' --apply --force-production --activate-config --authorization='approved-teams-launch-$GITHUB_RUN_ID'; php artisan team:launch '$TARGET_TENANT' --verify; php artisan queue:restart"
+
+      - name: Verify application readiness after activation
+        run: curl --fail --silent --show-error --max-time 20 https://app.theeverbranch.com/ready

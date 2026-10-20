@@ -7,6 +7,31 @@ return [
         'test' => 'tests/Integration/WebsiteDiscountMySqlRecoveryTest.php',
         'scenarios' => ['discount columns and saved rows retained before unique/site indexes and foreign keys; completed DDL replayed before migration bookkeeping'],
     ],
+
+    '2026_10_20_010000_create_team_operations_tables.php' => [
+        'test' => 'tests/Integration/TeamWorkMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['areas and encrypted records retained before remaining operation tables', 'retained tables missing named uniqueness/feed indexes', 'repeat completed DDL before migration bookkeeping'],
+    ],
+    '2026_10_19_010000_create_team_user_connections.php' => [
+        'test' => 'tests/Integration/TeamWorkMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['connection table and encrypted rows retained before unique index', 'repeat after completed DDL before migration bookkeeping'],
+    ],
+    '2026_10_17_040000_create_team_file_uploads.php' => [
+        'test' => 'tests/Integration/TeamWorkMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['upload table retained before chunks', 'upload uniqueness or chunk primary key missing'],
+    ],
+    '2026_10_17_010000_create_team_work_tables.php' => [
+        'test' => 'tests/Integration/TeamWorkMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['early tables retained before later tables', 'retained table missing task index or member primary key'],
+    ],
+    '2026_10_17_020000_create_team_inbox_table.php' => [
+        'test' => 'tests/Integration/TeamWorkMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['Inbox table retained before event uniqueness and recipient index'],
+    ],
+    '2026_10_17_030000_create_team_work_versions_table.php' => [
+        'test' => 'tests/Integration/TeamWorkMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['native version table retained before composite primary key'],
+    ],
     '2026_10_16_120000_create_subscription_recharge_evidence.php' => [
         'test' => 'tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php',
         'scenarios' => ['early connection retained before trailing tables', 'bare tables and encrypted evidence retained before every named index and foreign key', 'partial constraints repaired repeatedly without changing accepted generations', 'wrong-tenant and wrong-connection credential and operation parents rejected', 'duplicate generation or request and orphan scope fail without deleting evidence', 'same-named changed index or referential action fails closed', 'concurrent operation UUID dedupe with recovered fenced lease and immutable request replay'],

@@ -8703,6 +8703,38 @@ CREATE TABLE `subscription_webhook_inboxes` (
   CONSTRAINT `swi_install_fk` FOREIGN KEY (`installation_id`, `tenant_id`) REFERENCES `subscription_installations` (`id`, `tenant_id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `team_area_members`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `team_area_members` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `area_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `role` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `tam_member` (`tenant_id`,`area_id`,`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `team_areas`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `team_areas` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `slug` varchar(60) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `profile` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `version` int unsigned NOT NULL DEFAULT '1',
+  `settings` text COLLATE utf8mb4_unicode_ci,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ta_tenant_slug` (`tenant_id`,`slug`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `team_channel_members`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -8745,6 +8777,59 @@ CREATE TABLE `team_channels` (
   CONSTRAINT `team_channel_actor_fk` FOREIGN KEY (`created_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `team_channel_job_fk` FOREIGN KEY (`field_service_job_id`) REFERENCES `field_service_jobs` (`id`) ON DELETE CASCADE,
   CONSTRAINT `team_channel_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `team_file_chunks`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `team_file_chunks` (
+  `tenant_id` bigint unsigned NOT NULL,
+  `upload_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `chunk_index` int unsigned NOT NULL,
+  `size` int unsigned NOT NULL,
+  `sha256` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (`tenant_id`,`upload_id`,`chunk_index`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `team_file_uploads`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `team_file_uploads` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `task_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `uploader_user_id` bigint unsigned NOT NULL,
+  `client_key` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `filename` varchar(240) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `mime_type` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `expected_size` int unsigned NOT NULL,
+  `sha256` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `storage_key` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` datetime NOT NULL,
+  `updated_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `team_file_client_unique` (`tenant_id`,`uploader_user_id`,`client_key`),
+  KEY `team_file_task_idx` (`tenant_id`,`task_id`,`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `team_inbox_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `team_inbox_items` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `recipient_user_id` bigint unsigned NOT NULL,
+  `actor_user_id` bigint unsigned NOT NULL,
+  `task_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `event_type` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `event_key` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `read_at` datetime DEFAULT NULL,
+  `archived_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `team_inbox_event_unique` (`tenant_id`,`recipient_user_id`,`event_key`),
+  KEY `team_inbox_recipient_idx` (`tenant_id`,`recipient_user_id`,`archived_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `team_message_attachments`;
@@ -8805,6 +8890,237 @@ CREATE TABLE `team_messages` (
   CONSTRAINT `team_message_channel_fk` FOREIGN KEY (`team_channel_id`) REFERENCES `team_channels` (`id`) ON DELETE CASCADE,
   CONSTRAINT `team_message_parent_fk` FOREIGN KEY (`parent_message_id`) REFERENCES `team_messages` (`id`) ON DELETE SET NULL,
   CONSTRAINT `team_message_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `team_operation_attempts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `team_operation_attempts` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `area_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `record_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `connection_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `kind` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'prepared',
+  `request_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `input_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci,
+  `result` longtext COLLATE utf8mb4_unicode_ci,
+  `scheduled_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `toa_request` (`tenant_id`,`user_id`,`request_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `team_operation_records`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `team_operation_records` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `area_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `kind` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `title` varchar(500) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'draft',
+  `version` int unsigned NOT NULL DEFAULT '1',
+  `assigned_user_id` bigint unsigned DEFAULT NULL,
+  `connection_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `source_key` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `visibility` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'area',
+  `starts_on` date DEFAULT NULL,
+  `ends_on` date DEFAULT NULL,
+  `data` longtext COLLATE utf8mb4_unicode_ci,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `tor_source` (`tenant_id`,`area_id`,`kind`,`source_key`),
+  KEY `tor_feed` (`tenant_id`,`area_id`,`kind`,`starts_on`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `team_operation_revisions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `team_operation_revisions` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `record_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `version` int unsigned NOT NULL,
+  `user_id` bigint unsigned DEFAULT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `tov_version` (`tenant_id`,`record_id`,`version`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `team_project_members`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `team_project_members` (
+  `tenant_id` bigint unsigned NOT NULL,
+  `project_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `access` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (`tenant_id`,`project_id`,`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `team_projects`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `team_projects` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `owner_user_id` bigint unsigned NOT NULL,
+  `name` varchar(500) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `privacy` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `archived` tinyint(1) NOT NULL DEFAULT '0',
+  `version` int unsigned NOT NULL,
+  `payload` json NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `team_project_tenant_archive_idx` (`tenant_id`,`archived`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `team_provider_connections`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `team_provider_connections` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `area_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `account_key` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `account_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'connected',
+  `generation` int unsigned NOT NULL DEFAULT '1',
+  `credentials` text COLLATE utf8mb4_unicode_ci,
+  `settings` text COLLATE utf8mb4_unicode_ci,
+  `sync_state` text COLLATE utf8mb4_unicode_ci,
+  `expires_at` timestamp NULL DEFAULT NULL,
+  `last_success_at` timestamp NULL DEFAULT NULL,
+  `retry_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `tpc_identity` (`tenant_id`,`user_id`,`area_id`,`provider`,`account_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `team_source_snapshots`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `team_source_snapshots` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `connection_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `resource_key` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `checksum` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `observed_at` timestamp NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `tss_version` (`tenant_id`,`connection_id`,`resource_key`,`checksum`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `team_task_projects`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `team_task_projects` (
+  `tenant_id` bigint unsigned NOT NULL,
+  `task_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `project_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `section_id` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `position` int unsigned NOT NULL DEFAULT '0',
+  PRIMARY KEY (`tenant_id`,`task_id`,`project_id`),
+  KEY `team_project_order_idx` (`tenant_id`,`project_id`,`position`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `team_tasks`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `team_tasks` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `assigned_user_id` bigint unsigned DEFAULT NULL,
+  `parent_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `title` varchar(500) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `due_on` date DEFAULT NULL,
+  `due_at` datetime DEFAULT NULL,
+  `completed_at` datetime DEFAULT NULL,
+  `deleted` tinyint(1) NOT NULL DEFAULT '0',
+  `version` int unsigned NOT NULL,
+  `payload` json NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `team_task_assignment_idx` (`tenant_id`,`assigned_user_id`,`deleted`),
+  KEY `team_task_parent_idx` (`tenant_id`,`parent_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `team_user_connections`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `team_user_connections` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned NOT NULL,
+  `provider` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `credentials` text COLLATE utf8mb4_unicode_ci,
+  `project_ids` json DEFAULT NULL,
+  `preferences` json DEFAULT NULL,
+  `external_user_id` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `account_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'disconnected',
+  `expires_at` timestamp NULL DEFAULT NULL,
+  `last_synced_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `team_user_provider_unique` (`tenant_id`,`user_id`,`provider`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `team_work_events`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `team_work_events` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `entity_type` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `entity_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` json NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `team_work_event_entity_idx` (`tenant_id`,`entity_type`,`entity_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `team_work_locks`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `team_work_locks` (
+  `tenant_id` bigint unsigned NOT NULL,
+  PRIMARY KEY (`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `team_work_receipts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `team_work_receipts` (
+  `tenant_id` bigint unsigned NOT NULL,
+  `receipt_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `receipt_key` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` json NOT NULL,
+  PRIMARY KEY (`tenant_id`,`receipt_hash`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `team_work_versions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `team_work_versions` (
+  `tenant_id` bigint unsigned NOT NULL,
+  `entity_type` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `entity_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `version` int unsigned NOT NULL,
+  `sha256` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `snapshot` json NOT NULL,
+  `recorded_at` datetime NOT NULL,
+  PRIMARY KEY (`tenant_id`,`entity_type`,`entity_id`,`version`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `tenant_access_addons`;
@@ -10891,8 +11207,8 @@ CREATE TABLE `website_discounts` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `tenant_id` bigint unsigned NOT NULL,
   `tenant_site_id` bigint unsigned NOT NULL,
-  `code` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `type` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `code` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `type` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `value` int unsigned NOT NULL,
   `minimum_subtotal_cents` int unsigned NOT NULL DEFAULT '0',
   `maximum_issues` int unsigned DEFAULT NULL,
@@ -12118,3 +12434,9 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (295,'2026_10_16_10
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (296,'2026_10_16_100010_create_marketing_social_account_bindings',27);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (297,'2026_10_16_120000_create_subscription_recharge_evidence',28);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (298,'2026_10_20_020000_create_website_discounts',29);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (299,'2026_10_17_010000_create_team_work_tables',30);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (300,'2026_10_17_020000_create_team_inbox_table',30);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (301,'2026_10_17_030000_create_team_work_versions_table',30);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (302,'2026_10_17_040000_create_team_file_uploads',30);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (303,'2026_10_19_010000_create_team_user_connections',30);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (304,'2026_10_20_010000_create_team_operations_tables',30);

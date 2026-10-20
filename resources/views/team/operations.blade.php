@@ -1,0 +1,14 @@
+<div id="team-operations" data-url="{{ url('/team') }}" data-tenant="{{ $tenant->slug }}" data-user="{{ $actor['user_id'] }}" data-admin="{{ in_array($actor['role'], ['owner','admin']) ? '1' : '0' }}">
+    @if(config('team_operations.fixture'))<aside class="tops-fixture">Fictional preview · synthetic events and financials · live sending is disabled</aside>@endif
+    <nav class="tops-launcher" aria-label="Business work areas"><span>Work areas</span><div id="tops-areas"></div><button type="button" id="tops-setup">Set up an area</button></nav>
+    <section id="tops-personal" class="tops-personal" aria-label="Work across business areas" hidden></section>
+    <section id="tops-panel" hidden aria-label="Business workspace">
+        <header class="tops-header"><button id="tops-menu" class="tops-menu" type="button" aria-label="Open workspace navigation">Menu</button><div><p id="tops-eyebrow">YOUR WORK, CONNECTED</p><h2 id="tops-heading" tabindex="-1">Work areas</h2><p id="tops-subtitle"></p></div><div class="actions"><button id="tops-native" type="button">Back to tasks</button><button id="tops-settings" type="button">Area settings</button><button id="tops-new" type="button" class="primary">Create</button></div></header>
+        <nav id="tops-groups" aria-label="Workflow stages"></nav><nav id="tops-tabs" aria-label="Area views"></nav>
+        <div class="tops-tools"><label><span class="sr-only">Search this area</span><input id="tops-search" type="search" placeholder="Search this area…"></label><button id="tops-refresh" type="button">Refresh</button><span id="tops-scope"></span></div>
+        <p id="tops-notice" role="status" aria-live="polite"></p><div id="tops-content" aria-live="polite"></div><div class="tops-paging"><button id="tops-prev" type="button" hidden>Previous page</button><button id="tops-next" type="button" hidden>Next page</button></div>
+    </section>
+    <dialog id="tops-editor" aria-labelledby="tops-editor-title"><form id="tops-form"><h2 id="tops-editor-title">New event</h2><p id="tops-editor-notice" role="status"></p><div id="tops-editor-fields"></div><div class="actions"><button id="tops-editor-close" type="button">Keep draft and close</button><button id="tops-save" class="primary">Save draft</button></div></form></dialog>
+    <div id="tops-draft" class="tops-draft" hidden role="status"><span>Your unsaved area draft stays in this page.</span><button id="tops-resume" type="button">Resume draft</button><button id="tops-discard" type="button">Discard draft</button></div>
+    <dialog id="tops-detail" aria-labelledby="tops-detail-title"><h2 id="tops-detail-title">Details</h2><div id="tops-detail-body"></div><button id="tops-detail-close" type="button">Close details</button></dialog>
+</div>
