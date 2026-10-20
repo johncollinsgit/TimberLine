@@ -236,10 +236,14 @@ class TenantModuleCatalogService
      */
     public function publicCatalogPayload(): array
     {
+        $offer = (array) config('module_catalog.offers.standard', []);
+        $includedKeys = (array) ($offer['included_module_keys'] ?? []);
         $modules = [];
         foreach ($this->storeVisibleModuleDefinitions('public_site') as $moduleKey => $definition) {
+            if (! in_array($moduleKey, $includedKeys, true)) {
+                continue;
+            }
             $productMetadata = $this->moduleProductMetadata($moduleKey, $definition);
-            $purchaseMetadata = $this->modulePurchaseMetadata($moduleKey);
 
             $modules[] = [
                 'key' => $moduleKey,
@@ -256,46 +260,29 @@ class TenantModuleCatalogService
                 'required_integrations_label' => (string) ($productMetadata['required_integrations_label'] ?? 'No required integration'),
                 'mobile_relevance' => (string) ($productMetadata['mobile_relevance'] ?? 'not_mobile_specific'),
                 'mobile_relevance_label' => (string) ($productMetadata['mobile_relevance_label'] ?? 'Not mobile-specific'),
-                'pricing_impact_label' => (string) ($productMetadata['pricing_impact_label'] ?? 'Pricing impact not configured'),
-                'entitlement_requirement_label' => (string) ($productMetadata['entitlement_requirement_label'] ?? 'Access review required'),
+                'pricing_impact_label' => 'Included with Everbranch Simple',
+                'entitlement_requirement_label' => 'Included core branch; enable it during workspace setup',
                 'buyer_setup' => is_array($productMetadata['buyer_setup'] ?? null) ? (array) $productMetadata['buyer_setup'] : [],
                 'dependencies' => $this->publicDependencyLabels((array) ($definition['dependencies'] ?? [])),
                 'is_standalone' => ((array) ($definition['dependencies'] ?? [])) === [],
                 'data_used' => $this->publicDataUsed($moduleKey, $definition),
                 'industry_relevance' => $this->publicIndustryRelevance($moduleKey, $definition),
                 'primary_actions' => $this->publicPrimaryActions($definition, $productMetadata),
-                'purchase' => $purchaseMetadata,
+                'purchase' => [],
                 'status' => strtolower(trim((string) ($definition['status'] ?? 'disabled'))),
                 'billing_mode' => strtolower(trim((string) ($definition['billing_mode'] ?? 'unavailable'))),
                 'channels' => array_values(array_map('strval', (array) ($definition['channels'] ?? []))),
-                'included_in_plans' => array_values(array_map('strval', (array) ($definition['included_in_plans'] ?? []))),
+                'included_in_plans' => ['standard'],
                 'market_state' => strtoupper(trim((string) ($definition['market_state'] ?? 'INTERNAL_ONLY'))),
                 'cta_routing' => strtolower(trim((string) ($definition['cta_routing'] ?? 'none'))),
             ];
         }
 
-        $plans = [];
-        foreach ((array) config('module_catalog.plans', []) as $planKey => $definition) {
-            if (! is_array($definition)) {
-                continue;
-            }
-
-            $includedModules = array_values(array_filter(array_map(function ($moduleKey) use ($modules): ?string {
-                foreach ($modules as $module) {
-                    if (($module['key'] ?? null) === $moduleKey) {
-                        return (string) ($module['display_name'] ?? $moduleKey);
-                    }
-                }
-
-                return null;
-            }, (array) ($definition['included_modules'] ?? []))));
-
-            $plans[] = [
-                'key' => strtolower(trim((string) $planKey)),
-                'display_name' => (string) ($definition['display_name'] ?? $definition['label'] ?? Str::headline((string) $planKey)),
-                'included_modules' => $includedModules,
-            ];
-        }
+        $plans = [[
+            'key' => 'standard',
+            'display_name' => (string) ($offer['name'] ?? 'Everbranch Simple'),
+            'included_modules' => array_column($modules, 'display_name'),
+        ]];
 
         return [
             'generated_at' => now()->toIso8601String(),
@@ -309,6 +296,10 @@ class TenantModuleCatalogService
                 'supported_channel_types' => ['shopify', 'direct', 'hybrid'],
             ],
             'plans' => $plans,
+            'premium_products' => array_map(static fn (array $product): array => [
+                'key' => (string) $product['key'],
+                'name' => (string) $product['name'],
+            ], (array) ($offer['premium_products'] ?? [])),
             'modules' => $modules,
         ];
     }

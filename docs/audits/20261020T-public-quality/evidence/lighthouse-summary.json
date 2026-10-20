@@ -1,0 +1,182 @@
+[
+  {
+    "route": "/platform/promo",
+    "profile": "desktop",
+    "run": 1,
+    "scores": {
+      "performance": 82,
+      "accessibility": 100,
+      "best-practices": 96,
+      "seo": 100
+    },
+    "lcp_ms": 2600.5959,
+    "cls": 0,
+    "tbt_ms": 0,
+    "failed_accessibility": []
+  },
+  {
+    "route": "/platform/promo",
+    "profile": "desktop",
+    "run": 2,
+    "scores": {
+      "performance": 84,
+      "accessibility": 100,
+      "best-practices": 96,
+      "seo": 100
+    },
+    "lcp_ms": 2460.7062,
+    "cls": 0,
+    "tbt_ms": 0,
+    "failed_accessibility": []
+  },
+  {
+    "route": "/platform/plans",
+    "profile": "desktop",
+    "run": 1,
+    "scores": {
+      "performance": 93,
+      "accessibility": 100,
+      "best-practices": 96,
+      "seo": 100
+    },
+    "lcp_ms": 1240.6413,
+    "cls": 0,
+    "tbt_ms": 0,
+    "failed_accessibility": []
+  },
+  {
+    "route": "/platform/plans",
+    "profile": "desktop",
+    "run": 2,
+    "scores": {
+      "performance": 93,
+      "accessibility": 100,
+      "best-practices": 96,
+      "seo": 100
+    },
+    "lcp_ms": 1280.7197999999999,
+    "cls": 0,
+    "tbt_ms": 0,
+    "failed_accessibility": []
+  },
+  {
+    "route": "/explore/modules",
+    "profile": "desktop",
+    "run": 1,
+    "scores": {
+      "performance": 93,
+      "accessibility": 100,
+      "best-practices": 96,
+      "seo": 100
+    },
+    "lcp_ms": 1280.7746,
+    "cls": 0,
+    "tbt_ms": 0,
+    "failed_accessibility": []
+  },
+  {
+    "route": "/explore/modules",
+    "profile": "desktop",
+    "run": 2,
+    "scores": {
+      "performance": 93,
+      "accessibility": 100,
+      "best-practices": 96,
+      "seo": 100
+    },
+    "lcp_ms": 1280.5916,
+    "cls": 0,
+    "tbt_ms": 0,
+    "failed_accessibility": []
+  },
+  {
+    "route": "/platform/promo",
+    "profile": "mobile",
+    "run": 1,
+    "scores": {
+      "performance": 59,
+      "accessibility": 100,
+      "best-practices": 96,
+      "seo": 100
+    },
+    "lcp_ms": 14400.631700000002,
+    "cls": 0,
+    "tbt_ms": 0,
+    "failed_accessibility": []
+  },
+  {
+    "route": "/platform/promo",
+    "profile": "mobile",
+    "run": 2,
+    "scores": {
+      "performance": 59,
+      "accessibility": 100,
+      "best-practices": 96,
+      "seo": 100
+    },
+    "lcp_ms": 15075.697199999999,
+    "cls": 0,
+    "tbt_ms": 0,
+    "failed_accessibility": []
+  },
+  {
+    "route": "/platform/plans",
+    "profile": "mobile",
+    "run": 1,
+    "scores": {
+      "performance": 61,
+      "accessibility": 100,
+      "best-practices": 96,
+      "seo": 100
+    },
+    "lcp_ms": 6750.871,
+    "cls": 0,
+    "tbt_ms": 0,
+    "failed_accessibility": []
+  },
+  {
+    "route": "/platform/plans",
+    "profile": "mobile",
+    "run": 2,
+    "scores": {
+      "performance": 61,
+      "accessibility": 100,
+      "best-practices": 96,
+      "seo": 100
+    },
+    "lcp_ms": 6750.5678,
+    "cls": 0,
+    "tbt_ms": 0,
+    "failed_accessibility": []
+  },
+  {
+    "route": "/explore/modules",
+    "profile": "mobile",
+    "run": 1,
+    "scores": {
+      "performance": 60,
+      "accessibility": 100,
+      "best-practices": 96,
+      "seo": 100
+    },
+    "lcp_ms": 6900.7275,
+    "cls": 0,
+    "tbt_ms": 0,
+    "failed_accessibility": []
+  },
+  {
+    "route": "/explore/modules",
+    "profile": "mobile",
+    "run": 2,
+    "scores": {
+      "performance": 61,
+      "accessibility": 100,
+      "best-practices": 96,
+      "seo": 100
+    },
+    "lcp_ms": 6750.6019,
+    "cls": 0,
+    "tbt_ms": 0,
+    "failed_accessibility": []
+  }
+]

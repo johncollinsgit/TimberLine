@@ -7,10 +7,10 @@
     $recommendedComparePlan = (string) ($planComparison['recommended'] ?? '');
     $intentValue = in_array(($intent ?? ''), ['demo', 'production'], true) ? (string) $intent : 'production';
     $planCards = is_array($plan_cards ?? null) ? $plan_cards : [];
-    $addonCards = is_array($addon_cards ?? null) ? $addon_cards : [];
+    $branchCards = is_array($branch_cards ?? null) ? $branch_cards : [];
     $recommendedPlanKey = (string) ($recommended_plan_key ?? 'growth');
     $selectedPlanKey = old('preferred_plan_key', $recommendedPlanKey);
-    $selectedAddons = (array) old('addons_interest', []);
+    $selectedBranches = (array) old('branches_interest', array_filter([(string) request()->query('branch', '')], static fn (string $key): bool => in_array($key, array_column($branchCards, 'key'), true)));
     $formOptions = is_array($form_options ?? null) ? $form_options : [];
     $businessTypes = is_array($formOptions['business_types'] ?? null) ? $formOptions['business_types'] : [];
     $teamSizes = is_array($formOptions['team_sizes'] ?? null) ? $formOptions['team_sizes'] : [];
@@ -33,8 +33,9 @@
         old('requested_tenant_slug'),
         old('message'),
         old('preferred_plan_key'),
-        old('addons_interest'),
+        old('branches_interest'),
     ], static fn ($value): bool => ! empty($value));
+    $showAdvancedDetails = $showAdvancedDetails || $selectedBranches !== [];
     $heroHeadline = (string) ($content['headline'] ?? "Simplify your life,\nGet more time with your family.");
     $heroHeadlineLines = array_values(array_filter(
         array_map('trim', preg_split("/\r\n|\r|\n/", $heroHeadline) ?: []),
@@ -71,6 +72,7 @@
                                 <span>{{ $heroLine }}</span>
                             @endforeach
                         </h1>
+                        <p class="fb-contact-summary mt-4">Choose your core branches. We will review your setup and terms, then send access instructions. Submitting this request does not take a payment.</p>
                     </div>
 
                     <div id="panel-start-pricing" class="fb-public-tab-panel" role="tabpanel" aria-labelledby="tab-start-pricing" data-public-tab-panel="pricing" hidden>
@@ -115,7 +117,7 @@
                             @endif
 
                             <div class="fb-start-actions fb-plan-compare__actions">
-                                <a href="#start-access-form" class="fb-btn fb-btn-primary">Become a launch partner</a>
+                                <a href="#start-access-form" class="fb-btn fb-btn-primary">Get started</a>
                             </div>
                         </div>
                     </div>
@@ -133,6 +135,10 @@
             <div class="fb-card fb-start-form-card" data-premium-surface>
                 @if (session('status'))
                     <div class="fb-state fb-state--success mb-4">{{ session('status') }}</div>
+                @endif
+
+                @if($intentValue === 'production')
+                    <p class="fb-contact-summary mb-4" data-public-offer>{{ config('product_surfaces.public_offer.summary') }}</p>
                 @endif
 
                 <form method="POST" action="{{ route('platform.access-request') }}" class="space-y-4">
@@ -186,7 +192,7 @@
                     <details class="fb-start-details" @if($showAdvancedDetails) open @endif>
                         <summary>
                             <span>
-                                <strong>More details</strong>
+                                <strong>Choose branches and more details</strong>
                             </span>
                         </summary>
                         <div class="fb-start-details__body">
@@ -257,11 +263,11 @@
 
                             @if($intentValue === 'production')
                                 <div class="fb-start-details__subsection">
-                                    <div class="fb-start-details__subsection-title">Commercial interest</div>
+                                    <div class="fb-start-details__subsection-title">Your workspace</div>
 
                                     <div class="fb-start-form-grid fb-start-form-grid--2 fb-start-form-grid--compact">
                                         <div>
-                                            <label class="fb-form-label" for="preferred_plan_key">Preferred tier</label>
+                                            <label class="fb-form-label" for="preferred_plan_key">Preferred offer</label>
                                             <select id="preferred_plan_key" name="preferred_plan_key" class="fb-input fb-select fb-start-field mt-2">
                                                 <option value="">No preference</option>
                                                 @foreach($planCards as $plan)
@@ -279,28 +285,29 @@
                                         </div>
 
                                         <div>
-                                            <div class="fb-form-label">Add-ons of interest</div>
+                                            <div class="fb-form-label">Choose your core branches</div>
+                                            <p class="text-sm text-[var(--fb-text-secondary)]">Included in your plan. Start with what you need; we will help with setup.</p>
                                             <div class="mt-2 flex flex-wrap gap-2">
-                                                @foreach($addonCards as $addon)
+                                                @foreach($branchCards as $branch)
                                                     @php
-                                                        $addonKey = (string) ($addon['addon_key'] ?? '');
-                                                        $addonLabel = (string) ($addon['label'] ?? $addonKey);
+                                                        $branchKey = (string) ($branch['key'] ?? '');
+                                                        $branchLabel = (string) ($branch['display_name'] ?? $branchKey);
                                                     @endphp
-                                                    @if($addonKey !== '')
+                                                    @if($branchKey !== '')
                                                         <label class="fb-module-pill cursor-pointer">
                                                             <input
                                                                 type="checkbox"
                                                                 class="mr-2"
-                                                                name="addons_interest[]"
-                                                                value="{{ $addonKey }}"
-                                                                @checked(in_array($addonKey, $selectedAddons, true))
+                                                                name="branches_interest[]"
+                                                                value="{{ $branchKey }}"
+                                                                @checked(in_array($branchKey, $selectedBranches, true))
                                                             />
-                                                            {{ $addonLabel }}
+                                                            {{ $branchLabel }}
                                                         </label>
                                                     @endif
                                                 @endforeach
                                             </div>
-                                            @error('addons_interest') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
+                                            @error('branches_interest') <div class="mt-1 text-xs text-red-600">{{ $message }}</div> @enderror
                                         </div>
                                     </div>
                                 </div>

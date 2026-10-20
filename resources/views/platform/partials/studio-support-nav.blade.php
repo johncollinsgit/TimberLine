@@ -10,10 +10,10 @@
         </a>
         <div>
             <a class="eb-studio-support-nav__demo" href="{{ route('platform.industry-demo', ['discipline' => 'field']) }}">Explore a system</a>
-            <a href="{{ route('platform.modules.explore') }}">Modules</a>
+            <a href="{{ route('platform.modules.explore') }}">Branches</a>
             <a href="{{ route('platform.plans') }}">Plans</a>
             <a href="{{ route('login') }}">Log in</a>
-            <a class="eb-studio-support-nav__cta" href="{{ route('platform.start') }}">Become a launch partner</a>
+            <a class="eb-studio-support-nav__cta" href="{{ route('platform.start') }}">Get started</a>
         </div>
     </nav>
 </header>

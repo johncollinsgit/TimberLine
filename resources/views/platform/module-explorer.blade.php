@@ -13,7 +13,7 @@
 <html lang="en">
 <head>
     @include('partials.head', [
-        'title' => $selectedModule ? ($selectedModule['display_name'].' module') : 'Explore Everbranch modules',
+        'title' => $selectedModule ? ($selectedModule['display_name'].' module') : 'Choose your Everbranch branches',
         'description' => 'Browse Everbranch modules by business outcome, setup effort, integration, and industry without joining a workspace.',
     ])
 </head>
@@ -25,8 +25,8 @@
             <img src="{{ asset((string) config('everbranch.brand_assets.mark', 'brand/everbranch-mark.svg')) }}" alt="" />
             <span>Everbranch</span>
         </a>
-        <nav aria-label="Module explorer navigation">
-            <a href="{{ route('platform.modules.explore') }}" aria-current="page">Modules</a>
+        <nav aria-label="Branch explorer navigation">
+            <a href="{{ route('platform.modules.explore') }}" aria-current="page">Branches</a>
             <a href="{{ route('platform.contact', ['intent' => 'walkthrough']) }}">Guided walkthrough</a>
             <a href="{{ route('platform.plans') }}">Plans</a>
             <a href="{{ route('login') }}">Sign in</a>
@@ -36,19 +36,21 @@
     <main class="eb-explorer-shell" data-module-explorer>
         <section class="eb-explorer-hero" aria-labelledby="explorer-title">
             <div>
-                <p class="eb-explorer-kicker">Module Explorer</p>
-                <h1 id="explorer-title">Find the part of Everbranch that solves today’s problem.</h1>
-                <p>Browse in plain business language. Nothing here connects an account, changes a plan, or exposes a customer workspace.</p>
+                <p class="eb-explorer-kicker">Branch Explorer</p>
+                <h1 id="explorer-title">Choose the branches that make your day easier.</h1>
+                <p>{{ config('product_surfaces.public_offer.premium_note') }}</p>
+                <p data-public-offer>{{ config('product_surfaces.public_offer.summary') }}</p>
+                <p>These core branches are included in the simple plan. Choose what you need; we will help with connections and setup.</p>
             </div>
             <div class="eb-explorer-hero-actions">
                 <a class="fb-btn fb-btn-primary" href="{{ route('platform.contact', ['intent' => 'walkthrough']) }}">Request a guided walkthrough</a>
-                <a class="fb-btn fb-btn-secondary" href="{{ route('platform.start') }}">Create a workspace</a>
+                <a class="fb-btn fb-btn-secondary" href="{{ route('platform.start') }}">Choose your branches</a>
             </div>
         </section>
 
-        <section class="eb-explorer-controls" aria-label="Filter modules">
+        <section class="eb-explorer-controls" aria-label="Filter branches">
             <label class="eb-explorer-search">
-                <span>Search modules</span>
+                <span>Search branches</span>
                 <input
                     type="search"
                     value="{{ $filters['query'] ?? '' }}"
@@ -139,7 +141,7 @@
                             data-industry="{{ strtolower(implode('|', (array) ($module['industry_relevance'] ?? []))) }}"
                             data-position="{{ $position }}"
                         >
-                            <a href="{{ route('platform.modules.show', ['module' => $module['key']]) }}" aria-label="Learn about {{ $module['display_name'] }}">
+                            <a href="{{ route('platform.modules.show', ['module' => $module['key']]) }}">
                                 <div class="eb-module-row-main">
                                     <div class="eb-module-monogram" aria-hidden="true">{{ strtoupper(substr((string) ($module['display_name'] ?? 'E'), 0, 1)) }}</div>
                                     <div>
@@ -164,17 +166,17 @@
 
                 <div class="eb-explorer-empty" data-explorer-empty hidden>
                     <div aria-hidden="true">⌕</div>
-                    <h3>No modules match those filters.</h3>
+                    <h3>No branches match those filters.</h3>
                     <p>Try a broader business area or clear the filters to see the full catalog.</p>
-                    <button type="button" class="fb-btn fb-btn-secondary" data-explorer-clear>Show all modules</button>
+                    <button type="button" class="fb-btn fb-btn-secondary" data-explorer-clear>Show all branches</button>
                 </div>
             </section>
 
-            <aside class="eb-module-detail" aria-label="Module details">
+            <aside class="eb-module-detail" aria-label="Branch details">
                 @if($selectedModule)
                     @php $buyerSetup = is_array($selectedModule['buyer_setup'] ?? null) ? $selectedModule['buyer_setup'] : []; @endphp
                     <div class="eb-module-detail-head">
-                        <a href="{{ route('platform.modules.explore', request()->only(['q', 'category', 'integration', 'setup', 'industry', 'sort'])) }}" class="eb-module-detail-back">← All modules</a>
+                        <a href="{{ route('platform.modules.explore', request()->only(['q', 'category', 'integration', 'setup', 'industry', 'sort'])) }}" class="eb-module-detail-back">← All branches</a>
                         <span class="eb-module-status">{{ $selectedModule['lifecycle_label'] }}</span>
                     </div>
                     <p class="eb-explorer-kicker">{{ $selectedModule['category_label'] }}</p>
@@ -187,7 +189,7 @@
                         <div><dt>Integrations</dt><dd>{{ $selectedModule['required_integrations_label'] }}</dd></div>
                         <div><dt>Mobile</dt><dd>{{ $selectedModule['mobile_relevance_label'] }}</dd></div>
                         <div><dt>Access</dt><dd>{{ $selectedModule['entitlement_requirement_label'] }}</dd></div>
-                        <div><dt>Price</dt><dd>{{ data_get($selectedModule, 'purchase.price_display', $selectedModule['pricing_impact_label']) }}</dd></div>
+                        <div><dt>Included</dt><dd>{{ data_get($selectedModule, 'purchase.price_display', $selectedModule['pricing_impact_label']) }}</dd></div>
                         <div><dt>Dependencies</dt><dd>{{ $selectedModule['is_standalone'] ? 'Standalone' : implode(', ', (array) $selectedModule['dependencies']) }}</dd></div>
                     </dl>
 
@@ -215,8 +217,8 @@
                     </section>
 
                     <div class="eb-module-detail-actions">
-                        <a class="fb-btn fb-btn-primary" href="{{ route('platform.start', ['module' => $selectedModule['key']]) }}">
-                            {{ $buyerSetup['primary_action'] ?? 'Start with this module' }}
+                        <a class="fb-btn fb-btn-primary" href="{{ route('platform.start', ['branch' => $selectedModule['key']]) }}">
+                            Choose this branch
                         </a>
                         <a class="fb-btn fb-btn-secondary" href="{{ route('platform.contact', ['intent' => 'walkthrough', 'module' => $selectedModule['key']]) }}">See it in a guided walkthrough</a>
                         <a class="eb-module-contact" href="{{ route('platform.contact', ['module' => $selectedModule['key']]) }}">Ask Everbranch a question</a>
@@ -224,8 +226,8 @@
                 @else
                     <div class="eb-module-detail-placeholder">
                         <div class="eb-module-monogram" aria-hidden="true">E</div>
-                        <h2>Choose a module to see how it works.</h2>
-                        <p>You’ll see the business outcome, setup effort, data used, integrations, plan access, and the first steps after enabling it.</p>
+                        <h2>Choose a branch to see how it works.</h2>
+                        <p>You’ll see the business outcome, setup effort, data used, integrations, what is included, and the first steps after enabling it.</p>
                         <a href="{{ route('platform.contact', ['intent' => 'walkthrough']) }}" class="fb-btn fb-btn-secondary">Request a guided walkthrough</a>
                     </div>
                 @endif

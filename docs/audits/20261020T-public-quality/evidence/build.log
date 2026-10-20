@@ -1,0 +1,173 @@
+
+> build
+> npm run typecheck && npm run test:trajectory && vite build
+
+
+> typecheck
+> tsc -p tsconfig.workflows.json --noEmit
+
+
+> test:trajectory
+> node --test tests/e2e/trajectory-money.test.mjs tests/e2e/trajectory-charts.test.mjs tests/e2e/trajectory-bank-link.test.mjs
+
+✔ OAuth resume restores the same token, connection and authorized space only (1.492042ms)
+✔ expired, corrupt or unavailable browser storage cannot start a replacement link (0.256417ms)
+✔ revoked-item reconnect persists the server-selected new-item mode and clears completion state (0.064708ms)
+✔ OAuth return passes the complete provider callback without accepting other destinations or extra query state (0.252416ms)
+✔ cancel, unsupported bank and expired-token exits explain next steps without exposing raw provider errors (0.102875ms)
+✔ observed cash and forecast share an anchor without inventing an observation (6.676792ms)
+✔ missing observations stay missing and zero is a valid observed balance (0.113291ms)
+✔ scenario line shares observed anchor and does not fill missing forecasts (0.060792ms)
+✔ income chart uses monthly plan rates, never cash balances or invented growth (0.099459ms)
+✔ monthly bars use closing balances, preserving leap days and partial months (0.174875ms)
+✔ actual vs projected keeps current-month observations distinct and missing history blank (0.807834ms)
+✔ income runway keeps outflows distinct and defaults the projection to matching prior-year income (0.5145ms)
+✔ previous-year comparison aligns calendar months and preserves missing evidence (0.274166ms)
+✔ currency entry never uses floating-point multiplication (0.791666ms)
+✔ percentage allocations round one side and preserve the original remainder (0.082875ms)
+✔ mortgage rates retain three decimal places (0.181375ms)
+ℹ tests 16
+ℹ suites 0
+ℹ pass 16
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 80.400041
+vite v7.3.6 building client environment for production...
+(node:60936) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+transforming...
+../../../../../../private/var/folders/zq/lc1jymzs2tb2hhzh8ggxnnfh0000gn/T/everbranch-audit-r3ki6vn1/deployed-source/node_modules/@glideapps/glide-data-grid/dist/esm/data-editor/group-rename.js (4:13): A comment
+
+"/*#__PURE__*/"
+
+in "../../../../../../private/var/folders/zq/lc1jymzs2tb2hhzh8ggxnnfh0000gn/T/everbranch-audit-r3ki6vn1/deployed-source/node_modules/@glideapps/glide-data-grid/dist/esm/data-editor/group-rename.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+../../../../../../private/var/folders/zq/lc1jymzs2tb2hhzh8ggxnnfh0000gn/T/everbranch-audit-r3ki6vn1/deployed-source/node_modules/@glideapps/glide-data-grid/dist/esm/internal/data-editor-container/data-grid-container.js (7:13): A comment
+
+"/*#__PURE__*/"
+
+in "../../../../../../private/var/folders/zq/lc1jymzs2tb2hhzh8ggxnnfh0000gn/T/everbranch-audit-r3ki6vn1/deployed-source/node_modules/@glideapps/glide-data-grid/dist/esm/internal/data-editor-container/data-grid-container.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+../../../../../../private/var/folders/zq/lc1jymzs2tb2hhzh8ggxnnfh0000gn/T/everbranch-audit-r3ki6vn1/deployed-source/node_modules/@glideapps/glide-data-grid/dist/esm/internal/data-editor-container/data-grid-container.js (8:14): A comment
+
+"/*#__PURE__*/"
+
+in "../../../../../../private/var/folders/zq/lc1jymzs2tb2hhzh8ggxnnfh0000gn/T/everbranch-audit-r3ki6vn1/deployed-source/node_modules/@glideapps/glide-data-grid/dist/esm/internal/data-editor-container/data-grid-container.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+../../../../../../private/var/folders/zq/lc1jymzs2tb2hhzh8ggxnnfh0000gn/T/everbranch-audit-r3ki6vn1/deployed-source/node_modules/@glideapps/glide-data-grid/dist/esm/internal/data-grid-overlay-editor/private/markdown-overlay-editor-style.js (2:13): A comment
+
+"/*#__PURE__*/"
+
+in "../../../../../../private/var/folders/zq/lc1jymzs2tb2hhzh8ggxnnfh0000gn/T/everbranch-audit-r3ki6vn1/deployed-source/node_modules/@glideapps/glide-data-grid/dist/esm/internal/data-grid-overlay-editor/private/markdown-overlay-editor-style.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+../../../../../../private/var/folders/zq/lc1jymzs2tb2hhzh8ggxnnfh0000gn/T/everbranch-audit-r3ki6vn1/deployed-source/node_modules/@glideapps/glide-data-grid/dist/esm/internal/data-grid-overlay-editor/data-grid-overlay-editor-style.js (2:14): A comment
+
+"/*#__PURE__*/"
+
+in "../../../../../../private/var/folders/zq/lc1jymzs2tb2hhzh8ggxnnfh0000gn/T/everbranch-audit-r3ki6vn1/deployed-source/node_modules/@glideapps/glide-data-grid/dist/esm/internal/data-grid-overlay-editor/data-grid-overlay-editor-style.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+../../../../../../private/var/folders/zq/lc1jymzs2tb2hhzh8ggxnnfh0000gn/T/everbranch-audit-r3ki6vn1/deployed-source/node_modules/@glideapps/glide-data-grid/dist/esm/internal/data-grid-overlay-editor/data-grid-overlay-editor-style.js (3:14): A comment
+
+"/*#__PURE__*/"
+
+in "../../../../../../private/var/folders/zq/lc1jymzs2tb2hhzh8ggxnnfh0000gn/T/everbranch-audit-r3ki6vn1/deployed-source/node_modules/@glideapps/glide-data-grid/dist/esm/internal/data-grid-overlay-editor/data-grid-overlay-editor-style.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+../../../../../../private/var/folders/zq/lc1jymzs2tb2hhzh8ggxnnfh0000gn/T/everbranch-audit-r3ki6vn1/deployed-source/node_modules/@glideapps/glide-data-grid/dist/esm/internal/data-grid-overlay-editor/data-grid-overlay-editor-style.js (4:14): A comment
+
+"/*#__PURE__*/"
+
+in "../../../../../../private/var/folders/zq/lc1jymzs2tb2hhzh8ggxnnfh0000gn/T/everbranch-audit-r3ki6vn1/deployed-source/node_modules/@glideapps/glide-data-grid/dist/esm/internal/data-grid-overlay-editor/data-grid-overlay-editor-style.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+../../../../../../private/var/folders/zq/lc1jymzs2tb2hhzh8ggxnnfh0000gn/T/everbranch-audit-r3ki6vn1/deployed-source/node_modules/@glideapps/glide-data-grid/dist/esm/internal/data-grid-overlay-editor/data-grid-overlay-editor-style.js (5:14): A comment
+
+"/*#__PURE__*/"
+
+in "../../../../../../private/var/folders/zq/lc1jymzs2tb2hhzh8ggxnnfh0000gn/T/everbranch-audit-r3ki6vn1/deployed-source/node_modules/@glideapps/glide-data-grid/dist/esm/internal/data-grid-overlay-editor/data-grid-overlay-editor-style.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+../../../../../../private/var/folders/zq/lc1jymzs2tb2hhzh8ggxnnfh0000gn/T/everbranch-audit-r3ki6vn1/deployed-source/node_modules/@glideapps/glide-data-grid/dist/esm/internal/data-grid-overlay-editor/data-grid-overlay-editor-style.js (6:14): A comment
+
+"/*#__PURE__*/"
+
+in "../../../../../../private/var/folders/zq/lc1jymzs2tb2hhzh8ggxnnfh0000gn/T/everbranch-audit-r3ki6vn1/deployed-source/node_modules/@glideapps/glide-data-grid/dist/esm/internal/data-grid-overlay-editor/data-grid-overlay-editor-style.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+../../../../../../private/var/folders/zq/lc1jymzs2tb2hhzh8ggxnnfh0000gn/T/everbranch-audit-r3ki6vn1/deployed-source/node_modules/@glideapps/glide-data-grid/dist/esm/internal/data-grid-overlay-editor/data-grid-overlay-editor-style.js (7:14): A comment
+
+"/*#__PURE__*/"
+
+in "../../../../../../private/var/folders/zq/lc1jymzs2tb2hhzh8ggxnnfh0000gn/T/everbranch-audit-r3ki6vn1/deployed-source/node_modules/@glideapps/glide-data-grid/dist/esm/internal/data-grid-overlay-editor/data-grid-overlay-editor-style.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+../../../../../../private/var/folders/zq/lc1jymzs2tb2hhzh8ggxnnfh0000gn/T/everbranch-audit-r3ki6vn1/deployed-source/node_modules/@glideapps/glide-data-grid/dist/esm/internal/scrolling-data-grid/infinite-scroller.js (7:13): A comment
+
+"/*#__PURE__*/"
+
+in "../../../../../../private/var/folders/zq/lc1jymzs2tb2hhzh8ggxnnfh0000gn/T/everbranch-audit-r3ki6vn1/deployed-source/node_modules/@glideapps/glide-data-grid/dist/esm/internal/scrolling-data-grid/infinite-scroller.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+✓ 1616 modules transformed.
+rendering chunks...
+computing gzip size...
+public/build/assets/layers-BWBAp2CZ.png                     0.70 kB
+public/build/assets/layers-2x-Bpkbi35X.png                  1.26 kB
+public/build/assets/marker-icon-hN30_KVU.png                1.47 kB
+public/build/manifest.json                                 19.56 kB │ gzip:   2.69 kB
+public/build/assets/messaging-8UvE2dPG.css                  2.21 kB │ gzip:   0.75 kB
+public/build/assets/responses-Nxl9hUEr.css                  3.39 kB │ gzip:   1.05 kB
+public/build/assets/ai-assistant-B3zqr5Dy.css               3.79 kB │ gzip:   1.19 kB
+public/build/assets/fleet-Cvbui3lp.css                      6.25 kB │ gzip:   2.01 kB
+public/build/assets/fleet-map-C3AtSsUf.css                  6.31 kB │ gzip:   1.80 kB
+public/build/assets/wholesale-messaging-wSxACmOr.css        6.63 kB │ gzip:   1.87 kB
+public/build/assets/dashboard-eoclJKti.css                  7.25 kB │ gzip:   1.97 kB
+public/build/assets/leaflet-CLLlcC51.css                   11.08 kB │ gzip:   2.73 kB
+public/build/assets/editor-BZogLAS0.css                    11.71 kB │ gzip:   3.06 kB
+public/build/assets/evergrove-booking-DfOOfS_7.css         12.66 kB │ gzip:   3.29 kB
+public/build/assets/data-editor-all-Bhzk72UY.css           12.73 kB │ gzip:   2.26 kB
+public/build/assets/app-BaoWSnlT.css                       26.37 kB │ gzip:   6.18 kB
+public/build/assets/app-CFYSIOuz.css                       37.35 kB │ gzip:   7.94 kB
+public/build/assets/en-MUildqM1.css                       441.52 kB │ gzip:  52.26 kB
+public/build/assets/app-BoY3tusI.css                      699.24 kB │ gzip: 110.08 kB
+public/build/assets/birthday-email-composer-Cadabbrz.js     0.14 kB │ gzip:   0.12 kB
+public/build/assets/index-BPPTpE0W.js                       0.14 kB │ gzip:   0.13 kB
+public/build/assets/_commonjsHelpers-Cpj98o6Y.js            0.24 kB │ gzip:   0.18 kB
+public/build/assets/public-details-cards-CAY7fSI7.js        0.39 kB │ gzip:   0.27 kB
+public/build/assets/workspace-theme-BBlD_KkX.js             0.69 kB │ gzip:   0.40 kB
+public/build/assets/public-rickroll-story-DkmbUNXL.js       1.05 kB │ gzip:   0.47 kB
+public/build/assets/sidebar-dnd-B1BRGo-Q.js                 1.08 kB │ gzip:   0.62 kB
+public/build/assets/gate-5N7yMHeE.js                        1.10 kB │ gzip:   0.51 kB
+public/build/assets/public-phone-demo-C9VCEbms.js           1.26 kB │ gzip:   0.59 kB
+public/build/assets/evergrove-booking-CHEkGV7G.js           1.55 kB │ gzip:   0.79 kB
+public/build/assets/widget-dnd-CNiYv0Qj.js                  1.71 kB │ gzip:   0.75 kB
+public/build/assets/gantt-scroll-DK8u0Yfi.js                1.87 kB │ gzip:   0.85 kB
+public/build/assets/public-tabs-DyMalL8M.js                 2.09 kB │ gzip:   0.83 kB
+public/build/assets/workflow-editor-qV5N7aFR.js             2.12 kB │ gzip:   1.10 kB
+public/build/assets/public-mobile-nav-CULEHG2u.js           2.18 kB │ gzip:   0.87 kB
+public/build/assets/api-CHKkLNvZ.js                         2.18 kB │ gzip:   0.91 kB
+public/build/assets/Select-DPPUHHJL.js                      2.73 kB │ gzip:   1.24 kB
+public/build/assets/address-autocomplete-wbJjUh6o.js        2.98 kB │ gzip:   1.32 kB
+public/build/assets/dashboard-widgets-DFuPP5C5.js           3.23 kB │ gzip:   1.25 kB
+public/build/assets/data-grid-overlay-editor-BPiN-ZMq.js    3.69 kB │ gzip:   1.82 kB
+public/build/assets/public-studio-DFet30C6.js               4.56 kB │ gzip:   1.95 kB
+public/build/assets/public-product-demo-BMrQwXEp.js         5.20 kB │ gzip:   1.62 kB
+public/build/assets/public-problem-garden-RM0NZmMD.js       6.23 kB │ gzip:   2.49 kB
+public/build/assets/tenant-payment-setup-CXdRobVF.js        6.67 kB │ gzip:   2.69 kB
+public/build/assets/public-bud-iHAiEhyI.js                  7.68 kB │ gzip:   3.23 kB
+public/build/assets/Banner-BhgXvheN.js                      8.22 kB │ gzip:   2.58 kB
+public/build/assets/wholesale-messaging-BVvO5uHz.js         9.03 kB │ gzip:   2.94 kB
+public/build/assets/responses-dj3I4s1s.js                  10.60 kB │ gzip:   3.24 kB
+public/build/assets/fleet-map-hnKaRrpo.js                  12.75 kB │ gzip:   5.34 kB
+public/build/assets/number-overlay-editor-B8aZHUIp.js      16.09 kB │ gzip:   6.24 kB
+public/build/assets/public-industry-demos-CAfR1ocm.js      17.26 kB │ gzip:   5.88 kB
+public/build/assets/wizard-B57O7wZ8.js                     19.10 kB │ gzip:   5.53 kB
+public/build/assets/EmailContentStep-CniAo9Kd.js           19.86 kB │ gzip:   5.85 kB
+public/build/assets/customers-grid-BvM8rRyw.js             20.27 kB │ gzip:   6.70 kB
+public/build/assets/editor-BWjkzNNe.js                     22.71 kB │ gzip:   6.65 kB
+public/build/assets/master-data-grid-BmuQgP83.js           25.31 kB │ gzip:   8.58 kB
+public/build/assets/ai-assistant-CyHZ_ATh.js               32.82 kB │ gzip:  10.24 kB
+public/build/assets/sortable.esm-BzJVkfZx.js               36.92 kB │ gzip:  12.79 kB
+public/build/assets/ProgressBar-C3Ay9twS.js                39.17 kB │ gzip:  12.89 kB
+public/build/assets/jobs-grid-YLu25sGa.js                  39.42 kB │ gzip:  11.23 kB
+public/build/assets/ScrollTrigger-BrDuEirF.js              43.55 kB │ gzip:  18.05 kB
+public/build/assets/fleet-Cepwu8w1.js                      43.97 kB │ gzip:  14.91 kB
+public/build/assets/bootstrap-CmawwbOg.js                  47.58 kB │ gzip:  18.34 kB
+public/build/assets/dashboard-BR-COfDc.js                  58.25 kB │ gzip:  16.85 kB
+public/build/assets/messaging-DL8x6lAl.js                  66.02 kB │ gzip:  20.48 kB
+public/build/assets/index-D4-8ALNT.js                      70.43 kB │ gzip:  27.61 kB
+public/build/assets/studio-DdMaMXkJ.js                     82.12 kB │ gzip:  23.48 kB
+public/build/assets/app-BIpEd_OX.js                        92.92 kB │ gzip:  30.18 kB
+public/build/assets/app-CqEwSWpA.js                       110.89 kB │ gzip:  36.23 kB
+public/build/assets/app-BWJpJgx3.js                       122.93 kB │ gzip:  38.84 kB
+public/build/assets/client-ClAN2QIr.js                    142.22 kB │ gzip:  45.75 kB
+public/build/assets/leaflet-ByBE_sql.js                   149.51 kB │ gzip:  43.22 kB
+public/build/assets/en-CEAq9EIw.js                        161.60 kB │ gzip:  28.48 kB
+public/build/assets/auto-sRkgK8jz.js                      206.65 kB │ gzip:  70.57 kB
+public/build/assets/data-editor-all-BJlZhIeL.js           297.56 kB │ gzip: 100.24 kB
+✓ built in 2.60s

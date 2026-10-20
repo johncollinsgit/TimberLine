@@ -29,6 +29,7 @@ class PlatformAccessRequestController extends Controller
         $timelineKeys = array_keys((array) ($formOptions['timelines'] ?? []));
         $importPathKeys = array_keys((array) ($formOptions['import_paths'] ?? []));
         $mobileInterestKeys = array_keys((array) ($formOptions['mobile_interests'] ?? []));
+        $branchKeys = array_column((array) ($experienceService->publicPlansPayload()['branch_cards'] ?? []), 'key');
 
         $validated = $request->validate([
             'intent' => ['required', 'string', 'in:demo,production'],
@@ -43,9 +44,10 @@ class PlatformAccessRequestController extends Controller
             'mobile_interest' => ['nullable', 'string', 'max:80', Rule::in($mobileInterestKeys)],
             'website' => ['nullable', 'url', 'max:300'],
             'message' => ['nullable', 'string', 'max:2000'],
-            'preferred_plan_key' => ['nullable', 'string', 'max:80'],
-            'addons_interest' => ['nullable', 'array'],
-            'addons_interest.*' => ['string', 'max:120'],
+            'preferred_plan_key' => ['nullable', 'string', Rule::in(array_keys((array) config('module_catalog.offers', [])))],
+            'addons_interest' => ['prohibited'],
+            'branches_interest' => ['nullable', 'array', 'max:50'],
+            'branches_interest.*' => ['string', 'distinct', Rule::in($branchKeys)],
         ]);
 
         $requestRecord = $service->submit([
@@ -64,6 +66,7 @@ class PlatformAccessRequestController extends Controller
             'message' => (string) ($validated['message'] ?? ''),
             'preferred_plan_key' => (string) ($validated['preferred_plan_key'] ?? ''),
             'addons_interest' => (array) ($validated['addons_interest'] ?? []),
+            'branches_interest' => (array) ($validated['branches_interest'] ?? []),
         ]);
 
         $this->notifyReviewInbox($requestRecord, $reviewInboxResolver);

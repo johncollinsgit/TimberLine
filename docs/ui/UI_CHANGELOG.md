@@ -1,3 +1,17 @@
+## 2026-10-20 - Public quality and current offer (candidate)
+
+- Scoped Workflow Studio navigation styles to the authenticated tool, restoring
+  readable public header links. Strengthened header, demo link, workflow-step
+  contrast and keyboard focus without changing the page structure.
+- Public Branch Explorer and signup carry selected included core branches and
+  keep premium products separate. No paid-add-on grid or retired tier selection
+  is offered to new customers.
+- Public Everbranch and Evergrove acquisition pages share the canonical $499
+  setup / $299 monthly offer, with “Additional text, email, and AI usage fees may
+  apply.” Legacy tenant plan prices, agreements and subscriptions retain their
+  terms. Requests record interest only and do not activate billing or modules.
+- Verification and rubric evidence: `docs/audits/20261020T-public-quality/`.
+
 ## 2026-10-19 - Bank sign-in continuity
 
 - Trajectory resumes the same bank sign-in after mobile OAuth, preserving its

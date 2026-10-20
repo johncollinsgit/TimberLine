@@ -186,6 +186,9 @@ jobs:
       - name: Verify Fleet embedding and allowance in Chromium and WebKit
         run: npm run test:highlevel-fleet
 
+      - name: Verify public offer and accessibility in Chromium and WebKit
+        run: npx playwright test -c playwright.public.config.ts --grep-invert 'stable public'
+
       - name: Run tests in parallel
         run: php -d memory_limit=1G ./vendor/bin/pest --parallel --compact
 

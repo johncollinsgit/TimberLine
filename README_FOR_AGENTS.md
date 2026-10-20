@@ -1,3 +1,19 @@
+## Public offer and quality candidate (2026-10-20; not deployed)
+
+- The Simple public acquisition offer uses `module_catalog.offers.standard`: $499
+  one-time setup and $299/month per business. Additional text, email, and AI
+  usage fees may apply. This supersedes historical public Launch Partner and
+  tier advertising; recorded customer terms remain authoritative. Core branches
+  are included by choice; Teams, Trajectory and Markets & Makers are separate
+  premium software with separate pricing.
+- `product_surfaces.public_plans` separates acquisition cards from existing
+  tenant plan presentation. Access requests store `standard` interest only;
+  this metadata has no checkout/fulfillment mapping and does not activate billing.
+- Public header/step/module contrast and focus are corrected; Workflow Studio
+  navigation styles stay scoped to the tool. See
+  `docs/operations/standard-public-offer.md` and
+  `docs/audits/20261020T-public-quality/` for validation and limits.
+
 ## Self-service payment accounts, bank linking and native invoices (2026-10-19)
 
 - New Stripe accounts use full Dashboard access and direct charges; owner-session OAuth can connect an existing Standard account. Frozen request/routing/environment/account context prevents cross-merchant retries. Existing Express reservations and Wren routing stay unchanged. Direct payments require their own connected-event signing secret and live proof gate; new direct attempts use stable platform-account/environment fingerprints across key rotation.
@@ -713,7 +729,7 @@ release ID preservation.
 
 ## Public launch partner pricing (2026-10-13)
 
-- The Evergrove/Everbranch public offer is $499 setup, $89/month for six months, then $149/month. It applies to future offers only. The first year totals $1,927 before taxes or add-ons. Preserve earlier client-specific agreement versions and subscription rates, including Collins Electric and Front Yard Foods; do not reprice their drafts to apply this public change. See `docs/operations/everbranch-billing-readiness-audit.md` for the public-pricing release scope.
+- Historical public offer (superseded by the October 20 candidate above): the Evergrove/Everbranch public offer was $499 setup, $89/month for six months, then $149/month. It applies to future offers only. The first year totals $1,927 before taxes or add-ons. Preserve earlier client-specific agreement versions and subscription rates, including Collins Electric and Front Yard Foods; do not reprice their drafts to apply this public change. See `docs/operations/everbranch-billing-readiness-audit.md` for the public-pricing release scope.
 
 ## Collins employee install release (2026-09-30)
 

@@ -90,12 +90,14 @@ class CustomerAccessRequestService
             return $token !== '' ? $token : null;
         }, (array) ($input['addons_interest'] ?? []))));
 
+        $branchesInterest = array_values(array_unique(array_map('strval', (array) ($input['branches_interest'] ?? []))));
+
         $requestedSlug = trim((string) ($input['requested_tenant_slug'] ?? ''));
         if ($intent === self::INTENT_DEMO) {
             $requestedSlug = trim((string) config('tenancy.onboarding.demo_tenant_slug', 'demo'));
         }
 
-        return DB::transaction(function () use ($intent, $applicationKind, $email, $name, $company, $businessType, $teamSize, $timeline, $importPath, $mobileInterest, $website, $message, $phone, $city, $state, $zip, $country, $address, $address2, $retailLicenseNumber, $position, $referral, $currentSuppliers, $contactPreference, $agreementAccepted, $requestedSlug, $preferredPlanKey, $addonsInterest): CustomerAccessRequest {
+        return DB::transaction(function () use ($intent, $applicationKind, $email, $name, $company, $businessType, $teamSize, $timeline, $importPath, $mobileInterest, $website, $message, $phone, $city, $state, $zip, $country, $address, $address2, $retailLicenseNumber, $position, $referral, $currentSuppliers, $contactPreference, $agreementAccepted, $requestedSlug, $preferredPlanKey, $addonsInterest, $branchesInterest): CustomerAccessRequest {
             $normalizedSlug = $this->normalizeSlug($requestedSlug);
             // Serialize duplicate submissions per wholesale tenant, including first insert.
             if ($applicationKind === CustomerAccessRequest::KIND_WHOLESALE_APPLICATION) {
@@ -143,6 +145,7 @@ class CustomerAccessRequestService
                         'agreement' => $agreementAccepted,
                         'preferred_plan_key' => $preferredPlanKey !== '' ? $preferredPlanKey : null,
                         'addons_interest' => $addonsInterest !== [] ? $addonsInterest : null,
+                        'branches_interest' => $branchesInterest !== [] ? $branchesInterest : null,
                     ], static fn (mixed $value): bool => $value !== null)),
                 ])->save();
 
@@ -195,6 +198,7 @@ class CustomerAccessRequestService
                     'agreement' => $agreementAccepted,
                     'preferred_plan_key' => $preferredPlanKey !== '' ? $preferredPlanKey : null,
                     'addons_interest' => $addonsInterest !== [] ? $addonsInterest : null,
+                    'branches_interest' => $branchesInterest !== [] ? $branchesInterest : null,
                 ],
                 'user_id' => $user?->id,
             ]);

@@ -12,18 +12,20 @@ beforeEach(function (): void {
     $this->withoutVite();
 });
 
-test('public plans page renders tiers and add-ons', function (): void {
+test('public plans page renders the current offer and separate add-ons', function (): void {
     $this->get(route('platform.plans'))
         ->assertOk()
         ->assertSee('data-premium-motion="public"', false)
         ->assertSeeText('Plans')
-        ->assertSeeText('Add-ons')
-        ->assertSeeText('Module Map')
-        ->assertSeeText('Included now')
-        ->assertSeeText('$89/mo for 6 months')
+        ->assertSeeText('Included core branches')
+        ->assertSeeText('Separate premium software')
+        ->assertSeeText('Teams')
+        ->assertSeeText('$299/month per business')
         ->assertSeeText('$499 one-time setup')
-        ->assertSeeText('$149/mo after the first 6 months')
-        ->assertDontSeeText('$199/mo after the first 6 months');
+        ->assertSeeText('Additional text, email, and AI usage fees may apply.')
+        ->assertDontSeeText('$89/mo')
+        ->assertDontSeeText('$149/mo')
+        ->assertDontSeeText('$249/mo');
 });
 
 test('public demo request page renders access request form', function (): void {
@@ -52,23 +54,21 @@ test('public start as a client page renders plan interest inputs', function (): 
         ->assertSeeText('Email')
         ->assertSeeText('Business type')
         ->assertSeeText('Team size')
-        ->assertSeeText('More details')
-        ->assertSeeText('Commercial interest')
-        ->assertSeeText('Preferred tier')
-        ->assertSeeText('Add-ons of interest')
+        ->assertSeeText('Choose branches and more details')
+        ->assertSeeText('Your workspace')
+        ->assertSeeText('Preferred offer')
+        ->assertSeeText('Choose your core branches')
         ->assertSeeText('Already have access? Sign in')
         ->assertSeeText('Pricing')
-        ->assertSeeText('Launch partner pricing')
-        ->assertSeeText('$149')
+        ->assertSeeText('Everbranch pricing')
+        ->assertSeeText('$299')
         ->assertSeeText('$499 one-time')
-        ->assertSeeText('$89/mo')
-        ->assertSeeText('$149/mo')
-        ->assertDontSeeText('$199/mo')
-        ->assertSeeText('$1,033')
-        ->assertSeeText('save $360 in the first 6 months')
-        ->assertSeeText('Limited to 10')
-        ->assertSeeText('First 10 businesses')
-        ->assertSeeText('Unlimited users')
+        ->assertSeeText('$798')
+        ->assertSeeText('Additional text, email, and AI usage fees may apply.')
+        ->assertDontSeeText('$89/mo')
+        ->assertDontSeeText('$149/mo')
+        ->assertDontSeeText('Limited to 10')
+        ->assertDontSeeText('Starter includes everything')
         ->assertDontSeeText('Electrician')
         ->assertDontSeeText('CLIENT SIGNUP')
         ->assertDontSeeText('Production access request')
@@ -154,8 +154,8 @@ test('demo request captures business context without production commercial write
         'team_size' => '1_5',
         'timeline' => 'researching',
         'website' => 'https://demo-context.example.com',
-        'preferred_plan_key' => 'growth',
-        'addons_interest' => ['sms'],
+        'preferred_plan_key' => 'standard',
+        'branches_interest' => ['sms'],
     ])->assertRedirect(route('platform.request-submitted', ['intent' => 'demo'], absolute: false));
 
     $request = CustomerAccessRequest::query()->where('email', 'demo-context@example.com')->firstOrFail();
@@ -164,8 +164,8 @@ test('demo request captures business context without production commercial write
         ->and((string) data_get($request->metadata, 'team_size'))->toBe('1_5')
         ->and((string) data_get($request->metadata, 'timeline'))->toBe('researching')
         ->and((string) data_get($request->metadata, 'website'))->toBe('https://demo-context.example.com')
-        ->and((string) data_get($request->metadata, 'preferred_plan_key'))->toBe('growth')
-        ->and((array) data_get($request->metadata, 'addons_interest'))->toBe(['sms']);
+        ->and((string) data_get($request->metadata, 'preferred_plan_key'))->toBe('standard')
+        ->and((array) data_get($request->metadata, 'branches_interest'))->toBe(['sms']);
 });
 
 test('public access request rejects electrician business type while the customer tutorial is hidden', function (): void {

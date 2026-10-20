@@ -82,7 +82,13 @@ jobs:
       - name: Verify Fleet embedding and allowance in Chromium and WebKit
         run: npm run test:highlevel-fleet
 
-      - name: Run tests in parallel
+      - name: Verify public offer and accessibility in Chromium and WebKit
+        # Public browser checks share the already installed Fleet browsers.
+        # Platform-specific screenshot baselines are verified locally.
+        # No live form submission or Lighthouse evidence upload occurs here.
+        run: npx playwright test -c playwright.public.config.ts --grep-invert 'stable public'
+
+      - name: Run PHP tests in parallel
         run: php -d memory_limit=1G ./vendor/bin/pest --parallel --compact
 
   mysql-migration:

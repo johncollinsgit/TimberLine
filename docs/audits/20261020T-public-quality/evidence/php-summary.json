@@ -1,0 +1,18 @@
+{
+  "cases": 4011,
+  "passed_in_network_denied_run": 4008,
+  "skipped": 1,
+  "network_denied_failures": [
+    {
+      "class": "Tests\\Feature\\Agreements\\AgreementWorkflowTest",
+      "name": "landlord can email a secure agreement to its customer from the agreement screen"
+    },
+    {
+      "class": "Tests\\Feature\\Wholesale\\WholesaleProspectDiscoveryTest",
+      "name": "controlled website enrichment stores concise public evidence and updates explained fit"
+    }
+  ],
+  "passing_dns_fixture_rerun_cases": 2,
+  "broader_run_base": "f01202060a31eaecf9bed284dec576c694b9a14b",
+  "php": "8.5.2 local; CI checks 8.4"
+}

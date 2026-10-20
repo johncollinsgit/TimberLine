@@ -148,7 +148,8 @@ class PlatformProductPagesController extends Controller
             'form_options' => $experienceService->publicAccessRequestOptions(),
             'intent' => 'demo',
             'plan_cards' => (array) ($plansPayload['plan_cards'] ?? []),
-            'addon_cards' => (array) ($plansPayload['addon_cards'] ?? []),
+            'addon_cards' => [],
+            'branch_cards' => (array) ($plansPayload['branch_cards'] ?? []),
             'recommended_plan_key' => (string) ($plansPayload['recommended_plan_key'] ?? 'growth'),
         ]);
     }
@@ -162,7 +163,8 @@ class PlatformProductPagesController extends Controller
             'form_options' => $experienceService->publicAccessRequestOptions(),
             'intent' => 'production',
             'plan_cards' => (array) ($plansPayload['plan_cards'] ?? []),
-            'addon_cards' => (array) ($plansPayload['addon_cards'] ?? []),
+            'addon_cards' => [],
+            'branch_cards' => (array) ($plansPayload['branch_cards'] ?? []),
             'recommended_plan_key' => (string) ($plansPayload['recommended_plan_key'] ?? 'growth'),
         ]);
     }

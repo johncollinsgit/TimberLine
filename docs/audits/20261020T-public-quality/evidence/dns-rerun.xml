@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="CLI Arguments" tests="2" assertions="11" errors="0" failures="0" skipped="0" time="2.361577">
+    <testsuite name="Tests\Feature\Agreements\AgreementWorkflowTest" file="tests/Feature/Agreements/AgreementWorkflowTest.php" tests="1" assertions="5" errors="0" failures="0" skipped="0" time="2.296214">
+      <testcase name="landlord can email a secure agreement to its customer from the agreement screen" file="tests/Feature/Agreements/AgreementWorkflowTest.php::landlord can email a secure agreement to its customer from the agreement screen" class="Tests\Feature\Agreements\AgreementWorkflowTest" classname="Tests.Feature.Agreements.AgreementWorkflowTest" assertions="5" time="2.296214"/>
+    </testsuite>
+    <testsuite name="Tests\Feature\Wholesale\WholesaleProspectDiscoveryTest" file="tests/Feature/Wholesale/WholesaleProspectDiscoveryTest.php" tests="1" assertions="6" errors="0" failures="0" skipped="0" time="0.065363">
+      <testcase name="controlled website enrichment stores concise public evidence and updates explained fit" file="tests/Feature/Wholesale/WholesaleProspectDiscoveryTest.php::controlled website enrichment stores concise public evidence and updates explained fit" class="Tests\Feature\Wholesale\WholesaleProspectDiscoveryTest" classname="Tests.Feature.Wholesale.WholesaleProspectDiscoveryTest" assertions="6" time="0.065363"/>
+    </testsuite>
+  </testsuite>
+</testsuites>
