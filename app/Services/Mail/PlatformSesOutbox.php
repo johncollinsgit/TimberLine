@@ -168,6 +168,7 @@ class PlatformSesOutbox
         if (! $claimed) {
             return PlatformEmailDelivery::findOrFail($id)->state === 'queued' ? 'held' : PlatformEmailDelivery::findOrFail($id)->state;
         }
+        $failureReason = null;
         try {
             $receipt = trim((string) $this->client()->sendEmail([
                 'FromEmailAddress' => $delivery->message->from_email, 'Destination' => ['ToAddresses' => [$delivery->recipient]],
@@ -176,18 +177,23 @@ class PlatformSesOutbox
             ])->get('MessageId'));
             $state = $receipt !== '' ? 'accepted' : 'unknown';
         } catch (AwsException $exception) {
-            $state = $exception->getStatusCode() >= 400 && $exception->getStatusCode() < 500 ? 'rejected' : 'unknown';
+            $status = (int) $exception->getStatusCode();
+            $state = $status >= 400 && $status < 500 ? 'rejected' : 'unknown';
+            $code = (string) $exception->getAwsErrorCode();
+            // Never retain exception messages, request/response bodies or secrets.
+            $code = preg_match('/^[A-Za-z0-9._-]{1,48}$/D', $code) ? $code : 'UnclassifiedAwsError';
+            $failureReason = 'aws_http_'.$status.':'.$code;
             $receipt = '';
         } catch (\Throwable) {
             $state = 'unknown';
             $receipt = '';
         }
         try {
-            DB::transaction(function () use ($id, $state, $receipt): void {
+            DB::transaction(function () use ($id, $state, $receipt, $failureReason): void {
                 $row = PlatformEmailDelivery::lockForUpdate()->findOrFail($id);
                 if ($row->state !== 'accepted') {
                     $row->update(['state' => $state, 'provider_message_id' => $receipt !== '' ? $receipt : null,
-                        'accepted_at' => $state === 'accepted' ? now() : null]);
+                        'accepted_at' => $state === 'accepted' ? now() : null, 'hold_reason' => $failureReason]);
                 }
             });
         } catch (\Throwable) {

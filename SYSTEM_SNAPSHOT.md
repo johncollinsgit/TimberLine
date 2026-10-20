@@ -1,3 +1,4 @@
+<!-- SES failure diagnostics: bounded AWS HTTP status/error code persist in the existing hold_reason; sending/retry gates are unchanged. See docs/operations/ses-migration.md. -->
 <!-- SES platform simulator audit: retain exact signed notifications encrypted only for the three approved platform simulator logical intents, after authentication and matched delivery handling. See docs/operations/ses-migration.md. -->
 <!-- SES actual event binding: native tenant auto-tag is ses:tenant; signed source may include a display name. See the simulator checkpoint in docs/operations/ses-migration.md. -->
 <!-- SES customer usage billing policy: see docs/operations/ses-migration.md. Explicit email-only tenant exclusions freeze at reservation; provider cost and units remain metered. -->
