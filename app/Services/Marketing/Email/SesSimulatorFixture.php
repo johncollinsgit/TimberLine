@@ -16,7 +16,7 @@ class SesSimulatorFixture
     public function matches(array $event): bool
     {
         return $this->candidate($event)
-            && data_get($event, 'mail.tags.ses:tenant-name') === ['everbranch-tenant-'.self::TENANT_ID]
+            && SesEventContext::nativeTenant($event) === 'everbranch-tenant-'.self::TENANT_ID
             && data_get($event, 'mail.tags.ses:configuration-set') === ['everbranch-marketing'];
     }
 
@@ -24,7 +24,7 @@ class SesSimulatorFixture
     {
         return (bool) config('ses_migration.simulator_fixture_enabled')
             && data_get($event, 'mail.tags.tenant_id') === [(string) self::TENANT_ID]
-            && data_get($event, 'mail.source') === 'no-reply@theeverbranch.com'
+            && SesEventContext::source($event) === 'no-reply@theeverbranch.com'
             && count((array) data_get($event, 'mail.destination', [])) === 1
             && in_array(data_get($event, 'mail.destination.0'), self::RECIPIENTS, true);
     }

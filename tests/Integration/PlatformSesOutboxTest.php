@@ -212,6 +212,7 @@ it('binds signed event evidence to original recipient sender config and opaque r
     $row = PlatformEmailDelivery::findOrFail($id);
     $events = app(PlatformSesDeliveryEvents::class);
     $event = platformFixtureEvent($row);
+    $event['mail']['source'] = '"Everbranch, Inc." <NO-REPLY@theeverbranch.com>';
     foreach (['mail.destination.0' => 'other@example.test', 'mail.source' => 'other@example.test', 'mail.tags.ses:configuration-set.0' => 'wrong-config'] as $path => $value) {
         $invalid = $event;
         data_set($invalid, $path, $value);

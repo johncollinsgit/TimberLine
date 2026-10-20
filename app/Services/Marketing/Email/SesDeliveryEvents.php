@@ -27,11 +27,12 @@ class SesDeliveryEvents
             $delivery = MarketingEmailDelivery::query()->where('tenant_id', $tenantId)->where('provider', 'ses_tenant')->lockForUpdate()->find($deliveryId);
             $attempt = (array) data_get($delivery?->metadata, 'ses_attempt', []);
             $receipt = trim((string) data_get($event, 'mail.messageId'));
+            $nativeTenant = SesEventContext::nativeTenant($event);
             // Require the exact pre-send binding; never guess the latest email row.
             if (! $delivery || ! $attempt || $receipt === ''
-                || ($tags['ses:tenant-name'] ?? null) !== ($attempt['tenant_name'] ?? null)
+                || $nativeTenant === null || $nativeTenant !== ($attempt['tenant_name'] ?? null)
                 || ($tags['ses:configuration-set'] ?? null) !== ($attempt['configuration_set'] ?? null)
-                || data_get($event, 'mail.source') !== ($attempt['from'] ?? null)
+                || SesEventContext::source($event) !== strtolower((string) ($attempt['from'] ?? ''))
                 || ($delivery->provider_message_id && $delivery->provider_message_id !== $receipt)) {
                 return ['matched' => 0, 'updated' => 0];
             }

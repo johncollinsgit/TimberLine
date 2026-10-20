@@ -482,3 +482,41 @@ subscription is confirmed. This proves subscription authentication only: no SES
 simulator delivery or application delivery/bounce/complaint event has yet been
 verified. SendGrid SMTP remains the application default and tenant SES sending
 remains off. The separate platform-outbox work is not in this release.
+
+
+### Actual simulator checkpoint and native event binding (2026-10-20)
+
+Protected run `39498548953` deployed merged PR #450 as
+`2b7a8bcaa5d53096a2a918c71772c8b429097102`; `/ready` independently matched.
+All three final protected PR checks passed, including 4,218 PHP tests (8 skipped,
+30,450 assertions) and the MySQL schema/recovery/concurrency gates. The exact
+user-confirmed email billing exclusion IDs `1,6,10,14` are active. Existing
+messaging contracts were fingerprinted unchanged. SendGrid SMTP stays active,
+both real tenant and platform SES gates stay off, and no production AWS runtime
+credential has been persisted.
+
+Three fixed-content, approved simulator messages were accepted by SES. Seven
+actual Send/Delivery/Bounce/Complaint notifications passed the exact SNS
+account/topic/signature boundary and were retained encrypted in the private
+fixture. They exposed an incorrect assumption: AWS publishes the native tenant
+name in the `ses:tenant` auto-tag, not `ses:tenant-name`. The old binding rejected
+the events without delivery or suppression updates. No customer was emailed or
+billed. The fixture lane was disabled again and all evidence retained.
+
+The follow-up source uses only a single `ses:tenant` value matching the reserved
+native tenant. Missing, multiple, foreign and old guessed tags fail closed.
+AWS's documented sender display-name form is parsed as a single mailbox before
+comparison with the reserved sender; address lists and foreign senders remain
+rejected. Signature/account/topic, configuration set, recipient and full opaque
+receipt checks remain mandatory. See the provider's
+[SES event examples](https://docs.aws.amazon.com/ses/latest/dg/event-publishing-retrieving-sns-examples.html)
+for named sources; the native auto-tag name was verified from this account's
+actual authenticated messages.
+
+This correction requires its own tested release. Reprocess the seven encrypted,
+already-authenticated simulator events in place only after that release; use each
+stored audit hash as a stable internal replay ID and verify a repeated replay
+updates nothing. Do not export the raw private database, clear suppression or
+resend the accepted messages. Keep the fixture disabled after acceptance and
+retain receipts, encrypted audit evidence and contract fingerprints. The blocked
+raw-database export was not executed; scoped in-place reports are sufficient.

@@ -336,11 +336,41 @@ class SesMigrationSafetyTest extends TestCase
         $this->assertDatabaseMissing('messaging_contact_channel_states', ['tenant_id' => $delivery->tenant_id, 'email' => $delivery->email]);
     }
 
+    public function test_native_tenant_and_named_sender_bind_exactly_before_events_can_update(): void
+    {
+        [$delivery, $message, $config] = $this->fixture();
+        app(SesSendSafety::class)->claim($delivery->id, $delivery->tenant_id, $delivery->email, ['TenantName' => $config['tenant_name'], 'ConfigurationSetName' => $config['configuration_set'], 'FromEmailAddress' => $config['from_email']]);
+        $service = app(SesDeliveryEvents::class);
+        $event = $this->event($delivery, 'Complaint');
+        $event['mail']['source'] = '"Fixture, Inc." <SENDER@example.test>';
+        foreach (['legacy', 'missing', 'multiple', 'wrong_tenant', 'wrong_sender'] as $case) {
+            $invalid = $event;
+            if (in_array($case, ['legacy', 'missing'], true)) {
+                unset($invalid['mail']['tags']['ses:tenant']);
+                if ($case === 'legacy') {
+                    $invalid['mail']['tags']['ses:tenant-name'] = [$config['tenant_name']];
+                }
+            } elseif ($case === 'multiple') {
+                $invalid['mail']['tags']['ses:tenant'][] = 'another-tenant';
+            } elseif ($case === 'wrong_tenant') {
+                $invalid['mail']['tags']['ses:tenant'] = ['another-tenant'];
+            } else {
+                $invalid['mail']['source'] = 'Fixture <other@example.test>';
+            }
+            $this->assertSame(0, $service->handle($invalid, 'bad-'.$case)['matched']);
+        }
+        $this->assertSame('sending', $delivery->fresh()->status);
+        $this->assertDatabaseMissing('messaging_contact_channel_states', ['tenant_id' => $delivery->tenant_id]);
+        $this->assertSame(1, $service->handle($event, 'named-source')['updated']);
+        $this->assertSame(1, $service->handle($event, 'named-source')['duplicates']);
+        $this->assertDatabaseHas('messaging_contact_channel_states', ['tenant_id' => $delivery->tenant_id, 'email' => $delivery->email, 'email_status' => 'suppressed']);
+    }
+
     private function event(MarketingEmailDelivery $delivery, string $type): array
     {
         return ['eventType' => $type, 'mail' => ['source' => 'sender@example.test', 'messageId' => 'ses.opaque-id', 'timestamp' => now()->toIso8601String(), 'destination' => [$delivery->email], 'tags' => [
             'tenant_id' => [(string) $delivery->tenant_id], 'marketing_email_delivery_id' => [(string) $delivery->id],
-            'ses:tenant-name' => ['everbranch-tenant-'.$delivery->tenant_id], 'ses:configuration-set' => ['fixture-marketing'],
+            'ses:tenant' => ['everbranch-tenant-'.$delivery->tenant_id], 'ses:configuration-set' => ['fixture-marketing'],
         ]], 'complaint' => ['timestamp' => now()->toIso8601String(), 'complainedRecipients' => [['emailAddress' => $delivery->email]]],
             'bounce' => ['timestamp' => now()->toIso8601String(), 'bounceType' => 'Permanent', 'bouncedRecipients' => [['emailAddress' => $delivery->email, 'status' => '5.1.1', 'diagnosticCode' => 'Unknown user']]]];
     }

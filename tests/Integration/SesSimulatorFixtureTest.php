@@ -46,12 +46,19 @@ it('isolates authenticated simulator events and restores the original connection
 it('requires the default-off fixture gate and exact non-customer native tenant context', function (): void {
     $fixture = app(SesSimulatorFixture::class);
     $event = ['mail' => ['source' => 'no-reply@theeverbranch.com', 'destination' => ['success@simulator.amazonses.com'],
-        'tags' => ['tenant_id' => ['900000001'], 'ses:tenant-name' => ['everbranch-tenant-900000001'], 'ses:configuration-set' => ['everbranch-marketing']]]];
+        'tags' => ['tenant_id' => ['900000001'], 'ses:tenant' => ['everbranch-tenant-900000001'], 'ses:configuration-set' => ['everbranch-marketing']]]];
     expect($fixture->matches($event))->toBeFalse();
     config()->set('ses_migration.simulator_fixture_enabled', true);
     expect($fixture->matches($event))->toBeTrue();
+    $legacy = $event;
+    unset($legacy['mail']['tags']['ses:tenant']);
+    $legacy['mail']['tags']['ses:tenant-name'] = ['everbranch-tenant-900000001'];
+    expect($fixture->matches($legacy))->toBeFalse();
+    $ambiguous = $event;
+    $ambiguous['mail']['tags']['ses:tenant'][] = 'another-tenant';
+    expect($fixture->matches($ambiguous))->toBeFalse();
     foreach (['mail.source' => 'other@theeverbranch.com', 'mail.destination.0' => 'customer@example.test',
-        'mail.tags.tenant_id.0' => '1', 'mail.tags.ses:tenant-name.0' => 'everbranch-tenant-1', 'mail.tags.ses:configuration-set.0' => 'wrong'] as $key => $value) {
+        'mail.tags.tenant_id.0' => '1', 'mail.tags.ses:tenant.0' => 'everbranch-tenant-1', 'mail.tags.ses:configuration-set.0' => 'wrong'] as $key => $value) {
         $other = $event;
         data_set($other, $key, $value);
         expect($fixture->matches($other))->toBeFalse();
