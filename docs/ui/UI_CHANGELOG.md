@@ -1,3 +1,10 @@
+## 2026-10-20 - Recorded premium access and workspace readiness (candidate)
+
+- Separate assigned advanced software from the public/purchasable branch catalog.
+- Show current-tenant assignment, rollout/setup/role state and independently authorized workspace links.
+- Preserve each Teams component, financial policies, unknown states and provider/payment gates.
+- Scope and evidence: `docs/audits/20261020T-premium-readiness-candidate/`.
+
 ## 2026-10-20 - Truthful integration-health observations
 
 - Failed issue reads show Unknown with safe diagnostics and last successful check provenance.

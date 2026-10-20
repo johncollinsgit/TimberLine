@@ -238,6 +238,9 @@ class TenantModuleAccessResolver
                 'capabilities' => (array) ($rawModule['capabilities'] ?? []),
                 'visibility' => (array) ($rawModule['visibility'] ?? []),
                 'market_state' => (string) ($rawModule['market_state'] ?? 'INTERNAL_ONLY'),
+                // Informational assignment only; canAccess() still uses the guarded enabled decision.
+                'has_recorded_access' => (bool) ($rawModule['has_access_raw'] ?? false)
+                    && ($rawModule['enabled_status'] ?? 'inherit') !== 'disabled',
                 'has_access' => (bool) ($decision['enabled'] ?? false),
                 'enabled' => (bool) ($decision['enabled'] ?? false),
                 'access_sources' => (array) ($rawModule['access_sources'] ?? ['none']),
@@ -334,6 +337,7 @@ class TenantModuleAccessResolver
             'capabilities' => [],
             'visibility' => [],
             'market_state' => 'INTERNAL_ONLY',
+            'has_recorded_access' => false,
             'has_access' => false,
             'enabled' => false,
             'access_sources' => ['none'],

@@ -9,6 +9,7 @@ use App\Services\Billing\TenantBillingNextStepResolver;
 use App\Services\Operations\OperatorAlertService;
 use App\Services\Tenancy\TenantFinancialAccess;
 use App\Services\Tenancy\TenantModuleCatalogService;
+use App\Services\Tenancy\TenantPremiumProductSummaryService;
 use App\Support\Marketing\MarketingSectionRegistry;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -18,7 +19,7 @@ use Throwable;
 
 class MarketingModuleStoreController extends Controller
 {
-    public function index(Request $request, TenantModuleCatalogService $catalogService, TenantFinancialAccess $financialAccess, TenantBillingNextStepResolver $billingNextStepResolver): View
+    public function index(Request $request, TenantModuleCatalogService $catalogService, TenantFinancialAccess $financialAccess, TenantBillingNextStepResolver $billingNextStepResolver, TenantPremiumProductSummaryService $premiumSummaryService): View
     {
         $tenantId = $this->requireTenantId($request);
         Gate::authorize('view-tenant-module-store', $tenantId);
@@ -31,6 +32,8 @@ class MarketingModuleStoreController extends Controller
 
         $canRequestSoftware = $request->user()->isAdmin() || $request->user()->isManager() || $request->user()->isMarketingManager();
 
+        $premiumSummary = $premiumSummaryService->forTenant($tenantId, $request->user());
+
         return view('marketing.modules', [
             'currentSectionKey' => 'modules',
             'currentSection' => $sections['modules'],
@@ -41,9 +44,8 @@ class MarketingModuleStoreController extends Controller
             'canManageBranches' => Gate::allows('mutate-tenant-module-store', $tenantId),
             'canRequestSoftware' => $canRequestSoftware,
             'canViewAgreement' => $financialAccess->allows($request->user(), $tenantId) && $canRequestSoftware,
-            'premiumProducts' => array_map(static fn (array $product): array => [
-                'key' => (string) $product['key'], 'name' => (string) $product['name'],
-            ], (array) config('module_catalog.offers.standard.premium_products', [])),
+            'premiumProducts' => $premiumSummary['products'],
+            'premiumSummaryKnown' => $premiumSummary['known'],
         ]);
     }
 

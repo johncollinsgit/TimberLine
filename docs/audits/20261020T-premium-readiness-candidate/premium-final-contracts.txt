@@ -1,0 +1,7 @@
+[2026-10-20 09:42:17] testing.WARNING: tenant.premium_summary.unavailable {"exception_type":"RuntimeException"}
+
+  ..............................sssss.......[2026-10-20 09:42:18] testing.WARNING: stripe.webhook.secret_missing
+.......
+
+  Tests:    5 skipped, 44 passed (387 assertions)
+  Duration: 3.42s

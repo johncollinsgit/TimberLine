@@ -1,0 +1,6 @@
+[2026-10-20 09:37:31] testing.WARNING: tenant.premium_summary.unavailable {"exception_type":"RuntimeException"}
+
+  ........
+
+  Tests:    8 passed (45 assertions)
+  Duration: 2.33s
