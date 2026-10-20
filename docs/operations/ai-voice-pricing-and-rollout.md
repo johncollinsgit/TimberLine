@@ -71,7 +71,11 @@ wallet. Each accepted request reserves worst-case customer cost under both the
 AI account lock and shared credit lock, then settles exactly 2× trusted token cost.
 Unused reserved credit is released. Settled prepaid AI is excluded from the older
 monthly AI invoice path. Customer credit is funded only by the existing verified
-payment path; this rollout creates no purchased credit.
+payment path; this rollout creates no purchased credit. The dedicated AI credit
+checkout requires current owner membership, approved model/cap, explicit pack
+confirmation and verified Stripe configuration. It supports the shared balance
+without enabling the separate messaging checkout/send flags. Card payment and a
+verified webhook add credit; a browser return never does.
 
 The existing per-workspace request ceiling remains 1,000 per UTC month for this
 lane. Caps may be lower than its configured $100 maximum. Low credit, zero cap,

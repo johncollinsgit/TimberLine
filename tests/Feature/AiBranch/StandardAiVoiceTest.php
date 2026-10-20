@@ -194,3 +194,42 @@ test('the focused soccer shell retains the included AI setup entry without grant
     $this->actingAs($member)->get('/ai-branch?tenant='.$tenant->slug)->assertForbidden();
     Http::assertNothingSent();
 });
+
+test('an owner funds shared AI credit through a guarded checkout while messaging stays off and payment is required once', function () {
+    [$tenant, $owner] = standardAiTenant($this);
+    config(['features.tenant_messaging_credit_checkout' => false, 'services.stripe.secret' => 'sk_test_service_credit',
+        'services.stripe.webhook_secret' => 'whsec_service_credit', 'services.stripe.api_base' => 'https://api.stripe.com',
+        'commercial.billing_readiness.lifecycle_mutations_enabled' => true]);
+    $url = '/ai-branch/credit-checkout?tenant='.$tenant->slug;
+    $args = ['pack_cents' => 2500, 'confirmed' => true];
+    $this->actingAs($owner)->postJson($url, $args)->assertForbidden();
+    approveStandardAi($this, $tenant, $owner);
+    $admin = User::factory()->tenantAdmin()->create(['is_active' => true, 'email_verified_at' => now()]);
+    $admin->tenants()->attach($tenant->id, ['role' => 'admin', 'membership_active' => true]);
+    $this->actingAs($admin)->postJson($url, $args)->assertForbidden();
+    Http::assertNothingSent();
+    $owner->update(['role' => 'employee']);
+    Http::fake(['api.stripe.com/v1/checkout/sessions' => Http::response(['id' => 'cs_test_shared_ai', 'url' => 'https://checkout.stripe.com/c/pay/cs_test_shared_ai',
+        'mode' => 'payment', 'currency' => 'usd', 'status' => 'open', 'amount_subtotal' => 2500, 'livemode' => false,
+        'metadata' => ['tenant_id' => (string) $tenant->id, 'pack_cents' => '2500', 'credit_scope' => 'ai_shared']])]);
+    $this->actingAs($owner)->postJson($url, $args)->assertRedirect('https://checkout.stripe.com/c/pay/cs_test_shared_ai');
+    expect(TenantMessagingCreditAccount::count())->toBe(0)->and(config('features.tenant_messaging_credit_checkout'))->toBeFalse();
+    Http::assertSent(fn ($request) => $request['payment_method_types[0]'] === 'card' && $request['metadata[credit_scope]'] === 'ai_shared');
+    $event = ['id' => 'evt_shared_ai_credit', 'type' => 'checkout.session.completed', 'livemode' => false, 'created' => time(),
+        'data' => ['object' => ['id' => 'cs_test_shared_ai', 'mode' => 'payment', 'currency' => 'usd', 'amount_total' => 2500, 'payment_status' => 'paid',
+            'metadata' => ['purpose' => 'messaging_credit', 'credit_scope' => 'ai_shared', 'tenant_id' => (string) $tenant->id, 'pack_cents' => '2500']]]];
+    $ingest = function (array $event) {
+        $payload = json_encode($event, JSON_THROW_ON_ERROR);
+        $time = time();
+
+        return app(\App\Services\Billing\StripeWebhookIngestService::class)->ingest($payload, 't='.$time.',v1='.hash_hmac('sha256', $time.'.'.$payload, 'whsec_service_credit'));
+    };
+    $wrongMode = [...$event, 'livemode' => true];
+    expect($ingest($wrongMode)['status_code'])->toBe(400);
+    expect($ingest($event)['message'])->toBe('processed_credit');
+    $event['id'] = 'evt_shared_ai_credit_second';
+    $event['type'] = 'checkout.session.async_payment_succeeded';
+    expect($ingest($event)['message'])->toBe('processed_credit');
+    expect(TenantMessagingCreditAccount::sole()->balance_micros)->toBe(25000000)
+        ->and(TenantMessagingLedgerEntry::where('entry_type', 'credit_funding')->count())->toBe(1);
+});

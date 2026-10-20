@@ -20,12 +20,13 @@
                 <button type="button" class="fb-btn fb-btn-primary" onclick="document.dispatchEvent(new CustomEvent('everbranch:assistant:open'))">Open voice conversation</button>
                 @endif
             </header>
+            @if(request()->has('messaging_credit'))<p role="status">Credit is added only after verified payment confirmation. A checkout return alone does not add credit.</p>@endif
             @if(session('status'))<p role="status" class="rounded-lg bg-emerald-50 p-3 text-emerald-900">{{ session('status') }}</p>@endif
             @if($metered)
             <section class="space-y-3 border-b border-zinc-200 pb-5">
                 <h2 class="text-lg font-semibold">Shared service credit</h2><p>Available: ${{ number_format($commercial['credit_available_micros'] / 1000000, 2) }} · Reserved: ${{ number_format($commercial['credit_reserved_micros'] / 1000000, 4) }}. AI requests pause at your cap or available credit.</p>
                 <p>{{ $commercial['label'] }}: ${{ number_format($commercial['input_per_million_micros'] / 1000000, 2) }} input, ${{ number_format($commercial['cached_input_per_million_micros'] / 1000000, 2) }} cached input, ${{ number_format($commercial['output_per_million_micros'] / 1000000, 2) }} output per million tokens. Each request reserves up to ${{ number_format($commercial['max_request_charge_micros'] / 1000000, 4) }} and settles actual usage.</p>
-                <form method="post" action="{{ route('billing.messaging-credit.checkout', ['tenant' => $tenant->slug]) }}" class="flex gap-3">@csrf<label>Buy optional service credit<select name="pack_cents">@foreach(config('marketing.messaging.platform.credit_packs_cents') as $pack)<option value="{{ $pack }}">${{ number_format($pack / 100, 0) }}</option>@endforeach</select></label><button class="fb-btn fb-btn-secondary">Review credit purchase</button></form>
+                <form method="post" action="{{ route('ai-branch.credit-checkout', ['tenant' => $tenant->slug]) }}" class="flex gap-3">@csrf<label>Buy optional service credit<select name="pack_cents">@foreach(config('marketing.messaging.platform.credit_packs_cents') as $pack)<option value="{{ $pack }}">${{ number_format($pack / 100, 0) }}</option>@endforeach</select></label><label><input type="checkbox" name="confirmed" value="1" required> I approve buying this credit pack.</label><button class="fb-btn fb-btn-secondary">Review credit purchase</button></form>
             </section>
             @endif
             @if($errors->any())<div role="alert" class="text-red-800">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif

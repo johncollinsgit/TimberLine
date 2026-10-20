@@ -147,6 +147,16 @@ class AiBranchController extends Controller
         return redirect()->away($result['url']);
     }
 
+    public function creditCheckout(Request $request)
+    {
+        $tenant = $this->tenant($request);
+        $data = $request->validate(['pack_cents' => ['required', 'integer'], 'confirmed' => ['accepted']]);
+        $result = app(\App\Services\Billing\StripeMessagingCreditService::class)->createAiCheckout($tenant, $request->user(), $data['pack_cents']);
+        abort_unless($result['ok'] ?? false, 422, $result['message'] ?? 'Choose a valid credit pack.');
+
+        return redirect()->away($result['url']);
+    }
+
     public function start(Request $request)
     {
         $tenant = $this->tenant($request);
