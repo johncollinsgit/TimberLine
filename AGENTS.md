@@ -1,3 +1,8 @@
+## Wren payment choices and offline reconciliation (2026-10-19)
+
+- The family portal offers explicit card and canonical WrenFamilySoccer Venmo choices. Link clicks are audit events only. Organizer-confirmed receipts and reasoned fee waivers serialize with checkout, retire/reconcile open Stripe sessions, preserve actual receipts for review and never fabricate revenue. Preview-first `soccer:reconcile-offline` applies a reviewed invoice/family/amount with an active verified organizer.
+- Verified PayPal/Venmo create, capture, status, webhook and original-account refunds are implemented behind independent provider/merchant/collection/webhook gates. Order intent is durable and encrypted before HTTP; uncertainty cannot create a replacement order. Current provider status is checked before money movement. Existing Wren Express/destination routing remains unchanged. Real sandbox/live approval and acceptance still gate launch. See `docs/operations/wren-verified-venmo.md` and `docs/operations/wren-soccer.md`.
+
 # Forestry Backstage Guardrails
 
 ## Required Orientation and Release Safety (2026-07-21)

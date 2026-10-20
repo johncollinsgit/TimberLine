@@ -70,11 +70,14 @@ a failed or uncertain payment.
 
 ## Current limits
 
-Only phase 1 is implemented in this change. PayPal checkout, webhooks,
-subscriptions, refunds and reporting are not implemented. No PayPal checkout
-availability is returned anywhere. The new page says this explicitly even when
-an account verifies. Stripe collection remains governed by existing readiness.
-Real provider setup and end-to-end tests are required before activation.
+Wren now has a separately gated PayPal/Venmo customer checkout implementation:
+frozen Orders create/capture, signed webhook reconciliation, original-account
+refunds and pending-payment guards. It remains disabled until partner approval,
+Wren merchant setup, domain eligibility and real provider acceptance/callback
+proof are complete. See `docs/operations/wren-verified-venmo.md`. The connection
+setup page continues to distinguish an account connection from active checkout.
+Native storefront PayPal, subscriptions and automated dispute handling remain
+unimplemented. Stripe collection retains its existing account and readiness.
 
 ## Primary references
 

@@ -14,7 +14,8 @@ return [
     'help_ai_enabled' => (bool) env('WREN_SOCCER_HELP_AI_ENABLED', true),
     'help_ai_model' => env('WREN_SOCCER_HELP_AI_MODEL', 'gpt-6-luna'),
     'sms_recipient' => '+16786441829',
-    'venmo' => '@SarahCollins0503',
+    'venmo' => '@WrenFamilySoccer',
+    'venmo_url' => 'https://venmo.com/u/WrenFamilySoccer',
     'teams' => [
         'green-bears' => ['name' => 'Green Bears', 'min_age' => 3, 'max_age' => 4, 'public' => 25, 'reserved' => 5, 'color' => '#28744d'],
         'blue-dragons' => ['name' => 'Blue Dragons', 'min_age' => 5, 'max_age' => 7, 'public' => 44, 'reserved' => 6, 'color' => '#2377b5'],

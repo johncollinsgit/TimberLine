@@ -245,6 +245,7 @@ Route::post('/connected-website/carolina-barrel/inquiries', [\App\Http\Controlle
 \Illuminate\Support\Facades\Route::match(['get', 'post'], '/soccer/portal/{action}', [\App\Http\Controllers\Soccer\SoccerPortalController::class, 'handle'])->middleware([\App\Http\Middleware\Soccer\VerifySoccerBridge::class, 'throttle:600,1']);
 \Illuminate\Support\Facades\Route::get('/soccer/content', fn (\Illuminate\Http\Request $r) => response()->json(app(\App\Services\Soccer\SoccerWebsiteService::class)->publicContent($r->query('preview')))->header('Cache-Control', 'private, no-store'));
 \Illuminate\Support\Facades\Route::post('/soccer/stripe', [\App\Http\Controllers\Soccer\SoccerWebhookController::class, 'stripe']);
+\Illuminate\Support\Facades\Route::post('/soccer/paypal', \App\Http\Controllers\Soccer\SoccerPayPalWebhookController::class)->middleware('throttle:600,1');
 \Illuminate\Support\Facades\Route::post('/soccer/sms', [\App\Http\Controllers\Soccer\SoccerWebhookController::class, 'sms']);
 
 \Illuminate\Support\Facades\Route::get('/soccer/release-data/{id}', function (\Illuminate\Http\Request $r, string $id) {

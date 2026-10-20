@@ -5,6 +5,9 @@ return [
     'setup_enabled' => (bool) env('TENANT_PAYMENT_SETUP_ENABLED', false),
     'tenant_slugs' => array_values(array_filter(array_map('trim', explode(',', (string) env('TENANT_PAYMENT_SETUP_TENANTS', ''))))),
     'stripe_embedded_enabled' => (bool) env('TENANT_STRIPE_EMBEDDED_ENABLED', false),
+    'stripe_oauth_client_id' => env('STRIPE_CONNECT_CLIENT_ID'),
+    // Existing accounts retain their frozen routing. Only new accounts use this policy.
+    'legacy_express_tenants' => ['wren-family-soccer'],
     'paypal' => [
         'enabled' => (bool) env('TENANT_PAYPAL_ENABLED', false),
         'environment' => env('PAYPAL_ENVIRONMENT', 'sandbox'),
@@ -13,5 +16,9 @@ return [
         'client_secret' => env('PAYPAL_CLIENT_SECRET'),
         'partner_id' => env('PAYPAL_PARTNER_MERCHANT_ID'),
         'bn_code' => env('PAYPAL_BN_CODE'),
+        // Customer collection is separately gated from merchant connection setup.
+        'soccer_checkout_enabled' => (bool) env('WREN_SOCCER_PAYPAL_CHECKOUT_ENABLED', false),
+        'soccer_webhook_id' => env('WREN_SOCCER_PAYPAL_WEBHOOK_ID'),
+        'soccer_webhook_verified' => (bool) env('WREN_SOCCER_PAYPAL_WEBHOOK_VERIFIED', false),
     ],
 ];
