@@ -40,7 +40,12 @@ summaries and bank deposits must not be added again as revenue.
 Reuse Plaid Transactions and account mapping. Business Link requests Transactions
 only; household optional products retain their existing consent boundaries.
 Register `https://app.theeverbranch.com/trajectory` in Plaid and set the identical
-PLAID_REDIRECT_URI. The app refuses new bank sign-in without this registered,
+PLAID_REDIRECT_URI. New bank sign-ins additionally require the exact Trajectory
+space IDs in PLAID_LINK_SPACE_IDS (not tenant IDs); the default empty list keeps
+new sign-ins off. Registering a callback does not open the feature globally.
+Existing feed sync and original, already-issued owner/session-bound returns stay
+available when new sign-ins are paused; normal space authorization still applies.
+The app refuses new bank sign-in without this registered,
 HTTPS, same-origin return configuration. A browser OAuth handoff resumes the
 original unexpired Link token and server-issued user/space/browser-bound session.
 It cannot silently connect into another selected company. Cache evidence is
@@ -212,14 +217,25 @@ platform business. Wren's own seller connection remains separate. Verification
 now retains the connection's payment_processing purpose rather than losing it
 when provider readiness metadata is refreshed.
 
-Plaid production rejected a Transactions-only Link-token readiness request with
-HTTP 400 INVALID_FIELD; the error identifies redirect-URI Dashboard
-configuration. The exact required return remains
-`https://app.theeverbranch.com/trajectory`. No Link token or bank item was
-created. Do not set PLAID_REDIRECT_URI until Dashboard registration succeeds,
-then activate configuration through the protected release and perform the
-original-token mobile return, real institution, consent, reconnection and mapping
-checks. An API key alone is not Link readiness or permission to import accounts.
+Plaid's initial Transactions-only Link-token readiness request returned HTTP 400
+INVALID_FIELD because the return URI was not registered. The authenticated
+Dashboard client ID was compared by hash against production and matched; no keys
+were rotated. The existing Evergrove Software LLC team requires verification
+with its business Google identity before saving API settings. After that
+verification, the exact `https://app.theeverbranch.com/trajectory` URI was saved
+and independently re-opened to verify persistence. The same production request
+now returns HTTP 200 with a Link token. No bank item was created.
+
+Activate the registered PLAID_REDIRECT_URI together with PLAID_LINK_SPACE_IDS=3
+through a protected release containing the named-space gate. Space 3 is the
+already-enabled, owner-managed Evergrove Software LLC business pilot; no new
+space, entitlement or household access is created. Preserve the existing client
+and secret. Merge the gate into main before staging the shared environment, so
+an unrelated older release cannot activate the URI without pilot isolation.
+Verify runtime configuration and that other enabled spaces still cannot start
+new sign-ins. Original-token mobile return, real institution, consent,
+reconnection and mapping acceptance remain required before widening this pilot.
+An API key or Link token alone is not permission to import accounts.
 
 Evergrove's dedicated Wallet merchant still passes API identity inspection. A
 fresh fictional unpaid Wallet session was created without a buyer or submit
@@ -233,5 +249,7 @@ Shopify's current configuration guide uses OAuth installation for new custom
 apps. The older manual-token Website prototype is not a validated one-click
 merchant connection and remains unreleased.
 
-Local verification: 73 payment-setup, soccer PayPal, Plaid Link-session and Wallet
-preflight tests passed (342 assertions). No schema or rollout setting changed.
+Local verification: 170 payment-setup, soccer PayPal, Trajectory and Wallet
+preflight tests passed (817 assertions), including pilot isolation, disabled
+spaces, existing-feed sync and issued-session completion while new sign-ins are
+paused. No schema or customer collection setting changed.

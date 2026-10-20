@@ -21,6 +21,7 @@ beforeEach(function (): void {
     config(['trajectory.enabled' => true]);
     $this->user = User::factory()->create(['role' => 'admin', 'is_active' => true, 'email_verified_at' => now()]);
     [$this->space] = app(PilotService::class)->prepare($this->user, null, true);
+    config(['trajectory.plaid.link_space_ids' => [$this->space->id]]);
     $this->account = Account::create(['space_id' => $this->space->id, 'source_key' => 'integration:cash', 'name' => 'Cash', 'kind' => 'cash', 'balance_cents' => 100000, 'observed_at' => now()]);
 });
 
