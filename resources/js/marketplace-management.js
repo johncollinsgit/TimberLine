@@ -53,6 +53,24 @@ function urlState(values, push = false) {
     const url = new URL(location.href);
     Object.entries(values).forEach(([key, value]) => value ? url.searchParams.set(key, value) : url.searchParams.delete(key));
     if (url.href !== location.href) history[push ? 'pushState' : 'replaceState'](null, '', url);
+    syncProfileLinks();
+}
+function syncProfileLinks() {
+    const current = new URL(location.href);
+    const limits = { q: 160, status: 40, detail: 80, from: 10, to: 10, maker: 20, customer: 254, include_test: 1 };
+    document.querySelectorAll('[data-mm-profile-link], [data-mm-directory-back]').forEach(link => {
+        const target = new URL(link.href, location.href);
+        if (target.origin !== current.origin) return;
+        const back = link.hasAttribute('data-mm-directory-back');
+        if (back ? target.pathname !== '/marketplace/operations' : !/^\/marketplace\/operations\/makers\/\d+$/.test(target.pathname)) return;
+        Object.entries(limits).forEach(([key, max]) => {
+            const value = current.searchParams.get(key);
+            if (value && value.length <= max) target.searchParams.set(key, value);
+            else target.searchParams.delete(key);
+        });
+        if (back) target.searchParams.set('tab', 'makers');
+        link.href = target.href;
+    });
 }
 function applyFilters() {
     const query = (search?.value || '').trim().toLocaleLowerCase();
@@ -90,6 +108,7 @@ function restoreState() {
     if (status) status.value = [...status.options].some(option => option.value === params.get('status')) ? params.get('status') : '';
     records.forEach(record => { record.open = record.dataset.mmDetail === params.get('detail'); });
     applyFilters();
+    syncProfileLinks();
     const selected = records.find(record => record.open && !record.hidden);
     if (selected) requestAnimationFrame(() => selected.scrollIntoView({ block: 'nearest' }));
     // Native toggle events are queued tasks; wait until they have been delivered.

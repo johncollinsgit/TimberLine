@@ -39,10 +39,10 @@ no video, chat, stream scheduling or checkout was invented.
 
 | Check | Result |
 | --- | --- |
-| Marketplace suite with opt-in rendered fixture export | 98 passed / 1,127 assertions |
+| Marketplace suite with opt-in rendered fixture export | 99 passed / 1,141 assertions |
 | Teams and navigation regression | 212 passed / 2,085 assertions |
 | Tenant experience and preview scope checks (overlaps above) | 35 passed / 269 assertions |
-| Chromium + WebKit browser checks | 28 passed |
+| Chromium + WebKit browser checks | 32 passed |
 | Production build, typecheck and existing JS tests | Pass; existing Rollup annotation warnings |
 | Pint | 8 affected PHP files pass |
 | Whitespace | `git diff --check` passes |
@@ -105,3 +105,28 @@ and adds six viewport/engine checks for one-row geometry, the final Connections
 anchor, reachability and no page overflow. The full browser suite now passes
 28/28; Marketplace remains 98/1,127. The follow-up changes no commerce, shared
 workflow, Vite, route or integration behavior.
+
+
+## Independent review corrections
+
+Two distinct P2 issues identified against the original source candidate are fixed
+in a separate preserved follow-up:
+
+- Maker fulfillment pagination dropped its Orders hash, so the next page selected
+  Products. The existing paginator now adds `fragment('orders')`. A 21-line real
+  feature request proves20/1 page membership and both href fragments; both engines
+  exercise Next/Previous, preserve the Orders pane and check overflow. Scoped
+  paginator styles provide one visible control set, restrained SVGs,44px targets
+  and distinct disabled states without relying on Tailwind being loaded.
+- Maker profile links used only the initial server query, losing search/status/
+  selected-row changes made in the browser. Explicit same-origin profile and back
+  links now synchronize bounded permitted UI/report parameters whenever current
+  history state changes or restores. A browser case changes search/status, opens
+  a row, visits its real profile path and returns to the same filtered open row.
+  No object path, route or server authorization changes.
+
+Final acceptance:99 Marketplace tests /1,141 assertions and32 browser cases pass;
+build/typecheck/existing JS checks and Pint pass. The original590edd42 and focused
+profile follow-up fa4c3674 remain preserved. Shared workflow/Vite/base integration
+is still reserved to the coordinator. The supplemental pagination screenshots
+show the actual Blade paginator on its second page in both engines.
