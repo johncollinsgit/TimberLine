@@ -26,7 +26,9 @@
             <section class="space-y-3 border-b border-zinc-200 pb-5">
                 <h2 class="text-lg font-semibold">Shared service credit</h2><p>Available: ${{ number_format($commercial['credit_available_micros'] / 1000000, 2) }} · Reserved: ${{ number_format($commercial['credit_reserved_micros'] / 1000000, 4) }}. AI requests pause at your cap or available credit.</p>
                 <p>{{ $commercial['label'] }}: ${{ number_format($commercial['input_per_million_micros'] / 1000000, 2) }} input, ${{ number_format($commercial['cached_input_per_million_micros'] / 1000000, 2) }} cached input, ${{ number_format($commercial['output_per_million_micros'] / 1000000, 2) }} output per million tokens. Each request reserves up to ${{ number_format($commercial['max_request_charge_micros'] / 1000000, 4) }} and settles actual usage.</p>
+                @if($canApproveAi)
                 <form method="post" action="{{ route('ai-branch.credit-checkout', ['tenant' => $tenant->slug]) }}" class="flex gap-3">@csrf<label>Buy optional service credit<select name="pack_cents">@foreach(config('marketing.messaging.platform.credit_packs_cents') as $pack)<option value="{{ $pack }}">${{ number_format($pack / 100, 0) }}</option>@endforeach</select></label><label><input type="checkbox" name="confirmed" value="1" required> I approve buying this credit pack.</label><button class="fb-btn fb-btn-secondary">Review credit purchase</button></form>
+                @else<p>A workspace owner must approve the model and cap before buying AI service credit.</p>@endif
             </section>
             @endif
             @if($errors->any())<div role="alert" class="text-red-800">@foreach($errors->all() as $error)<p>{{ $error }}</p>@endforeach</div>@endif
@@ -34,6 +36,7 @@
             @if($snapshot) @include('ai-branch.context', ['context' => $snapshot, 'current' => true]) @endif
             <details @if(!$account?->enabled) open @endif class="border-b border-zinc-200 pb-5">
                 <summary class="cursor-pointer font-semibold">Workspace AI settings</summary>
+                @if(!$metered || $canApproveAi)
                 <form method="post" action="{{ route('ai-branch.settings', ['tenant' => $tenant->slug]) }}" class="mt-4 flex flex-wrap items-end gap-4">@csrf
                     <label class="text-sm">AI access<select name="enabled" class="mt-1 block rounded-lg border-zinc-300"><option value="0">Off</option><option value="1" @selected($account?->enabled)>On</option></select></label>
                     <label class="text-sm">{{ $pilotGrant ? 'Pilot spending cap ($)' : 'Monthly AI spending cap ($)' }}<input type="number" name="budget_dollars" min="0" step="0.01" max="{{ $tier['ai_limits']['provider_budget_cents'] / 100 }}" value="{{ number_format(($account?->budget_cents ?? ($metered ? 0 : $tier['ai_limits']['provider_budget_cents'])) / 100, 2, '.', '') }}" required class="mt-1 block rounded-lg border-zinc-300"></label>
@@ -44,6 +47,7 @@
                     <label class="text-sm"><input type="checkbox" name="confirmed" value="1" required> I approve sharing permitted context with the AI provider under this cap. @if($metered) I approve the displayed model usage rates and prepaid credit charges. @endif</label>
                     <button class="fb-btn fb-btn-primary">Save settings</button>
                 </form>
+                @else<p class="mt-3">Only a workspace owner can approve AI models and spending caps. Your current membership can use AI after that approval.</p>@endif
             </details>
             @if($account?->enabled)
             @if($enhanced)

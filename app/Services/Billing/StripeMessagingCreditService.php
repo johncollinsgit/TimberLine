@@ -26,8 +26,7 @@ class StripeMessagingCreditService
     {
         abort_unless(app(\App\Services\AiBranch\AiBranchOffer::class)->metered($tenant), 403);
         app(\App\Services\AiBranch\AiBranchAccess::class)->authorize($tenant, $actor);
-        abort_unless($actor->hasVerifiedEmail() && $actor->tenants()->whereKey($tenant->id)
-            ->wherePivotIn('role', ['owner', 'tenant_owner'])->wherePivot('membership_active', true)->exists(), 403);
+        abort_unless(app(\App\Services\AiBranch\AiBranchAccess::class)->canApprove($tenant, $actor), 403);
         app(\App\Services\AiBranch\AiBranchProvider::class)->settings($tenant);
         abort_unless(filled(config('services.stripe.webhook_secret')) && config('commercial.billing_readiness.lifecycle_mutations_enabled')
             && rtrim((string) config('services.stripe.api_base'), '/') === 'https://api.stripe.com'

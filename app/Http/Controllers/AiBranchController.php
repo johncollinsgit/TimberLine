@@ -65,6 +65,7 @@ class AiBranchController extends Controller
         $workspace = $enhanced ? ($snapshot['workspace'] ?? $workspaceContext->profile($tenant, $request->user())) : null;
 
         return response()->view('ai-branch.index', [
+            'canApproveAi' => $this->access->canApprove($tenant, $request->user()),
             'metered' => app(\App\Services\AiBranch\AiBranchOffer::class)->metered($tenant),
             'commercial' => app(\App\Services\AiBranch\AiBranchOffer::class)->presentation($tenant),
             'selectedModel' => app(\App\Services\AiBranch\AiBranchOffer::class)->model($tenant),
@@ -100,7 +101,7 @@ class AiBranchController extends Controller
         }
         $metered = app(\App\Services\AiBranch\AiBranchOffer::class)->metered($tenant);
         if ($metered) {
-            abort_unless($request->user()->tenants()->whereKey($tenant->id)->wherePivotIn('role', ['owner', 'tenant_owner'])->wherePivot('membership_active', true)->exists(), 403, 'A workspace owner must approve AI pricing, model and cap.');
+            abort_unless($this->access->canApprove($tenant, $request->user()), 403, 'A workspace owner must approve AI pricing, model and cap.');
         }
         $data = $request->validate(['enabled' => ['required', 'boolean'], 'budget_cents' => ['required', 'integer', 'min:0', 'max:'.$tier['ai_limits']['provider_budget_cents']], 'confirmed' => ['accepted'], 'timezone' => ['sometimes', 'required', 'string', 'timezone:all'],
             'model' => [$metered ? 'required' : 'sometimes', \Illuminate\Validation\Rule::in(array_keys(config('ai_branch.models')))]]);

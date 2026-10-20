@@ -233,3 +233,15 @@ test('an owner funds shared AI credit through a guarded checkout while messaging
     expect(TenantMessagingCreditAccount::sole()->balance_micros)->toBe(25000000)
         ->and(TenantMessagingLedgerEntry::where('entry_type', 'credit_funding')->count())->toBe(1);
 });
+
+test('admin views explain owner-only setup and the tenant audit records the missing cap approver', function () {
+    [$tenant, $owner] = standardAiTenant($this);
+    $tenant->users()->updateExistingPivot($owner->id, ['role' => 'admin']);
+    $this->actingAs($owner)->get('/ai-branch?tenant='.$tenant->slug)->assertOk()
+        ->assertSeeText('Only a workspace owner can approve AI models and spending caps.')
+        ->assertDontSeeText('Save settings')->assertDontSeeText('Review credit purchase');
+    expect(\Illuminate\Support\Facades\Artisan::call('ai-branch:audit-voice', ['--json' => true]))->toBe(0);
+    $audit = json_decode(\Illuminate\Support\Facades\Artisan::output(), true);
+    expect($audit['tenants'][0]['cap_approvers'])->toBe(0)->and($audit['tenants'][0]['setup_ready'])->toBeFalse();
+    Http::assertNothingSent();
+});

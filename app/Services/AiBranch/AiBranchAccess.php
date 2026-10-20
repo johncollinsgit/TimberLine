@@ -60,6 +60,12 @@ class AiBranchAccess
         return $tier;
     }
 
+    public function canApprove(Tenant $tenant, User $user): bool
+    {
+        return $user->is_active && $user->hasVerifiedEmail() && $user->tenants()->whereKey($tenant->id)
+            ->wherePivotIn('role', ['owner', 'tenant_owner'])->wherePivot('membership_active', true)->exists();
+    }
+
     public function member(Tenant $tenant, User $user): void
     {
         $user->refresh();

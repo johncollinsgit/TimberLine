@@ -54,6 +54,8 @@ class AiVoiceAudit extends Command
                     request()->setUserResolver($resolver);
                 }
             }
+            $capApprovers = $users->filter(fn ($user) => app(AiBranchAccess::class)->canApprove($tenant, $user))->count();
+            $checks['cap_approver'] = $capApprovers > 0;
             $checks['memory_storage'] = $storage;
             $checks['owner_opt_in'] = (bool) $account?->enabled;
             $checks['positive_budget'] = ($account?->budget_cents ?? 0) > 0;
@@ -63,8 +65,8 @@ class AiVoiceAudit extends Command
             }
             $rows[] = ['tenant_id' => $tenant->id, 'tenant' => $tenant->slug, 'provider' => $provider,
                 'branch_module' => app(TenantModuleAccessResolver::class)->canAccess($tenant->id, 'ai_branch'),
-                'eligible_members' => $users->count(), 'checks' => $checks,
-                'setup_ready' => $checks['branch_access'] && $storage && $users->isNotEmpty(),
+                'eligible_members' => $users->count(), 'cap_approvers' => $capApprovers, 'checks' => $checks,
+                'setup_ready' => $checks['branch_access'] && $storage && $capApprovers > 0,
                 'ready' => ! in_array(false, $checks, true), 'blocking_checks' => array_keys(array_filter($checks, fn ($value) => ! $value))];
         }
         if ($this->option('json')) {

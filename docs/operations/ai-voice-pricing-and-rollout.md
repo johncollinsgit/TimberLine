@@ -121,7 +121,9 @@ zero-dispatch option; revoked grants cannot fall through to a paid provider.
 
 Run `ai-branch:audit-voice --json` for a read-only inventory of every tenant's
 module/access, owner opt-in/cap, provider, context, memory and prepaid readiness.
-`setup_ready` distinguishes available setup from activated model use. No model
+`setup_ready` distinguishes available setup from activated model use and requires
+an active verified owner who can approve a cap. `cap_approvers` exposes legacy
+admin-only or missing-owner setup blockers without promoting memberships. No model
 request is made by this audit. Record deployment SHA and actual provider evidence
 separately from fixture/browser results. Use protected GitHub/Forge release gates;
 no schema changes, direct production file replacement or broad cache clearing.
