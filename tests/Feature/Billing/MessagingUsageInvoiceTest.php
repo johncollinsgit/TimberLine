@@ -9,7 +9,6 @@ use App\Models\TenantDirectInvoice;
 use App\Models\TenantMessagingUsagePeriod;
 use App\Services\Agreements\AgreementManagementService;
 use App\Services\Billing\MessagingUsageInvoiceService;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
 test('closed contract usage creates one auditable invoice and cannot be billed twice', function (string $channel, string $unitLabel): void {
@@ -64,33 +63,17 @@ test('closed contract usage creates one auditable invoice and cannot be billed t
         'authorized_at' => now()->subMonth(),
         'paid_at' => now()->subMonth(),
     ]);
-    $period = TenantMessagingUsagePeriod::query()->forAllTenants()->create([
-        'tenant_id' => $tenant->id,
-        'channel' => $channel,
+    $usage = app(\App\Services\Marketing\Messaging\TenantMessagingUsageService::class);
+    $units = $channel === 'email' ? 1040 : 254;
+    $provider = $channel === 'email' ? 'ses_tenant' : 'twilio_subaccount';
+    $reservation = $usage->reserve($tenant->id, $channel, $units, 'closed-period', $provider);
+    $settlement = $usage->settle($tenant->id, 'closed-period');
+    expect($reservation['amount_micros'])->toBe(200000)
+        ->and($usage->settle($tenant->id, 'closed-period')->id)->toBe($settlement->id);
+    $period = TenantMessagingUsagePeriod::query()->forAllTenants()->sole();
+    $period->update([
         'period_start' => now()->subMonthNoOverflow()->startOfMonth(),
         'period_end' => now()->subMonthNoOverflow()->endOfMonth(),
-        'included_units' => 250,
-        'used_units' => 254,
-        'reserved_units' => 0,
-        'provider_cost_micros' => 3378200,
-        'buyer_charge_micros' => 200000,
-    ]);
-    DB::table('tenant_messaging_ledger_entries')->insert([
-        'tenant_id' => $tenant->id,
-        'tenant_messaging_usage_period_id' => $period->id,
-        'entry_type' => 'usage_settlement',
-        'status' => 'settled',
-        'channel' => $channel,
-        'unit_type' => $channel === 'email' ? 'email' : 'segment',
-        'units' => 254,
-        'amount_micros' => 200000,
-        'provider_cost_micros' => 3378200,
-        'pricing_version' => 'collins-test-v2',
-        'idempotency_key' => 'settle:closed-period',
-        'metadata' => json_encode(['charged_units' => 4], JSON_THROW_ON_ERROR),
-        'occurred_at' => now()->subMonth(),
-        'created_at' => now(),
-        'updated_at' => now(),
     ]);
     Http::fake([
         'https://stripe.test/v1/customers/cus_contract' => Http::response([
@@ -109,7 +92,7 @@ test('closed contract usage creates one auditable invoice and cannot be billed t
         ->and($first['failures'])->toBe(0)
         ->and($second['groups'])->toBe(0)
         ->and($invoice->authorized_subtotal_cents)->toBe(20)
-        ->and($invoice->line_items[0]['description'])->toContain('4 '.$unitLabel)
+        ->and($invoice->line_items[0]['description'])->toContain(($channel === 'email' ? '40 ' : '4 ').$unitLabel)
         ->and($period->fresh()->tenant_direct_invoice_id)->toBe($invoice->id)
         ->and($period->fresh()->invoiced_at)->not->toBeNull();
 })->with(['SMS' => ['sms', 'SMS segments'], 'email' => ['email', 'emails']]);

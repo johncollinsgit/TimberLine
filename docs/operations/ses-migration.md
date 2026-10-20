@@ -292,3 +292,31 @@ CI or actual SES delivery/event acceptance.
 - https://docs.aws.amazon.com/ses/latest/dg/tenants.html
 - https://docs.aws.amazon.com/ses/latest/dg/sending-email-suppression-list-tenant-level.html
 - https://aws.amazon.com/ses/pricing/
+
+
+### Customer email usage exemptions (2026-10-20)
+
+`MARKETING_EMAIL_BILLING_EXEMPT_TENANT_IDS` is an explicit, email-only billing
+policy. The default is empty in source so numeric production IDs cannot exempt
+unrelated tenants in another environment. The user-confirmed production list is
+`1,6,10,14`: Modern Forestry, Green Shield Pest Control, Evergrove Software LLC,
+and Fictional Cedar Works - Voice Pilot. Everbranch Admin is the landlord console
+(`tenant_id = null`), not a tenant to charge; application mail is a platform cost.
+The user confirmed that AWS still charges Evergrove for excluded customer sends.
+
+Activate the exact list only after verifying the deployed code and those tenant
+IDs. This changes prospective customer email reservation charges to zero, while
+retaining sent units, allowance consumption, provider-cost estimates and an
+immutable `explicit-email-exclusion-v1` reservation/settlement audit. Existing
+reservations retain their original billing decision across configuration changes;
+review reconciliation before changing the list. Contracts, nonexcluded rates,
+SMS/MMS, module subscriptions and historic invoices are unchanged. Comped module
+status and the legacy provider routing list are not email usage exclusions.
+Provider-cost estimates are not a reconciled AWS bill.
+
+Acceptance covers both SES and SendGrid, included allowances, original contract
+rates, exactly-once credit/ledger settlement, excluded usage closing without an
+invoice, and nonexcluded reservation → settlement → one invoice across repeated
+billing runs. The scheduled invoice retry path uses the explicit tenant filter
+supported by `TenantDirectInvoice`; it must not call the unavailable
+`forAllTenants()` scope on that model.

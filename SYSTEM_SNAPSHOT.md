@@ -1,3 +1,4 @@
+<!-- SES customer usage billing policy: see docs/operations/ses-migration.md. Explicit email-only tenant exclusions freeze at reservation; provider cost and units remain metered. -->
 ## Markets & Makers management (source candidate, October 20)
 
 The [management console map](docs/architecture/markets-makers-management-console.md)

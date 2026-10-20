@@ -48,7 +48,9 @@ class MessagingUsageInvoiceService
         $summary = ['groups' => $groups->count(), 'drafts_created' => 0, 'invoices_sent' => 0, 'blocked' => 0, 'failures' => 0, 'invoice_ids' => [], 'errors' => []];
 
         if ($send) {
-            $pending = TenantDirectInvoice::query()->forAllTenants()
+            // TenantDirectInvoice uses HasTenantScope (explicit forTenant),
+            // not the globally scoped BelongsToTenant/forAllTenants trait.
+            $pending = TenantDirectInvoice::query()
                 ->whereIn('status', ['draft', 'send_failed'])
                 ->when($tenantId, fn ($query) => $query->where('tenant_id', (int) $tenantId))
                 ->get()

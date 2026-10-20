@@ -1,3 +1,4 @@
+<!-- SES customer usage billing policy: see docs/operations/ses-migration.md. Explicit email-only tenant exclusions freeze at reservation; provider cost and units remain metered. -->
 ## Guided onboarding and settings (source candidate, October 20)
 
 See [workspace settings and onboarding](docs/operations/workspace-settings-and-onboarding.md).
