@@ -1,3 +1,15 @@
+## Coordinated October 20 release state
+
+- Public offer/quality PR #436 is live at `df9469eadaff3a857e95c4e711aac80e1e20cd67`
+  (protected run 39392281921, exact `/ready`, Forge release 80667328, 18 read-only
+  Chromium/WebKit checks). Historical sections below retain their original evidence.
+- Marketplace code is integrated onto that release with its collection/availability
+  defaults off. The marketing product `markets_makers` maps to the internal
+  `markets_and_makers` module; marketing selection never activates it. Preserve
+  the shipped Teams migrations and both Teams/Marketplace MySQL recovery gates.
+- Settings, electrician intake and truthful health candidates remain separately
+  preserved until serialized release. See `docs/operations/coordinated-release-2026-10-20.md`.
+
 ## Public offer and quality candidate (2026-10-20; not deployed)
 
 - The Simple public acquisition offer uses `module_catalog.offers.standard`: $499
@@ -13,6 +25,27 @@
   navigation styles stay scoped to the tool. See
   `docs/operations/standard-public-offer.md` and
   `docs/audits/20261020T-public-quality/` for validation and limits.
+
+## Markets and Makers marketplace (2026-10-20; default off)
+
+- A dedicated Everbranch merchant workspace owns the independently verified domain,
+  catalog, allocated inventory, checkout snapshots, orders, and supplier statements.
+  Public/maker screens follow the Android tablet Showcase appearance. Standalone
+  makers need no subscription; native catalog sources require current explicit
+  workspace authorization. Staff access requires merchant owner/admin membership.
+- Owner operations cover maker profiles, products, sales/customers/discounts,
+  markets/shows and approved lineups, pickups, statements, and shared storefront
+  links. Shopify/Wix publishing and dropshipping remain phase two.
+- Default native Stripe direct checkout and separate merchant-specific Shop Pay
+  Wallet integration are independently gated. Signed canonical payments commit
+  allocated stock once; original-account refunds and accepted immutable rates
+  preserve supplier obligations. Default fee is 15%. V1 records reviewed bank
+  payments and never sends supplier funds automatically.
+- No real M&M merchant, wallet/device acceptance, DNS or production launch has been
+  completed. Checkout stays off until merchant, tax, policies and pilot verification.
+  Native PayPal buyer approval/capture/refund is independently gated and mock-tested;
+  actual platform/seller approval and payment acceptance remain launch blockers. Existing Website Commerce and Modern Forestry lanes remain separate.
+  See `docs/operations/markets-and-makers.md` for launch and recovery details.
 
 ## Self-service payment accounts, bank linking and native invoices (2026-10-19)
 

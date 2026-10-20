@@ -6193,6 +6193,540 @@ CREATE TABLE `marketing_wishlist_outreach_queue` (
   CONSTRAINT `marketing_wishlist_outreach_queue_wishlist_list_id_foreign` FOREIGN KEY (`wishlist_list_id`) REFERENCES `marketing_wishlist_lists` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_audits`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_audits` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `actor_user_id` bigint unsigned DEFAULT NULL,
+  `identity_id` bigint unsigned DEFAULT NULL,
+  `action` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `subject_id` bigint unsigned DEFAULT NULL,
+  `details` json DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_checkouts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_checkouts` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `uuid` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `session_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `identity_id` bigint unsigned DEFAULT NULL,
+  `connection_id` bigint unsigned DEFAULT NULL,
+  `group_key` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'creating',
+  `snapshot` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider_cart` longtext COLLATE utf8mb4_unicode_ci,
+  `provider_order_gid` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `expires_at` timestamp NOT NULL,
+  `paid_at` timestamp NULL DEFAULT NULL,
+  `failure_code` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  `provider` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'shopify',
+  `provider_session_ref` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `provider_payment_ref` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `mm_checkout_uuid` (`uuid`),
+  UNIQUE KEY `mm_checkout_provider_order` (`provider_order_gid`),
+  UNIQUE KEY `mm_native_session` (`provider_session_ref`),
+  UNIQUE KEY `mm_native_payment` (`provider_payment_ref`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_connections`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_connections` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `uuid` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `shop_domain` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `shop_gid` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `publication_gid` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `credentials` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `test_mode` tinyint(1) NOT NULL DEFAULT '1',
+  `verified_at` timestamp NULL DEFAULT NULL,
+  `created_by` bigint unsigned NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `mm_connection_uuid` (`uuid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_identities`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_identities` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `email` varchar(254) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `active` tinyint(1) NOT NULL DEFAULT '1',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `mm_identity_email` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_inventory_allocations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_inventory_allocations` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `listing_id` bigint unsigned NOT NULL,
+  `request_uuid` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `quantity` int NOT NULL,
+  `source_variant_id` bigint unsigned DEFAULT NULL,
+  `actor_user_id` bigint unsigned DEFAULT NULL,
+  `identity_id` bigint unsigned DEFAULT NULL,
+  `reason` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `shopify_location_gid` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `applied_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `mm_allocation_request` (`request_uuid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_inventory_levels`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_inventory_levels` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `listing_id` bigint unsigned NOT NULL,
+  `shopify_location_gid` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `quantity` int unsigned NOT NULL DEFAULT '0',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `mm_inventory_level` (`listing_id`,`shopify_location_gid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_ledger_entries`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_ledger_entries` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `maker_id` bigint unsigned NOT NULL,
+  `order_line_id` bigint unsigned NOT NULL,
+  `source_key` varchar(160) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `kind` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `amount_cents` int NOT NULL,
+  `statement_id` bigint unsigned DEFAULT NULL,
+  `eligible_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `mm_ledger_source` (`source_key`),
+  KEY `mm_ledger_unpaid` (`maker_id`,`statement_id`,`eligible_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_listings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_listings` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `maker_id` bigint unsigned NOT NULL,
+  `slug` varchar(160) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `title` varchar(160) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `variant_label` varchar(160) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `category` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `description` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `images` json NOT NULL,
+  `price_cents` int unsigned NOT NULL,
+  `stock_quantity` int unsigned NOT NULL DEFAULT '0',
+  `shipping` tinyint(1) NOT NULL DEFAULT '0',
+  `pickup_location_ids` json DEFAULT NULL,
+  `lead_time` varchar(160) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `revision` int unsigned NOT NULL DEFAULT '1',
+  `published_revision` int unsigned DEFAULT NULL,
+  `source_variant_id` bigint unsigned DEFAULT NULL,
+  `shopify_product_gid` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `shopify_variant_gid` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `shopify_inventory_gid` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `shipping_location_gid` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `connection_id` bigint unsigned DEFAULT NULL,
+  `synced_at` timestamp NULL DEFAULT NULL,
+  `approved_by` bigint unsigned DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  `shipping_fee_cents` int unsigned DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `mm_listing_slug` (`slug`),
+  KEY `mm_listing_maker` (`maker_id`,`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_login_links`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_login_links` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `token_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `email` varchar(254) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `expires_at` timestamp NOT NULL,
+  `consumed_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `mm_login_hash` (`token_hash`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_makers`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_makers` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `slug` varchar(160) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name` varchar(160) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `city` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `story` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `image_url` varchar(1000) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `tenant_id` bigint unsigned DEFAULT NULL,
+  `connected_by` bigint unsigned DEFAULT NULL,
+  `approved_by` bigint unsigned DEFAULT NULL,
+  `approved_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  `private_details` longtext COLLATE utf8mb4_unicode_ci,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `mm_maker_slug` (`slug`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_market_makers`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_market_makers` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `market_id` bigint unsigned NOT NULL,
+  `maker_id` bigint unsigned NOT NULL,
+  `status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'applied',
+  `booth` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `notes` text COLLATE utf8mb4_unicode_ci,
+  `approved_by` bigint unsigned DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `mm_market_maker` (`market_id`,`maker_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_markets`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_markets` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `name` varchar(160) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `slug` varchar(180) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `kind` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'market',
+  `status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'draft',
+  `description` text COLLATE utf8mb4_unicode_ci,
+  `image_url` varchar(1000) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `address` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `timezone` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'America/New_York',
+  `starts_at` datetime NOT NULL,
+  `ends_at` datetime NOT NULL,
+  `pickup_cutoff_at` datetime DEFAULT NULL,
+  `pickup_location_id` bigint unsigned DEFAULT NULL,
+  `created_by` bigint unsigned NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  `pickup_instructions` text COLLATE utf8mb4_unicode_ci,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `mm_market_slug` (`slug`),
+  KEY `mm_market_upcoming` (`status`,`starts_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_memberships`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_memberships` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `maker_id` bigint unsigned NOT NULL,
+  `identity_id` bigint unsigned NOT NULL,
+  `role` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'owner',
+  `active` tinyint(1) NOT NULL DEFAULT '1',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `mm_membership_pair` (`maker_id`,`identity_id`),
+  KEY `mm_membership_identity` (`identity_id`,`active`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_operations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_operations` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `uuid` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `connection_id` bigint unsigned DEFAULT NULL,
+  `kind` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `subject_id` bigint unsigned NOT NULL,
+  `status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'prepared',
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `result` longtext COLLATE utf8mb4_unicode_ci,
+  `actor_user_id` bigint unsigned DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `mm_operation_uuid` (`uuid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_order_lines`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_order_lines` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `order_id` bigint unsigned NOT NULL,
+  `maker_id` bigint unsigned NOT NULL,
+  `listing_id` bigint unsigned NOT NULL,
+  `provider_line_gid` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `title` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `quantity` int unsigned NOT NULL,
+  `refunded_quantity` int unsigned NOT NULL DEFAULT '0',
+  `unit_price_cents` int unsigned NOT NULL,
+  `maker_unit_cents` int unsigned NOT NULL,
+  `rate_id` bigint unsigned NOT NULL,
+  `discount_cents` int unsigned NOT NULL DEFAULT '0',
+  `shipping_credit_cents` int unsigned NOT NULL DEFAULT '0',
+  `fulfillment_status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'unfulfilled',
+  `tracking_number` varchar(160) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `tracking_url` varchar(1000) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `fulfilled_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `mm_order_line_provider` (`order_id`,`provider_line_gid`),
+  KEY `mm_order_line_maker` (`maker_id`,`fulfillment_status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_orders`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_orders` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `checkout_id` bigint unsigned NOT NULL,
+  `connection_id` bigint unsigned DEFAULT NULL,
+  `provider_order_gid` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `number` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `currency` varchar(3) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'USD',
+  `identity_id` bigint unsigned DEFAULT NULL,
+  `customer` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `email_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `group_key` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `merchandise_cents` int unsigned NOT NULL,
+  `discount_cents` int unsigned NOT NULL DEFAULT '0',
+  `shipping_cents` int unsigned NOT NULL DEFAULT '0',
+  `tax_cents` int unsigned NOT NULL DEFAULT '0',
+  `total_cents` int unsigned NOT NULL,
+  `status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'paid',
+  `test_mode` tinyint(1) NOT NULL DEFAULT '1',
+  `shipping_allocated_at` timestamp NULL DEFAULT NULL,
+  `shipping_subsidy_cents` int unsigned NOT NULL DEFAULT '0',
+  `processing_cost_cents` int unsigned DEFAULT NULL,
+  `shipping_refunds` json DEFAULT NULL,
+  `review_required` tinyint(1) NOT NULL DEFAULT '0',
+  `review_reason` text COLLATE utf8mb4_unicode_ci,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  `provider` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'shopify',
+  `fulfillment_details` longtext COLLATE utf8mb4_unicode_ci,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `mm_order_checkout` (`checkout_id`),
+  UNIQUE KEY `mm_order_provider` (`connection_id`,`provider_order_gid`),
+  KEY `mm_order_email` (`email_hash`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_payment_events`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_payment_events` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `provider` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `event_id` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `merchant_key` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `processed_at` timestamp NULL DEFAULT NULL,
+  `failure_code` varchar(80) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `mm_payment_event` (`provider`,`merchant_key`,`event_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_pickup_locations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_pickup_locations` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `name` varchar(160) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `address` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `instructions` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `shopify_location_gid` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `active` tinyint(1) NOT NULL DEFAULT '0',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  `tax_address` json DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_rate_acceptances`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_rate_acceptances` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `maker_id` bigint unsigned NOT NULL,
+  `rate_id` bigint unsigned NOT NULL,
+  `identity_id` bigint unsigned NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `mm_rate_acceptance` (`maker_id`,`rate_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_rate_agreements`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_rate_agreements` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `scope_key` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `version` int unsigned NOT NULL,
+  `kind` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `value` int unsigned NOT NULL,
+  `terms` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_by` bigint unsigned DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `mm_rate_version` (`scope_key`,`version`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_settings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_settings` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `connection_id` bigint unsigned DEFAULT NULL,
+  `checkout_enabled` tinyint(1) NOT NULL DEFAULT '0',
+  `readiness` json DEFAULT NULL,
+  `shipping_policy` text COLLATE utf8mb4_unicode_ci,
+  `return_policy` text COLLATE utf8mb4_unicode_ci,
+  `privacy_policy` text COLLATE utf8mb4_unicode_ci,
+  `support_email` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_statements`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_statements` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `uuid` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `maker_id` bigint unsigned NOT NULL,
+  `amount_cents` int NOT NULL,
+  `status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'review',
+  `approved_by` bigint unsigned DEFAULT NULL,
+  `approved_at` timestamp NULL DEFAULT NULL,
+  `paid_at` timestamp NULL DEFAULT NULL,
+  `bank_reference` varchar(160) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `mm_statement_uuid` (`uuid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_stock_reservations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_stock_reservations` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `checkout_id` bigint unsigned NOT NULL,
+  `listing_id` bigint unsigned NOT NULL,
+  `location_key` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `quantity` int unsigned NOT NULL,
+  `released_at` timestamp NULL DEFAULT NULL,
+  `committed_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `mm_stock_reservation` (`checkout_id`,`listing_id`,`location_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_store_links`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_store_links` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `maker_id` bigint unsigned NOT NULL,
+  `platform` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `url` varchar(1000) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `label` varchar(160) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'shared',
+  `identity_id` bigint unsigned NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `mm_store_link_maker` (`maker_id`,`platform`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_stores`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_stores` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `name` varchar(160) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `host` varchar(190) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `verified_at` timestamp NULL DEFAULT NULL,
+  `settings` json DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `mm_store_tenant` (`tenant_id`),
+  UNIQUE KEY `mm_store_host` (`host`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_webhook_events`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_webhook_events` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `connection_id` bigint unsigned NOT NULL,
+  `event_id` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `topic` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',
+  `failure_code` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `processed_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `mm_webhook_event` (`connection_id`,`event_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `marketplace_workspace_links`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_workspace_links` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `token_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `maker_id` bigint unsigned NOT NULL,
+  `identity_id` bigint unsigned NOT NULL,
+  `expires_at` timestamp NOT NULL,
+  `consumed_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `mm_workspace_link_hash` (`token_hash`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `markets`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -8707,11 +9241,11 @@ DROP TABLE IF EXISTS `team_area_members`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `team_area_members` (
-  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
-  `area_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `area_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `user_id` bigint unsigned NOT NULL,
-  `role` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `role` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -8722,13 +9256,13 @@ DROP TABLE IF EXISTS `team_areas`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `team_areas` (
-  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
-  `slug` varchar(60) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `profile` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `slug` varchar(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `profile` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `version` int unsigned NOT NULL DEFAULT '1',
-  `settings` text COLLATE utf8mb4_unicode_ci,
+  `settings` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -8784,10 +9318,10 @@ DROP TABLE IF EXISTS `team_file_chunks`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `team_file_chunks` (
   `tenant_id` bigint unsigned NOT NULL,
-  `upload_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `upload_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `chunk_index` int unsigned NOT NULL,
   `size` int unsigned NOT NULL,
-  `sha256` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `sha256` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (`tenant_id`,`upload_id`,`chunk_index`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -8795,17 +9329,17 @@ DROP TABLE IF EXISTS `team_file_uploads`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `team_file_uploads` (
-  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
-  `task_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `task_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `uploader_user_id` bigint unsigned NOT NULL,
-  `client_key` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `filename` varchar(240) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `mime_type` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `client_key` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `filename` varchar(240) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `mime_type` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `expected_size` int unsigned NOT NULL,
-  `sha256` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `storage_key` varchar(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `sha256` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `storage_key` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` datetime NOT NULL,
   `updated_at` datetime NOT NULL,
   PRIMARY KEY (`id`),
@@ -8817,13 +9351,13 @@ DROP TABLE IF EXISTS `team_inbox_items`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `team_inbox_items` (
-  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
   `recipient_user_id` bigint unsigned NOT NULL,
   `actor_user_id` bigint unsigned NOT NULL,
-  `task_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `event_type` varchar(40) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `event_key` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `task_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `event_type` varchar(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `event_key` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `read_at` datetime DEFAULT NULL,
   `archived_at` datetime DEFAULT NULL,
   `created_at` datetime NOT NULL,
@@ -8896,18 +9430,18 @@ DROP TABLE IF EXISTS `team_operation_attempts`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `team_operation_attempts` (
-  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
-  `area_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `area_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `user_id` bigint unsigned NOT NULL,
-  `record_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `connection_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `kind` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'prepared',
-  `request_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `input_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `payload` longtext COLLATE utf8mb4_unicode_ci,
-  `result` longtext COLLATE utf8mb4_unicode_ci,
+  `record_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `connection_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `kind` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'prepared',
+  `request_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `input_hash` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `result` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `scheduled_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -8919,20 +9453,20 @@ DROP TABLE IF EXISTS `team_operation_records`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `team_operation_records` (
-  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
-  `area_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `kind` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `title` varchar(500) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'draft',
+  `area_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `kind` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `title` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'draft',
   `version` int unsigned NOT NULL DEFAULT '1',
   `assigned_user_id` bigint unsigned DEFAULT NULL,
-  `connection_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `source_key` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `visibility` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'area',
+  `connection_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `source_key` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `visibility` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'area',
   `starts_on` date DEFAULT NULL,
   `ends_on` date DEFAULT NULL,
-  `data` longtext COLLATE utf8mb4_unicode_ci,
+  `data` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -8944,12 +9478,12 @@ DROP TABLE IF EXISTS `team_operation_revisions`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `team_operation_revisions` (
-  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
-  `record_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `record_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `version` int unsigned NOT NULL,
   `user_id` bigint unsigned DEFAULT NULL,
-  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` timestamp NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `tov_version` (`tenant_id`,`record_id`,`version`)
@@ -8960,9 +9494,9 @@ DROP TABLE IF EXISTS `team_project_members`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `team_project_members` (
   `tenant_id` bigint unsigned NOT NULL,
-  `project_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `project_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `user_id` bigint unsigned NOT NULL,
-  `access` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `access` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (`tenant_id`,`project_id`,`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -8970,11 +9504,11 @@ DROP TABLE IF EXISTS `team_projects`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `team_projects` (
-  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
   `owner_user_id` bigint unsigned NOT NULL,
-  `name` varchar(500) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `privacy` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `privacy` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `archived` tinyint(1) NOT NULL DEFAULT '0',
   `version` int unsigned NOT NULL,
   `payload` json NOT NULL,
@@ -8986,18 +9520,18 @@ DROP TABLE IF EXISTS `team_provider_connections`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `team_provider_connections` (
-  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
   `user_id` bigint unsigned NOT NULL,
-  `area_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `provider` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `account_key` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `account_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'connected',
+  `area_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `account_key` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `account_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'connected',
   `generation` int unsigned NOT NULL DEFAULT '1',
-  `credentials` text COLLATE utf8mb4_unicode_ci,
-  `settings` text COLLATE utf8mb4_unicode_ci,
-  `sync_state` text COLLATE utf8mb4_unicode_ci,
+  `credentials` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `settings` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `sync_state` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `expires_at` timestamp NULL DEFAULT NULL,
   `last_success_at` timestamp NULL DEFAULT NULL,
   `retry_at` timestamp NULL DEFAULT NULL,
@@ -9011,12 +9545,12 @@ DROP TABLE IF EXISTS `team_source_snapshots`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `team_source_snapshots` (
-  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
-  `connection_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `resource_key` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `checksum` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `connection_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `resource_key` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `checksum` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `observed_at` timestamp NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `tss_version` (`tenant_id`,`connection_id`,`resource_key`,`checksum`)
@@ -9027,9 +9561,9 @@ DROP TABLE IF EXISTS `team_task_projects`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `team_task_projects` (
   `tenant_id` bigint unsigned NOT NULL,
-  `task_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `project_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `section_id` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `task_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `project_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `section_id` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `position` int unsigned NOT NULL DEFAULT '0',
   PRIMARY KEY (`tenant_id`,`task_id`,`project_id`),
   KEY `team_project_order_idx` (`tenant_id`,`project_id`,`position`)
@@ -9039,11 +9573,11 @@ DROP TABLE IF EXISTS `team_tasks`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `team_tasks` (
-  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
   `assigned_user_id` bigint unsigned DEFAULT NULL,
-  `parent_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `title` varchar(500) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `parent_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `title` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `due_on` date DEFAULT NULL,
   `due_at` datetime DEFAULT NULL,
   `completed_at` datetime DEFAULT NULL,
@@ -9059,16 +9593,16 @@ DROP TABLE IF EXISTS `team_user_connections`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `team_user_connections` (
-  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
   `user_id` bigint unsigned NOT NULL,
-  `provider` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `credentials` text COLLATE utf8mb4_unicode_ci,
+  `provider` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `credentials` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `project_ids` json DEFAULT NULL,
   `preferences` json DEFAULT NULL,
-  `external_user_id` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `account_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'disconnected',
+  `external_user_id` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `account_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'disconnected',
   `expires_at` timestamp NULL DEFAULT NULL,
   `last_synced_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
@@ -9083,8 +9617,8 @@ DROP TABLE IF EXISTS `team_work_events`;
 CREATE TABLE `team_work_events` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `tenant_id` bigint unsigned NOT NULL,
-  `entity_type` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `entity_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `entity_type` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `entity_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `payload` json NOT NULL,
   PRIMARY KEY (`id`),
   KEY `team_work_event_entity_idx` (`tenant_id`,`entity_type`,`entity_id`)
@@ -9103,8 +9637,8 @@ DROP TABLE IF EXISTS `team_work_receipts`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `team_work_receipts` (
   `tenant_id` bigint unsigned NOT NULL,
-  `receipt_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `receipt_key` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `receipt_hash` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `receipt_key` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `payload` json NOT NULL,
   PRIMARY KEY (`tenant_id`,`receipt_hash`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -9114,10 +9648,10 @@ DROP TABLE IF EXISTS `team_work_versions`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `team_work_versions` (
   `tenant_id` bigint unsigned NOT NULL,
-  `entity_type` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `entity_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `entity_type` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `entity_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `version` int unsigned NOT NULL,
-  `sha256` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `sha256` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `snapshot` json NOT NULL,
   `recorded_at` datetime NOT NULL,
   PRIMARY KEY (`tenant_id`,`entity_type`,`entity_id`,`version`)
@@ -12440,3 +12974,6 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (301,'2026_10_17_03
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (302,'2026_10_17_040000_create_team_file_uploads',30);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (303,'2026_10_19_010000_create_team_user_connections',30);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (304,'2026_10_20_010000_create_team_operations_tables',30);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (305,'2026_10_20_120000_create_marketplace_tables',31);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (306,'2026_10_20_130000_add_native_marketplace_store',31);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (307,'2026_10_20_140000_add_marketplace_markets_and_reporting',31);

@@ -9,6 +9,8 @@ export default defineConfig(() => ({
     laravel({
       input: [
         'resources/css/app.css',
+        'resources/css/marketplace.css',
+        'resources/js/marketplace-wallet.js',
         'resources/js/app.js',
         'resources/js/team/app.js',
         'resources/js/tenant-payment-setup.js',

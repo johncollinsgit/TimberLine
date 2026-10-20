@@ -1,3 +1,15 @@
+## Coordinated October 20 release state
+
+- Public offer/quality PR #436 is live at `df9469eadaff3a857e95c4e711aac80e1e20cd67`
+  (protected run 39392281921, exact `/ready`, Forge release 80667328, 18 read-only
+  Chromium/WebKit checks). Historical sections below retain their original evidence.
+- Marketplace code is integrated onto that release with its collection/availability
+  defaults off. The marketing product `markets_makers` maps to the internal
+  `markets_and_makers` module; marketing selection never activates it. Preserve
+  the shipped Teams migrations and both Teams/Marketplace MySQL recovery gates.
+- Settings, electrician intake and truthful health candidates remain separately
+  preserved until serialized release. See `docs/operations/coordinated-release-2026-10-20.md`.
+
 ## Public offer and quality candidate (2026-10-20; not deployed)
 
 - The Simple public acquisition offer uses `module_catalog.offers.standard`: $499
@@ -13,6 +25,27 @@
   navigation styles stay scoped to the tool. See
   `docs/operations/standard-public-offer.md` and
   `docs/audits/20261020T-public-quality/` for validation and limits.
+
+## Markets and Makers marketplace (2026-10-20; default off)
+
+- `marketplace_*` is the dedicated Everbranch merchant retailer/supplier lane.
+  Do not reuse legacy, Modern Forestry or Website Commerce orders/customers.
+  Domain ownership requires the verified Store; operators require current active
+  owner/admin membership of its tenant. Email matches grant no workspace access.
+- Preserve explicit native catalog opt-in, atomic stock allocations/reservations,
+  accepted versioned rates, immutable integer earnings and promotion funding,
+  canonical merchant-bound signed payment evidence, original-account refunds,
+  encrypted private details and reviewed actual bank references. Checkout off must
+  preserve reconciliation, fulfillment, orders, statements and credentials.
+- Native Everbranch is the default checkout provider. Stripe direct payments and
+  separate Shop Pay Wallet require their own configured merchant and test/live
+  evidence; never borrow another tenant's account or the Evergrove Wallet binding.
+  Unknown mutations cannot be blindly replayed. PayPal buyer approval/capture/refund also has independent default-off merchant,
+  signature, test and live gates; seller setup alone never enables collection. Optional hosted Shopify is explicitly opt-in.
+- Appearance follows the Android tablet Showcase sample. Owner reporting and
+  market participation are permission-scoped; shared store links do not imply
+  catalog sync. Shopify/Wix reseller publishing remains phase two. See
+  `docs/operations/markets-and-makers.md`; source defaults remain off.
 
 ## Self-service payment accounts, bank linking and native invoices (2026-10-19)
 

@@ -173,7 +173,7 @@ jobs:
       - name: Verify clean and partial migration paths
         env:
           TEAM_WORK_DISPOSABLE_MYSQL: '1'
-        run: php ./vendor/bin/pest tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php tests/Integration/HighLevelFleetMySqlMigrationRecoveryTest.php tests/Integration/TenantMailMySqlMigrationRecoveryTest.php tests/Integration/FleetOperationsMySqlMigrationRecoveryTest.php tests/Integration/SoccerMySqlMigrationRecoveryTest.php tests/Integration/SoccerAllocationConcurrencyTest.php tests/Integration/MarketingDeskMySqlRecoveryTest.php tests/Integration/ReviewedSchemaDriftRecoveryTest.php tests/Integration/AiBranchMySqlMigrationRecoveryTest.php tests/Integration/TeamWorkMySqlMigrationRecoveryTest.php --compact
+        run: php ./vendor/bin/pest tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php tests/Integration/HighLevelFleetMySqlMigrationRecoveryTest.php tests/Integration/TenantMailMySqlMigrationRecoveryTest.php tests/Integration/FleetOperationsMySqlMigrationRecoveryTest.php tests/Integration/SoccerMySqlMigrationRecoveryTest.php tests/Integration/SoccerAllocationConcurrencyTest.php tests/Integration/MarketingDeskMySqlRecoveryTest.php tests/Integration/ReviewedSchemaDriftRecoveryTest.php tests/Integration/AiBranchMySqlMigrationRecoveryTest.php tests/Integration/TeamWorkMySqlMigrationRecoveryTest.php tests/Integration/MarketplaceMySqlRecoveryTest.php --compact
 
       - name: Rehearse prior production schema upgrade
         run: scripts/ci/rehearse-migrations.sh "${{ steps.migration-base.outputs.sha }}"
