@@ -65,7 +65,7 @@
                         <p class="text-sm text-amber-900">Card payment setup is awaiting Everbranch activation. Contact support to finish connecting your business.</p>
                     @endif
                     @if($account)
-                        @if($account->routingMode() === 'direct')<a class="fb-btn fb-btn-secondary inline-flex" href="https://dashboard.stripe.com" target="_blank" rel="noopener noreferrer">Open Stripe dashboard</a>@endif
+                        @if($account->routingMode() === 'direct')<a class="fb-btn fb-btn-secondary inline-flex" href="https://dashboard.stripe.com/{{ $account->provider_account_id }}/dashboard" target="_blank" rel="noopener noreferrer">Open Stripe dashboard</a>@endif
                         @if(count(data_get($account->metadata, 'requirements', [])))<div class="rounded-lg bg-amber-50 p-4 text-sm text-amber-950"><strong>Still needed in Stripe</strong><ul class="mt-2 list-disc pl-5">@foreach(data_get($account->metadata, 'requirements', []) as $requirement)<li>{{ str($requirement)->replace(['.', '_'], ' ')->headline() }}</li>@endforeach</ul></div>@endif
                         <dl class="grid grid-cols-2 gap-4 rounded-xl bg-zinc-50 p-4 text-sm">
                             <div><dt class="text-zinc-500">Card payments</dt><dd class="mt-1 font-semibold text-zinc-900">{{ $account->charges_enabled ? 'Enabled' : 'Pending Stripe approval' }}</dd></div>
