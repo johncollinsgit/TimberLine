@@ -15,13 +15,33 @@ class SesSimulatorFixture
 
     public function matches(array $event): bool
     {
+        return $this->candidate($event)
+            && data_get($event, 'mail.tags.ses:tenant-name') === ['everbranch-tenant-'.self::TENANT_ID]
+            && data_get($event, 'mail.tags.ses:configuration-set') === ['everbranch-marketing'];
+    }
+
+    public function candidate(array $event): bool
+    {
         return (bool) config('ses_migration.simulator_fixture_enabled')
             && data_get($event, 'mail.tags.tenant_id') === [(string) self::TENANT_ID]
-            && data_get($event, 'mail.tags.ses:tenant-name') === ['everbranch-tenant-'.self::TENANT_ID]
-            && data_get($event, 'mail.tags.ses:configuration-set') === ['everbranch-marketing']
             && data_get($event, 'mail.source') === 'no-reply@theeverbranch.com'
             && count((array) data_get($event, 'mail.destination', [])) === 1
             && in_array(data_get($event, 'mail.destination.0'), self::RECIPIENTS, true);
+    }
+
+    /** Called only behind the production SNS signature/account/topic boundary. */
+    public function handle(array $event, string $messageId, SesDeliveryEvents $events): array
+    {
+        return $this->run(function () use ($event, $messageId, $events): array {
+            DB::table('cache')->updateOrInsert(['key' => 'ses-simulator:event:'.hash('sha256', $messageId)], [
+                'value' => \Illuminate\Support\Facades\Crypt::encryptString(json_encode($event, JSON_THROW_ON_ERROR)),
+                'expiration' => 2147483647,
+            ]);
+
+            // Keep unmatched authenticated simulator evidence for inspection;
+            // its native/configuration binding still fails closed for delivery.
+            return $this->matches($event) ? $events->handle($event, $messageId) : ['matched' => 0, 'updated' => 0];
+        });
     }
 
     /** Never changes the production default permanently or loads customer rows. */
