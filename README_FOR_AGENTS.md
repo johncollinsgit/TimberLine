@@ -2232,3 +2232,12 @@ binding. Follow `docs/operations/wren-soccer.md` for reviewed Wren reconciliatio
 ## Teams connected operations candidate (2026-10-20)
 
 Events/Wholesale operations are default-off extensions of the shared Teams Laravel application. Read `docs/architecture/everbranch-team-connected-operations.md` and `docs/operations/everbranch-team-connected-operations-runbook.md`. Preserve authoritative Asana/Sheets/mail/commerce sources, source-generation fences, per-user access and encrypted evidence. Do not send or enable external sequences from template publication or internal rule saves. Reuse the existing email composer, messaging controls and shared AI usage ledger. No legacy Event table reuse without tenant mapping. The complete Phase 2 plan is not yet accepted; live OAuth/source discovery and real MySQL/Linux/protected-release gates remain outstanding.
+## Product visualization Mac handoff (local, 2026-10-20)
+
+Read `docs/operations/product-visualization.md`. Reuse the shared hand/room viewer
+and current tenant-owned Website products. Complete measured GLB assets are
+required; honor canonical access, product/site/tenant boundaries, independent
+default-off rollout and hand switches, publication and catalog revisions. Camera
+frames stay on-device. Native and connected-renderer adapters need Mac wiring
+and physical acceptance. Coordinate release actions with the Mac release owner;
+this candidate did not activate tenants or deploy. Preserve unrelated work.

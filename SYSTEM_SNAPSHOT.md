@@ -2908,3 +2908,12 @@ Mobile conversations support up to five private photos/PDFs per message, 50 MB p
 ## Teams connected operations candidate (2026-10-20)
 
 Default-off Events and reusable Wholesale work areas share `/teams` and `/team`, with area permissions, encrypted per-user provider connections, source projections, review evidence and durable attempts. Workflow navigation groups planning, execution and review. Reusable operational email templates use the existing composer; preview/preparation are separate from sending. The automatic executor currently produces permission-checked Teams Inbox reminders with quiet hours and deduplication. External campaign sequences and live pilot acceptance remain incomplete. See `docs/architecture/everbranch-team-connected-operations.md` and `docs/operations/everbranch-team-connected-operations-runbook.md` before enabling any operations/write/AI/weather flag. Runtime OAuth and source access, real MySQL/Linux checks and protected release gates remain prerequisites. Fictional screenshots are not source-data verification.
+## Product visualization Mac handoff (local, 2026-10-20)
+
+See `docs/operations/product-visualization.md`. Additive product metadata and
+tenant-owned GLB uploads support hand and room modes in a shared browser viewer.
+The connected catalog includes a gated descriptor; separate-renderer and
+Capacitor adapters await Mac integration and physical-device acceptance. All
+rollout flags default off. No schema, checkout, grants or deployment changes.
+Hand orientation, scale and skeleton finger masking are approximate. Synthetic
+QA models and AI concept imagery are not merchant assets or device evidence.

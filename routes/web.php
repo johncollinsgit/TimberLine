@@ -744,6 +744,7 @@ Route::post('/website/forms/{page}', [ManagedWebsiteController::class, 'submitFo
     ->name('managed-website.forms.submit');
 
 Route::get('/website-catalog-media/{media}', [\App\Http\Controllers\WebsiteCatalogController::class, 'media'])->name('managed-website.catalog.media');
+Route::get('/product-visualization/assets/{product}/{media}.glb', [\App\Http\Controllers\ProductVisualizationController::class, 'asset'])->name('product-visualization.asset');
 
 Route::get('/website-media/{media}', [ManagedWebsiteController::class, 'showMedia'])
     ->name('managed-website.media.show');
@@ -755,6 +756,7 @@ Route::get('/website-thumbnail-source/{siteVersion}/{pageVersion}', [ManagedWebs
 // intentionally do not share any Shopify or legacy Order route/model.
 Route::get('/shop', [WebsiteCommerceController::class, 'shop'])->name('managed-website.store.index');
 Route::get('/products/{handle}', [WebsiteCommerceController::class, 'showProduct'])->name('managed-website.store.products.show');
+Route::get('/products/{handle}/visualize', [WebsiteCommerceController::class, 'showVisualization'])->name('managed-website.store.products.visualize');
 Route::post('/products/{handle}/quote', [WebsiteCommerceController::class, 'requestQuote'])->middleware('throttle:6,1')->name('managed-website.store.products.quote');
 Route::get('/cart', [WebsiteCommerceController::class, 'cart'])->name('managed-website.store.cart');
 Route::get('/account', [WebsiteShopperAccountController::class, 'index'])->name('managed-website.store.account');
@@ -849,6 +851,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/products', [\App\Http\Controllers\WebsiteCatalogController::class, 'index'])->name('products.index');
             Route::get('/products/create', [\App\Http\Controllers\WebsiteCatalogController::class, 'create'])->name('products.create');
             Route::get('/products/{product}/edit', [\App\Http\Controllers\WebsiteCatalogController::class, 'edit'])->name('products.edit');
+            Route::get('/products/{product}/visualization', [\App\Http\Controllers\ProductVisualizationController::class, 'edit'])->name('products.visualization.edit');
+            Route::put('/products/{product}/visualization', [\App\Http\Controllers\ProductVisualizationController::class, 'update'])->name('products.visualization.update');
+            Route::post('/products/{product}/visualization/models', [\App\Http\Controllers\ProductVisualizationController::class, 'upload'])->middleware('throttle:20,1')->name('products.visualization.upload');
             Route::get('/collections', [\App\Http\Controllers\WebsiteCatalogController::class, 'collections'])->name('collections.index');
             Route::get('/collections/create', [\App\Http\Controllers\WebsiteCatalogController::class, 'createCollection'])->name('collections.create');
             Route::post('/collections', [\App\Http\Controllers\WebsiteCatalogController::class, 'storeCollection'])->name('collections.store');

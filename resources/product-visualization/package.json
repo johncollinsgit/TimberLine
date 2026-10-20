@@ -1,0 +1,16 @@
+{
+  "name": "everbranch-product-visualization",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node prepare-runtime.mjs && vite build",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@google/model-viewer": "4.4.0",
+    "@mediapipe/tasks-vision": "0.10.32",
+    "three": "0.183.2"
+  },
+  "devDependencies": {"vite": "7.3.1"}
+}

@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npm run typecheck && npm run test:trajectory && npm run test:ai-voice && vite build",
+    "build": "npm run typecheck && npm run test:trajectory && npm run test:ai-voice && vite build && npm run build:product-visualization",
+    "build:product-visualization": "npm --prefix resources/product-visualization ci --no-audit --no-fund && npm --prefix resources/product-visualization test && npm --prefix resources/product-visualization run build",
     "test:highlevel-fleet": "node --test tests/e2e/highlevel-fleet.test.mjs",
     "test:trajectory": "node --test tests/e2e/trajectory-money.test.mjs tests/e2e/trajectory-charts.test.mjs tests/e2e/trajectory-bank-link.test.mjs",
     "test:ai-voice": "node --test tests/e2e/ai-voice-conversation.test.mjs",
