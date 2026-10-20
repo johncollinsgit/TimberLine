@@ -154,6 +154,8 @@ return [
 
     'messaging' => [
         'platform' => [
+            // Customer email charges only; retain units and provider costs.
+            'email_billing_exempt_tenant_ids' => array_values(array_filter(array_map('intval', explode(',', (string) env('MARKETING_EMAIL_BILLING_EXEMPT_TENANT_IDS', ''))), fn ($id) => $id > 0)),
             'legacy_tenant_ids' => array_values(array_filter(array_map(
                 static fn (string $value): int => (int) trim($value),
                 explode(',', (string) env('MARKETING_MESSAGING_LEGACY_TENANT_IDS', '1'))

@@ -1,3 +1,4 @@
+<!-- SES customer usage billing policy: see docs/operations/ses-migration.md. Explicit email-only tenant exclusions freeze at reservation; provider cost and units remain metered. -->
 <!-- SES platform mail: default-off ses_platform encrypted outbox, dedicated queue and signed events; SendGrid stays default. See docs/operations/ses-migration.md before activation. -->
 ## Markets & Makers management (source candidate, October 20)
 
