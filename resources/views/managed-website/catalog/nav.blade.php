@@ -5,4 +5,7 @@
     @if(isset($site) && app(\App\Services\ManagedWebsite\WebsiteQuoteOrderService::class)->enabledFor($site->tenant))
     <a href="{{ route('managed-website.invoices.index') }}" class="rounded-lg px-4 py-2 text-sm font-semibold {{ request()->routeIs('managed-website.invoices.*') ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100' }}" @if(request()->routeIs('managed-website.invoices.*')) aria-current="page" @endif>Quotes & invoices</a>
     @endif
+    @if(config('marketplace.enabled') && config('marketplace.host') && ($canEdit ?? false))
+    <a href="https://{{ config('marketplace.host') }}/sell" class="rounded-lg px-4 py-2 text-sm font-semibold text-emerald-800">Sell on Markets and Makers ↗</a>
+    @endif
 </nav>

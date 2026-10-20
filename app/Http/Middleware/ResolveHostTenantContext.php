@@ -17,7 +17,9 @@ class ResolveHostTenantContext
 
     public function handle(Request $request, Closure $next): Response
     {
-        $context = $this->resolver->resolveForRequest($request);
+        $context = app(\App\Services\Marketplace\MarketplaceAccess::class)->publicHost($request->getHost())
+            ? HostTenantContext::none(host: $request->getHost(), strategy: 'marketplace_host')
+            : $this->resolver->resolveForRequest($request);
 
         $request->attributes->set('host_tenant_context', $context);
         $request->attributes->set('host_tenant', $context->tenant);

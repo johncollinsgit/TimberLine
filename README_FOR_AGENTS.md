@@ -14,6 +14,27 @@
   `docs/operations/standard-public-offer.md` and
   `docs/audits/20261020T-public-quality/` for validation and limits.
 
+## Markets and Makers marketplace (2026-10-20; default off)
+
+- `marketplace_*` is the dedicated Everbranch merchant retailer/supplier lane.
+  Do not reuse legacy, Modern Forestry or Website Commerce orders/customers.
+  Domain ownership requires the verified Store; operators require current active
+  owner/admin membership of its tenant. Email matches grant no workspace access.
+- Preserve explicit native catalog opt-in, atomic stock allocations/reservations,
+  accepted versioned rates, immutable integer earnings and promotion funding,
+  canonical merchant-bound signed payment evidence, original-account refunds,
+  encrypted private details and reviewed actual bank references. Checkout off must
+  preserve reconciliation, fulfillment, orders, statements and credentials.
+- Native Everbranch is the default checkout provider. Stripe direct payments and
+  separate Shop Pay Wallet require their own configured merchant and test/live
+  evidence; never borrow another tenant's account or the Evergrove Wallet binding.
+  Unknown mutations cannot be blindly replayed. PayPal seller setup does not enable
+  native marketplace buyer checkout. Optional hosted Shopify is explicitly opt-in.
+- Appearance follows the Android tablet Showcase sample. Owner reporting and
+  market participation are permission-scoped; shared store links do not imply
+  catalog sync. Shopify/Wix reseller publishing remains phase two. See
+  `docs/operations/markets-and-makers.md`; source defaults remain off.
+
 ## Self-service payment accounts, bank linking and native invoices (2026-10-19)
 
 - New Stripe accounts use full Dashboard access and direct charges; owner-session OAuth can connect an existing Standard account. Frozen request/routing/environment/account context prevents cross-merchant retries. Existing Express reservations and Wren routing stay unchanged. Direct payments require their own connected-event signing secret and live proof gate; new direct attempts use stable platform-account/environment fingerprints across key rotation.

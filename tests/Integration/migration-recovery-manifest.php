@@ -3,6 +3,18 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_20_140000_add_marketplace_markets_and_reporting.php' => [
+        'test' => 'tests/Integration/MarketplaceMySqlRecoveryTest.php',
+        'scenarios' => ['market, participation, encrypted maker details and storefront sharing survive partial table/index repair'],
+    ],
+    '2026_10_20_130000_add_native_marketplace_store.php' => [
+        'test' => 'tests/Integration/MarketplaceMySqlRecoveryTest.php',
+        'scenarios' => ['native merchant and payment evidence survive interrupted table, nullable-column, and named-index repair'],
+    ],
+    '2026_10_20_120000_create_marketplace_tables.php' => [
+        'test' => 'tests/Integration/MarketplaceMySqlRecoveryTest.php',
+        'scenarios' => ['early tables retained before trailing marketplace tables', 'all tables retained without named indexes', 'encrypted order and webhook sentinels survive repeated repair', 'conflicting unique data stops without deleting evidence'],
+    ],
     '2026_10_20_020000_create_website_discounts.php' => [
         'test' => 'tests/Integration/WebsiteDiscountMySqlRecoveryTest.php',
         'scenarios' => ['discount columns and saved rows retained before unique/site indexes and foreign keys; completed DDL replayed before migration bookkeeping'],
