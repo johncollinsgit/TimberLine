@@ -1,6 +1,8 @@
 # Shop Pay Wallet readiness
 
-The owner requested Shop Pay for soccer and tenant storefronts. This is active
+The owner originally requested Shop Pay for soccer and tenant storefronts, then
+limited the current pilot to **Evergrove only** on October 20. Do not provision
+or bind Carolina or Wren during this pilot. This is active
 integration preparation, not an available buyer payment method. Do not treat a
 Wallet session as a payment, order, tenant connection, payout or registration.
 
@@ -51,9 +53,11 @@ bounded timeouts and no redirects. Errors suppress provider request details.
 1. Confirm the legal merchant and payout owner for each named tenant. Each
    merchant needs its own dedicated Wallet store and completed Shopify Payments
    setup. Confirm actual plan terms before signup; do not assume every merchant
-   qualifies for the same offer. Save credentials only through a secure tenant
-   settings form with server-side membership, unique shop binding, encrypted
-   immutable revisions and audited replacement/revocation.
+   qualifies for the same offer. Ordinary tenant setup must use Shopify's
+   approved sign-in/install flow, with server-side membership, unique shop
+   binding, encrypted immutable revisions and audited replacement/revocation.
+   Keep credential entry and the existing preflight command operator-only;
+   customers must not copy API tokens to connect a sales channel.
 2. Add the exact SDK origins to that merchant's Shop channel allow list and
    configure its branding. Keep Shopify Payments test mode and SDK debug mode
    for payment testing. Do not attach Wren's origin to Evergrove's Wallet merely

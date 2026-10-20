@@ -3,9 +3,9 @@
         @php
             $stripeReady = $account?->isReady() ?? false;
             $stripeSteps = [
-                ['title' => 'Connect your payment account', 'detail' => 'A payment account for your business', 'done' => (bool) $account],
-                ['title' => 'Confirm your payout bank', 'detail' => 'Sign in to your bank securely in Stripe', 'done' => (bool) $account?->payouts_enabled],
-                ['title' => 'Finish verification', 'detail' => 'Payments and payouts enabled', 'done' => $stripeReady],
+                ['title' => 'Sign in or create an account', 'detail' => 'Use the Stripe account for your business', 'done' => (bool) $account],
+                ['title' => 'Choose where you get paid', 'detail' => 'Confirm or add your bank in Stripe', 'done' => (bool) $account?->payouts_enabled],
+                ['title' => 'Verify your business', 'detail' => 'Complete the details Stripe asks for', 'done' => $stripeReady],
             ];
         @endphp
         <style>
@@ -26,7 +26,7 @@
                         <span class="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs font-semibold text-zinc-700">{{ $stripeReady ? 'Account verified' : ($account ? 'Setup in progress' : 'Not connected') }}</span>
                     </div>
                     <h2 id="card-setup-title" class="mt-4 text-2xl font-semibold tracking-tight text-zinc-950 sm:text-3xl">{{ $stripeReady ? 'Your payment account is connected.' : 'Let’s get your business ready to get paid.' }}</h2>
-                    <p class="mt-3 max-w-2xl text-sm leading-6 text-zinc-600">Accept cards, Apple Pay and Google Pay on eligible devices through Stripe. Connect your existing Stripe account or create one for {{ $tenant->name }}. Reuse your verified payout bank, or sign in to your bank during secure Stripe setup.</p>
+                    <p class="mt-3 max-w-2xl text-sm leading-6 text-zinc-600">Let customers pay by card, Apple Pay or Google Pay on eligible devices. Sign in to Stripe to connect the account you already use, or create one for {{ $tenant->name }}. Stripe will guide you through any bank or business details it still needs.</p>
                     <ol class="mt-7 grid gap-4 sm:grid-cols-3" aria-label="Stripe setup progress">
                         @foreach($stripeSteps as $step)
                             <li class="flex items-start gap-3">
@@ -41,11 +41,11 @@
                     <div><h3 class="text-lg font-semibold text-zinc-950">Cards & digital wallets</h3><p class="mt-2 text-sm leading-6 text-zinc-600">{{ $stripeReady ? 'Review your business information or check your latest verification status.' : ($account?->details_submitted ? 'Your details have been submitted. Continue in Stripe to review any outstanding requirements, then check verification here.' : 'Start with your business details. Stripe securely collects identity information and your payout bank account during setup.') }}</p></div>
                     @if($stripeCanStart)
                         @if(!$account && $stripeOAuthAvailable)
-                        <form method="post" action="{{ route('tenant-payments.stripe.connect', ['tenant' => $tenant->slug]) }}">@csrf<button class="fb-btn fb-btn-primary">Connect existing Stripe account</button><p class="mt-2 text-xs text-zinc-500">Sign in to reuse your account and payout bank.</p></form>
+                        <form method="post" action="{{ route('tenant-payments.stripe.connect', ['tenant' => $tenant->slug]) }}">@csrf<button class="fb-btn fb-btn-primary">Sign in to Stripe</button><p class="mt-2 text-xs text-zinc-500">Already have Stripe? Choose your business account and approve the connection.</p></form>
                         @endif
                         @if($stripeEmbedded)
                             <div data-stripe-setup data-key="{{ config('services.stripe.publishable_key') }}" data-session-url="{{ route('tenant-payments.stripe.session', ['tenant' => $tenant->slug]) }}">
-                                <button type="button" class="fb-btn fb-btn-primary" data-start>{{ $account ? 'Continue setup' : ($stripeOAuthAvailable ? 'Create payment account' : 'Accept payments') }}</button>
+                                <button type="button" class="fb-btn {{ !$account && $stripeOAuthAvailable ? 'fb-btn-secondary' : 'fb-btn-primary' }}" data-start>{{ $account ? 'Continue setup' : ($stripeOAuthAvailable ? 'Create a Stripe account' : 'Accept payments') }}</button>
                                 <p class="mt-3 text-sm text-rose-800" role="alert" data-error hidden></p>
                                 <div class="mt-4" data-component></div>
                                 <p class="mt-3 text-sm text-zinc-600" data-complete hidden>Setup closed. Use Check verification below to see your current status.</p>
@@ -53,8 +53,12 @@
                         @else
                             <form method="post" action="{{ route('tenant-payments.stripe.start', ['tenant' => $tenant->slug]) }}" class="space-y-4" x-data="{ submitting: false }" x-on:submit="submitting = true" x-on:pageshow.window="submitting = false">
                                 @csrf
-                                <label class="block max-w-md text-sm font-medium text-zinc-800">Account owner email<input class="mt-2 block min-h-12 w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-base" type="email" name="email" autocomplete="email" value="{{ old('email', auth()->user()->email) }}" required></label>
-                                <button class="fb-btn fb-btn-primary min-h-12 w-full justify-center px-6 sm:w-auto disabled:opacity-60" x-bind:disabled="submitting"><span x-show="!submitting">{{ $account ? 'Continue setup' : ($stripeOAuthAvailable ? 'Create payment account' : 'Accept payments') }}</span><span x-show="submitting" x-cloak>Opening secure setup…</span></button>
+                                @if($account)
+                                    <input type="hidden" name="email" value="{{ auth()->user()->email }}">
+                                @else
+                                    <label class="block max-w-md text-sm font-medium text-zinc-800">Email for your new Stripe account<input class="mt-2 block min-h-12 w-full rounded-lg border border-zinc-300 bg-white px-4 py-3 text-base" type="email" name="email" autocomplete="email" value="{{ old('email', auth()->user()->email) }}" required></label>
+                                @endif
+                                <button class="fb-btn {{ !$account && $stripeOAuthAvailable ? 'fb-btn-secondary' : 'fb-btn-primary' }} min-h-12 w-full justify-center px-6 sm:w-auto disabled:opacity-60" x-bind:disabled="submitting"><span x-show="!submitting">{{ $account ? 'Continue setup' : ($stripeOAuthAvailable ? 'Create a Stripe account' : 'Accept payments') }}</span><span x-show="submitting" x-cloak>Opening secure setup…</span></button>
                                 <p class="text-xs leading-5 text-zinc-500">Continue securely with Stripe. You can return here and resume setup.</p>
                             </form>
                         @endif
@@ -76,7 +80,7 @@
                     <p class="border-t border-zinc-100 pt-4 text-sm leading-6 text-zinc-500">{{ $stripeCollectionReady ? 'Account setup is complete. Each checkout also checks its launch requirements.' : 'Customer checkout stays closed until payment and launch verification are complete.' }}</p>
                 </div>
                 <aside class="space-y-6 border-t border-zinc-100 bg-zinc-50/70 p-6 sm:p-8 lg:border-l lg:border-t-0" aria-label="Payment setup help">
-                    <div><h3 class="text-sm font-semibold text-zinc-950">Your next step</h3><p class="mt-2 text-sm leading-6 text-zinc-600">{{ !$stripeCanStart ? 'Everbranch needs to finish platform setup. Your business can continue when that is ready.' : ($stripeReady ? 'Your Stripe account is verified. Finish any remaining launch checks before accepting customer payments.' : ($account ? 'Continue the same Stripe account to complete outstanding details. Then return and check verification.' : 'Confirm the account owner’s email and open secure setup. Have your legal business details ready.')) }}</p></div>
+                    <div><h3 class="text-sm font-semibold text-zinc-950">Your next step</h3><p class="mt-2 text-sm leading-6 text-zinc-600">{{ !$stripeCanStart ? 'Everbranch needs to finish payment setup. Contact support to check when your business can connect.' : ($stripeReady ? 'Your Stripe account is verified. Finish any remaining launch checks before accepting customer payments.' : ($account ? 'Choose Continue setup to pick up where you left off in Stripe. Then return and check verification.' : ($stripeOAuthAvailable ? 'Already use Stripe? Sign in to connect it. New to Stripe? Create an account with your business email.' : 'Use your business email to open secure Stripe setup. Have your legal business details ready.'))) }}</p></div>
                     <div><h3 class="text-sm font-semibold text-zinc-950">Waiting for your bank?</h3><p class="mt-2 text-sm leading-6 text-zinc-600">You can begin business setup while your bank account is being approved. If Stripe asks for payout details, return to finish that step when your bank is ready.</p></div>
                     <div class="border-t border-zinc-200 pt-5"><h3 class="text-sm font-semibold text-zinc-950">Secure from the start</h3><p class="mt-2 text-sm leading-6 text-zinc-600">Identity and bank details go directly to Stripe. Customer payments belong to your business. Your Everbranch subscription is managed separately.</p></div>
                 </aside>

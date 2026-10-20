@@ -22,6 +22,25 @@ provider acceptance follow-up in `self-service-payments.md`. Connection
 verification retains its payment_processing purpose and grants no bank-feed
 access.
 
+The owner then signed into john@evergrovesoftware.com in a separate private
+Safari window. Business Dashboard identified Evergrove Software. Its initially
+empty Live REST app list now contains the new Everbranch Platform app. Complete
+credentials, copied through the provider's controls into an owner-only ignored
+local file, obtain genuine live OAuth HTTP 200. The token's listed scopes do not
+include partner access; ordinary app authentication is not platform approval.
+Do not reuse the regular Safari session belonging to Modern Forestry/Sarah.
+The platform's own merchant ID was read from its Business information screen;
+a read-only merchant-integrations lookup returned HTTP 403 NOT_AUTHORIZED.
+No seller referral or payment was created by that check.
+
+The app's live webhook registration was created and read back at
+`https://app.theeverbranch.com/api/soccer/paypal` for all eleven supported capture,
+refund, revocation and dispute events listed below. This verifies registration
+only. No genuine signed payment event, Wren merchant connection, capture or refund
+was produced, and production credentials/activation flags remain unchanged.
+The original partner application still needs authenticated approval and assigned
+live partner configuration before tenant onboarding can be made available.
+
 Configuration belongs in the server secret environment:
 
 - Existing `TENANT_PAYMENT_SETUP_ENABLED` and exact tenant allowlist plus canonical

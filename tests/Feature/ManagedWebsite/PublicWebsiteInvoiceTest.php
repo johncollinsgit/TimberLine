@@ -229,7 +229,7 @@ test('admin quote invoice coupon and payment setup forms render without provider
     $this->account->delete();
     app('livewire')->flushState();
     $setup = $this->get('http://localhost/payments?tenant='.$this->tenant->slug)->assertOk()
-        ->assertSeeText('Connect existing Stripe account')->assertSeeText('Create payment account')->assertSeeText('Connect PayPal')
+        ->assertSeeText('Sign in to Stripe')->assertSeeText('Create a Stripe account')->assertSeeText('Connect PayPal')
         ->assertDontSee('sk_test_public_invoice_fixture')->assertDontSee('private-paypal-fixture');
     exportPublicInvoiceQa('admin-payment-setup-new', $setup);
     Http::assertNothingSent();

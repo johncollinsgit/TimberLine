@@ -237,6 +237,13 @@ new sign-ins. Original-token mobile return, real institution, consent,
 reconnection and mapping acceptance remain required before widening this pilot.
 An API key or Link token alone is not permission to import accounts.
 
+Protected PR 431 deployed release `6c6d417478302c684ea39fffb99572f6fa16177c`.
+The successful deployment and exact `/ready` release were verified separately
+from cached runtime configuration. Runtime uses the registered return URI and
+pilot IDs [3]; linkReady is true for Evergrove business space 3 and false for
+household space 1 and Modern Forestry business space 2. No bank item, consent,
+mapping, import or customer payment was created by activation.
+
 Evergrove's dedicated Wallet merchant still passes API identity inspection. A
 fresh fictional unpaid Wallet session was created without a buyer or submit
 call. The Admin API's exact-source receipt reconciliation query also returned
