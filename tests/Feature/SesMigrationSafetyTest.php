@@ -160,7 +160,7 @@ class SesMigrationSafetyTest extends TestCase
         $this->assertSame('unknown', $provider->sendEmail($message, $config)['status']);
         $replacement = MarketingEmailDelivery::create(['tenant_id' => $delivery->tenant_id, 'provider' => 'ses_tenant', 'email' => $delivery->email, 'status' => 'sending']);
         $copy = [...$message, 'custom_args' => ['marketing_email_delivery_id' => $replacement->id]];
-        $this->assertSame('ses_delivery_not_ready', $provider->sendEmail($copy, $config)['error_code']);
+        $this->assertSame('ses_reconciliation_required', $provider->sendEmail($copy, $config)['error_code']);
         $event = $this->event($delivery, 'Send');
         $this->assertSame(1, app(SesDeliveryEvents::class)->handle($event, 'send-1')['matched']);
         $this->assertTrue($provider->sendEmail($message, $config)['success']);

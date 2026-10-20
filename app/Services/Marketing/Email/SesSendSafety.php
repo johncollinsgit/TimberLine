@@ -3,9 +3,9 @@
 namespace App\Services\Marketing\Email;
 
 use App\Models\MarketingEmailDelivery;
+use Illuminate\Cache\RateLimiter;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\RateLimiter;
 use RuntimeException;
 
 class SesSendSafety
@@ -45,6 +45,16 @@ class SesSendSafety
             throw new RuntimeException('SES cannot send inside a caller transaction.');
         }
 
+        if ($prior = $this->priorResult($tenantId, $email, $deliveryId)) {
+            return $prior;
+        }
+        // Admission is outside the delivery transaction: a database-backed cache
+        // must not read counters from an older MySQL repeatable-read snapshot.
+        // A failed/duplicate claim may consume capacity, never the reverse.
+        if (! $this->admit($tenantId)) {
+            throw new RuntimeException('SES attempt cap reached.');
+        }
+
         return DB::transaction(function () use ($deliveryId, $tenantId, $email, $payload): ?array {
             \App\Models\Tenant::query()->whereKey($tenantId)->lockForUpdate()->firstOrFail();
             $delivery = MarketingEmailDelivery::query()->where('tenant_id', $tenantId)->lockForUpdate()->findOrFail($deliveryId);
@@ -68,9 +78,6 @@ class SesSendSafety
                 ->where('provider', 'ses_tenant')->where('id', '!=', $deliveryId)
                 ->whereIn('metadata->ses_attempt->state', ['submitting', 'unknown'])->exists()) {
                 throw new RuntimeException('A prior SES attempt for this recipient needs reconciliation.');
-            }
-            if (! $this->admit($tenantId)) {
-                throw new RuntimeException('SES attempt cap reached.');
             }
             $delivery->forceFill(['metadata' => [...(array) $delivery->metadata, 'ses_attempt' => [
                 'state' => 'submitting', 'claimed_at' => now()->toIso8601String(),
@@ -109,7 +116,10 @@ class SesSendSafety
             throw new RuntimeException('SES requires a shared persistent cache for attempt caps.');
         }
 
-        return Cache::lock('ses:admission', 10)->block(2, function () use ($tenantId): bool {
+        $cache = Cache::store();
+        $limiter = new RateLimiter($cache);
+
+        return $cache->lock('ses:admission', 10)->block(2, function () use ($tenantId, $limiter): bool {
             $day = now('UTC')->format('Y-m-d');
             $cost = (int) config('ses_migration.approved_attempt_cost_micros');
             $spend = (int) config('ses_migration.daily_spend_cap_micros');
@@ -119,12 +129,12 @@ class SesSendSafety
                 'ses:second' => [(int) config('ses_migration.max_per_second'), 1],
             ];
             foreach ($limits as $key => [$max, $ttl]) {
-                if ($max < 1 || RateLimiter::tooManyAttempts($key, $max)) {
+                if ($max < 1 || $limiter->tooManyAttempts($key, $max)) {
                     return false;
                 }
             }
             foreach ($limits as $key => [$max, $ttl]) {
-                RateLimiter::hit($key, $ttl);
+                $limiter->hit($key, $ttl);
             }
 
             return true;

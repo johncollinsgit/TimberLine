@@ -14,9 +14,15 @@ The isolated `codex/ses-migration-20261020` checkout starts at that live commit.
 Other worktrees, dirty files, Teams, Marketplace, visualization, Android and Twilio
 are outside this release. The general release queue remains stopped.
 
-The Workspace/DNS task `01a15aa1-d513-73c7-a569-d0163fa37013` owns human inboxes,
-Google Workspace, Cloudflare MX and email authentication edits. Coordinate exact
-SES records with that owner before any DNS write. Workspace remains the human
+Workspace/DNS task `01a15aa1-d513-73c7-a569-d0163fa37013` completed and released
+DNS edit ownership. Preserve its verified root MX (priority 1 `smtp.google.com`),
+root SPF (`v=spf1 include:_spf.google.com ~all`), Google 2048-bit
+`google._domainkey` and verification TXT, and DMARC (`v=DMARC1; p=none;`).
+Preserve SendGrid `s1._domainkey` → `s1.domainkey.u61143478.wl229.sendgrid.net`,
+`s2._domainkey` → `s2.domainkey.u61143478.wl229.sendgrid.net`, and `em6596` →
+`u61143478.wl229.sendgrid.net`. `info@theeverbranch.com` is a verified alias of
+`john@evergrovesoftware.com`; Gmail send-as is ready. No mailbox test was sent.
+Exact SES DNS additions still require scoped approval. Workspace remains the human
 inbox. Do not change apex MX, cancel SendGrid or remove its authentication.
 
 ## Inventory and blast radius
@@ -136,6 +142,12 @@ Account-specific plan and all add-ons remain unverified. Do not silently enroll 
 change buyer-facing pricing based on these public rates.
 
 ## Rollback and release
+
+Run `tests/Integration/SesSendConcurrencyTest.php` against disposable MySQL to
+prove same-message holds, replacement-message holds and account caps across
+independent processes and tenants. Admission uses the same explicit cache store
+for locks and counters and runs outside the delivery transaction to avoid stale
+MySQL repeatable-read snapshots. The protected MySQL job includes this test.
 
 Run focused SES, failure/consent, tenant provider/readiness and broader marketing
 regressions, PHP lint and the normal protected GitHub test/build + Migration Safety
