@@ -63,7 +63,12 @@ class AiVoiceAudit extends Command
                 $credit = \App\Models\TenantMessagingCreditAccount::forAllTenants()->where('tenant_id', $tenant->id)->first();
                 $checks['prepaid_credit'] = ($credit?->availableMicros() ?? 0) > 0;
             }
+            $receipt = \App\Models\TenantAiUsageEvent::where('tenant_id', $tenant->id)->where('feature', 'ai_branch_chat')->where('status', 'settled')->latest('id')->first();
             $rows[] = ['tenant_id' => $tenant->id, 'tenant' => $tenant->slug, 'provider' => $provider,
+                'account' => ['enabled' => (bool) $account?->enabled, 'budget_cents' => $account?->budget_cents ?? 0],
+                'usage' => app(\App\Services\AiBranch\AiBranchChat::class)->usage($tenant),
+                'latest_settled_receipt' => $receipt ? [...$receipt->only(['id', 'model', 'provider_request_id', 'provider_cost_micros', 'buyer_charge_micros']),
+                    'input_tokens' => data_get($receipt->metadata, 'input_tokens'), 'output_tokens' => data_get($receipt->metadata, 'output_tokens')] : null,
                 'branch_module' => app(TenantModuleAccessResolver::class)->canAccess($tenant->id, 'ai_branch'),
                 'eligible_members' => $users->count(), 'cap_approvers' => $capApprovers, 'checks' => $checks,
                 'setup_ready' => $checks['branch_access'] && $storage && $capApprovers > 0,

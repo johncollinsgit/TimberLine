@@ -1,0 +1,95 @@
+name: Audit AI Voice Rollout
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Read-only tenant audit or exact approved $20 access price preparation
+        required: true
+        default: audit
+        type: choice
+        options:
+          - audit
+          - prepare-access-price
+      confirm_apply:
+        description: Apply only the approved $20/month price mapping (no customer or subscription)
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-voice-rollout-maintenance
+  cancel-in-progress: false
+
+jobs:
+  maintain:
+    name: Audit exact deployed AI release
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Validate exact deployed release
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          EXPECTED_RELEASE: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          for var in DEPLOY_HOST DEPLOY_USER DEPLOY_PORT DEPLOY_PATH DEPLOY_SSH_KEY; do
+            if [ -z "${!var}" ]; then echo "::error::Missing required secret: $var"; exit 1; fi
+          done
+          ready="$(curl --fail --silent --show-error --max-time 20 https://app.theeverbranch.com/ready)"
+          printf '%s' "$ready" | grep --fixed-strings --quiet "\"release\":\"$EXPECTED_RELEASE\""
+
+      - name: Configure SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Run the fixed approved operation
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          OPERATION: ${{ inputs.operation }}
+          APPLY: ${{ inputs.confirm_apply }}
+        run: |
+          set -euo pipefail
+          remote=(ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST")
+          case "$OPERATION" in
+            audit)
+              "${remote[@]}" "set -euo pipefail; cd '$DEPLOY_PATH'; php artisan ai-branch:audit-voice --json" > "$RUNNER_TEMP/ai-voice-audit.json"
+              cat "$RUNNER_TEMP/ai-voice-audit.json"
+              ;;
+            prepare-access-price)
+              "${remote[@]}" "set -euo pipefail; cd '$DEPLOY_PATH'; php artisan ai-branch:prepare-access-price"
+              if [ "$APPLY" = "true" ]; then
+                "${remote[@]}" "set -euo pipefail; cd '$DEPLOY_PATH'; php artisan ai-branch:prepare-access-price --apply --authorization='owner-approved-ai-20-monthly-20261020-run-$GITHUB_RUN_ID'"
+              fi
+              ;;
+            *) echo 'Unsupported operation'; exit 1 ;;
+          esac
+
+      - name: Retain read-only tenant audit
+        if: inputs.operation == 'audit'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-voice-audit-${{ github.run_id }}
+          path: ${{ runner.temp }}/ai-voice-audit.json
+          if-no-files-found: error
+          retention-days: 7

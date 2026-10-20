@@ -148,3 +148,53 @@ PHP;
         rmdir($dir);
     }
 })->with(['quota', 'approval', 'briefing_quota', 'briefing_replay', 'wallet']);
+
+it('retains strict real pilot settings and replay safety after a MySQL JSON round trip', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql' || ! preg_match('/(^|_)(ci|test|testing)(_|$)/', DB::connection()->getDatabaseName())) {
+        $this->markTestSkipped('Requires a complete disposable MySQL baseline.');
+    }
+    \Illuminate\Support\Facades\Http::preventStrayRequests();
+    config(['ai_branch.api_key' => 'fictional-mysql-key', 'ai_branch.model' => 'gpt-6-luna',
+        'ai_branch.input_micros_per_million' => 250000, 'ai_branch.output_micros_per_million' => 750000,
+        'ai_branch.rates_valid_until' => now()->addDay()->toIso8601String()]);
+    $tenant = Tenant::create(['name' => 'Fictional JSON grant fixture', 'slug' => \App\Services\AiBranch\AiFictionalPilot::SLUG]);
+    $user = User::factory()->tenantAdmin()->create(['is_active' => true, 'email_verified_at' => now()]);
+    $tenant->users()->attach($user->id, ['role' => 'owner', 'membership_active' => true]);
+    TenantAccessProfile::create(['tenant_id' => $tenant->id, 'plan_key' => 'base', 'operating_mode' => 'direct', 'source' => \App\Services\AiBranch\AiFictionalPilot::SOURCE]);
+    \App\Models\TenantModuleEntitlement::create(['tenant_id' => $tenant->id, 'module_key' => 'ai_branch', 'availability_status' => 'available',
+        'enabled_status' => 'enabled', 'billing_status' => 'trial', 'entitlement_source' => \App\Services\AiBranch\AiFictionalPilot::SOURCE, 'ends_at' => now()->addDay()]);
+    AiBranchAccount::create(['tenant_id' => $tenant->id, 'enabled' => true, 'budget_cents' => 500]);
+    $provider = app(\App\Services\AiBranch\AiBranchProvider::class);
+    \App\Models\LandlordOperatorAction::create(['tenant_id' => $tenant->id, 'action_type' => 'ai_voice.pilot.grant', 'status' => 'success',
+        'result' => ['owner_user_id' => $user->id, 'provider' => 'openai', 'synthetic_only' => true, 'expires_at' => now()->addDay()->toIso8601String(),
+            'provider_budget_cents' => 500, 'provider_settings' => $provider->pilotSettings()]]);
+    $resolver = request()->getUserResolver();
+    request()->setUserResolver(fn () => $user);
+    try {
+        app(\App\Services\AiBranch\AiFictionalPilot::class)->during($tenant, $user, function () use ($tenant, $user, $provider) {
+            expect($provider->settings()['model'])->toBe('gpt-6-luna')->and($provider->settings()['pilot_budget_cents'])->toBe(500);
+            \Illuminate\Support\Facades\Http::fake(['api.openai.com/*' => \Illuminate\Support\Facades\Http::response(['id' => 'resp_mysql_pilot_fixture', 'status' => 'completed',
+                'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => 'Fictional grant verified.']]]],
+                'usage' => ['input_tokens' => 100, 'output_tokens' => 30]])]);
+            $chat = app(AiBranchChat::class);
+            $conversation = $chat->start($tenant, $user);
+            $uuid = (string) \Illuminate\Support\Str::uuid();
+            $chat->ask($tenant, $user, $conversation->id, 'Fictional question', $uuid);
+            $chat->ask($tenant, $user, $conversation->id, 'Fictional question', $uuid);
+            $event = TenantAiUsageEvent::where('tenant_id', $tenant->id)->sole();
+            expect($event->status)->toBe('settled')->and($event->provider_cost_micros)->toBe(25)->and($event->buyer_charge_micros)->toBe(0);
+            \Illuminate\Support\Facades\Http::assertSentCount(1);
+            config(['ai_branch.models' => ['gpt-6-luna' => [...config('ai_branch.models')['gpt-6-luna'], 'output_rate' => 500001]]]);
+            expect(fn () => $provider->settings())->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+        });
+    } finally {
+        request()->setUserResolver($resolver);
+        foreach ([TenantAiUsageEvent::class, AiBranchConversation::class, AiBranchAccount::class, \App\Models\LandlordOperatorAction::class,
+            \App\Models\TenantModuleEntitlement::class, TenantAccessProfile::class] as $model) {
+            $model::where('tenant_id', $tenant->id)->delete();
+        }
+        $tenant->users()->detach();
+        $user->delete();
+        $tenant->delete();
+    }
+});

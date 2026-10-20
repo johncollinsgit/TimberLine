@@ -17,7 +17,9 @@ class AiBranchProvider
             $grant = app(AiFictionalPilot::class)->grant(\App\Models\Tenant::findOrFail($scope['tenant_id']), request()->user());
             if (data_get($grant->result, 'provider') === 'openai') {
                 $settings = $this->pilotSettings();
-                abort_unless($settings === data_get($grant->result, 'provider_settings'), 503, 'The approved pilot provider configuration changed. Operator review is required.');
+                $approved = data_get($grant->result, 'provider_settings');
+                // MySQL JSON canonicalizes object key order; compare exact values and types.
+                abort_unless(is_array($approved) && \Illuminate\Support\Arr::sortRecursive($settings) === \Illuminate\Support\Arr::sortRecursive($approved), 503, 'The approved pilot provider configuration changed. Operator review is required.');
 
                 return [...$settings, 'fictional_scope' => $scope, 'fictional_provider' => 'openai', 'pilot_budget_cents' => $grant->result['provider_budget_cents']];
             }

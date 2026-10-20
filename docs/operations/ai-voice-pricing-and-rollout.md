@@ -127,6 +127,10 @@ admin-only or missing-owner setup blockers without promoting memberships. No mod
 request is made by this audit. Record deployment SHA and actual provider evidence
 separately from fixture/browser results. Use protected GitHub/Forge release gates;
 no schema changes, direct production file replacement or broad cache clearing.
+The protected `Audit AI Voice Rollout` workflow can run the same read-only audit
+and retain its JSON, or preview/apply only the fixed approved $20 price. Both
+operations require `main` and the exact active `/ready` release; the price path
+cannot create a customer, subscription or charge.
 
 Focused acceptance: AI feature/billing tests; voice lifecycle unit tests; local
 browser automatic-turn, Stop, denial, hiding, memory reload/forget and revocation
