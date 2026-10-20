@@ -24,7 +24,10 @@ class SendGridWebhookController extends Controller
         }
 
         $payload = $request->json()->all();
-        $events = is_array($payload) ? $payload : [];
+        $events = is_array($payload) ? array_map(
+            fn ($event) => is_array($event) ? [...$event, 'provider' => 'sendgrid'] : $event,
+            $payload,
+        ) : [];
 
         $summary = $trackingService->handleSendGridEvents($events);
 

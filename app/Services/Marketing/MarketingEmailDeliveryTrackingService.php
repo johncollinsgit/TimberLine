@@ -40,6 +40,9 @@ class MarketingEmailDeliveryTrackingService
 
             $summary['processed']++;
             $delivery = $this->resolveDelivery($event);
+            if ($delivery && $delivery->provider === 'ses_tenant' && ($event['provider'] ?? '') !== 'ses_tenant') {
+                $delivery = null;
+            }
             if ($delivery && filled($event['email'] ?? null) && strtolower(trim((string) $event['email'])) !== strtolower(trim((string) $delivery->email))) {
                 $delivery = null;
             }

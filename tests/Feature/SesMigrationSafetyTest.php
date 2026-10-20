@@ -250,6 +250,18 @@ class SesMigrationSafetyTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_sendgrid_callbacks_cannot_impersonate_ses_or_update_its_deliveries(): void
+    {
+        [$delivery, $message, $config] = $this->fixture();
+        config(['marketing.messaging.responses.verify_sendgrid_event_signature' => false]);
+        $payload = [['provider' => 'ses_tenant', 'event' => 'spamreport', 'email' => $delivery->email,
+            'sg_event_id' => 'foreign-provider', 'sg_message_id' => 'foreign-receipt',
+            'custom_args' => ['tenant_id' => $delivery->tenant_id, 'marketing_email_delivery_id' => $delivery->id]]];
+        $this->postJson('/webhooks/sendgrid/events', $payload)->assertOk()->assertJsonPath('matched', 0);
+        $this->assertSame('sending', $delivery->fresh()->status);
+        $this->assertDatabaseMissing('messaging_contact_channel_states', ['tenant_id' => $delivery->tenant_id, 'email' => $delivery->email]);
+    }
+
     private function event(MarketingEmailDelivery $delivery, string $type): array
     {
         return ['eventType' => $type, 'mail' => ['source' => 'sender@example.test', 'messageId' => 'ses.opaque-id', 'timestamp' => now()->toIso8601String(), 'destination' => [$delivery->email], 'tags' => [
