@@ -14,10 +14,15 @@ class SoccerDeliveryService
         foreach ($ids as $id) {
             $candidate = $this->store->row('deliveries', $tenant, $id);
             $channel = $this->store->decrypt($candidate->payload)['channel'] ?? 'sms';
+            if ($channel === 'groupme' && ! config('soccer.groupme_notifications_enabled')) {
+                $this->store->query('deliveries', $tenant)->where('id', $id)->whereIn('status', ['pending', 'failed'])->update(['status' => 'suppressed', 'error' => 'groupme_notifications_disabled', 'updated_at' => now()]);
+
+                continue;
+            }
             if ($channel === 'sms' && (! config('soccer.sms_enabled') || ! $this->withinSendingHours() || config('soccer.notification_mode') !== 'sms')) {
                 continue;
             }
-            if ($channel !== 'sms' && config('soccer.notification_mode') !== 'email') {
+            if (! in_array($channel, ['sms', 'admin_email'], true) && config('soccer.notification_mode') !== 'email') {
                 continue;
             }
             $claimed = $this->store->query('deliveries', $tenant)->where('id', $id)->whereIn('status', ['pending', 'failed'])->update(['status' => 'sending', 'updated_at' => now()]);
@@ -74,7 +79,20 @@ class SoccerDeliveryService
         $conversation = null;
         $service = app(\App\Services\Marketing\MessagingConversationService::class);
         try {
-            if ($channel === 'email') {
+            if ($channel === 'admin_email') {
+                $recipients = array_map(fn ($email) => strtolower(trim($email)), config('soccer.admin_notification_emails', []));
+                if (! in_array($payload['email'], $recipients, true)) {
+                    $this->store->query('deliveries', $tenant)->where('id', $delivery->id)->update(['status' => 'suppressed', 'error' => 'admin_recipient_removed', 'updated_at' => now()]);
+
+                    return;
+                }
+                $summary = app(SoccerRegistrationSummaryService::class)->forEvent($tenant, $event);
+                $sent = \Illuminate\Support\Facades\Mail::to($payload['email'])->send(new \App\Mail\SoccerRegistrationSummaryMail($summary));
+                if (! $sent) {
+                    throw new \RuntimeException('Admin email was not accepted by the configured mailer.');
+                }
+                $providerId = $sent->getMessageId();
+            } elseif ($channel === 'email') {
                 $family = $this->store->row('families', $tenant, $event->family_id);
                 if (! $family->verified_at || strtolower(trim((string) $family->email)) !== $payload['email']) {
                     $this->store->query('deliveries', $tenant)->where('id', $delivery->id)->update(['status' => 'suppressed', 'error' => 'family_email_changed', 'updated_at' => now()]);
@@ -98,8 +116,8 @@ class SoccerDeliveryService
             }
         } catch (\Throwable $e) {
             // SMTP failures may occur after acceptance. Do not automatically resend unknown outcomes.
-            $status = $channel === 'email' ? 'uncertain' : 'failed';
-            $error = $channel === 'email' ? 'email_delivery_uncertain' : 'groupme_unavailable';
+            $status = in_array($channel, ['email', 'admin_email'], true) ? 'uncertain' : 'failed';
+            $error = in_array($channel, ['email', 'admin_email'], true) ? 'email_delivery_uncertain' : 'groupme_unavailable';
         }
         $this->store->query('deliveries', $tenant)->where('id', $delivery->id)->update(['status' => $status, 'provider_message_id' => $providerId, 'attempts' => $delivery->attempts + 1, 'retry_at' => now()->addMinutes(5 * ($delivery->attempts + 1)), 'error' => $error, 'updated_at' => now()]);
         if ($conversation) {

@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 
 beforeEach(function () {
-    config()->set(['soccer.notification_mode' => 'email', 'soccer.sms_enabled' => false, 'mail.default' => 'array', 'soccer.bridge_secret' => str_repeat('b', 32), 'soccer.stripe_webhook_secret' => str_repeat('w', 32)]);
+    config()->set(['soccer.notification_mode' => 'email', 'soccer.sms_enabled' => false, 'soccer.groupme_notifications_enabled' => true, 'mail.default' => 'array', 'soccer.bridge_secret' => str_repeat('b', 32), 'soccer.stripe_webhook_secret' => str_repeat('w', 32)]);
     Mail::purge('array');
     Http::preventStrayRequests();
     $this->tenant = Tenant::create(['name' => 'Wren', 'slug' => 'wren-family-soccer']);
@@ -89,6 +89,21 @@ it('checks current admin role and provider group membership before automatic ale
     $this->delivery->run($this->tenant->id);
     Http::assertSentCount(1);
     expect($this->store->query('deliveries', $this->tenant->id)->sole()->status)->toBe('failed');
+});
+
+it('keeps parent emails and suppresses queued GroupMe alerts when notifications are disabled', function () {
+    $this->events->record($this->tenant->id, null, $this->family, 'family_waitlisted', [], waitlist: true);
+    $queued = $this->store->query('deliveries', $this->tenant->id)->get()->first(fn ($row) => ($this->store->decrypt($row->payload)['channel'] ?? null) === 'groupme');
+    $this->store->query('deliveries', $this->tenant->id)->where('id', $queued->id)->update(['status' => 'failed']);
+    config()->set('soccer.groupme_notifications_enabled', false);
+    $this->events->record($this->tenant->id, null, $this->family, 'waitlist_reactivated', [], waitlist: true);
+    $this->delivery->run($this->tenant->id);
+
+    expect($this->store->row('deliveries', $this->tenant->id, $queued->id)->status)->toBe('suppressed');
+    expect($this->store->row('deliveries', $this->tenant->id, $queued->id)->error)->toBe('groupme_notifications_disabled');
+    expect($this->store->query('deliveries', $this->tenant->id)->count())->toBe(3);
+    expect(Mail::mailer()->getSymfonyTransport()->messages())->toHaveCount(2);
+    Http::assertNothingSent();
 });
 
 it('suppresses stale invoice emails and changed family addresses before SMTP', function () {
