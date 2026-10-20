@@ -45,6 +45,7 @@ jobs:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           TARGET_TENANT: ${{ inputs.tenant_slug }}
+          EXPECTED_RELEASE: ${{ github.sha }}
         run: |
           set -euo pipefail
           for var in DEPLOY_HOST DEPLOY_USER DEPLOY_PORT DEPLOY_PATH DEPLOY_SSH_KEY; do test -n "${!var}"; done
@@ -54,7 +55,12 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -p "$DEPLOY_PORT" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
           ssh -i ~/.ssh/deploy_key -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
-            "set -euo pipefail; cd '$DEPLOY_PATH'; php artisan team:launch '$TARGET_TENANT'; php artisan team:launch '$TARGET_TENANT' --apply --force-production --activate-config --authorization='approved-teams-launch-$GITHUB_RUN_ID'; php artisan team:launch '$TARGET_TENANT' --verify; php artisan queue:restart"
+            "set -euo pipefail; export RELEASE_ID='$EXPECTED_RELEASE'; cd '$DEPLOY_PATH'; php artisan team:launch '$TARGET_TENANT'; php artisan team:launch '$TARGET_TENANT' --apply --force-production --activate-config --authorization='approved-teams-launch-$GITHUB_RUN_ID'; php artisan team:launch '$TARGET_TENANT' --verify; php artisan queue:restart"
 
       - name: Verify application readiness after activation
-        run: curl --fail --silent --show-error --max-time 20 https://app.theeverbranch.com/ready
+        env:
+          EXPECTED_RELEASE: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ready="$(curl --fail --silent --show-error --max-time 20 https://app.theeverbranch.com/ready)"
+          printf '%s' "$ready" | jq -e --arg expected "$EXPECTED_RELEASE" '.status == "ok" and .release == $expected'

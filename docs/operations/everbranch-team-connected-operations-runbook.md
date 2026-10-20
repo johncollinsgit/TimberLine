@@ -2,6 +2,11 @@
 
 ## Rollout controls
 
+Production activation must use the protected `Launch approved Teams workspace`
+workflow. It exports the exact verified release ID while rebuilding configuration;
+the command refuses activation without that context. The post-activation health
+check must retain that same ID. Never pin a release ID in the shared environment.
+
 `TEAM_OPERATIONS_ENABLED=false` requires premium Teams plus current tenant entitlement/allowlist. Additional independent controls default off: `TEAM_OPERATIONS_SEND_ENABLED`, `TEAM_OPERATIONS_ASANA_CREATE_ENABLED`, `TEAM_OPERATIONS_SHEET_IDS_ENABLED`, `TEAM_OPERATIONS_AI_ENABLED`, `TEAM_WEATHER_ENABLED`, `TEAM_WEATHER_COMMERCIAL`, and the Teams ClamAV scanner setting. Disabling operations hides the new surfaces and stops scheduled synchronization/reminders without deleting records, credentials or evidence.
 
 Configure Google OAuth and verified scopes using `TEAM_GOOGLE_CLIENT_ID`, `TEAM_GOOGLE_CLIENT_SECRET`, and HTTPS callbacks. Sending and Sheets identifier writes require separate consent. Gmail watch configuration uses `TEAM_GOOGLE_PUBSUB_TOPIC`, `TEAM_GOOGLE_PUSH_SERVICE_ACCOUNT`, and `TEAM_GOOGLE_PUSH_AUDIENCE`; unsigned notifications are rejected. Drive notifications request a new source read, never apply cell changes from notification payloads. Scheduled reconciliation remains necessary. Renew watches and run the existing scheduler/queue workers. `TEAM_OPERATIONS_SYNC_PAGES` bounds pages per run (default 5, maximum 20).

@@ -62,3 +62,21 @@ test('launch refuses ordinary members and unverified administrators with a speci
     expect(TeamArea::count())->toBe(0)->and(TenantModuleEntitlement::count())->toBe(1);
     Http::assertNothingSent();
 });
+
+test('production activation refuses missing release context before changing tenant access', function () {
+    [$tenant] = teamWorkspace();
+    $previousEnvironment = app()->environment();
+    $previousRelease = getenv('RELEASE_ID');
+    app()->instance('env', 'production');
+    config(['app.release_id' => str_repeat('a', 40)]);
+    putenv('RELEASE_ID');
+    try {
+        $this->artisan('team:launch', ['tenant' => $tenant->slug, '--apply' => true, '--authorization' => 'approved-test-rollout', '--force-production' => true, '--activate-config' => true])
+            ->expectsOutputToContain('requires the deployed RELEASE_ID')->assertFailed();
+        expect(TeamArea::count())->toBe(0)->and(TenantModuleEntitlement::count())->toBe(1);
+        Http::assertNothingSent();
+    } finally {
+        app()->instance('env', $previousEnvironment);
+        putenv($previousRelease === false ? 'RELEASE_ID' : 'RELEASE_ID='.$previousRelease);
+    }
+});
