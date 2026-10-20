@@ -2987,6 +2987,9 @@
   unchanged. No live charge or registration opening is performed.
 ## 2026-10-20 - Teams Events and Wholesale workflows
 
+- Contained-settings candidate: keep profile, connections and reminder entry
+  points in a Teams dialog on both surfaces, with retained drafts and keyboard
+  focus restoration. Scope/evidence: `docs/operations/everbranch-team-contained-settings.md`.
 - Shared Forestry Teams presentation, dense task views, responsive navigation and
   source-aware work areas across the standalone and embedded application.
 - Events follows planning, preparation, execution and review; Wholesale groups

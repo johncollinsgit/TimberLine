@@ -6,6 +6,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="robots" content="noindex,nofollow">
     <meta name="theme-color" content="#244d3b">
+    @if(config('team_work.premium_enabled')) @livewireStyles @endif
     <title>{{ $teamAppName }}</title>
     <link rel="icon" href="{{ asset('brand/everbranch-mark.svg') }}" type="image/svg+xml">
     <style>
@@ -35,13 +36,18 @@
             @if(app(\App\Services\AiBranch\AiBranchAccess::class)->visible($tenant, auth()->user()))
             <a href="{{ route('ai-branch.index', ['tenant' => $tenant->slug]) }}" data-team-surface-link>AI Voice Branch</a>
             @endif
+            @if(config('team_work.premium_enabled'))
+            <button type="button" class="teams-settings-entry" data-team-settings aria-haspopup="dialog">Settings</button>
+            @else
             <a href="{{ route('profile.edit', ['tenant' => $tenant->slug]) }}">Account settings</a>
-            <div class="teams-user">@if(config('team_work.premium_enabled'))<span class="teams-avatar" aria-hidden="true">{{ mb_substr(auth()->user()->name, 0, 1) }}</span>@endif<span>{{ auth()->user()->name }}<br>{{ $tenant->name }}</span></div>
+            @endif
+            <div class="teams-user">@if(config('team_work.premium_enabled'))<span class="teams-avatar" data-team-user-avatar aria-hidden="true">{{ mb_substr(auth()->user()->name, 0, 1) }}</span>@endif<span><span data-team-user-name>{{ auth()->user()->name }}</span><br>{{ $tenant->name }}</span></div>
         </div>
     </aside>
     <main class="teams-content" id="teams-main" tabindex="-1">
         @include('team.workspace')
     </main>
 </div>
+@if(config('team_work.premium_enabled')) @livewireScripts @endif
 </body>
 </html>
