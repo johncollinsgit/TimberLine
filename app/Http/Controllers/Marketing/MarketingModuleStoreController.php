@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Marketing;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Marketing\TenantModuleStoreActionRequest;
 use App\Models\Tenant;
+use App\Services\Billing\TenantBillingNextStepResolver;
 use App\Services\Operations\OperatorAlertService;
+use App\Services\Tenancy\TenantFinancialAccess;
 use App\Services\Tenancy\TenantModuleCatalogService;
 use App\Support\Marketing\MarketingSectionRegistry;
 use Illuminate\Contracts\View\View;
@@ -16,17 +18,32 @@ use Throwable;
 
 class MarketingModuleStoreController extends Controller
 {
-    public function index(Request $request, TenantModuleCatalogService $catalogService): View
+    public function index(Request $request, TenantModuleCatalogService $catalogService, TenantFinancialAccess $financialAccess, TenantBillingNextStepResolver $billingNextStepResolver): View
     {
         $tenantId = $this->requireTenantId($request);
         Gate::authorize('view-tenant-module-store', $tenantId);
         $sections = MarketingSectionRegistry::sections();
+        $storePayload = $catalogService->tenantStorePayload($tenantId, 'marketing');
+        $billingStep = $billingNextStepResolver->resolveForTenantId($tenantId, [
+            'preferred_plan_key' => data_get($storePayload, 'current_plan.key'),
+            'addons_interest' => [],
+        ]);
+
+        $canRequestSoftware = $request->user()->isAdmin() || $request->user()->isManager() || $request->user()->isMarketingManager();
 
         return view('marketing.modules', [
             'currentSectionKey' => 'modules',
             'currentSection' => $sections['modules'],
             'sections' => $this->buildNavigation($sections),
-            'moduleStorePayload' => $catalogService->tenantStorePayload($tenantId, 'marketing'),
+            'moduleStorePayload' => $storePayload,
+            'hostedBillingReady' => (bool) data_get($billingStep, 'readiness.hosted_billing_enabled', false)
+                && (bool) data_get($billingStep, 'readiness.stripe_secret_format_valid', false),
+            'canManageBranches' => Gate::allows('mutate-tenant-module-store', $tenantId),
+            'canRequestSoftware' => $canRequestSoftware,
+            'canViewAgreement' => $financialAccess->allows($request->user(), $tenantId) && $canRequestSoftware,
+            'premiumProducts' => array_map(static fn (array $product): array => [
+                'key' => (string) $product['key'], 'name' => (string) $product['name'],
+            ], (array) config('module_catalog.offers.standard.premium_products', [])),
         ]);
     }
 

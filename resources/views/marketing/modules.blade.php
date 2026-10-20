@@ -16,11 +16,17 @@
             ])
             ->sortBy('label')
             ->values();
-        $moduleCards = $modules->map(function (array $module) use ($focusModule): array {
+        $canManage = (bool) ($canManageBranches ?? false);
+        $canPurchase = $canManage && (bool) ($canViewAgreement ?? false) && (bool) ($hostedBillingReady ?? false);
+        $moduleCards = $modules->map(function (array $module) use ($focusModule, $canManage, $canPurchase): array {
             $state = is_array($module['module_state'] ?? null) ? (array) $module['module_state'] : [];
             $purchase = is_array($module['purchase'] ?? null) ? (array) $module['purchase'] : [];
             $buyerSetup = is_array($module['buyer_setup'] ?? null) ? (array) $module['buyer_setup'] : [];
             $moduleKey = (string) ($module['module_key'] ?? '');
+            $owned = (bool) ($state['has_access'] ?? false);
+            $ready = $owned && ($state['ui_state'] ?? '') === 'active';
+            $needsSetup = $owned && ! $ready;
+            $pending = ! $owned && (bool) ($module['request_pending'] ?? false);
             $cta = (string) ($state['cta'] ?? 'none');
             $action = null;
 
@@ -34,7 +40,13 @@
                 $action = ['kind' => 'link', 'label' => (string) ($state['cta_label'] ?? 'Open Branch'), 'url' => (string) $state['cta_href']];
             }
 
-            $price = trim((string) ($purchase['price_display'] ?? ''));
+            if ($pending || (! $canManage && ($action['kind'] ?? null) !== 'link')) {
+                $action = null;
+            }
+            if (($action['kind'] ?? null) === 'purchase' && ! $canPurchase) {
+                $action = ['kind' => 'assisted', 'label' => 'Review setup with us', 'url' => route('custom-module-requests.create')];
+            }
+            $price = $owned ? 'Part of your current access' : trim((string) ($purchase['price_display'] ?? ''));
             if ($price === '') {
                 $price = match ((string) ($module['state_bucket'] ?? '')) {
                     'active' => 'Included with your plan',
@@ -51,7 +63,12 @@
                 'category' => (string) ($module['category'] ?? 'other'),
                 'category_label' => (string) ($module['category_label'] ?? 'Other'),
                 'cover_image' => (string) ($module['cover_image'] ?? '/images/branch-covers/customer-operations.png'),
-                'state_label' => (string) ($state['display_state_label'] ?? 'Available'),
+                'state_label' => $pending ? 'Awaiting review' : (string) ($state['state_label'] ?? 'Available'),
+                'owned' => $owned,
+                'ready' => $ready,
+                'needs_setup' => $needsSetup,
+                'pending' => $pending,
+                'setup_description' => (string) ($state['setup_description'] ?? ''),
                 'price' => $price,
                 'action' => $action,
                 'outcome' => (string) ($buyerSetup['outcome'] ?? $module['description'] ?? ''),
@@ -62,6 +79,12 @@
                 'focused' => $focusModule !== '' && $focusModule === $moduleKey,
             ];
         })->values();
+        $allowedTabs = ['plan', 'branches', 'add', 'setup'];
+        $initialTab = (string) request('tab', $focusModule !== '' ? 'add' : 'plan');
+        $initialTab = in_array($initialTab, $allowedTabs, true) ? $initialTab : 'plan';
+        $readyCount = $moduleCards->filter(fn (array $card): bool => $card['ready'])->count();
+        $setupCount = $moduleCards->where('needs_setup', true)->count();
+        $pendingCount = $moduleCards->where('pending', true)->count();
     @endphp
 
     <style>
@@ -120,25 +143,68 @@
         .branch-directory__dialog-actions > div { display: flex; gap: .65rem; }
         @media (max-width: 1100px) { .branch-directory__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
         @media (max-width: 760px) { .branch-directory__layout { display: block; } .branch-directory__filters { margin-bottom: 1.5rem; } .branch-directory__categories { display: flex; overflow-x: auto; } .branch-directory__category { border-top: 1px solid var(--fb-border, #e7eceb); border-right: 1px solid var(--fb-border, #e7eceb); flex: 0 0 auto; padding: 0 .75rem; white-space: nowrap; } .branch-directory__grid { grid-template-columns: 1fr; } .branch-directory__image { height: 160px; } }
+        .branch-directory__tabs { display: flex; gap: 1.5rem; overflow-x: auto; border-bottom: 1px solid var(--fb-border, #e7eceb); margin: 1.5rem 0; }
+        .branch-directory__tab { flex: 0 0 auto; min-height: 48px; padding: .75rem .15rem; border: 0; border-bottom: 3px solid transparent; background: transparent; color: #526562; font: inherit; font-size: .9rem; font-weight: 650; }
+        .branch-directory__tab[aria-selected="true"] { color: #173e3b; border-bottom-color: #173e3b; }
+        .branch-directory__tab:focus-visible { outline: 3px solid #173e3b; outline-offset: -3px; }
+        .branch-directory__overview { display: grid; gap: 1.25rem; max-width: 980px; }
+        .branch-directory__overview h2 { font-size: 1.45rem; margin: 0; }
+        .branch-directory__overview p { color: #526562; line-height: 1.65; max-width: 64ch; }
+        .branch-directory__summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin: 0; }
+        .branch-directory__summary div, .branch-directory__premium { border: 1px solid var(--fb-border, #e7eceb); border-radius: 10px; background: #fff; padding: 1.2rem; }
+        .branch-directory__summary dt { color: #526562; font-size: .85rem; }
+        .branch-directory__summary dd { margin: .4rem 0 0; font-size: 1.65rem; font-weight: 650; }
+        .branch-directory__premium-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin: 1rem 0 2rem; }
+        .branch-directory__premium h3 { font-size: 1rem; margin: 0; }
+        .branch-directory__premium p { margin: .5rem 0 1rem; font-size: .86rem; line-height: 1.5; color: #526562; }
+        dialog.branch-directory__backdrop { border: 0; background: transparent; margin: 0; max-width: none; max-height: none; width: 100vw; height: 100dvh; }
+        dialog.branch-directory__backdrop:not([open]) { display: none; }
+        dialog.branch-directory__backdrop::backdrop { background: rgba(13, 27, 30, .5); }
+        .branch-directory__dialog { max-height: calc(100dvh - 2rem); overflow-y: auto; }
+        @media (max-width: 600px) { .branch-directory__summary, .branch-directory__premium-grid { grid-template-columns: 1fr; } .branch-directory__tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 .75rem; overflow: visible; } .branch-directory__tab { text-align: left; } }
     </style>
 
     <div class="branch-directory" x-data="{
-        query: '', category: 'all', selected: null, guidanceOpen: false, wizardStep: 1, visibleCount: {{ $moduleCards->count() }},
-        matches(el) { const text = (el.dataset.search || ''); return (this.category === 'all' || el.dataset.category === this.category) && text.includes(this.query.trim().toLowerCase()); },
+        tab: @js($initialTab), tabs: ['plan', 'branches', 'add', 'setup'],
+        query: '', category: 'all', selected: null, opener: null, guidanceOpener: null, wizardStep: 1, visibleCount: {{ $moduleCards->count() }},
+        matches(el) {
+            const group = this.tab === 'branches' ? el.dataset.owned === '1' : this.tab === 'setup' ? (el.dataset.setup === '1' || el.dataset.pending === '1') : el.dataset.owned !== '1';
+            return group && (this.category === 'all' || el.dataset.category === this.category) && (el.dataset.search || '').includes(this.query.trim().toLowerCase());
+        },
         updateCount() { this.$nextTick(() => { this.visibleCount = [...this.$root.querySelectorAll('[data-branch-card]')].filter((el) => !el.hidden && getComputedStyle(el).display !== 'none').length; }); },
         setCategory(category) { this.category = category; this.updateCount(); },
-        openBranch(branch) { this.selected = branch; this.wizardStep = 1; this.$nextTick(() => this.$refs.dialog?.focus()); },
-        closeBranch() { this.selected = null; },
-    }" x-init="updateCount()">
+        setTab(tab, focus = false) {
+            if (!this.tabs.includes(tab)) return;
+            this.tab = tab; this.query = ''; this.category = 'all'; this.updateCount();
+            const url = new URL(window.location.href); url.searchParams.set('tab', tab); window.history.replaceState({}, '', url);
+            if (focus) this.$nextTick(() => document.getElementById('branch-tab-' + tab)?.focus());
+        },
+        moveTab(amount) { this.setTab(this.tabs[(this.tabs.indexOf(this.tab) + amount + this.tabs.length) % this.tabs.length], true); },
+        trapDialog(event) {
+            const items = [...event.currentTarget.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])')].filter(el => el.getClientRects().length > 0);
+            if (!items.length) { event.preventDefault(); return; }
+            event.preventDefault();
+            const index = items.indexOf(document.activeElement);
+            const next = index < 0 ? (event.shiftKey ? items.length - 1 : 0) : (index + (event.shiftKey ? -1 : 1) + items.length) % items.length;
+            items[next].focus();
+        },
+        openBranch(branch, trigger) { this.opener = trigger || document.activeElement; this.selected = branch; this.wizardStep = 1; this.$nextTick(() => this.$refs.dialog.showModal()); },
+        closeBranch() { this.$refs.dialog.close(); this.selected = null; this.$nextTick(() => this.opener?.focus()); },
+        nextStep(amount) { this.wizardStep += amount; this.$nextTick(() => this.$refs.dialog.querySelector('h2')?.focus()); },
+        openGuidance(trigger) { this.guidanceOpener = trigger || document.activeElement; this.$refs.guidanceDialog.showModal(); },
+        closeGuidance() { this.$refs.guidanceDialog.close(); this.$nextTick(() => this.guidanceOpener?.focus()); },
+    }" x-init="$watch('query', () => updateCount()); updateCount()">
         <header class="branch-directory__header">
             <div class="branch-directory__eyebrow">Branches</div>
-            <h1>Choose what helps your business grow next.</h1>
-            <p>Add what your business needs next. Browse simple, purpose-built tools for your business. Every Branch explains what it does and its price before you make a change. Viewing a Branch never changes billing or access; checkout is not active here.</p>
-            <div class="branch-directory__header-links">
-                <a href="{{ route('custom-module-requests.create') }}">Request something custom</a>
-                <a href="{{ route('custom-module-requests.create') }}">Request customization</a>
-            </div>
-            @if($blueprintRecommendations !== [])
+            <h1>Your plan. Your branches. Your next step.</h1>
+            <p>See what is part of your workspace, finish setup, and review the next tools for your business. Follow a short guide before confirming a change.</p>
+            @unless($hostedBillingReady ?? false)
+                <p class="text-sm">Guided setup is available; checkout is not active here.</p>
+            @endunless
+            @if($canRequestSoftware ?? false)
+                <div class="branch-directory__header-links"><a href="{{ route('custom-module-requests.create') }}">Request something custom</a></div>
+            @endif
+            @if($blueprintRows !== [])
                 <div class="branch-directory__guidance">
                     <strong>Setup guidance</strong>
                     <span>Recommended for your setup</span>
@@ -148,13 +214,52 @@
                     @elseif((bool) ($blueprintContext['is_sandbox'] ?? false))
                         <span>· Sandbox tenant context</span>
                     @endif
-                    <button type="button" class="branch-directory__button branch-directory__button--quiet" style="min-height: 32px; padding: 0 .55rem" @click="guidanceOpen = true">View guidance</button>
+                    <button type="button" class="branch-directory__button branch-directory__button--quiet" style="min-height: 32px; padding: 0 .55rem" @click="openGuidance($event.currentTarget)">View guidance</button>
                 </div>
             @endif
             <span class="sr-only">Access: Requires add-on access or a request.</span>
         </header>
 
+        <nav class="branch-directory__tabs" role="tablist" aria-label="Plan and branch settings" @keydown.right.prevent="moveTab(1)" @keydown.left.prevent="moveTab(-1)" @keydown.home.prevent="setTab('plan', true)" @keydown.end.prevent="setTab('setup', true)">
+            @foreach(['plan' => 'Your plan', 'branches' => 'Your branches', 'add' => 'Add software', 'setup' => 'Setup'] as $key => $label)
+                <button id="branch-tab-{{ $key }}" class="branch-directory__tab" role="tab" type="button" :aria-selected="tab === '{{ $key }}'" :tabindex="tab === '{{ $key }}' ? 0 : -1" aria-controls="{{ $key === 'plan' ? 'branch-panel-plan' : 'branch-panel-catalog' }}" @click="setTab('{{ $key }}')">{{ $label }}</button>
+            @endforeach
+        </nav>
+
+        <section id="branch-panel-plan" class="branch-directory__overview" role="tabpanel" aria-labelledby="branch-tab-plan" x-show="tab === 'plan'">
+            <div><h2>{{ $currentPlan['label'] ?? 'Your current package' }}</h2><p>Your current workspace package. Your signed agreement defines pricing, usage and any additional services.</p></div>
+            <dl class="branch-directory__summary">
+                <div><dt>Ready branches</dt><dd>{{ $readyCount }}</dd></div>
+                <div><dt>Need setup</dt><dd>{{ $setupCount }}</dd></div>
+                <div><dt>Awaiting review</dt><dd>{{ $pendingCount }}</dd></div>
+            </dl>
+            <div class="branch-directory__header-links">
+                @if($canViewAgreement ?? false)
+                    <a href="{{ route('agreements.index') }}">Review your agreement and receipts</a>
+                @else
+                    <p>Your workspace owner manages agreement and billing details.</p>
+                @endif
+                <button class="branch-directory__button branch-directory__button--quiet" type="button" @click="setTab('branches')">See your branches</button>
+                <button class="branch-directory__button" type="button" @click="setTab('setup')">Continue setup</button>
+            </div>
+        </section>
+
+        <section id="branch-panel-catalog" role="tabpanel" :aria-labelledby="'branch-tab-' + tab" x-show="tab !== 'plan'" x-cloak>
+            @unless($canManage)
+                <p class="branch-directory__copy">You can review this workspace. Ask your workspace administrator to make changes.</p>
+            @endunless
+            <div x-show="tab === 'add'">
+                <h2 class="text-xl font-semibold">Separate premium software</h2>
+                <p>Teams, Trajectory, and Markets &amp; Makers have separate pricing and a review before activation.</p>
+                <div class="branch-directory__premium-grid">
+                    @foreach((array) ($premiumProducts ?? []) as $product)
+                        <article class="branch-directory__premium"><h3>{{ $product['name'] }}</h3><p>Separate pricing. We will review your needs and terms with you.</p>@if($canRequestSoftware ?? false)<a class="branch-directory__button branch-directory__button--quiet" href="{{ route('custom-module-requests.create') }}">Discuss this software</a>@else<p>Ask your workspace administrator to discuss this software.</p>@endif</article>
+                    @endforeach
+                </div>
+            </div>
+            <div x-show="tab === 'setup'"><h2 class="text-xl font-semibold">One step at a time.</h2><p>Finish the branches below, or check the requests awaiting review. Open a setup guide to see what you need and what happens next.</p></div>
         <div class="branch-directory__layout">
+
             <aside class="branch-directory__filters" aria-label="Filter Branches">
                 <label class="branch-directory__filter-title" for="branch-search">Find a Branch</label>
                 <input id="branch-search" class="branch-directory__search" type="search" x-model.debounce.100ms="query" @input="updateCount()" placeholder="Search Branches" autocomplete="off">
@@ -169,17 +274,17 @@
 
             <main aria-live="polite" aria-atomic="true">
                 <div class="branch-directory__result-head">
-                    <div><h2>Browse Branches</h2><p x-text="visibleCount + (visibleCount === 1 ? ' Branch' : ' Branches') + ' shown'"></p></div>
+                    <div><h2 x-text="tab === 'branches' ? 'Your branches' : tab === 'setup' ? 'Setup and requests' : 'Browse Branches'">Browse Branches</h2><p x-text="visibleCount + (visibleCount === 1 ? ' Branch' : ' Branches') + ' shown'"></p></div>
                     <p>{{ $currentPlan['label'] ?? 'Your current plan' }}</p>
                 </div>
                 <div class="branch-directory__grid">
                     @foreach($moduleCards as $card)
-                        <article class="branch-directory__card" data-branch-card data-focused="{{ $card['focused'] ? 'true' : 'false' }}" data-category="{{ $card['category'] }}" data-search="{{ strtolower(implode(' ', [$card['name'], $card['description'], $card['category_label'], $card['outcome']])) }}" x-show="matches($el)" x-cloak>
+                        <article class="branch-directory__card" data-branch-card data-owned="{{ $card['owned'] ? '1' : '0' }}" data-setup="{{ $card['needs_setup'] ? '1' : '0' }}" data-pending="{{ $card['pending'] ? '1' : '0' }}" data-focused="{{ $card['focused'] ? 'true' : 'false' }}" data-category="{{ $card['category'] }}" data-search="{{ strtolower(implode(' ', [$card['name'], $card['description'], $card['category_label'], $card['outcome']])) }}" x-show="matches($el)" x-cloak>
                             @php($imageAttributes = "style=\"background-image: url('{$card['cover_image']}')\"")
                             @if($card['action'] && $card['action']['kind'] === 'link')
                                 <a class="branch-directory__image" {!! $imageAttributes !!} href="{{ $card['action']['url'] }}" aria-label="Open {{ $card['name'] }} Branch">
                             @elseif($card['action'])
-                                <button class="branch-directory__image" {!! $imageAttributes !!} type="button" @click='openBranch(@json($card))' aria-label="Open {{ $card['name'] }} Branch">
+                                <button class="branch-directory__image" {!! $imageAttributes !!} type="button" @click='openBranch(@json($card), $event.currentTarget)' aria-label="Open {{ $card['name'] }} Branch">
                             @else
                                 <div class="branch-directory__image" {!! $imageAttributes !!} role="img" aria-label="Preview of the {{ $card['name'] }} Branch page">
                             @endif
@@ -199,22 +304,26 @@
                                     @if($card['action']['kind'] === 'link')
                                         <a class="branch-directory__button" href="{{ $card['action']['url'] }}">{{ $card['action']['label'] }}</a>
                                     @else
-                                        <button class="branch-directory__button" type="button" @click='openBranch(@json($card))'>{{ $card['action']['label'] }}</button>
+                                        <button class="branch-directory__button" type="button" @click='openBranch(@json($card), $event.currentTarget)'>{{ $card['action']['label'] }}</button>
                                     @endif
+                                @else
+                                    <button class="branch-directory__button branch-directory__button--quiet" type="button" @click='openBranch(@json($card), $event.currentTarget)'>View setup guide</button>
                                 @endif
                             </div>
                         </article>
                     @endforeach
                 </div>
                 <div class="branch-directory__empty" x-show="visibleCount === 0" x-cloak>
-                    No Branches match that search. Try a different word or choose another category.
+                    No branches match this view. Try another category or tab; your workspace may already be set up.
                 </div>
             </main>
         </div>
 
+        </section>
+
         @if($blueprintRows !== [])
-            <div class="branch-directory__backdrop" x-show="guidanceOpen" x-cloak @click.self="guidanceOpen = false" @keydown.escape.window="guidanceOpen = false" role="presentation">
-                <section class="branch-directory__dialog" tabindex="-1" role="dialog" aria-modal="true" aria-label="Setup guidance">
+            <dialog @keydown.tab="trapDialog($event)" class="branch-directory__backdrop" x-ref="guidanceDialog" @click.self="closeGuidance()" @cancel.prevent="closeGuidance()" aria-label="Setup guidance">
+                <section class="branch-directory__dialog" tabindex="-1" aria-label="Setup guidance">
                     <div class="branch-directory__dialog-body">
                         <div class="branch-directory__dialog-step">Your setup</div>
                         <h2>Recommended for your setup</h2>
@@ -228,21 +337,21 @@
                             @endforeach
                         </div>
                         <div class="branch-directory__dialog-actions">
-                            <button class="branch-directory__dialog-close" type="button" @click="guidanceOpen = false">Close</button>
+                            <button class="branch-directory__dialog-close" type="button" @click="closeGuidance()">Close</button>
                         </div>
                     </div>
                 </section>
-            </div>
+            </dialog>
         @endif
 
-        <div class="branch-directory__backdrop" x-show="selected" x-cloak @click.self="closeBranch()" @keydown.escape.window="closeBranch()" role="presentation">
-            <section class="branch-directory__dialog" x-ref="dialog" tabindex="-1" role="dialog" aria-modal="true" :aria-label="selected ? selected.name + ' setup' : 'Branch setup'">
+        <dialog @keydown.tab="trapDialog($event)" class="branch-directory__backdrop" x-ref="dialog" @click.self="closeBranch()" @cancel.prevent="closeBranch()" :aria-label="selected ? selected.name + ' setup' : 'Branch setup'">
+            <section class="branch-directory__dialog">
                 <img class="branch-directory__dialog-image" :src="selected?.cover_image" alt="">
                 <div class="branch-directory__dialog-body">
                     <template x-if="wizardStep === 1">
                         <div>
                             <div class="branch-directory__dialog-step">Step 1 of 3 · Your choice</div>
-                            <h2 x-text="selected?.name"></h2>
+                            <h2 tabindex="-1" x-text="selected?.name"></h2>
                             <p x-text="selected?.outcome"></p>
                             <p x-show="selected?.best_for"><strong>Best for:</strong> <span x-text="selected?.best_for"></span></p>
                         </div>
@@ -250,7 +359,7 @@
                     <template x-if="wizardStep === 2">
                         <div>
                             <div class="branch-directory__dialog-step">Step 2 of 3 · Prepare</div>
-                            <h2>What you’ll need</h2>
+                            <h2 tabindex="-1">What you’ll need</h2>
                             <ul class="branch-directory__dialog-list"><template x-for="item in (selected?.what_you_need || [])" :key="item"><li x-text="item"></li></template></ul>
                             <p x-show="!(selected?.what_you_need || []).length">We’ll guide you through the essentials after you add this Branch.</p>
                         </div>
@@ -258,24 +367,30 @@
                     <template x-if="wizardStep === 3">
                         <div>
                             <div class="branch-directory__dialog-step">Step 3 of 3 · Confirm</div>
-                            <h2>Here’s what happens next</h2>
+                            <h2 tabindex="-1">Here’s what happens next</h2>
                             <ol class="branch-directory__dialog-list"><template x-for="step in (selected?.setup_steps || []).slice(0, 4)" :key="step"><li x-text="step"></li></template></ol>
                             <p x-show="selected?.help_text" x-text="selected?.help_text"></p>
+                            <p><strong x-text="selected?.price"></strong></p>
+                            <p x-show="selected?.pending">Your request is awaiting review. Your workspace administrator can help with the next step.</p>
+                            <p x-show="!selected?.action && !selected?.pending" x-text="selected?.setup_description || 'Your workspace administrator can help complete this setup.'"></p>
                         </div>
                     </template>
                     <div class="branch-directory__dialog-actions">
                         <button class="branch-directory__dialog-close" type="button" @click="closeBranch()">Cancel</button>
                         <div>
-                            <button class="branch-directory__dialog-close" type="button" x-show="wizardStep > 1" @click="wizardStep--">Back</button>
-                            <button class="branch-directory__button" type="button" x-show="wizardStep < 3" @click="wizardStep++">Continue</button>
-                            <form x-show="wizardStep === 3" method="POST" :action="selected?.action?.url">
-                                @csrf
-                                <button class="branch-directory__button" type="submit" x-text="selected?.action?.kind === 'purchase' ? 'Continue to purchase' : selected?.action?.label"></button>
-                            </form>
+                            <button class="branch-directory__dialog-close" type="button" x-show="wizardStep > 1" @click="nextStep(-1)">Back</button>
+                            <button class="branch-directory__button" type="button" x-show="wizardStep < 3" @click="nextStep(1)">Continue</button>
+                            <template x-if="wizardStep === 3 && selected?.action && !['link', 'assisted'].includes(selected.action.kind)">
+                                <form method="POST" :action="selected.action.url">
+                                    @csrf
+                                    <button class="branch-directory__button" type="submit" x-text="selected.action.kind === 'purchase' ? 'Review price and terms' : selected.action.label"></button>
+                                </form>
+                            </template>
+                            <template x-if="wizardStep === 3 && ['link', 'assisted'].includes(selected?.action?.kind)"><a class="branch-directory__button" :href="selected.action.url" x-text="selected.action.label"></a></template>
                         </div>
                     </div>
                 </div>
             </section>
-        </div>
+        </dialog>
     </div>
 </x-layouts::app>

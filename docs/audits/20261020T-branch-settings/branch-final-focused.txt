@@ -1,0 +1,6 @@
+............[2026-10-20 07:57:41] testing.WARNING: tenant.module_store.transition_blocked {"action":"activate","tenant_id":1,"module_key":"square","reason":"validation_failed","source":"marketing_module_store","actor_id":1}
+...............[2026-10-20 07:57:41] testing.WARNING: stripe.webhook.secret_missing
+...................
+
+  Tests:    46 passed (681 assertions)
+  Duration: 3.91s

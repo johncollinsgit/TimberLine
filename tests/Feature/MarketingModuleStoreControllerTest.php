@@ -36,7 +36,7 @@ test('marketing modules page renders tenant-aware module catalog for authenticat
     $this->actingAs($user)
         ->get(route('marketing.modules'))
         ->assertOk()
-        ->assertSeeText('Choose what helps your business grow next.')
+        ->assertSeeText('Your plan. Your branches. Your next step.')
         ->assertSeeText('Find a Branch')
         ->assertSeeText('Categories')
         ->assertSeeText('SMS')
