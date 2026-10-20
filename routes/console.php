@@ -314,3 +314,6 @@ Schedule::command('website:dispatch-order-notifications')->everyMinute()->withou
 
 // Retention also applies while the paid AI runtime is disabled.
 Schedule::command('ai-branch:prune --apply')->dailyAt('03:40')->withoutOverlapping(20);
+
+// Read-only provider reconciliation continues for accepted events while checkout is off.
+Schedule::command('marketplace:reconcile --limit=25')->everyFiveMinutes()->withoutOverlapping(10)->runInBackground();

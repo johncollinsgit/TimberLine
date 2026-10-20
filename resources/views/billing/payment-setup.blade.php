@@ -1,5 +1,6 @@
 <x-layouts::app.sidebar title="Connections">
     <flux:main>
+        @if(config('marketplace.enabled') && ($marketStore=app(\App\Services\Marketplace\MarketplaceAccess::class)->store()) && (int)$marketStore->tenant_id===(int)$tenant->id && app(\App\Services\Marketplace\MarketplaceAccess::class)->operator(auth()->user()))<a href="/marketplace/operations" class="underline">Markets and Makers merchant store →</a>@endif
         @php
             $stripeReady = $account?->isReady() ?? false;
             $stripeSteps = [

@@ -58,6 +58,15 @@ class EnforceCanonicalRuntimeHost
         // an integration test; StartSession reads the cookie name from Store.
         app('session')->driver()->setName(config('session.cookie'));
 
+        if (app(\App\Services\Marketplace\MarketplaceAccess::class)->publicHost($host)) {
+            // A dedicated marketplace domain never inherits staff cookies or app routes.
+            config(['session.cookie' => 'markets-and-makers-session', 'session.domain' => null, 'session.same_site' => 'lax', 'session.partitioned' => false]);
+            app('session')->driver()->setName('markets-and-makers-session');
+            abort_unless($request->routeIs('marketplace.public.*'), 404);
+
+            return $next($request);
+        }
+
         $context = $request->attributes->get('host_tenant_context');
         if ($context instanceof HostTenantContext && $context->strategy === 'managed_website_custom_domain') {
             // A custom customer domain is a public Website host, never an

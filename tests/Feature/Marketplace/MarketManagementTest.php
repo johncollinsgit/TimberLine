@@ -1,0 +1,102 @@
+<?php
+
+use App\Models\Marketplace\Checkout;
+use App\Models\Marketplace\Identity;
+use App\Models\Marketplace\Listing;
+use App\Models\Marketplace\Maker;
+use App\Models\Marketplace\Market;
+use App\Models\Marketplace\Membership;
+use App\Models\Marketplace\Order;
+use App\Models\Marketplace\OrderLine;
+use App\Models\Marketplace\PickupLocation;
+use App\Models\Marketplace\RateAcceptance;
+use App\Models\Marketplace\Store;
+use App\Models\Marketplace\StoreLink;
+use App\Models\Tenant;
+use App\Models\User;
+use App\Services\Marketplace\MarketplaceCatalog;
+use App\Services\Marketplace\MarketplaceMarkets;
+use App\Services\Marketplace\MarketplaceRates;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Str;
+
+beforeEach(function (): void {
+    config(['marketplace.enabled' => true, 'marketplace.checkout_provider' => 'everbranch', 'marketplace.checkout_enabled' => false, 'marketplace.host' => 'marketsandmakers.test', 'app.url' => 'https://app.theeverbranch.test']);
+    Route::middleware('web')->group(base_path('routes/marketplace.php'));
+    $routes = new Illuminate\Routing\RouteCollection;
+    foreach (Route::getRoutes() as $route) {
+        if (str_starts_with((string) $route->getName(), 'marketplace.public.')) {
+            $routes->add($route);
+        }
+    }
+    foreach (Route::getRoutes() as $route) {
+        if (! str_starts_with((string) $route->getName(), 'marketplace.public.')) {
+            $routes->add($route);
+        }
+    }Route::setRoutes($routes);
+    $this->withoutVite();
+    Http::preventStrayRequests();
+});
+function marketAdminFixture(): array
+{
+    $tenant = Tenant::create(['name' => 'Markets and Makers', 'slug' => 'markets-and-makers']);
+    Store::create(['tenant_id' => $tenant->id, 'name' => $tenant->name, 'host' => 'marketsandmakers.test', 'verified_at' => now()]);
+    $owner = User::factory()->create(['is_active' => true, 'email_verified_at' => now()]);
+    $owner->tenants()->attach($tenant->id, ['role' => 'owner', 'membership_active' => true]);
+    $identity = Identity::create(['email' => 'maker@market.example.test', 'active' => true]);
+    $maker = Maker::create(['name' => 'Fieldwork test maker', 'slug' => 'fieldwork-test-maker', 'city' => 'Easley', 'status' => 'approved', 'story' => 'Local handmade goods', 'private_details' => ['phone' => '555-0100', 'legal_business_name' => 'Private Supplier LLC']]);
+    Membership::create(['maker_id' => $maker->id, 'identity_id' => $identity->id, 'role' => 'owner', 'active' => true]);
+    $rate = app(MarketplaceRates::class)->global();
+    RateAcceptance::create(['maker_id' => $maker->id, 'identity_id' => $identity->id, 'rate_id' => $rate->id]);
+    $listing = Listing::create(['maker_id' => $maker->id, 'slug' => 'test-market-mug', 'title' => 'Test market mug', 'category' => 'Ceramics', 'description' => 'A useful mug', 'images' => ['https://example.test/photo.jpg'], 'price_cents' => 5000, 'shipping' => true, 'status' => 'approved']);
+
+    return compact('tenant', 'owner', 'identity', 'maker', 'listing', 'rate');
+}
+function marketTestSale(array $f, bool $testMode = false): Order
+{
+    $checkout = Checkout::create(['uuid' => (string) Str::uuid(), 'session_hash' => hash('sha256', Str::random()), 'provider' => 'stripe', 'group_key' => 'shipping', 'status' => 'paid', 'snapshot' => ['lines' => [['listing_id' => $f['listing']->id, 'maker_id' => $f['maker']->id]]], 'expires_at' => now()->addHour()]);
+    $order = Order::create(['checkout_id' => $checkout->id, 'provider' => 'stripe', 'provider_order_gid' => 'cs_'.Str::random(20), 'number' => 'MM-REPORT', 'customer' => ['email' => 'buyer@market.example.test', 'shipping_address' => ['name' => 'Example buyer']], 'email_hash' => hash('sha256', 'buyer@market.example.test'), 'group_key' => 'shipping', 'merchandise_cents' => 10000, 'discount_cents' => 1000, 'shipping_cents' => 600, 'tax_cents' => 0, 'total_cents' => 9600, 'test_mode' => $testMode]);
+    OrderLine::create(['order_id' => $order->id, 'maker_id' => $f['maker']->id, 'listing_id' => $f['listing']->id, 'provider_line_gid' => 'li_'.Str::random(12), 'title' => $f['listing']->title, 'quantity' => 2, 'unit_price_cents' => 5000, 'maker_unit_cents' => 4250, 'rate_id' => $f['rate']->id, 'discount_cents' => 1000]);
+
+    return $order;
+}
+test('merchant management offers sales customers discounts maker drill downs markets pickups and connections', function (): void {
+    $f = marketAdminFixture();
+    marketTestSale($f);
+    marketTestSale($f, true);
+    $this->actingAs($f['owner']);
+    foreach (['overview', 'customers', 'discounts', 'markets', 'pickups', 'connections'] as $tab) {
+        $this->get('https://app.theeverbranch.test/marketplace/operations?tab='.$tab)->assertOk();
+    }
+    $this->get('https://app.theeverbranch.test/marketplace/operations?tab=customers')->assertSee('buyer@market.example.test')->assertSee('$96.00');
+    $this->get('https://app.theeverbranch.test/marketplace/operations/makers/'.$f['maker']->id)->assertOk()->assertSee('Private Supplier LLC')->assertSee('555-0100')->assertSee('$100.00')->assertSee('buyer@market.example.test');
+    $this->get('https://marketsandmakers.test/makers/'.$f['maker']->slug)->assertOk()->assertDontSee('Private Supplier LLC')->assertDontSee('555-0100');
+    $outsider = User::factory()->create(['is_active' => true, 'email_verified_at' => now()]);
+    $this->actingAs($outsider)->get('https://app.theeverbranch.test/marketplace/operations/makers/'.$f['maker']->id)->assertForbidden();
+});
+test('market participation controls maker pickup eligibility and publication exposes only approved makers', function (): void {
+    $f = marketAdminFixture();
+    $this->actingAs($f['owner'])->post('https://app.theeverbranch.test/marketplace/operations/markets', ['name' => 'Saturday Gathering', 'kind' => 'market', 'status' => 'published', 'description' => 'Local goods and makers', 'address' => 'Example market address', 'timezone' => 'America/New_York', 'starts_at' => now()->addWeek()->format('Y-m-d').'T09:00', 'ends_at' => now()->addWeek()->format('Y-m-d').'T13:00', 'offer_pickup' => '1', 'tax_address' => ['line1' => '100 Example Street', 'city' => 'Easley', 'state' => 'SC', 'postal_code' => '29640', 'country' => 'US'], 'pickup_instructions' => 'Find the collection tent'])->assertRedirect();
+    $market = Market::firstOrFail();
+    $pickup = PickupLocation::findOrFail($market->pickup_location_id);
+    expect(app(MarketplaceMarkets::class)->pickupAvailable($f['maker'], $pickup->id))->toBeFalse();
+    $this->withSession(['marketplace_identity' => $f['identity']->id])->post('https://marketsandmakers.test/maker/'.$f['maker']->id.'/markets', ['market_id' => $market->id, 'action' => 'apply'])->assertRedirect();
+    expect(fn () => app(MarketplaceCatalog::class)->save($f['maker'], ['title' => 'Pickup mug', 'shipping' => false, 'pickup_location_ids' => [$pickup->id]], $f['listing']))->toThrow(Symfony\Component\HttpKernel\Exception\HttpException::class);
+    $this->post('https://app.theeverbranch.test/marketplace/operations/markets/'.$market->id.'/makers', ['maker_id' => $f['maker']->id, 'status' => 'approved', 'booth' => 'A4'])->assertRedirect();
+    expect(app(MarketplaceMarkets::class)->pickupAvailable($f['maker'], $pickup->id))->toBeTrue();
+    $this->get('https://marketsandmakers.test/markets')->assertOk()->assertSee('Saturday Gathering')->assertSee($f['maker']->name);
+    $market->update(['pickup_cutoff_at' => now()->subMinute()]);
+    expect(app(MarketplaceMarkets::class)->pickupAvailable($f['maker'], $pickup->id))->toBeFalse();
+});
+test('makers can share storefronts and private business information without granting ecommerce or other maker access', function (): void {
+    $f = marketAdminFixture();
+    $this->withSession(['marketplace_identity' => $f['identity']->id])->post('https://marketsandmakers.test/maker/'.$f['maker']->id.'/store-links', ['platform' => 'wix', 'url' => 'https://example.test/my-store', 'label' => 'My existing store'])->assertRedirect();
+    expect(StoreLink::first()->status)->toBe('shared');
+    $other = Maker::create(['name' => 'Other maker', 'slug' => 'other-maker', 'city' => 'Greer', 'status' => 'approved', 'story' => 'Other maker test goods']);
+    $this->post('https://marketsandmakers.test/maker/'.$other->id.'/details', ['phone' => 'stolen'])->assertForbidden();
+    $this->post('https://marketsandmakers.test/maker/'.$f['maker']->id.'/details', ['contact_name' => 'Private Contact', 'phone' => '555-0102'])->assertRedirect();
+    expect($f['maker']->fresh()->private_details['contact_name'])->toBe('Private Contact')->and(DB::table('marketplace_makers')->where('id', $f['maker']->id)->value('private_details'))->not->toContain('Private Contact');
+    $this->actingAs($f['owner'])->get('https://app.theeverbranch.test/marketplace/operations?tab=connections')->assertOk()->assertSee('My existing store')->assertSee('No catalog sync');
+});

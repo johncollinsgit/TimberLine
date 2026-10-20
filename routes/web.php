@@ -2,6 +2,7 @@
 
 require __DIR__.'/highlevel.php';
 require __DIR__.'/marketing-desk.php';
+require __DIR__.'/marketplace.php';
 
 use App\Http\Controllers\AccountingCommandCenterController;
 use App\Http\Controllers\AdminMasterDataController;

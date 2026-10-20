@@ -724,6 +724,15 @@ $catalog = [
             'capabilities' => ['fleet_tracking.vehicle_location', 'fleet_tracking.on_duty_phone_location'],
             'mobile' => ['status' => 'ready', 'display_name' => 'Location Tracker', 'renderer' => 'field_service', 'entry_screen' => 'field-service.location', 'contract_version' => 1, 'min_app_version' => '2.3.7', 'roles' => ['owner', 'tenant_owner', 'admin', 'manager', 'member', 'employee'], 'navigation' => ['group' => 'work', 'icon' => 'map-pin', 'position' => 10], 'actions' => ['share_on_duty_location', 'view_team_map']],
         ],
+        'markets_and_makers' => [
+            'display_name' => 'Markets and Makers Merchant',
+            'description' => 'Internal merchant workspace for the Markets and Makers marketplace.',
+            'status' => 'live', 'channels' => ['direct', 'shopify'], 'classification' => 'internal',
+            'included_in_plans' => [], 'default_enabled' => false, 'default_setup_status' => 'configured',
+            'dependencies' => [], 'billing_mode' => 'included', 'activation_policy' => 'internal_only',
+            'visibility' => ['public_site' => false, 'app_store' => false, 'mobile_store' => false],
+            'cta_routing' => 'none', 'capabilities' => ['marketplace.merchant'],
+        ],
         'everbranch_billing' => [
             'display_name' => 'Everbranch Billing',
             'description' => 'Create branded customer invoices and take payment through each business\'s own Stripe account.',
