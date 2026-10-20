@@ -57,6 +57,9 @@ class MarketController extends Controller
         $maker = Maker::findOrFail($data['maker_id']);
         abort_if($data['status'] === 'approved' && $maker->status !== 'approved', 422, 'Approve the maker before their market participation.');
         DB::table('marketplace_market_makers')->updateOrInsert(['market_id' => $market->id, 'maker_id' => $maker->id], ['status' => $data['status'], 'booth' => $data['booth'] ?? null, 'notes' => $data['notes'] ?? null, 'approved_by' => $request->user()->id, 'created_at' => now(), 'updated_at' => now()]);
+        if ($data['status'] !== 'approved') {
+            app(\App\Services\Marketplace\MarketplaceMarkets::class)->reviewMakerDeparture($market, $maker);
+        }
         Audit::create(['actor_user_id' => $request->user()->id, 'action' => 'market.maker_updated', 'subject_id' => $market->id, 'details' => ['maker_id' => $maker->id, 'status' => $data['status']]]);
 
         return back()->with('status', 'Maker participation updated.');
@@ -74,6 +77,10 @@ class MarketController extends Controller
                 return;
             }DB::table('marketplace_market_makers')->updateOrInsert(['market_id' => $market->id, 'maker_id' => $maker->id], ['status' => $data['action'] === 'apply' ? 'applied' : 'withdrawn', 'updated_at' => now(), 'created_at' => $old->created_at ?? now()]);
         });
+
+        if ($data['action'] === 'withdraw') {
+            app(\App\Services\Marketplace\MarketplaceMarkets::class)->reviewMakerDeparture($market, $maker);
+        }
 
         return back()->with('status', 'Market participation request saved.');
     }
@@ -103,6 +110,6 @@ class MarketController extends Controller
         $data = $request->validate(['legal_business_name' => 'nullable|string|max:160', 'contact_name' => 'nullable|string|max:160', 'phone' => 'nullable|string|max:40', 'business_address' => 'nullable|string|max:2000', 'notes' => 'nullable|string|max:3000']);
         $maker->update(['private_details' => $data]);
 
-        return back()->with('status','Private business details saved for Markets and Makers.');
+        return back()->with('status', 'Private business details saved for Markets and Makers.');
     }
 }

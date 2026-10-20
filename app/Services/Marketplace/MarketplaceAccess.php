@@ -60,7 +60,7 @@ class MarketplaceAccess
     {
         abort_unless($user->is_active && $user->email_verified_at, 403);
 
-        return $user->tenants()->where('tenants.id', $tenantId)->wherePivot('membership_active', true)->wherePivotIn('role', ['owner', 'admin'])->firstOrFail();
+        return $user->tenants()->where('tenants.id', $tenantId)->wherePivot('membership_active', true)->wherePivotIn('role', ['owner', 'tenant_owner', 'admin'])->firstOrFail();
     }
 
     public function settings(): Setting

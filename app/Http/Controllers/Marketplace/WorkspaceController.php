@@ -20,7 +20,7 @@ class WorkspaceController extends Controller
     {
         $link = $this->link($token);
 
-        return view('marketplace.workspace-connect', ['token' => $token, 'maker' => Maker::query()->findOrFail($link->maker_id), 'tenants' => $request->user()->tenants()->wherePivot('membership_active', true)->wherePivotIn('role', ['owner', 'admin'])->get()]);
+        return view('marketplace.workspace-connect', ['token' => $token, 'maker' => Maker::query()->findOrFail($link->maker_id), 'tenants' => $request->user()->tenants()->wherePivot('membership_active', true)->wherePivotIn('role', ['owner', 'tenant_owner', 'admin'])->get()]);
     }
 
     public function connect(Request $request, string $token, MarketplaceAccess $access)

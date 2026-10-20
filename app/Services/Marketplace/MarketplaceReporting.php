@@ -15,10 +15,11 @@ class MarketplaceReporting
     public function overview(Request $request): array
     {
         $data = $request->validate(['from' => 'nullable|date_format:Y-m-d', 'to' => 'nullable|date_format:Y-m-d|after_or_equal:from', 'maker' => 'nullable|integer', 'customer' => 'nullable|email:rfc|max:254']);
-        $from = CarbonImmutable::parse($data['from'] ?? now()->startOfMonth()->toDateString())->startOfDay();
-        $to = CarbonImmutable::parse($data['to'] ?? now()->toDateString())->endOfDay();
+        $zone = config('marketplace.timezone', 'America/New_York');
+        $from = CarbonImmutable::parse($data['from'] ?? now($zone)->startOfMonth()->toDateString(), $zone)->startOfDay();
+        $to = CarbonImmutable::parse($data['to'] ?? now($zone)->toDateString(), $zone)->endOfDay();
         abort_if($from->diffInDays($to) > 366, 422, 'Choose a date range of one year or less.');
-        $query = Order::query()->where('test_mode', false)->whereBetween('created_at', [$from, $to]);
+        $query = Order::query()->where('test_mode', false)->whereBetween('created_at', [$from->utc(), $to->utc()]);
         if (! empty($data['maker'])) {
             $maker = Maker::findOrFail($data['maker']);
             $query->whereHas('lines', fn ($q) => $q->where('maker_id', $maker->id));

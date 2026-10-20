@@ -21,6 +21,8 @@ if (config('marketplace.host')) {
         Route::post('/cart/add', [StorefrontController::class, 'add'])->middleware('throttle:60,1')->name('cart.add');
         Route::post('/cart/remove', [StorefrontController::class, 'remove'])->name('cart.remove');
         Route::post('/checkout', [StorefrontController::class, 'checkout'])->middleware('throttle:10,1')->name('checkout');
+        Route::get('/checkout/{uuid}/paypal', [\App\Http\Controllers\Marketplace\PayPalController::class, 'show'])->name('paypal');
+        Route::post('/checkout/{uuid}/paypal', [\App\Http\Controllers\Marketplace\PayPalController::class, 'act'])->middleware('throttle:15,1')->name('paypal.act');
         Route::get('/checkout/{uuid}/shop-pay', [\App\Http\Controllers\Marketplace\WalletController::class, 'show'])->name('wallet');
         Route::post('/checkout/{uuid}/shop-pay', [\App\Http\Controllers\Marketplace\WalletController::class, 'event'])->middleware('throttle:60,1')->name('wallet.event');
         Route::post('/checkout/{uuid}/shop-pay/cancel', [\App\Http\Controllers\Marketplace\WalletController::class, 'cancel'])->name('wallet.cancel');
@@ -76,3 +78,5 @@ Route::middleware(['auth', MarketplaceAppHost::class.':operator'])->prefix('mark
 
 Route::post('/webhooks/marketplace/shopify/{connection}', [ShopifyWebhookController::class, 'receive'])->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])->middleware('throttle:240,1')->name('marketplace.webhook');
 Route::post('/webhooks/marketplace/stripe', [\App\Http\Controllers\Marketplace\StripeWebhookController::class, 'receive'])->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])->middleware('throttle:240,1')->name('marketplace.stripe.webhook');
+
+Route::post('/webhooks/marketplace/paypal', [\App\Http\Controllers\Marketplace\PayPalWebhookController::class, 'receive'])->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class])->middleware('throttle:240,1')->name('marketplace.paypal.webhook');

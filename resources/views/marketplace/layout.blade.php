@@ -8,7 +8,7 @@
     @vite('resources/css/marketplace.css')
     @stack('head')
 </head>
-@php($marketRoot = app(\App\Services\Marketplace\MarketplaceAccess::class)->publicHost(request()->getHost()) ? '' : 'https://'.config('marketplace.host'))
+@php($marketRoot = app(\App\Services\Marketplace\MarketplaceAccess::class)->publicHost(request()->getHost()) ? '' : rtrim(route('marketplace.public.home'),'/'))
 <body class="{{ request()->routeIs('marketplace.operator.*', 'marketplace.workspace.*', 'marketplace.public.maker.*') ? 'workspace-screen' : '' }}">
 <a class="skip-link" href="#main">Skip to content</a>
 @if(config('marketplace.demo') && app()->environment('local'))<div class="demo-notice">Local preview · Example makers, products, and markets · Checkout is off</div>@endif

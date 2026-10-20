@@ -35,6 +35,7 @@ class MarketplacePrepareStore extends Command
             } else {
                 abort_if(Tenant::where('slug', 'markets-and-makers')->exists(), 409, 'Use the existing dedicated workspace explicitly.');
                 $tenant = Tenant::create(['name' => 'Markets and Makers', 'slug' => 'markets-and-makers']);
+                \App\Models\TenantAccessProfile::firstOrCreate(['tenant_id' => $tenant->id], ['operating_mode' => 'direct', 'source' => 'operator', 'metadata' => ['dedicated_marketplace_merchant' => true, 'billing_impact_cents' => 0]]);
                 $tenant->users()->attach($owner->id, ['role' => 'owner', 'membership_active' => true]);
             }
             $store = Store::create(['tenant_id' => $tenant->id, 'name' => 'Markets and Makers', 'host' => $host, 'verified_at' => now()]);

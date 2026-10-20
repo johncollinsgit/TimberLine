@@ -788,7 +788,7 @@ $catalog = [
         'markets_and_makers' => [
             'display_name' => 'Markets and Makers Merchant',
             'description' => 'Internal merchant workspace for the Markets and Makers marketplace.',
-            'status' => 'live', 'channels' => ['direct', 'shopify'], 'classification' => 'internal',
+            'status' => 'live', 'channels' => ['both'], 'classification' => 'internal',
             'included_in_plans' => [], 'default_enabled' => false, 'default_setup_status' => 'configured',
             'dependencies' => [], 'billing_mode' => 'included', 'activation_policy' => 'internal_only',
             'visibility' => ['public_site' => false, 'app_store' => false, 'mobile_store' => false],

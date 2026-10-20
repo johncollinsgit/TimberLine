@@ -100,3 +100,26 @@ test('makers can share storefronts and private business information without gran
     expect($f['maker']->fresh()->private_details['contact_name'])->toBe('Private Contact')->and(DB::table('marketplace_makers')->where('id', $f['maker']->id)->value('private_details'))->not->toContain('Private Contact');
     $this->actingAs($f['owner'])->get('https://app.theeverbranch.test/marketplace/operations?tab=connections')->assertOk()->assertSee('My existing store')->assertSee('No catalog sync');
 });
+
+test('merchant daily reports use South Carolina dates across UTC midnight', function (): void {
+    $f = marketAdminFixture();
+    $yesterday = marketTestSale($f);
+    $today = marketTestSale($f);
+    $yesterday->forceFill(['created_at' => '2026-10-20 02:00:00'])->save();
+    $today->forceFill(['created_at' => '2026-10-21 02:00:00'])->save();
+    $report = app(\App\Services\Marketplace\MarketplaceReporting::class)->overview(\Illuminate\Http\Request::create('/?from=2026-10-20&to=2026-10-20'));
+    expect($report['salesOrders']->modelKeys())->toBe([$today->id])->and($report['metrics']['orders'])->toBe(1)->and($report['from']->toDateString())->toBe('2026-10-20')->and($report['to']->toDateString())->toBe('2026-10-20');
+});
+
+test('maker withdrawal immediately holds uncollected pickup orders for owner review', function (): void {
+    $f = marketAdminFixture();
+    $pickup = PickupLocation::create(['name' => 'Departure market', 'address' => 'Example market address', 'instructions' => 'Collection tent', 'shopify_location_gid' => 'eb:departure', 'active' => true]);
+    $market = Market::create(['name' => 'Departure market', 'slug' => 'departure-market', 'kind' => 'market', 'status' => 'published', 'address' => 'Example market address', 'timezone' => 'America/New_York', 'starts_at' => now()->addWeek(), 'ends_at' => now()->addWeek()->addHours(4), 'pickup_location_id' => $pickup->id, 'created_by' => $f['owner']->id]);
+    DB::table('marketplace_market_makers')->insert(['market_id' => $market->id, 'maker_id' => $f['maker']->id, 'status' => 'approved']);
+    $order = marketTestSale($f);
+    $order->update(['group_key' => 'pickup:'.$pickup->id]);
+    $order->checkout->update(['group_key' => $order->group_key]);
+    $this->withSession(['marketplace_identity' => $f['identity']->id])->post('https://marketsandmakers.test/maker/'.$f['maker']->id.'/markets', ['market_id' => $market->id, 'action' => 'withdraw'])->assertRedirect();
+    expect($order->fresh()->review_required)->toBeTrue()->and(app(MarketplaceMarkets::class)->pickupAvailable($f['maker'], $pickup->id))->toBeFalse();
+    $this->actingAs($f['owner'])->get('https://app.theeverbranch.test/marketplace/operations?tab=pickups')->assertOk()->assertSee('A maker withdrew');
+});

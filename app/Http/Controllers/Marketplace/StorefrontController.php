@@ -75,7 +75,7 @@ class StorefrontController extends Controller
 
     public function checkout(Request $request, MarketplaceCheckout $checkout)
     {
-        $data = $request->validate(['group' => 'required|string|max:80', 'uuid' => 'required|uuid', 'payment_method' => 'nullable|in:card,shop_pay']);
+        $data = $request->validate(['group' => 'required|string|max:80', 'uuid' => 'required|uuid', 'payment_method' => 'nullable|in:card,shop_pay,paypal']);
         $attempt = $checkout->begin($request, $data['group'], $data['uuid']);
 
         return redirect()->away($attempt->provider_cart['url']);
