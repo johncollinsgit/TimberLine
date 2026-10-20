@@ -61,6 +61,6 @@ class WalletController extends Controller
         $data['test_mode'] = $request->boolean('test_mode');
         $wallet->connect($data, $request->user()->id);
 
-        return back()->with('status','Shop Pay merchant API identity verified. Wallet collection still requires its independent test and launch checks.');
+        return back()->with('status', 'Shop Pay merchant API identity verified. Wallet collection still requires its independent test and launch checks.');
     }
 }

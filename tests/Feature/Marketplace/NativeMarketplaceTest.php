@@ -713,7 +713,7 @@ test('native maker connections recognize active tenant owners and reject ordinar
     $f = nativeMarketFixture();
     $owner = User::factory()->create(['is_active' => true, 'email_verified_at' => now()]);
     $owner->tenants()->attach($f['tenant']->id, ['role' => 'tenant_owner', 'membership_active' => true]);
-    expect(app(MarketplaceAccess::class)->assertWorkspaceManager($owner,$f['tenant']->id)->id)->toBe($f['tenant']->id);
-    $owner->tenants()->updateExistingPivot($f['tenant']->id,['role' => 'member']);
-    expect(fn () => app(MarketplaceAccess::class)->assertWorkspaceManager($owner,$f['tenant']->id))->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+    expect(app(MarketplaceAccess::class)->assertWorkspaceManager($owner, $f['tenant']->id)->id)->toBe($f['tenant']->id);
+    $owner->tenants()->updateExistingPivot($f['tenant']->id, ['role' => 'member']);
+    expect(fn () => app(MarketplaceAccess::class)->assertWorkspaceManager($owner, $f['tenant']->id))->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
 });

@@ -59,7 +59,7 @@ class MarketplaceTax
 
         return $ops->run($ops->key($key), $kind, $checkout->id, ['merchant' => $checkout->snapshot['merchant'], 'input' => $input], function () use ($checkout, $input, $path, $ops, $key): array {
             $r = app(MarketplaceNativeCheckout::class)->client($checkout->snapshot['merchant'])->withHeaders(['Idempotency-Key' => $ops->key($key)])->post('https://api.stripe.com/v1/tax/transactions/'.$path, $input);
-            abort_unless($r->successful() && is_string($r->json('id')),502,'Payment tax posting needs reconciliation.');
+            abort_unless($r->successful() && is_string($r->json('id')), 502, 'Payment tax posting needs reconciliation.');
 
             return $r->json();
         });

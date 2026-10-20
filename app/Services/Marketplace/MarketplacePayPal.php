@@ -290,7 +290,7 @@ class MarketplacePayPal
                 $order->update(['processing_cost_cents' => MarketplaceShopify::cents($capture['seller_receivable_breakdown']['paypal_fee']['value'])]);
             }
 
-return $order;
+            return $order;
         });
         $tax = app(MarketplaceTax::class)->post($checkout->fresh());
         $this->refunds($order, $provider, $tax);
@@ -357,7 +357,7 @@ return $order;
                     $order->update(['review_required' => true, 'review_reason' => 'An external PayPal refund needs supplier allocation.', 'fulfillment_details' => [...($order->fulfillment_details ?? []), 'unallocated_refunds' => [...($order->fulfillment_details['unallocated_refunds'] ?? []), $refund['id'] => ['amount_cents' => MarketplaceShopify::cents($data['amount']['value'])]]]]);
                 }
 
-continue;
+                continue;
             }
             abort_if(! empty($op->result['id']) && $op->result['id'] !== $refund['id'], 409, 'Multiple refunds share one operation and require merchant review.');
             $up = collect($data['links'] ?? [])->firstWhere('rel', 'up')['href'] ?? '';
@@ -380,14 +380,14 @@ continue;
                 abort_unless($quantity <= $line->quantity - $line->refunded_quantity, 409);
                 $eligible = LedgerEntry::where('source_key', 'sale:'.$line->id)->whereNotNull('eligible_at')->exists();
                 LedgerEntry::create(['source_key' => $key, 'maker_id' => $line->maker_id, 'order_line_id' => $line->id, 'kind' => 'refund', 'amount_cents' => -$line->maker_unit_cents * $quantity, 'eligible_at' => ! $order->test_mode && $eligible ? now() : null]);
-                $line->increment('refunded_quantity',$quantity);
+                $line->increment('refunded_quantity', $quantity);
                 $locked = Order::query()->lockForUpdate()->findOrFail($order->id);
                 if ($op->payload['shipping_cents'] > 0) {
                     $locked->update(['shipping_refunds' => [...($locked->shipping_refunds ?? []), $refund['id'] => ['amount_cents' => $op->payload['shipping_cents'], 'status' => 'review']]]);
                 }if ($locked->review_reason === 'PayPal refund needs reconciliation.') {
                     $locked->update(['review_required' => false, 'review_reason' => null]);
-                }$statements = LedgerEntry::whereIn('order_line_id',$order->lines()->pluck('id'))->whereNotNull('statement_id')->pluck('statement_id');
-                Statement::whereIn('id',$statements)->where('status','approved')->update(['status' => 'review', 'approved_by' => null, 'approved_at' => null]);
+                }$statements = LedgerEntry::whereIn('order_line_id', $order->lines()->pluck('id'))->whereNotNull('statement_id')->pluck('statement_id');
+                Statement::whereIn('id', $statements)->where('status', 'approved')->update(['status' => 'review', 'approved_by' => null, 'approved_at' => null]);
             });
         }
     }

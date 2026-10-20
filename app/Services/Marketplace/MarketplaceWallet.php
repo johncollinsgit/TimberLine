@@ -255,7 +255,7 @@ class MarketplaceWallet
                 }app(MarketplaceOrders::class)->allocateShipping($order, $credits, $locked->snapshot['shipping_subsidy_cents'] ?? 0, $locked->snapshot['shipping_subsidy_actor'] ?? null);
             }
 
-return $order;
+            return $order;
         });
         if (! $order->review_required) {
             $order->forceFill(['review_required' => true, 'review_reason' => 'Wallet tax posting needs reconciliation.'])->save();
@@ -287,9 +287,9 @@ return $order;
             $ref = 'marketplace-wallet-refund-'.Str::afterLast($refund['id'], '/');
             $refundUuid = \Ramsey\Uuid\Uuid::uuid5(\Ramsey\Uuid\Uuid::NAMESPACE_URL, 'marketplace-wallet-tax-refund:'.$checkout->uuid.':'.$refund['id'])->toString();
             $input = ['mode' => 'partial', 'original_transaction' => $result['transaction']['id'], 'reference' => $ref, 'flat_amount' => -$amount];
-            app(MarketplaceShopify::class)->operation($connection,$refundUuid,'wallet_tax_refund',$order->id,['merchant' => $checkout->snapshot['merchant'], 'input' => $input],function () use ($checkout,$input) {
-                $response = app(MarketplaceNativeCheckout::class)->client($checkout->snapshot['merchant'])->withHeaders(['Idempotency-Key' => $input['reference']])->post('https://api.stripe.com/v1/tax/transactions/create_reversal',$input);
-                abort_unless($response->successful() && $response->json('id'),502,'Wallet refund tax needs reconciliation.');
+            app(MarketplaceShopify::class)->operation($connection, $refundUuid, 'wallet_tax_refund', $order->id, ['merchant' => $checkout->snapshot['merchant'], 'input' => $input], function () use ($checkout, $input) {
+                $response = app(MarketplaceNativeCheckout::class)->client($checkout->snapshot['merchant'])->withHeaders(['Idempotency-Key' => $input['reference']])->post('https://api.stripe.com/v1/tax/transactions/create_reversal', $input);
+                abort_unless($response->successful() && $response->json('id'), 502, 'Wallet refund tax needs reconciliation.');
 
                 return ['transaction' => $response->json()];
             });
