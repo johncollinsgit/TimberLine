@@ -1,7 +1,10 @@
 # Product visualization: Mac handoff
 
-Prepared October 20, 2026. This is an implementation candidate and installation
-handoff, not a live deployment or an accepted native app release.
+Prepared October 20, 2026. This document records the PC source and subsequent
+Mac integration. Backend deployment is governed by protected CI and exact `/ready`
+evidence; this source note is not a live-release claim. The Android debug QA build
+below is built and published for review, but has not been installed or accepted on
+a physical device.
 
 ## Intended experience
 
@@ -158,8 +161,23 @@ The inspected `everbranch-mobile` source is React/Vite with Capacitor 8, not
 React Native. Continue in the current `johncollinsgit/everbranch-mobile` Mac
 checkout; do not overwrite current auth/offline work with an older PC checkout.
 
-`docs/integrations/product-visualization/mobile/ProductVisualization.tsx` is a
-supplied adapter; it is not yet wired, typechecked or built in the native app.
+`docs/integrations/product-visualization/mobile/ProductVisualization.tsx` is the
+shared adapter contract. The actual React/Capacitor app is now wired and built in
+[mobile PR #55](https://github.com/johncollinsgit/everbranch-mobile/pull/55), exact
+source `2d698556bc8c59253aa4add88afcb12fe3111524`. Its existing published showroom
+base is `90be77e872a715001659dd9735ea678febcb11e7`; the stacked PR does not silently
+merge that older nine-commit baseline into mobile main.
+
+The debug QA APK is `com.everbranch.app` **2.3.30 / build 46**, SHA256
+`d9fe76479e558f2c7483002f8178b49ef71cec772a1720f8e2f54d36b71f25f5`.
+TypeScript/production build, 103 unit tests, 20 actual-bundle browser scenarios,
+Capacitor sync and the Android debug build passed. All 11 packaged runtime hashes
+were checked against pinned source `a5cf35775e2594ffa5a39e0a9972da2e6184accf`.
+The existing debug certificate matches build 45; store signing and installation
+are not established. Capacitor core/Android/iOS/CLI are aligned to 8.4.3, Share to
+8.0.3, and camera hardware is optional. Physical camera, AR and native sharing
+acceptance remain required. The following integration contract also serves as
+reproduction guidance; it is not a list of still-unwired app tasks.
 
 The Mac backend integration now supplies
 `GET /api/mobile/v1/workspaces/{tenant}/product-visualizations` under the existing
@@ -250,9 +268,18 @@ migrations) pass. Browser inspection rendered the synthetic barrel, opened/close
 both modes, and initialized the self-hosted Worker+hand model without camera
 access. The separate 24-second 720x1280 H.264 concept MP4 fully decodes.
 
-Still required: protected CI; actual connected-renderer wiring;
-native screen/API wiring and TypeScript/native builds; real measured merchant
-models; physical iPhone Safari and Android Chrome/native checks; open/closed
+The Mac source adds 65 affected PHP cases / 1,081 assertions and 22 viewer browser
+scenarios; final combined protected CI is still required. Actual Android screen/API
+wiring and the debug build are complete as recorded above. A separate local
+Carolina consumer candidate is preserved at
+`5a84ac8994dbdc5c161787cc273416fb1cfe15a7`, based on the verified private Sites
+mirror `6941af4e24bce6233a4f17b09cca33214d46f698`. Its 26 Node and 28 browser cases
+pass. It is unpublished: the current public Worker source/deployment and canonical
+Avery source remain unverified and must be reconciled before public publication.
+No replacement site or inferred target is authorized by this runbook.
+
+Still required: final combined protected CI/runtime checks; verified public
+connected-renderer publication; real measured merchant models; physical iPhone Safari and Android Chrome/native checks; open/closed
 grips and both hands, loss/reacquisition, denial/revocation and camera switching;
 no camera indicator after close/background/unmount; model/handle switching;
 save/share; room floor detection, movement/rotation/scale and Quick Look/Scene
@@ -260,9 +287,11 @@ Viewer behavior. Try low light and slower phones. A convincing closed grip may
 need hand mesh/segmentation work after device evaluation; skeleton masking is
 only an approximate depth occluder.
 
-Release coordination: the Mac owner is reconciling guided settings PR #444 and
-a separate Marketplace redesign. Keep this feature isolated; no independent
-merge/deploy or production tenant/model activation is authorized by this handoff.
+Release coordination: guided settings and Marketplace management were verified
+live through PRs #444 and #447. The coordinator owns the separate visualization
+and Teams releases, with isolated source ownership and normal release gates.
+Source owners do not deploy independently. No production tenant/model activation
+is included in this handoff.
 Retain normal GitHub test/build and Forge atomic release gates. Rollback turns
 off the visualization flag (or hand-only switch) and preserves all media/settings.
 No destructive cleanup/database rollback is needed.
