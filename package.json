@@ -29,7 +29,7 @@
     "test:team-laravel-browser": "node scripts/everbranch-team/laravel-acceptance.mjs",
     "test:team-laravel-views": "node scripts/everbranch-team/laravel-view-smoke.mjs",
     "team:parity": "node scripts/everbranch-team/build-parity-matrix.mjs",
-    "test:pos": "node --test tests/e2e/pos-request-keys.test.mjs tests/e2e/pos-register.test.mjs tests/e2e/pos-customers.test.mjs"
+    "test:pos": "node --test tests/e2e/pos-*.test.mjs"
   },
   "dependencies": {
     "@glideapps/glide-data-grid": "^6.0.3",

@@ -1,3 +1,12 @@
+## Fictional hosted POS demo boundary (2026-10-21; source candidate)
+
+`/platform/demos/alpha-printing-pos` is a separate public fictional browser
+demonstration. Preserve its fixed fixtures, isolated sessionStorage namespace,
+no operational writes, no provider calls and strict response policy. Never wire
+it through production `PosAccess`, tenant impersonation, real stock/customers or
+merchant configuration. Its availability is separate from real checkout and
+native iPhone Tap to Pay. See `docs/operations/alpha-printing-browser-demo.md`.
+
 ## Local POS simulation foundation (2026-10-21; source only, disabled)
 
 A separate local/testing-only register rehearses native catalog prices, confirmed
