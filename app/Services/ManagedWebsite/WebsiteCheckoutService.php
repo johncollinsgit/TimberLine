@@ -248,7 +248,7 @@ class WebsiteCheckoutService
     {
         $stripe = app(WebsiteStripeService::class);
         $stripe->client($payment);
-        $order = WebsiteOrder::query()->forTenantId($payment->tenant_id)->with('lines')->findOrFail($payment->website_order_id);
+        $order = WebsiteOrder::query()->withoutPosSimulation()->forTenantId($payment->tenant_id)->with('lines')->findOrFail($payment->website_order_id);
         if ((int) data_get($payment->metadata, 'expires_at') <= now()->timestamp) {
             app(WebsitePaymentService::class)->reconcile($payment);
             throw ValidationException::withMessages(['cart' => 'The earlier checkout is being reconciled. Reload the cart before continuing.']);
@@ -293,7 +293,7 @@ class WebsiteCheckoutService
             $stripe->retryMessage();
         }
         DB::transaction(function () use ($payment, $session, $customerData): void {
-            $order = WebsiteOrder::query()->forTenantId($payment->tenant_id)->lockForUpdate()->findOrFail($payment->website_order_id);
+            $order = WebsiteOrder::query()->withoutPosSimulation()->forTenantId($payment->tenant_id)->lockForUpdate()->findOrFail($payment->website_order_id);
             $payment = WebsitePayment::query()->forTenantId($payment->tenant_id)->lockForUpdate()->findOrFail($payment->id);
             abort_if($payment->provider_session_id && $payment->provider_session_id !== $session['id'], 409, 'Checkout identity changed. Staff review is required.');
             $details = $order->service_request;

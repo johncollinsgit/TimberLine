@@ -20,6 +20,7 @@ class WebsitePaymentService
 {
     public function assertFulfillable(WebsiteOrder $order): void
     {
+        $order->assertNotPosSimulation();
         abort_unless($order->payment_status === 'paid' && $order->cancelled_at === null, 422, 'Only paid Website orders can be fulfilled.');
         $payment = $order->payments()->forTenantId($order->tenant_id)->where('provider', 'stripe')->latest('id')->first();
         if ($payment && in_array(data_get($payment->metadata, 'checkout_version'), [1, 2], true)) {
@@ -74,6 +75,13 @@ class WebsitePaymentService
             || ($payment->provider_session_id && $payment->provider_session_id !== $object['id']))) {
             return;
         }
+        $orderQuery = WebsiteOrder::query()->forTenantId($payment->tenant_id)->withoutPosSimulation()->whereKey($payment->website_order_id);
+        if (DB::transactionLevel() > 0) {
+            $orderQuery->sharedLock();
+        }
+        if (! $orderQuery->first(['id'])) {
+            return;
+        }
         $event = WebsiteStripeWebhookEvent::query()->firstOrCreate(['stripe_event_id' => $payload['id']], [
             'tenant_id' => $payment->tenant_id, 'event_type' => $type, 'status' => 'received',
             'payload' => ['id' => $payload['id'], 'type' => $type, 'object_id' => (string) ($object['id'] ?? ''), 'website_payment_id' => $payment->id],
@@ -93,6 +101,7 @@ class WebsitePaymentService
 
     public function reconcile(WebsitePayment $payment, ?string $sessionId = null): void
     {
+        WebsiteOrder::query()->forTenantId($payment->tenant_id)->findOrFail($payment->website_order_id)->assertNotPosSimulation();
         $stripe = app(WebsiteStripeService::class);
         $payment->refresh();
         $sessionId ??= $payment->provider_session_id;
@@ -229,6 +238,7 @@ class WebsitePaymentService
 
     public function commitInventory(WebsiteOrder $order): bool
     {
+        $order->assertNotPosSimulation();
         if ($order->cancelled_at) {
             return false;
         }
@@ -282,11 +292,11 @@ class WebsitePaymentService
     private function locked(WebsitePayment $payment, callable $callback): mixed
     {
         return DB::transaction(function () use ($payment, $callback) {
-            $scope = WebsiteOrder::query()->forTenantId($payment->tenant_id)->findOrFail($payment->website_order_id);
+            $scope = WebsiteOrder::query()->withoutPosSimulation()->forTenantId($payment->tenant_id)->findOrFail($payment->website_order_id);
             TenantSite::query()->forTenantId($payment->tenant_id)->lockForUpdate()->findOrFail($scope->tenant_site_id);
             WebsiteCart::query()->forTenantId($payment->tenant_id)->where('tenant_site_id', $scope->tenant_site_id)
                 ->whereKey((int) data_get($payment->metadata, 'cart_id'))->lockForUpdate()->first();
-            $order = WebsiteOrder::query()->forTenantId($payment->tenant_id)->lockForUpdate()->findOrFail($scope->id);
+            $order = WebsiteOrder::query()->withoutPosSimulation()->forTenantId($payment->tenant_id)->lockForUpdate()->findOrFail($scope->id);
             $locked = WebsitePayment::query()->forTenantId($payment->tenant_id)->where('website_order_id', $order->id)->lockForUpdate()->findOrFail($payment->id);
 
             return $callback($order, $locked);
@@ -295,6 +305,7 @@ class WebsitePaymentService
 
     public function refund(WebsiteOrder $order, User $actor, int $amount, string $reason = '', ?string $requestId = null, ?int $paymentId = null): WebsiteOrder
     {
+        $order->assertNotPosSimulation();
         $payment = $order->payments()->forTenantId($order->tenant_id)->where('provider', 'stripe')->where('metadata->paid_confirmed', true)
             ->when($paymentId, fn ($query) => $query->whereKey($paymentId))->latest('id')->first();
         abort_unless($payment, 422, 'This order has no verified refundable native Stripe payment.');
@@ -354,6 +365,7 @@ class WebsitePaymentService
 
     public function reconcileRefunds(WebsitePayment $payment): void
     {
+        WebsiteOrder::query()->forTenantId($payment->tenant_id)->findOrFail($payment->website_order_id)->assertNotPosSimulation();
         if (! data_get($payment->fresh()->metadata, 'paid_confirmed')) {
             return;
         }

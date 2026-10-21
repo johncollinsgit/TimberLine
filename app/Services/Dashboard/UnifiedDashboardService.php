@@ -169,7 +169,11 @@ class UnifiedDashboardService
                 ['Customers', \App\Models\WebsiteCustomer::class, 'managed-website.customers.index'],
                 ['Orders', \App\Models\WebsiteOrder::class, 'managed-website.orders.index'],
             ] as [$label, $model, $route]) {
-                $cards[] = ['label' => $label, 'value' => (string) $model::query()->forTenantId($tenant->id)->count(),
+                $query = $model::query()->forTenantId($tenant->id);
+                if ($model === WebsiteOrder::class) {
+                    $query->withoutPosSimulation();
+                }
+                $cards[] = ['label' => $label, 'value' => (string) $query->count(),
                     'detail' => 'Website '.strtolower($label), 'href' => $url($route)];
             }
             $actions[] = ['label' => 'Review the website', 'description' => 'Review your pages, photos, and launch setup.', 'href' => $url('managed-website.index')];
@@ -424,7 +428,7 @@ class UnifiedDashboardService
         }
 
         if (Schema::hasTable('website_orders')) {
-            WebsiteOrder::query()
+            WebsiteOrder::query()->withoutPosSimulation()
                 ->forTenantId($tenantId)
                 ->where('payment_status', 'paid')
                 ->whereBetween('paid_at', [$range['starts_at'], $range['ends_at']])

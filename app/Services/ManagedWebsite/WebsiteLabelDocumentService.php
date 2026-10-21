@@ -2,6 +2,7 @@
 
 namespace App\Services\ManagedWebsite;
 
+use App\Models\WebsiteOrder;
 use App\Models\WebsiteShipment;
 use App\Models\WebsiteShipmentEvent;
 use Illuminate\Contracts\Cache\LockTimeoutException;
@@ -19,6 +20,7 @@ class WebsiteLabelDocumentService
     public function assertPrintable(WebsiteShipment $shipment): void
     {
         $shipment->refresh();
+        WebsiteOrder::query()->forTenantId($shipment->tenant_id)->findOrFail($shipment->website_order_id)->assertNotPosSimulation();
         abort_unless($shipment->provider === 'easypost' && data_get($shipment->parcel, '_native.version') === 1
             && data_get($shipment->parcel, '_native.buy_state') === 'purchased' && ! data_get($shipment->parcel, '_native.retired', false), 422, 'Only a purchased, active native label can be printed. Refresh the carrier status or review its replacement/refund first.');
     }

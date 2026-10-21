@@ -311,9 +311,11 @@ class WebsiteCommerceService
 
     public function fulfill(WebsiteOrder $order, User $actor, string $note = ''): WebsiteOrder
     {
+        $order->assertNotPosSimulation();
+
         return DB::transaction(function () use ($order, $actor, $note): WebsiteOrder {
             TenantSite::query()->forTenantId($order->tenant_id)->lockForUpdate()->findOrFail($order->tenant_site_id);
-            $order = WebsiteOrder::query()->forTenantId($order->tenant_id)->lockForUpdate()->with('lines')->findOrFail($order->id);
+            $order = WebsiteOrder::query()->withoutPosSimulation()->forTenantId($order->tenant_id)->lockForUpdate()->with('lines')->findOrFail($order->id);
             app(WebsitePaymentService::class)->assertFulfillable($order);
             abort_if($order->fulfillment_status === 'fulfilled' || $order->fulfillment_method === 'ship', 422, 'Use the remaining fulfillment or shipping action for this order.');
             $order->forceFill(['fulfillment_status' => 'fulfilled', 'fulfilled_at' => now()])->save();
@@ -329,6 +331,7 @@ class WebsiteCommerceService
 
     public function cancel(WebsiteOrder $order, User $actor, string $reason = ''): WebsiteOrder
     {
+        $order->assertNotPosSimulation();
         $payment = $order->payments()->forTenantId($order->tenant_id)->where('provider', 'stripe')->latest('id')->first();
         if ($payment) {
             abort_unless(data_get($payment->metadata, 'checkout_version') === 1, 422, 'Review this earlier checkout in Stripe before cancellation.');
@@ -340,7 +343,7 @@ class WebsiteCommerceService
 
         return DB::transaction(function () use ($order, $actor, $reason): WebsiteOrder {
             TenantSite::query()->forTenantId($order->tenant_id)->lockForUpdate()->findOrFail($order->tenant_site_id);
-            $order = WebsiteOrder::query()->forTenantId($order->tenant_id)->lockForUpdate()->findOrFail($order->id);
+            $order = WebsiteOrder::query()->withoutPosSimulation()->forTenantId($order->tenant_id)->lockForUpdate()->findOrFail($order->id);
             abort_unless($order->order_status === 'draft' && $order->payment_status === 'pending' && ! $order->payments()->exists(), 422, 'Only an unpaid draft can be cancelled without provider confirmation.');
             $order->update(['order_status' => 'cancelled', 'cancelled_at' => now(), 'fulfillment_status' => 'cancelled']);
             $this->event($order, 'cancelled', 'Draft order cancelled.'.(trim($reason) !== '' ? ' '.trim($reason) : ''), $actor);
@@ -351,11 +354,14 @@ class WebsiteCommerceService
 
     public function refund(WebsiteOrder $order, User $actor, int $amountCents, string $reason = '', ?string $requestId = null, ?int $paymentId = null): WebsiteOrder
     {
+        $order->assertNotPosSimulation();
+
         return app(WebsitePaymentService::class)->refund($order, $actor, $amountCents, $reason, $requestId, $paymentId);
     }
 
     public function addNote(WebsiteOrder $order, User $actor, string $note): void
     {
+        $order->assertNotPosSimulation();
         abort_if(trim($note) === '', 422, 'Enter a note.');
         $this->event($order, 'staff_note', trim($note), $actor);
     }

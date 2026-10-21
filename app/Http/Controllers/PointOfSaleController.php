@@ -10,6 +10,8 @@ use App\Models\WebsiteOrder;
 use App\Services\Billing\TenantPaymentSetupAccess;
 use App\Services\Billing\TenantPaymentsReadinessService;
 use App\Services\PointOfSale\PosAccess;
+use App\Services\PointOfSale\PosCatalogLookup;
+use App\Services\PointOfSale\PosCustomerDirectory;
 use App\Services\PointOfSale\PosService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -67,7 +69,7 @@ class PointOfSaleController extends Controller
         ]);
     }
 
-    public function register(Request $request, int $register, PosAccess $access, PosService $sales): Response
+    public function register(Request $request, int $register, PosAccess $access, PosService $sales, PosCustomerDirectory $customers): Response
     {
         $tenant = $this->tenant($request);
         $record = $access->register($tenant, $request->user(), $register);
@@ -76,11 +78,69 @@ class PointOfSaleController extends Controller
         $blocked = PosPaymentAttempt::query()->forTenantId($tenant->id)->where('pos_register_id', $record->id)
             ->whereIn('status', ['creating', 'awaiting_reader', 'processing', 'unknown', 'review'])->exists();
 
+        $selectedCustomer = null;
+        $oldCustomerId = filter_var(old('website_customer_id'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        if ($oldCustomerId) {
+            try {
+                $selectedCustomer = $customers->get($tenant, $request->user(), $register, $oldCustomerId);
+            } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+                // A stale or foreign selection never projects private contact details.
+            }
+        }
+
         return $this->privateView('pos.register', [
             'tenant' => $tenant, 'register' => $record, 'catalog' => $catalog, 'attempts' => $attempts,
             'blocked' => $blocked, 'requestId' => old('request_id', (string) Str::uuid()), 'freshRequestId' => (string) Str::uuid(),
             'requestLookupUrl' => route('pos.request-status', ['register' => $record->id, 'requestId' => '00000000-0000-0000-0000-000000000000', 'tenant' => $tenant->slug]),
+            'catalogLookupUrl' => route('pos.catalog.lookup', ['register' => $record->id, 'tenant' => $tenant->slug]),
+            'selectedCustomer' => $selectedCustomer, 'customerRequestId' => (string) Str::uuid(),
+            'customerSearchUrl' => route('pos.customers.search', ['register' => $record->id, 'tenant' => $tenant->slug]),
+            'customerCreateUrl' => route('pos.customers.create', ['register' => $record->id, 'tenant' => $tenant->slug]),
+            'customerHistoryUrl' => route('pos.customers.history', ['register' => $record->id, 'customer' => 0, 'tenant' => $tenant->slug]),
+            'customerRequestUrl' => route('pos.customers.request', ['register' => $record->id, 'requestId' => '00000000-0000-0000-0000-000000000000', 'tenant' => $tenant->slug]),
         ]);
+    }
+
+    public function catalogLookup(Request $request, int $register, PosCatalogLookup $catalog): Response
+    {
+        $item = $catalog->find($this->tenant($request), $request->user(), $register, $request->query('code'));
+
+        return response()->json(['item' => $item])->withHeaders($this->privateHeaders());
+    }
+
+    public function customerSearch(Request $request, int $register, PosCustomerDirectory $customers): Response
+    {
+        return response()->json($customers->search($this->tenant($request), $request->user(), $register, $request->query('query')))
+            ->withHeaders($this->privateHeaders());
+    }
+
+    public function customerCreate(Request $request, int $register, PosCustomerDirectory $customers): Response
+    {
+        $result = $customers->create($this->tenant($request), $request->user(), $register, $request->only(['request_id', 'first_name', 'last_name', 'email', 'phone']));
+
+        return response()->json($result, 201)->withHeaders($this->privateHeaders());
+    }
+
+    public function customerRequest(Request $request, int $register, string $requestId, PosCustomerDirectory $customers): Response
+    {
+        $customer = $customers->findCreation($this->tenant($request), $request->user(), $register, $requestId);
+
+        return response()->json(['customer' => $customer])->withHeaders($this->privateHeaders());
+    }
+
+    public function customerHistory(Request $request, int $register, int $customer, PosAccess $access, PosCustomerDirectory $customers): Response
+    {
+        $tenant = $this->tenant($request);
+        $record = $access->register($tenant, $request->user(), $register);
+        $history = $customers->history($tenant, $request->user(), $register, $customer);
+        $canRefund = true;
+        try {
+            $access->register($tenant, $request->user(), $register, true);
+        } catch (HttpException) {
+            $canRefund = false;
+        }
+
+        return $this->privateView('pos.customer-history', ['tenant' => $tenant, 'register' => $record, 'history' => $history, 'canRefund' => $canRefund]);
     }
 
     public function requestStatus(Request $request, int $register, string $requestId, PosAccess $access, PosService $sales): Response
@@ -103,8 +163,10 @@ class PointOfSaleController extends Controller
         $tenant = $this->tenant($request);
         $access->register($tenant, $request->user(), $register);
         $data = $request->validate([
-            'request_id' => ['required', 'uuid'], 'lines' => ['required', 'array', 'max:100'],
-            'customer_id' => ['prohibited'], 'website_customer_id' => ['prohibited'],
+            'request_id' => ['required', 'uuid'], 'lines' => ['required', 'array', 'max:200'],
+            'customer_id' => ['prohibited'], 'website_customer_id' => ['nullable', 'integer', 'min:1'],
+            'tender' => ['sometimes', 'required', 'in:card,cash'],
+            'cash_received_cents' => ['nullable', 'integer', 'min:0', 'max:100000000', 'required_if:tender,cash', 'prohibited_unless:tender,cash'],
             'lines.*.variant_id' => ['required', 'integer', 'min:1'], 'lines.*.quantity' => ['required', 'integer', 'min:0', 'max:99'],
         ]);
         $data['lines'] = array_values(array_filter($data['lines'], fn ($line) => (int) $line['quantity'] > 0));
@@ -129,6 +191,7 @@ class PointOfSaleController extends Controller
             'refunds' => $refunds, 'canRefund' => $canRefund, 'refundRequestId' => old('request_id', (string) Str::uuid()), 'freshRefundRequestId' => (string) Str::uuid(),
             'refundRequestRecords' => $canRefund ? $refunds->map(fn ($refund) => ['id' => $refund->id, 'request_id' => $refund->request_id,
                 'status' => $refund->status, 'url' => '#refund-'.$refund->id])->values()->all() : [],
+            'tender' => $this->tender($record),
         ]);
     }
 
@@ -199,7 +262,16 @@ class PointOfSaleController extends Controller
 
         return $this->privateView('pos.receipt', [
             'tenant' => $tenant, 'attempt' => $record, 'register' => $register, 'order' => $order, 'refundedCents' => (int) $refundedCents,
+            'tender' => $this->tender($record),
         ]);
+    }
+
+    private function tender(PosPaymentAttempt $attempt): array
+    {
+        $cash = data_get($attempt->snapshot, 'tender', 'card') === 'cash';
+
+        return ['kind' => $cash ? 'cash' : 'card', 'received_cents' => $cash ? (int) data_get($attempt->snapshot, 'cash_received_cents') : null,
+            'change_cents' => $cash ? (int) data_get($attempt->snapshot, 'change_cents') : null];
     }
 
     private function tenant(Request $request): Tenant

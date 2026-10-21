@@ -143,14 +143,47 @@ it('prepares a server-priced sale then exposes a receipt only after verified sim
     Http::assertNothingSent();
 });
 
-it('rejects unsupported foreign customer identifiers before any guest sale or customer-history write', function (): void {
+it('records a cash rehearsal with frozen change and a printable receipt without card controls', function (): void {
+    $this->actingAs($this->fixture->cashier)->post(($this->url)('pos.start', ['register' => $this->fixture->register->id]), [
+        ...$this->fixture->input(), 'tender' => 'cash', 'cash_received_cents' => 3000,
+    ])->assertRedirect();
+    $attempt = PosPaymentAttempt::sole();
+    expect($attempt->status)->toBe('succeeded')->and($attempt->snapshot['tender'])->toBe('cash')
+        ->and($attempt->snapshot['cash_received_cents'])->toBe(3000)->and($attempt->snapshot['change_cents'])->toBe(294);
+    $response = $this->get(($this->url)('pos.show', ['attempt' => $attempt->id]))->assertOk()
+        ->assertSeeText('Cash rehearsal')->assertSeeText('Cash received (simulation)')->assertSeeText('$30.00')
+        ->assertSeeText('Change due (simulation)')->assertSeeText('$2.94')->assertDontSeeText('Approve simulation');
+    exportPosRegisterSurface('cash-sale', $response);
+    $this->fixture->variant->update(['price_cents' => 99999]);
+    $response = $this->get(($this->url)('pos.receipt', ['attempt' => $attempt->id]))->assertOk()
+        ->assertSeeText('Print simulation receipt')->assertSeeText('Cash rehearsal')->assertSeeText('$27.06')
+        ->assertSeeText('$30.00')->assertSeeText('$2.94')->assertSeeText('No money moved');
+    exportPosRegisterSurface('cash-receipt', $response);
+    expect(WebsiteInventoryMovement::count())->toBe(1)->and($this->fixture->variant->fresh()->inventory_quantity)->toBe(4);
+    Http::assertNothingSent();
+});
+
+it('rejects missing underpaid cash or populated card cash fields at the HTTP boundary', function (string $tender, mixed $received): void {
+    $input = [...$this->fixture->input(), 'tender' => $tender];
+    if ($received !== null) {
+        $input['cash_received_cents'] = $received;
+    }
+    $this->actingAs($this->fixture->manager)->postJson(($this->url)('pos.start', ['register' => $this->fixture->register->id]), $input)->assertUnprocessable();
+    expect(PosPaymentAttempt::count())->toBe(0)->and(WebsiteOrder::count())->toBe(0)->and(WebsiteInventoryReservation::count())->toBe(0)
+        ->and(PosSimulatorObject::count())->toBe(0)->and($this->fixture->variant->fresh()->inventory_quantity)->toBe(5);
+    Http::assertNothingSent();
+})->with([['cash', null], ['cash', 1], ['card', 3000], ['cash', 100000001]]);
+
+it('rejects legacy and foreign customer identifiers before any sale or customer-history write', function (): void {
     $other = PosFixture::merchant('foreign-native-customer');
     $customer = WebsiteCustomer::create(['tenant_id' => $other->tenant->id, 'first_name' => 'Fictional',
         'last_name' => 'Foreign shopper', 'email' => 'foreign-pos-customer@example.test', 'status' => 'active']);
     $before = $customer->fresh()->getRawOriginal();
     $input = [...$this->fixture->input(), 'customer_id' => $customer->id, 'website_customer_id' => $customer->id];
     $this->actingAs($this->fixture->manager)->postJson(($this->url)('pos.start', ['register' => $this->fixture->register->id]), $input)
-        ->assertUnprocessable()->assertJsonValidationErrors(['customer_id', 'website_customer_id']);
+        ->assertUnprocessable()->assertJsonValidationErrors(['customer_id']);
+    unset($input['customer_id']);
+    $this->postJson(($this->url)('pos.start', ['register' => $this->fixture->register->id]), $input)->assertNotFound();
     expect(WebsiteOrder::count())->toBe(0)->and(PosPaymentAttempt::count())->toBe(0)
         ->and(WebsiteInventoryReservation::count())->toBe(0)->and(WebsiteInventoryMovement::count())->toBe(0)
         ->and(PosSimulatorObject::count())->toBe(0)->and(WebsiteOrderEvent::count())->toBe(0)

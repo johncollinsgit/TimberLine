@@ -15,12 +15,24 @@ class DatabaseSimulatedReader implements SimulatedReader
 
     public function capabilities(): array
     {
-        return ['environment' => 'simulation', 'physical_readers' => false, 'offline' => false, 'partial_refunds' => true];
+        return ['environment' => 'simulation', 'physical_readers' => false, 'offline' => false, 'partial_refunds' => true,
+            'tenders' => ['card', 'cash']];
     }
 
     public function createPayment(array $snapshot, string $key): array
     {
-        return $this->create('payment', $snapshot, $key, 'awaiting_reader');
+        $tender = $snapshot['tender'] ?? 'card';
+        abort_unless(in_array($tender, ['card', 'cash'], true), 422, 'Choose a supported simulated tender.');
+        if ($tender === 'cash') {
+            abort_unless(is_int($snapshot['cash_received_cents'] ?? null) && is_int($snapshot['change_cents'] ?? null)
+                && is_int($snapshot['amount_cents'] ?? null) && $snapshot['amount_cents'] > 0
+                && $snapshot['cash_received_cents'] <= 100000000 && $snapshot['cash_received_cents'] >= $snapshot['amount_cents']
+                && $snapshot['change_cents'] === $snapshot['cash_received_cents'] - $snapshot['amount_cents'],
+                422, 'The simulated cash request must contain exact server-priced change.');
+        }
+
+        // This records a fictional handover only; no drawer or payment device is contacted.
+        return $this->create('payment', $snapshot, $key, $tender === 'cash' ? 'succeeded' : 'awaiting_reader');
     }
 
     public function payment(int $tenantId, string $id): array
@@ -136,6 +148,7 @@ class DatabaseSimulatedReader implements SimulatedReader
         return DB::transaction(function () use ($object, $status): array {
             $object = PosSimulatorObject::query()->where('tenant_id', $object->tenant_id)->lockForUpdate()->findOrFail($object->id);
             $payload = $object->payload;
+            abort_if($object->kind === 'payment' && ($payload['tender'] ?? 'card') === 'cash', 422, 'Cash rehearsal does not control a card reader.');
             // Canonical terminal outcomes cannot be overwritten by a later UI command.
             if (! in_array($payload['status'], ['succeeded', 'failed', 'cancelled'], true)) {
                 $payload['status'] = $status;

@@ -150,7 +150,7 @@ class WebsiteCommerceController extends Controller
         $tenant = $this->tenant($request);
         abort_unless((int) $customer->tenant_id === (int) $tenant->id, 404);
         app(\App\Services\ManagedWebsite\WebsiteCatalogService::class)->assertEditor($this->site($tenant), $request->user());
-        $orders = WebsiteOrder::query()->forTenant($tenant)->where('website_customer_id', $customer->id)->latest()->paginate(20);
+        $orders = WebsiteOrder::query()->withoutPosSimulation()->forTenant($tenant)->where('website_customer_id', $customer->id)->latest()->paginate(20);
 
         return view('managed-website.commerce.customer', compact('customer', 'orders') + ['site' => $this->site($tenant)]);
     }
@@ -180,7 +180,7 @@ class WebsiteCommerceController extends Controller
     {
         $tenant = $this->tenant($request);
         $filters = $request->validate(['q' => ['nullable', 'string', 'max:64'], 'payment' => ['nullable', 'string', 'max:32'], 'fulfillment' => ['nullable', 'string', 'max:32'], 'shipment' => ['nullable', 'string', 'max:32'], 'source' => ['nullable', 'string', 'max:32'], 'risk' => ['nullable', 'string', 'max:32'], 'review' => ['nullable', 'string', 'max:32'], 'exception' => ['nullable', 'string', 'max:32']]);
-        $orders = WebsiteOrder::query()->forTenant($tenant)->with('lines', 'shipments')
+        $orders = WebsiteOrder::query()->withoutPosSimulation()->forTenant($tenant)->with('lines', 'shipments')
             ->when(filled($filters['q'] ?? null), fn ($query) => $query->where('number', 'like', '%'.addcslashes((string) $filters['q'], '%_\\').'%'))
             ->when(filled($filters['payment'] ?? null), fn ($query) => $query->where('payment_status', $filters['payment']))
             ->when(filled($filters['fulfillment'] ?? null), fn ($query) => $query->where('fulfillment_status', $filters['fulfillment']))
@@ -233,6 +233,7 @@ class WebsiteCommerceController extends Controller
 
     public function showOrder(Request $request, WebsiteOrder $order, WebsiteCommerceService $commerce): View
     {
+        $order->assertNotPosSimulation();
         $tenant = $this->tenant($request);
         abort_unless((int) $order->tenant_id === (int) $tenant->id, 404);
         $order->load(['lines', 'payments', 'fulfillments.lines', 'shipments.events', 'events']);
@@ -256,6 +257,7 @@ class WebsiteCommerceController extends Controller
 
     public function fulfill(Request $request, WebsiteOrder $order, WebsiteCommerceService $commerce): RedirectResponse
     {
+        $order->assertNotPosSimulation();
         $tenant = $this->tenant($request);
         abort_unless((int) $order->tenant_id === (int) $tenant->id, 404);
         $this->requireCommerce($tenant, $commerce);
@@ -266,6 +268,7 @@ class WebsiteCommerceController extends Controller
 
     public function cancel(Request $request, WebsiteOrder $order, WebsiteCommerceService $commerce): RedirectResponse
     {
+        $order->assertNotPosSimulation();
         $tenant = $this->tenant($request);
         abort_unless((int) $order->tenant_id === (int) $tenant->id, 404);
         $reason = (string) ($request->validate(['reason' => ['nullable', 'string', 'max:1000']])['reason'] ?? '');
@@ -276,6 +279,7 @@ class WebsiteCommerceController extends Controller
 
     public function refund(Request $request, WebsiteOrder $order, WebsiteCommerceService $commerce): RedirectResponse
     {
+        $order->assertNotPosSimulation();
         $tenant = $this->tenant($request);
         abort_unless((int) $order->tenant_id === (int) $tenant->id, 404);
         $data = $request->validate(['payment_id' => ['nullable', 'integer'], 'request_id' => ['required', 'uuid'], 'amount' => ['required', 'decimal:0,2', 'min:0.01', 'max:1000000'], 'reason' => ['nullable', 'string', 'max:1000']]);
@@ -286,6 +290,7 @@ class WebsiteCommerceController extends Controller
 
     public function checkRefunds(Request $request, WebsiteOrder $order): RedirectResponse
     {
+        $order->assertNotPosSimulation();
         $tenant = $this->tenant($request);
         abort_unless((int) $order->tenant_id === (int) $tenant->id, 404);
         $payments = $order->payments()->forTenantId($tenant->id)->where('provider', 'stripe')
@@ -300,6 +305,7 @@ class WebsiteCommerceController extends Controller
 
     public function addOrderNote(Request $request, WebsiteOrder $order, WebsiteCommerceService $commerce): RedirectResponse
     {
+        $order->assertNotPosSimulation();
         $tenant = $this->tenant($request);
         abort_unless((int) $order->tenant_id === (int) $tenant->id, 404);
         $commerce->addNote($order, $request->user(), (string) $request->validate(['note' => ['required', 'string', 'max:4000']])['note']);
@@ -309,6 +315,7 @@ class WebsiteCommerceController extends Controller
 
     public function purchaseLabel(Request $request, WebsiteOrder $order, WebsiteCommerceShippingService $shipping): RedirectResponse
     {
+        $order->assertNotPosSimulation();
         $tenant = $this->tenant($request);
         abort_unless((int) $order->tenant_id === (int) $tenant->id, 404);
         $quoteId = (int) $request->validate(['shipping_rate_quote_id' => ['required', 'integer']])['shipping_rate_quote_id'];
@@ -597,7 +604,7 @@ class WebsiteCommerceController extends Controller
         $token = $request->query('token');
         $number = $request->query('order');
         abort_unless(is_string($token) && preg_match('/^[A-Za-z0-9]{56}$/D', $token) && is_string($number) && strlen($number) <= 190, 404);
-        $order = WebsiteOrder::query()->forTenant($tenant)->where('tenant_site_id', $site->id)->where('number', $number)->where('lookup_token', $token)->with('lines', 'shipments')->firstOrFail();
+        $order = WebsiteOrder::query()->withoutPosSimulation()->forTenant($tenant)->where('tenant_site_id', $site->id)->where('number', $number)->where('lookup_token', $token)->with('lines', 'shipments')->firstOrFail();
         abort_unless(hash_equals((string) $order->lookup_token, $token), 404);
 
         return response()->view('managed-website.order', compact('site', 'order'))->header('Cache-Control', 'private, no-store')

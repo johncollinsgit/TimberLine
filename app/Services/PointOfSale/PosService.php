@@ -7,6 +7,7 @@ use App\Models\PosRefund;
 use App\Models\PosRegister;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Models\WebsiteCustomer;
 use App\Models\WebsiteInventoryMovement;
 use App\Models\WebsiteInventoryReservation;
 use App\Models\WebsiteOrder;
@@ -59,13 +60,23 @@ class PosService
         $this->access->register($tenant, $actor, $registerId);
         $providerKey = $this->reader->key();
         $this->assertProvider(['provider_key' => $providerKey]);
-        $request = Validator::make($input, ['request_id' => ['required', 'uuid'], 'customer_id' => ['prohibited'], 'website_customer_id' => ['prohibited'],
+        $input = ['tender' => 'card', ...$input];
+        if (($input['website_customer_id'] ?? null) === '') {
+            $input['website_customer_id'] = null;
+        }
+        $request = Validator::make($input, ['request_id' => ['required', 'uuid'], 'customer_id' => ['prohibited'], 'website_customer_id' => ['nullable', 'integer', 'min:1'],
+            'tender' => ['required', 'in:card,cash'],
+            'cash_received_cents' => ($input['tender'] ?? null) === 'cash' ? ['required', 'integer', 'min:0', 'max:100000000'] : ['prohibited'],
             'lines' => ['required', 'array', 'min:1', 'max:50'],
             'lines.*.variant_id' => ['required', 'integer', 'min:1', 'distinct'], 'lines.*.quantity' => ['required', 'integer', 'min:1', 'max:99']])->validate();
         $lines = collect($request['lines'])->map(fn ($line) => ['variant_id' => (int) $line['variant_id'], 'quantity' => (int) $line['quantity']])
             ->sortBy('variant_id')->values()->all();
-        $hash = $this->hash(['register_id' => $registerId, 'lines' => $lines]);
-        $attempt = DB::transaction(function () use ($tenant, $actor, $registerId, $request, $lines, $hash, $providerKey): PosPaymentAttempt {
+        $legacyTerms = ['register_id' => $registerId, 'lines' => $lines];
+        $tenderTerms = [...$legacyTerms, 'tender' => $request['tender'],
+            'cash_received_cents' => $request['tender'] === 'cash' ? (int) $request['cash_received_cents'] : null];
+        $customerId = isset($request['website_customer_id']) ? (int) $request['website_customer_id'] : null;
+        $requestTerms = [...$tenderTerms, 'website_customer_id' => $customerId];
+        $attempt = DB::transaction(function () use ($tenant, $actor, $registerId, $request, $lines, $legacyTerms, $tenderTerms, $requestTerms, $providerKey, $customerId): PosPaymentAttempt {
             // Serialize immutable request admission before locking a missing
             // unique key. Different registers must not form an RR gap-lock cycle.
             $this->admissionLock($tenant);
@@ -73,13 +84,34 @@ class PosService
             $this->access->register($tenant, $actor, $registerId);
             $existing = PosPaymentAttempt::query()->where('tenant_id', $tenant->id)->where('request_id', $request['request_id'])->lockForUpdate()->first();
             if ($existing) {
-                abort_unless(hash_equals($existing->request_hash, $hash), 409, 'This checkout request already has different terms.');
+                // Retain pre-tender and guest-only snapshots and their original
+                // keys. Replay uses issued prices/contact details, never today's profile.
+                $legacyTender = ! array_key_exists('tender', $existing->snapshot);
+                $legacyCustomer = ! array_key_exists('website_customer_id', $existing->snapshot);
+                $replayTerms = $legacyCustomer ? $tenderTerms : $requestTerms;
+                $replayTerms['change_cents'] = $request['tender'] === 'cash' ? $requestTerms['cash_received_cents'] - $existing->snapshot['amount_cents'] : null;
+                if (! $legacyCustomer) {
+                    $replayTerms['customer_snapshot'] = $existing->snapshot['customer_snapshot'] ?? null;
+                }
+                $hash = $this->hash($legacyTender ? $legacyTerms : $replayTerms);
+                abort_unless((! $legacyTender || $request['tender'] === 'card') && (! $legacyCustomer || $customerId === null)
+                    && hash_equals($existing->request_hash, $hash),
+                    409, 'This checkout request already has different terms.');
 
                 return $existing;
             }
+            $supportedTenders = $this->reader->capabilities()['tenders'] ?? ['card'];
+            abort_unless(is_array($supportedTenders) && in_array($request['tender'], $supportedTenders, true),
+                422, 'The installed simulated provider does not support this tender for a new sale.');
             abort_if(PosPaymentAttempt::query()->where('tenant_id', $tenant->id)->where('pos_register_id', $registerId)
                 ->whereIn('status', self::OPEN)->lockForUpdate()->first() !== null,
                 409, 'Resolve the current reader payment before starting another sale.');
+            // Shared current-read locking verifies native identity/status while
+            // remaining compatible with native order-insert customer FK locks.
+            $customer = $customerId === null ? null : WebsiteCustomer::query()->forTenantId($tenant->id)
+                ->where('status', 'active')->sharedLock()->findOrFail($customerId);
+            $customerSnapshot = $customer ? ['name' => trim((string) $customer->first_name.' '.(string) $customer->last_name),
+                'email' => $customer->email, 'phone' => $customer->phone] : ['name' => 'Guest'];
             $subtotal = 0;
             $frozen = [];
             foreach ($lines as $line) {
@@ -103,12 +135,19 @@ class PosService
                     'line_total_cents' => $total, 'track_inventory' => $tracked];
             }
             $tax = intdiv($subtotal * $register->tax_rate_bps + 5000, 10000);
+            $amount = $subtotal + $tax;
+            $received = $requestTerms['cash_received_cents'];
+            abort_if($request['tender'] === 'cash' && $received < $amount, 422, 'The simulated cash received does not cover the server-priced sale.');
+            $change = $request['tender'] === 'cash' ? $received - $amount : null;
+            $hash = $this->hash([...$requestTerms, 'change_cents' => $change, 'customer_snapshot' => $customerSnapshot]);
             $order = WebsiteOrder::query()->create(['tenant_id' => $tenant->id, 'tenant_site_id' => $register->tenant_site_id,
+                'website_customer_id' => $customerId,
                 'number' => 'SIM-POS-'.strtoupper(Str::random(12)), 'lookup_token' => Str::random(56), 'currency' => 'usd',
                 'source' => 'pos_simulation', 'payment_status' => 'pending', 'fulfillment_status' => 'unfulfilled', 'fulfillment_method' => 'pickup',
                 'order_status' => 'open', 'subtotal_cents' => $subtotal, 'discount_cents' => 0, 'shipping_cents' => 0,
                 'tax_cents' => $tax, 'total_cents' => $subtotal + $tax,
-                'customer_snapshot' => ['name' => 'Simulated counter sale'], 'service_request' => ['simulation' => true, 'register_id' => $registerId]]);
+                'customer_snapshot' => $customerSnapshot, 'service_request' => ['simulation' => true, 'register_id' => $registerId,
+                    'tender' => $request['tender'], 'cash_received_cents' => $received, 'change_cents' => $change]]);
             foreach ($frozen as $line) {
                 WebsiteOrderLine::query()->create(['tenant_id' => $tenant->id, 'website_order_id' => $order->id,
                     'website_product_variant_id' => $line['variant_id'], 'title' => $line['title'], 'product_type' => 'physical',
@@ -124,11 +163,13 @@ class PosService
             $snapshot = ['provider_key' => $providerKey, 'environment' => 'simulation', 'tenant_id' => $tenant->id, 'register_id' => $registerId, 'order_id' => $order->id, 'site_id' => $register->tenant_site_id,
                 'merchant_id' => $register->merchant_id, 'reader_id' => $register->reader_id, 'location_id' => $register->website_fulfillment_location_id,
                 'currency' => 'usd', 'amount_cents' => $order->total_cents, 'subtotal_cents' => $subtotal, 'tax_cents' => $tax,
+                'website_customer_id' => $customerId, 'customer_snapshot' => $customerSnapshot,
+                'tender' => $request['tender'], 'cash_received_cents' => $received, 'change_cents' => $change,
                 'tax_rate_bps' => $register->tax_rate_bps, 'tax_basis' => $register->tax_basis, 'nonce' => Str::random(40), 'lines' => $frozen];
             $attempt = PosPaymentAttempt::query()->create(['tenant_id' => $tenant->id, 'pos_register_id' => $registerId,
                 'website_order_id' => $order->id, 'user_id' => $actor->id, 'request_id' => $request['request_id'],
                 'request_hash' => $hash, 'snapshot' => $snapshot, 'status' => 'creating']);
-            $this->event($order, $actor, 'pos_simulation_started', 'Fictional reader payment reserved. No real payment is requested.');
+            $this->event($order, $actor, 'pos_simulation_started', 'Fictional '.$request['tender'].' payment reserved. No real payment is requested.');
 
             return $attempt;
         }, 3);
@@ -176,6 +217,7 @@ class PosService
     public function simulate(Tenant $tenant, User $actor, int $attemptId, string $outcome): PosPaymentAttempt
     {
         $attempt = $this->authorizedAttempt($tenant, $actor, $attemptId);
+        abort_if(($attempt->snapshot['tender'] ?? 'card') === 'cash', 422, 'Simulated cash has no card-reader outcomes. Reconcile the original cash rehearsal.');
         abort_unless(in_array($outcome, ['approved', 'declined', 'unknown', 'cancelled'], true), 422);
         if (in_array($attempt->status, ['succeeded', 'failed', 'cancelled', 'review'], true)) {
             return $attempt;
@@ -191,6 +233,9 @@ class PosService
         $attempt = $this->authorizedAttempt($tenant, $actor, $attemptId);
         if (in_array($attempt->status, ['succeeded', 'failed', 'cancelled', 'review'], true)) {
             return $attempt;
+        }
+        if (($attempt->snapshot['tender'] ?? 'card') === 'cash') {
+            return $this->reconcile($tenant, $actor, $attemptId);
         }
         abort_unless($attempt->provider_id, 409, 'The original payment has an unknown outcome. Reconcile it before cancellation.');
         try {
@@ -231,6 +276,7 @@ class PosService
             abort_if($reserved + (int) $data['amount_cents'] > $attempt->snapshot['amount_cents'], 409, 'This exceeds the remaining refundable amount, including unresolved refunds.');
             $snapshot = ['provider_key' => $attempt->snapshot['provider_key'], 'environment' => 'simulation', 'tenant_id' => $tenant->id, 'register_id' => $attempt->snapshot['register_id'],
                 'order_id' => $attempt->website_order_id, 'merchant_id' => $attempt->snapshot['merchant_id'], 'payment_id' => $attempt->provider_id,
+                'tender' => $attempt->snapshot['tender'] ?? 'card',
                 'amount_cents' => (int) $data['amount_cents'], 'currency' => $attempt->snapshot['currency'], 'nonce' => Str::random(40)];
             $refund = PosRefund::query()->create(['tenant_id' => $tenant->id, 'pos_payment_attempt_id' => $attemptId, 'user_id' => $actor->id,
                 'request_id' => $data['request_id'], 'request_hash' => $hash, 'snapshot' => $snapshot, 'amount_cents' => (int) $data['amount_cents'],
@@ -343,7 +389,7 @@ class PosService
                     $attempt->stock_committed_at ??= now();
                     $attempt->last_error = null;
                     $order->update(['payment_status' => 'paid', 'order_status' => 'confirmed', 'paid_at' => $order->paid_at ?: now()]);
-                    $this->event($order, $actor, 'pos_simulation_paid', 'Fictional reader approval verified. No real money was collected.');
+                    $this->event($order, $actor, 'pos_simulation_paid', 'Fictional '.($attempt->snapshot['tender'] ?? 'card').' payment verified. No real money was collected.');
                 }
             } elseif (in_array($status, ['failed', 'cancelled'], true)) {
                 $attempt->status = $status;
@@ -378,6 +424,18 @@ class PosService
         $register = $this->access->register($tenant, $actor, $attempt->pos_register_id, $manager);
         $snapshot = $attempt->snapshot;
         $this->assertProvider($snapshot);
+        $tender = $snapshot['tender'] ?? 'card';
+        abort_unless(in_array($tender, ['card', 'cash'], true), 409, 'The original simulated tender is unsupported.');
+        if ($tender === 'cash') {
+            abort_unless(is_int($snapshot['amount_cents'] ?? null) && $snapshot['amount_cents'] > 0
+                && is_int($snapshot['cash_received_cents'] ?? null) && is_int($snapshot['change_cents'] ?? null)
+                && $snapshot['cash_received_cents'] <= 100000000 && $snapshot['cash_received_cents'] >= $snapshot['amount_cents']
+                && $snapshot['change_cents'] === $snapshot['cash_received_cents'] - $snapshot['amount_cents'],
+                409, 'The original simulated cash and change do not match.');
+        } else {
+            abort_unless(($snapshot['cash_received_cents'] ?? null) === null && ($snapshot['change_cents'] ?? null) === null,
+                409, 'Card payment snapshots cannot include cash received or change.');
+        }
         abort_unless(($snapshot['environment'] ?? null) === 'simulation' && ($snapshot['tenant_id'] ?? null) === $tenant->id
             && ($snapshot['register_id'] ?? null) === $register->id && ($snapshot['site_id'] ?? null) === $register->tenant_site_id && ($snapshot['merchant_id'] ?? null) === $register->merchant_id
             && ($snapshot['reader_id'] ?? null) === $register->reader_id && ($snapshot['location_id'] ?? null) === $register->website_fulfillment_location_id
@@ -401,6 +459,14 @@ class PosService
             && $order->currency === ($attempt->snapshot['currency'] ?? null)
             && $order->subtotal_cents === $attempt->snapshot['subtotal_cents'] && $order->tax_cents === $attempt->snapshot['tax_cents'],
             409, 'The frozen simulated sale no longer matches.');
+        if (array_key_exists('website_customer_id', $attempt->snapshot)) {
+            abort_unless($order->website_customer_id === $attempt->snapshot['website_customer_id']
+                && is_array($attempt->snapshot['customer_snapshot'] ?? null)
+                && $order->customer_snapshot === $attempt->snapshot['customer_snapshot'],
+                409, 'The original customer selection or receipt snapshot no longer matches.');
+        } else {
+            abort_unless($order->website_customer_id === null, 409, 'A legacy guest sale cannot acquire a customer identity.');
+        }
         $lines = $order->lines()->orderBy('website_product_variant_id')
             ->when(DB::transactionLevel() > 0, fn ($query) => $query->lockForUpdate())->get()->map(fn ($line) => [
                 'variant_id' => $line->website_product_variant_id, 'title' => $line->title, 'variant_title' => data_get($line->snapshot, 'variant_title'),
@@ -479,6 +545,7 @@ class PosService
         $snapshot = $refund->snapshot;
         $this->assertProvider($snapshot);
         abort_unless(($snapshot['provider_key'] ?? null) === $attempt->snapshot['provider_key']
+            && ($snapshot['tender'] ?? 'card') === ($attempt->snapshot['tender'] ?? 'card')
             && ($snapshot['merchant_id'] ?? null) === $attempt->snapshot['merchant_id']
             && ($snapshot['payment_id'] ?? null) === $attempt->provider_id
             && ($snapshot['tenant_id'] ?? null) === $attempt->tenant_id

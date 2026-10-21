@@ -17,8 +17,16 @@ reads no provider credentials and sends no receipts. Commercial terms are deferr
   operator status is not tenant membership. Every operation rechecks access.
 - This is a native retail channel within the existing `website_*` authority.
   Orders use source `pos_simulation`; variants, stock, holds and inventory
-  movements retain the existing tenant/site ownership. No legacy, Marketplace,
-  Shopify, soccer, rewards, customer or subscription ledger is copied or changed.
+  movements retain the existing tenant/site ownership. Native Website customers
+  retain their own authority. No legacy, Marketplace, Shopify, soccer, rewards
+  or subscription ledger is copied or changed.
+- Simulation orders are excluded from ordinary native shopper/token/tracking,
+  customer/order views, dashboards, real sales summaries and quote attribution.
+  Existing native payment, shipping, fulfillment and notification paths reject
+  simulation orders before provider/operational writes. Practice history remains
+  available only through the gated POS projection. Shared stock holds still
+  protect inventory from an unsafe catalog import; simulations are never imported
+  into a real merchant workspace.
 - Four additive `pos_*` tables hold register bindings, immutable payment intents,
   refund requests and a separate durable simulated-provider ledger. There is no
   production register provisioning endpoint, reader discovery, USB driver or
@@ -67,6 +75,24 @@ cannot over-refund. Refunds do not automatically restock. The printable receipt
 shows frozen line/tax totals and verified simulation status; it does not claim
 inbox delivery, card-network receipt compliance, settlement or real card payment.
 
+The demonstration supports fictional card and cash tenders. Card rehearsal uses
+the simulated reader outcomes. Cash rehearsal requires a bounded integer received
+amount covering the server-priced total; the server freezes tender, received
+amount and exact change in the immutable terms. Canonical simulated cash evidence
+settles immediately and commits stock once. Changed tender/received input cannot
+reuse the original UUID. Refunds inherit the original tender/provider and refund
+the sale amount, not the tendered amount or change. Older card attempts without
+these fields remain serviceable. No real cash is recorded, drawer opened or
+physical payment requested; live cash operations/shifts still require acceptance.
+
+Barcode entry supports a keyboard-wedge scanner or typed code that exactly equals
+an existing native catalog SKU. A private read-only server lookup checks the
+current register's tenant/site, physical merchandise availability and stock,
+including items beyond the bounded browse list. Unknown or duplicate exact SKUs
+fail without choosing an arbitrary product. Server checkout resolves price and
+stock again. There is no independent UPC/EAN/barcode mapping or camera/USB driver;
+source catalog mappings and the actual scanner still need verification.
+
 ## Local verification
 
 Use the existing fake-provider PHP tests with an in-memory SQLite database and
@@ -103,13 +129,26 @@ inventory, customer lookup/create or guest checkout, customer transaction histor
 receipts, returns/refunds and reporting. This increment is its disabled simulation
 foundation; it is not a complete retail system or an activated client installation.
 
-The current register is deliberately guest-only. Populated `customer_id` and
-`website_customer_id` inputs are rejected; simulation orders retain no customer
-link and create no customer profile, marketing consent or messaging workflow.
-The existing native `WebsiteCustomer::orders()` relationship and
-`WebsiteOrder.website_customer_id` provide a future order linkage. That relation
-alone does not establish paid purchase history: pending, unknown, cancelled and
-refunded states need canonical provider evidence and accurate display rules.
+The register defaults to Guest and supports an explicit active native customer
+selection through `website_customer_id`. The ambiguous legacy `customer_id` is
+rejected. The server resolves ownership and freezes the selected ID/contact
+snapshot into the original request and native order; a changed customer cannot
+reuse the original UUID. Contact edits or archival do not rewrite issued terms.
+Guest sales retain no customer link and never create a shared anonymous profile.
+
+Private Find/Create controls reuse `WebsiteCustomer`; create is explicit and
+UUID-bound, including no-email contacts. Duplicate email asks the cashier to
+select the existing native record rather than merging identities. No customer
+contact is stored in browser request recovery. Customer creation, selection and
+purchase history cause no marketing enrollment, consent or messaging workflow.
+
+The practice customer profile shows the latest 100 canonically confirmed
+simulation sales at the current assigned register, with confirmed refunds/net
+and unresolved refunds separate. Totals explicitly cover shown practice sales,
+with incomplete coverage flagged; they are not all-time, cross-register or real
+merchant revenue. Native `WebsiteCustomer::orders()`/`website_customer_id` are
+reused; pending, unknown, failed, guest and unrelated customer sales cannot become
+paid profile history. Simulations remain excluded from real customer analytics.
 
 Keep native retail shoppers and `website_*` orders in their existing tenant lane.
 The separate MarketingProfile/legacy retail customer directory is not an
@@ -121,8 +160,8 @@ anonymous sales and never store PAN/CVV or infer sensitive personal traits.
 
 | Phase | Concrete deliverable | Dependencies / acceptance |
 | --- | --- | --- |
-| 1 — this PR | Private polished setup and guest register; server prices/tax snapshot; native stock; durable simulated attempts/reconciliation; printable receipt; manager refund | Local/testing only, fictional allowlisted tenant, default-off flags, automated MySQL recovery/concurrency and source review |
-| 2 — retail customer/history | Tenant-scoped native customer search/create/select, explicit guest choice, profile view of verified native purchases and refund history | Review native customer permissions/deduplication and read-only CRM projection contract; reject cross-tenant substitutions; preserve consent; pending/unknown excluded from paid totals |
+| 1 — this PR | Private polished setup/register; SKU barcode entry; Guest/Find/Create and bounded practice customer history; card/cash rehearsal and server change; server prices/tax snapshot; native stock; durable attempts/reconciliation; printable receipt; manager refund | Local/testing only, fictional allowlisted tenant, default-off flags, automated MySQL recovery/concurrency and source review |
+| 2 — retail customer/history acceptance | Production-ready native profile permissions/identity policy and payment-confirmed cross-channel history after real provider acceptance | Review retention, deduplication and read-only CRM projection contract; preserve guest choice and consent; distinguish channel/refund uncertainty and real payments from simulations |
 | 3 — provider/device test pilot | One supported smart-reader adapter and/or embedded Android Terminal bridge, signed callbacks, missed-event reconciliation | Exact merchant/account/routing/country and device eligibility, separate approved test credentials/activation, server-bound location/reader, canonical payment/refund acceptance |
 | 4 — store operations | Reviewed returns/restock decisions, cashier permissions/shifts as required, daily payment/refund/settlement reporting, receipt delivery and selected peripherals | Return/tax/receipt policy, evidence of original-provider settlement/refund behavior, inventory audit and printer/scanner hardware acceptance; no fabricated revenue or duplicate channels |
 | 5 — shipping handoff and controlled launch | Verified service/merchandise mapping and carrier-software handoff, migration rehearsal, named tenant rollout | Existing shipping workflow documentation, approved data mapping, no postage surcharges, independent carrier/payment outcomes, explicit acceptance and protected release authorization |

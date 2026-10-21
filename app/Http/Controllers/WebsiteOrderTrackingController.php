@@ -20,7 +20,7 @@ class WebsiteOrderTrackingController extends Controller
         $number = $request->query('order');
         $token = $request->query('token');
         abort_unless(is_string($number) && strlen($number) <= 190 && is_string($token) && preg_match('/^[A-Za-z0-9]{56}$/D', $token), 404);
-        $order = WebsiteOrder::query()->forTenant($tenant)->where('tenant_site_id', $site->id)
+        $order = WebsiteOrder::query()->withoutPosSimulation()->forTenant($tenant)->where('tenant_site_id', $site->id)
             ->where('number', $number)->where('lookup_token', $token)->with('lines', 'shipments')->firstOrFail();
         abort_unless(hash_equals((string) $order->lookup_token, $token), 404);
 

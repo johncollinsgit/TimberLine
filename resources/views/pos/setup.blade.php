@@ -24,7 +24,7 @@
         <section class="panel setup-card">
             <div class="card-icon"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5h16v12H4zM8 21h8M12 17v4M8 9l2 2 5-4"/></svg></div>
             <span class="status succeeded">Available in simulation</span><h2>Practice checkout</h2>
-            <p class="muted">Rehearse a merchandise basket, server-confirmed totals, reader outcomes, receipts and manager refunds.</p>
+            <p class="muted">Rehearse merchandise baskets, card and cash outcomes, exact SKU entry, receipts and manager refunds.</p>
             <p class="helper-copy">No card details or real payments are collected.</p>
         </section>
         <section class="panel setup-card">
@@ -79,7 +79,7 @@
             <section class="panel" id="setup-checklist" aria-labelledby="checklist-heading"><h2 id="checklist-heading">Your next steps</h2>
                 <ol class="step-list"><li><strong>Sign in as yourself</strong><p>Keep staff Everbranch access separate from the owner's Stripe account.</p></li><li><strong>Try the practice register</strong><p>Use merchandise, check the total, then rehearse approval, a lost response and a refund.</p></li><li><strong>Review the live pilot</strong><p>Confirm the merchant, exact reader, tax, receipts and any peripherals before collecting real payments.</p></li></ol>
             </section>
-            <section class="panel" aria-labelledby="practice-tools-heading"><h2 id="practice-tools-heading">Practice tools</h2><div class="capabilities"><span>Simulated reader</span><span>Simulated partial refunds</span><span>Online only</span><span>Physical reader unavailable</span></div><p class="helper-copy" style="margin-bottom:0">Additional processors are planned and unavailable in this build.</p></section>
+            <section class="panel" aria-labelledby="practice-tools-heading"><h2 id="practice-tools-heading">Practice tools</h2><div class="capabilities"><span>Card rehearsal</span><span>Cash rehearsal</span><span>Exact SKU entry</span><span>Printable receipts</span><span>Online only</span><span>Physical reader unavailable</span></div><p class="helper-copy" style="margin-bottom:0">Additional processors are planned and unavailable in this build.</p></section>
             <section class="panel" aria-labelledby="help-heading"><h2 id="help-heading">A little help at the counter</h2>
                 <details class="help"><summary>Which sign-in do I use?</summary><p>Staff use their own Everbranch account. An authorized owner or admin manages the business's payment account through its separate provider sign-in.</p></details>
                 <details class="help"><summary>What if the reader stops responding?</summary><p>Open the existing sale and choose Check existing payment. Keep its original request until an outcome is confirmed. Avoid a replacement sale while it is uncertain.</p></details>

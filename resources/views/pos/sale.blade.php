@@ -8,7 +8,7 @@
         $uncertainRefund = $refunds->contains(fn ($refund) => in_array($refund->status, ['creating', 'pending', 'unknown', 'review'], true));
         $remaining = max(0, $order->total_cents - $settledRefunds);
         $unresolved = in_array($attempt->status, ['creating', 'awaiting_reader', 'processing', 'unknown', 'review'], true);
-        $readerControls = in_array($attempt->status, ['awaiting_reader', 'processing', 'unknown'], true);
+        $readerControls = $tender['kind'] === 'card' && in_array($attempt->status, ['awaiting_reader', 'processing', 'unknown'], true);
     @endphp
     <div class="page-heading">
         <div><a href="{{ route('pos.register', ['register' => $register->id, 'tenant' => $tenant->slug]) }}">← {{ $register->name }}</a><h1>Practice sale #{{ $attempt->id }}</h1><p class="muted">{{ $order->number }} · {{ $attempt->created_at->format('M j, Y H:i') }}</p></div>
@@ -31,11 +31,17 @@
             </tbody></table>
             <dl class="totals" style="margin-top:1rem"><div><dt>Subtotal</dt><dd>{{ $money($order->subtotal_cents) }}</dd></div><div><dt>Simulation tax</dt><dd>{{ $money($order->tax_cents) }}</dd></div><div class="total"><dt>Total USD</dt><dd>{{ $money($order->total_cents) }}</dd></div></dl>
             <p class="muted compact">These are the server-confirmed prices for this sale. Changing the catalog does not change this payment.</p>
+            <p class="muted compact">Customer at sale: <strong>{{ data_get($order->customer_snapshot, 'name', 'Guest') }}</strong></p>
+            @if($order->website_customer_id)<p class="no-print compact"><a href="{{ route('pos.customers.history', ['register' => $register->id, 'customer' => $order->website_customer_id, 'tenant' => $tenant->slug]) }}">View private practice history</a></p>@endif
+            <dl class="totals"><div><dt>Practice payment method</dt><dd>{{ $tender['kind'] === 'cash' ? 'Cash rehearsal' : 'Card rehearsal' }}</dd></div>@if($tender['kind'] === 'cash')<div><dt>Cash received (simulation)</dt><dd>{{ $money($tender['received_cents']) }}</dd></div><div><dt>Change due (simulation)</dt><dd>{{ $money($tender['change_cents']) }}</dd></div>@endif</dl>
         </section>
         <aside class="stack">
             <section class="panel" aria-labelledby="reader-heading">
-                <h2 id="reader-heading">Simulated smart reader</h2>
-                @if ($readerControls)
+                <h2 id="reader-heading">{{ $tender['kind'] === 'cash' ? 'Cash rehearsal' : 'Simulated smart reader' }}</h2>
+                @if ($tender['kind'] === 'cash' && $attempt->status === 'succeeded')
+                    <p class="muted">The cash rehearsal was recorded and stock committed once. The cash received and change above are frozen server values.</p>
+                    <a class="button full" href="{{ route('pos.receipt', ['attempt' => $attempt->id, 'tenant' => $tenant->slug]) }}">View simulation receipt</a>
+                @elseif ($readerControls)
                     <p class="muted">The total is ready. Choose a practice reader outcome.</p>
                     <div class="actions">
                         @foreach (['approved' => 'Approve simulation', 'declined' => 'Decline simulation', 'unknown' => 'Simulate lost response'] as $outcome => $label)
@@ -54,7 +60,7 @@
                         <form method="POST" action="{{ route('pos.cancel', ['attempt' => $attempt->id, 'tenant' => $tenant->slug]) }}">@csrf<button class="secondary" type="submit">Cancel existing sale</button></form>
                     </div>
                 @endif
-                <p class="muted compact">A simulated reader is used here. No physical terminal or payment account is connected.</p>
+                <p class="muted compact">{{ $tender['kind'] === 'cash' ? 'No cash drawer is controlled and no real cash is recorded by this rehearsal.' : 'A simulated reader is used here. No physical terminal or payment account is connected.' }}</p>
             </section>
             @if ($attempt->status === 'succeeded')
                 <section class="panel" aria-labelledby="refund-heading">
@@ -70,7 +76,7 @@
                                 <button type="submit" class="secondary full" disabled>Request simulated refund</button>
                             </form>
                         @endif
-                        <p class="muted compact">Manager action. Refunds use the original simulated payment and do not restock items.</p>
+                        <p class="muted compact">Manager action. Refunds use the original {{ $tender['kind'] === 'cash' ? 'cash rehearsal' : 'simulated card payment' }} and do not restock items.</p>
                     @else
                         <p class="muted compact">A manager must authorize refunds.</p>
                     @endif

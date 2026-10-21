@@ -192,6 +192,7 @@ class WebsiteShippingPlanService
 
     public function quoteForOrder(WebsiteOrder $order, int $quoteId): WebsiteShippingRateQuote
     {
+        $order->assertNotPosSimulation();
         $snapshot = $order->shipping_rate_snapshot ?? [];
         abort_unless(($snapshot['quote_id'] ?? null) === $quoteId && data_get($snapshot, 'plan.version') === 1, 422, 'This order needs a reviewed shipping plan.');
 
@@ -207,6 +208,7 @@ class WebsiteShippingPlanService
     /** Label purchase uses order-owned evidence, independent of subsequent cart/catalog edits. */
     public function assertOrderQuote(WebsiteOrder $order, WebsiteShippingRateQuote $quote): void
     {
+        $order->assertNotPosSimulation();
         $snapshot = $order->shipping_rate_snapshot ?? [];
         $expected = $this->orderSnapshot($quote, $order->shipping_cents);
         $connection = $this->connection($order->tenant_id);

@@ -20,7 +20,7 @@ class WebsiteShopperAccountController extends Controller
     {
         [$tenant, $site] = $this->publicSite($request, $websites);
         $customer = $this->sessionCustomer($request, $tenant, $site);
-        $orders = $customer ? WebsiteOrder::query()->forTenant($tenant)
+        $orders = $customer ? WebsiteOrder::query()->withoutPosSimulation()->forTenant($tenant)
             ->where('tenant_site_id', $site->id)->where('website_customer_id', $customer->id)
             ->with('lines', 'shipments')->latest()->paginate(10) : null;
 
@@ -107,7 +107,7 @@ class WebsiteShopperAccountController extends Controller
         [$tenant, $site] = $this->publicSite($request, $websites);
         $customer = $this->sessionCustomer($request, $tenant, $site);
         abort_unless($customer, 403);
-        $order = WebsiteOrder::query()->forTenant($tenant)
+        $order = WebsiteOrder::query()->withoutPosSimulation()->forTenant($tenant)
             ->where('tenant_site_id', $site->id)->where('website_customer_id', $customer->id)
             ->where('number', $number)->with('lines', 'shipments')->firstOrFail();
 
