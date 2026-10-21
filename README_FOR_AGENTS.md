@@ -50,6 +50,16 @@ fall through. The user's $5 pilot cap is total lifetime provider spend. Preserve
 legacy accepted subscriptions, the tablet demo and all data/action boundaries.
 Protected release and exact readiness evidence remain required. No new schema.
 
+## Fictional campus demo source candidate (October 21)
+
+`/platform/demos/lees-mcrae` is a canonical-host-only GET/HEAD document with
+embedded fictional fixtures and browser-session simulation. Do not wire its
+demo persona controls to production identity, tenant data or providers. It has
+no server mutation API; route-only session/heartbeat exclusions and restrictive
+CSP preserve ordinary app/POS behavior. See
+`docs/operations/lees-mcrae-campus-demo.md`. Deployment requires the normal
+reviewed PR, passing gates and exact `/ready` release evidence.
+
 ## Current product map and verified checkpoint
 
 Read [the current product/setup/release map](docs/operations/everbranch-current-state.md)

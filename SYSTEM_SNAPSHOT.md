@@ -19,6 +19,15 @@ default off and production is hard-denied. Read
 [the POS simulation runbook](docs/operations/pos-simulation.md) for the ownership
 contract, verification and remaining hardware/provider acceptance.
 
+## Fictional campus demonstration — October 21 source candidate
+
+The approved `/platform/demos/lees-mcrae` serves a standalone fictional,
+browser-session campus prototype on the canonical app host. It creates no tenant,
+session record, production task, provider action or payment. Role policies and
+all hosted interactions are explicit browser simulations; college map/PDF context
+is public. The production release and exact readiness SHA still determine when
+the route is live. See `docs/operations/lees-mcrae-campus-demo.md`.
+
 <!-- SES failure diagnostics: bounded AWS HTTP status/error code persist in the existing hold_reason; sending/retry gates are unchanged. See docs/operations/ses-migration.md. -->
 <!-- SES platform simulator audit: retain exact signed notifications encrypted only for the three approved platform simulator logical intents, after authentication and matched delivery handling. See docs/operations/ses-migration.md. -->
 <!-- SES actual event binding: native tenant auto-tag is ses:tenant; signed source may include a display name. See the simulator checkpoint in docs/operations/ses-migration.md. -->
