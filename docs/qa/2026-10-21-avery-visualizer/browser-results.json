@@ -1,0 +1,153 @@
+{
+  "scope": "Disposable loopback staging fixture; fictional grant; headless phone/tablet; no physical camera",
+  "rows": [
+    {
+      "engine": "chromium",
+      "browserVersion": "156.0.8078.4",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "name": "existing grant / Avery entry / responsive page / camera off"
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "156.0.8078.4",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "name": "protected model / explicit camera / permission denial / close focus"
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "156.0.8078.4",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "name": "self-hosted Worker/WASM ready / video only / pagehide cleanup",
+      "runtimeRequests": [
+        "/avery-visualizer/runtime/wasm/vision_wasm_internal.js",
+        "/avery-visualizer/runtime/wasm/vision_wasm_internal.wasm",
+        "/avery-visualizer/runtime/hand_landmarker.task"
+      ]
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "156.0.8078.4",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "name": "unavailable camera / truthful 3D fallback"
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "156.0.8078.4",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "name": "return navigation / foreign-scope rejected / no provider or mutation requests",
+      "pageErrors": [],
+      "failedRequests": [
+        {
+          "url": "http://127.0.0.1:8799/avery/visualizer/model.glb",
+          "error": "net::ERR_INTERNET_DISCONNECTED"
+        }
+      ]
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "156.0.8078.4",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "name": "blocked model / truthful connection failure / camera remains off",
+      "expectedFailedRequest": "/avery/visualizer/model.glb",
+      "failedRequests": [
+        {
+          "url": "http://127.0.0.1:8799/avery/visualizer/model.glb",
+          "error": "net::ERR_INTERNET_DISCONNECTED"
+        }
+      ],
+      "pageErrors": []
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "156.0.8078.4",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "name": "existing grant / Avery entry / responsive page / camera off"
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "156.0.8078.4",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "name": "protected model / explicit camera / permission denial / close focus"
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "156.0.8078.4",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "name": "self-hosted Worker/WASM ready / video only / pagehide cleanup",
+      "runtimeRequests": [
+        "/avery-visualizer/runtime/wasm/vision_wasm_internal.js",
+        "/avery-visualizer/runtime/wasm/vision_wasm_internal.wasm",
+        "/avery-visualizer/runtime/hand_landmarker.task"
+      ]
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "156.0.8078.4",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "name": "unavailable camera / truthful 3D fallback"
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "156.0.8078.4",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "name": "return navigation / foreign-scope rejected / no provider or mutation requests",
+      "pageErrors": [],
+      "failedRequests": [
+        {
+          "url": "http://127.0.0.1:8799/avery/visualizer/model.glb",
+          "error": "net::ERR_INTERNET_DISCONNECTED"
+        }
+      ]
+    },
+    {
+      "engine": "chromium",
+      "browserVersion": "156.0.8078.4",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "name": "blocked model / truthful connection failure / camera remains off",
+      "expectedFailedRequest": "/avery/visualizer/model.glb",
+      "failedRequests": [
+        {
+          "url": "http://127.0.0.1:8799/avery/visualizer/model.glb",
+          "error": "net::ERR_INTERNET_DISCONNECTED"
+        }
+      ],
+      "pageErrors": []
+    }
+  ]
+}

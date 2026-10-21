@@ -1,0 +1,110 @@
+{
+  "protectedBase": "573ee0c4f3036fdcfe2b97b1743ae070f1b8102b",
+  "scope": "Existing Avery-only protected demo; unpublished candidate; no deployment/config/account/provider changes",
+  "runtimeSource": "a5cf35775e2594ffa5a39e0a9972da2e6184accf",
+  "runtimeManifest": "public/avery-visualizer/build-manifest.json",
+  "privateFictionalModelSha256": "704ab8f5bbb71aa2372eeb31f97d9186da9e1a560337d38c2790ec1ebe8290d3",
+  "php": {
+    "tests": 37,
+    "assertions": 543,
+    "suites": [
+      "AveryVisualizerTest",
+      "AveryGuestAccessTest",
+      "RetailShowroomTest"
+    ],
+    "providerHttp": "none"
+  },
+  "browser": {
+    "groups": 12,
+    "engine": "Chromium",
+    "version": "156.0.8078.4",
+    "profiles": [
+      "390x844 viewport",
+      "1024x768 viewport"
+    ],
+    "mode": "Headless, synthetic video only; no physical camera",
+    "webkit": "not run; engine not installed",
+    "pageErrors": 0,
+    "providerOrMutationRequestsAfterGate": 0,
+    "expectedFailure": "Intentionally blocked protected GLB yields truthful connection error; camera stays off"
+  },
+  "checks": [
+    "Pint5PHPpass",
+    "JSsyntaxpass",
+    "gitdiffcheckpass",
+    "11runtimeSHA256pass",
+    "exactreversibleWASMbasepatchpass",
+    "embeddedcompleteGLBpass"
+  ],
+  "protectedFiles": {
+    "app/Services/Retail/AveryGuestAccess.php": {
+      "sha256": "d26335731111960d4830814170f551332e63d5afe2762ea45cd5909492a3d052",
+      "equalsProtectedBase": true
+    },
+    "app/Http/Controllers/Retail/AveryGuestController.php": {
+      "sha256": "0956c096c4201b4b7456e799a0e411b2f082da949011f5f3bd1b531f38f06134",
+      "equalsProtectedBase": true
+    },
+    "app/Http/Middleware/RetailPresenterAccess.php": {
+      "sha256": "aefdfe6fcd0098c427a96479603fe9042bbd7e6f123288b784c529f8aeeb9c22",
+      "equalsProtectedBase": true
+    },
+    "config/retail_showroom.php": {
+      "sha256": "c1e0c6741f515533a4f2e551002edf4b0a7f417b6806c885c7f3ae94073b3648",
+      "equalsProtectedBase": true
+    },
+    "bootstrap/app.php": {
+      "sha256": "68a1642ee4b11bbc5a12c1d2d9e1ffbd5c5e474dd04db27ba7c2a1ba5f31bed4",
+      "equalsProtectedBase": true
+    },
+    "routes/web.php": {
+      "sha256": "ecf5d5ccdf9d8410cfd57e721e85e4d5618fdb253af77c5f748c40dc3ddde7a4",
+      "equalsProtectedBase": true
+    },
+    "public/retail/app.mjs": {
+      "sha256": "ff3b03a08acef16b57f8d99f492088d942e4d113444c2da3a3bb7aa35b5aa978",
+      "equalsProtectedBase": true
+    },
+    "public/retail/avery.mjs": {
+      "sha256": "6fc1e73d57becca4f3a3aedadd4af775b19da455ad3f87eb424744fa1d8e460d",
+      "equalsProtectedBase": true
+    },
+    "public/retail/avery-data.mjs": {
+      "sha256": "3061ccec32200196759ea230b26ea7398567d2da074df6b02b7e09b765149afd",
+      "equalsProtectedBase": true
+    },
+    "public/retail/sw.js": {
+      "sha256": "81b212d9f2b852f7dc997df386abadf67691053d52a7be62e2c9dc6ad283389f",
+      "equalsProtectedBase": true
+    },
+    "package.json": {
+      "sha256": "4b54ab97d642131f7687f1bae6f196667c6252975fb66080d9770ee6b0e4b5b1",
+      "equalsProtectedBase": true
+    },
+    "package-lock.json": {
+      "sha256": "0c8738a9ad38449ac67991ef5f0b11659757511b82a435f73b13990510fd1d6c",
+      "equalsProtectedBase": true
+    },
+    "composer.json": {
+      "sha256": "944b4f1c4d7d646900a92c17b025d81cf9e82eb530621e5c4a9709bfc0644257",
+      "equalsProtectedBase": true
+    },
+    "composer.lock": {
+      "sha256": "20aa14f5053470bb6048d64e2591c2dbc9177774fd4f2bcdf70c41db7af0ff81",
+      "equalsProtectedBase": true
+    }
+  },
+  "evidenceHashes": {
+    "chromium-390-page.png": "5fd74f5728571c6a0147abf10f0b897268790b676140cc5fbe03a96912152e9b",
+    "browser-results.json": "b9d4ab624ff109a75c5c8c86cc85e015f5388c62dc477ef0e93e473f5c44ba25",
+    "chromium-1024-page.png": "56b08c90d035e64b25d631cb5c5cb2f7c1d7d59aee035de69fd66d6be583dac5",
+    "chromium-390-3d.png": "7c9926b833c66ac549b75041c3e33c4bc3611139e6967b52bea184287d8e1f93",
+    "chromium-1024-3d.png": "1bc73a21a57e5f35144361f09eb52b8fed45a2542419d2b8f48526a9411a7778"
+  },
+  "limitations": [
+    "Illustrative geometry and preset scale, not actual Avery fit/size/safety",
+    "Real device camera/tracking/occlusion/AR/sharing acceptance separate",
+    "No WebKit claim",
+    "This candidate is not live; root owns exact-head CI and preview publication"
+  ]
+}

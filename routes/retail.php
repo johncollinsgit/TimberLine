@@ -13,6 +13,8 @@ if (is_string($host) && $host !== '') {
         Route::get('/avery', [\App\Http\Controllers\Retail\AveryGuestController::class, 'show']);
         Route::post('/avery', [\App\Http\Controllers\Retail\AveryGuestController::class, 'unlock'])->middleware('throttle:5,1,avery-pin:');
         Route::get('/avery/presenter', [\App\Http\Controllers\Retail\AveryGuestController::class, 'presenter']);
+        Route::get('/avery/visualizer', [\App\Http\Controllers\Retail\AveryVisualizerController::class, 'show']);
+        Route::get('/avery/visualizer/model.glb', [\App\Http\Controllers\Retail\AveryVisualizerController::class, 'model']);
     });
     Route::domain($host)->prefix('retail')->middleware('throttle:120,1')->group(function () {
         Route::get('/preview/{slug}/{token}', [Retail::class, 'shared'])->where('token', '[A-Za-z0-9]{48}');

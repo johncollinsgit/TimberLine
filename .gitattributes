@@ -13,3 +13,9 @@ README.md export-ignore
 # Preserve upstream browser libraries verbatim and keep review focused on app code.
 public/studio/transformers.web.js linguist-vendored -whitespace
 public/studio/vendor/** linguist-vendored -whitespace
+
+# Pinned, licensed standalone visualizer; demo integration remains first-party.
+public/avery-visualizer/viewer*.js linguist-vendored -whitespace
+public/avery-visualizer/hand-scene-*.js linguist-vendored -whitespace
+public/avery-visualizer/assets/** linguist-vendored -whitespace
+public/avery-visualizer/runtime/** linguist-vendored -whitespace

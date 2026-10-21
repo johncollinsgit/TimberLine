@@ -315,3 +315,21 @@ versioned environment and atomically switch only that preview's `current` link.
 Verify fresh desktop/mobile entry, rejected foreign scopes, agreement links,
 AI availability and presenter restoration. Roll back the preview pointer to the
 previous release; preserve its shared storage and owner cookies.
+
+
+## Avery illustrative knife visualizer (October 21 candidate)
+
+The Avery-only concept links to `/avery/visualizer`. This uses the **existing**
+Avery staging grant, configured host, and request-local visitor; no additional
+code, identity, account, environment setting, or model activation is required.
+The exact GET `/avery/visualizer/model.glb` serves one fictional fixture outside
+`public/`, with private/no-store/noindex headers. All query parameters and other
+model paths are rejected. Generic JS/WASM/model-tracking libraries are public
+static code, not tenant or customer data. The protected page/model are outside
+the existing `/retail/` service-worker scope and are not offline packs.
+
+Keep the protected base release and existing versioned environment/shared storage.
+Publish only this preview candidate after exact-head checks. Do not use the main
+production deployment hook, run a schema migration, or rotate the existing grant.
+Rollback is the isolated preview's prior release pointer. See
+`AVERY_VISUALIZER.md` for asset provenance, local QA, and honest device limits.

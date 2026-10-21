@@ -1,3 +1,15 @@
+## October 21, 2026 — Protected Avery illustrative visualizer
+
+The existing Avery-only staging demo now links to `/avery/visualizer`. It reuses
+the unchanged `/avery` access grant and exact presenter-host restriction. Its
+single fictional GLB is served by `/avery/visualizer/model.glb` from outside
+`public/`; neither endpoint accepts merchant, tenant, model, or path parameters.
+Only those two GET paths are added to the guest allowlist. There is no platform
+login, new access code, provider activation, storefront rollout, or general app
+visualization API in this change. The separate page uses self-hosted runtime,
+explicit camera consent, and close/background/navigation cleanup. See
+`docs/retail/AVERY_VISUALIZER.md` for provenance, checks, and limitations.
+
 ## October 18, 2026 — Avery-only shared demo entry
 
 Retail v20 adds `/avery`, a CSRF-protected PIN entry enabled only on the exact

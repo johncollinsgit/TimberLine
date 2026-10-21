@@ -1,3 +1,12 @@
+## 2026-10-21 — Avery-only illustrative knife preview (candidate)
+
+The existing protected Avery concept gains a clear entry to a separate private
+visualizer page. It combines current public Avery branding/photography with a
+plainly disclosed fictional 3D knife; the model is not an Avery fit/size promise.
+Camera access is a second explicit action, microphone is prohibited, and closing
+or leaving stops the preview. The current access form, session lifetime, other
+showroom content, pricing, and presenter flow remain unchanged.
+
 ## 2026-10-18 — Shared prepaid pricing and future voice model choice (development)
 
 The Retail new-customer offer now presents the approved shared balance, no text

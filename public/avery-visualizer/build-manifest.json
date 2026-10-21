@@ -1,0 +1,43 @@
+{
+  "upstreamRepository": "https://github.com/johncollinsgit/TimberLine",
+  "upstreamCommit": "a5cf35775e2594ffa5a39e0a9972da2e6184accf",
+  "upstreamTree": "60f47dfa679871b4c2961641349e1daa53c94fa2",
+  "handModelSha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+  "files": {
+    "THIRD_PARTY_LICENSES.txt": "3a5d2ae2dd34395937ff02746b273d641241812613bd613ac4848a88b15381f8",
+    "assets/hand-worker-CaCHiSYY.js": "20dc504a4f0f4c6903d3c1f3cce6116bb79ccded3da0485685a57065afd0e24b",
+    "hand-scene-CDFNSF6m.js": "b24c206bc492ef93e82050319dc74bfe67d77ece5d953a5417eff58b99f081c9",
+    "runtime/hand_landmarker.task": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+    "runtime/wasm/vision_wasm_internal.js": "6f6b86509cf9e163ea1cfec7edc8cf53732699c04781e4c21c557c1ba402310e",
+    "runtime/wasm/vision_wasm_internal.wasm": "cb3ec20026a9aecc2a81a93c25630ceb5389297ddb7a5f0bd61dd09cde606b9b",
+    "runtime/wasm/vision_wasm_nosimd_internal.js": "9f8fc960e363f0fb2f42f7937b97ae9cf9a5630490f71031fa90caa9bb121938",
+    "runtime/wasm/vision_wasm_nosimd_internal.wasm": "924274fcd5ac8985f6570a8573e7971b7bd2d580ba1b8f3beb0ba8f95db6347c",
+    "viewer-Ch5YCX_w.js": "009f52bad1e6d291dbcae13b006452cda41474f07c412231e718d33d259c4b5b",
+    "viewer.css": "3859fae089b9c0923c47cc2847206d44ed4e9db28d03698ef257d420c966be6b",
+    "viewer.js": "121c4db79ac15b7183a4422c3a51c0cc93f16b9cc17cd99a4714691d532b1062"
+  },
+  "integration": "Existing protected Avery-only retail demo; generic runtime only",
+  "upstreamFiles": {
+    "THIRD_PARTY_LICENSES.txt": "3a5d2ae2dd34395937ff02746b273d641241812613bd613ac4848a88b15381f8",
+    "assets/hand-worker-CaCHiSYY.js": "20dc504a4f0f4c6903d3c1f3cce6116bb79ccded3da0485685a57065afd0e24b",
+    "hand-scene-CDFNSF6m.js": "b24c206bc492ef93e82050319dc74bfe67d77ece5d953a5417eff58b99f081c9",
+    "runtime/hand_landmarker.task": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+    "runtime/wasm/vision_wasm_internal.js": "6f6b86509cf9e163ea1cfec7edc8cf53732699c04781e4c21c557c1ba402310e",
+    "runtime/wasm/vision_wasm_internal.wasm": "cb3ec20026a9aecc2a81a93c25630ceb5389297ddb7a5f0bd61dd09cde606b9b",
+    "runtime/wasm/vision_wasm_nosimd_internal.js": "9f8fc960e363f0fb2f42f7937b97ae9cf9a5630490f71031fa90caa9bb121938",
+    "runtime/wasm/vision_wasm_nosimd_internal.wasm": "924274fcd5ac8985f6570a8573e7971b7bd2d580ba1b8f3beb0ba8f95db6347c",
+    "viewer-Ch5YCX_w.js": "2914ed630a647c4de46abbad3fa728cbaee2a2e186d46314abfe39151def0760",
+    "viewer.css": "3859fae089b9c0923c47cc2847206d44ed4e9db28d03698ef257d420c966be6b",
+    "viewer.js": "121c4db79ac15b7183a4422c3a51c0cc93f16b9cc17cd99a4714691d532b1062"
+  },
+  "patches": [
+    {
+      "file": "viewer-Ch5YCX_w.js",
+      "purpose": "FilesetResolver appends a slash; remove trailing slash from WASM base to prevent a double-slash asset URL.",
+      "find": "wasm: Q0 + \"wasm/\"",
+      "replace": "wasm: Q0 + \"wasm\"",
+      "upstreamSha256": "2914ed630a647c4de46abbad3fa728cbaee2a2e186d46314abfe39151def0760",
+      "patchedSha256": "009f52bad1e6d291dbcae13b006452cda41474f07c412231e718d33d259c4b5b"
+    }
+  ]
+}
