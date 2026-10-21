@@ -1,3 +1,12 @@
+## Terminal sign-in and workspace boundary (2026-10-21; source candidate)
+
+Preserve the active-membership-only `/terminal` shell's separate actor-bound
+clock, explicit CSRF selection and existing first-party auth-session continuity.
+Do not use operator/email fallbacks, grant memberships, expose provider records
+or convert saved online readiness into Terminal acceptance. Production PosAccess
+remains unchanged. Read `docs/operations/terminal-workspace-access.md` before
+extending it or handing work to a native app. Separate release review is required.
+
 ## Fictional hosted POS demo boundary (2026-10-21; source candidate)
 
 `/platform/demos/alpha-printing-pos` is a separate public fictional browser
