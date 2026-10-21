@@ -41,7 +41,13 @@ class EnforceCanonicalRuntimeHost
         $canonicalAuthHost = $canonicalBaseDomain !== null
             && ($host === $canonicalBaseDomain || str_ends_with($host, '.'.$canonicalBaseDomain));
         $mobileAuthCookiePresent = $request->cookies->has('everbranch-mobile-auth-session');
-        $mobileAuthRoute = $request->is('mobile/authorize')
+        // The terminal uses this existing first-party authentication lane too.
+        // Its entry, password/2FA, Google return and logout must use one Store,
+        // even when an unrelated platform session cookie is also present.
+        $terminalHost = $host === $this->normalizeHost((string) config('tenancy.domains.canonical.landlord_host'));
+        $mobileAuthRoute = ($terminalHost && $request->is('terminal', 'terminal/*'))
+            || ($terminalHost && $mobileAuthCookiePresent && $request->is('auth/google/redirect', 'auth/google/callback'))
+            || $request->is('mobile/authorize')
             || $request->is('forgot-password', 'reset-password', 'reset-password/*')
             || $request->is('email/confirm/*')
             || ($request->is('login') && $request->boolean('mobile_email'))

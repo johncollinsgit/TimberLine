@@ -5,6 +5,8 @@ use Illuminate\Support\Facades\Route;
 
 require __DIR__.'/pos-demo.php';
 
+require __DIR__.'/terminal.php';
+
 // The service additionally requires local/testing, explicit rollout and tenant access.
 // This private route does not enable merchant collection or advertise a POS Branch.
 Route::middleware(['auth', 'verified', 'tenant.access'])

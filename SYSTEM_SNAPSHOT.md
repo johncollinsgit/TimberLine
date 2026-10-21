@@ -1,3 +1,12 @@
+## Authenticated terminal workspace shell (2026-10-21; source candidate)
+
+`/terminal` reuses existing sign-in and active tenant memberships for explicit
+workspace selection, fixed session expiry and a read-only readiness shell.
+It uses the existing first-party auth session, never bootstraps membership,
+and preserves production POS/payment guards. No provider activation or native
+iOS integration is included. See [the access contract](docs/operations/terminal-workspace-access.md).
+Source/tests do not establish release or financial acceptance.
+
 ## Fictional browser POS demonstration (2026-10-21; source candidate)
 
 The separate public `/platform/demos/alpha-printing-pos` source candidate uses
