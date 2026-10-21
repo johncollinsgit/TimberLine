@@ -2597,3 +2597,5 @@ require __DIR__.'/ai-branch.php';
 require __DIR__.'/website-invoices.php';
 
 require __DIR__.'/pos.php';
+
+require __DIR__.'/campus-demo.php';
