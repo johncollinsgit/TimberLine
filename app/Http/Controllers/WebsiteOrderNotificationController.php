@@ -32,6 +32,7 @@ class WebsiteOrderNotificationController extends Controller
 
     private function authorizeOrder(Request $request, WebsiteOrder $order): void
     {
+        $order->assertNotPosSimulation();
         $tenant = $request->attributes->get('current_tenant');
         abort_unless($tenant instanceof Tenant && $order->tenant_id === $tenant->id, 404);
         app(WebsiteShippingAccessService::class)->assertCanManage($tenant, $request->user());

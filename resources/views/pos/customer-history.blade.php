@@ -1,0 +1,16 @@
+@extends('pos.layout')
+@section('title', 'Private practice history')
+@section('content')
+    @php($money = fn ($cents) => '$'.number_format($cents / 100, 2))
+    <div class="page-heading"><div><a href="{{ route('pos.register', ['register' => $register->id, 'tenant' => $tenant->slug]) }}">← {{ $register->name }}</a><div class="eyebrow" style="margin-top:1rem">Private simulation history</div><h1>{{ $history['customer']['name'] }}</h1><p class="muted">{{ implode(' · ', array_filter([$history['customer']['email'], $history['customer']['phone']])) }}</p></div><span class="status">No real payments</span></div>
+    <div class="notice"><strong>Confirmed practice sales at this register only.</strong><p>Totals cover the latest {{ $history['paid_sale_count'] }} shown confirmed sales, up to 100. Guest sales, unconfirmed payments, other registers and live website orders are excluded. Pending refunds are shown separately and do not reduce confirmed net.</p>@if(!$history['history_complete'])<p>Older confirmed practice sales exist. These are bounded totals, not the customer's complete history.</p>@endif</div>
+    <section class="panel" aria-labelledby="history-totals"><h2 id="history-totals">Shown simulation totals · USD</h2><dl class="totals"><div><dt>Gross confirmed practice sales</dt><dd>{{ $money($history['gross_cents']) }}</dd></div><div><dt>Confirmed simulated refunds</dt><dd>{{ $money($history['confirmed_refunds_cents']) }}</dd></div><div class="total"><dt>Confirmed net</dt><dd>{{ $money($history['net_cents']) }}</dd></div><div><dt>Pending refunds (not deducted)</dt><dd>{{ $money($history['pending_refunds_cents']) }}</dd></div></dl></section>
+    <section class="panel" style="margin-top:1.25rem" aria-labelledby="history-sales"><h2 id="history-sales">Verified simulation receipts</h2>
+        @forelse($history['sales'] as $sale)
+            <article class="customer-result"><h3>{{ $sale['number'] }}</h3><p class="helper-copy">{{ $sale['paid_at'] }} · Customer at sale: {{ data_get($sale, 'customer_snapshot.name', 'Guest') }}</p><dl class="totals"><div><dt>Gross</dt><dd>{{ $money($sale['gross_cents']) }}</dd></div><div><dt>Confirmed refunds</dt><dd>{{ $money($sale['confirmed_refunds_cents']) }}</dd></div><div><dt>Confirmed net</dt><dd>{{ $money($sale['net_cents']) }}</dd></div>@if($sale['pending_refunds_cents'])<div><dt>Pending refunds (not deducted)</dt><dd>{{ $money($sale['pending_refunds_cents']) }}</dd></div>@endif</dl><div class="actions"><a class="button secondary" href="{{ route('pos.receipt', ['attempt' => $sale['attempt_id'], 'tenant' => $tenant->slug]) }}">View simulation receipt</a><a href="{{ route('pos.show', ['attempt' => $sale['attempt_id'], 'tenant' => $tenant->slug]) }}{{ $canRefund ? '#refund-heading' : '' }}">{{ $canRefund ? 'Review sale or manager refund' : 'Open sale' }}</a></div></article>
+        @empty
+            <div class="empty-state"><h3>No confirmed practice sales yet.</h3><p class="muted">An explicitly selected customer appears here after their simulated payment is verified. A guest sale stays outside this history.</p></div>
+        @endforelse
+        @unless($canRefund)<p class="helper-copy">A manager must authorize refunds from the original sale.</p>@endunless
+    </section>
+@endsection

@@ -38,7 +38,7 @@ class PirateShipSpreadsheetBridge
         return response()->streamDownload(function () use ($tenant, $site): void {
             $stream = fopen('php://output', 'w');
             fputcsv($stream, ['Order ID', 'Full Name', 'Address Line 1', 'Address Line 2', 'City', 'State', 'Zip', 'Country', 'Email', 'Phone', 'Order Items', 'Order Value', 'Requested Shipping Service']);
-            WebsiteOrder::query()->forTenant($tenant)->where('tenant_site_id', $site->id)
+            WebsiteOrder::query()->withoutPosSimulation()->forTenant($tenant)->where('tenant_site_id', $site->id)
                 ->where('payment_status', 'paid')->where('fulfillment_method', 'ship')->where('fulfillment_status', 'unfulfilled')
                 ->whereDoesntHave('shipments')->with('lines')->orderBy('id')->chunkById(100, function ($orders) use ($stream): void {
                     foreach ($orders as $order) {
@@ -111,7 +111,7 @@ class PirateShipSpreadsheetBridge
             $imported = 0;
             $already = 0;
             foreach ($rows as $row) {
-                $order = WebsiteOrder::query()->forTenant($tenant)->where('tenant_site_id', $site->id)
+                $order = WebsiteOrder::query()->withoutPosSimulation()->forTenant($tenant)->where('tenant_site_id', $site->id)
                     ->where('number', $row['number'])->lockForUpdate()->first();
                 if (! $order || $order->payment_status !== 'paid' || $order->fulfillment_method !== 'ship') {
                     throw ValidationException::withMessages(['file' => 'Order '.$row['number'].' is not a paid shipping order in this workspace. Nothing was imported.']);

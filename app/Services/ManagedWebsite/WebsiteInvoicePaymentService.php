@@ -34,7 +34,7 @@ class WebsiteInvoicePaymentService
     {
         $totals = ['collections' => 0, 'discounts' => 0, 'tax' => 0, 'refunds' => 0, 'fees' => 0,
             'charge_net' => 0, 'balance_due' => 0, 'fees_pending' => 0];
-        WebsiteOrder::forTenantId($site->tenant_id)->where('tenant_site_id', $site->id)
+        WebsiteOrder::withoutPosSimulation()->forTenantId($site->tenant_id)->where('tenant_site_id', $site->id)
             ->whereIn('source', ['staff_quote', 'staff_draft_invoice'])->whereNotNull('service_request')
             ->with('payments')->chunkById(100, function ($orders) use (&$totals) {
                 foreach ($orders as $order) {
@@ -92,6 +92,7 @@ class WebsiteInvoicePaymentService
 
     public function checkout(WebsiteOrder $order, string $installment, string $origin, string $method = 'card'): string
     {
+        $order->assertNotPosSimulation();
         $tenant = Tenant::findOrFail($order->tenant_id);
         abort_unless($this->enabled($tenant) && config('managed_website.commerce_enabled'), 423, 'Invoice checkout is not enabled.');
         $ready = app(TenantPaymentsReadinessService::class)->readinessFor($tenant);
@@ -204,6 +205,13 @@ class WebsiteInvoicePaymentService
         if (! $payment) {
             return false;
         }
+        $orderQuery = WebsiteOrder::query()->forTenantId($payment->tenant_id)->withoutPosSimulation()->whereKey($payment->website_order_id);
+        if (DB::transactionLevel() > 0) {
+            $orderQuery->sharedLock();
+        }
+        if (! $orderQuery->first(['id'])) {
+            return true;
+        }
         if (($payload['account'] ?? null) !== data_get($payment->metadata, 'account_id')
             || ($payload['livemode'] ?? null) !== data_get($payment->metadata, 'livemode')
             || ! preg_match('/^evt_[A-Za-z0-9_]+$/D', (string) ($payload['id'] ?? ''))) {
@@ -226,6 +234,7 @@ class WebsiteInvoicePaymentService
 
     public function reconcile(WebsitePayment $payment): void
     {
+        WebsiteOrder::query()->forTenantId($payment->tenant_id)->findOrFail($payment->website_order_id)->assertNotPosSimulation();
         $payment->refresh();
         $stripe = app(WebsiteStripeService::class);
         if (! $payment->provider_session_id) {
@@ -249,7 +258,7 @@ class WebsiteInvoicePaymentService
             ['expand' => ['payment_intent.latest_charge.balance_transaction']]);
         abort_unless($response->successful(), 502, 'Invoice payment verification is unavailable.');
         $session = (array) $response->json();
-        $order = WebsiteOrder::forTenantId($payment->tenant_id)->findOrFail($payment->website_order_id);
+        $order = WebsiteOrder::withoutPosSimulation()->forTenantId($payment->tenant_id)->findOrFail($payment->website_order_id);
         $this->locked($order, function ($order) use ($payment, $session, $stripe) {
             $payment->refresh();
             $metadata = $payment->metadata;
@@ -383,7 +392,10 @@ class WebsiteInvoicePaymentService
             abort_unless($variant->is_available && $variant->product?->status === 'active'
                 && (int) $variant->product?->tenant_site_id === (int) $order->tenant_site_id, 422, 'An invoice item is no longer available.');
             $quantity = $lines->sum('quantity');
-            $others = WebsiteInventoryReservation::forTenantId($order->tenant_id)->where('website_product_variant_id', $id)->where('website_order_id', '!=', $order->id)->where('status', 'active')->sum('quantity');
+            // The locked variant is the shared stock authority; use a current
+            // read so a pre-existing RR snapshot cannot hide a POS/web hold.
+            $others = WebsiteInventoryReservation::forTenantId($order->tenant_id)->where('website_product_variant_id', $id)
+                ->where('website_order_id', '!=', $order->id)->where('status', 'active')->lockForUpdate()->get()->sum('quantity');
             abort_unless($variant->inventory_quantity !== null && $variant->inventory_quantity - $others >= $quantity, 422, 'An invoice item no longer has enough stock.');
             WebsiteInventoryReservation::updateOrCreate(['tenant_id' => $order->tenant_id, 'website_order_id' => $order->id, 'website_product_variant_id' => $id],
                 ['quantity' => $quantity, 'status' => 'active', 'expires_at' => $expires->copy()->addMinutes(5)]);
@@ -401,7 +413,7 @@ class WebsiteInvoicePaymentService
         if (now()->timestamp <= (int) data_get($payment->metadata, 'expires_at') + 300) {
             return;
         }
-        $order = WebsiteOrder::forTenantId($payment->tenant_id)->findOrFail($payment->website_order_id);
+        $order = WebsiteOrder::withoutPosSimulation()->forTenantId($payment->tenant_id)->findOrFail($payment->website_order_id);
         $this->locked($order, function ($order) use ($payment) {
             $payment->refresh();
             if ($payment->provider_session_id || data_get($payment->metadata, 'paid_confirmed')) {
@@ -419,7 +431,7 @@ class WebsiteInvoicePaymentService
         return DB::transaction(function () use ($order, $action) {
             TenantSite::forTenantId($order->tenant_id)->lockForUpdate()->findOrFail($order->tenant_site_id);
 
-            return $action(WebsiteOrder::forTenantId($order->tenant_id)->lockForUpdate()->findOrFail($order->id));
+            return $action(WebsiteOrder::withoutPosSimulation()->forTenantId($order->tenant_id)->lockForUpdate()->findOrFail($order->id));
         }, 3);
     }
 }

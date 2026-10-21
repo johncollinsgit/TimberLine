@@ -1,3 +1,15 @@
+## Local POS simulation foundation (2026-10-21; source only, disabled)
+
+A separate local/testing-only register rehearses native catalog prices, confirmed
+simulation tax, shared inventory holds, immutable payment attempts, independent
+simulated-reader evidence, reconciliation, card/cash rehearsal, exact-SKU barcode
+entry, explicit native customer/guest choice and practice history, private printable
+simulation receipts and manager refunds. No Stripe/Terminal adapter, credentials,
+provider call, merchant onboarding, production activation or real payment is included. All rollout gates
+default off and production is hard-denied. Read
+[the POS simulation runbook](docs/operations/pos-simulation.md) for the ownership
+contract, verification and remaining hardware/provider acceptance.
+
 # Everbranch
 
 Read the [current product, setup and release map](docs/operations/everbranch-current-state.md)

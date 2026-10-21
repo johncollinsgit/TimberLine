@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npm run typecheck && npm run test:trajectory && npm run test:ai-voice && vite build",
+    "build": "npm run typecheck && npm run test:trajectory && npm run test:ai-voice && npm run test:pos && vite build",
     "test:highlevel-fleet": "node --test tests/e2e/highlevel-fleet.test.mjs",
     "test:trajectory": "node --test tests/e2e/trajectory-money.test.mjs tests/e2e/trajectory-charts.test.mjs tests/e2e/trajectory-bank-link.test.mjs",
     "test:ai-voice": "node --test tests/e2e/ai-voice-conversation.test.mjs",
@@ -28,7 +28,8 @@
     "test:team-laravel": "php vendor/bin/pest --configuration=phpunit.team.xml --compact",
     "test:team-laravel-browser": "node scripts/everbranch-team/laravel-acceptance.mjs",
     "test:team-laravel-views": "node scripts/everbranch-team/laravel-view-smoke.mjs",
-    "team:parity": "node scripts/everbranch-team/build-parity-matrix.mjs"
+    "team:parity": "node scripts/everbranch-team/build-parity-matrix.mjs",
+    "test:pos": "node --test tests/e2e/pos-request-keys.test.mjs tests/e2e/pos-register.test.mjs tests/e2e/pos-customers.test.mjs"
   },
   "dependencies": {
     "@glideapps/glide-data-grid": "^6.0.3",

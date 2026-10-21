@@ -17,7 +17,7 @@ class PirateShipBridgeController extends Controller
     public function index(Request $request, PirateShipSpreadsheetBridge $bridge): View
     {
         [$tenant, $site] = $this->context($request, $bridge);
-        $readyCount = WebsiteOrder::query()->forTenant($tenant)->where('tenant_site_id', $site->id)
+        $readyCount = WebsiteOrder::query()->withoutPosSimulation()->forTenant($tenant)->where('tenant_site_id', $site->id)
             ->where('payment_status', 'paid')->where('fulfillment_method', 'ship')
             ->where('fulfillment_status', 'unfulfilled')->whereDoesntHave('shipments')->count();
         $recentShipments = WebsiteShipment::query()->forTenant($tenant)->where('provider', 'pirate_ship')

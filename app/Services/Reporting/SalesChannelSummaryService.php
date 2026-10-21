@@ -94,7 +94,7 @@ class SalesChannelSummaryService
     /** @return Collection<int,array{key:string,label:string,order_count:int,revenue_cents:int,latest_order_at:?string}> */
     private function websiteChannel(int $tenantId, CarbonInterface $startsAt, CarbonInterface $endsAt): Collection
     {
-        $summary = WebsiteOrder::query()
+        $summary = WebsiteOrder::query()->withoutPosSimulation()
             ->forTenantId($tenantId)
             ->where('payment_status', 'paid')
             ->whereBetween('paid_at', [$startsAt, $endsAt])

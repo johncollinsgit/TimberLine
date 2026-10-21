@@ -627,7 +627,7 @@ class WebsiteShipmentLifecycleService
     {
         return DB::transaction(function () use ($order, $callback) {
             TenantSite::query()->forTenantId($order->tenant_id)->lockForUpdate()->findOrFail($order->tenant_site_id);
-            $order = WebsiteOrder::query()->forTenantId($order->tenant_id)->lockForUpdate()->findOrFail($order->id);
+            $order = WebsiteOrder::query()->withoutPosSimulation()->forTenantId($order->tenant_id)->lockForUpdate()->findOrFail($order->id);
 
             return $callback($order);
         }, 3);
@@ -635,7 +635,7 @@ class WebsiteShipmentLifecycleService
 
     private function locked(WebsiteShipment $shipment, callable $callback): mixed
     {
-        $order = WebsiteOrder::query()->forTenantId($shipment->tenant_id)->findOrFail($shipment->website_order_id);
+        $order = WebsiteOrder::query()->withoutPosSimulation()->forTenantId($shipment->tenant_id)->findOrFail($shipment->website_order_id);
 
         return $this->orderLock($order, function ($order) use ($shipment, $callback) {
             $shipment = WebsiteShipment::query()->forTenantId($order->tenant_id)->where('website_order_id', $order->id)->lockForUpdate()->findOrFail($shipment->id);

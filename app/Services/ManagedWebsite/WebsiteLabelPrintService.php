@@ -4,6 +4,7 @@ namespace App\Services\ManagedWebsite;
 
 use App\Models\Tenant;
 use App\Models\User;
+use App\Models\WebsiteOrder;
 use App\Models\WebsiteShipment;
 use App\Models\WebsiteShipmentEvent;
 use Illuminate\Support\Facades\DB;
@@ -43,6 +44,7 @@ class WebsiteLabelPrintService
 
     public function attempt(WebsiteShipment $shipment, User $actor, string $requestId): ?array
     {
+        WebsiteOrder::query()->forTenantId($shipment->tenant_id)->findOrFail($shipment->website_order_id)->assertNotPosSimulation();
         abort_unless(Str::isUuid($requestId), 422);
         $event = WebsiteShipmentEvent::query()->forTenantId($shipment->tenant_id)->where('website_shipment_id', $shipment->id)
             ->where('provider_event_id', 'print:'.$requestId.':requested')->first();
@@ -56,6 +58,7 @@ class WebsiteLabelPrintService
 
     public function result(WebsiteShipment $shipment, User $actor, string $requestId, string $result): void
     {
+        WebsiteOrder::query()->forTenantId($shipment->tenant_id)->findOrFail($shipment->website_order_id)->assertNotPosSimulation();
         app(WebsiteShippingAccessService::class)->assertCanManage(Tenant::query()->findOrFail($shipment->tenant_id), $actor);
         abort_unless(in_array($result, ['operator_confirmed', 'failed', 'cancelled'], true), 422);
         DB::transaction(function () use ($shipment, $actor, $requestId, $result): void {

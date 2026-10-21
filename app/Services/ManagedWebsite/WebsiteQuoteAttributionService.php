@@ -15,6 +15,7 @@ class WebsiteQuoteAttributionService
 {
     public function link(WebsiteCustomer $customer, ?WebsiteOrder $order = null): void
     {
+        $order?->assertNotPosSimulation();
         $email = strtolower(trim((string) $customer->email));
         $phone = $this->phone($customer->phone);
         if ($email === '' || $phone === '') {
@@ -63,7 +64,7 @@ class WebsiteQuoteAttributionService
                     return;
                 }
 
-                $order = WebsiteOrder::query()
+                $order = WebsiteOrder::query()->withoutPosSimulation()
                     ->forTenant($tenant)
                     ->where('website_customer_id', $customer->id)
                     ->where('created_at', '>=', $submission->submitted_at)

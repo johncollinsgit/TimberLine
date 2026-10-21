@@ -15,6 +15,9 @@ class WebsiteStripeService
 
     public function client(?WebsitePayment $payment = null): PendingRequest
     {
+        if ($payment) {
+            WebsiteOrder::query()->forTenantId($payment->tenant_id)->findOrFail($payment->website_order_id)->assertNotPosSimulation();
+        }
         $key = (string) config('services.stripe.secret');
         abort_unless(str_starts_with($key, 'sk_test_') || str_starts_with($key, 'sk_live_'), 423, 'Stripe is not configured.');
         if ($payment) {
@@ -70,6 +73,7 @@ class WebsiteStripeService
 
     public function event(WebsiteOrder $order, string $type, string $message, array $data = [], ?int $actorId = null): void
     {
+        $order->assertNotPosSimulation();
         WebsiteOrderEvent::query()->create(['tenant_id' => $order->tenant_id, 'website_order_id' => $order->id,
             'user_id' => $actorId, 'event_type' => $type, 'visibility' => 'staff', 'message' => $message, 'data' => $data]);
     }

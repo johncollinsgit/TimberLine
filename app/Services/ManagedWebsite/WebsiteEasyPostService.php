@@ -3,6 +3,7 @@
 namespace App\Services\ManagedWebsite;
 
 use App\Models\IntegrationConnection;
+use App\Models\WebsiteOrder;
 use App\Models\WebsiteShipment;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
@@ -12,6 +13,7 @@ class WebsiteEasyPostService
 {
     public function connection(WebsiteShipment $shipment): IntegrationConnection
     {
+        WebsiteOrder::query()->forTenantId($shipment->tenant_id)->findOrFail($shipment->website_order_id)->assertNotPosSimulation();
         abort_unless($shipment->provider === 'easypost' && data_get($shipment->parcel, '_native.version') === 1, 422, 'This shipment requires a separate provider review.');
         $connection = IntegrationConnection::query()->forTenantId($shipment->tenant_id)->where('provider', 'easypost')
             ->findOrFail((int) data_get($shipment->parcel, '_native.connection_id'));

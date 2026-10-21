@@ -7297,12 +7297,12 @@ DROP TABLE IF EXISTS `platform_email_deliveries`;
 CREATE TABLE `platform_email_deliveries` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `platform_email_message_id` bigint unsigned NOT NULL,
-  `recipient_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `recipient` text COLLATE utf8mb4_unicode_ci NOT NULL,
-  `provider_message_id` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `state` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'queued',
-  `hold_reason` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `event_state` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `recipient_hash` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `recipient` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider_message_id` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `state` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'queued',
+  `hold_reason` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `event_state` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `event_hashes` json DEFAULT NULL,
   `provider_cost_micros` int unsigned NOT NULL,
   `submitted_at` timestamp NULL DEFAULT NULL,
@@ -7322,16 +7322,124 @@ DROP TABLE IF EXISTS `platform_email_messages`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `platform_email_messages` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `group_key` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `payload_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `mime` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `group_key` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload_hash` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `mime` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned DEFAULT NULL,
-  `from_email` varchar(254) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `configuration_set` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `from_email` varchar(254) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `configuration_set` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `pem_group_uq` (`group_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `pos_payment_attempts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pos_payment_attempts` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `pos_register_id` bigint unsigned NOT NULL,
+  `website_order_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned DEFAULT NULL,
+  `request_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `request_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `snapshot` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider_id` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `provider_requested_at` timestamp NULL DEFAULT NULL,
+  `stock_committed_at` timestamp NULL DEFAULT NULL,
+  `last_error` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `pos_pay_request_uq` (`tenant_id`,`request_id`),
+  UNIQUE KEY `pos_pay_provider_uq` (`provider_id`),
+  KEY `pos_pay_register_idx` (`pos_register_id`),
+  KEY `pos_pay_order_idx` (`website_order_id`),
+  KEY `pos_pay_user_idx` (`user_id`),
+  KEY `pos_pay_status_idx` (`status`,`updated_at`),
+  CONSTRAINT `pos_pay_order_fk` FOREIGN KEY (`website_order_id`) REFERENCES `website_orders` (`id`) ON DELETE RESTRICT,
+  CONSTRAINT `pos_pay_register_fk` FOREIGN KEY (`pos_register_id`) REFERENCES `pos_registers` (`id`) ON DELETE RESTRICT,
+  CONSTRAINT `pos_pay_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `pos_pay_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `pos_refunds`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pos_refunds` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `pos_payment_attempt_id` bigint unsigned NOT NULL,
+  `user_id` bigint unsigned DEFAULT NULL,
+  `request_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `request_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `snapshot` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `amount_cents` int unsigned NOT NULL,
+  `reason` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider_id` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `provider_requested_at` timestamp NULL DEFAULT NULL,
+  `last_error` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `pos_refund_request_uq` (`tenant_id`,`request_id`),
+  UNIQUE KEY `pos_refund_provider_uq` (`provider_id`),
+  KEY `pos_refund_attempt_idx` (`pos_payment_attempt_id`),
+  KEY `pos_refund_user_idx` (`user_id`),
+  CONSTRAINT `pos_refund_attempt_fk` FOREIGN KEY (`pos_payment_attempt_id`) REFERENCES `pos_payment_attempts` (`id`) ON DELETE RESTRICT,
+  CONSTRAINT `pos_refund_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `pos_refund_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `pos_registers`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pos_registers` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `tenant_site_id` bigint unsigned NOT NULL,
+  `website_fulfillment_location_id` bigint unsigned NOT NULL,
+  `name` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `reader_id` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `merchant_id` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `currency` varchar(3) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'usd',
+  `active` tinyint(1) NOT NULL DEFAULT '0',
+  `cashier_user_ids` json DEFAULT NULL,
+  `tax_rate_bps` int unsigned NOT NULL,
+  `tax_basis` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tax_confirmed_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `pos_reg_reader_uq` (`reader_id`),
+  KEY `pos_reg_tenant_idx` (`tenant_id`),
+  KEY `pos_reg_site_idx` (`tenant_site_id`),
+  KEY `pos_reg_location_idx` (`website_fulfillment_location_id`),
+  CONSTRAINT `pos_reg_location_fk` FOREIGN KEY (`website_fulfillment_location_id`) REFERENCES `website_fulfillment_locations` (`id`) ON DELETE RESTRICT,
+  CONSTRAINT `pos_reg_site_fk` FOREIGN KEY (`tenant_site_id`) REFERENCES `tenant_sites` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `pos_reg_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `pos_simulator_objects`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pos_simulator_objects` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `object_key` varchar(160) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `kind` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `request_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `pos_sim_object_uq` (`object_key`),
+  KEY `pos_sim_tenant_idx` (`tenant_id`),
+  CONSTRAINT `pos_sim_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `pour_batch_lines`;
@@ -13021,3 +13129,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (305,'2026_10_20_12
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (306,'2026_10_20_130000_add_native_marketplace_store',31);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (307,'2026_10_20_140000_add_marketplace_markets_and_reporting',31);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (308,'2026_10_20_200000_create_platform_email_deliveries',32);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (309,'2026_10_21_160000_create_pos_simulation_tables',33);

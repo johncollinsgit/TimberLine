@@ -35,10 +35,11 @@ class WebsiteOrderNotificationService
         if (! in_array($order->source, ['native', 'staff_quote', 'staff_draft_invoice'], true)) {
             return;
         }
+        $order->assertNotPosSimulation();
         if (DB::transactionLevel() < 1 || ! isset(self::COPY[$kind]) || trim($transitionKey) === '') {
             throw new \LogicException('Native order notifications require a supported accepted transition transaction.');
         }
-        $order = WebsiteOrder::query()->forTenantId($order->tenant_id)->with('lines')->findOrFail($order->id);
+        $order = WebsiteOrder::query()->withoutPosSimulation()->forTenantId($order->tenant_id)->with('lines')->findOrFail($order->id);
         if ($shipment) {
             $shipment = WebsiteShipment::query()->forTenantId($order->tenant_id)->where('website_order_id', $order->id)->findOrFail($shipment->id);
         }
@@ -125,7 +126,7 @@ class WebsiteOrderNotificationService
                 || ($row->status !== 'queued' && $row->next_attempt_at?->isFuture())) {
                 return null;
             }
-            $order = WebsiteOrder::query()->forTenantId($row->tenant_id)->find($row->website_order_id);
+            $order = WebsiteOrder::query()->withoutPosSimulation()->forTenantId($row->tenant_id)->find($row->website_order_id);
             $tenant = Tenant::query()->find($row->tenant_id);
             $readiness = $tenant ? $this->readiness($tenant) : ['ready' => false, 'public_url' => null];
             $expectedUrl = $order && $readiness['public_url'] ? $this->orderUrl($order, $readiness['public_url']) : null;
@@ -178,12 +179,13 @@ class WebsiteOrderNotificationService
     /** Explicit operator action only. This never makes blocked history auto-send. */
     public function retryBlocked(WebsiteOrder $order, int $id, User $actor, string $reason): void
     {
+        $order->assertNotPosSimulation();
         app(WebsiteShippingAccessService::class)->authorize($actor, $order->tenant_id);
         abort_if(mb_strlen(trim($reason)) < 10 || mb_strlen($reason) > 1000, 422, 'Record the reason for retrying this update.');
         DB::transaction(function () use ($order, $id, $actor, $reason): void {
             $row = WebsiteOrderNotification::query()->forTenantId($order->tenant_id)->where('website_order_id', $order->id)->lockForUpdate()->findOrFail($id);
             abort_unless(in_array($row->status, ['blocked', 'failed'], true), 422, 'Only a blocked or locally failed update can be retried here.');
-            $order = WebsiteOrder::query()->forTenantId($order->tenant_id)->findOrFail($order->id);
+            $order = WebsiteOrder::query()->withoutPosSimulation()->forTenantId($order->tenant_id)->findOrFail($order->id);
             $readiness = $this->readiness(Tenant::query()->findOrFail($order->tenant_id));
             abort_unless($readiness['ready'] && $this->current($row, $order), 422, 'Restore notification readiness and review the current order state first.');
             $snapshot = $row->snapshot;
@@ -198,6 +200,7 @@ class WebsiteOrderNotificationService
     /** Provider evidence must resolve ambiguity before a deliberate retry is possible. */
     public function resolveUnknown(WebsiteOrder $order, int $id, User $actor, string $outcome, string $reason): void
     {
+        $order->assertNotPosSimulation();
         app(WebsiteShippingAccessService::class)->authorize($actor, $order->tenant_id);
         abort_unless(in_array($outcome, ['accepted', 'confirmed_not_accepted'], true) && mb_strlen(trim($reason)) >= 10 && mb_strlen($reason) <= 1000, 422, 'Record the provider evidence and its acceptance outcome.');
         DB::transaction(function () use ($order, $id, $actor, $outcome, $reason): void {

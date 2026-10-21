@@ -24,6 +24,6 @@ class WebsiteCustomer extends Model
 
     public function orders(): HasMany
     {
-        return $this->hasMany(WebsiteOrder::class);
+        return $this->hasMany(WebsiteOrder::class)->withoutPosSimulation();
     }
 }

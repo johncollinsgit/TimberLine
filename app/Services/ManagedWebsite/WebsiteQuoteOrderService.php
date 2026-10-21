@@ -42,7 +42,7 @@ class WebsiteQuoteOrderService
 
         return DB::transaction(function () use ($site, $data, $actor, $number, $requestHash) {
             TenantSite::query()->forTenantId($site->tenant_id)->whereKey($site->id)->lockForUpdate()->firstOrFail();
-            if ($existing = WebsiteOrder::query()->forTenantId($site->tenant_id)->where('tenant_site_id', $site->id)->where('number', $number)->first()) {
+            if ($existing = WebsiteOrder::query()->withoutPosSimulation()->forTenantId($site->tenant_id)->where('tenant_site_id', $site->id)->where('number', $number)->first()) {
                 abort_unless(data_get($existing->service_request, 'invoice.create_request_hash') === $requestHash, 409, 'This request was already saved with different details.');
 
                 return $existing->load('lines');
@@ -213,7 +213,7 @@ class WebsiteQuoteOrderService
 
     private function locked(WebsiteOrder $order): WebsiteOrder
     {
-        $order = WebsiteOrder::query()->forTenantId($order->tenant_id)->where('tenant_site_id', $order->tenant_site_id)->lockForUpdate()->findOrFail($order->id);
+        $order = WebsiteOrder::query()->withoutPosSimulation()->forTenantId($order->tenant_id)->where('tenant_site_id', $order->tenant_site_id)->lockForUpdate()->findOrFail($order->id);
         abort_unless(in_array($order->source, ['staff_quote', 'staff_draft_invoice'], true), 422, 'This order is outside the invoice workflow.');
 
         return $order;

@@ -252,4 +252,8 @@ return [
         'test' => 'tests/Integration/MarketingDeskMySqlRecoveryTest.php',
         'scenarios' => ['table retained before tenant and unique indexes; completed DDL and saved rows retained before migration bookkeeping'],
     ],
+    '2026_10_21_160000_create_pos_simulation_tables.php' => [
+        'test' => 'tests/Integration/PointOfSaleMySqlRecoveryTest.php',
+        'scenarios' => ['register table retained before remaining POS tables', 'all POS table rows retained before index and foreign-key DDL'],
+    ],
 ];
