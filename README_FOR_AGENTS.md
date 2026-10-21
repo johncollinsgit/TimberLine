@@ -2301,3 +2301,13 @@ and DKIM are verified. Approved simulator resources are being configured.
 Platform SMTP remains SendGrid; actual AWS delivery/application event acceptance,
 runtime credentials, production access and a separate platform retry/event
 contract remain required before completion.
+
+## Enterprise separate application (source candidate, 2026-10-21)
+
+Read `docs/operations/everbranch-enterprise.md` and the approved architecture in
+`docs/architecture/everbranch-enterprise-boundary-proposal.md` before continuing
+Enterprise. Its entry point, config, DB/schema installation, storage and release
+boundary are independent of retail. Never copy production users/data/credentials
+or run legacy membership/profile backfills. Reuse canonical tenant/Teams rails;
+department restrictions must hold through every native graph access path. All
+Enterprise rollout and writes remain off until reviewed; no new deployment exists.

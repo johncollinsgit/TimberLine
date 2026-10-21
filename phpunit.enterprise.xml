@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit bootstrap="vendor/autoload.php" colors="true">
+    <testsuites>
+        <testsuite name="Enterprise independent runtime">
+            <file>tests/Feature/Enterprise/EnterpriseRuntimeTest.php</file>
+            <file>tests/Feature/Enterprise/EnterpriseSchemaTest.php</file>
+            <file>tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php</file>
+        </testsuite>
+    </testsuites>
+    <php>
+        <env name="APP_ENV" value="testing" force="true"/>
+        <env name="ENTERPRISE_APP_ENV" value="testing" force="true"/>
+        <env name="ENTERPRISE_APP_KEY" value="base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=" force="true"/>
+        <env name="ENTERPRISE_RUNTIME_ISOLATED" value="true" force="true"/>
+    </php>
+</phpunit>

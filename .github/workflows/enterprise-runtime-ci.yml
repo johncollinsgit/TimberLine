@@ -1,0 +1,75 @@
+name: Enterprise isolated runtime
+
+on:
+  pull_request:
+    paths:
+      - 'apps/enterprise/**'
+      - 'app/Enterprise/**'
+      - 'app/Foundation/Enterprise*.php'
+      - 'app/Providers/EnterpriseServiceProvider.php'
+      - 'app/Http/Middleware/EnsureEnterpriseRuntime.php'
+      - 'app/Services/Team/**'
+      - 'app/Policies/Team*.php'
+      - 'config/enterprise.php'
+      - 'routes/enterprise.php'
+      - 'resources/views/enterprise/**'
+      - 'scripts/everbranch-team/enterprise-*'
+      - 'tests/Feature/Enterprise/**'
+      - 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php'
+      - 'tests/Integration/migration-recovery-manifest.php'
+      - 'phpunit.enterprise.xml'
+      - '.github/workflows/enterprise-runtime-ci.yml'
+      - 'composer.lock'
+      - 'package-lock.json'
+      - 'database/migrations/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  enterprise-runtime:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: everbranch_enterprise_ci
+          MYSQL_ROOT_PASSWORD: enterprise-ci-fixture
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -penterprise-ci-fixture"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      ENTERPRISE_DISPOSABLE_MYSQL: '1'
+      ENTERPRISE_DB_DRIVER: mysql
+      ENTERPRISE_DB_HOST: 127.0.0.1
+      ENTERPRISE_DB_PORT: '3306'
+      ENTERPRISE_DB_DATABASE: everbranch_enterprise_ci
+      ENTERPRISE_DB_USERNAME: root
+      ENTERPRISE_DB_PASSWORD: enterprise-ci-fixture
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql, pdo_sqlite, mbstring, fileinfo, gd, zip
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist --no-scripts
+      - run: php apps/enterprise/scripts/lint-schema.php
+      - run: php vendor/bin/phpunit -c phpunit.enterprise.xml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Check persistent Enterprise UI in a disposable database
+        env:
+          ENTERPRISE_TEST_PHP: php
+          EVERBRANCH_PLAYWRIGHT_MODULE: node_modules/playwright/index.mjs
+          ENTERPRISE_EVIDENCE: test-results/enterprise
+        run: node scripts/everbranch-team/enterprise-browser-smoke.mjs

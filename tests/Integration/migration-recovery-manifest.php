@@ -3,6 +3,18 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_21_000100_create_enterprise_identity.php' => [
+        'test' => 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['identity tables and rows retained before named unique keys and membership foreign-key repair; replay never creates memberships'],
+    ],
+    '2026_10_21_000200_create_enterprise_access_profiles.php' => [
+        'test' => 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['retained profiles and identity survive missing module state table; replay never bootstraps profiles or entitlements'],
+    ],
+    '2026_10_21_000300_create_enterprise_shared_work_schema.php' => [
+        'test' => 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['pinned shared schema repairs missing operation/file tables and project/record indexes while retaining native work evidence'],
+    ],
     '2026_10_20_200000_create_platform_email_deliveries.php' => [
         'test' => 'tests/Integration/PlatformMailMySqlRecoveryTest.php',
         'scenarios' => ['encrypted MIME retained before child table creation', 'recipient, unknown claim and event hashes retained before every named index and parent constraint', 'completed DDL replay before migration bookkeeping', 'duplicate identities or changed named constraints stop without deleting evidence'],

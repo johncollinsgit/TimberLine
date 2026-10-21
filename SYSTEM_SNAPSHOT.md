@@ -2983,3 +2983,12 @@ and DKIM are verified. Approved simulator resources are being configured.
 Platform SMTP remains SendGrid; actual AWS delivery/application event acceptance,
 runtime credentials, production access and a separate platform retry/event
 contract remain required before completion.
+
+## Enterprise isolated application (source candidate, 2026-10-21)
+
+`apps/enterprise` composes a separate runtime, database/install path, configuration
+and private storage over canonical tenant/membership and Teams components.
+Default-disabled workspace/request triage/assignment/progress/completion reuses
+native work and audit tables with shared graph-level department fences. No retail
+deployment, production grants, billing or providers are activated. See
+`docs/operations/everbranch-enterprise.md` for boundaries, checks and launch gaps.

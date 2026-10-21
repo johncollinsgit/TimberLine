@@ -39,6 +39,9 @@ final class WorkGraph
 
     private function projectAccess(array $project, array $actor, bool $write = false): bool
     {
+        if (isset($project['enterprise_area_id']) && ! \App\Enterprise\WorkspaceAccess::permits($actor, $project['enterprise_area_id'], $write)) {
+            return false;
+        }
         if ($project['tenant_id'] !== $actor['tenant_id']) {
             return false;
         }
@@ -54,6 +57,9 @@ final class WorkGraph
 
     private function taskAccess(array $state, array $task, array $actor, bool $write = false, int $depth = 0): bool
     {
+        if (isset($task['enterprise_area_id']) && ! \App\Enterprise\WorkspaceAccess::permits($actor, $task['enterprise_area_id'], $write)) {
+            return false;
+        }
         if ($depth > 5 || $task['tenant_id'] !== $actor['tenant_id'] || $task['deleted']) {
             return false;
         }
@@ -393,6 +399,10 @@ final class WorkGraph
         if ($kind === 'task.follow_up') {
             $state = $this->followUp($state, $actor, $command, $now);
         } elseif (in_array($kind, ['project.from_template', 'task.from_template'], true)) {
+            if (isset($state['projects'][$command['project_id'] ?? '']['enterprise_area_id'])) {
+                $this->project($state, $actor, $command['project_id'], true);
+                self::fail('enterprise_copy_not_available');
+            }
             $state = (new TeamWorkBlueprints($this))->instantiate($state, $actor, $command, $now);
         } elseif ($kind === 'project.create') {
             if (! in_array($actor['role'], ['owner', 'admin', 'member'], true) || isset($state['projects'][$id])) {
@@ -405,12 +415,21 @@ final class WorkGraph
             $state['projects'][$id] = ['id' => $id, 'tenant_id' => $actor['tenant_id'], 'name' => $this->text($command['name'] ?? '', 500, true),
                 'description' => $this->text($command['description'] ?? '', 100000), 'privacy' => $privacy, 'archived' => false,
                 'owner_id' => $actor['user_id'], 'members' => [$actor['user_id'] => 'editor'], 'sections' => [], 'version' => 1];
+            if (isset($command['enterprise_area_id'])) {
+                if (! \App\Enterprise\WorkspaceAccess::permits($actor, $command['enterprise_area_id'], true, true)) {
+                    self::fail('access_denied');
+                }
+                $state['projects'][$id]['enterprise_area_id'] = $command['enterprise_area_id'];
+            }
             foreach (['start_on', 'due_on', 'start_at', 'due_at'] as $field) {
                 $state['projects'][$id][$field] = $command[$field] ?? null;
             }
             $this->dates($state['projects'][$id]);
         } elseif (str_starts_with($kind, 'project.')) {
             $project = $this->project($state, $actor, $id);
+            if (isset($project['enterprise_area_id']) && ! \App\Enterprise\WorkspaceAccess::permits($actor, $project['enterprise_area_id'], true)) {
+                self::fail('access_denied');
+            }
             $this->version($project, $command);
             if ($project['owner_id'] !== $actor['user_id']) {
                 self::fail('access_denied');
@@ -550,6 +569,22 @@ final class WorkGraph
                 'description' => $this->text($command['description'] ?? '', 100000), 'assignee_id' => $assignee, 'parent_id' => $parent,
                 'collaborators' => [], 'memberships' => $memberships, 'completed_at' => null, 'deleted' => false, 'priority' => $command['priority'] ?? 'normal',
                 'version' => 1, 'comments' => [], 'field_job_ids' => [], 'created_at' => $now, 'updated_at' => $now];
+            $scope = $parent !== null ? ($state['tasks'][$parent]['enterprise_area_id'] ?? null) : null;
+            foreach ($memberships as $projectId => $_) {
+                $projectScope = $state['projects'][$projectId]['enterprise_area_id'] ?? null;
+                if ($scope !== null && $scope !== $projectScope) {
+                    self::fail('enterprise_scope_mismatch');
+                }
+                $scope = $projectScope ?? $scope;
+            }
+            if ($scope !== null) {
+                foreach ($memberships as $projectId => $_) {
+                    if (($state['projects'][$projectId]['enterprise_area_id'] ?? null) !== $scope) {
+                        self::fail('enterprise_scope_mismatch');
+                    }
+                }
+                $task['enterprise_area_id'] = $scope;
+            }
             if (! in_array($task['priority'], ['low', 'normal', 'high', 'urgent'], true)) {
                 self::fail('invalid_priority');
             }
@@ -596,6 +631,9 @@ final class WorkGraph
                 }
                 $task['completed_at'] = ($command['completed'] ?? true) ? $now : null;
             } elseif ($kind === 'task.recurrence') {
+                if (isset($task['enterprise_area_id'])) {
+                    self::fail('enterprise_recurrence_not_available');
+                }
                 if (($command['rule'] ?? null) === null) {
                     $task['recurrence'] = null;
                 } else {
@@ -657,6 +695,9 @@ final class WorkGraph
                 if (($command['remove'] ?? false) === true) {
                     unset($task['memberships'][$projectId]);
                 } else {
+                    if (($task['enterprise_area_id'] ?? null) !== ($state['projects'][$projectId]['enterprise_area_id'] ?? null)) {
+                        self::fail('enterprise_scope_mismatch');
+                    }
                     $task['memberships'][$projectId] = $membership;
                 }
             } elseif ($kind === 'task.comment') {
