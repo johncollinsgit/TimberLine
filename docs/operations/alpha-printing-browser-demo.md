@@ -19,6 +19,9 @@ also permits localhost and 127.0.0.1 for review. Customer domains are not an
 alternative entry point. The route retains the existing host/security middleware
 but excludes application session persistence and the scheduler-heartbeat writer.
 The controller reads no operational records and renders only trusted resources.
+It clears transient Livewire request assets before rendering this standalone
+document, so retained worker state cannot inject assets outside its nonce policy.
+It does not change the framework asset configuration for other pages.
 
 All changes made by the demo remain in its dedicated browser sessionStorage
 namespace `everbranch:fictional-pos-demo:v1`. Storage is local to that browser

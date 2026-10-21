@@ -17,6 +17,11 @@ class PosBrowserDemoController extends Controller
         // This surface accepts no tenant selection, customer identifiers or provider callbacks.
         abort_if($request->query->count() !== 0 || (string) $request->server('QUERY_STRING', '') !== '', 404);
 
+        // A fresh standalone document has no Livewire components or assets.
+        // Clear retained request state so a prior render in the same PHP worker
+        // cannot inject scripts/styles outside this page's explicit nonce policy.
+        app('livewire')->flushState();
+
         $nonce = base64_encode(random_bytes(24));
 
         return response()->view('pos.browser-demo', ['nonce' => $nonce])->withHeaders([

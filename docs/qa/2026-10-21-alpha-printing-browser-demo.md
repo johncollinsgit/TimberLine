@@ -12,7 +12,7 @@ See the [operating contract](../operations/alpha-printing-browser-demo.md).
 
 ## Tested evidence
 
-- **29 HTTP feature tests / 168 assertions passed.** Tests use the real
+- **30 HTTP feature tests / 184 assertions passed.** Tests use the real
   middleware pipeline, including production-mode rendering. They verify host,
   raw and parsed query, method and sub-API boundaries; per-response nonces/CSP;
   no cookies or SQL writes on the read-only demo route; no session/heartbeat
@@ -34,10 +34,25 @@ See the [operating contract](../operations/alpha-printing-browser-demo.md).
   the GET CSRF/session dependency, rejecting nonempty raw query strings, and
   making the Reset control visible at phone widths.
 
-The full PHP suite was started and deliberately interrupted to give the campus
-demo priority. It is **incomplete**, not a passing full-regression result.
-No GitHub PR/CI or deployment should compete with that priority until the release
-owner resumes the printing change. No schema or dependency change is included.
+The full PHP suite was initially interrupted for campus priority, then resumed
+after that artifact was delivered. The final DNS-capable local run passed
+**4,400 tests / 32,055 assertions**, with eight existing opt-in fixture skips.
+The 57.41-second parallel run used in-memory SQLite, array mail/cache/session,
+and existing provider fakes. The restricted sandbox could not resolve public DNS
+for two unchanged wholesale/email-validation tests; their isolated DNS-capable
+rerun passed without changing either safety guard.
+
+The resumed full run also found inherited Livewire request assets could inject
+scripts/styles outside the demo nonce policy. A narrow follow-up to initial
+commit `5f598caa19d0f2f62d0b758348d623205464dc04` clears transient Livewire
+request state after host/query authorization and before this standalone view.
+The regression forces prior injection, verifies four nonced inline elements,
+and proves a later normal page can still request its own Livewire assets.
+Independent source review cleared the fix. No schema, dependency, operational
+record, production POS guard or global asset-policy change is included.
+
+PR #455 is the review/release candidate. Exact-head GitHub checks and owner
+release review remain mandatory before merge/deployment.
 
 ## Native Safari walkthrough
 

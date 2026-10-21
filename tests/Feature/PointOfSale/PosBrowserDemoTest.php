@@ -121,6 +121,25 @@ it('renders the identical fictional page for a signed-in merchant without exposi
     }
 });
 
+it('clears prior Livewire request assets without disabling later normal asset injection', function (): void {
+    app('livewire')->forceAssetInjection();
+    $page = $this->get($this->demoUrl)->assertOk();
+    expect($page->getContent())->not->toContain('Livewire Styles')->not->toContain('data-update-uri=');
+    preg_match_all('/<(script|style)\b([^>]*)>/i', $page->getContent(), $elements, PREG_SET_ORDER);
+    expect($elements)->toHaveCount(4);
+    foreach ($elements as $element) {
+        expect($element[2])->toMatch('/\bnonce="[^"]+"/')->not->toMatch('/\bsrc\s*=/i');
+    }
+
+    // Only this standalone request is cleared; ordinary pages keep the same
+    // framework asset policy and can request their own scripts/styles.
+    \Illuminate\Support\Facades\Route::get('/fixture-browser-demo-livewire-next', fn () => response('<html><head></head><body>Fixture</body></html>'));
+    app('livewire')->forceAssetInjection();
+    $this->get('https://app.theeverbranch.com/fixture-browser-demo-livewire-next')->assertOk()
+        ->assertSee('Livewire Styles', false)->assertSee('data-update-uri=', false);
+    app('livewire')->flushState();
+});
+
 it('never accepts query parameters as tenant identity fixture data routing or credentials', function (string $query): void {
     $before = posBrowserDemoCanonicalCounts();
     $this->get($this->demoUrl.'?'.$query)->assertNotFound()->assertDontSee('PRIVATE-QUERY-BROWSER-MARKER', false);
