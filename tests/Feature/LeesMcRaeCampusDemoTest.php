@@ -61,6 +61,8 @@ it('serves fixed fictional campus content without tenant reads business writes s
         DB::flushQueryLog();
     }
     expect(strtolower($first->getContent()))->toContain('fictional')->toContain('simulation')
+        ->not->toContain('creates a real task in the reused teams engine')
+        ->toContain('the hosted demo does not execute the native teams engine')
         ->and($queries)->toBe([])
         ->and($first->headers->getCookies())->toBe([])->and($second->headers->getCookies())->toBe([])
         ->and(leesMcRaeDemoCanonicalCounts())->toBe($before)

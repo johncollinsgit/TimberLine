@@ -17,6 +17,7 @@ $html = str_replace([
     'Opening the fictional offline prototype…',
     'lees-mcrae-fictional-offline-v4',
     'The local demo server is unavailable. Reopen the downloaded offline prototype.',
+    'confirmation creates a real task in the reused Teams engine.',
 ], [
     'Lees-McRae · Campus project demo',
     '<b>CAMPUS DEMO</b>',
@@ -24,6 +25,7 @@ $html = str_replace([
     'Opening the fictional campus workspace…',
     'lees-mcrae-fictional-hosted-v3',
     'The fictional demo could not open. Reload this page to try again.',
+    'confirmation creates a simulated task in this browser session. The hosted demo does not execute the native Teams engine.',
 ], $html);
 
 // Match the repository's text normalization so reviewed/deployed bytes agree.

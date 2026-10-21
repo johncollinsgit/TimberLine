@@ -64,7 +64,8 @@ in the original isolated campus worktree and delivered private source archive.
 Its offline build SHA256 is
 `2c9fd4bf642688097a80f771069f54448143ebd59a33eeacb985b641fa0c295e`.
 `scripts/demos/build-campus-hosted.php` accepts only that checksum, changes the
-public title/banner/error text and session namespace, and writes the resource.
+public title/banner/error text and session namespace, corrects one retained tour
+sentence to describe browser-simulated task creation, and writes the resource.
 It never fetches remote HTML, credentials or runtime tenant data.
 
 ```sh
