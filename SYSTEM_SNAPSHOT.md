@@ -1,3 +1,12 @@
+## Fictional browser POS demonstration (2026-10-21; source candidate)
+
+The separate public `/platform/demos/alpha-printing-pos` source candidate uses
+only fixed fictional fixtures and namespaced browser-session storage. No tenant
+selection, sign-in bypass, server business-data mutation or provider request is
+included. It preserves the real POS production denial and payment gates. See
+[the browser demo contract](docs/operations/alpha-printing-browser-demo.md).
+Source readiness does not establish deployment or native iPhone payment support.
+
 ## Local POS simulation foundation (2026-10-21; source only, disabled)
 
 A separate local/testing-only register rehearses native catalog prices, confirmed
