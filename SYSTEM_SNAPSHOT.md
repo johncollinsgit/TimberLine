@@ -1,3 +1,14 @@
+## Local POS simulation foundation (2026-10-21; source only, disabled)
+
+A separate local/testing-only register rehearses native catalog prices, confirmed
+simulation tax, shared inventory holds, immutable payment attempts, independent
+simulated-reader evidence, reconciliation, private simulation receipts and
+manager refunds. No Stripe/Terminal adapter, credentials, provider call, merchant
+onboarding, production activation or real payment is included. All rollout gates
+default off and production is hard-denied. Read
+[the POS simulation runbook](docs/operations/pos-simulation.md) for the ownership
+contract, verification and remaining hardware/provider acceptance.
+
 <!-- SES failure diagnostics: bounded AWS HTTP status/error code persist in the existing hold_reason; sending/retry gates are unchanged. See docs/operations/ses-migration.md. -->
 <!-- SES platform simulator audit: retain exact signed notifications encrypted only for the three approved platform simulator logical intents, after authentication and matched delivery handling. See docs/operations/ses-migration.md. -->
 <!-- SES actual event binding: native tenant auto-tag is ses:tenant; signed source may include a display name. See the simulator checkpoint in docs/operations/ses-migration.md. -->

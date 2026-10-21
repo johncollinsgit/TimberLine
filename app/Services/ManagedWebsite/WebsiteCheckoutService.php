@@ -65,7 +65,10 @@ class WebsiteCheckoutService
                     app(WebsiteShippingReadinessService::class)->assertVariantCanShip($variant);
                 }
                 if ($variant->product?->track_inventory && $variant->inventory_quantity !== null) {
-                    $reserved = (int) WebsiteInventoryReservation::query()->forTenantId($site->tenant_id)->where('website_product_variant_id', $variant->id)->where('status', 'active')->sum('quantity');
+                    // A current read after the variant lock sees holds committed by
+                    // another channel while this transaction waited (MySQL RR).
+                    $reserved = (int) WebsiteInventoryReservation::query()->forTenantId($site->tenant_id)->where('website_product_variant_id', $variant->id)
+                        ->where('status', 'active')->lockForUpdate()->get()->sum('quantity');
                     if ($item->quantity > ($variant->inventory_quantity - $reserved)) {
                         throw ValidationException::withMessages(['cart' => $variant->product->title.' no longer has enough stock.']);
                     }

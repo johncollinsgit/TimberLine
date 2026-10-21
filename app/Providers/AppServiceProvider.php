@@ -32,6 +32,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->bind(\App\Services\PointOfSale\SimulatedReader::class, \App\Services\PointOfSale\DatabaseSimulatedReader::class);
+
         $this->app->singleton(OnboardingRailAdapterRegistry::class, function ($app): OnboardingRailAdapterRegistry {
             return new OnboardingRailAdapterRegistry([
                 $app->make(ShopifyOnboardingRailAdapter::class),
