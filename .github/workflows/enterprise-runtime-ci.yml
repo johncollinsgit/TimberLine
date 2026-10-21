@@ -6,7 +6,7 @@ on:
       - 'apps/enterprise/**'
       - 'app/Enterprise/**'
       - 'app/Foundation/Enterprise*.php'
-      - 'app/Providers/EnterpriseServiceProvider.php'
+      - 'app/Providers/Enterprise*.php'
       - 'app/Http/Middleware/EnsureEnterpriseRuntime.php'
       - 'app/Services/Team/**'
       - 'app/Policies/Team*.php'

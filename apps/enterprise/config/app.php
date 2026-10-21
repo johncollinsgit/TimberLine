@@ -13,4 +13,7 @@ return [
     'key' => env('ENTERPRISE_APP_KEY'),
     'previous_keys' => [],
     'maintenance' => ['driver' => 'file'],
+    'providers' => \Illuminate\Support\ServiceProvider::defaultProviders()->replace([
+        \Illuminate\Foundation\Providers\FoundationServiceProvider::class => \App\Providers\EnterpriseFoundationServiceProvider::class,
+    ])->toArray(),
 ];

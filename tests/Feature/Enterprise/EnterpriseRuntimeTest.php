@@ -9,6 +9,7 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Foundation\PackageManifest;
 use Illuminate\Foundation\Testing\TestCase;
+use Illuminate\Support\Facades\ParallelTesting;
 use Illuminate\Support\Facades\Route;
 
 /** Boots the dedicated application, never tests the retail bootstrap as a proxy. */
@@ -35,7 +36,9 @@ final class EnterpriseRuntimeTest extends TestCase
         foreach ([$this->app->getCachedConfigPath(), $this->app->getCachedRoutesPath(), $this->app->getCachedServicesPath(), $this->app->getCachedPackagesPath(), $this->app->getCachedEventsPath()] as $path) {
             $this->assertStringStartsWith($this->app->bootstrapPath('cache'), $path);
         }
-        $this->assertSame($this->app->storagePath('framework/views'), config('view.compiled'));
+        $token = ! empty($_SERVER['LARAVEL_PARALLEL_TESTING']) ? ParallelTesting::token() : false;
+        $expectedViews = $this->app->storagePath('framework/views').($token ? '/test_'.$token : '');
+        $this->assertSame($expectedViews, config('view.compiled'));
         $this->assertSame($this->app->storagePath('app/team-private'), config('filesystems.disks.team_private.root'));
     }
 
@@ -140,5 +143,61 @@ final class EnterpriseRuntimeTest extends TestCase
         });
         $this->get('https://unrecognized.invalid/login')->assertNotFound();
         $this->assertSame(0, $queries);
+    }
+
+    public function test_parallel_views_ignore_a_framework_path_primed_by_another_application(): void
+    {
+        $retail = new \Illuminate\Container\Container;
+        $retail->instance('config', new \Illuminate\Config\Repository(['view' => ['compiled' => base_path('storage/framework/shared-parallel-fixture')]]));
+        $provider = new class($retail) extends \Illuminate\Testing\ParallelTestingServiceProvider
+        {
+            public function originalPath(): ?string
+            {
+                return self::$originalCompiledViewPath;
+            }
+
+            public function restorePath(?string $path): void
+            {
+                self::$originalCompiledViewPath = $path;
+            }
+
+            public function compiledPath(): ?string
+            {
+                return $this->parallelSafeCompiledViewPath();
+            }
+        };
+        $originalPath = $provider->originalPath();
+        $originalParallel = $_SERVER['LARAVEL_PARALLEL_TESTING'] ?? null;
+        $originalToken = ParallelTesting::token();
+        $compiledFile = null;
+        try {
+            $_SERVER['LARAVEL_PARALLEL_TESTING'] = '1';
+            ParallelTesting::resolveTokenUsing(fn () => 'enterprise-isolation-fixture');
+            $provider->restorePath(null);
+            $this->assertSame(base_path('storage/framework/shared-parallel-fixture').'/test_enterprise-isolation-fixture', $provider->compiledPath());
+
+            ParallelTesting::callSetUpTestCaseCallbacks($this);
+            $expected = $this->app->storagePath('framework/views/test_enterprise-isolation-fixture');
+            $this->assertSame($expected, config('view.compiled'));
+            $this->assertDirectoryExists($expected);
+            $compiler = $this->app->make('blade.compiler');
+            $source = resource_path('views/enterprise/login.blade.php');
+            $compiler->compile($source);
+            $compiledFile = $compiler->getCompiledPath($source);
+            $this->assertStringStartsWith($expected.'/', $compiledFile);
+            $this->assertFileExists($compiledFile);
+            $this->assertArrayNotHasKey(\Illuminate\Testing\ParallelTestingServiceProvider::class, $this->app->getLoadedProviders());
+        } finally {
+            if ($compiledFile !== null && is_file($compiledFile)) {
+                unlink($compiledFile);
+            }
+            $provider->restorePath($originalPath);
+            ParallelTesting::resolveTokenUsing(fn () => $originalToken);
+            if ($originalParallel === null) {
+                unset($_SERVER['LARAVEL_PARALLEL_TESTING']);
+            } else {
+                $_SERVER['LARAVEL_PARALLEL_TESTING'] = $originalParallel;
+            }
+        }
     }
 }
