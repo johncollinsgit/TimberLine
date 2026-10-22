@@ -274,6 +274,7 @@ async function refresh() {
     data=await api('bootstrap');
     if(page==='fleet' && document.getElementById('map') && data.vehicles.length && (demo || setupStep(data)==='ready')){document.getElementById('status-banner').innerHTML=demo?'':statusBanner();document.getElementById('setup-panel').innerHTML=setupView();document.getElementById('vehicle-total').textContent=`${data.vehicles.length} / ${vehicleLimit()} vehicles`;updateList();await drawMap();}else{render();}
 }
+window.addEventListener('hashchange',()=>{if(demo&&data&&window.location.hash==='#calendar'){if(formDirty&&!window.confirm('Leave this page and discard unsaved changes?'))return;page='calendar';tourStep=-1;render();}});
 window.addEventListener('message',event=>{
     if (event.origin !== window.location.origin || event.source !== popup || !popup) return;
     if(['EVERBRANCH_BOUNCIE_CONNECTED','EVERBRANCH_BOUNCIE_CANCELLED','EVERBRANCH_BOUNCIE_FAILED'].includes(event.data?.message)){pendingCompletion=event.data.message;completePopup();}
