@@ -47,6 +47,30 @@ provider storage disabled and bounded timeouts/output. Fake-provider tests do
 not establish that a particular account/model is authorized or operational.
 No live configuration was inspected or copied into this isolated application.
 
+Tracked `everbranch-ai-runbook.md` identifies the existing Avery tenant-15
+integration as the **Everbranch AI Branch** OpenAI project, configured through
+`EVERBRANCH_AI_BRANCH_API_KEY` in the shared Forge environment. Its recorded
+model is `gpt-6-luna`, with a recorded November 14, 2026 key expiry. These are
+historical source notes, not a live account/key/rate verification. That runbook
+explicitly prohibits reusing its key for another integration. No automatic
+credential fallback or copy is permitted. Enterprise needs a separately
+approved credential destination or an explicit approved change to that restriction.
+
+The owner approved **$1 total** for synthetic AI connection tests on October 22,
+2026. This is not recurring spend or approval to configure a key. Before testing,
+approve the provider account/project and Enterprise-only secret destination,
+verify current model/rates, and restrict testing to one allowlisted synthetic
+tenant with a maximum lifetime cap of **1,000,000 micro-USD**. Never distribute
+that total approval across multiple independently capped tenants. No paid test
+has run; no campus, personal or mailbox content is approved as test input.
+
+The later reviewer-trial specification supersedes the $1 allowance with **$5
+total shared lifetime spend across SMS, email, AI and acceptance checks**. That
+requires one shared durable budget before any trial provider call; the existing
+per-tenant AI cap alone is insufficient. No recipients, credential configuration
+or new subscriptions are approved. Reviewers will receive service-sender mail
+without connecting their own mailbox.
+
 ## Own-user mailbox
 
 The additive Enterprise migration installs empty native-shaped domain, mailbox
@@ -79,14 +103,17 @@ separately from delivery and never automatically retries an uncertain send.
 The SMTP adapter cannot initiate mail from chat or workflow output. Changing a
 grant, credential, domain or submission target invalidates an old preview.
 
-Gmail or Microsoft 365 OAuth is a separate connection choice, not an existing
-connection inferred by this adapter. If selected later, send-only Gmail API
-access uses [`gmail.send`](https://developers.google.com/workspace/gmail/api/auth/scopes);
-Microsoft Graph's delegated least-privileged send permission is
-[`Mail.Send`](https://learn.microsoft.com/en-us/graph/api/user-sendmail?view=graph-rest-1.0).
-Reading inbox content requires a separate purpose, scope, authorization and
-injection review. Neither OAuth access nor domain-wide/application access is
-requested by this change.
+The implemented Gmail connector is the intended first connection choice for
+**john@evergrovesoftware.com**. The owner approved that intended mailbox, not
+credential configuration, OAuth consent or a real send. See
+[the Gmail connection contract](enterprise-gmail.md) for exact callback,
+per-user binding, refresh, revocation and dispatch gates. The additional Google
+scopes are `openid`, `email` and
+[`gmail.send`](https://developers.google.com/workspace/gmail/api/auth/scopes).
+No inbox, contacts, calendar, domain-wide or application-wide access is requested.
+An organization owner cannot connect or send as another user. Reading inbox
+content requires a separate purpose, scope, authorization and injection review.
+Microsoft integration is outside this slice.
 
 ## Private file scanner
 

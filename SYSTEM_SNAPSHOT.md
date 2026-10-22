@@ -3009,3 +3009,13 @@ reservations and empty native-shaped mailbox DDL preserve the independent
 application/database boundary. No credentials, grants, provider calls, sends or
 deployment are created. See `docs/architecture/enterprise-workflow-workspace.md`;
 real provider/scanner and physical iPad acceptance remain separate gates.
+
+The October 22 Gmail increment adds per-user send-only OAuth code with a dedicated
+callback, encrypted token refresh/revocation, exact sender-specific confirmation
+and durable no-retry dispatch. It creates no grants or Google credentials and
+defaults off. John is the intended first mailbox; the approved $1 total synthetic
+AI test budget does not approve credential installation, OAuth consent or real
+messages. The later reviewer trial specifies a service sender without reviewer
+mailbox access and supersedes that allowance with a $5 shared lifetime cap across
+all trial providers; no recipients or credential grants are approved. See
+`docs/operations/enterprise-gmail.md` and `docs/operations/enterprise-integrations.md`.

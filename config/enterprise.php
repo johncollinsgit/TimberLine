@@ -27,5 +27,13 @@ return [
         'send_enabled' => (bool) env('ENTERPRISE_MAILBOX_SEND_ENABLED', false),
         'allowed_ids' => array_values(array_filter(array_map('trim', explode(',', (string) env('ENTERPRISE_MAILBOX_ALLOWED_IDS', ''))))),
     ],
+    'gmail' => [
+        'connection_enabled' => (bool) env('ENTERPRISE_GMAIL_CONNECTION_ENABLED', false),
+        'send_enabled' => (bool) env('ENTERPRISE_GMAIL_SEND_ENABLED', false),
+        'client_id' => env('ENTERPRISE_GMAIL_CLIENT_ID'),
+        'client_secret' => env('ENTERPRISE_GMAIL_CLIENT_SECRET'),
+        'redirect_uri' => env('ENTERPRISE_GMAIL_REDIRECT_URI'),
+        'tenant_allowlist' => array_values(array_filter(array_map('trim', explode(',', (string) env('ENTERPRISE_GMAIL_TENANT_ALLOWLIST', ''))))),
+    ],
     'tenant_allowlist' => array_values(array_filter(array_map('trim', explode(',', (string) env('ENTERPRISE_TENANT_ALLOWLIST', ''))))),
 ];

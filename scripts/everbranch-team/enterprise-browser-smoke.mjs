@@ -327,6 +327,9 @@ try {
   await page.locator('#chat-log a').filter({hasText:'View source:'}).first().waitFor();
   await page.locator('#chat-log p').filter({hasText:'Synthetic date block'}).first().waitFor();
   await page.locator('#mailbox-status').filter({hasText:'No delivery transport connected'}).waitFor();
+  await page.locator('#gmail-status').filter({hasText:'approved Enterprise Google client'}).waitFor();
+  assert.equal(await page.locator('#gmail-connect').isDisabled(),true,'Unconfigured Google connection must stay disabled');
+  assert.equal(await page.locator('#gmail-disconnect').isVisible(),false,'No invented Google grant may be displayed');
   for (const [label,width,height] of [['ipad-portrait',820,1180],['ipad-landscape',1180,820],['phone',390,844]]) {
     await page.setViewportSize({width,height});
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),`${label} Ask overflow`);

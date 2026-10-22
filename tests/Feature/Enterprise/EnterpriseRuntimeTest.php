@@ -77,6 +77,11 @@ final class EnterpriseRuntimeTest extends TestCase
         $this->assertSame('null', config('queue.default'));
         $this->assertSame(['null'], array_keys(config('queue.connections')));
         $this->assertSame(['local', 'team_private'], array_keys(config('filesystems.disks')));
+        $this->assertInstanceOf(\App\Enterprise\EnterpriseMailboxGateway::class, $this->app->make(\App\Enterprise\MailboxGateway::class));
+        $this->assertFalse(config('enterprise.gmail.connection_enabled'));
+        $this->assertFalse(config('enterprise.gmail.send_enabled'));
+        $this->assertNull(config('enterprise.gmail.client_secret'));
+        $this->assertTrue(Route::has('enterprise.gmail.callback'));
     }
 
     public function test_http_fails_closed_until_explicit_isolation_and_database_configuration(): void

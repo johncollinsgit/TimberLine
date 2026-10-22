@@ -250,3 +250,39 @@ test('integration status is scoped and distinguishes configuration from real pro
     expect(fn () => app(IntelligenceStatus::class)->forUser($tenant, $outsider, $area))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
     Http::assertNothingSent();
 });
+
+test('aggregate sender selection accepts native numeric IDs through the HTTP preview and never sends during drafting', function (): void {
+    [$tenant, $owner, $area] = integrationFixture();
+    app()->bind(\App\Enterprise\MailboxGateway::class, \App\Enterprise\EnterpriseMailboxGateway::class);
+    config(['enterprise.ask_enabled' => true, 'enterprise.email_drafts_enabled' => true]);
+    $mailbox = integrationMailbox($tenant, $owner);
+    config(['enterprise.mailbox.send_enabled' => false]);
+    $url = route('enterprise.email.create', ['tenant' => $tenant->slug]);
+    $input = ['area_id' => $area, 'mailbox_id' => (string) $mailbox->id, 'request_id' => (string) Str::uuid(),
+        'to' => 'recipient@example.invalid', 'subject' => 'Synthetic preview only', 'body' => 'No external delivery is authorized.', 'source_refs' => []];
+    $this->actingAs($owner)->postJson($url, $input)->assertOk()->assertJsonPath('from', $mailbox->address)->assertJsonPath('delivery_ready', false);
+    $other = teamMember($tenant, 'member');
+    DB::table('team_area_members')->insert(['id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'area_id' => $area, 'user_id' => $other->id, 'role' => 'editor']);
+    $this->actingAs($other)->postJson($url, [...$input, 'request_id' => (string) Str::uuid()])->assertNotFound();
+    expect(TeamOperationRecord::query()->where('kind', 'ent_email')->count())->toBe(1);
+    Http::assertNothingSent();
+});
+
+test('aggregate Gmail sender readiness never borrows an enabled SMTP transport or falls back after missing consent', function (): void {
+    [$tenant, $owner, $area] = integrationFixture();
+    $smtp = \Mockery::mock(ConnectedMailboxGateway::class);
+    $smtp->shouldReceive('ready')->andReturn(true);
+    $smtp->shouldNotReceive('authorize');
+    $smtp->shouldNotReceive('dispatch');
+    $gmail = \Mockery::mock(\App\Enterprise\GmailMailboxGateway::class);
+    $gmail->shouldReceive('ready')->andReturn(false);
+    $id = (string) Str::uuid();
+    $binding = ['id' => $id, 'tenant_id' => (string) $tenant->id, 'user_id' => (string) $owner->id, 'area_id' => $area];
+    $gmail->shouldReceive('readyFor')->with($binding)->once()->andReturn(false);
+    $gmail->shouldReceive('authorize')->with($tenant, $owner, $area, $id)->once()->andThrow(new \Symfony\Component\HttpKernel\Exception\NotFoundHttpException);
+    $gateway = new \App\Enterprise\EnterpriseMailboxGateway($smtp, $gmail);
+    expect($gateway->ready())->toBeTrue()->and($gateway->readyFor($binding))->toBeFalse();
+    expect(fn () => $gateway->dispatch($tenant, $owner, $binding, ['to' => 'recipient@example.invalid', 'subject' => 'Synthetic', 'body' => 'No send'], (string) Str::uuid()))
+        ->toThrow(\Symfony\Component\HttpKernel\Exception\NotFoundHttpException::class);
+    Http::assertNothingSent();
+});

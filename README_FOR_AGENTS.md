@@ -2317,15 +2317,24 @@ The October 22 source increment is documented in
 gates, internal discussion-task exclusion from operational progress, private file
 scanner quarantine, separate owner/admin cost visibility and current-permission
 Ask citations. Model transport reuse does not activate paid AI. Mailbox preview/
-confirmation is fake-adapter tested; the default gateway has no connections or
+confirmation is fake-adapter tested; the default configuration has no connections or
 sending capability. Do not substitute retail/owner credentials or create grants.
 ## Enterprise workflow workspace (October 22 source candidate)
 
 The isolated Enterprise application now has a dedicated project workflow workspace,
 screen/form builder, reviewed activation, durable human runs/history, authorized
 Home briefing and regenerated one-page PDF. Build its assets separately with
-`npm run build:enterprise`. Real-capable Responses/own-user SMTP adapters and empty
+`npm run build:enterprise`. Real-capable Responses/own-user Gmail and SMTP adapters and empty
 mailbox schema require separately approved configuration; source installation grants
 no access or provider connection. Read `docs/architecture/enterprise-workflow-workspace.md`
 and `docs/operations/enterprise-integrations.md`. All new rollout flags default off;
 neither draft PR nor fixture evidence establishes deployment or live acceptance.
+
+Gmail uses its own fixed callback, original browser/user/tenant/department-bound
+one-use OAuth state, encrypted refresh tokens and exact confirmed send receipts.
+Read `docs/operations/enterprise-gmail.md`; Google login credentials and automatic
+provisioning are not inherited. Connection and sending flags default off. The
+intended own-user sender is john@evergrovesoftware.com. The subsequent reviewer
+trial uses a verified service sender, no reviewer mailbox access and a $5 total
+shared provider cap, superseding the earlier $1 AI-only allowance. Credentials,
+OAuth grants, recipients, real sends and deployment still need exact approval.
