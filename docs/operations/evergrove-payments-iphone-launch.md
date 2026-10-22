@@ -2,6 +2,12 @@
 
 Prepared 2026-10-22. This is a readiness and owner-action plan, not evidence of a live merchant or installed payments app. Credential-free native/backend work can proceed now. Real collection remains **NO-GO** until every financial gate below is verified.
 
+The follow-up [durable server contracts](evergrove-payments-production-contracts.md)
+add MySQL persistence, server catalog/quotes with missing tax unavailable, and
+scoped mobile API/PKCE code with all configuration disabled. The native offline
+register is unchanged and does not call those APIs. Merchant, inventory/provider
+integration, signing/distribution and physical acceptance remain required.
+
 Mac inventory reported by the workstream owner: Xcode 26.3 with iOS SDK 26.2; an existing Everbranch Capacitor app at version 2.3.7/build 18 with an APNs entitlement and no Tap to Pay entitlement. Three valid Apple Development identities are visible in the authorized keychain read, but distribution signing/authority and App Store Connect status are unverified. Known iPhones are currently unavailable to developer tooling; a cached iPhone 15 Pro Max record reports iOS 27.0.1, which needs current toolchain/PSP eligibility verification before use. No physical install or payment check has run. Personal Context was unavailable. Later filesystem inspection found historical repository/infrastructure and Modern Forestry iOS memory notes under `.claude/projects`; they identify the monolith and a separate canonical SwiftUI Modern Forestry app, not an Evergrove Payments entitlement or current merchant approval. Device identifiers are intentionally omitted here.
 
 The user's existing Galaxy Tab Alpha checkout is a home-screen browser demonstration, not a verified APK. The new iPhone milestone reuses its canonical register/catalog/customer/guest/cash/change/receipt/refund journey as a bundled offline reference inside an Evergrove-branded SwiftUI shell, with a separate native recovery lab. That reuse is not a production payment bridge: no browser JavaScript is permitted to supply real paid status or card data. A native provider SDK and authenticated backend remain required for real collection.
