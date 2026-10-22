@@ -7,15 +7,25 @@ namespace App\Services\PaymentsCore;
 use DomainException;
 use Throwable;
 
-/** Unregistered internal orchestration. No API, provider or authorizer is enabled. */
+/** Provider-neutral orchestration. Default access is closed and no provider ships. */
 final class PaymentCore
 {
     /** @param array<string, PaymentProvider> $providers Exact provider keys only. */
     public function __construct(
-        private SqlitePaymentJournal $journal,
+        private PaymentJournal $journal,
         private array $providers = [],
         private PaymentAccess $access = new ClosedPaymentAccess,
     ) {}
+
+    /** Safe inspection never looks up or contacts a provider. */
+    public function inspect(MerchantBinding $scope, string $operationId): array
+    {
+        $this->access->assertAllowed($scope, 'inspect');
+        $row = $this->original($scope, $operationId);
+        $this->access->assertAllowed(MerchantBinding::restore($row['binding']), 'inspect');
+
+        return $row;
+    }
 
     public function start(MerchantBinding $binding, SaleSnapshot $sale, string $requestId): array
     {
@@ -34,6 +44,7 @@ final class PaymentCore
         $this->access->assertAllowed($scope, 'recover');
         $row = $this->original($scope, $operationId);
         $provider = $this->provider(MerchantBinding::restore($row['binding']));
+        $this->access->assertAllowed(MerchantBinding::restore($row['binding']), 'recover');
         if (in_array($row['state'], ['succeeded', 'failed', 'cancelled'], true)) {
             return $row;
         }
@@ -75,7 +86,7 @@ final class PaymentCore
     {
         $provider = $this->providers[$binding->provider] ?? null;
         if (! $provider instanceof PaymentProvider || ! $provider->supports($binding)) {
-            throw new DomainException('The original provider and merchant capability are unavailable.');
+            throw new ProviderUnavailableException('The original provider and merchant capability are unavailable.');
         }
 
         return $provider;

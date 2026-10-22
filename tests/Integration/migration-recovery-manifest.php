@@ -3,6 +3,14 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_22_190100_create_payment_core_quotes_table.php' => [
+        'test' => 'tests/Integration/PaymentsCoreQuotesMySqlRecoveryTest.php',
+        'scenarios' => ['encrypted immutable quote rows survive interrupted named-index repair and completed DDL replay', 'duplicate request evidence and changed named index definitions stop without deleting evidence'],
+    ],
+    '2026_10_22_190000_create_payment_core_journal_tables.php' => [
+        'test' => 'tests/Integration/PaymentsCoreMySqlRecoveryTest.php',
+        'scenarios' => ['retained admission and binding rows before operation/event tables', 'retained encrypted operations and events before indexes and foreign keys', 'duplicate and cross-tenant retained rows are rejected without rewriting evidence'],
+    ],
     '2026_10_29_150000_create_team_search_index.php' => [
         'test' => 'tests/Integration/TeamSearchMySqlRecoveryTest.php',
         'scenarios' => ['encrypted documents and checkpoints survive missing terms table', 'named lookup and document indexes recover without replacing rows', 'completed DDL replay remains idempotent'],

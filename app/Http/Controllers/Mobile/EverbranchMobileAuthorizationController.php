@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Mobile;
 use App\Http\Controllers\Controller;
 use App\Models\MobileAuthorizationCode;
 use App\Models\User;
+use App\Support\Auth\MobileAuthorizationClients;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -17,14 +18,15 @@ class EverbranchMobileAuthorizationController extends Controller
     public function __invoke(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'client_id' => ['required', 'in:everbranch-mobile'],
-            'redirect_uri' => ['required', 'in:everbranch://auth/callback,https://app.theeverbranch.com/field/'],
+            'client_id' => ['required', 'string', 'max:80'],
+            'redirect_uri' => ['required', 'string', 'max:255'],
             'code_challenge' => ['required', 'string', 'size:43', 'regex:/^[A-Za-z0-9_-]+$/'],
             'code_challenge_method' => ['required', 'in:S256'],
             'state' => ['required', 'string', 'min:16', 'max:255', 'regex:/^[A-Za-z0-9._~-]+$/'],
             'device_name' => ['nullable', 'string', 'max:160'],
             'auth_method' => ['required', 'in:google,email'],
         ]);
+        MobileAuthorizationClients::assertAllowed($validated['client_id'], $validated['redirect_uri']);
 
         $canonicalUrl = route('mobile.everbranch.authorize', $validated, absolute: false);
         $fingerprint = hash('sha256', json_encode($validated, JSON_THROW_ON_ERROR));
