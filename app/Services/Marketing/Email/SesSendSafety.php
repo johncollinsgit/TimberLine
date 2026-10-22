@@ -3,6 +3,7 @@
 namespace App\Services\Marketing\Email;
 
 use App\Models\MarketingEmailDelivery;
+use App\Models\MessagingContactChannelState;
 use App\Models\TenantMessagingLedgerEntry;
 use App\Services\Marketing\Messaging\TenantMessagingUsageService;
 use Illuminate\Cache\RateLimiter;
@@ -30,7 +31,26 @@ class SesSendSafety
             ->whereRaw('LOWER(TRIM(email)) = ?', [strtolower(trim($email))])
             ->whereIn('metadata->ses_attempt->state', ['submitting', 'unknown'])->exists();
 
-        return $unresolved ? $this->heldResult() : null;
+        if ($unresolved) {
+            return $this->heldResult();
+        }
+
+        return $this->recipientHeld($tenantId, $email) ? [
+            'success' => false, 'provider' => 'ses_tenant', 'status' => 'suppressed',
+            'message_id' => null, 'error_code' => 'ses_recipient_suppressed',
+            'error_message' => 'Permanent recipient feedback requires review before any new provider send.',
+            'retryable' => false, 'payload' => [], 'dry_run' => false,
+        ] : null;
+    }
+
+    protected function recipientHeld(int $tenantId, string $email): bool
+    {
+        return MessagingContactChannelState::query()->forTenantId($tenantId)
+            ->whereRaw('LOWER(TRIM(email)) = ?', [strtolower(trim($email))])
+            ->whereIn('email_status', ['bounced', 'suppressed'])->exists()
+            || MarketingEmailDelivery::query()->where('tenant_id', $tenantId)->where('provider', 'ses_tenant')
+                ->whereRaw('LOWER(TRIM(email)) = ?', [strtolower(trim($email))])
+                ->whereIn('metadata->ses_attempt->recipient_hold', ['hard_bounce', 'complaint'])->exists();
     }
 
     protected function heldResult(): array
@@ -76,6 +96,12 @@ class SesSendSafety
             }
             if ($delivery->provider_message_id || ! in_array($delivery->status, ['pending', 'sending', 'queued'], true)) {
                 throw new RuntimeException('Existing delivery cannot be resubmitted to SES.');
+            }
+            // Delivery/complaint events take the same tenant lock. Recheck at
+            // the durable claim, including callers without marketing options.
+            // Marketing opt-outs retain their existing purpose-specific checks.
+            if ($this->recipientHeld($tenantId, $email)) {
+                throw new RuntimeException('SES recipient is held by permanent feedback.');
             }
             if (MarketingEmailDelivery::query()->where('tenant_id', $tenantId)->where('email', $delivery->email)
                 ->where('provider', 'ses_tenant')->where('id', '!=', $deliveryId)

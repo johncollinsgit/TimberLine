@@ -1,3 +1,4 @@
+<!-- SES readiness source candidate: preserve SendGrid and SES-off gates; do not treat local/provider-simulator/live proofs as interchangeable. Read docs/operations/ses-readiness-review-2026-10-22.md before appeal/activation. -->
 ## Synthetic Fleet Calendar presentation (2026-10-22; source candidate)
 
 The isolated browser demo adds three synthetic Calendar examples linked by job

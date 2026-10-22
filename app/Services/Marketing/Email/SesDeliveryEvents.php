@@ -10,9 +10,9 @@ class SesDeliveryEvents
 {
     public function handle(array $event, string $snsMessageId): array
     {
-        $tags = collect((array) data_get($event, 'mail.tags', []))->map(fn ($v) => is_array($v) ? ($v[0] ?? null) : null)->all();
-        $tenantId = (int) ($tags['tenant_id'] ?? 0);
-        $deliveryId = (int) ($tags['marketing_email_delivery_id'] ?? 0);
+        $tags = collect((array) data_get($event, 'mail.tags', []))->map(fn ($v) => is_array($v) && array_is_list($v) && count($v) === 1 ? $v[0] : null)->all();
+        $tenantId = filter_var($tags['tenant_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        $deliveryId = filter_var($tags['marketing_email_delivery_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
         $type = strtolower((string) ($event['eventType'] ?? $event['notificationType'] ?? ''));
         $name = match ($type) {
             'send' => 'processed', 'delivery' => 'delivered', 'open' => 'open', 'click' => 'click',
@@ -24,12 +24,18 @@ class SesDeliveryEvents
         }
 
         return DB::transaction(function () use ($event, $snsMessageId, $tags, $tenantId, $deliveryId, $type, $name): array {
+            // Serialize SES feedback with the final recipient eligibility claim.
+            if (! \App\Models\Tenant::query()->whereKey($tenantId)->lockForUpdate()->first()) {
+                return ['matched' => 0, 'updated' => 0];
+            }
             $delivery = MarketingEmailDelivery::query()->where('tenant_id', $tenantId)->where('provider', 'ses_tenant')->lockForUpdate()->find($deliveryId);
             $attempt = (array) data_get($delivery?->metadata, 'ses_attempt', []);
             $receipt = trim((string) data_get($event, 'mail.messageId'));
             $nativeTenant = SesEventContext::nativeTenant($event);
             // Require the exact pre-send binding; never guess the latest email row.
-            if (! $delivery || ! $attempt || $receipt === ''
+            $destination = (array) data_get($event, 'mail.destination', []);
+            if (! $delivery || ! $attempt || $receipt === '' || count($destination) !== 1
+                || strtolower(trim((string) ($destination[0] ?? ''))) !== strtolower(trim($delivery->email))
                 || $nativeTenant === null || $nativeTenant !== ($attempt['tenant_name'] ?? null)
                 || ($tags['ses:configuration-set'] ?? null) !== ($attempt['configuration_set'] ?? null)
                 || SesEventContext::source($event) !== strtolower((string) ($attempt['from'] ?? ''))
@@ -51,6 +57,16 @@ class SesDeliveryEvents
             $recipients = array_map(fn ($email) => strtolower(trim((string) $email)), $recipients);
             if (! in_array(strtolower(trim($delivery->email)), $recipients, true)) {
                 return ['matched' => 0, 'updated' => 0];
+            }
+            // Keep SES permanent feedback in the immutable attempt too. An
+            // existing unsubscribe must not mask a complaint, and later list
+            // reconsent/temporary events cannot clear provider safety holds.
+            if ($type === 'complaint' || ($type === 'bounce' && ($detail['bounceType'] ?? '') === 'Permanent')) {
+                $attempt['recipient_hold'] = ($attempt['recipient_hold'] ?? '') === 'complaint' || $type === 'complaint'
+                    ? 'complaint' : 'hard_bounce';
+                DB::table('marketing_email_deliveries')->where('id', $deliveryId)->update([
+                    'metadata' => json_encode([...(array) $delivery->metadata, 'ses_attempt' => $attempt], JSON_THROW_ON_ERROR),
+                ]);
             }
             $recipientDetail = collect((array) ($detail['bouncedRecipients'] ?? []))->first(fn ($r) => strtolower(trim((string) ($r['emailAddress'] ?? ''))) === strtolower(trim($delivery->email))) ?? [];
             $normalized = [

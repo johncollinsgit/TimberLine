@@ -10,7 +10,12 @@ class PlatformSesDeliveryEvents
     /** Called only after the shared exact-topic/account SNS signature verifier. */
     public function handle(array $event, string $snsMessageId): array
     {
-        $tags = collect((array) data_get($event, 'mail.tags', []))->map(fn ($value) => is_array($value) && count($value) === 1 ? $value[0] : null)->all();
+        $rawTags = (array) data_get($event, 'mail.tags', []);
+        // Platform submissions never supply a native tenant or marketing IDs.
+        if (array_intersect(['ses:tenant', 'tenant_id', 'marketing_email_delivery_id'], array_keys($rawTags)) !== []) {
+            return ['matched' => 0, 'updated' => 0];
+        }
+        $tags = collect($rawTags)->map(fn ($value) => is_array($value) && array_is_list($value) && count($value) === 1 ? $value[0] : null)->all();
         $id = filter_var($tags['platform_delivery_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
         $type = strtolower((string) ($event['eventType'] ?? ''));
         if (! $id || ($tags['everbranch_lane'] ?? '') !== 'platform' || ! in_array($type, ['send', 'delivery', 'bounce', 'complaint', 'reject', 'rendering failure', 'deliverydelay'], true)) {
