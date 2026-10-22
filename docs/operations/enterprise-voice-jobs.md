@@ -1,127 +1,128 @@
-# Ask Everbranch job voice prototype
+# Ask Everbranch voice prototype
 
-Source assessment: October 22, 2026. Base: Enterprise integration checkpoint
-`7512e27dc71075b909049d3229ceb4bf7a23cf22`. This isolated increment is default-off,
-unmerged and undeployed. It does not modify the tour, header, shared Ask markup,
-campus fixtures, native applications, credentials, accounts or provider grants.
-The Enterprise owner remains the sole owner of final tour/shell integration.
+## Integrated private-shell increment (October 22)
 
-## Readiness
+The Enterprise integration branch mounts the reviewed optional generation,
+exact-session cancellation and preview adapters in the existing Ask pane and
+final tour screen. Completed typed/spoken turns retain server history; replacing
+an unresolved turn or explicit Stop/context/disposal cancels the exact old scope.
+Generated, simulated and record-backed replies are labeled separately before
+and after explicit requests. Source job opening still re-reads current canonical
+task/version/department authority. No model-created URL or recipient is trusted.
 
-| Capability | Source evidence | Current limit |
+Private actual-kernel Chromium/WebKit acceptance replaces only the provider and
+speech devices, preserving authentication, CSRF, encrypted history and the real
+reservation ledger. It covers two typed turns and a spoken follow-up, manual
+email/SMS recipient previews and exact replay/conflict, cancellation after
+departure or department change, late-result suppression and phone/tablet layouts.
+This does not verify real microphone hardware, provider delivery or paid AI.
+
+Unknown AI outcomes now pause new tenant reservations/dispatch claims until
+reconciled, without zeroing unknown exposure or blocking completed exact replay.
+Already-dispatched costs are not a guaranteed account cap. The controlled trial
+continues to refuse generation until its shared-ledger adapter is reviewed.
+See [the concrete runtime decision packet](enterprise-runtime-approval-packet.md).
+
+Source-only, default-off increment in draft PR 472, based on Enterprise checkpoint
+`7512e27dc71075b909049d3229ceb4bf7a23cf22`. No merge, deployment, provider activation,
+credentials, paid calls, real messages, accounts or grants. The Enterprise owner
+alone owns the Ask pane, header, fictional campus fixtures and final tour placement.
+Record lookup alone is not the completed crowning conversational assistant.
+
+## Implemented source versus verified behavior
+
+| Capability | Implemented source | Acceptance evidence and limits |
 | --- | --- | --- |
-| Two-way browser speech | Existing `resources/js/ai-voice-conversation.js`: explicit activation, one final utterance, scoped request, browser TTS, next turn after playback. Reused here. | Browser recognition may process speech online. Fake speech and browser automation do not establish physical microphone, accents, speaker echo or Safari/iPad/iPhone acceptance. No provider audio/realtime transport is verified by this work. |
-| Enterprise Ask | `AskEverbranch`, `IntelligenceAskModel`, `Intelligence` use authenticated tenant/user/department evidence; approved model selection is a separate gated lane. | Existing Ask returns server-checked record facts and reference selection, not an independently verified live conversational narrator. No live model call was made here. |
-| Grounded job lookup | New `VoiceJobs` reuses `Operations::listing/show`, `WorkspaceAccess` and `RequestWorkflow::view`. The endpoint returns current task facts, exact links and a permitted linked request's recorded location. | Narrow title-word matching, at most 200 permitted operational tasks and a bounded 1,000-request location scan. A missing match is incomplete evidence. No general semantic search, campus-wide census, live tracking, file/mailbox search or generated facts. |
-| Identity and scope | Existing verified authentication, workspace middleware, canonical membership, department and native task permissions. Exact focus is read again under current policy. | Client scope stamps suppress stale UI; they never authorize the server. Ordinary members retain their existing permissions. Public browser samples cannot prove authenticated privacy. |
-| Controls | New optional `Talk`, `Stop`, `Interrupt reply` controls and typed lookup share the existing capture loop. Hiding/page exit stops capture; context changes/disposal cancel pending UI. | The shell must call `contextChanged` on department/user/tenant/section changes and dispose controls when removed. Interrupt is an explicit button; the microphone stays paused during playback. Talk reconnects manually; there is no automatic retry. |
-| Session/history/budget | 12 spoken turns, 10-minute wall-clock limit including interrupts, 45-second response wait, existing 90-second capture/180-second playback watchdogs. Only one focus and at most ten choices are retained in memory. | Stopping aborts the client wait; accepted server work may still finish. Existing model accounts retain their independent server budgets/history. This new endpoint dispatches no provider and incurs no AI usage. |
-| Email | Existing `EmailDrafts` binds the user's authorized mailbox, exact recipient/subject/body digest, expiry, source/access rechecks, durable idempotent state and content-free audit. | Default-off delivery, own-mailbox/OAuth/provider readiness and live acceptance are separate. Voice lookup only returns `review_required`; it cannot create or confirm a send. |
-| SMS/actions | Existing separately bounded trial/provider architecture remains unchanged. | No general voice-to-SMS preview/confirmation/execution adapter is added. Voice cannot approve writes, messages, payments or grants. Do not advertise this as working voice sends. |
-| Costs and crew | Voice facts contain the permitted current handler/owner, status, due date, next action, blockers, observation time and source links. | No full crew roster or job cost total is inferred. Costs are deliberately outside this projection; authorized Planning remains the source for recorded project costs. Missing location/date/handler stays unknown. |
-| Finale | The feature interface is ready for the existing Ask pane's owner to connect to its current job/detail/map controls. | Tour placement, fixture seeding and actual authenticated shell end-to-end acceptance remain pending. The component browser fixture is not a finished guided tour or live college workspace. |
+| Speech conversation | Existing explicit browser capture, scoped request, browser TTS; 12 turns/10 minutes, 45-second wait, capture/playback watchdogs, Stop/Interrupt, manual restart and typed fallback. | Fake speech in Chromium and WebKit; no physical microphone, echo, accent, mobile Safari or acoustic acceptance. Browser speech can use its vendor's online service. No realtime audio provider is connected. |
+| Record fallback | `VoiceJobs` reads canonical current task permissions and linked permitted request location. Title matching checks up to 200 tasks and 1,000 request locations. | Actual server/policy fixtures tested; browser server replies are synthetic. Missing matches are incomplete evidence. No costs, private student records, mailbox, files or live GPS. |
+| Generative adapter | `VoiceAssistant`, `VoiceCompletionProvider`, `ResponsesVoiceProvider`, `VoiceCostReservation` reuse existing `ResponsesTransport` and `Intelligence` accounting. Separate `voice_answer` purpose; no tools or send executor. | Fake provider only, including its explicit `provider_simulated=true` and `usage.state=simulated_estimate`. Real Responses account/model/credential permission and quality remain unverified. |
+| Grounding and privacy | Current tenant/user/department and native task access; eight supplied projections including focus/history, at most six historical messages (three pairs), server-only history, 12 turns and ten-minute expiry. Revalidate **every supplied source**, regardless of model-selected citations, before dispatch, reply, replay and draft preview. | Bounded evidence is not campus-wide semantic search. The question does not search all tasks. Generated narrative can still be wrong; task benchmarks and physical acceptance are required. |
+| Budget and replay | Commit worst-case reservation before IO; approved positive existing tenant lifetime cap/base rates and separate default-zero inclusive voice ceilings (input at least 1.25x base, output at least base), no automatic retry, immutable per-user request UUID/input and accounting receipt; uncertain usage retains maximum reservation. Voice clamps input bytes including instructions/framing to 12,000 and output to 800 tokens. | Controlled shared trial mode deliberately falls back without model dispatch, preventing escape of its combined budget. No voice spend is authorized. Session ceiling is 12 bounded calls under the existing cumulative tenant cap, not a customer pricing term. |
+| Cancellation | Client abort plus authenticated server cancellation/tombstone handles Stop-before-arrival, wait timeout, stale responses and successor-session races. Post-IO permission/source/cancel checks suppress late replies. | Accepted provider work may finish and retain cost. Cancellation failure is visible and never promises a refund. Manual new session is required after uncertain/pre-dispatch failure; no paid automatic reconnect. |
+| Email/SMS proposals | Strict finite intent and exact schema; model cannot authorize recipients, tools or confirmation, or provide trusted action/navigation URLs (arbitrary generated text is untrusted). Human explicitly enters one email/E.164 recipient for server-held immutable subject/body preview. Editor permission, source/version rechecks, expiry, exact replay, five previews/session and content-free audit. | `delivery_ready=false`, `can_confirm=false`, `recipient_verified=false`. No sender selection, recipient identity/consent verification, confirmation route or send adapter. Never advertise this as working voice sends. Draft playback pauses mic for review; explicit Talk resumes and Stop invalidates the session. |
+| Retention | Indexed ten-minute content expiry; bounded scrubbing removes session/history/pending prompts, recipients/drafts and `ent_ai_usage.value`, preserving costs/idempotency and content-free audit. Late completion cannot restore scrubbed content. | New sessions opportunistically scrub 100 expired tenant rows. Isolated `enterprise:voice-prune --limit=1000` handles idle records. An operator must configure/verify maintenance cadence before live activation; no scheduler or live database was changed here. Backups/log/provider cache and abuse-monitoring retention need separate runtime review; local expiry and store=false do not promise provider deletion. |
+| Navigation and source links | Only server-projected exact jobs can invoke the supplied existing opener. Explicit ambiguity choice re-reads through deterministic lookup. Linked locations carry recorded/synthetic provenance. | Campus owner must connect and test actual detail/map/source navigation in the accepted shell; component screenshots do not prove the guided tour is integrated. |
 
-No Avery key, Jarvis credentials, new credentials/OAuth, paid model/audio call,
-live email/text, production grant, hosting change, merge or deployment was used.
-The existing combined $5 SMS/email/AI trial allowance is not a voice budget grant.
-Any provider-backed voice increment requires exact independent authorization and
-verified current provider/rate/budget controls first.
+## Endpoint contract
 
-## Server contract
+All endpoints reuse verified authentication, resolved workspace and area policy,
+private/no-store JSON and existing mounted route generation. Default-off flags:
+`ENTERPRISE_VOICE_JOBS_ENABLED`, `ENTERPRISE_VOICE_GENERATION_ENABLED`,
+`ENTERPRISE_VOICE_DRAFTS_ENABLED`; Ask/Operations/access/spend gates also apply.
+Inclusive voice rates require `ENTERPRISE_VOICE_INPUT_CEILING_MICROUSD_PER_MILLION` and `ENTERPRISE_VOICE_OUTPUT_CEILING_MICROUSD_PER_MILLION`, both default zero. Missing/insufficient ceilings retain zero-dispatch record lookup. They must include applicable cache-write/account/tier/region charges. No flag or provider secret was activated by this work.
 
-`POST /enterprise/voice/jobs` uses the existing Enterprise mount and verified
-authenticated middleware, plus a 20/minute throttle. `ENTERPRISE_VOICE_JOBS_ENABLED`
-defaults false; Ask, Operations and ordinary Enterprise access gates also apply.
-Body: `area_id` UUID, `question` (1–1,500 characters), optional exact task UUID
-`focus`. Recognized words stay out of GET URLs. Do not enable body tracing.
+- `POST /enterprise/voice/jobs`: `area_id`, question (1-1,500 chars), optional task
+  UUID `focus`. Returns `mode=record_backed`, `provider_dispatch=false`, scope,
+  timestamp, coverage and matched/choose/no_match/review_required. No persistence.
+- `POST /enterprise/voice/turns`: same fields plus client-generated UUID
+  `session_id` and unique per-turn `request_id`. Client history/confirmation are
+  prohibited. Missing permitted configuration retains zero-dispatch fallback.
+  Configured generation adds exact session/turn IDs, trusted simulation marker,
+  answered/matched/choose/draft_proposed, current source links and usage receipt.
+- `POST /enterprise/voice/sessions/{id}/cancel`: area ID, exact private session;
+  may create an early cancellation tombstone. Never reverses accepted costs.
+- `POST /enterprise/voice/previews`: area/session/turn/preview UUIDs and **human**
+  `to`. Client subject/body/confirmation prohibited. Returns exact immutable
+  preview, digest, expiry and disconnected-delivery flags. Does not send anything.
 
-Outcomes: `matched`, `choose`, `no_match`, `review_required`. The response includes
-server-owned `scope`, `mode=record_backed`, `provider_dispatch=false`, trusted
-`sample_data`, timestamp and coverage. Only one unambiguous task is described.
-Ambiguity exposes at most ten currently readable titles; selecting one requires
-a new authorized read. Message/action language cannot dispatch a provider or
-mutation. All responses are private/no-store. No transcript, conversation, usage
-reservation or new business/audit row is persisted by a lookup.
+JSON output is untrusted text. Do not enable request/response body tracing or
+render model text as HTML. Exact source links are server-generated; never follow
+model-provided URLs. No general assistant conversation storage is implied.
 
-The location is a linked permitted request's recorded label/coordinates, explicitly
-not GPS or a surveyed position. Missing location produces no pin. The location
-source and exact task source use server-generated mounted application links.
+## Existing Ask pane integration handoff
 
-## Integration handoff to the Enterprise shell owner
+1. Load `resources/js/enterprise/voice-jobs-entry.js` from its runtime Vite manifest.
+   `EverbranchVoiceJobs.mount(existingVoiceHost, options)` adds optional controls
+   without starting capture. Keep Ask Everbranch and Talk. Do not edit another
+   assistant or start the microphone automatically during the tour.
+2. Provide `context()` with runtime private/sample, authenticated=true for private,
+   exact current tenantId/userId/areaId. Context stamps suppress stale UI, never
+   authorize server data. Public/sample runtime always uses lookup, never generate.
+3. `lookup(body,{signal})` calls the existing server jobs route using existing
+   CSRF-aware transport. For an approved private generative integration only,
+   optionally supply `generate(body,{signal})`, `cancelSession(body)` (required
+   together), and `preparePreview(body,{signal})` to the above routes. No provider
+   URL or secret goes into the browser. Keep all generation flags false pending
+   the decision in `enterprise-voice-live-decision.md`.
+4. `openJob(job,{signal})` uses existing detail/map navigation, respecting pending
+   edits and signal before committing UI. Return true only if opened. Missing
+   coordinates mean no pin; no external map request is required. Render current
+   server source links, timestamp, coverage and latency alongside the answer.
+5. `onReply`, `onTranscript`, `onError`, `onState` use existing Ask log/text nodes.
+   Render choose candidates as explicit `session.choose(id)` buttons; keep at
+   most twenty visible turns and clear on context change. Generated citations
+   do not establish truth; simulation must remain plainly labeled.
+6. Use `session.ask(question)` for typed fallback. `previewDraft(exactTo)` is a
+   separate human UI operation; optional mounted controls display exact text
+   without any Send/Confirm button. No outcome calls a write/send executor.
+7. Call `contextChanged()` **before** department/user/tenant/section changes and
+   `dispose()` when unmounting. Hidden/page-exit stops capture/cancels pending work.
+   Stop invalidates the draft; draft playback pauses capture while review stays
+   available until expiry. Talk resumes explicitly; no background listening.
+8. Campus owner connects the existing fictional dorm pipe job and final tour step.
+   No private student/faculty data, extra campus fixture set, shared header or tour
+   markup is added here. Show only actual tested capability; otherwise mark Preview.
 
-1. Use the existing Ask pane, not a second assistant. Load the manifest entry
-   `resources/js/enterprise/voice-jobs-entry.js` through that runtime's existing
-   Vite helper. Both retail and independent Enterprise builds include it.
-   Loading starts neither a microphone nor a lookup.
-2. On `everbranch:voice-jobs-ready` (or immediately if the namespace is already
-   present), call `EverbranchVoiceJobs.mount(existingVoiceHost, options)`.
-   Keep the name **Ask Everbranch** and its **Talk** control.
-3. `context()` returns `{runtime, authenticated, tenantId, userId, areaId}` from
-   the current trusted presentation/current authenticated data response. The
-   existing `workspace`/`viewer` IDs provide tenant/user; use current `area`.
-   Public sample adapters use `runtime: 'sample'`, visibly fictional labels and
-   their own local transport. They must not claim server authorization.
-4. `lookup(body, {signal})` calls the existing `transport.request` with its
-   mounted Enterprise base plus `/voice/jobs`, current tenant query and the
-   body. The shared transport now forwards AbortSignal. Never use a provider URL,
-   credentials or a generated URL here.
-5. `openJob(job, {signal})` invokes the shell's existing task/project detail and
-   linked-request map selection. Respect unsaved/pending work and recheck the
-   signal before committing navigation. Return `true` only if it opened. With
-   no recorded coordinates, show an honest missing-location state. Do not make
-   an external map/provider request. `job.source_url` and
-   `job.location.source_url` are existing authorized source destinations.
-6. `onReply(result)` appends the checked facts, source links, `as_of`, coverage
-   and `latency_ms` to the existing Ask log using text nodes. Render `choose`
-   candidates as explicit buttons invoking `session.choose(id)`. Keep at most
-   twenty visible turns and clear them on context change. Do not call a send or
-   write executor for any outcome. `opened=false` must not be labeled opened.
-7. Supply existing browser `Recognition`, `Utterance` and `synthesis` objects,
-   `onTranscript` for an editable fallback draft and `onError` for visible
-   errors. Typed fallback calls `session.ask(question)`. Call
-   `session.contextChanged()` before context/section changes and
-   `session.dispose()` when unmounting. Do not auto-start Talk in the tour.
-8. After integration, place the actual working read/navigation step last in the
-   existing tour. The campus owner supplies the fictional students, faculty,
-   departments and operational jobs. This branch only supplies synthetic test
-   records, not another campus dataset. Use a current actual title such as
-   “Show the dorm pipe job”, then “Where is it?” or “Who is handling it?”.
+## Evidence and remaining gates
 
-The title matcher and factual narration must be labeled **record-backed job
-lookup**. Scripted/fake audio and sample responses must never be labeled live AI.
-If the shell or physical speech is not accepted, show a clearly marked preview
-with typed fallback; do not promise a working voice finale.
+Focused PHP tests use synthetic tenants/tasks, in-memory data and fake model,
+with HTTP stray requests prohibited. They exercise policy, all-source freshness,
+owned replay, exact preview, cost reservation/uncertainty, cancellation and
+retention. Node tests exercise fake capture/playback, stale cancellation races,
+manual preview and mic pause. Browser component tests run fake speech and
+synthetic endpoints in Chromium/WebKit at 390px, with all external requests
+blocked, no page errors and no Send/Confirm control. Evidence is written to
+ignored `storage/app/voice-jobs-acceptance/`, including explicit `liveAI=false`
+and `physicalAcousticAcceptance=false` markers.
 
-## Verification and remaining release gates
+Additive expiry/index migrations are restart guarded, retain data on code
+rollback, and have manifest-registered durable MySQL recovery tests. Local lint
+and SQLite tests are distinct from actual disposable MySQL CI execution.
+Independent review and exact-head CI results belong in the PR; earlier-head green
+checks are not evidence for a changed head. No merge/deployment is authorized.
 
-Local checks on October 22:
-
-- 59 focused PHP cases / 814 assertions passed: new voice lookup plus existing
-  operations, next slice, requester search, prefix mount and independent runtime.
-  New endpoint alone: 5 cases / 66 assertions, rerun after final formatting.
-- 11 voice lifecycle/controller Node cases passed, including exact focus,
-  ambiguity, revoked scope, cancellation, late responses, explicit interrupt,
-  total-time/turn limits and wait timeout without retry.
-- Existing build prerequisites passed: TypeScript, 16 Trajectory tests and
-  40 POS tests. Both Vite production artifacts compiled successfully. Existing
-  dependency annotation warnings do not come from this voice change.
-- Edge/Chromium at a 390px viewport passed the component fixture: explicit Talk,
-  job/detail and recorded-location display, followup, ambiguity, typed fallback,
-  interrupt, stop during wait, hide, permission denial and access revocation.
-  Seven loopback lookup calls, zero external requests and zero page errors.
-  Screenshot/results: local `storage/app/voice-jobs-acceptance/` (not committed).
-- WebKit could not start: the installed Playwright package has no
-  `webkit-2336/Playwright.exe`. No browser was installed by this task. Physical
-  iPad/iPhone microphone/speaker acceptance remains completely unverified.
-
-Reproduce with `npm run test:ai-voice`, the six PHP test files above, and
-`VOICE_BROWSER_CHANNEL=msedge node tests/browser/enterprise-voice-jobs.smoke.mjs`.
-Use the documented Windows test-local OpenSSL configuration and in-memory SQLite,
-array mail/cache/session and blocked provider requests. No real data is needed.
-The browser harness replaces speech and server replies; PHP tests separately
-exercise real canonical persistence and policy. Neither is live-provider proof.
-
-Pending: owner shell/tour wiring, actual seeded-workspace end-to-end test,
-physical supported-device speech, protected Linux/CI review/release evidence,
-explicit paid voice approval if a provider is proposed, and separate reviewed
-email/SMS voice adapters. This draft does not activate or approve any of them.
+Remaining: final owner integration, approved existing provider/key and inclusive
+spend scope, retention maintenance and runtime review, fake-to-real model task
+benchmarks, physical iPad/iPhone acoustics/latency/reconnect acceptance. Live sends
+require a separate recipient/sender/preview/budget approval and a reviewed executor.
+No customer fee, included usage amount or numerical customer cap is established.

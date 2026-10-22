@@ -3,6 +3,14 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_22_190000_add_private_voice_retention.php' => [
+        'test' => 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['retained encrypted voice and metering rows survive partial expiry column and named index creation; repeated recovery and code rollback preserve evidence'],
+    ],
+    '2026_10_22_000600_add_private_voice_retention.php' => [
+        'test' => 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['isolated runtime expiry column and named indexes recover independently without content or accounting loss'],
+    ],
     '2026_10_22_000500_create_enterprise_client_silo.php' => [
         'test' => 'tests/Integration/EnterpriseClientProvisioningMySqlTest.php',
         'scenarios' => ['retained encrypted client receipt and native department survive missing unique indexes; repeated recovery and down preserve data; independent first-claim processes serialize behind the real database lock without creating access'],

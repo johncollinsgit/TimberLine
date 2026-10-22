@@ -68,6 +68,49 @@ test('usage overview aggregates real ledger fields by permitted department and p
     Http::assertNothingSent();
 });
 
+test('voice answer usage is labeled and scoped without exposing private voice evidence or writing during reads', function (): void {
+    [$tenant, $owner, $area] = usageFixture();
+    [$foreignTenant, $foreignOwner, $foreignArea] = usageFixture();
+    $other = TeamArea::create(['id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'slug' => 'voice-other',
+        'name' => 'Other synthetic voice department', 'profile' => 'enterprise_department', 'version' => 1]);
+    $legacy = TeamArea::create(['id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'slug' => 'voice-legacy',
+        'name' => 'PRIVATE-legacy-voice-department', 'profile' => 'general', 'version' => 1]);
+    $voice = usageLedger($tenant, $area, 'voice_answer', 'completed', ['reserved_microusd' => 100, 'charged_microusd' => 15,
+        'input_tokens' => 10, 'output_tokens' => 5, 'session_id' => 'PRIVATE-voice-session', 'request_id' => 'PRIVATE-voice-request',
+        'provider_simulated' => true, 'value' => ['answer' => 'PRIVATE-spoken-answer', 'refs' => ['PRIVATE-job-reference']],
+        'transcript' => 'PRIVATE-voice-transcript']);
+    usageLedger($tenant, $area, 'voice_answer', 'uncertain', ['reserved_microusd' => 40]);
+    usageLedger($tenant, $other, 'voice_answer', 'completed', ['reserved_microusd' => 200, 'charged_microusd' => 21,
+        'input_tokens' => 14, 'output_tokens' => 7]);
+    usageLedger($foreignTenant, $foreignArea, 'voice_answer', 'reserved', ['reserved_microusd' => 900001]);
+    // A synthetic mismatched foreign ledger row also proves tenant filtering independently of area filtering.
+    usageLedger($foreignTenant, $area, 'voice_answer', 'reserved', ['reserved_microusd' => 900002]);
+    usageLedger($tenant, $legacy, 'voice_answer', 'reserved', ['reserved_microusd' => 900003]);
+    $before = [DB::table('team_operation_records')->get()->toJson(), DB::table('team_operation_revisions')->count(),
+        DB::table('team_operation_attempts')->count()];
+
+    $response = usageGet($tenant, $owner, $area->id)->assertOk()->assertJsonPath('scope.type', 'department')
+        ->assertJsonPath('scope.area_id', $area->id)->assertJsonCount(1, 'departments')->assertJsonPath('read_only', true)
+        ->assertJsonPath('totals.requests', 2)->assertJsonPath('totals.completed', 1)->assertJsonPath('totals.uncertain', 1)
+        ->assertJsonPath('totals.input_tokens', 10)->assertJsonPath('totals.output_tokens', 5)
+        ->assertJsonPath('totals.settled_usage_derived_microusd', 15)->assertJsonPath('totals.reserved_exposure_microusd', 40)
+        ->assertJsonPath('totals.estimated_total_exposure_microusd', 55)->assertJsonCount(1, 'departments.0.purposes')
+        ->assertJsonPath('departments.0.purposes.0.purpose', 'voice_answer')->assertJsonPath('departments.0.purposes.0.label', 'Voice answer')
+        ->assertJsonPath('departments.0.purposes.0.totals.requests', 2);
+    expect($response->getContent())->not->toContain('PRIVATE-', $voice->id, $foreignTenant->id, $foreignArea->id, $other->id,
+        'provider_id', 'session_id', 'request_id', 'transcript', 'user_id', 'input_hash', 'settings_hash', 'provider_simulated');
+    expect(DB::table('team_operation_records')->where('id', $voice->id)->value('data'))
+        ->not->toContain('PRIVATE-spoken-answer', 'PRIVATE-voice-transcript', 'PRIVATE-voice-session');
+    $all = usageGet($tenant, $owner)->assertOk()->assertJsonPath('totals.requests', 3)
+        ->assertJsonPath('totals.settled_usage_derived_microusd', 36)->assertJsonPath('totals.estimated_total_exposure_microusd', 76);
+    expect($all->getContent())->not->toContain($foreignArea->id, 'PRIVATE-legacy-voice-department');
+    usageGet($tenant, $owner, $foreignArea->id)->assertNotFound();
+    usageGet($foreignTenant, $owner, $foreignArea->id)->assertForbidden();
+    expect([DB::table('team_operation_records')->get()->toJson(), DB::table('team_operation_revisions')->count(),
+        DB::table('team_operation_attempts')->count()])->toBe($before);
+    Http::assertNothingSent();
+});
+
 test('an existing Intelligence request produces the ledger summarized without another provider call', function (): void {
     [$tenant, $owner, $area] = usageFixture();
     config(['enterprise.intelligence' => ['enabled' => true, 'api_key' => 'synthetic-no-real-key', 'model' => 'approved-test-model',

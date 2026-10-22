@@ -23,12 +23,14 @@ final class EnterpriseServiceProvider extends ServiceProvider
         $this->app->scoped(TenantContext::class);
         $this->app['config']->set('enterprise.runtime', true);
         $this->app->bind(\App\Enterprise\AskModel::class, \App\Enterprise\IntelligenceAskModel::class);
+        $this->app->bind(\App\Enterprise\VoiceCompletionProvider::class, \App\Enterprise\ResponsesVoiceProvider::class);
+        $this->app->bind(\App\Enterprise\VoiceCostReservation::class, \App\Enterprise\IntelligenceVoiceReservation::class);
         $this->app->bind(\App\Enterprise\MailboxGateway::class, \App\Enterprise\EnterpriseMailboxGateway::class);
     }
 
     public function boot(): void
     {
-        $this->commands([\App\Enterprise\Provisioning\ProvisionClientCommand::class]);
+        $this->commands([\App\Enterprise\Provisioning\ProvisionClientCommand::class, \App\Enterprise\VoicePruneCommand::class]);
         DB::prohibitDestructiveCommands($this->app->isProduction());
         Gate::policy(TeamProject::class, TeamProjectPolicy::class);
         Gate::policy(TeamTask::class, TeamTaskPolicy::class);

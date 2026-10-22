@@ -34,22 +34,35 @@
     const session=voiceSession,scope=voiceScope;
     for(const row of result.candidates||[]){const button=document.createElement('button');button.type='button';button.className='button';button.textContent=row.title;button.onclick=()=>{if(session!==voiceSession||scope!==voiceScope)return;session?.choose(row.id).catch(error=>{if(session===voiceSession&&scope===voiceScope){clearVoiceEvidence();message(error.message,true);}});};answer.append(button);}
     if(result.job){voiceSource(result.job.source_url,'Source job',answer);if(result.job.location?.source_url)voiceSource(result.job.location.source_url,'Source location',answer);}
-    const note=document.createElement('p');note.className='caption';note.textContent=`${result.sample_data?'Fictional demonstration records. ':''}Record-backed lookup · no model/provider dispatch. As of ${result.as_of}. ${typeof result.coverage==='string'?result.coverage:JSON.stringify(result.coverage)} ${result.opened===false?'Detail was not opened.':''}`;answer.append(note);
+    else for(const source of Object.values(result.sources||{})){voiceSource(source.source_url,`Source job: ${source.title}`,answer);if(source.location?.source_url)voiceSource(source.location.source_url,'Source location',answer);}
+    const mode=result.mode==='generated'?(result.provider_simulated?'Simulated provider response for testing - no paid provider call.':'AI-generated response from current permitted records. Provider invoice not reconciled.'):'Record-backed lookup - no model/provider dispatch.';
+    const note=document.createElement('p');note.className='caption';note.textContent=`${result.sample_data?'Fictional demonstration records. ':''}${mode} As of ${result.as_of}. ${typeof result.coverage==='string'?result.coverage:JSON.stringify(result.coverage)} ${result.generation_status||''} ${result.opened===false?'Detail was not opened.':''}`;answer.append(note);
+    if(result.mode==='generated'&&result.usage){const usage=document.createElement('p');usage.className='caption';const cost=result.usage.cost_microusd;usage.textContent=`${result.provider_simulated?'Simulated ledger estimate':'Metered estimate'}: ${Number.isSafeInteger(cost)&&cost>=0?'$'+(cost/1000000).toFixed(6):'cost unverified'}. Provider invoice reconciliation pending. Nothing was sent or changed.`;answer.append(usage);}
     while($('chat-log').children.length>20)$('chat-log').firstElementChild.remove();
   }
   function renderVoice(){
     const enabled=section==='ask'&&!!data.features?.voice_jobs&&!!data.features?.ask&&!!area;
     $('ask-voice-pane').hidden=!enabled;
-    const stamp=enabled?JSON.stringify([transport.mode,workspace,data.viewer_id||data.viewer||viewer,area,section]):null;
+    const stamp=enabled?JSON.stringify([transport.mode,workspace,data.viewer_id||data.viewer||viewer,area,section,!!data.features?.voice_generation,!!data.features?.voice_drafts]):null;
     if(stamp!==voiceScope){resetVoice();voiceScope=stamp;}
     if(!enabled){if(!askBusy)$('ask-submit').disabled=false;return;}if(voiceSession)return;
     if(!window.EverbranchVoiceJobs){$('ask-voice-controls').textContent='Record-backed job lookup is unavailable until reviewed application assets finish loading. Reload if this persists; manual work remains available. No model request is substituted.';$('ask-submit').disabled=true;return;}
     if(!askBusy)$('ask-submit').disabled=false;
     $('ask-voice-controls').replaceChildren();
+    // Cancellation belongs to this adapter's original tenant query, even after a switch.
+    const mountedScope=voiceScope,endpoint=nextBase,query=nextQuery();
+    const current=()=>voiceScope===mountedScope&&section==='ask';
+    const generation=transport.mode==='private'&&!!data.features?.voice_generation;
     voiceSession=EverbranchVoiceJobs.mount($('ask-voice-controls'),{
       context:()=>({runtime:transport.mode,authenticated:transport.mode==='private',tenantId:workspace,userId:data.viewer_id||data.viewer||viewer,areaId:area}),
-      lookup:(body,options)=>transport.request(`${nextBase}/voice/jobs${nextQuery()}`,body,options),openJob:openVoiceJob,onReply:voiceReply,
-      onTranscript:text=>{$('ask-question').value=text;chatMessage(text,'question');},onError:text=>{clearVoiceEvidence();message(text,true);},
+      lookup:(body,options)=>transport.request(`${endpoint}/voice/jobs${query}`,body,options),
+      ...(generation?{
+        generate:(body,options)=>transport.request(`${endpoint}/voice/turns${query}`,body,options),
+        cancelSession:body=>transport.request(`${endpoint}/voice/sessions/${encodeURIComponent(body.session_id)}/cancel${query}`,{area_id:body.area_id}),
+        ...(data.features?.voice_drafts?{preparePreview:(body,options)=>transport.request(`${endpoint}/voice/previews${query}`,body,options)}:{}),
+      }:{}),
+      openJob:openVoiceJob,onReply:result=>{if(current())voiceReply(result);},
+      onTranscript:text=>{if(current()){$('ask-question').value=text;chatMessage(text,'question');}},onError:text=>{if(current()){clearVoiceEvidence();message(text,true);}},
       Recognition:window.SpeechRecognition||window.webkitSpeechRecognition,Utterance:window.SpeechSynthesisUtterance,synthesis:window.speechSynthesis,
     });
   }

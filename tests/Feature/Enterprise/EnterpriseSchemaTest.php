@@ -57,9 +57,13 @@ final class EnterpriseSchemaTest extends TestCase
             $this->assertTrue(Schema::hasTable($table));
             $this->assertSame(0, DB::table($table)->count(), $table.' must start empty');
         }
-        $this->assertCount(5, DB::table('migrations')->get());
+        $this->assertCount(6, DB::table('migrations')->get());
+        $this->assertTrue(Schema::hasColumn('team_operation_records', 'voice_expires_at'));
+        foreach (['tor_voice_expiry', 'tor_voice_sessions', 'tor_voice_previews'] as $index) {
+            $this->assertTrue(Schema::hasIndex('team_operation_records', $index));
+        }
         $this->install();
-        $this->assertCount(5, DB::table('migrations')->get());
+        $this->assertCount(6, DB::table('migrations')->get());
         $this->assertCount(6, EnterpriseSchema::sharedVersionOne());
     }
 

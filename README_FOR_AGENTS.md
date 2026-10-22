@@ -1,3 +1,14 @@
+## Enterprise generated conversation (source candidate, October 22)
+
+The same private Ask pane can mount the reviewed default-off generation adapter,
+with bounded server history, current source rechecks, old-scope cancellation and
+exact manual-recipient previews. Preserve explicit simulated/generated/record
+labels, existing usage reservations and the controlled-trial generation refusal.
+Do not substitute sample authorization or enable providers from passing tests.
+Read [the runtime and integration decision packet](docs/operations/enterprise-runtime-approval-packet.md)
+before any hosted presenter, credential or provider action. Physical devices and
+live paid acceptance remain unverified.
+
 ## Enterprise voice finale and admin usage (source candidate, October 22)
 
 The existing Ask pane now integrates explicit Talk, record-backed current-job

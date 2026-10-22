@@ -14,7 +14,7 @@ class UsageOverview
 
     public const DEPARTMENT_LIMIT = 200;
 
-    private const PURPOSES = ['ask' => 'Ask Everbranch', 'briefing' => 'Project briefing', 'workflow_draft' => 'Workflow draft', 'other' => 'Unclassified purpose'];
+    private const PURPOSES = ['ask' => 'Ask Everbranch', 'briefing' => 'Project briefing', 'workflow_draft' => 'Workflow draft', 'voice_answer' => 'Voice answer', 'other' => 'Unclassified purpose'];
 
     public function __construct(private WorkspaceAccess $access, private Intelligence $intelligence) {}
 
@@ -119,7 +119,7 @@ class UsageOverview
                 continue;
             }
             $data = is_array($row->data) ? $row->data : [];
-            $purpose = in_array($data['purpose'] ?? null, ['ask', 'briefing', 'workflow_draft'], true) ? $data['purpose'] : 'other';
+            $purpose = in_array($data['purpose'] ?? null, ['ask', 'briefing', 'workflow_draft', 'voice_answer'], true) ? $data['purpose'] : 'other';
             $contribution = $this->contribution($row->status, $data);
             $departments[$row->area_id]['purposes'][$purpose] ??= ['purpose' => $purpose, 'label' => self::PURPOSES[$purpose], 'totals' => $this->emptyTotals()];
             $this->add($departments[$row->area_id]['purposes'][$purpose]['totals'], $contribution);
