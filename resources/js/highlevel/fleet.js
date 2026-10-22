@@ -10,13 +10,13 @@ const history = new RouteHistory();
 let leaflet = null;
 let demo = Boolean(config.demo), demoData=null;
 let sessionScope = null, sessionEpoch = 0;
-let token = null, expiresAt = 0, parentOrigin = null, data = null, page = 'fleet', selected = null, search = '', devices = null, busy = false;
-const labels = {fleet:'Fleet', health:'Vans', jobs:'Jobs', trips:'Trips & routes', maintenance:'Maintenance', alerts:'Alerts', connection:'Connection', settings:'Settings'};
-let tourStep = 0;
+let token = null, expiresAt = 0, parentOrigin = null, data = null, page = config.demo&&window.location.hash==='#calendar'?'calendar':'fleet', selected = null, search = '', devices = null, busy = false;
+const labels = {fleet:'Fleet', health:'Vans', ...(demo?{calendar:'Calendar'}:{}), jobs:'Jobs', trips:'Trips & routes', maintenance:'Maintenance', alerts:'Alerts', connection:'Connection', settings:'Settings'};
+let tourStep = page==='calendar'?-1:0;
 const tour = [
     ['fleet','See the whole fleet','Every vehicle and route here is fictional. Compare the colored fictional driving routes along real roads, uncheck vehicles, or search and check a truck to add it to the map.'],
     ['health','Set up your vans','Search vans, choose a crew, add job types and update materials on board. Set availability before looking for a van for a job.'],
-    ['jobs','Review upcoming work','Calendars and open pipeline work connect automatically in the live app. Search a sample job, choose its address and assign a van.'],
+    ['calendar','Follow an event to its job','Open a synthetic calendar event, follow its linked job and compare needed materials with stock on the assigned van. These examples do not create real HighLevel Calendar events.'],
     ['trips','Review a trip route','Expand a trip to review trip miles, drive and idle time, and a reported path. A route-review flag calls for a manager’s review.'],
     ['maintenance','Plan maintenance and costs','Review overdue work, several upcoming services, recently completed work and illustrative USD service costs. Expand a plan to rehearse recording completed service.'],
     ['alerts','Follow up on vehicle issues','Assign a fictional battery or check-engine alert and record the action taken. A completed review does not clear a real vehicle fault.'],
@@ -99,7 +99,7 @@ function statusBanner() {
 function tourView(){
     if(!demo || tourStep<0)return '';
     const step=tour[tourStep];
-    return `<section class="card demo-tour" id="demo-tour" aria-labelledby="tour-title"><span class="eyebrow">Click-through demo · ${tourStep+1} of ${tour.length}</span><h2 id="tour-title">${step[1]}</h2><p>${step[2]}</p><div class="actions"><button id="tour-back" ${tourStep===0?'disabled':''}>Back</button><button id="tour-next" class="primary">${tourStep===tour.length-1?'Finish tour':'Next: '+tour[tourStep+1][1]}</button><button id="tour-close">Explore on my own</button></div></section>`;
+    return `<section class="card demo-tour" id="demo-tour" aria-labelledby="tour-title"><span class="eyebrow">Click-through demo · ${tourStep+1} of ${tour.length}</span><h2 id="tour-title">${step[1]}</h2><p>${step[2]}</p><div class="actions"><button id="tour-back" ${tourStep===0?'disabled':''}>Back</button><button id="tour-next" class="primary">${tourStep===tour.length-1?'Finish tour':'Next: '+tour[tourStep+1][1]}</button><button id="tour-skip">Skip this step</button><button id="tour-close">Explore on my own</button></div></section>`;
 }
 function setupView() {
     if (demo) return '';
@@ -182,7 +182,7 @@ async function syncCrm(force = false) {
 }
 function updateCrmStatus() {
     const target = document.getElementById('crm-sync-status');
-    if (target && data) target.textContent = crmSyncing ? 'Loading jobs…' : crmError ? `Jobs could not refresh. ${crmError} Your saved jobs are still here.` : `${data.operations?.jobs?.length || 0} jobs from HighLevel. ${formDirty ? 'Save your changes to see new jobs.' : ''}`;
+    if (target && data) target.textContent = crmSyncing ? 'Loading jobs…' : crmError ? `Jobs could not refresh. ${crmError} Your saved jobs are still here.` : `${data.operations?.jobs?.length || 0} ${demo?'demo jobs.':'jobs from HighLevel.'} ${formDirty ? 'Save your changes to see new jobs.' : ''}`;
 }
 async function finishBouncie(message) {
     clearInterval(popupTimer);
@@ -213,6 +213,7 @@ function bind() {
     });
     const advance=delta=>{tourStep+=delta;if(tourStep>=tour.length){tourStep=-1;}else{page=tour[tourStep][0];}render();document.getElementById('demo-tour')?.scrollIntoView({block:'start'});};
     const tourNext=document.getElementById('tour-next');if(tourNext)tourNext.onclick=()=>advance(1);
+    const tourSkip=document.getElementById('tour-skip');if(tourSkip)tourSkip.onclick=()=>advance(1);
     const tourBack=document.getElementById('tour-back');if(tourBack)tourBack.onclick=()=>advance(-1);
     const tourClose=document.getElementById('tour-close');if(tourClose)tourClose.onclick=()=>{tourStep=-1;render();};
     const startTour=document.getElementById('start-tour');if(startTour)startTour.onclick=()=>{tourStep=0;page='fleet';render();};
@@ -220,8 +221,8 @@ function bind() {
     const deviceSearch=document.getElementById('device-search');if(deviceSearch)deviceSearch.oninput=()=>{root.querySelectorAll('.device').forEach(el=>el.hidden=!el.textContent.toLowerCase().includes(deviceSearch.value.toLowerCase()));};
     updateCrmStatus();
     const toggle=document.getElementById('toggle-demo');if(toggle)toggle.onclick=()=>{if(config.demo){window.location.href='/crm/fleet/guide';return;}window.open('/crm/fleet/demo','_blank','noopener');};
-    bindOperations(root,data,api,run,refresh,notice);
-    root.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>{if(formDirty&&!window.confirm('Leave this page and discard unsaved changes?'))return;page=b.dataset.page; if(demo)tourStep=-1; render();});
+    bindOperations(root,data,api,run,refresh,notice,id=>{if(formDirty&&!window.confirm('Leave this page and discard unsaved changes?'))return;page='jobs';tourStep=-1;render();const item=root.querySelector(`[data-job-id="${id}"]`);if(item){item.open=true;item.scrollIntoView({block:'start'});}});
+    root.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>{if(formDirty&&!window.confirm('Leave this page and discard unsaved changes?'))return;page=b.dataset.page; if(demo)tourStep=-1; render();if(b.dataset.eventId){const event=root.querySelector(`[data-calendar-event="${CSS.escape(b.dataset.eventId)}"]`);if(event){event.tabIndex=-1;event.focus();event.scrollIntoView({block:'start'});}}});
     const searchInput=document.getElementById('search');
     if(searchInput){searchInput.value=search;searchInput.oninput=()=>{search=searchInput.value;updateList();};document.getElementById('vehicle-list').onclick=e=>{if(e.target.closest('.map-vehicle-check'))return;const b=e.target.closest('[data-vehicle]');if(!b)return;selected=Number(b.dataset.vehicle);updateList();const v=data.vehicles.find(v=>v.id===selected);if(map&&v?.location){map.panTo({lat:v.location.latitude,lng:v.location.longitude});}else if(v?.location){panFallback(v.location);}};}
     const list=document.getElementById('vehicle-list');
@@ -273,6 +274,7 @@ async function refresh() {
     data=await api('bootstrap');
     if(page==='fleet' && document.getElementById('map') && data.vehicles.length && (demo || setupStep(data)==='ready')){document.getElementById('status-banner').innerHTML=demo?'':statusBanner();document.getElementById('setup-panel').innerHTML=setupView();document.getElementById('vehicle-total').textContent=`${data.vehicles.length} / ${vehicleLimit()} vehicles`;updateList();await drawMap();}else{render();}
 }
+window.addEventListener('hashchange',()=>{if(demo&&data&&window.location.hash==='#calendar'){if(formDirty&&!window.confirm('Leave this page and discard unsaved changes?'))return;page='calendar';tourStep=-1;render();}});
 window.addEventListener('message',event=>{
     if (event.origin !== window.location.origin || event.source !== popup || !popup) return;
     if(['EVERBRANCH_BOUNCIE_CONNECTED','EVERBRANCH_BOUNCIE_CANCELLED','EVERBRANCH_BOUNCIE_FAILED'].includes(event.data?.message)){pendingCompletion=event.data.message;completePopup();}
@@ -288,7 +290,7 @@ async function start() {
         if(demo){demoData=createDemo();demoData.map_key=config.demoMapKey||null;}else{await authorize();}
         data=await api('bootstrap');
         const step=setupStep(data);
-        page=!demo && ['connection','vehicles'].includes(step)?'connection':'fleet';
+        if(!demo)page=['connection','vehicles'].includes(step)?'connection':'fleet';
         render();
         if(!demo){
             if(step==='vehicles')await run(loadDevices);
