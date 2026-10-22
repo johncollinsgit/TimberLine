@@ -19,11 +19,19 @@ Chromium/WebKit checks. It also runs these focused reviewer-operations gates:
 | Map and navigation | `enterprise-shell-navigation.test.mjs`; `enterprise-navigation-browser.mjs` in `all` or `navigation` | Same authorized search/filter result for list and markers; actual Back/Forward workspace/view/selection and retained unsent note/reload. |
 | Executive sample | `enterprise-executive.test.mjs`, sample contract tests and `enterprise-executive-browser.mjs` within priorities browser | Trusted default persona, configured simulated workspace stages, grounded drilldowns, separate uncommitted software terms, mutation rejection, saved branch and removal on role/scope changes. |
 | Contrast | `enterprise-theme.test.mjs` | Numeric normal-text and focus contrast against actual light/dark/alpha backgrounds; trusted sample-only college palette, unchanged shared Everbranch identity. |
+| Voice runtime | `EnterpriseVoiceRuntimeTest` in the independent suite; `EnterpriseVoiceJobsTest` in the separate Pest gate | Real mounted CSRF/method/throttle and current private-task/tenant/role denials; inert record text, no provider/business writes. |
+| Usage overview | `EnterpriseUsageOverviewTest`; `tests/js/enterprise-usage.test.mjs` | Existing encrypted usage ledger through fake Responses, current financial-role/department filtering and aggregate-only projection; estimate/uncertainty/empty-ledger honesty. |
+| Integrated voice and usage shell | `enterprise-voice-shell-browser.mjs` within shared renderer and private `all` / bounded `voice` scenario | Real HTTP records, typed and fake-speech lookup, exact source map navigation, context/late-response/error clearing, preview focus, unavailable-assets/no-model fallback and desktop/phone/iPad viewports. No physical acoustic or provider acceptance. |
 
 The signed-in tour helper `enterprise-private-tour-browser.mjs` runs inside the
 native operations `all` scenario. It creates fictional projects and requests
 through real HTTP, verifies triage/assignment/progress and workflow save/reload,
 and checks retained drafts, current identity, authorized links and zero tour POSTs.
+It also creates a long fictional workspace list and verifies an actual sidebar
+click after returning from the full-screen builder. The desktop sticky rail
+scrolls independently; tablet/phone retain document-flow navigation. The combined
+two-engine scenario has a 25-minute ceiling because it preserves real server
+throttles rather than disabling them for the larger synthetic action sequence.
 
 Both reviewer browser scripts and the native operations harness run sequentially
 in Chromium and WebKit. Browser steps share the already installed Playwright

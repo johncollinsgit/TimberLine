@@ -22,8 +22,10 @@
         [
             {
                 title: "One campus. A clear picture.",
+                id: "campus-overview",
+                pageId: "enterprise-overview",
                 section: "home",
-                duration: 30000,
+                duration: 25000,
                 role: "Workers · Security · Administration",
                 text: opening,
                 detail: "Search connects authorized work, locations and accountable departments. The official location directory keeps uncertain placements visibly unverified.",
@@ -41,8 +43,10 @@
             },
             {
                 title: "A request starts the story.",
+                id: "request-intake",
+                pageId: "enterprise-requests",
                 section: "requests",
-                duration: 30000,
+                duration: 25000,
                 role: "Student requester · IT · Events · Maintenance",
                 text: "A student reports that event audio needs attention. The request stays traceable as the department triages it, assigns a worker and shares public progress.",
                 detail: "Requester updates show the next step. Internal notes, student details and restricted attachments stay with the people permitted to see them.",
@@ -54,8 +58,10 @@
             },
             {
                 title: "Design the work, then review it.",
+                id: "workflow-design",
+                pageId: "enterprise-workflows",
                 section: "workflows",
-                duration: 30000,
+                duration: 25000,
                 role: "Department manager · IT · assigned worker",
                 text: "Open the complete workflow workspace. Connect a form, condition, assignment and approval; preview the draft before activating it.",
                 detail: "The same canvas, form and run-history presentation supports the sample experience. Sample execution is explicitly separate from the permission-controlled server engine.",
@@ -67,8 +73,10 @@
             },
             {
                 title: "Emergencies interrupt work. They do not erase it.",
+                id: "interruption-resume",
+                pageId: "enterprise-roll-call",
                 section: "roll_call",
-                duration: 30000,
+                duration: 25000,
                 role: "Security · workers · Events · department managers",
                 text: "An urgent water issue needs the worker now. The original audio check becomes Interrupted, retaining its owner, progress, notes and last checkpoint.",
                 detail: "The resumption queue keeps it in Roll Call until someone explicitly resumes, reassigns, reschedules or closes it with a reason. Managers review schedule impacts.",
@@ -83,8 +91,10 @@
             },
             {
                 title: "Partners and equipment stay connected.",
+                id: "partners-equipment",
+                pageId: "enterprise-assets",
                 section: "assets",
-                duration: 30000,
+                duration: 25000,
                 role: "Contractor · Operations · Athletics",
                 text: "A contractor acknowledges a limited update link and provides an ETA and evidence. Staff locate the PA system through its custody record for the gym event.",
                 detail: "An update link permits only its reviewed actions. Asset history shows holder, last recorded location, expected return and condition; it is not a live tracker.",
@@ -99,8 +109,10 @@
             },
             {
                 title: "Bring the right work into the meeting.",
+                id: "meeting-roll-call",
+                pageId: "enterprise-roll-call",
                 section: "roll_call",
-                duration: 30000,
+                duration: 25000,
                 role: "Administration · department managers · campus teams",
                 text: "Roll Call brings together emergencies, interrupted work, overdue commitments and conflicts. Leaders record decisions and confirm commitments before changing tasks.",
                 detail: "The fresh one-page meeting PDF includes scope, timestamp and source links. Completion and contractor quality are separate measures. A saved PDF remains a dated snapshot.",
@@ -119,35 +131,57 @@
                     ],
                 ],
             },
+            {
+                id: "ask-everbranch-finale",
+                pageId: "enterprise-ask",
+                title: "Finish with Ask Everbranch.",
+                section: "ask",
+                duration: 30000,
+                target: "ask-voice-controls",
+                targets: Object.freeze(["ask-voice-controls", "ask-job-detail", "ask-message-preview-actions"]),
+                role: "Staff · current authorized job context",
+                text: 'Open Ask Everbranch and type “Show event audio job”. Inspect the matching fictional job, then ask “Where is it?” or “Who is assigned?” without losing the job context.',
+                detail: 'This demonstration uses deterministic record lookup, not generative AI. Talk is optional and starts only after your own button press and microphone permission, when supported. Email and text previews remain Draft / not sent. Opening or replaying this scene starts no microphone, model call or delivery.',
+                cards: [
+                    ["Find the same job", 'Type “Show event audio job”, then inspect the authorized job detail and source record.'],
+                    ["Follow up in context", 'Ask “Where is it?” or “Who is assigned?” against that same visible job. Unknown or inaccessible data stays unavailable.'],
+                    ["Talk, then review drafts", 'Use Talk deliberately when supported, or keep typing. Review email/text previews in Ask Everbranch: Draft / not sent.'],
+                ],
+            },
         ].map((scene) => Object.freeze(scene)),
     );
 
     class StoryClock {
-        constructor() {
+        constructor(sequence = scenes) {
+            const durations = sequence.map(scene => scene.duration);
+            if (!durations.length || durations.some(value => !Number.isFinite(value) || value <= 0)) throw new TypeError("Tour scenes need positive finite durations.");
+            this.durations = Object.freeze(durations);
             this.elapsed = 0;
             this.playing = false;
         }
         get duration() {
-            return scenes.reduce((sum, scene) => sum + scene.duration, 0);
+            return this.durations.reduce((sum, value) => sum + value, 0);
         }
         get index() {
-            return Math.min(
-                scenes.length - 1,
-                Math.floor(this.elapsed / 30000),
-            );
+            let boundary = 0;
+            for (let index = 0; index < this.durations.length; index++) {
+                boundary += this.durations[index];
+                if (this.elapsed < boundary) return index;
+            }
+            return this.durations.length - 1;
         }
         tick(milliseconds) {
             if (this.playing)
                 this.elapsed = Math.min(
                     this.duration,
-                    this.elapsed + Math.max(0, milliseconds),
+                    this.elapsed + (Number.isFinite(milliseconds) ? Math.max(0, milliseconds) : 0),
                 );
             if (this.elapsed === this.duration) this.playing = false;
             return this.index;
         }
         seek(index) {
-            this.elapsed =
-                Math.max(0, Math.min(scenes.length - 1, index)) * 30000;
+            const target = Number.isFinite(index) ? Math.max(0, Math.min(this.durations.length - 1, Math.trunc(index))) : 0;
+            this.elapsed = this.durations.slice(0, target).reduce((sum, value) => sum + value, 0);
         }
         restart() {
             this.elapsed = 0;
@@ -335,6 +369,9 @@
                     {}),
             };
             root.dataset.tourScene = String(clock.index);
+            root.dataset.tourSceneId = scene.id;
+            root.dataset.tourPage = scene.pageId;
+            root.dataset.tourSection = scene.section;
             root.dataset.tourPlaying = String(clock.playing);
             text("count", `Scene ${clock.index + 1} of ${scenes.length}`);
             text("role", scene.role);
@@ -367,15 +404,18 @@
             get("screen").disabled =
                 actions.canNavigate?.(clock.index) === false;
             get("screen").dataset.screen = scene.section;
+            get("screen").textContent = scene.section === "ask" ? "Open Ask Everbranch" : "Explore this screen";
+            get("screen").dataset.feature = scene.target || scene.section;
+            get("progress").max = clock.duration;
             get("progress").value = clock.elapsed;
             get("progress").setAttribute(
                 "aria-valuetext",
-                `${Math.floor(clock.elapsed / 1000)} of 180 seconds of active playback`,
+                `${Math.floor(clock.elapsed / 1000)} of ${Math.ceil(clock.duration / 1000)} seconds of active playback`,
             );
-            const seconds = Math.floor(clock.elapsed / 1000);
+            const seconds = Math.floor(clock.elapsed / 1000), total = Math.ceil(clock.duration / 1000);
             text(
                 "time",
-                `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")} / 3:00`,
+                `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")} / ${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`,
             );
             root.querySelectorAll("[data-tour-scene]").forEach((button) =>
                 button.setAttribute(

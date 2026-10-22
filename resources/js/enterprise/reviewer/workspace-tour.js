@@ -121,6 +121,9 @@
                 );
                 add("projects", "Projects", "projects", Boolean(p), p?.id);
             }
+            if (index === 6) {
+                add("ask", "Open Ask Everbranch and optional Talk", "ask", feature("ask") && feature("voice_jobs"));
+            }
             return items;
         }
         function describe(index, base) {
@@ -222,6 +225,14 @@
                             : "Quarterly history/templates and automated reporting remain pending discovery.",
                     ],
                 ];
+            if (index === 6)
+                records = [
+                    ["Authorized job lookup", feature("ask") && feature("voice_jobs")
+                        ? 'Open Ask Everbranch for current authorized jobs. "Show event audio job" is a fictional sample example; current matches depend on your records.'
+                        : "Ask Everbranch job lookup and Talk are unavailable in the current workspace configuration."],
+                    ["Follow up on the same job", 'Ask "Where is it?" or "Who is assigned?" against the chosen job. Deterministic record lookup is not generative AI; unavailable facts are not invented.'],
+                    ["Optional Talk · draft previews", "Talk requires your own button press and microphone permission when supported. Email/text previews stay Draft / not sent; no delivery is established."],
+                ];
             const copy = [
                 base.text,
                 "Open the current authorized request or your own service-request portal. Published updates and internal work remain separate. This tour does not create a student request.",
@@ -229,6 +240,9 @@
                 "Open current project work and Roll Call to inspect recorded ownership, checkpoints and resumption. The tour does not infer an emergency or claim an interruption that the records do not show.",
                 "Open the current people, contractor, asset and calendar screens when enabled. Contacts, custody and reservations remain governed by existing permissions.",
                 "Open current Roll Call and meeting notes. Any later task changes still require their own exact preview and confirmation; a downloaded PDF is a dated snapshot.",
+                feature("ask") && feature("voice_jobs")
+                    ? "Open the current authorized Ask Everbranch screen. Enter a job lookup yourself, inspect the returned record and try a location or assignee follow-up. Typed lookup remains available without starting the microphone. The tour never submits a prompt, begins Talk or dispatches a message."
+                    : "This finale is unavailable because Ask Everbranch job lookup and optional Talk are not both enabled for the current workspace. No sample record, alternate account or automatic provider operation will be substituted.",
             ];
             return {
                 text: copy[index],

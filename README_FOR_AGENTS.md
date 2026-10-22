@@ -1,3 +1,14 @@
+## Enterprise voice finale and admin usage (source candidate, October 22)
+
+The existing Ask pane now integrates explicit Talk, record-backed current-job
+lookup, source/detail navigation and preview-only messages. The final tour scene
+opens that pane without starting capture or sending. Private usage aggregates the
+existing authorized ledger; public department figures are explicitly fictional.
+No live generative AI, messages, hosted client or hardware acceptance is implied.
+Read [the boundary and checks](docs/operations/enterprise-voice-finale-and-usage.md).
+Department-head/COO launch gates remain a reviewed design proposal in
+[the activation plan](docs/architecture/enterprise-department-activation-design.md),
+with no live permission or billing changes.
 ## Enterprise executive and visibility previews (source candidate, October 22)
 
 Preserve the explicit sample-only COO overview and its global read-only mutation
@@ -2431,3 +2442,13 @@ intended own-user sender is john@evergrovesoftware.com. The subsequent reviewer
 trial uses a verified service sender, no reviewer mailbox access and a $5 total
 shared provider cap, superseding the earlier $1 AI-only allowance. Credentials,
 OAuth grants, recipients, real sends and deployment still need exact approval.
+## Enterprise job voice source prototype (2026-10-22)
+
+Read `docs/operations/enterprise-voice-jobs.md` before integrating Talk into the
+existing Ask pane. `enterprise.voice_jobs_enabled` defaults off. The new lookup
+is record-backed, read-only and department/task scoped; it never dispatches a
+model, email, SMS, payment or write. Reuse the existing shell/detail/map and let
+the Enterprise owner place the actual accepted capability last in its tour.
+Keep sample fixtures visibly fictional. No source/browser result establishes
+physical speech, deployment or live provider readiness. Existing trial budgets
+and other customers' credentials do not authorize a paid voice connection.

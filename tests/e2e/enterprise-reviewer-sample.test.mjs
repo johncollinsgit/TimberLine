@@ -268,7 +268,8 @@ test("fictional quarterly exports are explicit snapshots with DST boundaries and
             3600000,
         25,
     );
-    assert.equal(report.current_records.length, 4);
+    // Original four records plus the clearly fictional faculty project/request/task.
+    assert.equal(report.current_records.length, 7);
     assert.ok(
         report.current_records.every(
             (r) => !["finance", "certificate"].includes(r.entity_type),
@@ -686,7 +687,8 @@ test("three-minute tour clock excludes pauses and restarts without records, netw
     const context = vm.createContext({});
     vm.runInContext(tourSource, context);
     const { StoryClock, scenes, opening } = context.EverbranchReviewerTour;
-    assert.equal(scenes.length, 6);
+    assert.equal(scenes.length, 7);
+    assert.equal(scenes.at(-1).section, "ask");
     assert.ok(
         opening.startsWith(
             "Everbranch Enterprise is your campus operating system.",
@@ -713,6 +715,64 @@ test("three-minute tour clock excludes pauses and restarts without records, netw
     assert.equal(clock.elapsed, 0);
     assert.equal(clock.playing, false);
     assert.equal(clock.index, 0);
+});
+
+test("tour clock follows cumulative scene durations and preserves the three-minute Ask finale", () => {
+    const context = vm.createContext({});
+    vm.runInContext(tourSource, context);
+    const {StoryClock, scenes} = context.EverbranchReviewerTour;
+    const clock = new StoryClock();
+    assert.equal(clock.duration, 180000);
+    let start = 0;
+    for (let index = 0; index < scenes.length; index++) {
+        clock.seek(index);
+        assert.equal(clock.elapsed, start);
+        assert.equal(clock.index, index);
+        clock.playing = true;
+        clock.tick(scenes[index].duration - 1);
+        assert.equal(clock.index, index);
+        clock.tick(1);
+        assert.equal(clock.index, Math.min(index + 1, scenes.length - 1));
+        start += scenes[index].duration;
+    }
+    assert.equal(clock.playing, false);
+    const variable = new StoryClock([{duration: 10}, {duration: 25}, {duration: 5}]);
+    variable.seek(2);
+    assert.equal(variable.elapsed, 35);
+    variable.playing = true;
+    variable.tick(5);
+    assert.equal(variable.elapsed, 40);
+    assert.equal(variable.playing, false);
+    variable.seek(-10);
+    assert.equal(variable.elapsed, 0);
+    variable.playing = true;
+    variable.tick(Number.NaN);
+    assert.equal(variable.elapsed, 0);
+    assert.throws(() => new StoryClock([{duration: 0}]), /positive finite/);
+});
+
+test("Ask finale describes actual typed lookup and unsent previews without starting a microphone or provider", () => {
+    const effects = [];
+    const context = vm.createContext({
+        fetch() {effects.push("fetch"); throw new Error("No automatic calls");},
+        navigator: {mediaDevices: {getUserMedia() {effects.push("microphone"); throw new Error("No automatic microphone");}}},
+    });
+    vm.runInContext(tourSource, context);
+    const {scenes, StoryClock, priorities} = context.EverbranchReviewerTour, finale = scenes.at(-1);
+    assert.equal(finale.id, "ask-everbranch-finale");
+    assert.equal(finale.pageId, "enterprise-ask");
+    assert.equal(finale.section, "ask");
+    assert.deepEqual(Array.from(finale.targets), ["ask-voice-controls", "ask-job-detail", "ask-message-preview-actions"]);
+    assert.match(finale.text, /Show event audio job/);
+    assert.match(finale.text, /Where is it\?/);
+    assert.match(finale.text, /Who is assigned\?/);
+    assert.match(finale.detail, /deterministic record lookup, not generative AI/);
+    assert.match(finale.detail, /Draft \/ not sent/);
+    assert.equal(priorities.length, 7, "The established priorities workflow remains unchanged");
+    const clock = new StoryClock();
+    for (let replay = 0; replay < 5; replay++) {clock.seek(6); clock.playing = true; clock.tick(30000); clock.restart();}
+    assert.deepEqual(effects, []);
+    assert.doesNotMatch(tourSource, /getUserMedia\s*\(|new\s+(?:webkit)?SpeechRecognition\s*\(/);
 });
 
 test("emergency completion never removes interrupted work and resumption retains the checkpoint", async () => {
@@ -800,6 +860,7 @@ test("a cross-workspace sample handoff preserves the one owning request and crea
     assert.equal(handoff.status, "pending");
     assert.equal(handoff.task_id, null);
     const before = adapter.snapshot().tasks.length;
+    const beforeRequests = adapter.snapshot().requests.length;
     handoff = await adapter.request("/enterprise/operations/commands", {
         action: "handoff.accept",
         id: handoff.id,
@@ -809,7 +870,7 @@ test("a cross-workspace sample handoff preserves the one owning request and crea
         reason: "Sample IT accepts the next step",
     });
     assert.equal(adapter.snapshot().tasks.length, before + 1);
-    assert.equal(adapter.snapshot().requests.length, 1);
+    assert.equal(adapter.snapshot().requests.length, beforeRequests);
     assert.equal(adapter.snapshot().requests[0].area_id, api.ids.area);
     const linked = await adapter.request(
         `/enterprise/operations/tasks/${handoff.task_id}`,

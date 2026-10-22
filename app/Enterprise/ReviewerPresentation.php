@@ -32,7 +32,8 @@ class ReviewerPresentation
         $bootstrap = ['project' => ['id' => $scope['project_id'], 'name' => 'Campus event readiness - sample'], 'members' => [],
             'can_design' => false, 'can_run' => false, 'items' => [], 'templates' => []];
         $html = view($workflow ? 'enterprise.workspace' : 'enterprise.app', ['presentation' => $presentation, 'enterpriseRole' => 'sample perspective',
-            'scope' => $scope, 'bootstrap' => $bootstrap, 'inlineAssets' => $workflow ? $this->assets() : null])->render();
+            'scope' => $scope, 'bootstrap' => $bootstrap, 'inlineAssets' => $workflow ? $this->assets() : null,
+            'voiceAssets' => $workflow ? null : $this->voiceAssets()])->render();
         $nonce = base64_encode(random_bytes(24));
         // Skip whole element bodies: compiled JS can contain literal opening-tag
         // strings, which must not be rewritten as if they were document elements.
@@ -77,5 +78,23 @@ class ReviewerPresentation
         };
 
         return ['js' => $read($entry['file'] ?? null), 'css' => implode("\n", array_map($read, $entry['css'] ?? []))];
+    }
+
+    private function voiceAssets(): ?string
+    {
+        $directory = base_path('apps/enterprise/public/build');
+        if (! is_file($directory.'/manifest.json')) {
+            return null;
+        }
+        $manifest = json_decode(file_get_contents($directory.'/manifest.json'), true, 32, JSON_THROW_ON_ERROR);
+        $entry = $manifest['resources/js/enterprise/voice-jobs-entry.js'] ?? [];
+        $file = $entry['file'] ?? null;
+        // A fixed, self-contained reviewed entry; no external imports or generated path.
+        if (! is_string($file) || ! preg_match('/^assets\/[A-Za-z0-9._-]+$/D', $file) || ! empty($entry['imports'])
+            || ! is_file($directory.'/'.$file) || filesize($directory.'/'.$file) > 250000) {
+            return null;
+        }
+
+        return str_ireplace('</script', '<\/script', file_get_contents($directory.'/'.$file));
     }
 }

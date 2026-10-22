@@ -90,12 +90,14 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Check private transport and isolated sample contracts
-        run: node --test tests/e2e/enterprise-transport.test.mjs tests/e2e/enterprise-reviewer-sample.test.mjs tests/e2e/enterprise-workspace-tour.test.mjs tests/e2e/enterprise-procedures-ui.test.mjs tests/e2e/enterprise-resource-presentation.test.mjs tests/e2e/enterprise-shell-navigation.test.mjs tests/e2e/enterprise-theme.test.mjs tests/e2e/enterprise-executive.test.mjs tests/e2e/enterprise-role-preview.test.mjs
+        run: node --test tests/e2e/enterprise-transport.test.mjs tests/e2e/enterprise-reviewer-sample.test.mjs tests/e2e/enterprise-workspace-tour.test.mjs tests/e2e/enterprise-procedures-ui.test.mjs tests/e2e/enterprise-resource-presentation.test.mjs tests/e2e/enterprise-shell-navigation.test.mjs tests/e2e/enterprise-preference-lifecycle.test.mjs tests/e2e/enterprise-theme.test.mjs tests/e2e/enterprise-executive.test.mjs tests/e2e/enterprise-role-preview.test.mjs tests/js/enterprise-sample-voice.test.mjs tests/js/enterprise-usage.test.mjs tests/e2e/ai-voice-conversation.test.mjs tests/e2e/enterprise-voice-jobs.test.mjs
       - run: npm run build:enterprise
       - name: Check shared reviewer rendering without account or route authority
         run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseReviewerRenderTest.php tests/Feature/Enterprise/EnterpriseResourcePresentationTest.php tests/Feature/Enterprise/EnterpriseReviewerTrialEntryTest.php tests/Feature/EnterpriseReviewerPublicTest.php tests/Feature/LeesMcRaeCampusDemoTest.php --compact --display-warnings
       - name: Check permission-filtered period reports and certificate register
         run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseContractorCertificatesTest.php tests/Feature/Enterprise/EnterpriseReportExportTest.php tests/Feature/Enterprise/EnterpriseFinancePacketsTest.php tests/Feature/Enterprise/EnterpriseOperationsTest.php --compact --display-warnings
+      - name: Check read-only voice and usage ledger policies without providers
+        run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseVoiceJobsTest.php tests/Feature/Enterprise/EnterpriseUsageOverviewTest.php --compact --display-warnings
       - name: Check controlled trial pages in the dedicated runtime without providers
         run: php vendor/bin/pest -c phpunit.enterprise.xml tests/Feature/Enterprise/EnterpriseTrialPagesTest.php --compact --display-warnings
       - name: Install browser dependencies
@@ -119,7 +121,7 @@ jobs:
             ENTERPRISE_BROWSER_ENGINE="$engine" ENTERPRISE_EVIDENCE="test-results/enterprise/reviewer-shared/$engine" node scripts/everbranch-team/enterprise-reviewer-browser.mjs
           done
       - name: Check native Operations Roll Call and Resources in Chromium and WebKit
-        timeout-minutes: 15
+        timeout-minutes: 25
         env:
           ENTERPRISE_TEST_PHP: php
           EVERBRANCH_PLAYWRIGHT_MODULE: node_modules/playwright/index.mjs

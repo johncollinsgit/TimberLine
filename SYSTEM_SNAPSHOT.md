@@ -1,3 +1,14 @@
+## Enterprise voice finale and admin usage (source candidate, October 22)
+
+The existing Ask pane now integrates explicit Talk, record-backed current-job
+lookup, source/detail navigation and preview-only messages. The final tour scene
+opens that pane without starting capture or sending. Private usage aggregates the
+existing authorized ledger; public department figures are explicitly fictional.
+No live generative AI, messages, hosted client or hardware acceptance is implied.
+Read [the boundary and checks](docs/operations/enterprise-voice-finale-and-usage.md).
+Department-head/COO launch gates remain a reviewed design proposal in
+[the activation plan](docs/architecture/enterprise-department-activation-design.md),
+with no live permission or billing changes.
 ## Enterprise executive and visibility previews (source candidate, October 22)
 
 The same public sample now defaults fresh tabs to a clearly labeled read-only
@@ -3117,3 +3128,12 @@ messages. The later reviewer trial specifies a service sender without reviewer
 mailbox access and supersedes that allowance with a $5 shared lifetime cap across
 all trial providers; no recipients or credential grants are approved. See
 `docs/operations/enterprise-gmail.md` and `docs/operations/enterprise-integrations.md`.
+## Ask Everbranch job voice prototype (2026-10-22; default-off source)
+
+See `docs/operations/enterprise-voice-jobs.md`. A scoped read-only operational
+job lookup reuses canonical Enterprise task/request access and the existing
+browser capture/playback loop. Optional Talk controls expose bounded sessions,
+explicit interrupt and typed fallback. No tour/header/fixture integration, paid
+provider call, communication send or production activation is included. Shell
+integration and physical iPad/iPhone speech acceptance remain pending; fake
+browser speech is not live AI or acoustic evidence.

@@ -47,6 +47,7 @@ Route::middleware(['auth', 'verified', ResolveWorkspace::class, \App\Http\Middle
     Route::get('/enterprise/files/{id}/caption', [\App\Enterprise\FileCaptionController::class, 'show'])->whereUuid('id')->name('enterprise.files.caption');
     Route::post('/enterprise/files/{id}/caption', [\App\Enterprise\FileCaptionController::class, 'save'])->whereUuid('id')->name('enterprise.files.caption.save');
     Route::get('/enterprise/search', \App\Enterprise\CampusSearchController::class)->name('enterprise.search');
+    Route::post('/enterprise/voice/jobs', \App\Enterprise\VoiceJobsController::class)->middleware('throttle:20,1,enterprise-voice-jobs:')->name('enterprise.voice.jobs');
     Route::get('/enterprise/roll-call', [\App\Enterprise\RollCallController::class, 'index'])->name('enterprise.roll_call');
     Route::get('/enterprise/meetings', [\App\Enterprise\RollCallController::class, 'meetings'])->name('enterprise.meetings');
     Route::post('/enterprise/meetings', [\App\Enterprise\RollCallController::class, 'save'])->name('enterprise.meetings.save');
@@ -55,6 +56,7 @@ Route::middleware(['auth', 'verified', ResolveWorkspace::class, \App\Http\Middle
     Route::post('/enterprise/meetings/{id}/confirm', [\App\Enterprise\RollCallController::class, 'confirm'])->whereUuid('id')->name('enterprise.meetings.confirm');
     Route::get('/enterprise/meetings/{id}/pdf', [\App\Enterprise\RollCallController::class, 'pdf'])->whereUuid('id')->name('enterprise.meetings.pdf');
     Route::get('/enterprise/operations', [\App\Enterprise\OperationsController::class, 'index'])->name('enterprise.operations');
+    Route::get('/enterprise/ai-usage', \App\Enterprise\UsageOverviewController::class)->name('enterprise.ai_usage');
     Route::post('/enterprise/operations/commands', [\App\Enterprise\OperationsController::class, 'command'])->name('enterprise.operations.command');
     Route::get('/enterprise/operations/contractors/{id}/quality', [\App\Enterprise\OperationsController::class, 'quality'])->whereUuid('id')->name('enterprise.operations.quality');
     Route::get('/enterprise/operations/tasks/{id}', [\App\Enterprise\OperationsController::class, 'show'])->whereUuid('id')->name('enterprise.operations.show');
