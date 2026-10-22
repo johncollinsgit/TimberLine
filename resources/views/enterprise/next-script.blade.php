@@ -19,6 +19,7 @@
     transport.replace(url);
   }
   function resetNext() {
+    if(typeof resetVoice==='function')resetVoice();
     if (typeof resetOperations === 'function') resetOperations();
     discussionGeneration++; activeDiscussionKey = null;
     emailGeneration++; emailPending = null; emailPreview = null; $('email-form').reset(); $('email-preview').hidden = true;
@@ -28,6 +29,7 @@
     $('planning-list').replaceChildren(); planningData = null;
   }
   function renderNext() {
+    if(typeof renderVoice==='function')renderVoice();
     $('ask-nav').hidden = !data.features?.ask;
     if (section === 'ask' && !data.features?.ask) section = 'requests';
     $('ask').hidden = section !== 'ask';

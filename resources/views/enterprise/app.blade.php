@@ -33,7 +33,7 @@
 @includeIf('enterprise.runtime-designation')
 <a class="ent-skip" href="#enterprise-main">Skip to workspace</a><div class="shell">
 <aside class="sidebar" aria-label="Everbranch Enterprise"><div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 20c1-9 7-14 13-17 2 9-2 16-9 15M5 22l9-12"/></svg></span><div><strong>Everbranch</strong><small>Enterprise · Teams</small></div></div>
-<p class="workspace-label">Organization workspace</p><nav aria-label="Workspace sections"><button class="nav-item" data-section="home" id="home-nav" hidden>Campus overview</button><button class="nav-item active" data-section="requests">Requests</button><button class="nav-item" data-section="projects">Operations &amp; projects</button><button class="nav-item" data-section="contractors">Contractors</button><button class="nav-item" data-section="ask" id="ask-nav" hidden>Ask Everbranch</button>@includeIf('enterprise.operations-nav')</nav>
+<p class="workspace-label">Organization workspace</p><nav aria-label="Workspace sections"><button class="nav-item" data-section="home" id="home-nav" hidden>Campus overview</button><button class="nav-item active" data-section="requests">Requests</button><button class="nav-item" data-section="projects">Operations &amp; projects</button><button class="nav-item" data-section="contractors">Contractors</button><button class="nav-item" data-section="ask" id="ask-nav" hidden>Ask Everbranch</button>@includeIf('enterprise.operations-nav')<button class="nav-item" data-section="usage" id="usage-nav" hidden>AI &amp; voice usage</button></nav>
 <p class="workspace-label">Your workspaces</p><div id="areas"></div><div class="sidebar-bottom"><strong>{{ $enterprisePresentation["identity"]["name"] }}</strong><br>{{ $enterprisePresentation["identity"]["userName"] }}<br>Connected work. Clear ownership.@unless($enterpriseSample)<form id="enterprise-logout" method="post" action="{{ $enterprisePresentation['routes']['logout'] }}"><input type="hidden" name="_token" value="{{ $enterprisePresentation['csrf'] ?? '' }}"><button class="nav-item" type="submit">Sign out</button></form>@endunless</div></aside>
 <main class="main" id="enterprise-main"><header class="topbar"><div class="breadcrumb">{{ $enterprisePresentation["identity"]["name"] }} <span>/</span> <strong id="breadcrumb">Requests</strong></div><span class="badge" id="visibility">Loading workspace</span></header>
 <div class="content"><div class="eyebrow">Everbranch Enterprise</div><div class="page-heading"><div><h1 id="heading">Turn requests into owned work.</h1><p class="subtle">One place for intake, assignment and visible progress.</p></div><div class="actions"><button class="button" id="create-workspace" hidden>New workspace</button><button class="button primary" id="create-request" hidden>New request</button><button class="button primary" id="create-project" hidden>New project</button></div></div>
@@ -45,6 +45,8 @@
 @includeIf('enterprise.procedures-workspace')
 @includeIf('enterprise.finance-workspace')
 @includeIf('enterprise.role-preview')
+@include('enterprise.partials.usage-overview')
+<div id="enterprise-usage-tools" class="actions" hidden><button class="button" type="button" id="usage-all" hidden>All authorized departments</button><button class="button" type="button" id="usage-refresh">Refresh usage records</button></div>
 <div id="work"><div class="toolbar"><div class="actions" role="group" aria-label="Work view"><button class="button" data-view="list" aria-pressed="true">List</button><button class="button" data-view="calendar" aria-pressed="false">Calendar</button><button class="button" data-view="map" aria-pressed="false">Map</button></div><label>Find work <input id="search" type="search" placeholder="Search visible work"></label><button class="button" id="map-toggle">View Map</button></div>
 <section class="panel map-panel" id="map" hidden><div class="map-head"><div><div class="eyebrow">Workspace locations</div><h2>See where the work happens.</h2></div><span class="caption">Select a marker for request details</span></div><div id="map-holder"><svg class="location-map" viewBox="0 0 1000 330" preserveAspectRatio="none" aria-hidden="true"><defs><pattern id="grid" width="100" height="66" patternUnits="userSpaceOnUse"><path d="M100 0H0V66" fill="none" stroke="#d9e2ce"/></pattern></defs><rect width="1000" height="330" fill="url(#grid)"/></svg><div id="map-markers"></div><p class="caption">Saved longitude/latitude positions on a coordinate grid. No campus basemap, GPS feed or external map provider is connected.</p></div><p class="caption" id="map-empty"></p></section>
 <div class="detail-layout"><section id="request-list" aria-label="Visible workspace work"></section><aside class="panel" id="detail" aria-label="Selected work details"><h2>Choose a request</h2><p class="subtle">Select a row or map marker to see its details and permitted actions.</p></aside></div><p class="caption" id="coverage"></p></div>
@@ -52,6 +54,7 @@
 @if($enterpriseSample)@includeIf('enterprise.reviewer-tour')@elseif(config('enterprise.runtime') === true && config('enterprise.tour_enabled', false) && config('enterprise.sample_data', false))@include('enterprise.workspace-tour')@endif
 <dialog id="create-dialog"><form id="create-form" class="stack"><h2 id="dialog-title">New request</h2><label>Title<input name="title" maxlength="100" required></label><label id="visibility-field" hidden>Visibility<select name="visibility"><option value="department_only">Department only</option><option value="shared">Shared across organization</option></select></label><div id="request-fields" class="stack"><label>Work description<textarea name="description" maxlength="5000" rows="4"></textarea></label><label>Due date<input name="due_on" type="date"></label><label>Location label<input name="location" maxlength="200"></label><div class="field-pair"><label>Latitude (optional)<input name="latitude" type="number" min="-90" max="90" step="any"></label><label>Longitude (optional)<input name="longitude" type="number" min="-180" max="180" step="any"></label></div></div><p class="caption" id="create-context"></p><div class="actions"><button class="button primary" type="submit">Save</button><button class="button" type="button" id="cancel-create">Cancel</button></div></form></dialog>
 <script>{!! file_get_contents(resource_path('js/enterprise/transport.js')) !!}</script>
+<script>{!! file_get_contents(resource_path('js/enterprise/usage.js')) !!}</script>
 @if($enterpriseSample)
 @includeIf('enterprise.reviewer-adapter')
 @endif
@@ -66,7 +69,7 @@
     tenantSlug = presentation.identity.tenantSlug,
     viewer = presentation.identity.viewer,
     workspace = presentation.identity.workspace;
-  const allowedSections = presentation.sections || ['home', 'projects', 'contractors', 'ask', 'requests', 'roll_call', 'buildings', 'calendar', 'people', 'assets', 'workflows', 'requester', 'finance'];
+  const allowedSections = presentation.sections || ['home', 'projects', 'contractors', 'ask', 'requests', 'roll_call', 'buildings', 'calendar', 'people', 'assets', 'workflows', 'requester', 'finance', 'usage'];
   const navigation = new URLSearchParams(transport.mode === 'sample' ? location.hash.slice(1) : location.search);
   for (const key of ['area_id', 'selected', 'section']) {
     if (!navigation.has(key) && presentation.navigation?.[key]) navigation.set(key, presentation.navigation[key]);
@@ -182,6 +185,7 @@
     });
   }
   function render({preserveDetail=false}={}) {
+    if(transport.mode==='sample')$('enterprise-main').dataset.demoPage='enterprise-'+section;
     // An explicit unsaved URL/history view takes precedence over an async saved default.
     if (preserveDetail && navigationViewOverride) ({view, map} = navigationViewOverride);
     $('areas').innerHTML = data.areas.map(a => `<button class="sidebar-project ${a.id === area ? 'active' : ''}" data-area="${esc(a.id)}"><span class="dot"></span>${esc(a.name)}</button>`).join('');
@@ -371,6 +375,9 @@
     load();
   }
   globalThis.addEventListener('popstate', restoreNavigation);
+  // A restored browser document must not revive cached operational facts or active voice.
+  globalThis.addEventListener('pagehide',()=>clearWorkspaceContext(true));
+  globalThis.addEventListener('pageshow',event=>{if(event.persisted)restoreNavigation();});
   $('search').oninput = () => {
     $('search').value = $('search').value.slice(0, 200);
     beginNavigation('search');
@@ -403,6 +410,8 @@
   @includeIf('enterprise.operations-script')
   @includeIf('enterprise.procedures-script')
   @includeIf('enterprise.finance-script')
+  @include('enterprise.voice-script')
+  @include('enterprise.usage-script')
   document.addEventListener('enterprise:navigate', event => {
     const next = event.detail || {};
     if (next.section && !allowedSections.includes(next.section)) return;
@@ -411,6 +420,7 @@
     const previousArea = area, previousSection = section, previousSelected = selected;
     if (next.area !== undefined) area = next.area;
     if (next.section) section = next.section;
+    if(['list','calendar','map'].includes(next.view)){view=next.view;map=next.map===true||view==='map';navigationViewOverride={view,map};}
     selected = next.selected !== undefined ? next.selected : selectionMemory.get(area + ':' + section) || (area === previousArea && section === previousSection ? previousSelected : null);
     rememberUrl();
     if (next.area !== undefined) {resetNext(); load();} else render();
@@ -419,4 +429,9 @@
 })();
 </script>
 @include('enterprise.app-install')
+@if($enterpriseSample)
+@if(!empty($voiceAssets))<script type="module">{!! $voiceAssets !!}</script>@endif
+@elseif(config('enterprise.voice_jobs_enabled') && config('enterprise.ask_enabled'))
+@vite('resources/js/enterprise/voice-jobs-entry.js')
+@endif
 </body></html>

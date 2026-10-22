@@ -1,3 +1,14 @@
+## Enterprise voice finale and admin usage (source candidate, October 22)
+
+The existing Ask pane now integrates explicit Talk, record-backed current-job
+lookup, source/detail navigation and preview-only messages. The final tour scene
+opens that pane without starting capture or sending. Private usage aggregates the
+existing authorized ledger; public department figures are explicitly fictional.
+No live generative AI, messages, hosted client or hardware acceptance is implied.
+Read [the boundary and checks](docs/operations/enterprise-voice-finale-and-usage.md).
+Department-head/COO launch gates remain a reviewed design proposal in
+[the activation plan](docs/architecture/enterprise-department-activation-design.md),
+with no live permission or billing changes.
 ## Enterprise executive and visibility previews (source candidate, October 22)
 
 Preserve the explicit sample-only COO overview and its global read-only mutation

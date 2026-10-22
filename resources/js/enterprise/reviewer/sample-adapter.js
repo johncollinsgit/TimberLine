@@ -12,6 +12,9 @@
         request: "30000000-0000-4000-8000-000000000001",
         task: "40000000-0000-4000-8000-000000000001",
         emergency: "40000000-0000-4000-8000-000000000002",
+        facultyProject: "20000000-0000-4000-8000-000000000002",
+        facultyRequest: "30000000-0000-4000-8000-000000000002",
+        facultyTask: "40000000-0000-4000-8000-000000000003",
         contractor: "50000000-0000-4000-8000-000000000001",
         building: "60000000-0000-4000-8000-000000000052",
         asset: "70000000-0000-4000-8000-000000000001",
@@ -192,6 +195,15 @@
                     archived: false,
                     tasks: [IDS.task, IDS.emergency],
                 },
+                {
+                    id: IDS.facultyProject,
+                    name: "Teaching-space readiness - sample",
+                    description: "Fictional teaching-space preparation, not an actual class schedule or faculty assignment.",
+                    enterprise_area_id: IDS.area,
+                    version: 1,
+                    archived: false,
+                    tasks: [IDS.facultyTask],
+                },
             ],
             requests: [
                 {
@@ -214,6 +226,28 @@
                             "Sample worker is checking the PA system. Internal sample notes remain separate from requester updates.",
                     },
                     task_id: IDS.task,
+                },
+                {
+                    id: IDS.facultyRequest,
+                    area_id: IDS.area,
+                    title: "Faculty classroom AV readiness - sample",
+                    version: 1,
+                    status: "assigned",
+                    due_on: "2026-10-23",
+                    data: {
+                        description: "Fictional faculty request to check classroom AV. No actual faculty person, room, timetable or equipment inventory is asserted.",
+                        requester_label: "Faculty requester - fictional example",
+                        location: "May School of Natural and Health Sciences",
+                        location_source: "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+                        catalog_map_number: "2",
+                        latitude: null,
+                        longitude: null,
+                        created_by: "fictional-faculty",
+                        task_id: IDS.facultyTask,
+                        project_id: IDS.facultyProject,
+                        progress_note: "The sample worker will confirm the fictional teaching-space AV checklist. No message was sent.",
+                    },
+                    task_id: IDS.facultyTask,
                 },
             ],
             tasks: [
@@ -246,6 +280,24 @@
                             completed: false,
                         },
                     ],
+                    approved: false,
+                },
+                {
+                    id: IDS.facultyTask,
+                    title: "Faculty classroom AV readiness - sample",
+                    version: 1,
+                    assignee_id: "2",
+                    completed_at: null,
+                    due_on: "2026-10-23",
+                    enterprise_area_id: IDS.area,
+                    project_id: IDS.facultyProject,
+                    status: "active",
+                    accountable_owner_id: "1",
+                    ball_user_id: "2",
+                    next_action: "Confirm the fictional teaching-space AV checklist with the sample faculty requester.",
+                    blockers: ["Sample teaching-space access needs confirmation."],
+                    checkpoint: "",
+                    checklist: [{key: "av", label: "Check the fictional classroom AV setup", weight: 1, completed: false}],
                     approved: false,
                 },
                 {
@@ -397,6 +449,10 @@
         const supplemental = seed();
         state.certificates ??= supplemental.certificates;
         state.finance ??= supplemental.finance;
+        // Add the clearly fictional faculty example to older browser samples without replacing their edits.
+        if (!state.projects.some(row => row.id === IDS.facultyProject)) state.projects.push(clone(supplemental.projects.find(row => row.id === IDS.facultyProject)));
+        if (!state.tasks.some(row => row.id === IDS.facultyTask)) state.tasks.push(clone(supplemental.tasks.find(row => row.id === IDS.facultyTask)));
+        if (!state.requests.some(row => row.id === IDS.facultyRequest)) state.requests.push(clone(supplemental.requests.find(row => row.id === IDS.facultyRequest)));
         const members = [
             {
                 id: "1",
@@ -783,6 +839,8 @@
                     collaboration: state.persona !== "requester",
                     planning: state.persona !== "requester",
                     ask: true,
+                    voice_jobs: true,
+                    ai_usage: manager(),
                     email_drafts: false,
                     workflow: state.persona !== "requester",
                     briefing: state.persona !== "requester",
@@ -1819,6 +1877,99 @@
                     "Fictional sample operations only; private server authorization is not simulated as a security boundary.",
                 as_of: now(),
             };
+        }
+        // Pure lookup: never enters sample receipts, persistence, discussion creation or provider transport.
+        function voiceJobs(body) {
+            const uuidPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
+            if (!body || typeof body !== "object" || Array.isArray(body) || typeof body.area_id !== "string" || !uuidPattern.test(body.area_id)
+                || typeof body.question !== "string" || !body.question.trim() || body.question.length > 1500
+                || (body.focus != null && (typeof body.focus !== "string" || !uuidPattern.test(body.focus))))
+                error("Choose a current sample department and a job question up to 1,500 characters.");
+            const chosen = area(body.area_id), question = body.question.trim();
+            const base = {
+                mode: "record_backed", provider_dispatch: false, sample_data: true, as_of: now(),
+                scope: {tenant_id: "sample-campus", user_id: currentId(), area_id: chosen.id, department: chosen.name},
+                coverage: "At most 200 currently permitted fictional sample tasks in this department. Linked request location only; no live tracking, mailbox, student records or accounting. Missing evidence is not proof that nothing exists.",
+                candidates: [], job: null,
+            };
+            if (/\b(send|email|e-mail|text|sms|delete|assign|approve|pay|complete|reschedule|cancel)\b/iu.test(question))
+                return {...base, outcome: "review_required", reply: "Voice lookup cannot change work or send messages. Open the authorized action or composer, review the exact recipient and body, and confirm separately. Nothing was sent or changed."};
+            const permitted = task => {
+                if (state.persona === "requester" || task.enterprise_area_id !== chosen.id || task.deleted) return false;
+                const parent = state.projects.find(row => row.id === task.project_id);
+                return Boolean(parent && !parent.archived && parent.enterprise_area_id === chosen.id);
+            };
+            const read = id => {
+                const task = get(state.tasks, id);
+                if (!permitted(task)) error("This sample operational task is unavailable in the current department and perspective.", 404);
+                project(task.project_id); // Recheck the same current department/project policy on every focused follow-up.
+                return {raw: task, view: taskView(task)};
+            };
+            let selected;
+            if (body.focus != null) selected = read(body.focus);
+            else {
+                const stop = new Set("a an the please can could would you me my our show open find bring up tell about everything what whats is are where wheres who whos when how status job jobs task tasks work on at in of for to and with it its that this".split(" "));
+                const terms = [...new Set(question.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(term => term && !stop.has(term)))];
+                const checked = state.tasks.filter(permitted).slice(0, 200);
+                const matches = terms.length ? checked.filter(task => terms.every(term => task.title.toLowerCase().includes(term))) : [];
+                if (matches.length !== 1) return {...base, candidates: matches.slice(0, 10).map(task => ({id: task.id, title: task.title})),
+                    outcome: matches.length ? "choose" : "no_match", reply: matches.length
+                        ? "More than one permitted job matches. Choose the exact job before I open or describe it."
+                        : "No matching job was found in the checked department sample. Say a few words from its title, or use search."};
+                selected = read(matches[0].id);
+            }
+            const {raw, view} = selected;
+            let location = null;
+            for (const row of state.requests) {
+                if (row.area_id !== chosen.id || (row.task_id || row.data?.task_id) !== view.id) continue;
+                try {
+                    const linked = requestView(row);
+                    location = {label: linked.data.location ?? null, latitude: linked.data.latitude ?? null, longitude: linked.data.longitude ?? null,
+                        provenance: "Recorded fictional request location; not verified positioning or live GPS.", source_url: recordUrl("requests", row.id, chosen.id)};
+                    break;
+                } catch (failure) {
+                    if (![403, 404].includes(failure.status)) throw failure;
+                }
+            }
+            const job = Object.fromEntries(["id", "project_id", "area_id", "title", "status", "priority", "next_action", "due_on", "blockers", "version", "task_version"]
+                .map(key => [key, view[key] ?? null]));
+            job.updated_at = raw.updated_at ?? null; // An absent source timestamp stays unknown.
+            job.owner = members.find(member => member.id === String(view.owner_user_id))?.name ?? null;
+            job.handler = view.ball_team ? "Department team" : (members.find(member => member.id === String(view.ball_user_id))?.name ?? null);
+            job.location = location;
+            job.source_url = recordUrl("projects", view.project_id, chosen.id) + "&task=" + encodeURIComponent(view.id);
+            job.cost_coverage = "Costs are outside this voice projection. Use currently authorized Planning for recorded project costs; no job total is inferred.";
+            const reply = job.title + ". Status: " + String(job.status).replaceAll("_", " ") + ". Location: " + (location?.label ?? "not recorded in the checked sources")
+                + ". Current handler: " + (job.handler ?? "not available") + ". Due date: " + (job.due_on ?? "not recorded")
+                + ". Next action: " + (job.next_action || "not recorded") + ". Blockers: " + (job.blockers?.length ? job.blockers.join("; ") : "none recorded in this task") + ".";
+            return {...base, outcome: "matched", job: clone(job), reply};
+        }
+        function sampleUsage(query) {
+            if (!manager()) error("Sample usage is available only to the manager or executive perspective.", 404);
+            if (query.has("area_id") && !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(query.get("area_id")))
+                error("Choose an exact configured sample department for usage.");
+            const selected = query.has("area_id") ? area(query.get("area_id")).id : null;
+            const empty = () => Object.fromEntries(["requests", "completed", "reserved", "uncertain", "cancelled", "unreconciled", "input_tokens", "output_tokens", "reported_token_records", "token_unknown_records", "original_reserved_microusd", "original_reservation_unknown_records", "settled_usage_derived_microusd", "reserved_exposure_microusd", "uncertain_reserved_microusd", "estimated_total_exposure_microusd", "exposure_unknown_records"].map(key => [key, 0]));
+            // Fixed illustrative examples, never calculated from browser activity or represented as provider usage.
+            const examples = [
+                {area: IDS.area, purpose: "ask", label: "Ask Everbranch", totals: {...empty(), requests: 2, completed: 1, uncertain: 1, input_tokens: 900, output_tokens: 150, reported_token_records: 1, token_unknown_records: 1, original_reserved_microusd: 7000, settled_usage_derived_microusd: 1500, reserved_exposure_microusd: 4000, uncertain_reserved_microusd: 4000, estimated_total_exposure_microusd: 5500}},
+                {area: IDS.area, purpose: "briefing", label: "Project briefing", totals: {...empty(), requests: 1, completed: 1, input_tokens: 1200, output_tokens: 200, reported_token_records: 1, original_reserved_microusd: 3000, settled_usage_derived_microusd: 1800, estimated_total_exposure_microusd: 1800}},
+                {area: IDS.it, purpose: "workflow_draft", label: "Workflow draft", totals: {...empty(), requests: 1, completed: 1, input_tokens: 1500, output_tokens: 300, reported_token_records: 1, original_reserved_microusd: 5000, settled_usage_derived_microusd: 2400, estimated_total_exposure_microusd: 2400}},
+            ];
+            const totals = empty(), departments = state.areas.filter(row => (!selected && [IDS.area, IDS.it].includes(row.id)) || row.id === selected).map(row => {
+                area(row.id);
+                const department = {id: row.id, name: row.name, totals: empty(), purposes: examples.filter(example => example.area === row.id).map(({purpose, label, totals}) => ({purpose, label, totals}))};
+                for (const purpose of department.purposes) for (const key of Object.keys(totals)) {department.totals[key] += purpose.totals[key]; totals[key] += purpose.totals[key];}
+                return department;
+            });
+            return {sample_data: true, read_only: true, provider_invoice_verified: false, as_of: now(), currency: "USD", money_unit: "microusd",
+                scope: {type: selected ? "department" : "authorized_departments", area_id: selected}, ledger_state: "fictional_illustrative_records", totals, departments,
+                coverage: {record_scan_limit: 1000, scanned_records: totals.requests, department_limit: 200, returned_departments: departments.length, has_more_records: false, has_more_departments: false, partial: false, period: "fixed_fictional_example_only"},
+                technical_budget: {ready: false, provider_calls_verified: false, status: "Budget discovery pending; unactivated. These fixed fictional examples do not establish a live allowance or commercial cap."},
+                basis: {source: "FICTIONAL SAMPLE USAGE: explicit fixed examples, not browser counts, real ledger records or provider-account activity.",
+                    settled_cost: "Illustrative token-derived cost only; not an invoice or actual spend.", reserved_exposure: "The uncertain example illustrates held exposure; no real reservation is created.",
+                    tokens: "All token figures are fictional. Browser voice lookup is a separate record lookup and makes no model call or charge.",
+                    zero_records: "No illustrative row is not proof of zero provider-account spend.", commercial: "Budget discovery pending and unactivated. No price, subscription, quota, allowance or cap is established.", snapshot: "Generated from fixed fictional constants during this read; no transcript or usage is persisted."}};
         }
         function operationCommand(body) {
             if (body.action.startsWith("handoff.")) {
@@ -4097,6 +4248,19 @@
         let queue = Promise.resolve();
         function request(url, body, options = {}) {
             const work = async () => {
+                const { parsed } = navigation(url),
+                    path = parsed.pathname.replace(/\/$/, ""),
+                    query = parsed.searchParams;
+                if (path === "/enterprise/voice/jobs") {
+                    if (String(options.method || (body !== undefined ? "POST" : "GET")).toUpperCase() !== "POST" || options.binary)
+                        error("Use the explicit read-only sample voice lookup POST.", 405);
+                    return clone(voiceJobs(body));
+                }
+                if (path === "/enterprise/ai-usage") {
+                    if (body !== undefined || String(options.method || "GET").toUpperCase() !== "GET")
+                        error("Sample usage accepts read-only GET only.", 405);
+                    return clone(sampleUsage(query));
+                }
                 if (
                     executive() &&
                     (body !== undefined ||
@@ -4109,9 +4273,6 @@
                         "This executive demonstration is read-only. Switch to the department manager sample to operate a workflow. No real administrator access is granted.",
                         403,
                     );
-                const { parsed } = navigation(url),
-                    path = parsed.pathname.replace(/\/$/, ""),
-                    query = parsed.searchParams;
                 if (
                     !path.startsWith("/enterprise/") &&
                     !path.startsWith("/team/")

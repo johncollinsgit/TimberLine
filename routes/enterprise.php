@@ -56,6 +56,7 @@ Route::middleware(['auth', 'verified', ResolveWorkspace::class, \App\Http\Middle
     Route::post('/enterprise/meetings/{id}/confirm', [\App\Enterprise\RollCallController::class, 'confirm'])->whereUuid('id')->name('enterprise.meetings.confirm');
     Route::get('/enterprise/meetings/{id}/pdf', [\App\Enterprise\RollCallController::class, 'pdf'])->whereUuid('id')->name('enterprise.meetings.pdf');
     Route::get('/enterprise/operations', [\App\Enterprise\OperationsController::class, 'index'])->name('enterprise.operations');
+    Route::get('/enterprise/ai-usage', \App\Enterprise\UsageOverviewController::class)->name('enterprise.ai_usage');
     Route::post('/enterprise/operations/commands', [\App\Enterprise\OperationsController::class, 'command'])->name('enterprise.operations.command');
     Route::get('/enterprise/operations/contractors/{id}/quality', [\App\Enterprise\OperationsController::class, 'quality'])->whereUuid('id')->name('enterprise.operations.quality');
     Route::get('/enterprise/operations/tasks/{id}', [\App\Enterprise\OperationsController::class, 'show'])->whereUuid('id')->name('enterprise.operations.show');

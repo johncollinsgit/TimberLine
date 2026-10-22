@@ -41,6 +41,12 @@ test('Talk looks up and opens an actual returned job; a spoken followup retains 
   assert.equal(f.queries[1].focus, 'pipe'); assert.equal(f.transcripts.length, 2); f.session.dispose()
 })
 
+test('the tour assignment followup retains only the previously rechecked exact job', async () => {
+  const f = fixture(); await f.session.ask('Show the dorm pipe job');
+  await f.session.ask('Who is assigned?'); assert.equal(f.queries[1].focus, 'pipe');
+  f.session.contextChanged(); await f.session.ask('Who is assigned?'); assert.equal(f.queries[2].focus, undefined); f.session.dispose()
+})
+
 test('ambiguity requires an exact current choice and re-reads it; unrelated IDs cannot be opened', async () => {
   let calls = 0
   const f = fixture(async () => ++calls === 1 ? result({ outcome: 'choose', job: null, candidates: [{ id: 'pipe', title: 'Pipe' }, { id: 'window', title: 'Window' }] }) : result())

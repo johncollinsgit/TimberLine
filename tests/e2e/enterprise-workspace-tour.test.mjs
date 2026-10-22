@@ -182,7 +182,7 @@ test("role/feature loss clears links without falling back to fictional records o
         true,
     );
     for (let repeat = 0; repeat < 3; repeat++)
-        for (let scene = 0; scene < 6; scene++) {
+        for (let scene = 0; scene < 7; scene++) {
             tour.links(scene);
             tour.describe(scene, { text: "Opening" });
         }
@@ -200,6 +200,31 @@ test("role/feature loss clears links without falling back to fictional records o
         tour.describe(0, { text: "Opening" }).detail,
         /Waiting for the current authorized workspace/,
     );
+});
+
+test("Ask finale requires both current features and never substitutes a sample job or starts an operation", () => {
+    const {tour,snapshot,actions}=fixture();
+    for (const features of [{}, {ask:true}, {voice_jobs:true}]) {
+        snapshot.data.features=features;
+        tour.update(snapshot);
+        assert.equal(tour.links(6).find(row=>row.id==='ask').available,false);
+        assert.equal(tour.open(6,'ask').available,false);
+        assert.match(tour.describe(6,{}).text,/unavailable/);
+    }
+    snapshot.data.features={ask:true,voice_jobs:true};
+    tour.update(snapshot);
+    assert.equal(tour.links(6).find(row=>row.id==='ask').available,true);
+    assert.match(tour.describe(6,{}).cards[0][1],/fictional sample example/);
+    assert.match(tour.describe(6,{}).cards[1][1],/not generative AI/);
+    assert.match(tour.describe(6,{}).cards[2][1],/Draft \/ not sent/);
+    assert.equal(actions.length,0);
+    assert.equal(tour.open(6,'ask').available,true);
+    assert.equal(actions.length,1);
+    assert.equal(actions[0].type,'enterprise:navigate');
+    assert.equal(actions[0].detail.section,'ask');
+    tour.update(null);
+    assert.equal(tour.open(6,'ask').available,false);
+    assert.equal(actions.length,1);
 });
 test("unavailable context and remote workflow targets never navigate", () => {
     const { tour, context, boot, snapshot, actions } = fixture();

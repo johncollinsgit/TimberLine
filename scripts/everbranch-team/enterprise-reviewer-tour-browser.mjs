@@ -188,7 +188,7 @@ try {
     for (let count = 0; count < 3; count++) {
         await launcher.click();
         await page
-            .getByRole("button", { name: "06 Meeting Roll Call", exact: false })
+            .getByRole("button", { name: "07 Ask Everbranch", exact: false })
             .click();
         await page
             .getByRole("button", { name: "Restart", exact: true })
@@ -224,7 +224,7 @@ try {
     assert.deepEqual(external, []);
     assert.deepEqual(errors, []);
     console.log(
-        `PASS (${engine}): six-scene/180-second immutable tour, keyboard controls, reduced motion, phone/iPad/desktop email preview, Escape/focus return, replay without actions, isolated sample CTA, zero external requests/errors. Viewport simulation, not physical iPad acceptance.`,
+        `PASS (${engine}): seven-scene/180-second immutable tour, keyboard controls, reduced motion, phone/iPad/desktop email preview, Escape/focus return, replay without actions, isolated sample CTA, zero external requests/errors. Viewport simulation, not physical iPad acceptance.`,
     );
 } finally {
     await browser.close();

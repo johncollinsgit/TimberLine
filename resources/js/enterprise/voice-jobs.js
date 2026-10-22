@@ -1,6 +1,6 @@
 import { createVoiceConversation } from '../ai-voice-conversation.js'
 
-const followup = /^(?:(?:and |so )?(?:where(?: is|['’]s) (?:it|that|this)(?: located| at)?|who(?: is|['’]s)? (?:working on|handling|owns) (?:it|that|this)|what(?: is| are|['’]s)? (?:its|the) (?:status|due date|next action|blockers)|when is (?:it|that|this) due|tell me more(?: about (?:it|that|this))?))[?.!]*$/i
+const followup = /^(?:(?:and |so )?(?:where(?: is|['']s) (?:it|that|this)(?: located| at)?|who(?: is|['']s)? (?:working on|handling|owns) (?:it|that|this)|who(?: is|['']s)? assigned(?: to (?:it|that|this))?|what(?: is| are|['']s)? (?:its|the) (?:status|due date|next action|blockers)|when is (?:it|that|this) due|tell me more(?: about (?:it|that|this))?))[?.!]*$/i
 const controls = /^(?:stop|cancel|stop listening|stop talking)[?.!]*$/i
 
 /** Adds voice to the existing Ask pane. All records come from the authorized transport. */

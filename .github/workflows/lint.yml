@@ -14,6 +14,7 @@ on:
       - codex/enterprise-client-provisioning
       - codex/enterprise-prefixed-integrations
       - codex/enterprise-painpoint-demo
+      - codex/enterprise-executive-visibility
   workflow_dispatch:
 
 concurrency:

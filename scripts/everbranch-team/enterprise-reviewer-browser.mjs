@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import {checkVoiceShell} from './enterprise-voice-shell-browser.mjs';
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -127,6 +128,7 @@ try {
     assert.equal(response.headers()["set-cookie"], undefined);
     await page.locator('#reviewer-perspective').selectOption('manager');
     await page.waitForFunction(()=>document.getElementById('reviewer-perspective')?.value==='manager');
+    await checkVoiceShell(page,evidence,{sample:true});
     await page.locator('#home-nav').click();
     await page.getByText("Fictional sample controls", { exact: false }).count();
     await page.locator("#briefing-body .briefing-hero").waitFor();
@@ -134,7 +136,7 @@ try {
         .getByRole("button", { name: "Show me Lees-McRae", exact: true })
         .click();
     await page
-        .getByRole("button", { name: "06 Meeting Roll Call", exact: false })
+        .getByRole("button", { name: "07 Ask Everbranch", exact: false })
         .click();
     assert.equal(
         await page
@@ -148,6 +150,13 @@ try {
     await page
         .locator("[data-tour-trial-status]")
         .waitFor({ state: "visible" });
+    const capturesBeforeFinale=await page.evaluate(()=>shellCaptures.length);
+    await page.screenshot({path:resolve(evidence,'ask-finale-desktop.png'),fullPage:true});
+    await page.getByRole('button',{name:'Open Ask Everbranch',exact:true}).click();
+    await page.locator('#ask-voice-controls').getByRole('button',{name:'Talk',exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>shellCaptures.length),capturesBeforeFinale,'Tour navigation never starts a microphone');
+    assert.equal(await page.locator('#enterprise-main').getAttribute('data-demo-page'),'enterprise-ask');
+    await page.getByRole('button',{name:'Show me Lees-McRae',exact:true}).click();
     await page.getByRole("button", { name: "Restart", exact: true }).click();
     await page.keyboard.press("ArrowRight");
     await page
@@ -214,9 +223,12 @@ try {
     await page
         .getByRole("region", { name: "Linked native task", exact: true })
         .waitFor();
+    const selectedWorkflowUrl = page.url();
     await page
         .getByLabel("Sample perspective", { exact: true })
         .selectOption("worker");
+    await page.getByRole("region", { name: "Linked native task", exact: true }).waitFor();
+    assert.equal(page.url(), selectedWorkflowUrl, "Perspective switch retains workflow and run");
     await page
         .getByLabel("Complete sound check (native task)", { exact: true })
         .check();
