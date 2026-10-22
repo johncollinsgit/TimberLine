@@ -115,8 +115,10 @@ On the exact protected accepted release and intended HTTPS mount:
 6. Dictate the email/SMS fixture drafts, inspect exact previews, cancel one and
    confirm the other only against the fake transport. Verify no external send.
    Real delivery acceptance, if separately approved above, is a different step.
-7. Exhaust time/turn/spend limits, replay an accepted UUID and simulate an uncertain
-   provider outcome. Verify no extra call or duplicate action. Stop/dispose, reopen
+7. Exhaust time/turn/spend limits with the fake provider before live use, replay
+   an accepted UUID and simulate an uncertain provider outcome. The physical live
+   check must remain within the fourteen-call campaign; no extra paid calls are
+   needed to prove rejection. Verify no extra call or duplicate action. Stop/dispose, reopen
    and confirm there is no ambient microphone or hidden persistent conversation.
 
 Until those steps pass, call the last tour item a clearly marked preview. Neither

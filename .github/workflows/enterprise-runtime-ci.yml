@@ -45,6 +45,7 @@ on:
       - 'package.json'
       - 'database/migrations/**'
       - 'docs/operations/enterprise-ci.md'
+      - 'docs/operations/enterprise-voice-*.md'
   workflow_dispatch:
 
 permissions:
