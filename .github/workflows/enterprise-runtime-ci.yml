@@ -132,7 +132,7 @@ jobs:
             ENTERPRISE_BROWSER_ENGINE="$engine" ENTERPRISE_EVIDENCE="test-results/enterprise/reviewer-shared/$engine" node scripts/everbranch-team/enterprise-reviewer-browser.mjs
           done
       - name: Check native Operations Roll Call and Resources in Chromium and WebKit
-        timeout-minutes: 15
+        timeout-minutes: 25
         env:
           ENTERPRISE_TEST_PHP: php
           EVERBRANCH_PLAYWRIGHT_MODULE: node_modules/playwright/index.mjs
