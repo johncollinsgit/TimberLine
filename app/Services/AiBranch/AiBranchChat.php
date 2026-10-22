@@ -199,7 +199,7 @@ class AiBranchChat
                     $workflowAction = app(AiWorkspaceWorkflows::class)->propose($tenant, $user, $result['draft'], (string) Str::uuid());
                 } catch (\Illuminate\Validation\ValidationException|\Illuminate\Database\Eloquent\ModelNotFoundException|\Symfony\Component\HttpKernel\Exception\HttpException) {
                     // Generation was billed; an invalid proposal never loses the answer or replays the provider.
-                    $workflowNotice = 'The proposed details need clarification. No job or email was created. Check the customer and required fields.';
+                    $workflowNotice = 'The proposed details need clarification. No action was executed. Check the required details and try again.';
                 }
             }
             $message = ['role' => 'assistant', 'uuid' => $uuid, 'text' => $result['reply'], 'sources' => $reservation['sources'],
