@@ -10,10 +10,20 @@
     const boot = @json($enterprisePresentation), adapter = EverbranchSampleTransport.create(boot);
     document.body.classList.add('enterprise-sample');
     function start() {
-        const root = document.querySelector('[data-reviewer-tour-root]');
+        const root = document.querySelector('[data-reviewer-tour-root]:not([data-priority-only="true"])');
         if (root && document.querySelector('.content')) document.querySelector('.content').prepend(root);
         const dispatch = detail => document.dispatchEvent(new CustomEvent('enterprise:navigate', {detail}));
         EverbranchReviewerTour.mount(root, {
+            priorityStatus(item) {
+                const manager = adapter.snapshot().persona === 'manager';
+                const restricted = ['reports','certificates','invoices','funds'].includes(item.id);
+                return {available: !restricted || manager, status: restricted && !manager ? 'Unavailable in this sample perspective' : 'Browser simulation · server feature implemented, not hosted'};
+            },
+            onPriority(item) {
+                if (['reports','certificates','invoices','funds'].includes(item.id) && adapter.snapshot().persona !== 'manager') return {available:false,message:'Unavailable in this sample perspective'};
+                dispatch({section:item.section, area:EverbranchSampleTransport.ids.area});
+                return {available:true};
+            },
             onNavigate(section) {
                 if (section === 'workflows') return adapter.navigate(boot.routes.workflowWorkspace + '#area_id=' + EverbranchSampleTransport.ids.area + '&project_id=' + EverbranchSampleTransport.ids.project);
                 dispatch({section, area: EverbranchSampleTransport.ids.area});

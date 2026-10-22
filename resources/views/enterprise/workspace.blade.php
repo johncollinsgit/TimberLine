@@ -11,6 +11,7 @@
         ],
     ];
     $enterpriseSample = ($enterprisePresentation['runtime'] ?? 'private') === 'sample';
+    $enterpriseInstall = $enterpriseSample ? [] : \App\Enterprise\AppManifest::links(request());
     $workflowBoot = array_merge($enterprisePresentation, [
         'tenant' => $enterprisePresentation['identity']['tenantSlug'],
         'tenant_id' => (string) $enterprisePresentation['identity']['workspace'],
@@ -22,6 +23,7 @@
 @endphp
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="csrf-token" content="{{ $enterpriseSample ? "" : ($enterprisePresentation["csrf"] ?? "") }}"><title>Workflow workspace · {{ $enterprisePresentation["identity"]["name"] }}</title>
+@include('enterprise.app-install-head')
 @if($enterpriseSample)
 <style>{!! $inlineAssets['css'] ?? '' !!}</style>
 @else
@@ -31,4 +33,13 @@
 @if(!$enterpriseSample && preg_match('/^#[0-9a-fA-F]{6}$/D', $enterprisePresentation['branding']['accent'] ?? ''))
 <style>:root{--gold:{{ $enterprisePresentation['branding']['accent'] }};--ew-accent:{{ $enterprisePresentation['branding']['accent'] }}}</style>
 @endif
-</head><body>@includeIf('enterprise.runtime-designation')@if($enterpriseSample)@includeIf('enterprise.reviewer-adapter')@endif<div id="enterprise-workflow" data-bootstrap="{{ json_encode($workflowBoot, JSON_THROW_ON_ERROR) }}"></div><noscript>This workflow workspace requires JavaScript. Return to <a href="{{ $enterprisePresentation['routes']['back'] }}">Enterprise Projects</a>.</noscript>@if($enterpriseSample)<script type="module">{!! $inlineAssets['js'] ?? '' !!}</script>@endif</body></html>
+</head><body>
+@includeIf('enterprise.runtime-designation')
+@if($enterpriseSample)
+@includeIf('enterprise.reviewer-adapter')
+@endif
+@include('enterprise.workflow-priorities')
+<div id="enterprise-workflow" data-bootstrap="{{ json_encode($workflowBoot, JSON_THROW_ON_ERROR) }}"></div><noscript>This workflow workspace requires JavaScript. Return to <a href="{{ $enterprisePresentation['routes']['back'] }}">Enterprise Projects</a>.</noscript>
+@if($enterpriseSample)<script type="module">{!! $inlineAssets['js'] ?? '' !!}</script>@endif
+@include('enterprise.app-install')
+</body></html>

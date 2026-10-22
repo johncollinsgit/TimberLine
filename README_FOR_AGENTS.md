@@ -1,3 +1,22 @@
+## Enterprise priorities and procedural handoffs (source candidate, October 22)
+
+Preserve the same renderer and explicit public-sample/private-server transport
+boundary for the priorities overview and resumable walkthrough. Current-source
+screens include period exports, certificate review/internal reminders and the
+default-off owner/admin Finance packet register. Packet approvals are internal
+routing evidence, never permission to pay or validated accounting. No provider,
+credential, grant or recovery action is part of these tour controls. The separate
+proposal workspace remains planning; Open proposal is honestly unavailable.
+Read [the priorities matrix](docs/operations/enterprise-priorities-demo.md) and
+[Finance packet contract](docs/operations/enterprise-finance-packets.md) before
+changing status labels, permissions, sample behavior or confirmation semantics.
+
+Preserve the default-off installable app's canonical mount scope and manual
+update confirmation. Shared transport tracks pending mutations to block unsafe
+refresh; do not infer failure from a dropped response or clear exact receipts.
+No offline/service-worker cache or physical installation is established. Read
+[the app contract](docs/operations/enterprise-web-app.md).
+
 ## Enterprise integrations under a trusted application prefix (source candidate, October 22)
 
 Gmail callbacks and controlled-trial pages/links now derive their origin and

@@ -39,7 +39,7 @@
       && model.blockers.every(row=>!row.owner_id || owners.has(String(row.owner_id)));
   }
   function rollPaintPriorities() {
-    $('roll-method').textContent=`${rollSnapshot.label} · ${rollSnapshot.method_label || rollSnapshot.method} · As of ${rollSnapshot.as_of}`;
+    $('roll-method').textContent=`${rollSnapshot.scope?.label || 'Current checked scope'} · ${rollSnapshot.label} · ${rollSnapshot.method_label || rollSnapshot.method} · As of ${rollSnapshot.as_of}`;
     $('roll-priorities').innerHTML=rollSnapshot.items.map(row=>`<article class="roll-priority"><span class="badge">${esc(String(row.kind).replaceAll('_',' '))}</span><h3>${esc(row.title)}</h3><p>${esc(row.reason)}</p><dl><dt>Owner</dt><dd>${esc(row.owner?.name || 'Unassigned')}</dd><dt>With the ball</dt><dd>${esc(row.ball?.name || 'Not recorded')}</dd><dt>Next action</dt><dd>${esc(row.next_action || 'Not recorded')}</dd><dt>Due</dt><dd>${esc(row.due_on || 'Unknown')}</dd><dt>Last recorded</dt><dd>${esc(row.source_updated_at || 'Unknown')}</dd></dl><a class="button" href="${esc(transport.href(row.source_url))}">Open source record</a></article>`).join('') || '<p class="caption">No priorities are present in this checked sample. This does not establish that no campus work exists.</p>';
     $('roll-coverage').textContent=`${rollSnapshot.coverage} ${rollSnapshot.overflow_count ? `${rollSnapshot.overflow_count} additional priorities exceed this display bound.` : ''}`;
   }
@@ -198,6 +198,8 @@
     const active=section==='roll_call'&&data.features?.roll_call===true;$('roll-call-panel').hidden=!active;
     if(!active){rollCapture();rollStore();if(rollContext){rollGeneration++;rollContext=null;}return;}
     $('work').hidden=true;$('heading').textContent='Make the next move clear.';$('breadcrumb').textContent='Roll Call';
+    $('roll-work-mode').textContent=data.can_coordinate?'Dispatch review: check current handlers, unresolved work and exact task changes before confirmation.':'Technician view: open your assigned work, job details and permitted status, note or photo actions. Manager decisions remain separately authorized.';
+    $('roll-my-work').hidden=!rollOwners().some(row=>String(row.id)===String(data.viewer_id||viewer));
     if(!['campus','workspace','project','team'].includes(rollScope))rollScope='workspace';
     if(!rollProjects().some(row=>row.id===rollProject))rollProject=rollProjects()[0]?.id || '';
     if(!rollOwners().some(row=>String(row.id)===rollPerson))rollPerson=String(rollOwners()[0]?.id || '');
@@ -207,6 +209,7 @@
     rollContext=key;rollGeneration++;rollBusy=false;rollModel=null;rollSnapshot=null;rollPreview=null;rollPendingSave=null;rollPendingConfirm=null;rollLoad();
   }
   $('roll-scope-form').onsubmit=event=>{event.preventDefault();if(rollBusy)return;rollCapture();rollStore();rollScope=$('roll-scope').value;rollProject=$('roll-project').value;rollPerson=$('roll-person').value;rollSelectedMeeting='';rollContext=null;renderRollCall();};
+  $('roll-my-work').onclick=()=>{if(rollBusy||!rollOwners().some(row=>String(row.id)===String(data.viewer_id||viewer)))return;rollCapture();rollStore();rollScope='team';rollPerson=String(data.viewer_id||viewer);rollSelectedMeeting='';rollContext=null;renderRollCall();};
   $('roll-scope').onchange=()=>{$('roll-project-label').hidden=$('roll-scope').value!=='project';$('roll-person-label').hidden=$('roll-scope').value!=='team';};
   $('roll-new').onclick=()=>{if(rollBusy || rollPendingSave || rollPendingConfirm){rollNotice('Resolve the pending request before starting another meeting.',true);return;}rollCapture();rollStore();rollModel=rollNewModel();rollSelectedMeeting='';rollPreview=null;rollDirty=true;rollDraftBlocked=false;rollStore();rollPaintEditor();rollRememberUrl();};
   document.querySelectorAll('[data-roll-add]').forEach(button=>button.onclick=()=>{

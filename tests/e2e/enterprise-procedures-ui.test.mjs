@@ -51,7 +51,8 @@ function fixture({
 } = {}) {
     const nodes = new Map(),
         listeners = new Map(),
-        calls = [];
+        calls = [],
+        fetchCalls = [];
     const get = (name) => {
         if (!nodes.has(name)) nodes.set(name, new Node());
         return nodes.get(name);
@@ -105,7 +106,8 @@ function fixture({
             calls.push({ url, body: body ? structuredClone(body) : undefined });
             return handler ? handler(url, body) : result;
         },
-        fetch() {
+        fetch(...args) {
+            fetchCalls.push(args);
             throw new Error(
                 "No browser download or external call belongs in this focused fixture",
             );
@@ -137,13 +139,25 @@ function fixture({
     const dispatch = (type, detail) =>
         context.document.dispatchEvent({ type, detail });
     const settle = () => new Promise((resolve) => setImmediate(resolve));
-    return { context, nodes, get, calls, drafts, result, dispatch, settle };
+    return {
+        context,
+        nodes,
+        get,
+        calls,
+        fetchCalls,
+        drafts,
+        result,
+        dispatch,
+        settle,
+    };
 }
-test("public sample, disabled flags and nonmanager roles never call certificate or report APIs", async () => {
+test("disabled flags, nonmanager roles and unsupported transports never call certificate or report APIs", async () => {
     for (const setup of [
-        { mode: "sample" },
+        { mode: "unsupported" },
         { review: false },
         { features: { certificates: false, reports: false } },
+        { mode: "sample", review: false },
+        { mode: "sample", features: { certificates: false, reports: false } },
     ]) {
         const f = fixture(setup);
         f.dispatch("enterprise:render");
@@ -155,8 +169,135 @@ test("public sample, disabled flags and nonmanager roles never call certificate 
         assert.deepEqual(f.calls, []);
         assert.equal(f.get("certificate-body").hidden, true);
         assert.equal(f.get("quarterly-period").hidden, true);
+        assert.deepEqual(f.fetchCalls, []);
     }
 });
+test("authorized sample procedures use only the explicit sample transport and clear records on role loss", async () => {
+    const report = {
+        schema_version: 1,
+        report_type: "period_activity",
+        sample_data: true,
+        label: "FICTIONAL BROWSER SAMPLE — operational period export",
+        generated_at_utc: "2026-10-22T10:00:00Z",
+        window: {
+            timezone: "America/New_York",
+            start_local: "2026-10-01",
+            end_local_inclusive: "2026-10-22",
+            start_utc: "2026-10-01T04:00:00Z",
+            end_utc_exclusive: "2026-10-23T04:00:00Z",
+            observed_through_utc: "2026-10-22T10:00:00Z",
+            period_state: "in_progress",
+            period_in_progress: true,
+        },
+        current_records: [],
+        recorded_events: [],
+        coverage: {},
+        exclusions: [],
+    };
+    const f = fixture({
+        mode: "sample",
+        handler: async (url) => {
+            if (url.includes("/reports/quarterly.json"))
+                return {
+                    sample_export: true,
+                    mime: "application/json",
+                    content: JSON.stringify(report),
+                };
+            if (url.includes("/reports/quarterly")) return report;
+            return {
+                ...f.result,
+                items: [
+                    {
+                        id,
+                        title: "Fictional sample certificate",
+                        contractor_title: "Fictional contractor",
+                        status: "active",
+                        version: 1,
+                        accepted: null,
+                        pending: null,
+                        reminder_reasons: ["unreviewed"],
+                    },
+                ],
+            };
+        },
+    });
+    f.dispatch("enterprise:render");
+    await f.settle();
+    assert.equal(f.calls.length, 2);
+    assert.ok(
+        f.calls.every((call) =>
+            call.url.startsWith("/enterprise/certificates"),
+        ),
+    );
+    assert.equal(f.get("certificate-body").hidden, false);
+    assert.match(
+        f.get("certificate-status").textContent,
+        /Fictional browser-only/,
+    );
+    assert.match(
+        f.get("certificate-list").innerHTML,
+        /Fictional sample certificate/,
+    );
+    f.context.section = "roll_call";
+    f.dispatch("enterprise:render");
+    assert.equal(f.get("quarterly-period").hidden, false);
+    assert.equal(
+        f.calls.length,
+        2,
+        "Opening a sample report must not automatically generate or download it",
+    );
+    await f.get("quarterly-period").onsubmit({ preventDefault() {} });
+    assert.equal(f.calls.length, 3);
+    assert.ok(f.calls[2].url.startsWith("/enterprise/reports/quarterly?"));
+    await vm.runInContext(
+        "quarterlyDownload({preventDefault(){}},'json')",
+        f.context,
+    );
+    assert.equal(f.calls.length, 4);
+    assert.ok(f.calls[3].url.startsWith("/enterprise/reports/quarterly.json?"));
+    assert.match(
+        f.get("quarterly-status").textContent,
+        /Fictional browser-only JSON snapshot/,
+    );
+    assert.deepEqual(
+        f.fetchCalls,
+        [],
+        "Authorized sample export must never fall through to browser/server fetch",
+    );
+    f.context.data.can_review = false;
+    f.dispatch("enterprise:tour-context", null);
+    f.dispatch("enterprise:render");
+    await f.settle();
+    assert.equal(f.calls.length, 4);
+    assert.equal(f.get("certificate-body").hidden, true);
+    assert.equal(f.get("certificate-list").innerHTML, "");
+    assert.equal(f.get("quarterly-preview-body").children.length, 0);
+    assert.equal(f.get("quarterly-period").hidden, true);
+    assert.equal(f.get("quarterly-json").hidden, true);
+});
+
+test("a private authorization denial clears procedures and never substitutes fictional sample records", async () => {
+    const f = fixture({
+        handler: async () => {
+            const error = new Error("Current access denied");
+            error.status = 403;
+            throw error;
+        },
+    });
+    f.dispatch("enterprise:render");
+    await f.settle();
+    assert.equal(f.calls.length, 2);
+    assert.equal(f.get("certificate-body").hidden, true);
+    assert.equal(f.get("certificate-list").innerHTML, "");
+    assert.equal(f.get("certificate-retained-body").textContent, "");
+    assert.equal(f.get("quarterly-period").hidden, true);
+    assert.deepEqual(f.fetchCalls, []);
+    assert.match(
+        f.get("certificate-status").textContent,
+        /access is unavailable/,
+    );
+});
+
 test("a reset blocks a delayed certificate result from repopulating former manager records", async () => {
     let release;
     const held = new Promise((resolve) => {

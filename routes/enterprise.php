@@ -7,6 +7,15 @@ use App\Http\Controllers\TeamFileController;
 use App\Http\Controllers\TeamWorkController;
 use Illuminate\Support\Facades\Route;
 
+// Generic install metadata does not start a web session or resolve operational records.
+Route::withoutMiddleware([\Illuminate\Cookie\Middleware\EncryptCookies::class, \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
+    \Illuminate\Session\Middleware\StartSession::class, \Illuminate\View\Middleware\ShareErrorsFromSession::class,
+    \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class, \App\Http\Middleware\EnterpriseCsrfToken::class])->group(function (): void {
+        Route::get('/enterprise/app.webmanifest', [\App\Enterprise\AppManifest::class, 'manifest'])->name('enterprise.app_manifest');
+        Route::get('/enterprise/app-version', [\App\Enterprise\AppManifest::class, 'currentVersion'])->name('enterprise.app_version');
+        Route::get('/enterprise/app-icon-{size}.png', [\App\Enterprise\AppManifest::class, 'icon'])->where('size', '180|192|512')->name('enterprise.app_icon');
+    });
+
 Route::get('/login', [SessionController::class, 'create'])->name('login');
 Route::post('/login', [SessionController::class, 'store'])->middleware('throttle:5,1')->name('login.store');
 Route::post('/logout', [SessionController::class, 'destroy'])->middleware('auth')->name('logout');
@@ -61,6 +70,10 @@ Route::middleware(['auth', 'verified', ResolveWorkspace::class, \App\Http\Middle
     Route::get('/enterprise/certificates/{id}/history', [\App\Enterprise\ContractorCertificatesController::class, 'history'])->whereUuid('id')->name('enterprise.certificates.history');
     Route::get('/enterprise/certificates/{id}', [\App\Enterprise\ContractorCertificatesController::class, 'show'])->whereUuid('id')->name('enterprise.certificates.show');
     Route::post('/enterprise/certificates/commands', [\App\Enterprise\ContractorCertificatesController::class, 'command'])->name('enterprise.certificates.command');
+    Route::get('/enterprise/finance', [\App\Enterprise\FinancePacketsController::class, 'index'])->name('enterprise.finance');
+    Route::get('/enterprise/finance/{id}/history', [\App\Enterprise\FinancePacketsController::class, 'history'])->whereUuid('id')->name('enterprise.finance.history');
+    Route::get('/enterprise/finance/{id}', [\App\Enterprise\FinancePacketsController::class, 'show'])->whereUuid('id')->name('enterprise.finance.show');
+    Route::post('/enterprise/finance/commands', [\App\Enterprise\FinancePacketsController::class, 'command'])->name('enterprise.finance.command');
     Route::get('/enterprise/preferences', [\App\Enterprise\WorkspacePreferencesController::class, 'show'])->name('enterprise.preferences');
     Route::post('/enterprise/preferences', [\App\Enterprise\WorkspacePreferencesController::class, 'save'])->name('enterprise.preferences.save');
     Route::get('/enterprise/requester', [\App\Enterprise\RequesterController::class, 'index'])->name('enterprise.requester');

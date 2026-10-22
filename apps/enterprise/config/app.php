@@ -5,6 +5,7 @@ return [
     'env' => env('ENTERPRISE_APP_ENV', 'production'),
     'debug' => false,
     'url' => env('ENTERPRISE_APP_URL', 'https://enterprise.invalid'),
+    'release_id' => env('ENTERPRISE_RELEASE_ID'),
     'timezone' => 'UTC',
     'locale' => 'en',
     'fallback_locale' => 'en',

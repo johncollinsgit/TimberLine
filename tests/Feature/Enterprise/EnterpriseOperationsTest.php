@@ -72,6 +72,34 @@ function opsPerformed($tenant, $user, array $task): array
     return $task;
 }
 
+test('shared visibility reads one current task across authorized roles without widening department or tenant access', function (): void {
+    [$tenant, $owner, $area, $project, $native] = opsFixture();
+    $worker = teamMember($tenant, 'member');
+    $reader = teamMember($tenant, 'viewer');
+    $outsideDepartment = teamMember($tenant, 'member');
+    foreach ([[$worker, 'editor'], [$reader, 'viewer']] as [$member, $role]) {
+        DB::table('team_area_members')->insert(['id' => (string) Str::uuid(), 'tenant_id' => $tenant->id,
+            'area_id' => $area, 'user_id' => $member->id, 'role' => $role]);
+    }
+    $task = opsConfigure($tenant, $owner, $native, ['ball_user_id' => (string) $worker->id]);
+    $task = opsAct($tenant, $worker, $task, 'task.check', ['item_id' => 'inspect', 'completed' => true])->assertOk()->json();
+    $url = route('enterprise.operations.show', ['tenant' => $tenant->slug, 'id' => $native['id']]);
+    foreach ([$owner, $worker, $reader] as $member) {
+        $this->actingAs($member)->getJson($url)->assertOk()
+            ->assertJsonPath('id', $native['id'])->assertJsonPath('version', $task['version'])
+            ->assertJsonPath('owner_user_id', (string) $owner->id)
+            ->assertJsonPath('ball_user_id', (string) $worker->id)
+            ->assertJsonPath('checklist.0.completed', true)->assertJsonPath('progress_percent', 25);
+    }
+    opsAct($tenant, $reader, $task, 'task.check', ['item_id' => 'repair', 'completed' => true])->assertNotFound();
+    $this->actingAs($outsideDepartment)->getJson($url)->assertNotFound();
+    [$other, $otherOwner] = teamWorkspace();
+    config(['enterprise.tenant_allowlist' => [(string) $tenant->id, (string) $other->id]]);
+    $this->actingAs($otherOwner)->getJson(route('enterprise.operations.show', ['tenant' => $other->slug, 'id' => $native['id']]))->assertNotFound();
+    expect(DB::table('team_tasks')->count())->toBe(1);
+    Http::assertNothingSent();
+});
+
 test('operations is canonical weighted checklist work with separate manager verified 4.0 and exact replay', function (): void {
     [$tenant, $owner, $area, $project, $native] = opsFixture();
     $membershipCounts = [DB::table('tenant_user')->count(), DB::table('team_area_members')->count(), DB::table('team_project_members')->count()];

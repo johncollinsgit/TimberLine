@@ -22,6 +22,18 @@ export async function checkRollCallWorkspace(page, evidence) {
     await command({action:'request.assign',id:request.id,area_id:area,expected_version:request.version,project_id:project,assignee_id:owner});
     await page.goto(new URL(`/?tenant=${tenant}&area_id=${area}&section=roll_call&scope=project&project_id=${project}`,page.url()).href);
     await page.getByLabel('Meeting title',{exact:true}).waitFor();
+    assert.match(await page.locator('#roll-call-panel').innerText(),/Roll Call tickets handed to technicians on paper/);
+    const assignedResponse=page.waitForResponse(response=>{const url=new URL(response.url());return url.pathname==='/enterprise/roll-call'&&url.searchParams.get('type')==='team'&&url.searchParams.get('team_user_id')===owner;});
+    await page.getByRole('button',{name:'My assigned daily work',exact:true}).click();
+    assert.equal((await assignedResponse).status(),200);
+    await page.waitForFunction(()=>document.querySelector('#roll-method').textContent.includes('Assigned'));
+    await page.waitForFunction(()=>!document.getElementById('roll-save').disabled);
+    assert.equal(await page.getByLabel('Person',{exact:true}).inputValue(),owner);
+    await page.getByLabel('Meeting scope',{exact:true}).selectOption('project');
+    await page.getByLabel('Scope project',{exact:true}).selectOption(project);
+    await page.getByRole('button',{name:'Refresh current work',exact:true}).click();
+    await page.getByLabel('Meeting title',{exact:true}).waitFor();
+    await page.waitForFunction(()=>!document.getElementById('roll-save').disabled);
     await page.getByLabel('Meeting title',{exact:true}).fill('Synthetic reviewed meeting <img src=x onerror=alert(1)>');
     await page.getByRole('button',{name:'Add decision',exact:true}).click();
     await page.getByLabel('Decision 1',{exact:true}).fill('Synthetic retained decision <img src=x onerror=alert(1)>');

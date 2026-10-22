@@ -1,3 +1,27 @@
+## Enterprise priorities and procedural handoffs (source candidate, October 22)
+
+The existing campus renderer now has a source-backed priorities overview and
+guided exploration of actual screens, with persistent compact top controls,
+Hide/Show, current-step highlights and an unavailable Open proposal control
+while the separate proposal workspace is in planning. Public examples are
+explicit browser simulations; private screens recheck current permissions.
+Reporting and certificate renewal reuse the existing tested panels. A separate
+default-off Finance packet register adds encrypted invoice/fund/source references,
+assigned review, explicit handoff, review invalidation and manual external-process
+evidence for existing owner/admin roles. It executes no payment and validates no
+fund balance, donor policy or institutional approval sequence. Read
+[priorities and acceptance](docs/operations/enterprise-priorities-demo.md) and
+[Finance packets](docs/operations/enterprise-finance-packets.md). No hosted client,
+provider connection, access grant, recovery activation or deployment follows
+from this source candidate.
+
+The default-off installable web-app foundation supplies canonical per-mount
+manifest/start/scope and existing Everbranch icons, accessible install help and
+manual update checks. Active saves/uploads block refresh; an explicit review is
+required before reload, retaining existing draft/receipt and unsaved-work guards.
+No service worker, offline sync, GPS, push or device installation is included.
+Read [the web-app boundary](docs/operations/enterprise-web-app.md).
+
 ## Enterprise integrations under a trusted application prefix (source candidate, October 22)
 
 Gmail callbacks and controlled-trial pages/links now derive their origin and

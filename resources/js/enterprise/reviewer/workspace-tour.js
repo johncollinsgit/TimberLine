@@ -25,6 +25,19 @@
                 (row) => String(row.id) === String(context.selected),
             ) || context?.data?.requests?.[0];
         const ready = () => Boolean(context && area());
+        function priorityStatus(item) {
+            const permitted = {
+                visibility: Boolean(project()),
+                crews: feature("roll_call"),
+                schedules: feature("resources"),
+                reports: feature("reports") && context?.data?.can_review === true,
+                certificates: feature("certificates") && context?.data?.can_review === true,
+                invoices: feature("finance") && context?.data?.can_review === true,
+                funds: feature("finance") && context?.data?.can_review === true,
+            };
+            const available = ready() && permitted[item.id] === true;
+            return {available, status: available ? "Persistent feature · current permissions" : "Unavailable in current workspace"};
+        }
         function links(index) {
             const p = project(),
                 r = request(),
@@ -72,6 +85,7 @@
                     p?.id,
                 );
                 add("projects", "Projects", "projects", Boolean(p), p?.id);
+                add("finance", "Invoice & fund review packets", "finance", feature("finance") && context?.data?.can_review === true);
             }
             if (index === 3) {
                 add(
@@ -154,7 +168,9 @@
                     ],
                     [
                         "Finance boundary",
-                        "No accounts-payable or finance ledger. Dedicated invoice/check procedure pending discovery.",
+                        feature("finance") && context?.data?.can_review === true
+                            ? "Restricted invoice/fund packets retain document references, review decisions and the next owner. Finance keeps payment execution and its authoritative ledger."
+                            : "Invoice/fund review packets are unavailable in the current workspace. No payment or accounting operation is implied.",
                     ],
                 ];
             if (index === 3)
@@ -234,6 +250,15 @@
             },
             links,
             describe,
+            priorityStatus,
+            openPriority(item) {
+                if (!priorityStatus(item).available) return {available: false, message: "That feature is unavailable in the current authorized workspace."};
+                globalThis.document.dispatchEvent(new CustomEvent("enterprise:navigate", {detail: {
+                    section: item.section,
+                    ...(item.id === "visibility" ? {selected: project().id} : {}),
+                }}));
+                return {available: true};
+            },
             open(index, id) {
                 const link = links(index).find((row) => row.id === id);
                 if (!link?.available)
@@ -337,6 +362,9 @@
             }
         }
         const tour = EverbranchReviewerTour.mount(root, {
+            priorityStorageKey: `everbranch-priorities-private-v1:${new URL(boot.routes?.back || "/", globalThis.location.href).pathname.replace(/\/+$/, "") || "/"}:${boot.identity.workspace}:${boot.identity.viewer}`,
+            priorityStatus: (item) => navigation.priorityStatus(item),
+            onPriority: (item) => navigation.openPriority(item),
             emailPreview: false,
             hideTrial: true,
             describeScene: (index, base) => navigation.describe(index, base),
