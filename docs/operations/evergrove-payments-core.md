@@ -1,9 +1,10 @@
-# Evergrove Payments core: local engineering milestone
+# Evergrove Payments core: foundation contract
 
-This package is an unregistered provider-neutral orchestration foundation for a
-future Evergrove iPhone checkout. It has no HTTP endpoints, application container
-binding, enabled authorizer, credential reader, payment SDK, live adapter,
-production migration, inventory integration or real merchant. The durable
+This document records the PR #465 foundation checkpoint. The subsequent
+[durable server contracts](evergrove-payments-production-contracts.md) add
+MySQL persistence, server quotes and disabled mobile API/PKCE contracts. Neither
+milestone supplies a payment SDK, live adapter, atomic inventory integration or
+real merchant. The durable
 SQLite reference journal **refuses live bindings**. It is only for disposable
 local/test fixtures. This is implemented/tested source, not production payment
 acceptance. It leaves `PosService`, `SimulatedReader`, the Alpha browser demo and
