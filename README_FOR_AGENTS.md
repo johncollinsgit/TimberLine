@@ -2399,3 +2399,13 @@ intended own-user sender is john@evergrovesoftware.com. The subsequent reviewer
 trial uses a verified service sender, no reviewer mailbox access and a $5 total
 shared provider cap, superseding the earlier $1 AI-only allowance. Credentials,
 OAuth grants, recipients, real sends and deployment still need exact approval.
+## Enterprise job voice source prototype (2026-10-22)
+
+Read `docs/operations/enterprise-voice-jobs.md` before integrating Talk into the
+existing Ask pane. `enterprise.voice_jobs_enabled` defaults off. The new lookup
+is record-backed, read-only and department/task scoped; it never dispatches a
+model, email, SMS, payment or write. Reuse the existing shell/detail/map and let
+the Enterprise owner place the actual accepted capability last in its tour.
+Keep sample fixtures visibly fictional. No source/browser result establishes
+physical speech, deployment or live provider readiness. Existing trial budgets
+and other customers' credentials do not authorize a paid voice connection.

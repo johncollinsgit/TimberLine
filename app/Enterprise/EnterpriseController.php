@@ -66,7 +66,7 @@ class EnterpriseController
             'requests' => array_slice($items, 0, 100), 'projects' => $projects, 'coverage' => 'up_to_100_visible_requests_scan_1000', 'has_more' => count($items) > 100,
             'scan_partial' => $scanned === 1000,
             'features' => ['collaboration' => (bool) config('enterprise.collaboration_enabled'), 'planning' => (bool) config('enterprise.planning_enabled'),
-                'ask' => (bool) config('enterprise.ask_enabled'), 'email_drafts' => (bool) config('enterprise.email_drafts_enabled'),
+                'ask' => (bool) config('enterprise.ask_enabled'), 'voice_jobs' => (bool) config('enterprise.voice_jobs_enabled'), 'email_drafts' => (bool) config('enterprise.email_drafts_enabled'),
                 'workflow' => (bool) config('enterprise.workflow_enabled'), 'briefing' => (bool) config('enterprise.briefing_enabled'),
                 'operations' => (bool) config('enterprise.operations_enabled'), 'resources' => (bool) config('enterprise.resources_enabled'),
                 'roll_call' => (bool) config('enterprise.roll_call_enabled'), 'requester' => (bool) config('enterprise.requester_enabled'),

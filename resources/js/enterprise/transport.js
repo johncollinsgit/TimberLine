@@ -36,6 +36,7 @@
                     if (!identity.viewer || !identity.workspace) throw new Error('The authorized Enterprise identity is unavailable.');
                     const response = await root.fetch(target.href, {
                         credentials: 'same-origin',
+                        ...(options.signal ? {signal: options.signal} : {}),
                         headers: {
                             Accept: 'application/json',
                             'Content-Type': options.binary ? 'application/octet-stream' : 'application/json',
