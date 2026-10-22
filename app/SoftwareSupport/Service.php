@@ -42,7 +42,9 @@ class Service
                     'id' => (string) Str::uuid(), 'owner_tenant_id' => $context['ownerId'],
                     'client_tenant_id' => $context['tenant']->id, 'ticket_id' => $ticket->id,
                     'created_by' => $user->id, 'department' => $data['department'], 'kind' => 'ticket', 'request_key' => $key,
-                    'payload' => ['fingerprint' => $fingerprint, 'revision' => 1],
+                    'payload' => ['fingerprint' => $fingerprint, 'revision' => 1,
+                        'response_expectation' => app(ResponseCalendar::class)->snapshot((int) $context['tenant']->id, \Carbon\CarbonImmutable::now()),
+                        'initial_human_response_at' => null],
                 ]);
                 $this->message($record, $user, $data['body'], false);
                 $this->files($record, $user, $files, $paths);
@@ -81,6 +83,9 @@ class Service
                 $this->message($record, $user, $data['body'], $owner);
                 $this->files($record, $user, $files, $paths);
                 $this->entry($record, $user, 'reply', ['fingerprint' => $fingerprint], $key);
+                if ($owner && ! ($record->payload['initial_human_response_at'] ?? null)) {
+                    $record->update(['payload' => [...$record->payload, 'initial_human_response_at' => now()->toIso8601String()]]);
+                }
                 TenantSupportTicket::withoutGlobalScopes()->whereKey($record->ticket_id)->where('tenant_id', $record->client_tenant_id)->update(['last_activity_at' => now()]);
             });
         } catch (\Throwable $error) {
@@ -141,6 +146,7 @@ class Service
             $entry = $this->entry($record, $user, 'attachment', [
                 'name' => basename(str_replace('\\', '/', $file->getClientOriginalName())),
                 'mime' => $file->getMimeType(), 'size' => $file->getSize(), 'sha256' => hash_file('sha256', $file->getRealPath()),
+                'scan' => ['status' => 'quarantined', 'reason' => 'awaiting_scanner'],
             ]);
             $path = 'private/software-support/'.$entry->id;
             $paths[] = $path;

@@ -2987,7 +2987,9 @@ contract remain required before completion.
 
 Native tenant support now has a department-private candidate queue with explicit
 owner/client/member bindings, replay-safe submissions/replies, private files,
-status history and fake-only owner SMS/email outbox. Separate campus Enterprise
-runtime identity/transport integration remains unimplemented; native IDs do not
-identify Enterprise users. No provisioning, role grants or provider activation.
+status history and fake-only owner SMS/email outbox. A test-only mutually signed
+campus transport contract preserves separate identities/stores; production
+adapters and actual bindings remain absent. Upload downloads default deny pending
+fresh scanner clearance. Native IDs do not identify Enterprise users. No
+provisioning, role grants or provider activation.
 See [the scope and review package](docs/operations/software-service-support.md).

@@ -27,11 +27,14 @@ authorized users in one department share that department's thread. A client
 cannot triage tickets. Revoking active membership, owner allowlist or a client
 binding takes effect on subsequent requests, including attachment downloads.
 
-The campus runtime-to-support transport and identity binding remain UNIMPLEMENTED.
+The test-only mutually authenticated transport and exact department mapping
+contract is implemented with independent fixture stores. Its production
+identity/persistence/network adapters and all actual bindings remain UNIMPLEMENTED.
+Read [the narrow campus integration handoff](../architecture/software-support-campus-transport.md).
 Parent coordination with campus/proposal owners must establish the reviewed
-runtime/client/department/principal mapping and authenticated transport before
-integrating campus navigation. Never query across databases, copy roles, share
-keys or assume Enterprise session trust to make this candidate appear connected.
+runtime/client/department/principal mapping before integrating campus navigation.
+Never query across databases, copy roles, share application keys or assume
+Enterprise session trust to make this candidate appear connected.
 The current queue route is `/workspaces/{native-workspace-slug}/software-support`.
 Common route includes, orientation notes and migration manifest need integration
 coordination. No campus header, tour or proposal files were changed.
@@ -57,9 +60,12 @@ Allow at most three files per submission/reply, 5 MB each, with MIME AND extensi
 checks for PNG/JPEG/PDF/plain text. HTML/SVG/executables and invalid non-file array
 values are rejected. Bytes live on the private local disk under generated UUIDs;
 there are no public URLs. Downloads recheck ticket scope, verify SHA256, force
-attachment/octet-stream and nosniff, and prohibit shared caching. An approved
-malware scanning/quarantine service is not integrated and remains a production
-acceptance item. Do not treat file-type checks as malware scanning.
+attachment/octet-stream and nosniff, and prohibit shared caching. New and
+previously unscanned files are quarantined; downloads default deny until
+`AttachmentGate` has fresh hash/policy-bound clearance from an approved scanner.
+The scanner interface is unbound/disabled, so actual scanning remains a production
+acceptance item. Missing/failed/infected/stale results deny downloads. Do not
+treat file-type checks as malware scanning.
 
 ## Notification review package: simulation only
 
@@ -116,8 +122,13 @@ calls per department. After go-live, one 60-minute review call per active
 workspace each month. Tickets remain available for bugs, service incidents and
 questions between meetings. Additional consulting, workshops and development
 are separately scoped/approved; a voluntary extra session is a one-time courtesy,
-not a permanent entitlement. No pooling, SLA, service hours, rollout/billing
-start, travel, cancellation or no-show term is inferred. No paid development or
+not a permanent entitlement. Approved hours are Monday–Friday 9 AM–5 PM Eastern,
+holidays excluded, with an initial human response within one business day and
+no guaranteed resolution time. Automatic receipts are distinct from human replies.
+`ResponseCalendar` uses America/New_York and no guessed holiday list. Calculated
+targets stay null until a client-specific calendar and eight-service-hour
+interpretation are explicitly reviewed; all real policies remain empty/off.
+No pooling, rollout/billing start, travel, cancellation or no-show term is inferred. No paid development or
 unlimited support is promised by submitting a ticket.
 
 ## Acceptance and release

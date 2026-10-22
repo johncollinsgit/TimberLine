@@ -1,5 +1,7 @@
 <?php
 
+require __DIR__.'/software-support-transport.php';
+
 \Illuminate\Support\Facades\Route::post('/team/operations/push/{connection}', \App\Http\Controllers\TeamOperationsPushController::class)->whereUuid('connection')->middleware('throttle:120,1')->name('team.operations.push');
 
 use App\Http\Controllers\AiAssistantController;

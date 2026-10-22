@@ -11,4 +11,10 @@ return [
     'owner_sms' => env('SOFTWARE_SUPPORT_OWNER_SMS'),
     'owner_email' => env('SOFTWARE_SUPPORT_OWNER_EMAIL'),
     'simulation_hourly_limit' => 10,
+    'scanner_enabled' => false,
+    'scanner_id' => null,
+    'scanner_policy' => null,
+    'scan_max_age_seconds' => 3600,
+    // This cannot be enabled in local/staging/production, even by configuration.
+    'test_transport_enabled' => false,
 ];

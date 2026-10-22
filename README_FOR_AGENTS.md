@@ -2307,5 +2307,8 @@ Read [the software support runbook](docs/operations/software-service-support.md)
 before changing department-private support. Reuse the native ticket engine;
 preserve its exclusion from legacy tenant-wide help/search paths. Explicit active
 memberships and owner/client/department bindings are required. Campus Enterprise
-has independent auth/database/storage; its adapter is still unimplemented. Owner
+has independent auth/database/storage; a test-only signed transport contract is
+available but its production adapters/bindings remain unimplemented. Read the
+campus transport handoff before integration. Uploads default deny without fresh
+approved scanner clearance. Owner
 notification intents are fake-only; destinations never belong in source or UI.

@@ -4,7 +4,6 @@ namespace App\SoftwareSupport;
 
 use App\Models\TenantSupportTicketMessage;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -89,10 +88,7 @@ class Controller extends \App\Http\Controllers\Controller
         $record = $this->access->ticket($context, $reference);
         $attachment = $this->service->entries($record, 'attachment')->firstWhere('id', $file);
         abort_unless($attachment, 404);
-        $path = 'private/software-support/'.$attachment->id;
-        abort_unless(Storage::disk('local')->exists($path), 404);
-        $bytes = Storage::disk('local')->get($path);
-        abort_unless(hash_equals($attachment->payload['sha256'], hash('sha256', $bytes)), 503, 'Attachment integrity check failed.');
+        $bytes = app(AttachmentGate::class)->download($attachment);
 
         return response()->streamDownload(fn () => print ($bytes), $attachment->payload['name'], ['Content-Type' => 'application/octet-stream', 'X-Content-Type-Options' => 'nosniff', 'Cache-Control' => 'private, no-store']);
     }

@@ -1,11 +1,42 @@
 # Software support review — October 22, 2026
 
-This is a disabled native-tenant foundation, with fictional fixtures only.
-Campus Enterprise identity/transport integration, production upload scanning,
-MySQL acceptance, private workspace bindings and live provider integration remain
-open. Nothing was deployed, provisioned, granted or sent.
+This is a disabled native-tenant foundation and test-only campus transport, with
+fictional fixtures only. Actual campus adapters/bindings, production scanning and
+live providers remain absent. Nothing was deployed, provisioned, granted or sent.
+Current exact-head CI status is recorded on PR473; earlier observations below
+retain their original source-head boundaries.
 
-## Verification
+## Follow-up milestone
+
+- **54 local tests passed, 1,086 assertions:** signed campus/owner packets,
+  independent stores, interrupted/repeated mutations, current mapping/membership
+  revocation, response substitution and target changes, hard production denial,
+  quarantine/scanner failure states, approved human-response expectations and
+  existing mobile/search/operator support regressions. PHP Pint passed 25 files.
+- Nine synthetic WebKit views were regenerated after the support-hours change;
+  no horizontal overflow, missing form labels or JavaScript errors.
+- Disposable MySQL run **39834093409**, PR head **06a2cb9**, executed the original
+  support/recovery suite: **11 passed, 109 assertions**. The generated data-free
+  schema passed fresh-tree and blank-database boot checks. The job then correctly
+  failed because its new fingerprint was not yet committed.
+- Baseline artifact **12449727718** was downloaded and verified against ZIP SHA256
+  `d09940fa7c87a9ce4164eccc5a727f93b6bcb5afc499d4f8691d2418ab9f4e72`.
+  Its manifest names source head `06a2cb9dbbdc42cb5f795d46508ddcda58fbe50a`
+  and tested checkout `f7a0f3056c8f321d2c2d43d9dfc78133315ec23d`.
+  SQL review found the new support table/indexes/migration entry plus equivalent
+  explicit utf8mb4 charset output on the existing POS tables. No business data
+  was included. The generated SQL and fingerprint are committed together, with
+  fingerprint `b85b688d7e6d355fb2800877f881775cfb579f93d4d6c4e1384740cc77baeb9c`.
+- Independent follow-up review found invalid holiday dates were format-checked
+  only. Strict date round-trip validation and a regression now keep calculated
+  targets null for malformed dates. No actual holiday list or live SLA clock
+  was configured.
+
+Narrow integration interface, exact file ownership and live approval bundle:
+[campus transport handoff](../architecture/software-support-campus-transport.md).
+Production transport is not established by the fixture tests.
+
+## Initial milestone verification (68ad2df)
 
 - **46 tests passed, 1,031 assertions:** the new support suite plus existing
   `EverbranchMobilePlatformTest`, `LandlordSearchControllerTest` and

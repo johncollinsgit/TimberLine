@@ -8,6 +8,8 @@ on:
       - 'config/software_support.php'
       - 'routes/software-support*'
       - 'tests/Feature/SoftwareSupport/**'
+      - 'tests/Support/SoftwareSupportTransportFixtures.php'
+      - 'routes/api.php'
       - 'tests/Integration/SoftwareSupportMySqlRecoveryTest.php'
       - 'database/migrations/2026_10_22_180000_create_software_support_records.php'
       - 'database/schema/**'
@@ -52,6 +54,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
+          extensions: pdo_mysql, pdo_sqlite, sodium
           tools: composer:v2
           coverage: none
       - name: Configure existing Flux dependency access

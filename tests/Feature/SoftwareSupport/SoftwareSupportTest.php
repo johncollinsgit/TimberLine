@@ -5,6 +5,8 @@ use App\Models\TenantSupportTicket;
 use App\Models\TenantSupportTicketMessage;
 use App\Models\User;
 use App\Services\Mobile\TenantMobileSupportService;
+use App\SoftwareSupport\AttachmentGate;
+use App\SoftwareSupport\AttachmentScanner;
 use App\SoftwareSupport\NotificationSimulation;
 use App\SoftwareSupport\Record;
 use Illuminate\Http\UploadedFile;
@@ -71,6 +73,7 @@ it('persists a private submission and deduplicates interrupted or repeated submi
 
 it('rejects foreign tenants departments inactive memberships and client triage', function (): void {
     $record = submitSoftwareTicket($this);
+    expect($record->payload['initial_human_response_at'])->toBeNull();
     $this->actingAs($this->otherDepartment)->get($this->clientPath.'/'.$record->id)->assertNotFound();
     $this->get($this->clientPath)->assertOk()->assertDontSee('Software export stops');
     $this->post($this->clientPath, [...$this->data, 'request_key' => (string) Str::uuid()])->assertSessionHasErrors('department');
@@ -98,6 +101,7 @@ it('supports owner replies status history stale updates and searchable tracking'
     $reply = ['request_key' => (string) Str::uuid(), 'body' => 'We are reviewing this software issue.'];
     $this->post($this->ownerPath.'/'.$record->id.'/reply', $reply)->assertStatus(303);
     $this->post($this->ownerPath.'/'.$record->id.'/reply', $reply)->assertStatus(303);
+    expect($record->fresh()->payload['initial_human_response_at'])->not->toBeNull();
     expect(TenantSupportTicketMessage::withoutGlobalScopes()->count())->toBe(2);
     $this->post($this->ownerPath.'/'.$record->id.'/reply', [...$reply, 'body' => 'Changed'])->assertConflict();
     $triage = ['status' => 'in_progress', 'priority' => 'urgent', 'revision' => 1];
@@ -115,10 +119,41 @@ it('keeps attachments private rejects unsafe inputs and validates integrity', fu
     $record = submitSoftwareTicket($this, ['attachments' => [UploadedFile::fake()->createWithContent('steps.txt', 'Fictional file content')]]);
     $file = Record::where('kind', 'attachment')->firstOrFail();
     $url = $this->clientPath.'/'.$record->id.'/files/'.$file->id;
+    $this->get($url)->assertStatus(423);
+    config(['software_support.scanner_enabled' => true, 'software_support.scanner_id' => 'fixture-scanner', 'software_support.scanner_policy' => 'fixture-policy-v1']);
+    app()->instance(AttachmentScanner::class, new class implements AttachmentScanner
+    {
+        public function inspect(string $bytes): array
+        {
+            return ['status' => 'clean', 'sha256' => hash('sha256', $bytes), 'scanner' => 'fixture-scanner', 'definitions' => 'fictional-v1'];
+        }
+    });
+    app(AttachmentGate::class)->review($file);
     $this->get($url)->assertOk()->assertHeader('X-Content-Type-Options', 'nosniff')->assertDownload('steps.txt');
     $this->actingAs($this->otherDepartment)->get($url)->assertNotFound();
     Storage::disk('local')->put('private/software-support/'.$file->id, 'tampered');
     $this->actingAs($this->requester)->get($url)->assertStatus(503);
+});
+
+it('keeps unavailable failed infected and policy-mismatched scanner results quarantined', function (): void {
+    $record = submitSoftwareTicket($this, ['attachments' => [UploadedFile::fake()->createWithContent('steps.txt', 'Fictional file content')]]);
+    $file = Record::where('kind', 'attachment')->firstOrFail();
+    $url = $this->clientPath.'/'.$record->id.'/files/'.$file->id;
+    app(AttachmentGate::class)->review($file);
+    $this->get($url)->assertStatus(423);
+    config(['software_support.scanner_enabled' => true, 'software_support.scanner_id' => 'fixture-scanner', 'software_support.scanner_policy' => 'fixture-policy-v1']);
+    $scanner = Mockery::mock(AttachmentScanner::class);
+    app()->instance(AttachmentScanner::class, $scanner);
+    $scanner->shouldReceive('inspect')->once()->andThrow(new RuntimeException('Sensitive fictional provider error'));
+    app(AttachmentGate::class)->review($file);
+    expect($file->fresh()->payload['scan'])->toBe(['status' => 'quarantined', 'reason' => 'scanner_failed']);
+    $scanner->shouldReceive('inspect')->once()->andReturn(['status' => 'infected', 'sha256' => $file->payload['sha256'], 'scanner' => 'fixture-scanner', 'definitions' => 'fictional-v1']);
+    app(AttachmentGate::class)->review($file);
+    $this->get($url)->assertStatus(423);
+    $scanner->shouldReceive('inspect')->once()->andReturn(['status' => 'clean', 'sha256' => $file->payload['sha256'], 'scanner' => 'fixture-scanner', 'definitions' => 'fictional-v1']);
+    app(AttachmentGate::class)->review($file);
+    config(['software_support.scanner_policy' => 'fixture-policy-v2']);
+    $this->get($url)->assertStatus(423);
 });
 
 it('rolls back a failed attachment write and safely retries the same submission', function (): void {
@@ -175,7 +210,9 @@ it('fails closed by default and renders a reviewable mobile friendly interface',
     $record = submitSoftwareTicket($this);
     $this->get($this->clientPath)->assertOk()->assertDontSee('one 30-minute');
     config(['software_support.clients.'.$this->clientTenant->id.'.approved_support_allowance' => true]);
+    config(['software_support.clients.'.$this->clientTenant->id.'.support_expectations.approved' => true]);
     $this->get($this->clientPath)->assertOk()->assertSee('one 30-minute');
+    $this->get($this->clientPath)->assertOk()->assertSee('initial human response')->assertSee('Resolution time is not guaranteed');
     if (getenv('SUPPORT_CAPTURE_HTML')) {
         file_put_contents(base_path('.tmp/support-client.html'), $this->get($this->clientPath)->assertOk()->getContent());
         file_put_contents(base_path('.tmp/support-thread.html'), $this->get($this->clientPath.'/'.$record->id)->assertOk()->getContent());
