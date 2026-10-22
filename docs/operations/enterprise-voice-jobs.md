@@ -27,6 +27,11 @@ The existing combined $5 SMS/email/AI trial allowance is not a voice budget gran
 Any provider-backed voice increment requires exact independent authorization and
 verified current provider/rate/budget controls first.
 
+The next actual generative increment, exact requested approval packet, provider
+cost bounds, fixture message previews and physical-device acceptance are in
+`enterprise-voice-live-decision.md`. Record lookup alone is not the completed
+crowning assistant.
+
 ## Server contract
 
 `POST /enterprise/voice/jobs` uses the existing Enterprise mount and verified
@@ -105,14 +110,17 @@ Local checks on October 22:
 - Existing build prerequisites passed: TypeScript, 16 Trajectory tests and
   40 POS tests. Both Vite production artifacts compiled successfully. Existing
   dependency annotation warnings do not come from this voice change.
-- Edge/Chromium at a 390px viewport passed the component fixture: explicit Talk,
+- Edge/Chromium and Windows Playwright WebKit at a 390px viewport passed the component fixture: explicit Talk,
   job/detail and recorded-location display, followup, ambiguity, typed fallback,
   interrupt, stop during wait, hide, permission denial and access revocation.
-  Seven loopback lookup calls, zero external requests and zero page errors.
+  Seven loopback lookup calls per engine, zero external requests and zero page errors.
   Screenshot/results: local `storage/app/voice-jobs-acceptance/` (not committed).
-- WebKit could not start: the installed Playwright package has no
-  `webkit-2336/Playwright.exe`. No browser was installed by this task. Physical
-  iPad/iPhone microphone/speaker acceptance remains completely unverified.
+- The initially absent WebKit executable was resolved using the repository's
+  pinned Playwright 1.62.1 CLI and its official CDN. WebKit 26.5/revision 2336,
+  FFmpeg 1011 and Winldd 1007 are local test dependencies under
+  `storage/app/playwright-browsers`, not system software or Mac UI. Both engine
+  results are saved. Physical iPad/iPhone microphone/speaker acceptance remains
+  completely unverified; Windows WebKit does not establish Safari speech support.
 
 Reproduce with `npm run test:ai-voice`, the six PHP test files above, and
 `VOICE_BROWSER_CHANNEL=msedge node tests/browser/enterprise-voice-jobs.smoke.mjs`.
