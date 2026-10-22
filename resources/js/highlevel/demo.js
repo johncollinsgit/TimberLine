@@ -1,9 +1,10 @@
 // Entirely synthetic, browser-only examples. Never seed a customer database.
+import roadRoutes from './demo-routes.json';
 const iso = (minutes=0) => new Date(Date.now()+minutes*60000).toISOString();
 const day = offset => new Date(Date.now()+offset*86400000).toISOString().slice(0,10);
 export function createDemo(){
     const names=['Van 01 · North crew','Van 02 · Downtown crew','Truck 03 · Install team','Van 04 · Service crew','Truck 05 · Reserve','Van 06 · Inspection team'];
-    const positions=[[34.8526,-82.394],[34.864,-82.401],[34.832,-82.375],[34.875,-82.35],[34.821,-82.405],[34.843,-82.366]];
+    const positions=names.map((_,i)=>roadRoutes.vehicles[i+1]?.[1].points.at(-1)||[34.821,-82.405]);
     const record=(id,device_id,details,status='open',at=iso(-5))=>({id,device_id,details,status,event_at:at});
     const jobs=[record(201,null,{source:'calendar',reference:'DEMO-appointment-201',title:'Panel inspection · Downtown',crm_status:'confirmed',assigned_user:'Demo dispatcher',device_id:2,latitude:34.8534,longitude:-82.3975,crm_start:iso(-45),crm_end:iso(35),skills:['inspection'],materials:{}},'active'),record(202,null,{source:'calendar',reference:'DEMO-appointment-202',title:'Service visit · North Main',crm_status:'confirmed',device_id:1,latitude:34.886,longitude:-82.393,crm_start:iso(55),crm_end:iso(115),skills:['service'],materials:{wire:40}},'active'),record(203,null,{source:'calendar',reference:'DEMO-appointment-203',title:'Lighting repair · Eastside',crm_status:'confirmed',latitude:34.871,longitude:-82.349,crm_start:iso(20),crm_end:iso(80),skills:['service'],materials:{wire:20}},'active'),record(204,null,{source:'pipeline',reference:'DEMO-opportunity-204',title:'New installation · Southside',crm_status:'open',device_id:3,latitude:34.819,longitude:-82.371,scheduled_start:iso(100),scheduled_end:iso(180),skills:['installation'],materials:{fixtures:6}},'active'),record(205,null,{source:'calendar',reference:'DEMO-appointment-205',title:'Service follow-up · Main Street',device_id:1,crm_start:iso(-100),crm_end:iso(-65),latitude:34.85,longitude:-82.4,skills:['service'],materials:{}},'active'),record(206,null,{source:'calendar',reference:'DEMO-appointment-206',title:'Second nearby service visit',device_id:1,crm_start:iso(-90),crm_end:iso(-60),latitude:34.85,longitude:-82.39,skills:['service'],materials:{}},'active')];
     const crews=['Alex + Jordan','Taylor + Morgan','Sam + Casey','Riley + Jamie','','Drew + Avery'];
@@ -26,13 +27,11 @@ export function demoRequest(d,path,method,body){
     if(path==='bootstrap')return d;
     if(path.startsWith('operations/vehicles/') && path.includes('/history?')){
         const id=Number(path.split('/')[2]),q=new URLSearchParams(path.split('?')[1]),start=q.get('start'),end=q.get('end');
-        const points=[[34.8526,-82.394],[34.854,-82.394],[34.857,-82.394],[34.859,-82.394],[34.859,-82.391],[34.859,-82.388],[34.861,-82.388],[34.864,-82.388]];
-        const shifted=points.map(([lat,lng])=>[lat+(id-1)*.003,lng+(id-1)*.002]);
-        return {vehicle_id:id,status:id===5?'no_trips':'ready',message:id===5?'No completed fictional trips for this reserve truck.':'Fictional route geometry for this presentation; not real vehicle data.',range:{start,end,timezone:'America/New_York'},samples:[],trips:id===5?[]:[{id:`demo-route-${id}-out`,segments:[shifted],trace_segments:[true],geometry_limited:false,distance_miles:5.8+id,started_at:iso(-240),ended_at:iso(-210)},{id:`demo-route-${id}-back`,segments:[shifted.map(([lat,lng],i)=>[lat+.001,lng+(i>3?.001:0)]).reverse()],trace_segments:[true],geometry_limited:false,distance_miles:6.1+id,started_at:iso(-120),ended_at:iso(-80)}]};
+        return {demo:true,vehicle_id:id,status:id===5?'no_trips':'ready',message:id===5?'No completed fictional trips for this reserve truck.':'Fictional driving routes along real roads; not recorded vehicle movements.',range:{start,end,timezone:'America/New_York'},samples:[],trips:(roadRoutes.vehicles[id]||[]).map((route,index)=>({id:`demo-route-${id}-${index}`,segments:[route.points],trace_segments:[true],geometry_limited:false,distance_miles:route.distance_miles,started_at:iso(index?-120:-240),ended_at:iso(index?-80:-210)}))};
     }
     if(path==='operations/sources')return {calendars:[{id:'demo-service-calendar',name:'Demo service appointments'}],pipelines:[{id:'demo-work-pipeline',name:'Demo scheduled work'}]};
     if(path==='operations/sync')return {saved:true,count:d.operations.jobs.length};
-    if(path.endsWith('/path'))return {message:'Synthetic demo GPS samples. Connecting lines illustrate reported samples, not verified road segments.',points:[[34.885,-82.393],[34.873,-82.393],[34.864,-82.394],[34.86,-82.395],[34.856,-82.398],[34.852,-82.397],[34.848,-82.391],[34.843,-82.373],[34.845,-82.368],[34.86,-82.364],[34.874,-82.366],[34.885,-82.381],[34.885,-82.393]].map(([lat,lng],i)=>({lat,lng,at:iso(-130+i*4)})),truncated:false};
+    if(path.endsWith('/path')){const trip=d.operations.trips.find(t=>t.id===Number(path.split('/')[2])),route=roadRoutes.vehicles[trip?.device_id]?.[0];return {message:'Fictional driving route along real roads. This is not a recorded vehicle movement.',points:[],trips:route?[{segments:[route.points],trace_segments:[true]}]:[],truncated:false};}
     const id=Number(path.split('/')[2]);
     if(path.endsWith('/dispatch')){
         const job=d.operations.jobs.find(j=>j.id===id),j=job?.details,start=Date.parse(j?.scheduled_start||j?.crm_start),end=Date.parse(j?.scheduled_end||j?.crm_end);

@@ -412,6 +412,7 @@ test('trip telemetry merges out of order events, deduplicates metrics and preser
     $ingest->ingestBouncieEvent($metrics);
     $payload = $ops->bootstrap($w[0], [['id' => $device->id]]);
     expect($payload['trips'])->toHaveCount(1)->and($payload['trips'][0]['details']['distance_miles'])->toEqual(40)
+        ->and($payload['trips'][0]['details']['provider_trip_hash'])->toBe(hash('sha256', 't1'))
         ->and($payload['trips'][0]['drive_seconds'])->toEqual(2100)->and($payload['trips'][0]['route_review'])->toBe('review')
         ->and($payload['trips'][0]['details']['review_status'])->toBe('approved_detour');
     expect(DB::table('fleet_operation_records')->where('id', $record->id)->value('payload'))->not->toContain('Road closure');
@@ -703,4 +704,30 @@ test('maintenance records optional service estimates and actual costs without bi
     expect(\App\Models\HighLevel\FleetOperationRecord::where('kind', 'service_log')->sole()->payload['actual_cost'])->toEqual(105.25);
     $this->postJson('/crm/fleet/api/operations/plans', ['device_id' => $device->id, 'title' => 'Bad cost', 'due_date' => now()->toDateString(), 'estimated_cost' => -1])->assertUnprocessable();
     Http::assertNotSent(fn ($request) => $request->method() !== 'GET');
+});
+
+test('individual trip review uses the matching provider trace and never guesses between ambiguous trips', function () {
+    $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-22T18:00:00Z'));
+    $w = highlevelWorkspace();
+    $device = highlevelOperationsDevice($w);
+    $ops = app(\App\Services\HighLevel\FleetOperationsService::class);
+    $start = now()->subHours(2)->toIso8601String();
+    $end = now()->subHour()->toIso8601String();
+    $trip = $ops->save($w[0], 'trip', ['started_at' => $start, 'ended_at' => $end, 'provider_trip_hash' => hash('sha256', 'trip-a')], $device->id);
+    $row = ['imei' => $device->external_device_id, 'startTime' => $start, 'endTime' => $end,
+        'gps' => ['type' => 'LineString', 'coordinates' => [[-82.600, 34.820], [-82.601, 34.821], [-82.600, 34.822]]]];
+    $rows = [[...$row, 'transactionId' => 'trip-a'], [...$row, 'transactionId' => 'trip-b']];
+    Http::fake(function () use (&$rows) {
+        return Http::response($rows);
+    });
+    $path = $ops->path($w[0], $trip);
+    expect($path['trips'])->toHaveCount(1)->and($path['trips'][0]['id'])->toBe(hash('sha256', 'trip-a'))
+        ->and($path['trips'][0]['trace_segments'])->toBe([true])->and($path['trips'][0]['segments'][0])->toHaveCount(3);
+    $trip->update(['payload' => ['started_at' => $start, 'ended_at' => $end]]);
+    expect($ops->path($w[0], $trip)['trips'])->toBe([]);
+    $rows = [[...$row, 'transactionId' => 'trip-a']];
+    expect($ops->path($w[0], $trip)['trips'])->toHaveCount(1);
+    config(['highlevel.collection_enabled' => false]);
+    expect($ops->path($w[0], $trip)['trips'])->toBe([]);
+    $this->travelBack();
 });

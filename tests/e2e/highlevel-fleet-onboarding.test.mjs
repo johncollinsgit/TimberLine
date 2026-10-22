@@ -49,7 +49,7 @@ async function fixture(browserType, options, check) {
                 vehicles:state.selected.map((id,i)=>({id:i+1,device_id:id,name:`Van ${i+1}`,location:null})),
                 settings:{vehicle_limit:100,retention_days:14,policy_version:'v1',policy_sha256:state.approved?'a'.repeat(64):null,policy_approved:state.approved,tracking_enabled:state.approved},
                 subscription:{has_access:true,required:false,setup_allowed:true,collection_active:state.collection},support_email:'support@example.test',map_key:null,
-                operations:{jobs:state.syncs && !state.crmError?[{id:10,details:{title:'Panel inspection',source:'calendar',crm_status:'confirmed',reference:'event-1'}}]:[],job_source:state.syncs?{type:'automatic',sources:[{name:'Service calendar'}],synced_at:new Date().toISOString()}:null},
+                operations:{jobs:state.syncs && !state.crmError?[{id:10,details:{title:'Panel inspection',source:'calendar',crm_status:'confirmed',reference:'event-1'}}]:[],trips:state.samplePath?[{id:301,device_id:1,details:{distance_miles:3,started_at:new Date(Date.now()-7200000).toISOString(),ended_at:new Date(Date.now()-3600000).toISOString()},candidates:[],route_review:'baseline_needed'}]:[],job_source:state.syncs?{type:'automatic',sources:[{name:'Service calendar'}],synced_at:new Date().toISOString()}:null},
             }));
             if(route==='operations/sync') {
                 state.syncs++;
@@ -58,6 +58,7 @@ async function fixture(browserType, options, check) {
                 return res.end(JSON.stringify({saved:true,count:1}));
             }
             if(route==='bouncie/connect') return res.end(JSON.stringify({url:`${origin}/oauth/approve`}));
+            if(route==='operations/trips/301/path')return res.end(JSON.stringify({points:[{lat:34.8,lng:-82.3},{lat:34.9,lng:-82.4}],trips:[],message:'Full recorded trip geometry is unavailable. Retained GPS samples are shown as isolated dots, not a driving route.'}));
             if(route.startsWith('operations/vehicles/') && route.includes('/history?')) {
                 state.historyRequests++;
                 const id=Number(route.split('/')[2]);
@@ -158,6 +159,15 @@ for(const browserType of [chromium,webkit]) {
             await frame.getByRole('button',{name:'Refresh CRM work'}).click();
             await frame.locator('.ops-item summary').filter({hasText:'Panel inspection'}).waitFor();
             assert.equal(state.writes.length,0);
+        });
+    });
+    test(`${browserType.name()} never joins sparse trip samples into an invented road route`,async()=>{
+        await fixture(browserType,{connected:true,selected:['imei-1'],approved:true,collection:true,samplePath:true},async({frame})=>{
+            await frame.getByRole('button',{name:'Trips & routes',exact:true}).click();
+            await frame.locator('.ops-item summary').first().click();
+            await frame.getByRole('button',{name:'View reported path'}).click();
+            await frame.getByText('Full recorded trip geometry is unavailable. Retained GPS samples are shown as isolated dots, not a driving route.',{exact:true}).waitFor();
+            assert.equal(await frame.locator('.trip-map .leaflet-overlay-pane path').count(),2);
         });
     });
     test(`${browserType.name()} loads several selected live routes and never saves selection after CRM account changes`,{timeout:60000},async()=>{

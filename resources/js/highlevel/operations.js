@@ -85,8 +85,10 @@ export function bindOperations(root,d,api,run,refresh,notice){
     }));
     root.querySelectorAll('[data-path]').forEach(button=>button.onclick=()=>run(async()=>{
         const result=await api(`operations/trips/${button.dataset.path}/path`);const target=root.querySelector(`#path-${button.dataset.path}`);
-        target.innerHTML=`<p>${e(result.message)} ${result.truncated?'Showing the first 2,000 samples.':''}</p>${result.points.length?'<div class="trip-map map"></div>':'<p>No retained GPS samples are available for this trip.</p>'}`;
-        if(result.points.length){const m=baseMap(target.querySelector('.trip-map'),d);const layer=L.polyline(result.points.map(p=>[p.lat,p.lng]),{color:'#216347',weight:4}).addTo(m);m.fitBounds(layer.getBounds(),{padding:[30,30],maxZoom:16});}
+        const segments=(result.trips||[]).flatMap(t=>(t.segments||[]).map((points,i)=>({points,line:t.trace_segments?.[i]===true&&points.length>=2})));
+        const samples=result.points||[],bounds=[...segments.flatMap(s=>s.points),...samples.map(p=>[p.lat,p.lng])];
+        target.innerHTML=`<p>${e(result.message)} ${result.truncated?'Showing the first 2,000 samples.':''}</p>${bounds.length?'<div class="trip-map map"></div>':'<p>No retained GPS trace is available for this trip.</p>'}`;
+        if(bounds.length){const m=baseMap(target.querySelector('.trip-map'),d);for(const segment of segments){if(segment.line)L.polyline(segment.points,{color:'#216347',weight:4}).addTo(m);else segment.points.forEach(p=>L.circleMarker(p,{color:'#216347',radius:4}).addTo(m));}samples.forEach(p=>L.circleMarker([p.lat,p.lng],{color:'#216347',radius:4}).addTo(m));m.fitBounds(bounds,{padding:[30,30],maxZoom:16});}
     }));
 }
 export function baseMap(target,d){

@@ -22,7 +22,7 @@ export class RouteHistory {
         const r=this.records.get(id);
         if(!r)return 'Route history queued';
         if(r.status==='loading')return 'Loading recorded routes…';
-        if(r.status==='ready')return `${r.trips.length} recorded trip${r.trips.length===1?'':'s'}${r.trips.some(t=>t.geometry_limited)?' · Incomplete geometry':''}`;
+        if(r.status==='ready')return `${r.trips.length} ${r.demo?'example':'recorded'} trip${r.trips.length===1?'':'s'}${r.trips.some(t=>t.geometry_limited)?' · Incomplete geometry':''}`;
         return r.message || 'No recorded routes available';
     }
     async load(data,api,onChange){
@@ -52,7 +52,7 @@ export class RouteHistory {
             const result=this.records.get(id);
             return (result?.trips||[]).flatMap(trip=>(trip.segments||[]).flatMap((segment,index)=>{
                 const points=segment.filter(coordinate);
-                return points.length?[{id,points,line:trip.trace_segments?.[index]===true && points.length>2}]:[];
+                return points.length?[{id,points,line:trip.trace_segments?.[index]===true && points.length>=2}]:[];
             })).concat((result?.samples||[]).filter(p=>coordinate([p.latitude,p.longitude])).map(p=>({id,points:[[p.latitude,p.longitude]],line:false})));
         });
     }

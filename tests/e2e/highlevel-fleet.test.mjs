@@ -120,7 +120,7 @@ for (const browserType of [chromium, webkit]) {
       assert.equal(await page.locator('.vehicle-row').count(),6);
       await page.getByRole('heading',{name:'See the whole fleet',exact:true}).waitFor();
       if(process.env.HIGHLEVEL_SCREENSHOT_DIR && browserType.name()==='chromium'){mkdirSync(process.env.HIGHLEVEL_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:`${process.env.HIGHLEVEL_SCREENSHOT_DIR}/demo-guided-tour.png`,fullPage:true});}
-      await page.getByText('2 recorded trips',{exact:true}).first().waitFor();
+      await page.getByText('2 example trips',{exact:true}).first().waitFor();
       assert.equal(await page.locator('.leaflet-overlay-pane path').count(),10);
       await page.getByRole('button',{name:'Uncheck all vehicles'}).click();
       assert.equal(await page.locator('.leaflet-overlay-pane path').count(),0);

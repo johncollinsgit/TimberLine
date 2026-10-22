@@ -1,5 +1,7 @@
 ## CRM Fleet onboarding, recorded routes and guided demo (2026-10-22; release candidate)
 
+Trip review uses matching Bouncie geometry, with sparse samples drawn as dots. The fictional demo bundles real-road driving shapes; it never sends customer coordinates to a public router.
+
 See `docs/operations/highlevel-fleet-runbook.md`. The embedded Fleet surface now
 shows a saved-state setup checklist, automatic CRM account sign-in and work
 source discovery, Bouncie popup recovery, selected-vehicle recorded trip layers,

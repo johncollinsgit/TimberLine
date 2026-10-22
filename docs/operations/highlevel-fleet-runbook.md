@@ -33,6 +33,9 @@ Release candidate; source verification is separate from deployment and pilot act
   remain dots. Per-vehicle loading/errors and incomplete geometry stay visible.
   The browser loads at most three histories concurrently and keeps them only in
   page memory. Both Leaflet and configured production Google Maps draw layers.
+  Individual trip review also reuses this geometry. Webhook records keep an
+  encrypted provider-trip hash; older records need an exact unique timestamp
+  match. Unmatched or sparse retained samples are dots, never a connecting line.
 - Maintenance groups overdue/due and upcoming plans, recorded completed service,
   optional USD estimates and actual costs. Missing costs remain unrecorded.
   These encrypted planning records neither charge nor update accounting/provider
@@ -44,6 +47,11 @@ Release candidate; source verification is separate from deployment and pilot act
   budgets are illustrative. Demo mutations stay in memory and reset on reload;
   demo history never calls real CRM or Bouncie APIs. The separate draft
   250-truck pest-control demo is not merged by this change.
+  Bundled fictional paths follow Greenville's actual road network; they are not
+  translated or interpolated GPS placeholders. `demo-routes.json` records the
+  OSRM/OpenStreetMap provenance and date. Geometry is generated offline using the
+  [OSRM Route service](https://project-osrm.org/docs/v5.24.0/api/#route-service),
+  never by sending live vehicle coordinates to a public router.
 
 # Everbranch Fleet private CRM app
 

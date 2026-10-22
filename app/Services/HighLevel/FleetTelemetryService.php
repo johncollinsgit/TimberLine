@@ -96,6 +96,7 @@ class FleetTelemetryService
                 return;
             }
             $p['timestamps'][$type] = $at->toIso8601String();
+            $p['provider_trip_hash'] = hash('sha256', $transaction);
             if ($type === 'tripStart') {
                 $p['started_at'] = $at->toIso8601String();
                 $p['start_odometer'] = $this->number(data_get($event, 'start.odometer'));
