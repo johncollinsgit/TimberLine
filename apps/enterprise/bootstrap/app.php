@@ -15,10 +15,13 @@ use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 $runtime = dirname(__DIR__);
 $root = dirname($runtime, 2);
+$paths = \App\Enterprise\Provisioning\RuntimePaths::resolve($runtime);
 $app = new EnterpriseApplication($root);
+$app->instance('enterprise.runtime_root', $paths['root']);
+$app->instance('enterprise.client_root_selected', $paths['selected']);
 $app->useBootstrapPath(__DIR__);
-$app->useEnvironmentPath($runtime);
-$app->useStoragePath($runtime.'/storage');
+$app->useEnvironmentPath($paths['root']);
+$app->useStoragePath($paths['root'].'/storage');
 $app->useConfigPath($runtime.'/config');
 $app->useDatabasePath($runtime.'/database');
 $app->usePublicPath($runtime.'/public');
@@ -39,6 +42,7 @@ return (new ApplicationBuilder($app))
         $middleware->append(EnsureEnterpriseRuntime::class);
         $middleware->append(\App\Http\Middleware\EnsureEnterprisePrefixMount::class);
         $middleware->append(\App\Http\Middleware\EnsureEnterpriseTrialMount::class);
+        $middleware->append(\App\Http\Middleware\EnsureEnterpriseClientSilo::class);
         $middleware->web(replace: [
             \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class => \App\Http\Middleware\EnterpriseCsrfToken::class,
         ]);

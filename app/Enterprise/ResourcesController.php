@@ -40,7 +40,8 @@ class ResourcesController
             'id' => ['required', 'uuid'], 'area_id' => ['required', 'uuid'], 'request_id' => ['required', 'uuid'], 'expected_version' => ['required', 'integer', 'min:0'],
             'title' => ['required_if:action,location.save,asset.save,reservation.save', 'string', 'max:150'],
             'level' => ['required_if:action,location.save', Rule::in(Resources::LEVELS)], 'parent_id' => ['nullable', 'uuid'],
-            'catalog_map_number' => ['nullable', 'string', 'regex:/^(?:[1-9]|[1-5][0-9]|6[0-8])$/D'],
+            'catalog_map_number' => ['nullable', 'string', app(\App\Enterprise\Provisioning\ClientSilo::class)->enabled()
+                ? 'regex:/^(?:[a-z][a-z0-9-]{0,39}|[1-9]|[1-5][0-9]|6[0-8])$/D' : 'regex:/^(?:[1-9]|[1-5][0-9]|6[0-8])$/D'],
             'description' => ['nullable', 'string', 'max:2000'],
             'location_id' => ['required_if:action,asset.save,asset.checkout,asset.return', 'uuid'], 'condition' => ['nullable', 'string', 'max:500'],
             'holder_id' => ['required_if:action,asset.checkout', 'integer', 'min:1'],

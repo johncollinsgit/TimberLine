@@ -1,4 +1,4 @@
-@php($campusResourceCatalog = app(\App\Enterprise\LocationCatalog::class)->all())
+@php($campusResourceCatalog = $enterprisePresentation['locations'] ?? app(\App\Enterprise\LocationCatalog::class)->all())
   const resourceCatalog = @json($campusResourceCatalog);
   const resourceSections = ['buildings', 'assets', 'calendar'];
   const resourceDraftPrefix = `everbranch-resource:${transport.mode}:${workspace}:${viewer}:`;
@@ -14,6 +14,13 @@
   const resourceNotice=(text,error=false)=>{$('res-status').textContent=text;$('res-status').classList.toggle('notice-error',error);};
   const resourceFact=(label,value)=>`<dt>${esc(label)}</dt><dd>${esc(value??'Not recorded')}</dd>`;
   const resourceButton=(action,label,extra='')=>`<button type="button" class="button" data-res-action="${esc(action)}" ${extra}>${esc(label)}</button>`;
+  function resourceProvenance(entry) {
+    const label=entry.source_label||resourceCatalog.source_label||'Source document';
+    const page=entry.source_page??resourceCatalog.source_page;
+    let link=null;
+    try {const url=new URL(entry.source_url||resourceCatalog.source_url);if(['https:','http:'].includes(url.protocol))link=url.href;}catch{}
+    return `<p class="caption">Source: ${esc(label)}${page!==null&&page!==undefined&&page!==''?`, page ${esc(page)}`:''}.${link?` <a href="${esc(link)}" target="_blank" rel="noopener noreferrer">Open source</a>.`:''} This is a source reference, not a live inventory assertion.</p>`;
+  }
   function resourceSafeLink(value) {
     try {const resolved=transport.href(value);const url=new URL(resolved,location.href);return url.origin===location.origin&&['http:','https:'].includes(url.protocol)?url.href:null;}catch{return null;}
   }
@@ -26,7 +33,7 @@
     const catalog=section==='buildings'&&resourceDirectory==='catalog';
     const rows=catalog?resourceCatalog.entries.filter(resourceMatches):resourceItems.filter(row=>(section==='buildings'?row.kind==='location':section==='assets'?row.kind==='asset':['reservation','conflict'].includes(row.kind))&&resourceMatches(row));
     $('res-show-catalog').setAttribute('aria-pressed',String(catalog));$('res-show-saved').setAttribute('aria-pressed',String(!catalog));
-    const card=row=>{const id=catalog?'catalog:'+row.map_number:row.id;return `<button class="resource-card" type="button" aria-pressed="${id===resourceSelection}" data-res-open="${esc(id)}"><span class="resource-number">${esc(catalog?row.map_number:row.kind==='conflict'?'!':row.kind==='asset'?'A':resourceMapNumber(row)||'•')}</span><span><strong>${esc(row.name||row.title)}</strong><small>${esc(catalog?[row.aliases,row.official_function_details].filter(Boolean).join(' · ')||'Official map directory':`${row.kind} · ${row.status} · version ${row.version}`)}</small>${!catalog&&row.kind==='reservation'?`<small>${esc(resourceStamp(resourceDatum(row).starts_at))}</small>`:''}</span></button>`;};
+    const card=row=>{const id=catalog?'catalog:'+row.map_number:row.id;return `<button class="resource-card" type="button" aria-pressed="${id===resourceSelection}" data-res-open="${esc(id)}"><span class="resource-number">${esc(catalog?row.map_number:row.kind==='conflict'?'!':row.kind==='asset'?'A':resourceMapNumber(row)||'•')}</span><span><strong>${esc(row.name||row.title)}</strong><small>${esc(catalog?[row.aliases,row.official_function_details].filter(Boolean).join(' · ')||'Catalog directory':`${row.kind} · ${row.status} · version ${row.version}`)}</small>${!catalog&&row.kind==='reservation'?`<small>${esc(resourceStamp(resourceDatum(row).starts_at))}</small>`:''}</span></button>`;};
     if(section==='calendar') {
       const conflicts=rows.filter(row=>row.kind==='conflict'),bookings=rows.filter(row=>row.kind==='reservation').sort((a,b)=>String(a.data.starts_at).localeCompare(String(b.data.starts_at)));
       const day=value=>value&&Number.isFinite(Date.parse(value))?new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',dateStyle:'full'}).format(new Date(value)):'Unscheduled';
@@ -34,8 +41,8 @@
     } else $('res-list').innerHTML=rows.map(card).join('');
     if(!rows.length)$('res-list').innerHTML='<p class="resource-empty">No matching records in the current authorized result.</p>';
     $('res-list').querySelectorAll('[data-res-open]').forEach(button=>button.onclick=()=>resourceSelect(button.dataset.resOpen));
-    $('res-counts').innerHTML=`<span><strong>${rows.length}</strong> ${catalog?'public directory matches':'matching returned records'}</span>${!catalog?`<span><strong>${resourceItems.filter(row=>row.kind==='conflict'&&row.status==='open').length}</strong> open conflicts in this result</span><span><strong>${resourceItems.filter(row=>row.kind==='asset'&&row.status==='checked_out').length}</strong> checked out in this result</span>`:''}`;
-    $('res-coverage').textContent=catalog?'All 68 numbered official legend entries. Directory entries do not create operational records.':resourceResult?.coverage||'Current workspace records have not been confirmed.';
+    $('res-counts').innerHTML=`<span><strong>${rows.length}</strong> ${catalog?'catalog matches':'matching returned records'}</span>${!catalog?`<span><strong>${resourceItems.filter(row=>row.kind==='conflict'&&row.status==='open').length}</strong> open conflicts in this result</span><span><strong>${resourceItems.filter(row=>row.kind==='asset'&&row.status==='checked_out').length}</strong> checked out in this result</span>`:''}`;
+    $('res-coverage').textContent=catalog?`All ${resourceCatalog.entries.length} catalog entries available to this workspace. Directory entries do not create operational records.`:resourceResult?.coverage||'Current workspace records have not been confirmed.';
   }
   function resourceRelated(row) {
     const explicit=record=>[record.location_id,record.resource_id,record.data?.location_id,record.data?.resource_id].includes(row.id);
@@ -47,7 +54,7 @@
     if(resourceSelection.startsWith('catalog:')) {
       const source=resourceCatalog.entries.find(row=>row.map_number===resourceSelection.slice(8));if(!source){target.innerHTML='<h2>Choose a location</h2>';return;}
       const saved=resourceItems.filter(row=>row.kind==='location'&&resourceMapNumber(row)===source.map_number);
-      target.innerHTML=`<span class="badge">Official map #${esc(source.map_number)}</span><h2>${esc(source.name)}</h2><dl class="resource-facts">${resourceFact('Alias',source.aliases||'None listed')}${resourceFact('Official function',source.official_function_details||'Not specified in this legend')}${resourceFact('Related spaces',source.related_spaces||'Not specified')}${resourceFact('Historic commons',source.historic_commons==='True'?'Marked in the legend':'Not marked')}${resourceFact('Coordinates / ownership','Unverified; no placement or ownership inferred')}</dl><p class="caption">Source: official campus parking map, page 2. This is a source reference, not a live inventory assertion.</p><h3>Saved references in this workspace</h3>${saved.map(row=>resourceButton('open','Open '+row.title,`data-id="${esc(row.id)}"`)).join('')||'<p class="caption">No saved reference in the returned result.</p>'}${resourceResult?.can_coordinate?`<div class="actions">${resourceButton('catalog.create','Add verified workspace reference')}</div>`:''}`;
+      target.innerHTML=`<span class="badge">Catalog reference ${esc(source.map_number)}</span><h2>${esc(source.name)}</h2><dl class="resource-facts">${resourceFact('Alias',source.aliases||'None listed')}${resourceFact('Recorded function',source.official_function_details||'Not specified in this source')}${resourceFact('Related spaces',source.related_spaces||'Not specified')}${source.historic_commons?resourceFact('Historic commons',source.historic_commons==='True'?'Marked in the source':'Not marked'):''}${resourceFact('Coordinates / ownership','Unverified; no placement or ownership inferred')}</dl>${resourceProvenance(source)}<h3>Saved references in this workspace</h3>${saved.map(row=>resourceButton('open','Open '+row.title,`data-id="${esc(row.id)}"`)).join('')||'<p class="caption">No saved reference in the returned result.</p>'}${resourceResult?.can_coordinate?`<div class="actions">${resourceButton('catalog.create','Add verified workspace reference')}</div>`:''}`;
       resourceWireDetail(null);return;
     }
     const row=resourceItems.find(item=>item.id===resourceSelection);
@@ -125,6 +132,11 @@
   $('res-discard-draft').onclick=()=>{if(resourceBusy||resourceForm?.uncertain)return;resourceWriteDraft(resourceDraftKey(resourceForm),null);resourceForm=null;$('res-dialog').close();};
   $('res-query').oninput=resourceRenderList;$('res-refresh').onclick=()=>{resourceGeneration++;resourceLoad();};$('res-new').onclick=()=>resourceOpen(section==='buildings'?'location.save':section==='assets'?'asset.save':'reservation.save');
   $('res-show-catalog').onclick=()=>{resourceDirectory='catalog';resourceRenderList();};$('res-show-saved').onclick=()=>{resourceDirectory='saved';resourceRenderList();};
-  function resourceZoom(value){const zoom=Math.max(100,Math.min(400,Number(value)));$('res-zoom').value=zoom;$('res-zoom-value').textContent=zoom+'%';$('res-plan-image').style.width=zoom+'%';}
-  $('res-zoom').oninput=()=>resourceZoom($('res-zoom').value);$('res-zoom-out').onclick=()=>resourceZoom(Number($('res-zoom').value)-25);$('res-zoom-in').onclick=()=>resourceZoom(Number($('res-zoom').value)+25);$('res-plan-fit').onclick=()=>{resourceZoom(100);$('res-plan-viewport').scrollTo({top:0,left:0});};$('res-plan-top').onclick=()=>$('res-plan-viewport').scrollTo({top:0,behavior:'smooth'});$('res-plan-bottom').onclick=()=>$('res-plan-viewport').scrollTo({top:$('res-plan-viewport').scrollHeight,behavior:'smooth'});
+  function resourceZoom(value){if(!$('res-zoom')||!$('res-zoom-value')||!$('res-plan-image'))return;const zoom=Math.max(100,Math.min(400,Number(value)));$('res-zoom').value=zoom;$('res-zoom-value').textContent=zoom+'%';$('res-plan-image').style.width=zoom+'%';}
+  if($('res-zoom'))$('res-zoom').oninput=()=>resourceZoom($('res-zoom').value);
+  if($('res-zoom-out'))$('res-zoom-out').onclick=()=>resourceZoom(Number($('res-zoom')?.value||100)-25);
+  if($('res-zoom-in'))$('res-zoom-in').onclick=()=>resourceZoom(Number($('res-zoom')?.value||100)+25);
+  if($('res-plan-fit'))$('res-plan-fit').onclick=()=>{resourceZoom(100);$('res-plan-viewport')?.scrollTo({top:0,left:0});};
+  if($('res-plan-top'))$('res-plan-top').onclick=()=>$('res-plan-viewport')?.scrollTo({top:0,behavior:'smooth'});
+  if($('res-plan-bottom'))$('res-plan-bottom').onclick=()=>$('res-plan-viewport')?.scrollTo({top:$('res-plan-viewport').scrollHeight,behavior:'smooth'});
   document.addEventListener('enterprise:render',resourceEnter);

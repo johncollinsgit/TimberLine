@@ -5,6 +5,8 @@
             <file>tests/Feature/Enterprise/EnterpriseRuntimeTest.php</file>
             <file>tests/Feature/Enterprise/EnterpriseSchemaTest.php</file>
             <file>tests/Feature/Enterprise/EnterprisePrefixMountTest.php</file>
+            <file>tests/Feature/Enterprise/EnterpriseClientProvisioningTest.php</file>
+            <file>tests/Integration/EnterpriseClientProvisioningMySqlTest.php</file>
             <file>tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php</file>
             <file>tests/Integration/EnterpriseTrialBudgetMySqlConcurrencyTest.php</file>
         </testsuite>

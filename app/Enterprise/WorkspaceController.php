@@ -14,7 +14,8 @@ class WorkspaceController
         // Reuse the same server projection as the operating APIs before mounting any UI.
         $bootstrap = app(Workflows::class)->listing($tenant, $request->user(), $input['area_id'], $input['project_id']);
 
-        return response()->view('enterprise.workspace', ['tenant' => $tenant, 'bootstrap' => $bootstrap, 'scope' => $input])
+        return response()->view('enterprise.workspace', ['tenant' => $tenant, 'bootstrap' => $bootstrap, 'scope' => $input,
+            'clientBranding' => app(ClientPresentation::class)->settings($tenant, $request->user())['branding'] ?? []])
             ->header('Cache-Control', 'private, no-store');
     }
 }

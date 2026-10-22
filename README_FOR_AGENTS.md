@@ -1,3 +1,22 @@
+## Reusable Enterprise client setup and procedural records (source candidate, October 22)
+
+The isolated runtime now has candidate trusted per-client runtime roots and
+validated, exact-hash plan/apply/status provisioning for tenant structure,
+departments, branding, approved location catalogs and inert workflow defaults.
+Provisioning creates no identity, membership, entitlement, provider or billing
+grant. See [client provisioning](docs/operations/enterprise-client-provisioning.md).
+Hosting and initial verified owner access still require the explicit actions in
+[the persistent-workspace proposal](docs/operations/enterprise-persistent-workspace-approval.md).
+No operational backup or restorability is established; recovery remains plan-first.
+
+Default-off manager features add a restricted contractor certificate metadata
+register with reviewed replacements and a derived internal reminder queue, plus
+quarter/date-window CSV/JSON exports of authorized current facts and recorded
+events. No external alerts, insurance coverage policy, fiscal-quarter template
+or automatic report submission is inferred. Read
+[certificate procedures](docs/operations/enterprise-contractor-certificates.md) and
+[period exports](docs/operations/enterprise-period-reports.md).
+
 ## Enterprise campus operations candidate (2026-10-22; draft, disabled)
 
 The separate Enterprise app/database runtime now has candidate canonical task

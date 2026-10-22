@@ -57,9 +57,9 @@ final class EnterpriseSchemaTest extends TestCase
             $this->assertTrue(Schema::hasTable($table));
             $this->assertSame(0, DB::table($table)->count(), $table.' must start empty');
         }
-        $this->assertCount(4, DB::table('migrations')->get());
+        $this->assertCount(5, DB::table('migrations')->get());
         $this->install();
-        $this->assertCount(4, DB::table('migrations')->get());
+        $this->assertCount(5, DB::table('migrations')->get());
         $this->assertCount(6, EnterpriseSchema::sharedVersionOne());
     }
 

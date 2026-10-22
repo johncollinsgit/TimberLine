@@ -93,13 +93,23 @@ export async function checkRollCallWorkspace(page, evidence) {
     }
     const pdf=await readFile(pdfPath);assert.ok(pdf.toString().startsWith('%PDF-1.4'));assert.equal((pdf.toString().match(/\/Type \/Page\b/g)||[]).length,1);
     assert.match(pdf.toString(),/SAMPLE DATA/);
+    const reportVisible=await page.locator('#quarterly-period').isVisible();
+    if(reportVisible)assert.equal(await page.locator('#quarterly-project').inputValue(),'','The combined view must cover the initial all-projects report filter');
     for(const [name,width,height] of [['desktop',1440,1000],['ipad-portrait',820,1180],['ipad-landscape',1180,820],['phone',390,844]]){
         await page.setViewportSize({width,height});
-        assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,`${name}: meeting UI overflows horizontally`);
+        for(const reportMode of reportVisible?['calendar_quarter','date_range']:[null]) {
+        if(reportMode)await page.locator('#quarterly-mode').selectOption(reportMode);
+        const artifact=name+(reportMode==='date_range'?'-date-range':'');
+        const layout=await page.evaluate(()=>({width:innerWidth,scrollWidth:document.documentElement.scrollWidth,scrolling:[...document.querySelectorAll('body *')].filter(element=>{const r=element.getBoundingClientRect();return r.width>0&&r.height>0&&element.scrollWidth>element.clientWidth+1;}).map(element=>({tag:element.tagName,id:element.id,class:element.className,type:element.getAttribute('type'),scrollWidth:element.scrollWidth,clientWidth:element.clientWidth,overflowX:getComputedStyle(element).overflowX})),offenders:[...document.querySelectorAll('body *')].filter(element=>{const r=element.getBoundingClientRect();return r.width>0&&r.height>0&&(r.right>innerWidth+1||r.left< -1);}).map(element=>{const r=element.getBoundingClientRect(),s=getComputedStyle(element);return {tag:element.tagName,id:element.id,class:element.className,type:element.getAttribute('type'),left:r.left,right:r.right,width:r.width,minWidth:s.minWidth,maxWidth:s.maxWidth,display:s.display,text:element.textContent?.trim().slice(0,100)};})}));
+        await writeFile(resolve(evidence,`enterprise-roll-call-${artifact}-layout.json`),JSON.stringify(layout,null,2));
+        await page.screenshot({path:resolve(evidence,`enterprise-roll-call-${artifact}.png`),fullPage:true});
+        assert.equal(layout.scrollWidth<=layout.width+1,true,`${artifact}: meeting UI overflows horizontally; ${JSON.stringify({offenders:layout.offenders,scrolling:layout.scrolling})}`);
         assert.equal(await page.locator('#roll-save').evaluate(element=>element.getBoundingClientRect().height>=44),true,`${name}: save touch target too small`);
         assert.equal(await page.locator('#roll-scope').evaluate(element=>element.getBoundingClientRect().height>=44),true,`${name}: scope touch target too small`);
-        await page.screenshot({path:resolve(evidence,`enterprise-roll-call-${name}.png`),fullPage:true});
+        if(reportVisible)assert.equal(await page.locator('#quarterly-project').evaluate(element=>element.getBoundingClientRect().height>=44),true,`${artifact}: project filter touch target too small`);
+        }
     }
+    if(reportVisible)await page.locator('#quarterly-mode').selectOption('calendar_quarter');
     await page.setViewportSize({width:1440,height:1000});
     await page.getByLabel('Meeting scope',{exact:true}).selectOption('campus');
     await page.getByRole('button',{name:'Refresh current work',exact:true}).click();
