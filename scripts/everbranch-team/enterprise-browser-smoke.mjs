@@ -7,6 +7,14 @@ import { once } from 'node:events';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { checkWorkflowWorkspace } from './enterprise-workflow-browser.mjs';
+import { checkMappedOperationsWorkflow } from './enterprise-operations-workflow-browser.mjs';
+import { checkRollCallWorkspace } from './enterprise-roll-call-browser.mjs';
+import { checkResourceWorkspace } from './enterprise-resources-browser.mjs';
+import { checkTaskEvidenceWorkflow } from './enterprise-task-evidence-browser.mjs';
+import { checkPrivateWorkspaceTour } from './enterprise-private-tour-browser.mjs';
+const operationsMode = process.env.ENTERPRISE_TEST_OPERATIONS === '1';
+const operationsScenario = process.env.ENTERPRISE_OPERATIONS_SCENARIO || 'all';
+assert.ok(['all', 'mapped', 'roll-call', 'resources', 'task-evidence', 'tour'].includes(operationsScenario), 'Unsupported Operations browser scenario');
 const php = process.env.ENTERPRISE_TEST_PHP;
 assert.ok(php, 'ENTERPRISE_TEST_PHP is required');
 const {
@@ -41,6 +49,11 @@ const env = {
   ENTERPRISE_WORKFLOW_ENABLED: 'true',
   ENTERPRISE_BRIEFING_ENABLED: 'true',
   ENTERPRISE_SAMPLE_DATA: 'true',
+  ENTERPRISE_OPERATIONS_ENABLED: operationsMode ? 'true' : 'false',
+  ENTERPRISE_ROLL_CALL_ENABLED: operationsMode ? 'true' : 'false',
+  ENTERPRISE_RESOURCES_ENABLED: operationsMode ? 'true' : 'false',
+  ENTERPRISE_REQUESTER_ENABLED: operationsMode ? 'true' : 'false',
+  ENTERPRISE_TOUR_ENABLED: operationsMode ? 'true' : 'false',
   ENTERPRISE_TENANT_ALLOWLIST: '1'
 };
 const keyFile = db + '.key', certFile = db + '.crt';
@@ -105,8 +118,21 @@ try {
     }
   });
   const external = [];
-  await context.route('**/*', route => {
-    if (new URL(route.request().url()).hostname === '127.0.0.1') return route.continue();
+  let dynamicDispatch = 0, dynamicQueue = Promise.resolve();
+  await context.route('**/*', async route => {
+    const url = new URL(route.request().url());
+    if (url.hostname === '127.0.0.1') {
+      // The combined synthetic scenario performs far more actions than a single user.
+      // Respect the real server throttle; never disable it for browser acceptance.
+      if (operationsMode && ['all', 'tour'].includes(operationsScenario) && !url.pathname.startsWith('/build/')) {
+        await (dynamicQueue = dynamicQueue.then(async () => {
+          const delay = Math.max(0, dynamicDispatch + 800 - Date.now());
+          if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+          dynamicDispatch = Date.now();
+        }));
+      }
+      return route.continue();
+    }
     external.push(route.request().url());
     return route.abort();
   });
@@ -126,6 +152,13 @@ try {
   await page.getByRole('link', {
     name: 'Synthetic Enterprise'
   }).click();
+  if (operationsMode) {
+    if (['all', 'mapped'].includes(operationsScenario)) await checkMappedOperationsWorkflow(page,evidence);
+    if (['all', 'roll-call'].includes(operationsScenario)) await checkRollCallWorkspace(page,evidence);
+    if (['all', 'resources'].includes(operationsScenario)) await checkResourceWorkspace(page,evidence);
+    if (['all', 'task-evidence'].includes(operationsScenario)) await checkTaskEvidenceWorkflow(page,evidence);
+    if (['all', 'tour'].includes(operationsScenario)) await checkPrivateWorkspaceTour(page,evidence);
+  } else {
   await page.getByRole('button', {
     name: 'New workspace',
     exact: true
@@ -337,9 +370,10 @@ try {
     await page.screenshot({path:resolve(evidence,`enterprise-ask-${label}.png`),fullPage:true});
   }
   await checkWorkflowWorkspace(page,evidence);
+  }
   assert.deepEqual(errors, []);
   assert.deepEqual(external, []);
-  console.log(`PASS (${browserEngine}): independent runtime intake lifecycle and map; contractor/date planning; larger project details, retained drafts, exact interrupted note retry, resumable private quarantined upload; desktop/phone/iPad portrait/landscape viewport layout and touch targets; user-aware record-backed Ask citations and disconnected mailbox; zero external requests and JavaScript errors. Viewport simulation only, not physical iPad acceptance.`);
+  console.log(operationsMode ? `PASS (${browserEngine}): Operations browser scenario ${operationsScenario}; zero external requests and JavaScript errors. Viewport simulation only, not physical iPad acceptance.` : `PASS (${browserEngine}): independent runtime intake lifecycle and map; contractor/date planning; larger project details, retained drafts, exact interrupted note retry, resumable private quarantined upload; desktop/phone/iPad portrait/landscape viewport layout and touch targets; user-aware record-backed Ask citations and disconnected mailbox; zero external requests and JavaScript errors. Viewport simulation only, not physical iPad acceptance.`);
 } catch(error) {
   if(page) {await page.screenshot({path:resolve(evidence,'failure.png'),fullPage:true}).catch(()=>{});await writeFile(resolve(evidence,'failure.txt'),`${error.stack}\n${await page.locator('body').innerText().catch(()=>'Unavailable')}`).catch(()=>{});}
   throw error;

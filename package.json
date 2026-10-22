@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build:enterprise": "npm run typecheck && vite build --config vite.enterprise.config.js",
-    "build": "npm run typecheck && npm run test:trajectory && npm run test:ai-voice && npm run test:pos && vite build",
+    "build": "npm run typecheck && npm run test:trajectory && npm run test:ai-voice && npm run test:pos && vite build && vite build --config vite.enterprise.config.js",
     "test:highlevel-fleet": "node --test tests/e2e/highlevel-fleet.test.mjs",
     "test:trajectory": "node --test tests/e2e/trajectory-money.test.mjs tests/e2e/trajectory-charts.test.mjs tests/e2e/trajectory-bank-link.test.mjs",
     "test:ai-voice": "node --test tests/e2e/ai-voice-conversation.test.mjs",

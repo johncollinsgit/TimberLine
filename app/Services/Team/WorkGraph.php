@@ -633,6 +633,13 @@ final class WorkGraph
                     self::fail('assignee_lacks_access');
                 }
             } elseif ($kind === 'task.complete') {
+                if (isset($actor['enterprise_ops_managed'][$task['id']])) {
+                    $proof = $actor['enterprise_ops_completion_proofs'][$task['id']] ?? null;
+                    if (! ($command['completed'] ?? true) || ! is_array($proof) || $proof['task_version'] !== $task['version']
+                        || $proof['approver_id'] !== $actor['user_id']) {
+                        self::fail('enterprise_manager_approval_required');
+                    }
+                }
                 if (($command['completed'] ?? true) && $task['completed_at'] === null && ($task['recurrence'] ?? null) !== null) {
                     $state = $this->repeat($state, $actor, $task, $now);
                 }

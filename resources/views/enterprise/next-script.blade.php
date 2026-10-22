@@ -1,5 +1,5 @@
-  const nextBase = @json(url('/enterprise')), teamBase = @json(url('/team'));
-  const draftPrefix = `everbranch-enterprise-draft:${workspace}:${viewer}:`;
+  const nextBase = urls.enterprise, teamBase = urls.team;
+  const draftPrefix = `everbranch-enterprise-draft:${transport.mode === 'sample' ? 'sample:' : ''}${workspace}:${viewer}:`;
   const selectionMemory = new Map(), noteBusy = new Set(), planningReceipts = new Map();
   let activeDiscussionKey = null, discussionGeneration = 0, planningData = null, planningPending = null, planningBusy = false, askBusy = false, askPending = null, emailPreview = null, emailPending = null, emailGeneration = 0, gmailConnection = null, gmailBusy = false;
   const nextQuery = () => '?tenant=' + encodeURIComponent(tenantSlug);
@@ -16,9 +16,10 @@
   function rememberUrl() {
     const url = new URL(location.href);
     for (const [key, value] of Object.entries({area_id: area, section, selected})) value ? url.searchParams.set(key, value) : url.searchParams.delete(key);
-    history.replaceState(null, '', url);
+    transport.replace(url);
   }
   function resetNext() {
+    if (typeof resetOperations === 'function') resetOperations();
     discussionGeneration++; activeDiscussionKey = null;
     emailGeneration++; emailPending = null; emailPreview = null; $('email-form').reset(); $('email-preview').hidden = true;
     $('mailbox-status').textContent = 'No delivery transport connected. No mailbox messages are read or sent.';
@@ -38,28 +39,55 @@
   }
   async function mountDiscussion(kind, id) {
     if (!data.features?.collaboration) return;
-    const key = `${area}:${kind}:${id}`, generation = ++discussionGeneration;
+    stashComposer(); $('discussion')?.remove();
+    const key = `${area}:${kind}:${id}`, generation = ++discussionGeneration, scopeArea=area, scopeSection=section, scopeSelection=selected;
     activeDiscussionKey = key;
     const target = {kind, id, key};
     const host = document.createElement('section'); host.className = 'discussion'; host.id = 'discussion';
+    const current=()=>generation===discussionGeneration&&activeDiscussionKey===key&&area===scopeArea&&section===scopeSection&&selected===scopeSelection&&host.isConnected;
+    const heading=kind==='task'?'Task notes & evidence':'Notes & files';
     host.innerHTML = '<h3>Notes & files</h3><p class="caption">Checking current permissions…</p>';
     $('detail').append(host);
     try {
       const result = await api(`${nextBase}/discussion/${kind}/${id}${nextQuery()}`);
-      if (generation !== discussionGeneration || activeDiscussionKey !== key) return;
+      if (!current()) return;
       const draft = readDraft(key);
-      host.innerHTML = `<h3>Notes & files</h3><div class="discussion-feed" id="discussion-feed">${result.comments.map(c => `<article class="discussion-note"><p class="caption">${esc(c.created_at)} · ${esc(data.members.find(m => m.id === c.author_id)?.name || 'Workspace member')}</p><div>${esc(c.body)}</div></article>`).join('') || '<p class="caption">No notes yet.</p>'}</div><div id="discussion-files">${result.files.map(f => `<div class="file-row"><span>${esc(f.filename)} · ${esc(f.status)}</span>${f.downloadable ? `<a class="button" href="${esc(teamBase)}/files/${encodeURIComponent(f.id)}/download${nextQuery()}">Download</a>` : f.can_manage && ['uploading','quarantined'].includes(f.status) ? `<button class="button" data-cancel-upload="${esc(f.id)}">Cancel upload</button>` : ''}</div>`).join('')}</div><p class="caption">${esc(result.coverage)}</p>${result.can_write ? `<form class="discussion-composer stack" id="discussion-form"><label>Add a note<textarea id="discussion-body" maxlength="5000" placeholder="Write a project update…">${esc(draft.body || '')}</textarea></label><label>Attach photos, PDF or text<input class="file-picker" id="discussion-files-picker" type="file" multiple accept="image/jpeg,image/png,application/pdf,text/plain,.jpg,.jpeg,.png,.pdf,.txt"></label><p class="file-notice">Up to 10 MB per file. Files attach independently to this discussion and stay unavailable for download until verified clean. After interruption, select the same file to resume. No public links are created.</p><p id="upload-status" role="status" aria-live="polite"></p><button class="button primary" id="note-submit" type="submit">${draft.pending ? 'Retry the same note' : 'Post note'}</button></form>` : '<p class="caption">Discussion is read only. Requests need an assigned task before notes or files can be added.</p>'}`;
+      host.innerHTML = `<h3>Notes & files</h3><div class="discussion-feed" id="discussion-feed">${result.comments.map(c => `<article class="discussion-note"><p class="caption">${esc(c.created_at)} · ${esc(data.members.find(m => m.id === c.author_id)?.name || 'Workspace member')}</p><div>${esc(c.body)}</div></article>`).join('') || '<p class="caption">No notes yet.</p>'}</div><div id="discussion-files">${result.files.map(f => `<div class="file-row"><span>${esc(f.filename)} · ${esc(f.status)}</span>${f.downloadable ? `<a class="button" href="${esc(transport.href(teamBase + '/files/' + encodeURIComponent(f.id) + '/download' + nextQuery()))}">Download</a>` : f.can_manage && ['uploading','quarantined'].includes(f.status) ? `<button class="button" data-cancel-upload="${esc(f.id)}">Cancel upload</button>` : ''}</div>`).join('')}</div><p class="caption">${esc(result.coverage)}</p>${result.can_write ? `<form class="discussion-composer stack" id="discussion-form"><label>Add a note<textarea id="discussion-body" maxlength="5000" placeholder="Write a project update…">${esc(draft.body || '')}</textarea></label><label>Attach photos, PDF or text<input class="file-picker" id="discussion-files-picker" type="file" multiple accept="image/jpeg,image/png,application/pdf,text/plain,.jpg,.jpeg,.png,.pdf,.txt"></label><p class="file-notice">Up to 10 MB per file. Files attach independently to this discussion and stay unavailable for download until verified clean. After interruption, select the same file to resume. No public links are created.</p><p id="upload-status" role="status" aria-live="polite"></p><button class="button primary" id="note-submit" type="submit">${draft.pending ? 'Retry the same note' : 'Post note'}</button></form>` : '<p class="caption">Discussion is read only. Requests need an assigned task before notes or files can be added.</p>'}`;
       if ($('discussion-body')) {
         $('discussion-body').oninput = stashComposer;
         $('discussion-form').onsubmit = e => {e.preventDefault(); postNote(target);};
         $('discussion-files-picker').onchange = e => uploadFiles(target, [...e.target.files]);
+      }
+      host.querySelector('h3').textContent=heading;
+      if(kind==='task'){const caption=document.createElement('p');caption.className='caption';caption.textContent='Internal evidence for this canonical task. Existing task and department permissions apply; requester updates are published separately.';host.querySelector('h3').after(caption);}
+      if(data.features?.operations){
+        const rows=[...host.querySelectorAll('#discussion-files .file-row')];
+        result.files.forEach((file,index)=>{
+          const row=rows[index];if(!row)return;
+          const captionText=document.createElement('p');captionText.className='caption';captionText.hidden=!file.caption;captionText.textContent='Caption: '+(file.caption||'');row.append(captionText);
+          if(!result.can_write||!file.can_manage||!['ready','quarantined'].includes(file.status))return;
+          const draftKey=`${key}:caption:${file.id}`,saved=readDraft(draftKey);let state={value:file.caption||'',version:file.caption_version||0,...saved},sending=false;
+          const form=document.createElement('form');form.className='stack';form.style.flexBasis='100%';form.style.minWidth='0';form.setAttribute('aria-label','Caption for '+file.filename);
+          const label=document.createElement('label');label.textContent='File caption (metadata only)';const input=document.createElement('textarea');input.name='caption';input.maxLength=300;input.rows=2;input.value=state.value;label.append(input);
+          const submit=document.createElement('button');submit.type='submit';submit.className='button';const discard=document.createElement('button');discard.type='button';discard.className='button';discard.textContent='Discard caption draft and reload';
+          const status=document.createElement('p');status.className='caption';status.setAttribute('role','status');status.setAttribute('aria-live','polite');
+          const lock=()=>{input.readOnly=!!state.pending||sending;submit.disabled=sending;submit.textContent=state.pending?'Retry exact caption':'Save caption';discard.disabled=sending||!!state.pending&&!state.definitive;};
+          const persist=()=>{if(!state.pending)state.value=input.value;writeDraft(draftKey,state);};input.oninput=persist;
+          form.onsubmit=async event=>{event.preventDefault();if(sending||!current())return;if(!state.pending)state.pending={caption:input.value,expected_version:state.version,request_id:crypto.randomUUID()};const exact=state.pending;state.definitive=false;state.uncertain=true;sending=true;persist();lock();status.textContent='Saving caption metadata; file bytes and permissions stay unchanged.';
+            try{const result=await api(`${nextBase}/files/${encodeURIComponent(file.id)}/caption${nextQuery()}`,exact);writeDraft(draftKey,{});if(!current())return;state={value:result.caption,version:result.version};input.value=result.caption;captionText.hidden=!result.caption;captionText.textContent='Caption: '+result.caption;status.textContent=result.replayed?'Existing caption recovered without repeating the save.':'Caption saved.';}
+            catch(error){state.uncertain=!error.status||error.status>=500;state.definitive=!state.uncertain;if([403,404].includes(error.status)){writeDraft(draftKey,{});if(current()){form.replaceChildren();status.textContent='Caption access is no longer available.';form.append(status);}return;}if(error.status===422){state.pending=null;state.uncertain=false;}writeDraft(draftKey,state);if(current())status.textContent=error.message+(state.uncertain?' Retry this exact caption; the outcome is unconfirmed.':' Your reviewed draft and version are retained.');}
+            finally{sending=false;if(current())lock();}
+          };
+          discard.onclick=()=>{if(sending||state.uncertain||!current())return;writeDraft(draftKey,{});refreshDiscussion(target);};
+          form.append(label,submit,discard,status);row.append(form);lock();
+        });
       }
       host.querySelectorAll('[data-cancel-upload]').forEach(b => b.onclick = async () => {
         try { await api(`${teamBase}/file-uploads/${b.dataset.cancelUpload}/cancel${nextQuery()}`, {}); refreshDiscussion(target); }
         catch (e) { message(e.message, true); }
       });
     } catch (error) {
-      if (generation !== discussionGeneration) return;
+      if (!current()) return;
       host.replaceChildren(); host.textContent = error.message;
       // Do not redisplay retained text until this target is currently authorized.
       activeDiscussionKey = null;
@@ -103,8 +131,7 @@
           for (let index = 0; index < Math.ceil(file.size / upload.chunk_bytes); index++) {
             if (upload.received_chunks.includes(index)) continue;
             status(`${file.name}: uploading part ${index + 1}…`);
-            const response = await fetch(`${teamBase}/file-uploads/${upload.id}/chunks/${index}${nextQuery()}`, {method:'PUT', credentials:'same-origin', headers:{Accept:'application/json','Content-Type':'application/octet-stream','X-CSRF-TOKEN':document.querySelector('meta[name=csrf-token]').content,'X-Team-Viewer':viewer,'X-Team-Workspace':workspace}, body:bytes.slice(index * upload.chunk_bytes, (index + 1) * upload.chunk_bytes)});
-            const result = await response.json(); if (!response.ok) throw new Error(result.message || 'Upload interrupted.');
+            await api(`${teamBase}/file-uploads/${upload.id}/chunks/${index}${nextQuery()}`, bytes.slice(index * upload.chunk_bytes, (index + 1) * upload.chunk_bytes), {method:'PUT', binary:true});
           }
         }
         const completed = upload.status === 'ready' ? upload : await api(`${teamBase}/file-uploads/${upload.id}/complete${nextQuery()}`, {});
@@ -173,7 +200,7 @@
       for (const source of result.sources) {
         const facts = document.createElement('p'); facts.textContent = `${source.title} — ${Object.entries(source.facts).filter(([key]) => key !== 'version').map(([k,v]) => `${labels[k] || k}: ${v ?? 'not recorded'}`).join('; ')}`; answer.append(facts);
         const url = new URL(source.url, location.href);
-        if (url.origin === location.origin) { const link = document.createElement('a'); link.href = url.href; link.textContent = `View source: ${source.title}`; answer.append(link); }
+        if (url.origin === location.origin) { const link = document.createElement('a'); link.href = transport.href(url.href); link.textContent = `View source: ${source.title}`; answer.append(link); }
       }
       const coverage = document.createElement('p'); coverage.className = 'caption'; coverage.textContent = `${result.model_status} As of ${result.as_of}. ${result.coverage}`; answer.append(coverage);
       answer.scrollIntoView({block:'nearest'});
@@ -207,7 +234,7 @@
       if(area!==requestedArea||section!=='ask'||generation!==emailGeneration)return;
       const url=new URL(result.authorization_url);
       if(url.origin!=='https://accounts.google.com'||url.pathname!=='/o/oauth2/v2/auth'||url.username||url.password||url.hash)throw new Error('An unsupported Google consent destination was returned.');
-      location.assign(url.href);
+      transport.navigate(url.href);
     }catch(error){if(area===requestedArea&&generation===emailGeneration)message(error.message,true);}
     finally{gmailBusy=false;if(area===requestedArea&&section==='ask')loadMailboxes();}
   };
@@ -230,6 +257,6 @@
     catch (error) { message(error.message, true); }
     finally { $('email-confirm').disabled = false; }
   };
-  document.querySelector('form[action="{{ route('logout') }}"]')?.addEventListener('submit', () => { for (const key of Object.keys(sessionStorage)) if (key.startsWith(draftPrefix) || key.startsWith(`enterprise-workflow:${workspace}:${viewer}:`)) sessionStorage.removeItem(key); });
+  $('enterprise-logout')?.addEventListener('submit', () => { for (const key of Object.keys(sessionStorage)) if (key.startsWith(draftPrefix) || key.startsWith(`enterprise-workflow:${workspace}:${viewer}:`)) sessionStorage.removeItem(key); });
   window.addEventListener('pagehide', stashComposer);
   window.visualViewport?.addEventListener('resize', () => {document.documentElement.style.setProperty('--visible-height', window.visualViewport.height + 'px'); if (document.activeElement?.matches('#discussion-body,#ask-question')) document.activeElement.scrollIntoView({block:'nearest'});});

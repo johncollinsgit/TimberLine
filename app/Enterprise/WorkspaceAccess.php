@@ -34,7 +34,7 @@ class WorkspaceAccess
             $scopes[$member->area_id]['members'][(string) $member->user_id] = $member->role;
         }
 
-        return ['enterprise_scopes' => $scopes,
+        return ['enterprise_scopes' => $scopes, ...Operations::graphAuthority($tenant, $scopes),
             'enterprise_available' => (bool) config('enterprise.runtime') && (bool) config('enterprise.enabled')
                 && in_array((string) $tenant->id, array_map('strval', config('enterprise.tenant_allowlist', [])), true),
             'enterprise_writes' => (bool) config('enterprise.writes_enabled')];
@@ -42,6 +42,9 @@ class WorkspaceAccess
 
     public static function permits(array $actor, string $areaId, bool $write = false, bool $coordinate = false): bool
     {
+        if (! in_array($actor['role'] ?? null, ['owner', 'admin', 'member', 'viewer'], true)) {
+            return false;
+        }
         $scope = $actor['enterprise_scopes'][$areaId] ?? null;
         if (! $scope || ! ($actor['enterprise_available'] ?? false) || ($write && ! ($actor['enterprise_writes'] ?? false))) {
             return false;
@@ -49,7 +52,7 @@ class WorkspaceAccess
         if (in_array($actor['role'], ['owner', 'admin'], true)) {
             return true;
         }
-        if (in_array($actor['role'], ['guest'], true) || ($write && $actor['role'] === 'viewer')) {
+        if (in_array($actor['role'], ['guest'], true) || (($write || $coordinate) && $actor['role'] === 'viewer')) {
             return false;
         }
         $role = $scope['members'][$actor['user_id']] ?? null;

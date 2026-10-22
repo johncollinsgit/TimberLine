@@ -8,27 +8,39 @@ on:
       - 'app/Foundation/Enterprise*.php'
       - 'app/Providers/Enterprise*.php'
       - 'app/Http/Middleware/EnsureEnterpriseRuntime.php'
+      - 'app/Http/Middleware/EnterpriseCsrfToken.php'
+      - 'app/Http/Middleware/EnsureEnterpriseTrialMount.php'
+      - 'app/Http/Middleware/EnsureEnterprisePrefixMount.php'
+      - 'app/Http/Controllers/LeesMcRaeCampusDemoController.php'
       - 'app/Services/Team/**'
       - 'app/Services/AiBranch/ResponsesTransport.php'
       - 'app/Services/AiBranch/AiBranchProvider.php'
       - 'app/Policies/Team*.php'
       - 'config/enterprise.php'
       - 'routes/enterprise.php'
+      - 'routes/campus-demo.php'
+      - 'resources/data/enterprise/**'
       - 'resources/views/enterprise/**'
       - 'resources/js/enterprise/**'
       - 'vite.enterprise.config.js'
       - 'scripts/everbranch-team/enterprise-*'
       - 'tests/Feature/Enterprise/**'
+      - 'tests/Feature/LeesMcRaeCampusDemoTest.php'
+      - 'tests/e2e/enterprise-*'
       - 'tests/Support/enterprise-https-router.php'
       - 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php'
+      - 'tests/Integration/EnterpriseTrialBudgetMySqlConcurrencyTest.php'
       - 'tests/Integration/migration-recovery-manifest.php'
       - 'phpunit.enterprise.xml'
+      - 'phpunit.team.xml'
       - '.github/workflows/enterprise-runtime-ci.yml'
       - '.github/workflows/tests.yml'
       - '.github/workflows/lint.yml'
       - 'composer.lock'
       - 'package-lock.json'
+      - 'package.json'
       - 'database/migrations/**'
+      - 'docs/operations/enterprise-ci.md'
   workflow_dispatch:
 
 permissions:
@@ -66,14 +78,22 @@ jobs:
           extensions: pdo_mysql, pdo_sqlite, mbstring, fileinfo, gd, zip
           coverage: none
       - run: composer install --no-interaction --prefer-dist --no-scripts
+      - name: Prepare empty isolated test environment files
+        run: php -r 'foreach ([".env", "apps/enterprise/.env"] as $path) { if (!is_file($path)) { file_put_contents($path, ""); } }'
       - run: php apps/enterprise/scripts/lint-schema.php
-      - run: php vendor/bin/phpunit -c phpunit.enterprise.xml
+      - run: php vendor/bin/phpunit -c phpunit.enterprise.xml --display-warnings
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - name: Check private transport and isolated sample contracts
+        run: node --test tests/e2e/enterprise-transport.test.mjs tests/e2e/enterprise-reviewer-sample.test.mjs tests/e2e/enterprise-workspace-tour.test.mjs
       - run: npm run build:enterprise
+      - name: Check shared reviewer rendering without account or route authority
+        run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseReviewerRenderTest.php tests/Feature/EnterpriseReviewerPublicTest.php tests/Feature/LeesMcRaeCampusDemoTest.php --compact --display-warnings
+      - name: Check controlled trial pages in the dedicated runtime without providers
+        run: php vendor/bin/pest -c phpunit.enterprise.xml tests/Feature/Enterprise/EnterpriseTrialPagesTest.php --compact --display-warnings
       - run: npx playwright install --with-deps chromium webkit
       - name: Check persistent Enterprise UI in Chromium and WebKit
         env:
@@ -82,6 +102,27 @@ jobs:
         run: |
           ENTERPRISE_BROWSER_ENGINE=chromium ENTERPRISE_EVIDENCE=test-results/enterprise/chromium node scripts/everbranch-team/enterprise-browser-smoke.mjs
           ENTERPRISE_BROWSER_ENGINE=webkit ENTERPRISE_EVIDENCE=test-results/enterprise/webkit node scripts/everbranch-team/enterprise-browser-smoke.mjs
+      - name: Check reviewer tour and shared renderer in Chromium and WebKit
+        timeout-minutes: 15
+        env:
+          ENTERPRISE_TEST_PHP: php
+          EVERBRANCH_PLAYWRIGHT_MODULE: node_modules/playwright/index.mjs
+        run: |
+          for engine in chromium webkit; do
+            ENTERPRISE_BROWSER_ENGINE="$engine" ENTERPRISE_EVIDENCE="test-results/enterprise/reviewer-tour/$engine" node scripts/everbranch-team/enterprise-reviewer-tour-browser.mjs
+            ENTERPRISE_BROWSER_ENGINE="$engine" ENTERPRISE_EVIDENCE="test-results/enterprise/reviewer-shared/$engine" node scripts/everbranch-team/enterprise-reviewer-browser.mjs
+          done
+      - name: Check native Operations Roll Call and Resources in Chromium and WebKit
+        timeout-minutes: 15
+        env:
+          ENTERPRISE_TEST_PHP: php
+          EVERBRANCH_PLAYWRIGHT_MODULE: node_modules/playwright/index.mjs
+          ENTERPRISE_TEST_OPERATIONS: '1'
+          ENTERPRISE_OPERATIONS_SCENARIO: all
+        run: |
+          for engine in chromium webkit; do
+            ENTERPRISE_BROWSER_ENGINE="$engine" ENTERPRISE_EVIDENCE="test-results/enterprise/operations/$engine" node scripts/everbranch-team/enterprise-browser-smoke.mjs
+          done
       - uses: actions/upload-artifact@v4
         if: always()
         with:

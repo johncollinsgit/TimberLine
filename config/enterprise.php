@@ -1,5 +1,7 @@
 <?php
 
+$reviewers = json_decode((string) env('ENTERPRISE_TRIAL_REVIEWERS_JSON', '{}'), true);
+
 return [
     'runtime' => false, // Set only by the dedicated Enterprise bootstrap/provider.
     'enabled' => (bool) env('ENTERPRISE_ENABLED', false),
@@ -10,6 +12,40 @@ return [
     'email_drafts_enabled' => (bool) env('ENTERPRISE_EMAIL_DRAFTS_ENABLED', false),
     'workflow_enabled' => (bool) env('ENTERPRISE_WORKFLOW_ENABLED', false),
     'briefing_enabled' => (bool) env('ENTERPRISE_BRIEFING_ENABLED', false),
+    'operations_enabled' => (bool) env('ENTERPRISE_OPERATIONS_ENABLED', false),
+    'resources_enabled' => (bool) env('ENTERPRISE_RESOURCES_ENABLED', false),
+    'roll_call_enabled' => (bool) env('ENTERPRISE_ROLL_CALL_ENABLED', false),
+    'requester_enabled' => (bool) env('ENTERPRISE_REQUESTER_ENABLED', false),
+    'tour_enabled' => (bool) env('ENTERPRISE_TOUR_ENABLED', false),
+    'reviewer_demo_enabled' => (bool) env('ENTERPRISE_REVIEWER_DEMO_ENABLED', false),
+    'trial' => [
+        'enabled' => (bool) env('ENTERPRISE_TRIAL_ENABLED', false),
+        'tenant_id' => env('ENTERPRISE_TRIAL_TENANT_ID'), 'area_id' => env('ENTERPRISE_TRIAL_AREA_ID'),
+        'canonical_origin' => env('ENTERPRISE_TRIAL_CANONICAL_ORIGIN'),
+        'prior_spend_verified' => (bool) env('ENTERPRISE_TRIAL_PRIOR_SPEND_VERIFIED', false),
+        'prior_spend_microusd' => (int) env('ENTERPRISE_TRIAL_PRIOR_SPEND_MICROUSD', 0),
+        'prior_spend_evidence' => env('ENTERPRISE_TRIAL_PRIOR_SPEND_EVIDENCE'),
+        'reviewers' => is_array($reviewers) ? $reviewers : [],
+        'rates_valid_until' => env('ENTERPRISE_TRIAL_RATES_VALID_UNTIL'),
+        'acceptance_max_cost_microusd' => (int) env('ENTERPRISE_TRIAL_ACCEPTANCE_MAX_COST_MICROUSD', 0),
+        'channels' => [
+            'sms' => ['enabled' => (bool) env('ENTERPRISE_TRIAL_SMS_ENABLED', false),
+                'account_sid' => env('ENTERPRISE_TRIAL_TWILIO_ACCOUNT_SID'), 'auth_token' => env('ENTERPRISE_TRIAL_TWILIO_AUTH_TOKEN'),
+                'from_number' => env('ENTERPRISE_TRIAL_SMS_FROM_NUMBER'), 'sender_verified' => (bool) env('ENTERPRISE_TRIAL_SMS_SENDER_VERIFIED', false),
+                'sender_evidence' => env('ENTERPRISE_TRIAL_SMS_SENDER_EVIDENCE'),
+                'max_cost_microusd_per_segment' => (int) env('ENTERPRISE_TRIAL_SMS_MAX_COST_MICROUSD_PER_SEGMENT', 0)],
+            'email' => ['enabled' => (bool) env('ENTERPRISE_TRIAL_EMAIL_ENABLED', false),
+                'api_key' => env('ENTERPRISE_TRIAL_SENDGRID_API_KEY'), 'from_email' => env('ENTERPRISE_TRIAL_EMAIL_FROM'),
+                'sender_verified' => (bool) env('ENTERPRISE_TRIAL_EMAIL_SENDER_VERIFIED', false),
+                'sender_evidence' => env('ENTERPRISE_TRIAL_EMAIL_SENDER_EVIDENCE'),
+                'max_cost_microusd' => (int) env('ENTERPRISE_TRIAL_EMAIL_MAX_COST_MICROUSD', 0)],
+            'ai' => ['enabled' => (bool) env('ENTERPRISE_TRIAL_AI_ENABLED', false),
+                'api_key' => env('ENTERPRISE_TRIAL_AI_API_KEY'), 'model' => env('ENTERPRISE_TRIAL_AI_MODEL'),
+                'input_rate_microusd_per_million' => (int) env('ENTERPRISE_TRIAL_AI_INPUT_RATE_MICROUSD_PER_MILLION', 0),
+                'output_rate_microusd_per_million' => (int) env('ENTERPRISE_TRIAL_AI_OUTPUT_RATE_MICROUSD_PER_MILLION', 0),
+                'max_input' => 12000, 'max_output' => 800],
+        ],
+    ],
     'sample_data' => (bool) env('ENTERPRISE_SAMPLE_DATA', false),
     'intelligence' => [
         'enabled' => (bool) env('ENTERPRISE_AI_ENABLED', false),

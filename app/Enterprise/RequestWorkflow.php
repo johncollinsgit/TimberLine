@@ -138,8 +138,12 @@ class RequestWorkflow
             $task = $this->graph->read($this->work->state($tenant->id), $actor, 'task', $data['task_id']);
             abort_unless($this->graph->can($this->work->state($tenant->id), $actor, 'task', $task['id'], true), 403);
             if ($action === 'request.complete') {
-                $this->work->execute($tenant->id, fn () => $this->access->actor($tenant, $user, true), ['kind' => 'task.complete',
-                    'id' => $task['id'], 'idempotency_key' => $input['request_id'], 'expected_version' => $task['version'], 'completed' => true]);
+                if (config('enterprise.operations_enabled')) {
+                    app(Operations::class)->assertApproved($tenant, $user, $task['id']);
+                } else {
+                    $this->work->execute($tenant->id, fn () => $this->access->actor($tenant, $user, true), ['kind' => 'task.complete',
+                        'id' => $task['id'], 'idempotency_key' => $input['request_id'], 'expected_version' => $task['version'], 'completed' => true]);
+                }
                 $record->status = 'completed';
             } else {
                 $record->status = 'in_progress';

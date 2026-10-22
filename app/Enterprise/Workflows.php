@@ -71,6 +71,8 @@ class Workflows
         $editable = $this->graph->can($this->work->state($tenant->id), $actor, 'project', $projectId, true);
 
         return ['project' => ['id' => $project['id'], 'name' => $project['name']], 'members' => $this->members($tenant, $actor, $areaId, $projectId),
+            'operations_enabled' => (bool) config('enterprise.operations_enabled'),
+            'tasks' => config('enterprise.operations_enabled') ? app(Operations::class)->listing($tenant, $user, $areaId, $projectId)['items'] : [],
             'can_design' => $this->canDesign($actor, $areaId) && $editable, 'can_run' => WorkspaceAccess::permits($actor, $areaId, true) && $editable];
     }
 
@@ -88,8 +90,22 @@ class Workflows
             }
         }
         $assignee = collect($scope['members'])->firstWhere('can_approve', true)['id'] ?? null;
+        $template = $assignee ? WorkflowDefinition::template($assignee) : null;
+        if ($template && config('enterprise.operations_enabled')) {
+            foreach ($template['edges'] as &$edge) {
+                if ($edge['id'] === 'e3') {
+                    $edge['target'] = 'work';
+                } elseif ($edge['id'] === 'e5') {
+                    $edge['source'] = 'work';
+                    $edge['target'] = 'approval';
+                } elseif ($edge['id'] === 'e6') {
+                    $edge['source'] = 'approval';
+                }
+            }
+            unset($edge);
+        }
 
-        return $scope + ['items' => $items, 'templates' => $assignee ? [['key' => 'maintenance', 'name' => 'Illustrative maintenance workflow', 'sample' => true, 'definition' => WorkflowDefinition::template($assignee)]] : [],
+        return $scope + ['items' => $items, 'templates' => $template ? [['key' => 'maintenance', 'name' => 'Illustrative maintenance workflow', 'sample' => true, 'definition' => $template]] : [],
             'coverage' => 'Up to 100 workflows in this project from a bounded scan of 1000 department workflow records.', 'as_of' => now()->toIso8601String()];
     }
 
@@ -122,12 +138,27 @@ class Workflows
             'coverage' => 'Up to 100 runs from a bounded scan of 1000 department run records; each run preserves its activated definition.'];
     }
 
-    private function assignments(Tenant $tenant, array $actor, string $area, string $projectId, array $definition): void
+    private function assignments(Tenant $tenant, array $actor, string $area, string $projectId, array $definition, bool $activate = false): void
     {
         $members = array_column($this->members($tenant, $actor, $area, $projectId), null, 'id');
         foreach ($definition['nodes'] as $node) {
             if (isset($node['assignee_id'])) {
                 abort_unless(isset($members[$node['assignee_id']]) && ($node['type'] !== 'approval' || $members[$node['assignee_id']]['can_approve']), 422, 'Choose existing project editors; approval requires a current coordinator or organization owner/admin.');
+                if ($activate && config('enterprise.operations_enabled')) {
+                    abort_unless(isset($node['task_id']), 422, 'Map every assignment and approval to a configured native project task before activation.');
+                }
+            }
+            if (isset($node['task_id'])) {
+                $state = $this->work->state($tenant->id);
+                $recipient = array_replace($actor, ['user_id' => $node['assignee_id'], 'role' => $actor['active_roles'][$node['assignee_id']] ?? 'guest']);
+                $task = $state['tasks'][$node['task_id']] ?? null;
+                abort_unless($task && ($task['enterprise_area_id'] ?? '') === $area && isset($task['memberships'][$projectId])
+                    && $this->graph->can($state, $actor, 'task', $task['id']) && $this->graph->can($state, $recipient, 'task', $task['id'], true), 404);
+                if ($activate && config('enterprise.operations_enabled')) {
+                    $operation = app(Operations::class)->show($tenant, User::query()->findOrFail($actor['user_id']), $task['id']);
+                    abort_unless($operation['version'] > 0 && $operation['checklist'] && ! in_array($operation['status'], ['closed', 'completed', 'interrupted'], true), 422, 'Configure the native task checklist and resolve interruption before activation.');
+                    abort_unless($node['type'] !== 'assignment' || $operation['ball_user_id'] === $node['assignee_id'], 422, 'The assignment must match the native task current ball.');
+                }
             }
         }
     }
@@ -212,7 +243,7 @@ class Workflows
             if (! $pause) {
                 abort_unless(($input['confirmed'] ?? false) === true, 422, 'Review and explicitly confirm this definition before activation.');
                 $definition = $this->compiler->compile($row->data['draft']);
-                $this->assignments($tenant, $actor, $row->area_id, $row->data['project_id'], $definition);
+                $this->assignments($tenant, $actor, $row->area_id, $row->data['project_id'], $definition, true);
                 $digest = WorkflowDefinition::digest($definition);
                 abort_unless(hash_equals($digest, $input['digest'] ?? ''), 409, 'The reviewed definition no longer matches.');
                 $row->data = array_replace($row->data, ['active' => ['definition' => $definition, 'digest' => $digest,
@@ -241,7 +272,7 @@ class Workflows
             abort_unless($workflow->status === 'active' && isset($workflow->data['active']) && $workflow->version === $input['expected_version'], 409, 'Start requires the current active workflow version.');
             abort_if(TeamOperationRecord::query()->whereKey($input['id'])->exists(), 409);
             $active = $workflow->data['active'];
-            $this->assignments($tenant, $actor, $workflow->area_id, $workflow->data['project_id'], $active['definition']);
+            $this->assignments($tenant, $actor, $workflow->area_id, $workflow->data['project_id'], $active['definition'], true);
             $data = ['workflow_id' => $id, 'project_id' => $workflow->data['project_id'], 'definition' => $active['definition'], 'active_version' => $active['version'],
                 'definition_digest' => $active['digest'], 'current_node_id' => $this->startId($active['definition']), 'values' => [], 'history' => [], 'started_by' => (string) $user->id];
             $status = $this->walk($data, (string) $user->id);
@@ -277,6 +308,19 @@ class Workflows
         $node = collect($data['definition']['nodes'])->firstWhere('id', $data['current_node_id']);
         $can = $run->status === 'waiting' && $this->allowed($actor, $workflow, $node)
             && $this->graph->can($this->work->state($tenant->id), $actor, 'project', $data['project_id'], true);
+        $linked = null;
+        if (isset($node['task_id'])) {
+            if (! config('enterprise.operations_enabled')) {
+                $can = false;
+            } else {
+                $linked = app(Operations::class)->show($tenant, User::query()->findOrFail($actor['user_id']), $node['task_id']);
+                abort_unless($linked['area_id'] === $workflow->area_id && isset($this->work->state($tenant->id)['tasks'][$node['task_id']]['memberships'][$data['project_id']]), 404);
+                $can = $can && ($node['type'] !== 'assignment' || ($linked['ball_user_id'] === $actor['user_id'] && ($linked['approval_required'] || $linked['completion_score'] === 4.0)))
+                    && ! in_array($linked['status'], ['interrupted', 'closed'], true);
+            }
+        } elseif (config('enterprise.operations_enabled') && isset($node['assignee_id'])) {
+            $can = false;
+        }
         $collected = [];
         foreach ($data['definition']['nodes'] as $step) {
             foreach ($step['screen']['fields'] ?? [] as $field) {
@@ -287,7 +331,7 @@ class Workflows
         }
 
         return ['id' => $run->id, 'version' => $run->version, 'status' => $run->status, 'current_node_id' => $data['current_node_id'],
-            'current_node' => $node, 'values' => $data['values'], 'collected_fields' => $collected, 'history' => $data['history'], 'active_version' => $data['active_version'],
+            'current_node' => $node, 'linked_task' => $linked, 'values' => $data['values'], 'collected_fields' => $collected, 'history' => $data['history'], 'active_version' => $data['active_version'],
             'definition_digest' => $data['definition_digest'], 'can_advance' => $can, 'allowed_decisions' => $can ? ($node['type'] === 'approval' ? ['approve', 'reject'] : ['complete']) : [],
             'updated_at' => $run->updated_at?->toIso8601String()];
     }
@@ -311,6 +355,26 @@ class Workflows
             $decision = $input['decision'] ?? 'complete';
             abort_unless(in_array($decision, $node['type'] === 'approval' ? ['approve', 'reject'] : ['complete'], true), 422);
             $values = $this->compiler->values($node['screen']['fields'], $input['values'] ?? []);
+            if (isset($node['assignee_id']) && config('enterprise.operations_enabled')) {
+                abort_unless(isset($node['task_id']), 409, 'This legacy run has no canonical task mapping. Review a mapped workflow before operating it.');
+            }
+            if (isset($node['task_id'])) {
+                abort_unless(config('enterprise.operations_enabled'), 403, 'Native operational workflow actions are paused.');
+                $operation = app(Operations::class)->show($tenant, $user, $node['task_id']);
+                abort_unless($operation['area_id'] === $workflow->area_id && isset($this->work->state($tenant->id)['tasks'][$node['task_id']]['memberships'][$data['project_id']]), 404);
+                abort_unless(($input['expected_task_version'] ?? null) === $operation['task_version'] && ($input['expected_operations_version'] ?? null) === $operation['version'], 409, 'The linked native task changed. Refresh and review its current checklist before continuing.');
+                abort_unless(! in_array($operation['status'], ['interrupted', 'closed'], true), 409);
+                if ($node['type'] === 'assignment') {
+                    abort_unless($operation['ball_user_id'] === $actor['user_id'] && ($operation['approval_required'] || $operation['completion_score'] === 4.0), 409, 'Perform every native task checklist item before completing this workflow assignment.');
+                } elseif ($decision === 'approve') {
+                    if ($operation['completion_score'] !== 4.0) {
+                        app(Operations::class)->execute($tenant, $user, ['action' => 'task.approve', 'task_id' => $node['task_id'],
+                            'expected_version' => $operation['version'], 'expected_task_version' => $operation['task_version'],
+                            'request_id' => (string) \Ramsey\Uuid\Uuid::uuid5(\Ramsey\Uuid\Uuid::NAMESPACE_URL, 'workflow-approval:'.$runId.':'.$input['request_id']), 'note' => 'Explicit workflow approval']);
+                    }
+                    app(Operations::class)->assertApproved($tenant, $user, $node['task_id']);
+                }
+            }
             $data['values'] = array_replace($data['values'], $values);
             $data['history'][] = ['node_id' => $node['id'], 'type' => $node['type'], 'label' => $node['label'], 'decision' => $decision, 'user_id' => (string) $user->id,
                 'at' => now()->toIso8601String(), 'fields' => array_keys($values)];
@@ -319,6 +383,15 @@ class Workflows
             } else {
                 $data['current_node_id'] = $this->next($data['definition'], $node['id'], 'always');
                 $status = $this->walk($data, (string) $user->id);
+                if ($status === 'completed' && config('enterprise.operations_enabled')) {
+                    $visited = array_column($data['history'], null, 'node_id');
+                    foreach ($data['definition']['nodes'] as $step) {
+                        if ($step['type'] === 'assignment' && isset($visited[$step['id']])) {
+                            abort_unless(isset($step['task_id']), 409);
+                            app(Operations::class)->assertApproved($tenant, $user, $step['task_id']);
+                        }
+                    }
+                }
             }
             $run->data = $data;
             $run->status = $status;

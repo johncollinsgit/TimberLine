@@ -15,7 +15,7 @@ class WorkflowDefinition
         $d = Validator::make($definition, [
             'schema_version' => ['required', 'integer', 'in:1'],
             'nodes' => ['required', 'array', 'min:2', 'max:24'],
-            'nodes.*' => ['required', 'array:id,type,label,position,screen,assignee_id,condition'],
+            'nodes.*' => ['required', 'array:id,type,label,position,screen,assignee_id,condition,task_id'],
             'nodes.*.id' => ['required', 'string', $slug, 'distinct'],
             'nodes.*.type' => ['required', Rule::in(['start', 'form', 'condition', 'assignment', 'approval', 'complete'])],
             'nodes.*.label' => ['required', 'string', 'max:100'],
@@ -34,6 +34,7 @@ class WorkflowDefinition
             'nodes.*.screen.fields.*.options' => ['sometimes', 'array', 'min:1', 'max:12'],
             'nodes.*.screen.fields.*.options.*' => ['string', 'max:100'],
             'nodes.*.assignee_id' => ['sometimes', 'string', 'regex:/^[1-9][0-9]{0,18}$/D'],
+            'nodes.*.task_id' => ['sometimes', 'uuid'],
             'nodes.*.condition' => ['sometimes', 'array:field,operator,value'],
             'nodes.*.condition.field' => ['required_with:nodes.*.condition', 'string', $slug],
             'nodes.*.condition.operator' => ['required_with:nodes.*.condition', 'in:equals,not_equals'],
@@ -61,6 +62,7 @@ class WorkflowDefinition
             abort_unless($manual === isset($node['screen']), 422, 'Only human steps must have an operational screen.');
             abort_unless(in_array($node['type'], ['assignment', 'approval'], true) === isset($node['assignee_id']), 422, 'Assignments and approvals require an existing assignee.');
             abort_unless(($node['type'] === 'condition') === isset($node['condition']), 422, 'Only conditions may contain a field condition.');
+            abort_unless(! isset($node['task_id']) || in_array($node['type'], ['assignment', 'approval'], true), 422, 'Only assignments and approvals may link canonical tasks.');
             foreach ($node['screen']['fields'] ?? [] as $field) {
                 abort_if(isset($fields[$field['key']]), 422, 'Every form field must have a unique key.');
                 abort_unless(($field['type'] === 'select') === isset($field['options']), 422, 'Only select fields have options.');
