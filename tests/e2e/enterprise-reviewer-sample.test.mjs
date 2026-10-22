@@ -63,6 +63,20 @@ function sample() {
 }
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
+test("approved same-origin root and prefixed trial links navigate outside sample screens without network fallback", () => {
+    const { adapter, boot, context } = sample();
+    let destination = null;
+    context.location.assign = (value) => { destination = value; };
+    for (const path of ["/enterprise/trial", "/enterprise-campus/enterprise/trial"]) {
+        boot.routes.trial = "https://sample.example" + path;
+        assert.equal(adapter.href(boot.routes.trial), path);
+        adapter.navigate(boot.routes.trial);
+        assert.equal(destination, path);
+        assert.throws(() => adapter.navigate("https://evil.example" + path), /stays within/);
+        assert.equal(destination, path);
+    }
+});
+
 test("sample reset clears this sample workspace's retained drafts without touching private or trial state", async () => {
     const { adapter, values } = sample();
     for (const name of [

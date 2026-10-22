@@ -6,6 +6,9 @@ the mount context; moving a pending operation to another mount fails closed.
 The source supports `/enterprise-campus` without enabling any provider or
 changing the separate trial-only mount. See
 [the mount runbook](docs/operations/enterprise-same-origin-trial-mount.md).
+The public tour receives a trial destination only from an explicitly approved,
+default-empty same-origin configuration; publishing a link never enables a
+provider or resolves operational records during public rendering.
 Actual hosting, Google consent, service credentials, recipients and live sends
 remain separately gated. Tests use fake providers; no operational connection,
 paid call or recovery capability is established by this candidate.

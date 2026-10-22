@@ -21,6 +21,8 @@ return [
     'certificates_timezone' => env('ENTERPRISE_CERTIFICATES_TIMEZONE', 'America/New_York'),
     'tour_enabled' => (bool) env('ENTERPRISE_TOUR_ENABLED', false),
     'reviewer_demo_enabled' => (bool) env('ENTERPRISE_REVIEWER_DEMO_ENABLED', false),
+    'reviewer_trial_destination' => env('ENTERPRISE_REVIEWER_TRIAL_DESTINATION', ''),
+    'reviewer_trial_destination_approved' => env('ENTERPRISE_REVIEWER_TRIAL_DESTINATION_APPROVED', false) === true,
     'trial' => [
         'enabled' => (bool) env('ENTERPRISE_TRIAL_ENABLED', false),
         'tenant_id' => env('ENTERPRISE_TRIAL_TENANT_ID'), 'area_id' => env('ENTERPRISE_TRIAL_AREA_ID'),
