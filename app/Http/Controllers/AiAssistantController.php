@@ -34,6 +34,17 @@ class AiAssistantController extends Controller
         $data = $request->validate(['conversation' => ['nullable', 'integer', 'min:1'], 'origin' => ['sometimes', 'array:kind,id']]);
         $origin = isset($data['origin']) ? app(\App\Services\AiBranch\AiWorkspacePage::class)->normalize($data['origin']) : [];
         $conversation = ! empty($data['conversation']) ? $chat->conversation($tenant, $user, (int) $data['conversation']) : null;
+        $workflows = app(\App\Services\AiBranch\AiWorkspaceWorkflows::class);
+        $workflowsAvailable = $workflows->enabled($tenant, $user);
+        if (! $conversation && $workflowsAvailable && ! $request->boolean('new')) {
+            foreach (AiBranchConversation::where('tenant_id', $tenant->id)->where('user_id', $user->id)->where('expires_at', '>', now())->latest('updated_at')->limit(30)->pluck('id') as $candidate) {
+                try {
+                    $conversation = $chat->conversation($tenant, $user, $candidate);
+                    break;
+                } catch (HttpException|\Illuminate\Database\Eloquent\ModelNotFoundException) { /* Preserve incompatible chats; resume a compatible one. */
+                }
+            }
+        }
         $commitmentsAvailable = app(\App\Services\AiBranch\AiCommitments::class)->allows($tenant, $user);
         $kinds = ['internal_job_note', 'undo_internal_job_note', ...($commitmentsAvailable ? ['internal_commitment_task'] : [])];
         $actions = AiBranchAction::query()->where('tenant_id', $tenant->id)->where('user_id', $user->id)->whereIn('kind', $kinds)->latest('id')->limit(30)->get()
@@ -70,7 +81,15 @@ class AiAssistantController extends Controller
             }
         }
         unset($message);
+        $agentsAvailable = $workflowsAvailable && config('ai_branch.workspace_agents_enabled') && $actionsAvailable && $context->permissions($tenant, $user)['customers'];
         $payload = [
+            'api_audio' => app(\App\Services\AiBranch\AiWorkspaceAudio::class)->presentation($tenant, $user),
+            'workflows_available' => $workflowsAvailable,
+            'agents_available' => (bool) $agentsAvailable,
+            'workspace_agents' => $agentsAvailable ? app(\App\Services\AiBranch\AiWorkspaceAgents::class)->listing($tenant, $user) : [],
+            'workflow_actions' => $workflowsAvailable ? $workflows->listing($tenant, $user) : [],
+            'workspace_memories' => $workflowsAvailable ? app(\App\Services\AiBranch\AiWorkspaceMemory::class)->listing($tenant, $user) : [],
+            'history_days' => (int) config($workflowsAvailable ? 'ai_branch.workspace_history_days' : 'ai_branch.history_days'),
             'commercial' => app(\App\Services\AiBranch\AiBranchOffer::class)->presentation($tenant),
             'fictional_pilot' => app(\App\Services\AiBranch\AiFictionalPilot::class)->current() !== null,
             'provider_mode' => app(\App\Services\AiBranch\AiFictionalPilot::class)->current() !== null

@@ -224,6 +224,7 @@ class TenantEmailDispatchService
             ?? $this->nullableString($settings['reply_to_email'] ?? null)
             ?? $this->nullableString($providerConfig['reply_to_email'] ?? null);
         $providerConfig['provider_status'] = $this->nullableString($settings['provider_status'] ?? null);
+        $providerConfig['no_provider_retry'] = (bool) ($options['no_provider_retry'] ?? false);
 
         if (array_key_exists('tracking_enabled', $options)) {
             $providerConfig['tracking_enabled'] = (bool) $options['tracking_enabled'];

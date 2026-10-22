@@ -6,6 +6,9 @@ import WeeklyReport from './ai-weekly-report'
 import SharedAttention from './ai-shared-attention'
 import PhonePractice from './ai-phone-practice'
 import CommitmentDraft from './ai-commitment-draft'
+import WorkspaceActions from './ai-workspace-actions'
+import WorkspaceAgents from './ai-workspace-agents'
+import { createApiVoice } from './ai-api-voice'
 import { createVoiceConversation } from './ai-voice-conversation'
 
 function Assistant({ host }) {
@@ -28,16 +31,19 @@ function Assistant({ host }) {
   const [note, setNote] = useState('')
   const [jobId, setJobId] = useState('')
   const noteRequest = useRef(null)
+  const agentRequests = useRef(new Map())
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
   const [uncertain, setUncertain] = useState(false)
   const [listening, setListening] = useState(false)
   const [readAloud, setReadAloud] = useState(false)
   const [voicePhase, setVoicePhase] = useState('idle')
+  const [audioReviewed, setAudioReviewed] = useState(false)
   const [reviewed, setReviewed] = useState([])
   const base = new URL(host.dataset.baseUrl, location.origin)
   let origin = {}
   try { const value = JSON.parse(host.dataset.origin || '{}'); if (value && ['workspace', 'job', 'customer', 'class'].includes(value.kind)) origin = value } catch {}
+  useEffect(() => setAudioReviewed(false), [session?.api_audio?.rates_digest, open])
   const stopSpeech = () => window.speechSynthesis?.cancel()
   const stopVoice = () => voice.current?.stop()
   const stopCapture = () => { const current = recognition.current; recognition.current = null; clearTimeout(recognitionTimer.current); current?.abort(); setListening(false) }
@@ -61,6 +67,7 @@ function Assistant({ host }) {
     if (base.origin !== location.origin) throw new Error('Assistant endpoint is unavailable.')
     const url = endpoint('/assistant')
     if (id) url.searchParams.set('conversation', id)
+    if (id === 0) url.searchParams.set('new', '1')
     if (origin.kind) { url.searchParams.set('origin[kind]', origin.kind); if (origin.id) url.searchParams.set('origin[id]', origin.id) }
     const response = await fetch(url, { credentials: 'same-origin', signal, cache: 'no-store', headers: { Accept: 'application/json' } })
     const data = await response.json().catch(() => ({}))
@@ -73,7 +80,7 @@ function Assistant({ host }) {
     const turn = ++sequence.current
     abort.current = new AbortController()
     setNotice('Loading your private workspace…')
-    loadSession(null, abort.current.signal).then(data => { if (turn === sequence.current) { setSession(data); setNotice('Ask about permitted workspace records. Review dictated text before choosing Ask.') } }).catch(error => { if (turn === sequence.current) { setSession(null); setNotice(error.message) } })
+    loadSession(null, abort.current.signal).then(data => { if (turn === sequence.current) { setSession(data); setConversation(data.conversation?.id || null); setUncertain(Boolean(data.conversation?.pending)); setNotice(data.conversation ? 'Your workspace conversation is ready to continue.' : 'Ask about your workspace, customers or jobs.') } }).catch(error => { if (turn === sequence.current) { setSession(null); setNotice(error.message) } })
     const pause = () => { stopVoice(); stopCapture(); stopSpeech() }
     const hidden = () => { if (document.hidden) pause() }
     document.addEventListener('visibilitychange', hidden)
@@ -117,7 +124,7 @@ function Assistant({ host }) {
       setSession(data); setDraft(''); requestId.current = null; setUncertain(false); setNotice('Answer ready. The checked evidence may be incomplete.')
       const message = data.conversation?.messages.filter(row => row.role === 'assistant').at(-1)
       if (!fromVoice && readAloud && message && 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined') { const speech = new SpeechSynthesisUtterance(message.text); speech.lang = document.documentElement.lang || 'en-US'; window.speechSynthesis.speak(speech) }
-      return message?.text
+      return fromVoice ? message : message?.text
     } catch (error) { const message = error.message + ' Refresh the conversation before asking again.'; if (turn === sequence.current) { setSession(null); setUncertain(true); setNotice(message) }; throw new Error(message) }
     finally { sending.current = false; if (turn === sequence.current) setBusy(false) }
   }
@@ -126,15 +133,25 @@ function Assistant({ host }) {
     if (voice.current?.isActive()) { stopVoice(); setNotice('Voice conversation stopped.'); return }
     if (!session || busy || uncertain || draft.trim()) return
     stopCapture(); stopSpeech()
-    voice.current = createVoiceConversation({
+    voice.current = session.api_audio?.enabled ? createApiVoice({
+      transcribe: async (audio, uuid, signal) => (await api('/voice/transcribe', 'POST', { audio, request_id: uuid }, signal)).text,
+      answer: question => sendVoice.current(question, true),
+      speech: (message, uuid, signal) => api('/voice/speech', 'POST', { conversation_id: message.conversation_id, message_uuid: message.uuid, request_id: uuid }, signal),
+      onState: setVoicePhase, onTranscript: text => { setDraft(text); requestId.current = null }, onError: setNotice,
+    }) : createVoiceConversation({
       Recognition: window.SpeechRecognition || window.webkitSpeechRecognition,
       Utterance: window.SpeechSynthesisUtterance, synthesis: window.speechSynthesis,
       language: document.documentElement.lang || navigator.language || 'en-US',
-      send: question => sendVoice.current(question, true), onState: setVoicePhase,
+      send: async question => (await sendVoice.current(question, true))?.text, onState: setVoicePhase,
       onTranscript: text => { setDraft(text); requestId.current = null },
       onError: setNotice,
     })
     voice.current.start()
+  }
+  const audioSettings = async enabled => {
+    stopVoice(); const turn = ++sequence.current; setBusy(true)
+    try { await api('/voice/settings', 'POST', { enabled, rates_digest: session.api_audio.rates_digest, confirmed: true }); if (turn !== sequence.current) return; setAudioReviewed(false); await refresh() }
+    catch (error) { if (turn === sequence.current) { setNotice(error.message); setBusy(false) } }
   }
   const dictate = (target = 'question') => {
     stopVoice()
@@ -177,6 +194,25 @@ function Assistant({ host }) {
       if (dialog.current?.open) setNotice('Preview prepared. Review the exact job and note before approving. No note has been added yet.')
     } catch (error) { if (turn === sequence.current) { setSession(null); setNotice(error.message); setBusy(false) } }
   }
+  const decideWorkflow = async (action, approve) => {
+    stopVoice(); stopCapture(); stopSpeech()
+    const turn = ++sequence.current; setBusy(true)
+    try { const result = await api('/workflows/' + action.id + '/decision', 'POST', { digest: action.digest, decision: approve ? 'approve' : 'reject', confirmed: true }); if (turn !== sequence.current) return; await refresh(); setNotice(result.action.status === 'executed' ? (action.kind === 'workspace_create_followup_agent' ? 'Customer follow-up agent created.' : action.kind === 'workspace_create_job' ? 'Job created. You can now ask Everbranch to email its details.' : 'Email accepted by the provider. Delivery appears in customer history.') : 'Action status: ' + result.action.status) }
+    catch (error) { if (turn === sequence.current) { await refresh(); setNotice(error.message + ' Refresh status before trying again.') } }
+    finally { if (turn === sequence.current) setBusy(false) }
+  }
+  const workspaceMemory = async id => {
+    if (!id && !window.confirm('Save this for authorized workspace assistant users?')) return
+    stopVoice(); stopCapture(); stopSpeech(); const turn = ++sequence.current; setBusy(true)
+    try { await api('/workspace-memory' + (id ? '/' + id : ''), id ? 'DELETE' : 'POST', id ? undefined : { body: memory.trim(), confirmed: true }); if (turn !== sequence.current) return; setMemory(''); await refresh() }
+    catch (error) { if (turn === sequence.current) setNotice(error.message) }
+    finally { if (turn === sequence.current) setBusy(false) }
+  }
+  const agentCommand = async (agent, command) => {
+    stopVoice(); stopCapture(); stopSpeech(); const turn = ++sequence.current; setBusy(true)
+    try { if (!agentRequests.current.has(agent.id)) agentRequests.current.set(agent.id, crypto.randomUUID()); await api('/agents/' + agent.id + '/' + command, 'POST', { request_id: agentRequests.current.get(agent.id) }); if (turn !== sequence.current) return; agentRequests.current.delete(agent.id); await refresh() }
+    catch (error) { if (turn === sequence.current) { setNotice(error.message); setBusy(false) } }
+  }
   const sourceLink = source => {
     if (!source.url) return <span>{source.title || source.ref}</span>
     let url
@@ -207,21 +243,26 @@ function Assistant({ host }) {
       {session?.fictional_pilot && session.provider_mode === 'openai' && <p>Total pilot allowance used or reserved: ${(session.usage.provider_micros / 1_000_000).toFixed(4)} / ${(session.pilot_budget_cents / 100).toFixed(2)}</p>}
       {session?.commercial && <p>Model: {session.commercial.label} · Available service credit: ${(session.commercial.credit_available_micros / 1_000_000).toFixed(2)}. Each turn reserves up to ${(session.commercial.max_request_charge_micros / 1_000_000).toFixed(4)}, then settles actual usage. <a href={base.href} onClick={event => { event.preventDefault(); if (close()) location.assign(base.href) }}>Model, rates and spending cap</a></p>}
       <button className="assistant-link" onClick={() => { if (close()) document.dispatchEvent(new CustomEvent('app-command-palette:open', { detail: { voice: true, query: '' } })) }}>Find a page</button>
-      <nav aria-label="Assistant views">{[['chat', 'Conversation'], ['memory', 'Private memory'], ['activity', 'Activity and approvals'], ...(session?.financial_summary ? [['finance', 'Financial snapshot']] : []), ...(session?.reports_available ? [['reports', 'Weekly report']] : []), ...(session?.attention_available ? [['attention', 'Needs attention']] : []), ...(session?.phone_practice_available ? [['phone', 'Phone practice']] : [])].map(([key, label]) => <button key={key} aria-pressed={tab === key} disabled={busy} onClick={() => { stopVoice(); stopCapture(); stopSpeech(); setTab(key) }}>{label}</button>)}</nav>
+      <nav aria-label="Assistant views">{[['chat', 'Conversation'], ['memory', 'Private memory'], ['activity', 'Activity and approvals'], ...(session?.agents_available ? [['agents', 'Agents']] : []), ...(session?.financial_summary ? [['finance', 'Financial snapshot']] : []), ...(session?.reports_available ? [['reports', 'Weekly report']] : []), ...(session?.attention_available ? [['attention', 'Needs attention']] : []), ...(session?.phone_practice_available ? [['phone', 'Phone practice']] : [])].map(([key, label]) => <button key={key} aria-pressed={tab === key} disabled={busy} onClick={() => { stopVoice(); stopCapture(); stopSpeech(); setTab(key) }}>{label}</button>)}</nav>
       <p role="status" aria-live="polite">{notice}</p><button disabled={busy} className="assistant-link" onClick={() => refresh()}>Refresh conversation</button>
       {session?.context?.page?.title && <p>Context: {session.context.page.title}</p>}
       {session?.commitments_available && <div hidden={tab !== 'activity'}><CommitmentDraft jobs={session.note_jobs || []} load={(job, signal) => api('/commitments/sources?job_id=' + job, 'GET', undefined, signal)} propose={input => api('/commitments', 'POST', input)} list={(view, after, signal) => api('/commitments?' + new URLSearchParams({ view, after: String(after) }), 'GET', undefined, signal)} onPrepared={() => refresh()} /></div>}
       {session?.phone_practice_available && tab === 'phone' && <PhonePractice run={(scenario, uuid, signal) => api('/phone/practice', 'POST', { scenario, request_id: uuid }, signal)} />}
       {session?.attention_available && <div hidden={tab !== 'attention'}><SharedAttention active={tab === 'attention'} load={(view, after, signal) => api('/attention?' + new URLSearchParams({ view, after: String(after) }), 'GET', undefined, signal)} mutate={(item, operation, options, uuid) => api('/attention/' + item.id, 'POST', { operation, version: item.version, request_id: uuid, confirmed: true, ...options })} /></div>}
       {tab === 'reports' && session?.reports_available && <WeeklyReport api={api} audience={session.report_audience || []} printUrl={id => endpoint('/reports/' + encodeURIComponent(id)).href} />}
+      {tab === 'agents' && session?.agents_available && <WorkspaceAgents agents={session.workspace_agents || []} busy={busy} run={agent => agentCommand(agent, 'run')} pause={agent => agentCommand(agent, 'pause')} openConversation={id => { setTab('chat'); refresh(id) }} />}
       {tab === 'chat' && <>
+        {session?.workflows_available && <p>Conversations resume across your devices in this workspace. History is retained for {session.history_days} days after activity; workspace memory stays until removed.</p>}
         <section className="assistant-voice" aria-label="Voice conversation">
-          <button type="button" className="assistant-primary" aria-pressed={voicePhase !== 'idle'} disabled={voicePhase === 'idle' && (!session || busy || uncertain || Boolean(draft.trim()))} onClick={toggleVoice}>{voicePhase === 'idle' ? 'Start voice conversation' : 'Stop voice conversation'}</button>
+          {session?.api_audio?.available && <details><summary>API voice settings</summary><p>API transcription and an AI-generated speaking voice. Questions and answers are saved in this workspace. Microphone recordings are limited to 30 seconds per turn. Long spoken replies read the first 1,500 characters; the full reply stays on screen.</p><p>Provider prices: transcription ${session.api_audio.rates.transcription_per_minute_micros / 1000000}/minute. Speech per million tokens: ${session.api_audio.rates.speech_text_input_rate / 1000000} text input, ${session.api_audio.rates.speech_text_output_rate / 1000000} text output, ${session.api_audio.rates.speech_audio_output_rate / 1000000} audio output. Text answers use your selected model’s pricing. {session.api_audio.buyer_multiplier ? 'Usage is charged from service credit at 2× provider cost.' : 'Usage counts against your existing provider spending cap.'} All stages share the workspace AI cap.</p>{session.api_audio.can_approve && <><label><input type="checkbox" checked={audioReviewed} onChange={event => setAudioReviewed(event.target.checked)} />I reviewed API audio usage and pricing.</label><button disabled={busy || !audioReviewed} onClick={() => audioSettings(!session.api_audio.enabled)}>{session.api_audio.enabled ? 'Disable API voice' : 'Enable API voice'}</button></>}</details>}
+          <button type="button" className="assistant-primary" aria-pressed={voicePhase !== 'idle'} disabled={voicePhase === 'idle' && (!session || busy || uncertain || Boolean(draft.trim()))} onClick={toggleVoice}>{voicePhase === 'idle' ? (session?.api_audio?.enabled ? 'Start API voice conversation' : 'Start device voice conversation') : 'Stop voice conversation'}</button>
+          {session?.api_audio?.enabled && voicePhase === 'listening' && <button onClick={() => voice.current?.finish()}>Finish speaking</button>}
           <p role="status" aria-live="polite">{({ idle: 'Speak with Everbranch', starting: 'Microphone starting…', listening: 'Listening… Finish speaking to send your question.', thinking: 'Thinking… Microphone paused.', speaking: 'Speaking… Microphone paused.' })[voicePhase]}</p>
           <p>Each spoken turn sends automatically and uses your AI allowance. Replies play aloud, then listening resumes. Save lasting preferences in Private memory. Your browser may process speech online.</p>
         </section>
-        <label>Conversation<select disabled={busy} value={conversation || ''} onChange={event => { if (draft.trim() && !window.confirm('Discard the question you have not sent?')) return; setDraft(''); setSession(null); requestId.current = null; stopSpeech(); refresh(Number(event.target.value) || null) }}><option value="">New private conversation</option>{session?.conversations.map(row => <option key={row.id} value={row.id}>Conversation {row.id}</option>)}</select></label>
-        <div aria-label="Conversation messages">{session?.conversation?.messages.map((message, index) => <article key={message.uuid ? message.uuid + message.role : index} className={message.role}><strong>{message.role === 'assistant' ? 'Everbranch' : 'You'}</strong><p>{message.text}</p>{message.generated_at && <small>Generated {new Date(message.generated_at).toLocaleString()}</small>}{message.usage && <small>{message.usage.model} · {message.usage.input_tokens} input ({message.usage.cached_input_tokens} cached), {message.usage.output_tokens} output tokens · ${(message.usage.charge_micros / 1_000_000).toFixed(6)}</small>}{message.sources?.length ? <details><summary>Sources ({message.sources.length})</summary>{message.sources.map(source => <p key={source.ref}>{sourceLink(source)}</p>)}</details> : null}</article>)}</div>
+        <label>Conversation<select disabled={busy} value={conversation || ''} onChange={event => { if (draft.trim() && !window.confirm('Discard the question you have not sent?')) return; setDraft(''); setSession(null); requestId.current = null; stopSpeech(); refresh(Number(event.target.value) || 0) }}><option value="">New private conversation</option>{session?.conversations.map(row => <option key={row.id} value={row.id}>Conversation {row.id}</option>)}</select></label>
+        <div aria-label="Conversation messages">{session?.conversation?.messages.map((message, index) => <article key={message.uuid ? message.uuid + message.role : index} className={message.role}><strong>{message.role === 'assistant' ? 'Everbranch' : 'You'}</strong><p>{message.text}</p>{message.workflow_notice && <p role="status">{message.workflow_notice}</p>}{message.generated_at && <small>Generated {new Date(message.generated_at).toLocaleString()}</small>}{message.usage && <small>{message.usage.model} · {message.usage.input_tokens} input ({message.usage.cached_input_tokens} cached), {message.usage.output_tokens} output tokens · ${(message.usage.charge_micros / 1_000_000).toFixed(6)}</small>}{message.sources?.length ? <details><summary>Sources ({message.sources.length})</summary>{message.sources.map(source => <p key={source.ref}>{sourceLink(source)}</p>)}</details> : null}</article>)}</div>
+        {session?.workflows_available && <WorkspaceActions actions={session.workflow_actions || []} busy={busy} decide={decideWorkflow} />}
         {session?.context && <details><summary>Context coverage</summary><p>Permitted evidence is sampled. This is not a complete activity report or financial ledger.</p></details>}
         <form onSubmit={ask}><label>Question<textarea value={draft} maxLength={3000} disabled={busy} onChange={event => { stopVoice(); stopCapture(); setDraft(event.target.value); requestId.current = null }} placeholder="What needs my attention?" /></label><div className="assistant-actions"><button type="button" disabled={!session || busy || uncertain} onClick={() => dictate()}>{listening ? 'Stop listening' : 'Voice to text'}</button><button className="assistant-primary" disabled={!session || busy || uncertain || !draft.trim()}>Ask</button></div></form>
         <label><input type="checkbox" checked={readAloud} disabled={!('speechSynthesis' in window) || voicePhase !== 'idle'} onChange={event => { setReadAloud(event.target.checked); stopSpeech() }} />Read typed answers aloud</label><button className="assistant-link" onClick={() => { stopVoice(); stopSpeech() }}>Stop speaking</button>
@@ -232,7 +273,7 @@ function Assistant({ host }) {
         {[['total_income', 'Income'], ['total_expenses', 'Expenses'], ['net_income', 'Net result']].map(([key, label]) => <article key={key}><strong>{label}</strong><p>{formatReportCents(session.financial_summary.amounts_cents?.[key])}</p></article>)}
         <p>{session.financial_summary.stale ? 'Stale saved report' : 'Saved report'} · Observed {new Date(session.financial_summary.observed_at).toLocaleString()}</p><p>{session.financial_summary.coverage}</p>
       </> : <p>{session?.financial_summary?.reason || 'A permitted report is unavailable.'}</p>}<p>Read only. No accounting transaction is created or changed.</p></section>}
-      {tab === 'memory' && <><p>Explicit private preferences stay in this workspace. They cannot grant access.</p>{session?.memories.map(row => <article key={row.id}><p>{row.body}</p><small>Expires {new Date(row.expires_at).toLocaleDateString()}</small><button disabled={busy} onClick={() => updateMemory(row.id)}>Forget</button></article>)}<label>Remember this<textarea value={memory} maxLength={500} onChange={event => setMemory(event.target.value)} /></label><button className="assistant-primary" disabled={busy || !memory.trim()} onClick={() => updateMemory()}>Save private memory</button></>}
+      {tab === 'memory' && <>{session?.workflows_available && <section><h3>Workspace memory</h3><p>Shared with authorized workspace assistant users. Saved until removed.</p>{session.workspace_memories.map(entry => <article key={entry.id}><p>{entry.body}</p><button disabled={busy} onClick={() => workspaceMemory(entry.id)}>Remove workspace memory</button></article>)}</section>}<p>Explicit private preferences stay in this workspace. They cannot grant access.</p>{session?.memories.map(row => <article key={row.id}><p>{row.body}</p><small>Expires {new Date(row.expires_at).toLocaleDateString()}</small><button disabled={busy} onClick={() => updateMemory(row.id)}>Forget</button></article>)}<label>Remember this<textarea value={memory} maxLength={500} onChange={event => setMemory(event.target.value)} /></label><button className="assistant-primary" disabled={busy || !memory.trim()} onClick={() => updateMemory()}>Save private memory</button>{session?.workflows_available && <button disabled={busy || !memory.trim()} onClick={() => workspaceMemory()}>Save for workspace</button>}</>}
       {tab === 'activity' && session?.actions_available && <form onSubmit={proposeNote}><h3>Draft an internal job note</h3><p>Recent permitted jobs only. Preparing a preview adds no note and sends no message.</p><label>Job<select value={jobId} disabled={busy} onChange={event => setJobId(event.target.value)}><option value="">Choose a job</option>{session.note_jobs?.map(job => <option key={job.id} value={job.id}>{job.title}</option>)}</select></label><label>Internal note<textarea maxLength={3000} value={note} disabled={busy} onChange={event => { stopCapture(); setNote(event.target.value) }} /></label><button type="button" disabled={busy} onClick={() => dictate('note')}>{listening ? 'Stop listening' : 'Voice to text'}</button><button className="assistant-primary" disabled={busy || !jobId || !note.trim()}>Prepare note preview</button></form>}
       {tab === 'activity' && <><p>Review exact changes before approving. Only unchanged internal notes support undo; sent communications cannot be recalled.</p>{session?.actions.map(action => <article key={action.id} data-assistant-action={action.id}><strong>{action.payload.job_title || 'Internal job note'} · {action.status}</strong><p>{action.payload.body}</p>{action.result_id && <small>Receipt: internal {action.kind === 'internal_commitment_task' ? 'task' : 'note'} {action.result_id}</small>}{action.can_undo && <><label><input type="checkbox" checked={reviewed.includes(action.id)} onChange={event => setReviewed(event.target.checked ? [...reviewed, action.id] : reviewed.filter(id => id !== action.id))} />Remove this exact unchanged internal note.</label><button disabled={busy || !reviewed.includes(action.id)} onClick={() => decide(action, 'undo')}>Undo note</button></>}{action.status === 'pending' && new Date(action.expires_at) > new Date() && <><label><input type="checkbox" checked={reviewed.includes(action.id)} onChange={event => setReviewed(event.target.checked ? [...reviewed, action.id] : reviewed.filter(id => id !== action.id))} />I reviewed this exact {action.kind === 'internal_commitment_task' ? 'task, source, assignee and due time' : 'note and job'}.</label><button disabled={busy || !reviewed.includes(action.id)} onClick={() => decide(action, 'approve')}>{action.kind === 'internal_commitment_task' ? 'Approve task' : 'Approve note'}</button><button disabled={busy} onClick={() => decide(action, 'reject')}>Reject</button></>}</article>)}</>}
     </dialog>

@@ -76,7 +76,7 @@ class SendGridEmailProvider implements EmailProvider
                 'success' => true,
                 'provider' => $this->key(),
                 'status' => 'sent',
-                'message_id' => 'DRYRUN-SG-' . strtoupper(bin2hex(random_bytes(6))),
+                'message_id' => 'DRYRUN-SG-'.strtoupper(bin2hex(random_bytes(6))),
                 'error_code' => null,
                 'error_message' => null,
                 'retryable' => false,
@@ -142,7 +142,7 @@ class SendGridEmailProvider implements EmailProvider
         }
 
         try {
-            $response = $this->request($apiKey)->post('https://api.sendgrid.com/v3/mail/send', $payload);
+            $response = $this->request($apiKey, ! ($config['no_provider_retry'] ?? false))->post('https://api.sendgrid.com/v3/mail/send', $payload);
         } catch (\Throwable $exception) {
             return $this->failure('provider_unreachable', $exception->getMessage(), true, [
                 'exception' => get_class($exception),
@@ -199,8 +199,8 @@ class SendGridEmailProvider implements EmailProvider
             'to_email' => $toEmail,
             'subject' => $subject,
             'text' => "This is a SendGrid test email for {$tenantLabel}.\n\nSent at {$timestamp}.",
-            'html' => '<p>This is a <strong>SendGrid test email</strong> for ' . e($tenantLabel) . '.</p>'
-                . '<p>Sent at ' . e($timestamp) . '.</p>',
+            'html' => '<p>This is a <strong>SendGrid test email</strong> for '.e($tenantLabel).'.</p>'
+                .'<p>Sent at '.e($timestamp).'.</p>',
             'from_email' => $config['from_email'] ?? null,
             'from_name' => $config['from_name'] ?? null,
             'reply_to_email' => $config['reply_to_email'] ?? null,
@@ -285,7 +285,7 @@ class SendGridEmailProvider implements EmailProvider
             return [
                 'valid' => false,
                 'status' => 'unhealthy',
-                'issues' => ['SendGrid health check failed: ' . $exception->getMessage()],
+                'issues' => ['SendGrid health check failed: '.$exception->getMessage()],
                 'details' => [
                     'provider' => $this->key(),
                     'live_check' => true,
@@ -411,7 +411,7 @@ class SendGridEmailProvider implements EmailProvider
     }
 
     /**
-     * @param array<string,mixed> $data
+     * @param  array<string,mixed>  $data
      * @return array<string,string>
      */
     protected function normalizedCustomArgs(array $data): array
@@ -444,8 +444,8 @@ class SendGridEmailProvider implements EmailProvider
     }
 
     /**
-     * @param array<int,string> $categories
-     * @param array<string,mixed> $metadata
+     * @param  array<int,string>  $categories
+     * @param  array<string,mixed>  $metadata
      * @return array<int,string>
      */
     protected function normalizedCategories(array $categories, array $metadata): array
@@ -457,12 +457,12 @@ class SendGridEmailProvider implements EmailProvider
 
         $campaignType = strtolower(trim((string) ($metadata['campaign_type'] ?? '')));
         if ($campaignType !== '') {
-            $values->push('campaign-' . str_replace('_', '-', $campaignType));
+            $values->push('campaign-'.str_replace('_', '-', $campaignType));
         }
 
         $templateKey = strtolower(trim((string) ($metadata['template_key'] ?? '')));
         if ($templateKey !== '') {
-            $values->push('template-' . str_replace('_', '-', $templateKey));
+            $values->push('template-'.str_replace('_', '-', $templateKey));
         }
 
         return $values
@@ -483,7 +483,7 @@ class SendGridEmailProvider implements EmailProvider
         $message = trim((string) ($errors->first()['message'] ?? ''));
 
         if ($message === '') {
-            $message = 'SendGrid request failed with status ' . $status . '.';
+            $message = 'SendGrid request failed with status '.$status.'.';
         }
 
         $lower = strtolower($message);
@@ -536,7 +536,7 @@ class SendGridEmailProvider implements EmailProvider
     }
 
     /**
-     * @param array<string,mixed> $payload
+     * @param  array<string,mixed>  $payload
      * @return array{
      *   success:false,
      *   provider:string,
@@ -570,13 +570,14 @@ class SendGridEmailProvider implements EmailProvider
         ];
     }
 
-    protected function request(string $apiKey): PendingRequest
+    protected function request(string $apiKey, bool $retry = true): PendingRequest
     {
-        return Http::acceptJson()
+        $request = Http::acceptJson()
             ->asJson()
             ->timeout(20)
-            ->retry(2, 250, throw: false)
             ->withToken($apiKey);
+
+        return $retry ? $request->retry(2, 250, throw: false) : $request;
     }
 
     protected function nullableString(mixed $value): ?string
