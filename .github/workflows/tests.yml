@@ -13,6 +13,7 @@ on:
       - codex/enterprise-reviewer-operations
       - codex/enterprise-client-provisioning
       - codex/enterprise-prefixed-integrations
+      - codex/enterprise-painpoint-demo
   workflow_dispatch:
 
 concurrency:

@@ -21,10 +21,11 @@
         } catch { return null; }
     };
     EverbranchReviewerTour.mountPriorities(root, {
-        priorityStorageKey: sample ? 'everbranch-priorities-sample-v1' : `everbranch-priorities-private-v1:${safeBack()?.pathname.replace(/\/+$/, '') || '/'}:${boot.identity.workspace}:${boot.identity.viewer}`,
+        ...(sample && adapter?.snapshot().persona === 'executive' ? {priorityItems:EverbranchReviewerTour.executivePriorities} : {}),
+        priorityStorageKey: sample ? 'everbranch-priorities-sample:'+boot.identity.workspace+':'+adapter?.snapshot().persona : `everbranch-priorities-private-v1:${safeBack()?.pathname.replace(/\/+$/, '') || '/'}:${boot.identity.workspace}:${boot.identity.viewer}`,
         priorityStatus(item) {
             const restricted = ['reports','certificates','invoices','funds'].includes(item.id),
-                available = Boolean(safeBack()) && (!sample || (!restricted || adapter?.snapshot().persona === 'manager'));
+                available = Boolean(safeBack()) && (!sample || (!restricted || ['manager','executive'].includes(adapter?.snapshot().persona)));
             return {available, status: sample ? (available ? 'Return to sample workspace · no live action' : 'Unavailable in this sample perspective') : 'Return to workspace · current permissions checked there'};
         },
         onPriority(item) {

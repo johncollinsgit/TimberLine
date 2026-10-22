@@ -3,6 +3,7 @@
     <testsuites>
         <testsuite name="Enterprise independent runtime">
             <file>tests/Feature/Enterprise/EnterpriseRuntimeTest.php</file>
+            <file>tests/Feature/Enterprise/EnterpriseRolePreviewTest.php</file>
             <file>tests/Feature/Enterprise/EnterpriseAppManifestTest.php</file>
             <file>tests/Feature/Enterprise/EnterpriseSchemaTest.php</file>
             <file>tests/Feature/Enterprise/EnterprisePrefixMountTest.php</file>

@@ -13,14 +13,17 @@
         const root = document.querySelector('[data-reviewer-tour-root]:not([data-priority-only="true"])');
         if (root && document.querySelector('.content')) document.querySelector('.content').prepend(root);
         const dispatch = detail => document.dispatchEvent(new CustomEvent('enterprise:navigate', {detail}));
+        const executive = adapter.snapshot().persona === 'executive';
         EverbranchReviewerTour.mount(root, {
+            ...(executive ? {priorityItems:EverbranchReviewerTour.executivePriorities} : {}),
+            priorityStorageKey:'everbranch-priorities-sample:'+boot.identity.workspace+':'+adapter.snapshot().persona,
             priorityStatus(item) {
-                const manager = adapter.snapshot().persona === 'manager';
+                const manager = ['manager','executive'].includes(adapter.snapshot().persona);
                 const restricted = ['reports','certificates','invoices','funds'].includes(item.id);
                 return {available: !restricted || manager, status: restricted && !manager ? 'Unavailable in this sample perspective' : 'Browser simulation · server feature implemented, not hosted'};
             },
             onPriority(item) {
-                if (['reports','certificates','invoices','funds'].includes(item.id) && adapter.snapshot().persona !== 'manager') return {available:false,message:'Unavailable in this sample perspective'};
+                if (['reports','certificates','invoices','funds'].includes(item.id) && !['manager','executive'].includes(adapter.snapshot().persona)) return {available:false,message:'Unavailable in this sample perspective'};
                 dispatch({section:item.section, area:EverbranchSampleTransport.ids.area});
                 return {available:true};
             },
@@ -32,8 +35,18 @@
             ...(boot.routes.trial ? {onTryIt() { adapter.navigate(boot.routes.trial); }} : {}),
         });
         const chooser = document.getElementById('reviewer-perspective');
+        const executiveOption=document.createElement('option');executiveOption.value='executive';executiveOption.textContent='Blaine · COO demo admin';chooser.prepend(executiveOption);
         chooser.value = adapter.snapshot().persona;
-        chooser.onchange = () => { adapter.setPersona(chooser.value); if(document.getElementById('enterprise-workflow')) location.reload(); else dispatch({section:chooser.value==='requester'?'requester':'requests', area:EverbranchSampleTransport.ids.area}); };
+        chooser.onchange = () => {
+            adapter.setPersona(chooser.value);
+            const next=adapter.href(boot.routes.back+'#section='+(chooser.value==='executive'?'home':chooser.value==='requester'?'requester':'requests')+'&area_id='+EverbranchSampleTransport.ids.area);
+            if(new URL(next,location.href).pathname===location.pathname){history.pushState(null,'',next);location.reload();}else adapter.navigate(next);
+        };
+        if(executive&&!document.getElementById('enterprise-workflow')){
+            const pricing=document.createElement('button');pricing.type='button';pricing.className='nav-item';pricing.textContent='Pricing & billing · proposed';pricing.id='executive-pricing-nav';
+            pricing.onclick=()=>{dispatch({section:'home',area:EverbranchSampleTransport.ids.area});setTimeout(()=>document.getElementById('executive-software')?.scrollIntoView({block:'start',behavior:'instant'}),150);};
+            document.querySelector('[aria-label="Workspace sections"]')?.append(pricing);
+        }
         const reset = document.getElementById('reviewer-reset-dialog'), open = document.getElementById('reviewer-reset-open');
         open.onclick = () => reset.showModal();
         document.getElementById('reviewer-reset-cancel').onclick = () => {reset.close();open.focus();};

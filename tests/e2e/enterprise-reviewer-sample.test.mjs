@@ -15,7 +15,7 @@ const tourSource = await readFile(
     new URL("../../resources/js/enterprise/reviewer/tour.js", import.meta.url),
     "utf8",
 );
-function sample() {
+function sample(extraBoot = {}) {
     const values = new Map(),
         context = vm.createContext({
             crypto: webcrypto,
@@ -52,6 +52,7 @@ function sample() {
             back: "/platform/demos/lees-mcrae",
             workflowWorkspace: "/platform/demos/lees-mcrae/workflows",
         },
+        ...extraBoot,
     };
     return {
         adapter: context.EverbranchSampleTransport.create(boot),
@@ -62,6 +63,120 @@ function sample() {
     };
 }
 const plain = (value) => JSON.parse(JSON.stringify(value));
+
+test("trusted executive default is fictional and read-only with configured workspace counts and separate uncommitted software terms", async () => {
+    const { adapter, api } = sample({ defaultPersona: "executive" });
+    const data = await adapter.request(
+        "/enterprise/data?area_id=" + api.ids.area,
+    );
+    assert.equal(data.viewer_id, "demo-executive");
+    assert.equal(data.demo_persona, "executive");
+    assert.equal(data.can_coordinate, false);
+    assert.equal(data.can_submit, false);
+    assert.deepEqual(
+        plain(data.executive.network.map((row) => row.id)),
+        plain(data.areas.map((row) => row.id)),
+    );
+    assert.deepEqual(
+        plain(data.executive.proposal.stages.map((row) => row.amount)),
+        [1000, 2000, 2500],
+    );
+    assert.equal(data.executive.proposal.cadence, null);
+    assert.equal(data.executive.proposal.currency, null);
+    assert.equal(
+        data.executive.metrics.find((row) => row.id === "variance").value,
+        null,
+    );
+    const before = plain(adapter.snapshot());
+    await assert.rejects(
+        adapter.request("/enterprise/commands", {
+            action: "workspace.create",
+            id: webcrypto.randomUUID(),
+            request_id: webcrypto.randomUUID(),
+            title: "Not authorized",
+        }),
+        /read-only/,
+    );
+    assert.deepEqual(plain(adapter.snapshot()), before);
+    assert.equal(
+        before.plans.some((row) =>
+            [1000, 2000, 2500].includes(row.data?.amount_minor),
+        ),
+        false,
+    );
+    adapter.setPersona("worker");
+    const worker = await adapter.request(
+        "/enterprise/data?area_id=" + api.ids.area,
+    );
+    assert.equal(worker.executive, undefined);
+    assert.equal(worker.features.finance, false);
+    assert.equal(
+        worker.areas.some((row) => row.id === api.ids.projects),
+        false,
+    );
+    await assert.rejects(
+        adapter.request("/enterprise/data?area_id=" + api.ids.projects),
+        /unavailable/,
+    );
+    adapter.setPersona("requester");
+    assert.equal(
+        (await adapter.request("/enterprise/data?area_id=" + api.ids.area))
+            .areas.length,
+        1,
+    );
+    await assert.rejects(
+        adapter.request("/enterprise/data?area_id=" + api.ids.it),
+        /unavailable/,
+    );
+});
+
+test("sample department projection denies known-ID task, discussion and history reads after a perspective change", async () => {
+    const { adapter, api } = sample(),
+        area = api.ids.projects,
+        project = webcrypto.randomUUID(),
+        id = webcrypto.randomUUID();
+    const send = (body) =>
+        adapter.request("/enterprise/commands", {
+            request_id: webcrypto.randomUUID(),
+            area_id: area,
+            ...body,
+        });
+    await send({
+        action: "project.create",
+        id: project,
+        title: "Fictional department project",
+    });
+    await send({
+        action: "request.create",
+        id,
+        expected_version: 0,
+        title: "Fictional department request",
+    });
+    const triage = await send({
+        action: "request.triage",
+        id,
+        expected_version: 1,
+        note: "Fictional review",
+    });
+    const assigned = await send({
+        action: "request.assign",
+        id,
+        expected_version: triage.version,
+        project_id: project,
+        assignee_id: "2",
+    });
+    adapter.setPersona("worker");
+    for (const path of [
+        "/enterprise/operations/tasks/" + assigned.task.id,
+        "/enterprise/discussion/task/" + assigned.task.id,
+        "/enterprise/discussion/project/" + project,
+        "/enterprise/requests/" + id + "/history",
+    ])
+        await assert.rejects(
+            adapter.request(path + "?area_id=" + area),
+            /unavailable/,
+        );
+});
 
 test("fictional certificate replacement retains accepted expiry until exact manager review and isolates perspectives", async () => {
     const { adapter, api } = sample(),

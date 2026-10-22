@@ -42,6 +42,7 @@ Route::middleware(['auth', 'verified', ResolveWorkspace::class, \App\Http\Middle
     Route::get('/', [EnterpriseController::class, 'index'])->name('enterprise.index');
     Route::get('/teams', [EnterpriseController::class, 'index'])->name('team.index');
     Route::get('/enterprise/data', [EnterpriseController::class, 'data'])->name('enterprise.data');
+    Route::get('/enterprise/role-preview', \App\Enterprise\RolePreviewController::class)->name('enterprise.role_preview');
     Route::get('/enterprise/integrations', [\App\Enterprise\IntegrationController::class, 'status'])->name('enterprise.integrations');
     Route::get('/enterprise/files/{id}/caption', [\App\Enterprise\FileCaptionController::class, 'show'])->whereUuid('id')->name('enterprise.files.caption');
     Route::post('/enterprise/files/{id}/caption', [\App\Enterprise\FileCaptionController::class, 'save'])->whereUuid('id')->name('enterprise.files.caption.save');
