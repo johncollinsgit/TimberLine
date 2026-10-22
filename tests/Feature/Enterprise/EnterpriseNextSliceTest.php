@@ -100,6 +100,16 @@ test('planning rechecks coordinator role and rejects foreign references inactive
     $this->actingAs($outsider)->getJson(route('enterprise.planning', ['tenant' => $tenant->slug, 'area_id' => $area]))->assertNotFound();
 });
 
+test('inactive contractors cannot receive new date blocks but their existing blocks can be cancelled', function (): void {
+    [$tenant, $owner, $area, $project] = nextFixture();
+    $contractor = nextPlan($tenant, $owner, $area, 'contractor')->assertOk()->json();
+    $values = ['project_id' => $project, 'contractor_id' => $contractor['id'], 'starts_on' => '2026-11-10', 'ends_on' => '2026-11-11'];
+    $schedule = nextPlan($tenant, $owner, $area, 'schedule', $values)->assertOk()->json();
+    nextPlan($tenant, $owner, $area, 'contractor', ['id' => $contractor['id'], 'expected_version' => 1, 'status' => 'inactive'])->assertOk();
+    nextPlan($tenant, $owner, $area, 'schedule', $values)->assertUnprocessable();
+    nextPlan($tenant, $owner, $area, 'schedule', $values + ['id' => $schedule['id'], 'expected_version' => 1, 'status' => 'cancelled'])->assertOk()->assertJsonPath('status', 'cancelled');
+});
+
 test('Ask Everbranch returns current role checked citations without financial or department leakage and never calls a provider by default', function (): void {
     [$tenant, $owner, $area, $project] = nextFixture();
     $editor = nextMember($tenant, $area);

@@ -114,7 +114,7 @@ class Planning
             }
             if ($kind === 'schedule') {
                 $contractor = $this->record($tenant, $actor, 'contractor', $input['contractor_id']);
-                abort_unless($contractor->area_id === $area->id && $contractor->status === 'active', 422);
+                abort_unless($contractor->area_id === $area->id && ($input['status'] === 'cancelled' || $contractor->status === 'active'), 422);
                 $data['contractor_id'] = $contractor->id;
                 if ($input['status'] !== 'cancelled') {
                     $overlap = TeamOperationRecord::query()->where(['tenant_id' => $tenant->id, 'area_id' => $area->id, 'kind' => self::KINDS['schedule'], 'status' => 'planned'])

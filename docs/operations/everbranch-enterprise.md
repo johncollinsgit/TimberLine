@@ -126,6 +126,10 @@ It creates a named disposable testing SQLite fixture, uses a separate headless
 process, blocks external requests, and deletes its database afterward. Synthetic
 fixture credentials and a fixed test-only key never configure an actual account.
 Screenshots/output are local evidence, not customer or deployment records.
+The harness uses loopback HTTPS with a one-use self-signed certificate; its
+temporary key/certificate files are deleted before browser requests. No system
+trust setting changes. This tests the unchanged secure session-cookie contract
+in both Chromium and WebKit. OpenSSL is required for that disposable fixture.
 
 The new `.github/workflows/enterprise-runtime-ci.yml` runs the separate runtime,
 schema lint and opt-in MySQL 8.4 recovery suite. No deployment job is added.

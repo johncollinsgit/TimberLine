@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdir, writeFile, unlink } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, unlink } from 'node:fs/promises';
+import { createServer as createHttpsServer, request as httpsRequest } from 'node:https';
+import { request as httpRequest } from 'node:http';
+import { once } from 'node:events';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 const php = process.env.ENTERPRISE_TEST_PHP;
@@ -19,7 +22,7 @@ const evidence = resolve(process.env.ENTERPRISE_EVIDENCE || '../evidence/enterpr
 await mkdir(evidence, {
   recursive: true
 });
-const origin = 'http://127.0.0.1:8879';
+const origin = 'https://127.0.0.1:8879';
 const env = {
   ...process.env,
   ENTERPRISE_APP_ENV: 'testing',
@@ -36,7 +39,8 @@ const env = {
   ENTERPRISE_EMAIL_DRAFTS_ENABLED: 'true',
   ENTERPRISE_TENANT_ALLOWLIST: '1'
 };
-let server, browser;
+const keyFile = db + '.key', certFile = db + '.crt';
+let server, serverExit, proxy, browser;
 try {
   const seeded = spawnSync(php, ['scripts/everbranch-team/enterprise-browser-fixture.php'], {
     env,
@@ -44,16 +48,35 @@ try {
     windowsHide: true
   });
   assert.equal(seeded.status, 0, seeded.stdout + seeded.stderr);
-  server = spawn(php, ['-S', '127.0.0.1:8879', '-t', 'apps/enterprise/public', 'apps/enterprise/public/index.php'], {
+  // One-use loopback TLS fixture. No trust-store change or persistent credential.
+  const generated = spawnSync(process.env.ENTERPRISE_TEST_OPENSSL || (process.platform === 'win32' ? 'C:/Program Files/Git/usr/bin/openssl.exe' : 'openssl'),
+    ['req','-x509','-newkey','rsa:2048','-nodes','-keyout',keyFile,'-out',certFile,'-days','1','-subj','/CN=127.0.0.1','-addext','subjectAltName=IP:127.0.0.1'],
+    {encoding:'utf8',windowsHide:true});
+  assert.equal(generated.status,0,'Unable to create the disposable loopback TLS fixture');
+  const key = await readFile(keyFile), cert = await readFile(certFile);
+  await unlink(keyFile); await unlink(certFile);
+  server = spawn(php, ['-S', '127.0.0.1:8878', '-t', 'apps/enterprise/public', 'tests/Support/enterprise-https-router.php'], {
     env,
     stdio: 'ignore',
     windowsHide: true
   });
+  serverExit = once(server,'exit');
+  proxy = createHttpsServer({key,cert}, (req,res) => {
+    const upstream = httpRequest({hostname:'127.0.0.1',port:8878,path:req.url,method:req.method,headers:req.headers}, response => {
+      res.writeHead(response.statusCode,response.headers); response.pipe(res);
+    });
+    upstream.on('error', () => {if (!res.headersSent) res.writeHead(503); res.end('Local fixture is starting.');});
+    req.pipe(upstream);
+  });
+  proxy.listen(8879,'127.0.0.1'); await once(proxy,'listening');
   let ready = false;
   for (let i = 0; i < 40; i++) {
     try {
-      const r = await fetch(origin + '/login');
-      if (r.status === 200) {
+      const ok = await new Promise(resolve => {
+        const request = httpsRequest(origin + '/login',{ca:cert}, response => {response.resume(); resolve(response.statusCode === 200);});
+        request.on('error',() => resolve(false)); request.end();
+      });
+      if (ok) {
         ready = true;
         break;
       }
@@ -70,6 +93,7 @@ try {
     } : {})
   });
   const context = await browser.newContext({
+    ignoreHTTPSErrors: true, // This context only: the one-use self-signed loopback fixture.
     viewport: {
       width: 1440,
       height: 1000
@@ -91,10 +115,9 @@ try {
   await page.getByLabel('Password', {
     exact: true
   }).fill('Synthetic-browser-only-2026!');
-  await page.getByRole('button', {
-    name: 'Sign in',
-    exact: true
-  }).click();
+  const [login] = await Promise.all([page.waitForResponse(r => r.request().method() === 'POST' && new URL(r.url()).pathname === '/login'),
+    page.getByRole('button', {name:'Sign in',exact:true}).click()]);
+  assert.equal(login.status(),200,'Enterprise sign-in must preserve its secure session');
   await page.getByRole('link', {
     name: 'Synthetic Enterprise'
   }).click();
@@ -310,6 +333,8 @@ try {
   console.log(`PASS (${browserEngine}): independent runtime intake lifecycle and map; contractor/date planning; larger project details, retained drafts, exact interrupted note retry, resumable private quarantined upload; desktop/phone/iPad portrait/landscape viewport layout and touch targets; user-aware record-backed Ask citations and disconnected mailbox; zero external requests and JavaScript errors. Viewport simulation only, not physical iPad acceptance.`);
 } finally {
   if (browser) await browser.close();
-  if (server) server.kill();
+  if (proxy) {proxy.closeAllConnections(); await new Promise(resolve => proxy.close(resolve));}
+  if (server && server.exitCode === null) {server.kill(); await serverExit;}
   await unlink(db).catch(() => {});
+  await unlink(keyFile).catch(() => {}); await unlink(certFile).catch(() => {});
 }
