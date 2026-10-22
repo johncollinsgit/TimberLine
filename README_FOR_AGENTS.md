@@ -1,4 +1,16 @@
-## Enterprise integration rehearsal (October 22; not released)
+## Unified Enterprise and proposal review candidate (October 22; not released)
+
+Proposal PR475 is now included in the isolated current-main Enterprise candidate.
+Version/build/page-bound reviewer names and shared comments use the real proposal
+engine and the existing fictional campus renderer, including the full-screen
+workflow workspace. These names grant no campus access. Client operational data
+and proposal-owner data require separate singleton silos, keys and storage. The
+client runtime and owner runtime have independent provisioning/access gates. Read
+[the unified review runbook](docs/operations/enterprise-proposal-review-release.md).
+The combined MySQL baseline must be workflow-generated and reviewed before the
+candidate is release eligible. No live provisioning or provider calls occurred.
+
+## Earlier Enterprise integration rehearsal
 
 Preserve both current-main Fleet behavior and the disabled Enterprise runtime.
 This candidate combines `084bbb1` and `904ebe7` without importing the separate
@@ -2502,3 +2514,13 @@ the Enterprise owner place the actual accepted capability last in its tour.
 Keep sample fixtures visibly fictional. No source/browser result establishes
 physical speech, deployment or live provider readiness. Existing trial budgets
 and other customers' credentials do not authorize a paid voice connection.
+## Reusable service proposals (October 22; draft source, disabled)
+
+Read [the proposal boundary](docs/architecture/reusable-proposals.md) before
+mounting or activating the shared engine. Native business tenants, Enterprise
+department areas, client tenants and HighLevel locations are distinct. No owner
+binding is inferred by name. Keep published versions and exact selections,
+review display names, final signature evidence and provider lifecycles separate.
+Lees-McRae has client-only prices and no-markup usage; never copy that offer into
+global rates. Both feature flags and binding/host lists default closed. The
+campus header/tour and payment stack remain under their existing owners.

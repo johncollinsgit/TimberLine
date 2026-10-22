@@ -683,6 +683,20 @@ test("public navigation is idempotent, uses hash context and strips tenant and u
     );
 });
 
+test("published review workflow navigation retains its exact trusted canvas route", () => {
+    const routes = {
+        back: "/service-proposals/synthetic-review/campus/projects",
+        workflowWorkspace: "/service-proposals/synthetic-review/campus/workflows",
+    };
+    const { adapter, api } = sample({ routes });
+    const mapped = adapter.href(`/projects/workspace?area_id=${api.ids.area}&project_id=${api.ids.project}`);
+    assert.ok(mapped.startsWith(routes.workflowWorkspace + "#"));
+    assert.equal(adapter.href(mapped), mapped);
+    const unrelated = adapter.href("/service-proposals/other-review/campus/workflows");
+    assert.ok(unrelated.startsWith(routes.back));
+    assert.ok(!unrelated.includes("other-review"));
+});
+
 test("three-minute tour clock excludes pauses and restarts without records, network or provider effects", () => {
     const context = vm.createContext({});
     vm.runInContext(tourSource, context);

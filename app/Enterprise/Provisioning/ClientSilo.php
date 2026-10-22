@@ -124,7 +124,8 @@ final class ClientSilo
             'tenant_mailbox_users', 'team_work_locks', 'team_projects', 'team_tasks', 'team_project_members', 'team_task_projects',
             'team_work_events', 'team_work_receipts', 'team_inbox_items', 'team_work_versions', 'team_file_uploads', 'team_file_chunks',
             'team_areas', 'team_area_members', 'team_provider_connections', 'team_operation_records', 'team_source_snapshots',
-            'team_operation_attempts', 'team_operation_revisions'];
+            'team_operation_attempts', 'team_operation_revisions', 'service_proposal_assets', 'service_proposal_drafts',
+            'service_proposal_versions', 'service_proposal_reviews', 'service_proposal_comments'];
         $actual = Schema::getTableListing(schemaQualified: false);
         sort($expected);
         sort($actual);

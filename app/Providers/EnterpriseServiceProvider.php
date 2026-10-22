@@ -30,6 +30,7 @@ final class EnterpriseServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        \App\Proposals\RateLimits::register();
         $this->commands([\App\Enterprise\Provisioning\ProvisionClientCommand::class, \App\Enterprise\VoicePruneCommand::class]);
         DB::prohibitDestructiveCommands($this->app->isProduction());
         Gate::policy(TeamProject::class, TeamProjectPolicy::class);

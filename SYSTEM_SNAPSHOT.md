@@ -1,4 +1,16 @@
-## Enterprise integration rehearsal (October 22; not released)
+## Unified Enterprise and proposal review candidate (October 22; not released)
+
+The isolated source candidate now imports proposal PR475 into current-main
+Enterprise. Real server-persisted review names/comments bind to an immutable
+proposal version and exact fictional campus build/page; they never grant campus
+membership. Dedicated client and owner runtimes preserve singleton database,
+key/storage/session boundaries. Hosted provisioning and operational acceptance
+have not run; client and owner destinations require independent release gates.
+See [the unified review runbook](docs/operations/enterprise-proposal-review-release.md)
+for source, generated MySQL baseline, browser, protected release and hosted
+acceptance gates. Provider activation remains separate.
+
+## Earlier Enterprise integration rehearsal
 
 The isolated release candidate combines current main `084bbb1` with reviewed
 Enterprise source `904ebe7`. Fleet application files match main; Enterprise
@@ -3188,3 +3200,11 @@ explicit interrupt and typed fallback. No tour/header/fixture integration, paid
 provider call, communication send or production activation is included. Shell
 integration and physical iPad/iPhone speech acceptance remain pending; fake
 browser speech is not live AI or acoustic evidence.
+## Reusable service proposals (October 22; draft source, disabled)
+
+`App\Proposals` adds tenant-scoped catalogs/clients/draft templates, owner drafts
+and previews, immutable private password publications, scoped review comments
+and non-binding exact-selection agreement requests. The regular and Enterprise
+owner-lane binding registry and recipient hosts ship empty. No real workspace
+is provisioned or bound; no signature/payment/provider activation is included.
+See [the architecture and acceptance gates](docs/architecture/reusable-proposals.md).

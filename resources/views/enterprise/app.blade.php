@@ -186,6 +186,7 @@
   }
   function render({preserveDetail=false}={}) {
     if(transport.mode==='sample')$('enterprise-main').dataset.demoPage='enterprise-'+section;
+    if(transport.mode==='sample')document.dispatchEvent(new CustomEvent('enterprise:section-rendered',{detail:{section}}));
     // An explicit unsaved URL/history view takes precedence over an async saved default.
     if (preserveDetail && navigationViewOverride) ({view, map} = navigationViewOverride);
     $('areas').innerHTML = data.areas.map(a => `<button class="sidebar-project ${a.id === area ? 'active' : ''}" data-area="${esc(a.id)}"><span class="dot"></span>${esc(a.name)}</button>`).join('');

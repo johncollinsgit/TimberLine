@@ -5,6 +5,8 @@ on:
     paths:
       - 'apps/enterprise/**'
       - 'app/Enterprise/**'
+      - 'app/Proposals/**'
+      - 'bootstrap/providers.php'
       - 'app/Foundation/Enterprise*.php'
       - 'app/Providers/Enterprise*.php'
       - 'app/Http/Middleware/EnsureEnterpriseRuntime.php'
@@ -18,15 +20,21 @@ on:
       - 'app/Services/AiBranch/AiBranchProvider.php'
       - 'app/Policies/Team*.php'
       - 'config/enterprise.php'
+      - 'config/service_proposals.php'
       - 'routes/enterprise.php'
+      - 'routes/service-proposals.php'
       - 'routes/campus-demo.php'
       - 'resources/data/enterprise/**'
       - 'resources/views/enterprise/**'
+      - 'resources/views/service-proposals/**'
       - 'resources/js/enterprise/**'
       - 'resources/js/ai-voice-conversation.js'
       - 'vite.enterprise.config.js'
       - 'scripts/everbranch-team/enterprise-*'
+      - 'scripts/proposals/review-browser.mjs'
       - 'tests/Feature/Enterprise/**'
+      - 'tests/Feature/Proposals/**'
+      - 'tests/Support/proposal-review-browser*.php'
       - 'tests/Feature/LeesMcRaeCampusDemoTest.php'
       - 'tests/e2e/enterprise-*'
       - 'tests/browser/enterprise-voice-jobs.smoke.mjs'
@@ -102,6 +110,8 @@ jobs:
       - run: npm run build:enterprise
       - name: Check shared reviewer rendering without account or route authority
         run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseReviewerRenderTest.php tests/Feature/Enterprise/EnterpriseResourcePresentationTest.php tests/Feature/Enterprise/EnterpriseReviewerTrialEntryTest.php tests/Feature/EnterpriseReviewerPublicTest.php tests/Feature/LeesMcRaeCampusDemoTest.php --compact --display-warnings
+      - name: Check immutable proposal and version-bound campus review policies
+        run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Proposals --compact --display-warnings
       - name: Check permission-filtered period reports and certificate register
         run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseContractorCertificatesTest.php tests/Feature/Enterprise/EnterpriseReportExportTest.php tests/Feature/Enterprise/EnterpriseFinancePacketsTest.php tests/Feature/Enterprise/EnterpriseOperationsTest.php --compact --display-warnings
       - name: Check read-only voice and usage ledger policies without providers
@@ -123,6 +133,15 @@ jobs:
           VOICE_WEBKIT: '1'
           VOICE_EVIDENCE_DIR: test-results/enterprise/voice-jobs
         run: node tests/browser/enterprise-voice-jobs.smoke.mjs
+      - name: Check persisted proposal and campus page review in Chromium and WebKit
+        timeout-minutes: 20
+        env:
+          ENTERPRISE_TEST_PHP: php
+          EVERBRANCH_PLAYWRIGHT_MODULE: node_modules/playwright/index.mjs
+        run: |
+          for engine in chromium webkit; do
+            PROPOSAL_BROWSER_ENGINE="$engine" PROPOSAL_BROWSER_EVIDENCE="test-results/enterprise/proposal-review/$engine" node scripts/proposals/review-browser.mjs
+          done
       - name: Check reviewer tour and shared renderer in Chromium and WebKit
         timeout-minutes: 15
         env:

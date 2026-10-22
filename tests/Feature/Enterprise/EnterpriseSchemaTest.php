@@ -57,14 +57,18 @@ final class EnterpriseSchemaTest extends TestCase
             $this->assertTrue(Schema::hasTable($table));
             $this->assertSame(0, DB::table($table)->count(), $table.' must start empty');
         }
-        $this->assertCount(6, DB::table('migrations')->get());
+        foreach (['assets', 'drafts', 'versions', 'reviews', 'comments'] as $kind) {
+            $this->assertTrue(Schema::hasTable('service_proposal_'.$kind));
+            $this->assertSame(0, DB::table('service_proposal_'.$kind)->count());
+        }
+        $this->assertCount(7, DB::table('migrations')->get());
         $this->assertTrue(Schema::hasColumn('team_operation_records', 'voice_expires_at'));
         foreach (['tor_voice_expiry', 'tor_voice_sessions', 'tor_voice_previews'] as $index) {
             $this->assertTrue(Schema::hasIndex('team_operation_records', $index));
         }
         $this->install();
-        $this->assertCount(6, DB::table('migrations')->get());
-        $this->assertCount(6, EnterpriseSchema::sharedVersionOne());
+        $this->assertCount(7, DB::table('migrations')->get());
+        $this->assertCount(7, EnterpriseSchema::sharedVersionOne());
     }
 
     public function test_schema_replay_does_not_backfill_memberships_profiles_or_entitlements(): void

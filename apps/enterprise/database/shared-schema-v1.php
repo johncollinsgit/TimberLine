@@ -9,4 +9,5 @@ return [
     '2026_10_17_030000_create_team_work_versions_table.php' => '5e8eb38196a3f5bfa36a81ff51879d96cf0d4f9c89feba2a2401d65c204ea9e3',
     '2026_10_17_040000_create_team_file_uploads.php' => 'd0c92fb0cb81fb33e83ba2e28382d419f4cc95bdd5a31fd4d98371229098f739',
     '2026_10_20_010000_create_team_operations_tables.php' => '24f30606f93c3720b01138e30016f762c28dd41b936840a8447f63afb534b804',
+    '2026_10_22_150000_create_service_proposal_tables.php' => '80aa869bfa9e1f7c51b4d5ff09838ce9b93ddc2374f35c59beec4e0c3b9f10ba',
 ];

@@ -7,6 +7,12 @@ use App\Http\Controllers\TeamFileController;
 use App\Http\Controllers\TeamWorkController;
 use Illuminate\Support\Facades\Route;
 
+// Independent business-owner proposals share this runtime's web/CSRF/session rails.
+// Recipient capabilities deliberately stay outside employee/Teams middleware.
+Route::middleware(\App\Enterprise\ProposalRuntimeBoundary::class)->group(function (): void {
+    require __DIR__.'/service-proposals.php';
+});
+
 // Generic install metadata does not start a web session or resolve operational records.
 Route::withoutMiddleware([\Illuminate\Cookie\Middleware\EncryptCookies::class, \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
     \Illuminate\Session\Middleware\StartSession::class, \Illuminate\View\Middleware\ShareErrorsFromSession::class,

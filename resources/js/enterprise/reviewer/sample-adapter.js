@@ -590,6 +590,11 @@
                 );
             const workflow =
                 parsed.pathname.includes("/projects/workspace") ||
+                parsed.pathname ===
+                    new URL(
+                        boot.routes.workflowWorkspace,
+                        globalThis.location?.href ?? "https://sample.invalid/",
+                    ).pathname ||
                 (parsed.pathname.endsWith("/workflows") &&
                     parsed.pathname.startsWith("/platform/demos/"));
             const current = new URL(

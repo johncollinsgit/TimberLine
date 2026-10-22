@@ -40,6 +40,25 @@ final class EnterpriseMySqlMigrationRecoveryTest extends TestCase
         DB::table('tenant_mailboxes')->insert(['id' => 9901, 'tenant_id' => 9901, 'tenant_mail_domain_id' => 9901,
             'address' => 'member@mysql-recovery.example.invalid', 'display_name' => 'Synthetic retained mailbox', 'provider_credentials' => $encrypted]);
 
+        config(['service_proposals.owner_workspaces.9901' => 'enterprise', 'service_proposals.publish_enabled' => true]);
+        $proposals = app(\App\Proposals\ProposalService::class);
+        $proposalTenant = \App\Models\Tenant::findOrFail(9901);
+        $draft = $proposals->leesMcRaeDraft($proposalTenant, 9901);
+        $publication = $proposals->publish($proposalTenant, 9901, $draft->id, 1, 'Synthetic recovery password', 1, (string) \Illuminate\Support\Str::uuid(), 'reviewer');
+        $comment = $proposals->comment($publication['version'], 'Ross', 'approach', 'Synthetic retained proposal evidence', (string) \Illuminate\Support\Str::uuid());
+        $proposalCipher = DB::table('service_proposal_versions')->where('id', $publication['version']->id)->value('payload');
+        $commentCipher = DB::table('service_proposal_comments')->where('id', $comment->id)->value('payload');
+        Schema::table('service_proposal_comments', fn (Blueprint $table) => $table->dropForeign('sp_c_version_fk'));
+        Schema::table('service_proposal_comments', fn (Blueprint $table) => $table->dropUnique('sp_c_request_uq'));
+        $proposalMigration = require database_path('migrations/2026_10_22_000700_create_enterprise_service_proposals.php');
+        $proposalMigration->up();
+        $proposalMigration->up();
+        $proposalMigration->down();
+        $this->assertSame($proposalCipher, DB::table('service_proposal_versions')->where('id', $publication['version']->id)->value('payload'));
+        $this->assertSame($commentCipher, DB::table('service_proposal_comments')->where('id', $comment->id)->value('payload'));
+        $this->assertTrue(Schema::hasIndex('service_proposal_comments', 'sp_c_request_uq', 'unique'));
+        $this->assertSame('service_proposal_versions', collect(Schema::getForeignKeys('service_proposal_comments'))->firstWhere('name', 'sp_c_version_fk')['foreign_table']);
+
         // MySQL retains these tables/data while later DDL or bookkeeping is absent.
         Schema::drop('team_operation_attempts');
         Schema::drop('team_operation_revisions');

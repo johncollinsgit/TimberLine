@@ -45,6 +45,10 @@ final class EnterpriseVoiceRuntimeTest extends TestCase
             'enterprise.trial.enabled' => false, 'enterprise.gmail.connection_enabled' => false, 'enterprise.gmail.send_enabled' => false,
             'team_work.enabled' => true,
         ]);
+        // Provider boot resolves the limiter before this test switches to disposable array cache.
+        $app->forgetInstance(\Illuminate\Cache\RateLimiter::class);
+        \Illuminate\Support\Facades\RateLimiter::clearResolvedInstance(\Illuminate\Cache\RateLimiter::class);
+        \App\Proposals\RateLimits::register();
 
         return $app;
     }

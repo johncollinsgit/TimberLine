@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_22_000700_create_enterprise_service_proposals.php' => [
+        'test' => 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['checksum-pinned proposal schema repairs missing named comment index and version constraint while preserving encrypted publication and comment evidence; code rollback retains all five tables'],
+    ],
     '2026_10_22_190000_add_private_voice_retention.php' => [
         'test' => 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php',
         'scenarios' => ['retained encrypted voice and metering rows survive partial expiry column and named index creation; repeated recovery and code rollback preserve evidence'],
@@ -30,6 +34,10 @@ return [
     '2026_10_21_000300_create_enterprise_shared_work_schema.php' => [
         'test' => 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php',
         'scenarios' => ['pinned shared schema repairs missing operation/file tables and project/record indexes while retaining native work evidence'],
+    ],
+    '2026_10_22_150000_create_service_proposal_tables.php' => [
+        'test' => 'tests/Integration/ServiceProposalMySqlRecoveryTest.php',
+        'scenarios' => ['retained encrypted client/catalog/draft/version/request/comment evidence before named index and foreign-key DDL', 'repeated completed DDL before migration bookkeeping', 'publication replay unique index recovered without replacing tokens'],
     ],
     '2026_10_20_200000_create_platform_email_deliveries.php' => [
         'test' => 'tests/Integration/PlatformMailMySqlRecoveryTest.php',

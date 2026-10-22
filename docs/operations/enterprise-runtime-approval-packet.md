@@ -4,6 +4,11 @@ Prepared October 22, 2026. Proposed destinations below are not provisioned or
 verified access grants. Source tests, browser simulations and public sample data
 are distinct from hosted persistent-workspace acceptance.
 
+Current action-time approvals and access status belong in the private release
+handoff. This source design is not an authorization record. The additional
+proposal-owner silo is described structurally in
+`enterprise-proposal-review-release.md`; do not install it in the client silo.
+
 ## Release and hosting
 
 The existing approved server is `129.212.138.111`, Forge site record
@@ -16,8 +21,7 @@ the numeric Forge server/site IDs, active release layout and PHP socket. Those
 identifiers are unknown; this document is not authority to guess them or bypass
 the existing Forge login restriction.
 
-The concrete owner decision is whether to create these isolated destinations on
-that existing site and install the narrow reviewed route:
+The designed isolated campus destinations on that existing site are:
 
 - Database `everbranch_enterprise_demo`, schema-limited database user
   `everbranch_ent_demo`; no global privileges or grant option.
@@ -48,8 +52,10 @@ restore-verified.
 Protected GitHub checks/reviews and the normal GitHub-to-Forge atomic release
 path remain mandatory. The Enterprise draft stack needs release-owner review
 against current main; do not incidentally merge Fleet, POS, terminal, support or
-proposal branches. A correct-client immutable proposal publication is absent;
-the header remains in its honest preparation state.
+proposal branches blindly. Proposal PR475 is now explicitly included in the
+unified source candidate. A correct-client hosted immutable publication is still
+absent; normal campus headers retain preparation state. Authorized publication
+review routes alone replace that state with the actual bound proposal link.
 
 ## AI account, credential and spend
 
