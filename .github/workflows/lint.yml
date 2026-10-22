@@ -12,6 +12,7 @@ on:
       - codex/enterprise-workflow-briefing
       - codex/enterprise-reviewer-operations
       - codex/enterprise-client-provisioning
+      - codex/enterprise-prefixed-integrations
   workflow_dispatch:
 
 concurrency:
