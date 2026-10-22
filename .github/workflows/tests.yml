@@ -83,7 +83,9 @@ jobs:
         run: npm run test:highlevel-fleet
 
       - name: Verify conversational voice, memory and stop controls with fictional fixtures
-        run: node tests/browser/ai-voice-conversation.smoke.mjs
+        run: |
+          node tests/browser/ai-voice-conversation.smoke.mjs
+          node tests/browser/ai-workspace-assistant.smoke.mjs
 
       - name: Verify workspace branch settings in Chromium and WebKit
         run: |

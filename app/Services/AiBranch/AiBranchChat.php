@@ -41,22 +41,27 @@ class AiBranchChat
             return AiBranchConversation::query()->create([
                 'tenant_id' => $tenant->id, 'user_id' => $user->id, 'messages' => [],
                 'context_hash' => $this->context->scopeHash($tenant, $user),
-                'expires_at' => now()->addDays((int) config('ai_branch.history_days')),
+                'expires_at' => now()->addDays((int) config(app(AiWorkspaceWorkflows::class)->enabled($tenant, $user) ? 'ai_branch.workspace_history_days' : 'ai_branch.history_days')),
             ]);
         }, 3);
     }
 
     public function usage(Tenant $tenant): array
     {
-        $events = TenantAiUsageEvent::query()->where('tenant_id', $tenant->id)->where('feature', 'ai_branch_chat')
+        $events = TenantAiUsageEvent::query()->where('tenant_id', $tenant->id)->whereIn('feature', ['ai_branch_chat', 'ai_branch_audio'])
             ->when(! app(AiFictionalPilot::class)->reserved($tenant), fn ($query) => $query->where('occurred_at', '>=', now('UTC')->startOfMonth()));
 
-        return ['responses' => (clone $events)->count(), 'provider_micros' => (int) (clone $events)->sum('provider_cost_micros'), 'buyer_micros' => (int) $events->sum('buyer_charge_micros')];
+        return ['responses' => (clone $events)->where('feature', 'ai_branch_chat')->count(), 'provider_micros' => (int) (clone $events)->sum('provider_cost_micros'), 'buyer_micros' => (int) $events->sum('buyer_charge_micros')];
     }
 
     public function ask(Tenant $tenant, User $user, int $conversationId, string $question, string $uuid, array $origin = []): array
     {
         return $this->run($tenant, $user, $conversationId, $question, $uuid, $origin, 'chat');
+    }
+
+    public function agentFollowup(Tenant $tenant, User $user, int $conversationId, string $question, string $uuid): array
+    {
+        return $this->run($tenant, $user, $conversationId, $question, $uuid, [], 'agent_followup');
     }
 
     public function briefing(Tenant $tenant, User $user, string $uuid, array $origin = []): array
@@ -85,6 +90,8 @@ class AiBranchChat
         abort_if(! $enhanced && $origin !== [], 422, 'Page context is unavailable.');
         $origin = $enhanced ? app(AiWorkspacePage::class)->normalize($origin) : [];
         $settings = $this->provider->settings($tenant);
+        $settings['workspace_workflows'] = in_array($purpose, ['chat', 'agent_followup'], true) && app(AiWorkspaceWorkflows::class)->enabled($tenant, $user)
+            && ! isset($settings['fictional_scope']);
         $fingerprint = hash('sha256', json_encode($enhanced
             ? [$user->id, $conversationId, $question, $purpose, $origin]
             : [$user->id, $conversationId, $question], JSON_THROW_ON_ERROR));
@@ -109,16 +116,23 @@ class AiBranchChat
                 abort_if(count($messages) >= 40, 422, 'Start a new chat to keep context manageable.');
                 $snapshot = $enhanced ? app(AiWorkspaceContext::class)->capture($tenant, $user, $origin, $purpose) : null;
                 $sources = $snapshot['sources'] ?? $this->context->sources($tenant, $user);
+                $workflowContext = $settings['workspace_workflows'] ? app(AiWorkspaceWorkflows::class)->context($tenant, $user, $question, $messages) : null;
+                if ($workflowContext) {
+                    $sources = collect([...$sources, ...collect($workflowContext['customers'])->map(fn ($customer) => \Illuminate\Support\Arr::only($customer, ['id', 'ref', 'type', 'title', 'url']))->all(),
+                        ...collect($workflowContext['customers'])->flatMap(fn ($customer) => $customer['jobs'])->all()])->unique('ref')->take(30)->values()->all();
+                }
                 $memories = AiBranchMemory::query()->where('tenant_id', $tenant->id)->where('user_id', $user->id)->where('expires_at', '>', now())->orderBy('id')->limit(10)->get()->pluck('body')->all();
                 $input = [['role' => 'user', 'content' => json_encode([
                     ...($snapshot ? ['untrusted_workspace_context' => $snapshot] : ['untrusted_workspace_evidence' => $sources]),
                     'untrusted_personal_memory' => $memories,
+                    ...($workflowContext ? ['untrusted_workflow_context' => $workflowContext] : []),
                 ], JSON_THROW_ON_ERROR)]];
                 foreach ($messages as $message) {
                     $input[] = ['role' => $message['role'], 'content' => $message['text']];
                 }
                 $input[] = ['role' => 'user', 'content' => $question];
-                abort_if(strlen(json_encode($input, JSON_THROW_ON_ERROR)) + strlen(AiBranchProvider::INSTRUCTIONS) + 2048 > $settings['max_input'], 422, 'Start a new chat or shorten the question and memory.');
+                $overhead = strlen(AiBranchProvider::INSTRUCTIONS) + ($settings['workspace_workflows'] ? strlen(AiWorkspaceWorkflows::INSTRUCTIONS) + strlen(json_encode(AiWorkspaceWorkflows::format(), JSON_THROW_ON_ERROR)) + 1024 : 2048);
+                abort_if(strlen(json_encode($input, JSON_THROW_ON_ERROR)) + $overhead > $settings['max_input'], 422, 'Start a new chat or shorten the question and memory.');
                 $usage = $this->usage($tenant);
                 $reservedMicros = $this->provider->cost($settings['max_input'], $settings['max_output'], $settings);
                 $cap = min($account->budget_cents, (int) $tier['ai_limits']['provider_budget_cents']) * 10000;
@@ -177,12 +191,25 @@ class AiBranchChat
                 $event->provider_request_id = $result['provider_id'];
                 app(\App\Services\Marketing\Messaging\TenantMessagingUsageService::class)->settleAi($event, $cost);
             }
+            $workflowAction = null;
+            $workflowNotice = null;
+            if ($settings['workspace_workflows'] && ($result['draft']['kind'] ?? 'none') !== 'none') {
+                try {
+                    abort_if($purpose === 'agent_followup' && $result['draft']['kind'] !== 'customer_email', 422);
+                    $workflowAction = app(AiWorkspaceWorkflows::class)->propose($tenant, $user, $result['draft'], (string) Str::uuid());
+                } catch (\Illuminate\Validation\ValidationException|\Illuminate\Database\Eloquent\ModelNotFoundException|\Symfony\Component\HttpKernel\Exception\HttpException) {
+                    // Generation was billed; an invalid proposal never loses the answer or replays the provider.
+                    $workflowNotice = 'The proposed details need clarification. No action was executed. Check the required details and try again.';
+                }
+            }
             $message = ['role' => 'assistant', 'uuid' => $uuid, 'text' => $result['reply'], 'sources' => $reservation['sources'],
+                ...($workflowAction ? ['workflow_action_id' => $workflowAction->id] : []), ...($workflowNotice ? ['workflow_notice' => $workflowNotice] : []),
                 'conversation_id' => $conversationId, 'purpose' => $purpose, 'generated_at' => now('UTC')->toIso8601String(),
                 ...(isset($settings['buyer_multiplier']) ? ['usage' => ['model' => $settings['model'], 'input_tokens' => $result['input_tokens'],
                     'cached_input_tokens' => $result['cached_input_tokens'] ?? 0, 'output_tokens' => $result['output_tokens'], 'charge_micros' => $cost * 2]] : []),
                 ...($reservation['snapshot'] ? ['workspace_context' => $reservation['snapshot']] : [])];
-            $conversation->forceFill(['messages' => [...(array) $conversation->messages, ['role' => 'user', 'uuid' => $uuid, 'text' => $question], $message], 'pending_uuid' => null])->save();
+            $conversation->forceFill(['messages' => [...(array) $conversation->messages, ['role' => 'user', 'uuid' => $uuid, 'text' => $question], $message], 'pending_uuid' => null,
+                ...($settings['workspace_workflows'] ? ['expires_at' => now()->addDays((int) config('ai_branch.workspace_history_days'))] : [])])->save();
             $event->forceFill(['status' => 'settled', 'provider_request_id' => $result['provider_id'],
                 'provider_cost_micros' => $cost, 'buyer_charge_micros' => $cost * (int) ($settings['buyer_multiplier'] ?? 0),
                 'metadata' => [...$event->metadata, 'input_tokens' => $result['input_tokens'], 'output_tokens' => $result['output_tokens'], 'cached_input_tokens' => $result['cached_input_tokens'] ?? 0],

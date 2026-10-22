@@ -77,7 +77,9 @@ class AiBranchProvider
         // A revoked/expired grant must never fall through to a paid provider.
         if (isset($settings['fictional_scope']) || is_array(config('ai_branch.fictional_request'))) {
             // Check the precise grant again immediately before any dispatch.
-            abort_unless($this->settings() === $settings, 403, 'Fictional pilot access changed.');
+            $approved = $settings;
+            unset($approved['workspace_workflows']);
+            abort_unless(empty($settings['workspace_workflows']) && $this->settings() === $approved, 403, 'Fictional pilot access changed.');
             if (($settings['fictional_provider'] ?? 'scripted') === 'scripted') {
                 return app(AiFictionalPilot::class)->response($input, $settings);
             }
@@ -86,9 +88,11 @@ class AiBranchProvider
         $response = Http::withToken(config('ai_branch.api_key'))->acceptJson()->connectTimeout(5)->timeout(40)
             ->post('https://api.openai.com/v1/responses', [
                 'model' => $settings['model'], 'instructions' => self::INSTRUCTIONS
+                    .(! empty($settings['workspace_workflows']) ? AiWorkspaceWorkflows::INSTRUCTIONS : '')
                     .' Use the current workspace context, date, and timezone when supplied. Cite source refs, never generate record URLs. All evidence lists are bounded samples. Unknown, restricted, unsupported, missing or stale sources are not proof that nothing needs attention.'
                     .($purpose === 'briefing' ? ' For this briefing follow the supplied attention list in its exact server order. Summarize only these candidates and offer suggestions. If it is empty, say nothing was found in the checked sample and explain incomplete coverage. Do not invent new priorities or imply an action was performed.' : ''),
                 'input' => $input, 'store' => false, 'max_output_tokens' => $settings['max_output'], 'service_tier' => 'default',
+                ...(! empty($settings['workspace_workflows']) ? ['text' => AiWorkspaceWorkflows::format()] : []),
                 // The short conversational output limit is for the answer itself.
                 ...(isset($settings['reasoning']) ? ['reasoning' => ['effort' => $settings['reasoning']]] : ($settings['model'] === 'gpt-6-luna' ? ['reasoning' => ['effort' => 'none']] : [])),
             ])->throw()->json();
@@ -102,7 +106,17 @@ class AiBranchProvider
             throw new RuntimeException('Unverifiable AI response.');
         }
 
-        return ['reply' => $reply, 'input_tokens' => $in, 'output_tokens' => $out, 'cached_input_tokens' => $cached, 'provider_id' => mb_substr((string) ($response['id'] ?? ''), 0, 120)];
+        $draft = null;
+        if (! empty($settings['workspace_workflows'])) {
+            $structured = json_decode($reply, true, 16, JSON_THROW_ON_ERROR);
+            if (! is_string($structured['reply'] ?? null) || trim($structured['reply']) === '' || ! is_array($structured['draft'] ?? null)) {
+                throw new RuntimeException('Unverifiable workflow response.');
+            }
+            $reply = $structured['reply'];
+            $draft = $structured['draft'];
+        }
+
+        return ['reply' => $reply, 'draft' => $draft, 'input_tokens' => $in, 'output_tokens' => $out, 'cached_input_tokens' => $cached, 'provider_id' => mb_substr((string) ($response['id'] ?? ''), 0, 120)];
     }
 
     public function cost(int $input, int $output, array $settings, int $cached = 0): int

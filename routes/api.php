@@ -93,6 +93,16 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
                 Route::get('/class-scheduling/classes/{scheduledClass}', [EverbranchMobileClassSchedulingController::class, 'show'])->middleware('abilities:mobile:read')->whereNumber('scheduledClass')->name('workspace.class-scheduling.show');
                 Route::post('/class-scheduling/enrollments/{enrollment}/reminders', [EverbranchMobileClassSchedulingController::class, 'storeReminder'])->middleware(['abilities:mobile:write', 'throttle:30,1'])->whereNumber('enrollment')->name('workspace.class-scheduling.reminders.store');
                 Route::prefix('ai-assistant')->name('workspace.ai-assistant.')->group(function (): void {
+                    Route::post('/voice/settings', [\App\Http\Controllers\AiWorkspaceAudioController::class, 'settings'])->middleware('abilities:mobile:write')->name('voice.settings');
+                    Route::post('/voice/transcribe', [\App\Http\Controllers\AiWorkspaceAudioController::class, 'transcribe'])->middleware('abilities:mobile:write')->name('voice.transcribe');
+                    Route::post('/voice/speech', [\App\Http\Controllers\AiWorkspaceAudioController::class, 'speech'])->middleware('abilities:mobile:write')->name('voice.speech');
+                    Route::post('/agents/{agent}/run', [\App\Http\Controllers\AiWorkspaceWorkflowController::class, 'runAgent'])->whereUuid('agent')->middleware('abilities:mobile:write')->name('agents.run');
+                    Route::post('/agents/{agent}/pause', [\App\Http\Controllers\AiWorkspaceWorkflowController::class, 'pauseAgent'])->whereUuid('agent')->middleware('abilities:mobile:write')->name('agents.pause');
+                    Route::get('/workflows/customers', [\App\Http\Controllers\AiWorkspaceWorkflowController::class, 'customers'])->middleware('abilities:mobile:read')->name('workflows.customers');
+                    Route::post('/workflows', [\App\Http\Controllers\AiWorkspaceWorkflowController::class, 'propose'])->middleware('abilities:mobile:write')->name('workflows.propose');
+                    Route::post('/workflows/{action}/decision', [\App\Http\Controllers\AiWorkspaceWorkflowController::class, 'decision'])->whereNumber('action')->middleware('abilities:mobile:write')->name('workflows.decision');
+                    Route::post('/workspace-memory', [\App\Http\Controllers\AiWorkspaceWorkflowController::class, 'memory'])->middleware('abilities:mobile:write')->name('workspace-memory');
+                    Route::delete('/workspace-memory/{memory}', [\App\Http\Controllers\AiWorkspaceWorkflowController::class, 'forget'])->whereUuid('memory')->middleware('abilities:mobile:write')->name('workspace-memory.forget');
                     Route::get('/commitments', [\App\Http\Controllers\AiCommitmentController::class, 'index'])->middleware('abilities:mobile:read')->name('commitments.index');
                     Route::get('/commitments/sources', [\App\Http\Controllers\AiCommitmentController::class, 'sources'])->middleware('abilities:mobile:read')->name('commitments.sources');
                     Route::post('/commitments', [\App\Http\Controllers\AiCommitmentController::class, 'propose'])->middleware(['abilities:mobile:write', 'throttle:20,1,ai-commitments:'])->name('commitments.propose');

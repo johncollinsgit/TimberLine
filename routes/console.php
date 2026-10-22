@@ -317,6 +317,8 @@ Schedule::command('team:sync-operations')->everyMinute()->when(fn () => (bool) c
 Schedule::command('team:remind-operations')->everyMinute()->when(fn () => (bool) config('team_operations.enabled'))->withoutOverlapping(5);
 
 Schedule::command('ai-branch:prune --apply')->dailyAt('03:40')->withoutOverlapping(20);
+Schedule::call(fn () => app(\App\Services\AiBranch\AiWorkspaceAgents::class)->scheduledRuns())
+    ->name('ai-workspace-followups')->everyMinute()->withoutOverlapping(10);
 
 // Read-only provider reconciliation continues for accepted events while checkout is off.
 Schedule::command('marketplace:reconcile --limit=25')->everyFiveMinutes()->withoutOverlapping(10)->runInBackground();

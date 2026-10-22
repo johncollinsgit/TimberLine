@@ -1,3 +1,23 @@
+## Workspace voice and follow-up agents (October 22; source candidate)
+
+The workspace assistant now has a common web/native contract for resumed private
+conversations (365 days after activity), encrypted shared workspace knowledge,
+current customer lookup, and exact, expiring job/email/agent previews. Mutations
+recheck current access, customer, assignment, sender and timezone before execution.
+Email intent commits before provider HTTP; unknown outcomes never resend on replay.
+The first workspace agent is customer follow-up: manual or daily local-time runs,
+current owner permissions, one bounded email draft per run, separate send approval,
+run history and pause. Job coordinator and daily briefing agents are roadmap items.
+
+API voice uses bounded mono PCM turns → `gpt-transcribe` → the existing metered text
+agent → saved-answer speech via `gpt-audio-mini-2025-12-15`. Every stage shares the
+AI account lock/cap and prepaid meter when applicable; audio has separate reviewed
+rates and opt-in. No client provider key or autonomous business tool execution.
+Workspace workflows, agents and audio each have a default-off rollout flag; existing
+fictional text pilot grants cannot enable them. No schema changes. Source checks
+are not live-provider, physical-device, production-release or App Store evidence.
+See `docs/operations/everbranch-voice-runbook.md` for activation and acceptance.
+
 ## Synthetic Fleet Calendar presentation (2026-10-22; source candidate)
 
 The isolated browser demo adds three synthetic Calendar examples linked by job

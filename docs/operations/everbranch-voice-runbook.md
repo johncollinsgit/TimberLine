@@ -1,3 +1,74 @@
+## Workspace assistant increment — October 22 (source candidate)
+
+Website and native mobile use the same authenticated workspace commands and saved
+conversations. History resumes per user/workspace for 365 days after activity;
+explicit shared workspace knowledge is encrypted and stays until removed. Customer
+search uses current permitted records, with bounded job and customer evidence.
+Jobs, customer emails and agent creation require an exact 15-minute review card.
+Customer/contact, sender, assignee or timezone changes invalidate relevant previews.
+A spoken yes never approves a write. Workspace email uses the configured tenant
+sender, escaped plain text, frozen brand styling, consent/suppression checks and a
+single durable delivery intent. A provider acceptance receipt is not delivery.
+Unknown email outcomes stay blocked from automatic resend.
+
+The first agent is **customer follow-up**. It prepares one customer email per run
+for review, uses its creator's current permissions and AI cap, and offers manual
+or daily local-time runs, pause and run history. The existing minute scheduler
+queues a deterministic request per local calendar day (including DST); database
+queue workers run each request once. A paused/revoked/expired run performs no
+inference. Runs reuse an accessible conversation until its bounded history fills.
+There is no autonomous external send or agent delegation.
+
+**Roadmap, unavailable:** job coordinator (scheduling, assignments and job follow-up)
+and daily briefing agent (workspace summary and priorities). Both clients label
+these as roadmap items; they are not selectable agent types.
+
+### API voice transport
+
+The first API implementation is a chained voice workflow: at most 30 seconds of
+canonical 16 kHz mono PCM WAV, file transcription, the existing saved text agent,
+and API audio reading of the saved answer. It supports automatic end of turn,
+manual finish, stop, and microphone release during inference/playback. Close,
+background, workspace/auth change and late microphone grants release capture;
+late callbacks cannot restart listening. The first 1,500 characters of long replies
+are read aloud, with the complete answer retained on screen. Device dictation and
+web device speech remain separate fallback controls.
+
+Rates verified October 22 against the official OpenAI model/pricing cards:
+`gpt-transcribe` $0.0045/minute; `gpt-audio-mini-2025-12-15` $0.60/M text input,
+$2.40/M text output, $20/M audio output. Selected text model rates apply separately.
+Audio requires its own owner/billing-admin pricing approval. All stages reserve
+against the same account lock and cap; prepaid tenants pay the existing 2× provider
+cost policy. Provider errors/timeouts retain reservations for review, without retry.
+Results cache encrypted for ten minutes for UUID replay; cache misses never infer
+again. Original recordings are not saved by Everbranch. Rates expire November 20.
+No existing fictional/text pilot grant authorizes this audio transport.
+
+### Rollout and remaining acceptance
+
+1. Review and merge backend/mobile changes through their normal checks. No migration.
+2. Enable the existing assistant/context gates for the intended workspace; set
+   `EVERBRANCH_AI_WORKSPACE_WORKFLOWS_ENABLED=true`. Agents additionally require
+   `EVERBRANCH_AI_WORKSPACE_AGENTS_ENABLED=true`; audio additionally requires
+   `EVERBRANCH_AI_WORKSPACE_AUDIO_ENABLED=true`. Default is false for all three.
+3. Use the workspace owner UI to review/enable current audio pricing and a positive
+   AI cap. Confirm model access and current prices. Verify the existing database
+   queue/scheduler. No customer contact should be used for acceptance without an
+   explicit reviewed send.
+4. On real Safari, iPhone/WKWebView and Android, verify actual microphone permission,
+   two successive audio turns, playback, stop, background, workspace switch,
+   resumed history, job preview/creation and contextual email preview. Verify exact
+   provider usage/credit settlement, sender readiness and accepted/delivered status.
+5. Obtain protected backend `/ready` release evidence and native distribution
+   evidence before claiming this live. Source/unit/browser tests do not establish
+   real provider audio or physical microphone acceptance.
+
+Sources: https://developers.openai.com/api/docs/guides/voice-agents,
+https://developers.openai.com/api/docs/models/gpt-transcribe,
+https://developers.openai.com/api/docs/models/gpt-audio-mini,
+https://developers.openai.com/api/docs/pricing.
+
+
 # Ask Everbranch voice implementation
 
 ## October 20 web conversation and pricing increment

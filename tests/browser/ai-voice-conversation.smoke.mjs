@@ -55,7 +55,7 @@ try {
   })
   await page.goto('http://127.0.0.1:' + server.address().port)
   await page.getByRole('button', { name: 'Ask Everbranch', exact: true }).click()
-  const start = page.getByRole('button', { name: 'Start voice conversation', exact: true })
+  const start = page.getByRole('button', { name: 'Start device voice conversation', exact: true })
   await start.waitFor(); await page.getByText('Workspace context on', { exact: false }).waitFor()
   assert.equal(posts, 0)
   await start.click(); await page.evaluate(() => window.captures.at(-1).result('What needs attention?'))
