@@ -52,7 +52,7 @@ class WorkspaceAccess
         if (in_array($actor['role'], ['owner', 'admin'], true)) {
             return true;
         }
-        if (in_array($actor['role'], ['guest'], true) || ($write && $actor['role'] === 'viewer')) {
+        if (in_array($actor['role'], ['guest'], true) || (($write || $coordinate) && $actor['role'] === 'viewer')) {
             return false;
         }
         $role = $scope['members'][$actor['user_id']] ?? null;

@@ -78,6 +78,8 @@ jobs:
           extensions: pdo_mysql, pdo_sqlite, mbstring, fileinfo, gd, zip
           coverage: none
       - run: composer install --no-interaction --prefer-dist --no-scripts
+      - name: Prepare empty isolated test environment files
+        run: php -r 'foreach ([".env", "apps/enterprise/.env"] as $path) { if (!is_file($path)) { file_put_contents($path, ""); } }'
       - run: php apps/enterprise/scripts/lint-schema.php
       - run: php vendor/bin/phpunit -c phpunit.enterprise.xml --display-warnings
       - uses: actions/setup-node@v4

@@ -280,3 +280,20 @@ test('meeting PDF regenerates one readable bounded Letter page with current agen
     expect($this->get($url)->assertOk()->getContent())->not->toBe($pdf);
     expect(DB::table('team_tasks')->count())->toBe(8);
 });
+
+test('a tenant viewer cannot retain manager meeting reads through a stale department coordinator role', function (): void {
+    [$tenant, $owner] = teamWorkspace();
+    config(['enterprise.tenant_allowlist' => [(string) $tenant->id]]);
+    $area = rollCommand($tenant, $owner, ['action' => 'workspace.create', 'title' => 'Shared role downgrade fixture', 'visibility' => 'shared'])['id'];
+    $project = rollCommand($tenant, $owner, ['action' => 'project.create', 'title' => 'Shared role downgrade work', 'area_id' => $area])['id'];
+    $coordinator = rollMember($tenant, $area, 'coordinator');
+    $meeting = app(Meetings::class)->save($tenant, $coordinator, rollMeetingInput($coordinator, $area, $project, ['commitments' => [], 'blockers' => []]));
+    $this->actingAs($coordinator)->getJson(route('enterprise.meetings.show', ['tenant' => $tenant->slug, 'id' => $meeting['id']]))->assertOk();
+    DB::table('tenant_user')->where(['tenant_id' => $tenant->id, 'user_id' => $coordinator->id])->update(['role' => 'viewer']);
+    $this->getJson(route('enterprise.data', ['tenant' => $tenant->slug, 'area_id' => $area]))->assertOk();
+    $this->getJson(route('enterprise.meetings.show', ['tenant' => $tenant->slug, 'id' => $meeting['id']]))->assertNotFound();
+    $this->get(route('enterprise.meetings.pdf', ['tenant' => $tenant->slug, 'id' => $meeting['id']]))->assertNotFound();
+    $this->getJson(route('enterprise.meetings', ['tenant' => $tenant->slug, 'scope' => 'workspace', 'area_id' => $area]))->assertOk()->assertJsonPath('items', []);
+    expect(DB::table('tenant_user')->where(['tenant_id' => $tenant->id, 'user_id' => $coordinator->id])->value('role'))->toBe('viewer');
+    Http::assertNothingSent();
+});
