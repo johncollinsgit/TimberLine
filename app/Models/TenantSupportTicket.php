@@ -11,6 +11,12 @@ class TenantSupportTicket extends Model
 {
     use HasTenantScope;
 
+    // Department-private software tickets are reachable only through SoftwareSupport\Access.
+    public function scopeLegacySupport(\Illuminate\Database\Eloquent\Builder $query): void
+    {
+        $query->where(fn ($q) => $q->whereNull('source_type')->orWhere('source_type', '!=', 'software_service'));
+    }
+
     protected $fillable = [
         'tenant_id', 'created_by_user_id', 'assigned_to_user_id', 'subject',
         'category', 'priority', 'status', 'source_type', 'dedupe_key', 'resolution_summary', 'resolved_at', 'metadata', 'last_activity_at',

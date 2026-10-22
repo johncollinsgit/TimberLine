@@ -1,5 +1,10 @@
 <?php
 
+\Illuminate\Support\Facades\Artisan::command('software-support:simulate {--fail=*}', function (): void {
+    $count = app(\App\SoftwareSupport\NotificationSimulation::class)->run($this->option('fail'));
+    $this->info('Simulated notification attempts: '.$count.'. No messages sent.');
+})->purpose('Exercise the private support outbox locally without provider calls');
+
 use App\Jobs\ReleaseDueAutomationWorkflowRunItemsJob;
 use App\Models\TenantWholesaleSetting;
 use App\Services\FieldService\WorkspaceAssetService;

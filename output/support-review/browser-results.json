@@ -1,0 +1,92 @@
+[
+  {
+    "device": "desktop",
+    "view": "client",
+    "width": 1280,
+    "scroll": 1280,
+    "heading": "How can we help?",
+    "labels": true,
+    "keyboardFocus": "INPUT",
+    "errors": []
+  },
+  {
+    "device": "desktop",
+    "view": "owner",
+    "width": 1280,
+    "scroll": 1280,
+    "heading": "A clear view of client support.",
+    "labels": true,
+    "keyboardFocus": "INPUT",
+    "errors": []
+  },
+  {
+    "device": "desktop",
+    "view": "thread",
+    "width": 1280,
+    "scroll": 1280,
+    "heading": "Software export stops",
+    "labels": true,
+    "keyboardFocus": "TEXTAREA",
+    "errors": []
+  },
+  {
+    "device": "ipad",
+    "view": "client",
+    "width": 820,
+    "scroll": 820,
+    "heading": "How can we help?",
+    "labels": true,
+    "keyboardFocus": "INPUT",
+    "errors": []
+  },
+  {
+    "device": "ipad",
+    "view": "owner",
+    "width": 820,
+    "scroll": 820,
+    "heading": "A clear view of client support.",
+    "labels": true,
+    "keyboardFocus": "INPUT",
+    "errors": []
+  },
+  {
+    "device": "ipad",
+    "view": "thread",
+    "width": 820,
+    "scroll": 820,
+    "heading": "Software export stops",
+    "labels": true,
+    "keyboardFocus": "TEXTAREA",
+    "errors": []
+  },
+  {
+    "device": "phone",
+    "view": "client",
+    "width": 390,
+    "scroll": 390,
+    "heading": "How can we help?",
+    "labels": true,
+    "keyboardFocus": "INPUT",
+    "errors": []
+  },
+  {
+    "device": "phone",
+    "view": "owner",
+    "width": 390,
+    "scroll": 390,
+    "heading": "A clear view of client support.",
+    "labels": true,
+    "keyboardFocus": "INPUT",
+    "errors": []
+  },
+  {
+    "device": "phone",
+    "view": "thread",
+    "width": 390,
+    "scroll": 390,
+    "heading": "Software export stops",
+    "labels": true,
+    "keyboardFocus": "TEXTAREA",
+    "errors": []
+  }
+]

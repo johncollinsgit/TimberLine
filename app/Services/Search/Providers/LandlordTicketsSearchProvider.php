@@ -20,7 +20,7 @@ class LandlordTicketsSearchProvider implements LandlordSearchProvider
         }
 
         $normalized = trim($query);
-        $rows = TenantSupportTicket::query()
+        $rows = TenantSupportTicket::query()->legacySupport()
             ->with('tenant:id,name,slug')
             ->select(['id', 'tenant_id', 'subject', 'category', 'priority', 'status', 'last_activity_at'])
             ->when($normalized !== '', function (Builder $builder) use ($normalized): void {
