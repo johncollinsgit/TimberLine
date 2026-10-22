@@ -27,6 +27,7 @@
 </style>@if(!$enterpriseSample && preg_match('/^#[0-9a-fA-F]{6}$/D', $enterprisePresentation['branding']['accent'] ?? ''))
 <style>:root{--gold:{{ $enterprisePresentation['branding']['accent'] }};--ew-accent:{{ $enterprisePresentation['branding']['accent'] }}}</style>
 @endif
+@includeIf('enterprise.enterprise-campus-theme')
 </head>
 <body>
 @includeIf('enterprise.runtime-designation')
@@ -38,10 +39,12 @@
 <div class="content"><div class="eyebrow">Everbranch Enterprise</div><div class="page-heading"><div><h1 id="heading">Turn requests into owned work.</h1><p class="subtle">One place for intake, assignment and visible progress.</p></div><div class="actions"><button class="button" id="create-workspace" hidden>New workspace</button><button class="button primary" id="create-request" hidden>New request</button><button class="button primary" id="create-project" hidden>New project</button></div></div>
 <p id="status" role="status" aria-live="polite"></p><button class="button" id="retry" hidden>Retry the same action</button>
 @include('enterprise.home')
+@includeIf('enterprise.executive-demo')
 @include('enterprise.next-panels')
 @includeIf('enterprise.operations-panels')
 @includeIf('enterprise.procedures-workspace')
 @includeIf('enterprise.finance-workspace')
+@includeIf('enterprise.role-preview')
 <div id="work"><div class="toolbar"><div class="actions" role="group" aria-label="Work view"><button class="button" data-view="list" aria-pressed="true">List</button><button class="button" data-view="calendar" aria-pressed="false">Calendar</button><button class="button" data-view="map" aria-pressed="false">Map</button></div><label>Find work <input id="search" type="search" placeholder="Search visible work"></label><button class="button" id="map-toggle">View Map</button></div>
 <section class="panel map-panel" id="map" hidden><div class="map-head"><div><div class="eyebrow">Workspace locations</div><h2>See where the work happens.</h2></div><span class="caption">Select a marker for request details</span></div><div id="map-holder"><svg class="location-map" viewBox="0 0 1000 330" preserveAspectRatio="none" aria-hidden="true"><defs><pattern id="grid" width="100" height="66" patternUnits="userSpaceOnUse"><path d="M100 0H0V66" fill="none" stroke="#d9e2ce"/></pattern></defs><rect width="1000" height="330" fill="url(#grid)"/></svg><div id="map-markers"></div><p class="caption">Saved longitude/latitude positions on a coordinate grid. No campus basemap, GPS feed or external map provider is connected.</p></div><p class="caption" id="map-empty"></p></section>
 <div class="detail-layout"><section id="request-list" aria-label="Visible workspace work"></section><aside class="panel" id="detail" aria-label="Selected work details"><h2>Choose a request</h2><p class="subtle">Select a row or map marker to see its details and permitted actions.</p></aside></div><p class="caption" id="coverage"></p></div>
@@ -57,7 +60,8 @@
   'use strict';
 
   const presentation = @json($enterprisePresentation),
-    transport = EverbranchTransport.create(presentation),
+    baseTransport = EverbranchTransport.create(presentation),
+    transport = Object.freeze({...baseTransport, replace: rememberNavigation}),
     urls = presentation.routes,
     tenantSlug = presentation.identity.tenantSlug,
     viewer = presentation.identity.viewer,
@@ -84,13 +88,16 @@
     area = navigation.get('area_id'),
     selected = navigation.get('selected'),
     section = allowedSections.includes(navigation.get('section')) ? navigation.get('section') : 'requests',
-    view = 'list',
-    map = false,
+    view = ['list', 'calendar', 'map'].includes(navigation.get('view')) ? navigation.get('view') : 'list',
+    map = navigation.get('map') === '1' || (!navigation.has('map') && view === 'map'),
     pending = null,
     pendingUncertain = false,
     createAction = '',
     draft = null,
     busy = false;
+  let navigationPushPending = false, navigationSearchBatch = false,
+    navigationViewOverride = navigation.has('view') ? {view, map} : null;
+  $('search').value = (navigation.get('q') || '').slice(0, 200);
   function message(text, error = false) {
     $('status').textContent = text;
     $('status').classList.toggle('notice-error', error);
@@ -100,6 +107,7 @@
   function clearWorkspaceContext(failed = false) {
     stashComposer();
     data = {areas: [], requests: [], projects: [], members: []};
+    document.dispatchEvent(new CustomEvent('enterprise:workspace-state', {detail: {loaded: false, area: null}}));
     // Clear the tour synchronously, independent of optional panel reset hooks.
     document.dispatchEvent(new CustomEvent('enterprise:tour-context', {detail: null}));
     $('request-list').replaceChildren();
@@ -174,11 +182,15 @@
     });
   }
   function render({preserveDetail=false}={}) {
+    // An explicit unsaved URL/history view takes precedence over an async saved default.
+    if (preserveDetail && navigationViewOverride) ({view, map} = navigationViewOverride);
     $('areas').innerHTML = data.areas.map(a => `<button class="sidebar-project ${a.id === area ? 'active' : ''}" data-area="${esc(a.id)}"><span class="dot"></span>${esc(a.name)}</button>`).join('');
     $('areas').querySelectorAll('[data-area]').forEach(b => b.onclick = () => {
       rememberSelection();
+      beginNavigation();
       area = b.dataset.area;
       selected = selectionMemory.get(area + ':' + section) || null;
+      rememberUrl();
       resetNext();
       load();
     });
@@ -204,26 +216,30 @@
       $('request-list').innerHTML = `<div class="table-wrap"><table><thead><tr><th>Work</th><th>Status</th><th>Due</th></tr></thead><tbody>${work.map(r => `<tr><td><button class="link" data-open="${esc(r.id)}">${esc(r.title || r.name)}</button></td><td><span class="badge">${esc(r.status || (r.archived ? 'Archived' : 'Active'))}</span></td><td>${esc(r.due_on || 'Unscheduled')}</td></tr>`).join('')}</tbody></table>${work.length ? '' : '<p class="empty">No work yet. Create a request to begin.</p>'}</div>`;
     }
     $('request-list').querySelectorAll('[data-open]').forEach(b => b.onclick = () => {
+      rememberSelection();
+      beginNavigation();
       selected = b.dataset.open;
       detail();
     });
-    const located = data.requests.filter(r => r.data.latitude !== null && r.data.longitude !== null && Number.isFinite(Number(r.data.latitude)) && Number.isFinite(Number(r.data.longitude)));
+    const located = work.filter(r => r.data?.latitude != null && r.data?.longitude != null && Number.isFinite(Number(r.data.latitude)) && Number.isFinite(Number(r.data.longitude)));
     const lats = located.map(r => Number(r.data.latitude)),
       lons = located.map(r => Number(r.data.longitude));
     const minX = Math.min(...lons),
       maxX = Math.max(...lons),
       minY = Math.min(...lats),
       maxY = Math.max(...lats);
-    $('map-markers').innerHTML = located.map((r, i) => `<button class="map-pin" style="left:${maxX === minX ? 50 : 10 + 80 * (Number(r.data.longitude) - minX) / (maxX - minX)}%;top:${maxY === minY ? 50 : 10 + 80 * (maxY - Number(r.data.latitude)) / (maxY - minY)}%" data-map="${esc(r.id)}" aria-label="Open ${esc(r.title)}">${i + 1}</button>`).join('');
+    $('map-markers').innerHTML = located.map((r, i) => `<button class="map-pin" style="left:${maxX === minX ? 50 : 10 + 80 * (Number(r.data.longitude) - minX) / (maxX - minX)}%;top:${maxY === minY ? 50 : 10 + 80 * (maxY - Number(r.data.latitude)) / (maxY - minY)}%" data-map="${esc(r.id)}" aria-label="Open ${esc(r.title || r.name)}">${i + 1}</button>`).join('');
     $('map-markers').querySelectorAll('[data-map]').forEach(b => b.onclick = () => {
-      section = 'requests';
+      rememberSelection();
+      beginNavigation();
       selected = b.dataset.map;
       render();
     });
-    $('map-empty').textContent = located.length ? '' : 'No saved coordinates in the loaded requests.';
+    $('map-empty').textContent = located.length ? '' : 'No saved coordinates match the current view and filters.';
     $('coverage').textContent = 'Showing up to 100 currently visible requests in this workspace.' + (data.has_more ? ' More visible requests exist.' : '') + (data.scan_partial ? ' The scan limit was reached; results are partial.' : '');
     if(!preserveDetail)detail();
     document.dispatchEvent(new CustomEvent('enterprise:render', {detail: {data, area, section, selected, transport}}));
+    document.dispatchEvent(new CustomEvent('enterprise:workspace-state', {detail: {area, section, features: data.features || {}, loaded: workspaceLoaded, viewer_id: data.viewer_id}}));
   }
   function detail() {
     stashComposer();
@@ -311,18 +327,72 @@
     $('create-dialog').close();
   };
   $('retry').onclick = () => pending && command(pending);
-  $('search').oninput = render;
+  // Workspace history stores navigation only. Record drafts keep their existing scoped storage.
+  function beginNavigation(kind = 'change') {
+    navigationPushPending = kind !== 'search' || !navigationSearchBatch;
+    navigationSearchBatch = kind === 'search';
+  }
+  function rememberNavigation(value) {
+    let target;
+    try {
+      // Retain the sample adapter's canonical same-origin destination validation.
+      target = new URL(baseTransport.href(String(value)), location.href);
+    } catch { return; }
+    if (target.origin !== location.origin || target.pathname !== location.pathname || target.username || target.password) return;
+    const parameters = new URLSearchParams(transport.mode === 'sample' ? target.hash.slice(1) : target.search);
+    // These fixed presentation fields are intentionally not adapter authority or record data.
+    parameters.set('view', ['list', 'calendar', 'map'].includes(view) ? view : 'list');
+    parameters.set('map', map ? '1' : '0');
+    const query = $('search').value.slice(0, 200);
+    query ? parameters.set('q', query) : parameters.delete('q');
+    if (transport.mode === 'sample') { target.search = ''; target.hash = parameters.toString(); }
+    else { parameters.set('tenant', tenantSlug); target.search = parameters.toString(); }
+    if (target.href !== location.href) {
+      const method = navigationPushPending ? 'pushState' : 'replaceState';
+      history[method](history.state, '', target.href);
+    }
+    navigationPushPending = false;
+  }
+  function restoreNavigation() {
+    const incoming = new URLSearchParams(transport.mode === 'sample' ? location.hash.slice(1) : location.search);
+    rememberSelection();
+    navigationPushPending = false;
+    navigationSearchBatch = false;
+    area = incoming.get('area_id');
+    section = allowedSections.includes(incoming.get('section')) ? incoming.get('section') : 'requests';
+    selected = incoming.get('selected');
+    view = ['list', 'calendar', 'map'].includes(incoming.get('view')) ? incoming.get('view') : 'list';
+    map = incoming.get('map') === '1' || (!incoming.has('map') && view === 'map');
+    navigationViewOverride = {view, map};
+    $('search').value = (incoming.get('q') || '').slice(0, 200);
+    incoming.has('section') ? navigation.set('section', section) : navigation.delete('section');
+    // The destination must pass a fresh authorized projection; never restore record payloads from history.
+    resetNext();
+    load();
+  }
+  globalThis.addEventListener('popstate', restoreNavigation);
+  $('search').oninput = () => {
+    $('search').value = $('search').value.slice(0, 200);
+    beginNavigation('search');
+    render();
+  };
+  $('search').onblur = () => { navigationSearchBatch = false; };
   $('map-toggle').onclick = () => {
+    beginNavigation();
     map = !map;
+    navigationViewOverride = {view, map};
     render();
   };
   document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => {
+    beginNavigation();
     view = b.dataset.view;
     if (view === 'map') map = true;
+    navigationViewOverride = {view, map};
     render();
   });
   document.querySelectorAll('[data-section]').forEach(b => b.onclick = () => {
     rememberSelection();
+    beginNavigation();
     message('');
     section = b.dataset.section;
     selected = selectionMemory.get(area + ':' + section) || null;
@@ -337,9 +407,12 @@
     const next = event.detail || {};
     if (next.section && !allowedSections.includes(next.section)) return;
     rememberSelection();
+    beginNavigation();
+    const previousArea = area, previousSection = section, previousSelected = selected;
     if (next.area !== undefined) area = next.area;
     if (next.section) section = next.section;
-    selected = next.selected ?? null;
+    selected = next.selected !== undefined ? next.selected : selectionMemory.get(area + ':' + section) || (area === previousArea && section === previousSection ? previousSelected : null);
+    rememberUrl();
     if (next.area !== undefined) {resetNext(); load();} else render();
   });
   load();

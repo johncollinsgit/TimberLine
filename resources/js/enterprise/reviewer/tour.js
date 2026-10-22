@@ -14,6 +14,10 @@
         {id: "invoices", title: "Clear invoice handoffs", outcome: "Keep the invoice reference, current approver and next action together as the packet moves through review.", procedure: "Record the decision and handoff; Finance keeps payment execution.", section: "finance", scene: 2, target: "finance-list", selector: "[data-finance-record]", icon: "M6 3h12v18l-3-2-3 2-3-2-3 2z M9 8h6 M9 12h6 M9 16h3"},
         {id: "funds", title: "Traceable fund references", outcome: "Keep the approved budget code and restriction reference beside the project approval packet.", procedure: "Use Finance-approved references and reconcile to the authoritative ledger.", section: "finance", scene: 2, target: "finance-list", selector: "[data-finance-record]", icon: "M3 8l9-5 9 5 M4 9h16 M6 10v8 M12 10v8 M18 10v8 M3 21h18 M4 18h16"},
     ].map(Object.freeze));
+    const executivePriorities = Object.freeze([
+        Object.freeze({id:'executive',title:'Executive oversight',outcome:'Inspect configured workspaces, evidence-based work queues and proposed software rollout costs in one view.',procedure:'Open a supporting record; distinguish simulated workspace stages and uncommitted software costs from campus job budgets.',section:'home',scene:0,target:'executive-network',icon:'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z'}),
+        ...priorities,
+    ]);
     const scenes = Object.freeze(
         [
             {
@@ -152,6 +156,7 @@
     }
 
     function mountPriorities(root, actions = {}, pause = () => {}) {
+        const priorities = actions.priorityItems || globalThis.EverbranchReviewerTour.priorities;
         const get = (name) => root.querySelector(`[data-priorities-${name}]`),
             dialog = get("dialog");
         if (!dialog) return null;
@@ -555,6 +560,7 @@
         scenes,
         opening,
         priorities,
+        executivePriorities,
         mountPriorities,
     });
 })();

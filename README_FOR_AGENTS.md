@@ -1,3 +1,16 @@
+## Enterprise executive and visibility previews (source candidate, October 22)
+
+Preserve the explicit sample-only COO overview and its global read-only mutation
+fence. Simulated workspace lifecycle and proposed software figures never become
+operating metrics, subscriptions or real access. Private member previews select
+an existing verified tenant member and intersect both actors' fresh ACLs; they
+never impersonate or expose descriptions/files/finance/mailboxes. Clear scoped
+data before asynchronous reloads and reject late responses. See
+[the preview contract](docs/operations/enterprise-executive-and-member-preview.md).
+Map/list filters and pushed navigation history must preserve drafts and recheck
+authorization. College decorative colors are specific to the trusted public
+catalog; retain shared Everbranch branding and measured text/focus contrast.
+
 ## Enterprise priorities and procedural handoffs (source candidate, October 22)
 
 Preserve the same renderer and explicit public-sample/private-server transport

@@ -1,3 +1,16 @@
+## Enterprise executive and visibility previews (source candidate, October 22)
+
+The same public sample now defaults fresh tabs to a clearly labeled read-only
+COO demonstration overview, with configured simulated workspace stages,
+record-derived drilldowns and separate uncommitted software rollout figures.
+No real account, campus metric or billing is established. The private People
+screen has a current-owner/admin read-only existing-member projection, intersecting
+both actors' fresh department and native private-record ACLs without impersonation.
+Map/search filters now agree and Back/Forward retains scoped navigation/drafts.
+Shared contrast and sample-only sourced college colors preserve Everbranch branding.
+Read [the preview boundaries](docs/operations/enterprise-executive-and-member-preview.md).
+Hosted acceptance, access grants and backup/recovery remain separately gated.
+
 ## Enterprise priorities and procedural handoffs (source candidate, October 22)
 
 The existing campus renderer now has a source-backed priorities overview and

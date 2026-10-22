@@ -163,6 +163,9 @@ export async function checkPrivateWorkspaceTour(page,evidence) {
     try{await Promise.race([areaStarted,new Promise((_,reject)=>{areaBarrier=setTimeout(()=>reject(new Error('Delayed current-area fixture did not begin')),30000);})]);}finally{clearTimeout(areaBarrier);}
     await page.locator(`#areas [data-area="${recoveryArea}"]`).click();
     await page.waitForURL(url=>url.searchParams.get('area_id')===recoveryArea);
+    // History now records navigation intent before its authorized data read.
+    // URL changes alone must never be used as evidence that this scope loaded.
+    await page.locator(`#areas [data-area="${recoveryArea}"].active`).waitFor();
     await open();await scene(2);
     assert.match(await root.locator('[data-tour-role]').innerText(),/Synthetic private recovery workspace/i);
     const oldReply=page.waitForResponse(response=>new URL(response.url()).pathname==='/enterprise/data'&&new URL(response.url()).searchParams.get('area_id')===area);

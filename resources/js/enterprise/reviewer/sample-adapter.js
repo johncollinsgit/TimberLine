@@ -388,7 +388,11 @@
         try {
             state = JSON.parse(storage?.getItem(key) || "null");
         } catch {}
-        if (!state || state.schema !== 1) state = seed();
+        if (!state || state.schema !== 1) {
+            state = seed();
+            if (boot.defaultPersona === "executive")
+                state.persona = "executive";
+        }
         // Add new illustrative records to older sample sessions without replacing user work.
         const supplemental = seed();
         state.certificates ??= supplemental.certificates;
@@ -403,13 +407,17 @@
             { id: "3", name: "Student requester · sample", can_approve: false },
         ];
         const currentId = () =>
-            state.persona === "requester"
-                ? "3"
-                : state.persona === "worker"
-                  ? "2"
-                  : "1";
-        const manager = () => state.persona === "manager";
-        const canWrite = () => state.persona !== "requester";
+            state.persona === "executive"
+                ? "demo-executive"
+                : state.persona === "requester"
+                  ? "3"
+                  : state.persona === "worker"
+                    ? "2"
+                    : "1";
+        const executive = () => state.persona === "executive";
+        const manager = () => ["manager", "executive"].includes(state.persona);
+        const canWrite = () =>
+            !["requester", "executive"].includes(state.persona);
         function save() {
             state.revision++;
             try {
@@ -446,10 +454,21 @@
                 );
         };
         function project(id) {
-            return get(state.projects, id);
+            const result = get(state.projects, id);
+            area(result.enterprise_area_id);
+            return result;
         }
         function area(id) {
-            return get(state.areas, id || IDS.area);
+            const result = get(state.areas, id || IDS.area);
+            if (
+                (!manager() && result.visibility === "department_only") ||
+                (state.persona === "requester" && result.id !== IDS.area)
+            )
+                error(
+                    "This workspace is unavailable in this sample perspective.",
+                    404,
+                );
+            return result;
         }
         function audit(id, action, details = {}) {
             (state.histories[id] ??= []).push({
@@ -487,6 +506,9 @@
                 "scope",
                 "team_user_id",
                 "meeting",
+                "view",
+                "map",
+                "search",
             ])
                 if (query.has(name)) result[name] = query.get(name);
             return { parsed, values: result };
@@ -549,6 +571,12 @@
             globalThis.location?.assign(href(url));
         }
         function requestView(row) {
+            area(row.area_id);
+            if (
+                state.persona === "requester" &&
+                row.data.created_by !== currentId()
+            )
+                error("This sample request is unavailable.", 404);
             const task = row.task_id ? get(state.tasks, row.task_id) : null;
             if (state.persona === "requester")
                 return {
@@ -570,10 +598,148 @@
             return {
                 ...clone(row),
                 task: task ? clone(task) : null,
-                can_coordinate: manager(),
+                can_coordinate: manager() && !executive(),
                 can_progress:
                     canWrite() &&
                     (manager() || task?.assignee_id === currentId()),
+            };
+        }
+        function executiveModel() {
+            if (!executive())
+                error("The executive sample overview is unavailable.", 403);
+            const configured = state.areas.filter(
+                (row) => manager() || row.visibility === "shared",
+            );
+            const ids = new Set(configured.map((row) => row.id));
+            const tasks = state.tasks.filter((row) =>
+                ids.has(row.enterprise_area_id),
+            );
+            const target = (section, selected) => ({
+                section,
+                area: IDS.area,
+                ...(selected ? { selected } : {}),
+            });
+            return {
+                runtime: "sample",
+                persona: "executive",
+                asOf: now(),
+                scope: "Configured fictional workspace records. No current college operating data or direct-report hierarchy is asserted.",
+                network: configured.map((row) => ({
+                    id: row.id,
+                    label: row.name,
+                    lifecycle:
+                        row.id === IDS.area
+                            ? "Live"
+                            : row.id === IDS.it
+                              ? "Onboarding"
+                              : "Planned",
+                    summary:
+                        "Illustrative rollout stage only; not provisioned or connected. Open this configured sample workspace to inspect its records.",
+                    available: true,
+                    target: { section: "projects", area: row.id },
+                })),
+                metrics: [
+                    {
+                        id: "active",
+                        label: "Active work",
+                        value: tasks.filter((row) => !row.completed_at).length,
+                        detail: "Current visible sample tasks; inspect ownership and next action.",
+                        available: true,
+                        target: target("projects", IDS.project),
+                    },
+                    {
+                        id: "blocked",
+                        label: "Interrupted or blocked work",
+                        value: tasks.filter(
+                            (row) =>
+                                row.status === "interrupted" ||
+                                row.blockers?.length,
+                        ).length,
+                        detail: "Recorded interruptions and blockers, not inferred urgency.",
+                        available: true,
+                        target: target("roll_call"),
+                    },
+                    {
+                        id: "schedule",
+                        label: "Schedule and capacity",
+                        value: null,
+                        detail: "Recorded reservations and conflicts are available. Staff capacity, live class schedules and utilization are not connected.",
+                        available: true,
+                        target: target("calendar"),
+                    },
+                    {
+                        id: "insurance",
+                        label: "Contractor renewal attention",
+                        value: state.certificates.filter(
+                            (row) =>
+                                ids.has(row.area_id) &&
+                                sampleCertificate(row).reminder_reasons?.length,
+                        ).length,
+                        detail: "Derived fictional certificate attention queue; no external alerts or coverage-policy decision.",
+                        available: true,
+                        target: target("people"),
+                    },
+                    {
+                        id: "approvals",
+                        label: "Invoice review packets",
+                        value: state.finance.filter(
+                            (row) =>
+                                ids.has(row.area_id) &&
+                                row.status !== "externally_completed",
+                        ).length,
+                        detail: "Current sample packets needing a next owner. Internal routing is not payment authorization.",
+                        available: true,
+                        target: target("finance", IDS.finance),
+                    },
+                    {
+                        id: "variance",
+                        label: "Restricted funds / budget variance",
+                        value: null,
+                        detail: "Source fund references can be inspected. Approved budgets, restrictions and ledger balances remain unverified; no variance is calculated.",
+                        available: true,
+                        target: target("finance", IDS.finance),
+                    },
+                    {
+                        id: "quarterly",
+                        label: "Quarterly readiness",
+                        value: "Review required",
+                        detail: "Open factual period exports and reconcile to the agreed report template. No approved college template or submission is connected.",
+                        available: true,
+                        target: target("roll_call"),
+                    },
+                ],
+                proposal: {
+                    currency: null,
+                    cadence: null,
+                    stages: [
+                        { amount: 1000, label: "Proposed stage 1" },
+                        { amount: 2000, label: "Proposed stage 2" },
+                        { amount: 2500, label: "Proposed stage 3" },
+                    ],
+                },
+                allowedSourceOrigins: ["https://www.lmc.edu"],
+                sources: [
+                    {
+                        label: "Current public leadership",
+                        url: "https://www.lmc.edu/about/leadership.htm",
+                        detail: "Parent research checked Oct22,2026: Hansen is Executive Vice President / COO. No account or purchasing authority is inferred.",
+                    },
+                    {
+                        label: "Hansen directory",
+                        url: "https://www.lmc.edu/directory/employee/hansen-blaine.htm",
+                        detail: "Current role in Strategic Planning & Effectiveness; demonstration persona only.",
+                    },
+                    {
+                        label: "Historical org chart — confirm current scope",
+                        url: "https://www.lmc.edu/about/strategic-plan-2030/files/factbook.pdf",
+                        detail: "2022–23 Factbook published Jan2024, PDF page index4. Historical division included operations/risk, facilities, IR/planning, technology, dining/retail/Exchange and events. It is not a current direct-report chart.",
+                    },
+                    {
+                        label: "Current department directory",
+                        url: "https://www.lmc.edu/directory/strategicplanning-effectiveness.htm",
+                        detail: "Directory grouping includes operations, institutional research, project management and motor pool. Grouping is not direct-report proof. Other portfolio areas are unconnected; admissions and marketing are outside this initial scope.",
+                    },
+                ],
             };
         }
         function data(query) {
@@ -585,7 +751,17 @@
                 },
                 selected_area_id: selected,
                 viewer_id: currentId(),
-                areas: clone(state.areas),
+                areas: clone(
+                    state.areas.filter(
+                        (row) =>
+                            manager() ||
+                            (row.visibility === "shared" &&
+                                (state.persona !== "requester" ||
+                                    row.id === IDS.area)),
+                    ),
+                ),
+                demo_persona: state.persona,
+                ...(executive() ? { executive: executiveModel() } : {}),
                 requests: state.requests
                     .filter(
                         (row) =>
@@ -622,9 +798,9 @@
                     "Fictional browser sample only. Perspective filtering is illustrative, not server authorization.",
                 has_more: false,
                 scan_partial: false,
-                can_manage: manager(),
-                can_submit: true,
-                can_coordinate: manager(),
+                can_manage: manager() && !executive(),
+                can_submit: !executive(),
+                can_coordinate: manager() && !executive(),
                 can_review: manager(),
                 sample_data: true,
             };
@@ -1049,7 +1225,7 @@
                 tasks: state.tasks
                     .filter((task) => task.project_id === selected.id)
                     .map(taskView),
-                can_design: manager(),
+                can_design: manager() && !executive(),
                 can_run: canWrite(),
                 items: [],
                 templates: [
@@ -1477,6 +1653,7 @@
         function discussionKey(kind, id) {
             if (kind === "request") {
                 const row = get(state.requests, id);
+                area(row.area_id);
                 return row.task_id ? "task:" + row.task_id : "request:" + id;
             }
             return kind + ":" + id;
@@ -1517,7 +1694,8 @@
                         coverage:
                             "Assign the sample request before adding internal notes/files.",
                     };
-            } else if (kind === "task") get(state.tasks, id);
+            } else if (kind === "task")
+                area(get(state.tasks, id).enterprise_area_id);
             else project(id);
             const key = discussionKey(kind, id);
             const task = key.startsWith("task:")
@@ -1546,6 +1724,7 @@
             };
         }
         function taskView(task) {
+            area(task.enterprise_area_id);
             const checklist = (task.checklist || []).map((item) => ({
                 ...item,
                 id: item.id || item.key,
@@ -1597,7 +1776,7 @@
                     state.requests.find((row) => row.task_id === task.id)?.id ||
                     null,
                 owning_area_id: task.owning_area_id || task.enterprise_area_id,
-                can_manage: manager(),
+                can_manage: manager() && !executive(),
                 can_update:
                     canWrite() &&
                     (manager() || task.assignee_id === currentId()),
@@ -1635,7 +1814,7 @@
                     ),
                 ),
                 members: clone(members.filter((row) => row.id !== "3")),
-                can_manage: manager(),
+                can_manage: manager() && !executive(),
                 coverage:
                     "Fictional sample operations only; private server authorization is not simulated as a security boundary.",
                 as_of: now(),
@@ -1942,7 +2121,7 @@
                           }
                         : {}),
                 },
-                can_coordinate: manager(),
+                can_coordinate: manager() && !executive(),
                 can_checkout:
                     canWrite() &&
                     row.kind === "asset" &&
@@ -2289,7 +2468,7 @@
                 items,
                 total_visible: items.length,
                 overflow_count: 0,
-                can_lead: manager(),
+                can_lead: manager() && !executive(),
                 complete_url: recordUrl("roll_call", "", selected),
                 coverage:
                     "Fictional sample records only. No college schedules, private evaluations, internal notes or real student records.",
@@ -2512,7 +2691,8 @@
                 reminder_reasons: row.status === "archived" ? [] : reasons,
                 expiry_state:
                     row.status === "archived" ? "archived" : expiryState,
-                can_manage: manager() && row.status !== "archived",
+                can_manage:
+                    manager() && !executive() && row.status !== "archived",
                 as_of_on: today,
                 timezone: "UTC",
                 sample_data: true,
@@ -2668,7 +2848,7 @@
                             r.kind === "contractor" && r.area_id === selected,
                     ),
                 ),
-                can_manage: true,
+                can_manage: !executive(),
                 as_of_on: new Date().toISOString().slice(0, 10),
                 timezone: "UTC",
                 partial: false,
@@ -2681,7 +2861,8 @@
             return {
                 ...clone(row),
                 next_owner_eligible: row.next_owner_id === "1",
-                can_manage: row.status !== "externally_completed",
+                can_manage:
+                    !executive() && row.status !== "externally_completed",
                 can_decide:
                     row.status === "submitted" &&
                     row.next_owner_id === currentId(),
@@ -2889,7 +3070,7 @@
                     ),
                 ),
                 approvers: [clone(members[0])],
-                can_manage: true,
+                can_manage: !executive(),
                 partial: false,
                 has_more: false,
                 as_of: now(),
@@ -3251,7 +3432,7 @@
                 /^\/enterprise\/requests\/([^/]+)\/history$/,
             );
             if (history) {
-                get(state.requests, history[1]);
+                requestView(get(state.requests, history[1]));
                 return {
                     items: clone(state.histories[history[1]] || []),
                     coverage: "This tab’s sample request history only.",
@@ -3461,7 +3642,7 @@
                                     (row.kind !== "cost" || manager()),
                             ),
                         ),
-                        can_coordinate: manager(),
+                        can_coordinate: manager() && !executive(),
                         can_finance: manager(),
                         basis: "Fictional sample planning, not actual purchasing or schedules.",
                         partial: false,
@@ -3567,7 +3748,7 @@
                                 row.status === "open",
                         ).length,
                     },
-                    can_coordinate: manager(),
+                    can_coordinate: manager() && !executive(),
                     partial: false,
                     coverage:
                         "Fictional browser resources only. Location names are source-backed; sample inventory and custody are illustrative.",
@@ -3723,7 +3904,7 @@
                     role_defaults: clone(shared?.roles || {}),
                     role: manager() ? "manager" : "employee",
                     intake_published: shared?.intake_published ?? true,
-                    can_manage: manager(),
+                    can_manage: manager() && !executive(),
                     licensing: {
                         unit: "department_workspace",
                         employees: "all_included",
@@ -3916,6 +4097,18 @@
         let queue = Promise.resolve();
         function request(url, body, options = {}) {
             const work = async () => {
+                if (
+                    executive() &&
+                    (body !== undefined ||
+                        (options.method &&
+                            !["GET", "HEAD"].includes(
+                                options.method.toUpperCase(),
+                            )))
+                )
+                    error(
+                        "This executive demonstration is read-only. Switch to the department manager sample to operate a workflow. No real administrator access is granted.",
+                        403,
+                    );
                 const { parsed } = navigation(url),
                     path = parsed.pathname.replace(/\/$/, ""),
                     query = parsed.searchParams;
@@ -3982,7 +4175,11 @@
             replace,
             snapshot: () => clone(state),
             setPersona(value) {
-                if (!["manager", "worker", "requester"].includes(value))
+                if (
+                    !["manager", "worker", "requester", "executive"].includes(
+                        value,
+                    )
+                )
                     error("Choose a sample perspective.");
                 state.persona = value;
                 save();
@@ -4011,6 +4208,8 @@
                     /* Browser storage can be unavailable without blocking reset. */
                 }
                 state = seed();
+                if (boot.defaultPersona === "executive")
+                    state.persona = "executive";
                 save();
             },
             initialScope: () => ({

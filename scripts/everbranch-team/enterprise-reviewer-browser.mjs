@@ -125,6 +125,9 @@ try {
     assert.equal(response.status(), 200);
     assert.equal(response.headers()["x-reviewer-fixture-sql"], "0");
     assert.equal(response.headers()["set-cookie"], undefined);
+    await page.locator('#reviewer-perspective').selectOption('manager');
+    await page.waitForFunction(()=>document.getElementById('reviewer-perspective')?.value==='manager');
+    await page.locator('#home-nav').click();
     await page.getByText("Fictional sample controls", { exact: false }).count();
     await page.locator("#briefing-body .briefing-hero").waitFor();
     await page
@@ -211,9 +214,12 @@ try {
     await page
         .getByRole("region", { name: "Linked native task", exact: true })
         .waitFor();
+    const selectedWorkflowUrl = page.url();
     await page
         .getByLabel("Sample perspective", { exact: true })
         .selectOption("worker");
+    await page.getByRole("region", { name: "Linked native task", exact: true }).waitFor();
+    assert.equal(page.url(), selectedWorkflowUrl, "Perspective switch retains workflow and run");
     await page
         .getByLabel("Complete sound check (native task)", { exact: true })
         .check();

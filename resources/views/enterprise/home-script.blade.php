@@ -1,5 +1,17 @@
-  let homeGeneration = 0, homeArea = null, briefingBusy = false, briefingPending = null;
+  let homeGeneration = 0, homeArea = null, briefingBusy = false, briefingPending = null, executiveView = null;
+  document.addEventListener('enterprise:workspace-state',event=>{if(!event.detail?.loaded){executiveView?.destroy();executiveView=null;if($('executive-demo'))$('executive-demo').hidden=true;}});
   function renderHome() {
+    const executiveRoot = $('executive-demo');
+    if (transport.mode === 'sample' && data.demo_persona === 'executive' && section === 'home' && executiveRoot) {
+      homeGeneration++;homeArea=null;
+      const config={...data.executive,onNavigate:target=>{document.dispatchEvent(new CustomEvent('enterprise:navigate',{detail:target}));return {available:true};}};
+      if(executiveView)executiveView.update(config);else executiveView=EverbranchExecutiveDemo.mount(executiveRoot,config);
+      $('campus-home').hidden=true;$('work').hidden=true;$('contractors').hidden=true;$('ask').hidden=true;
+      $('heading').textContent='Campus operations, at a glance.';$('breadcrumb').textContent='Executive overview';$('home-nav').textContent='Executive overview';$('home-nav').hidden=false;
+      $('create-request').hidden=true;$('create-project').hidden=true;rememberUrl();return;
+    }
+    if(executiveRoot){executiveView?.destroy();executiveView=null;executiveRoot.hidden=true;}
+    $('home-nav').textContent='Campus overview';
     $('home-nav').hidden = !data.features?.briefing;
     if (section === 'home' && !data.features?.briefing) section = 'requests';
     $('campus-home').hidden = section !== 'home';

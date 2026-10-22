@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import {checkExecutiveDemo} from './enterprise-executive-browser.mjs';
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -125,6 +126,9 @@ try {
     assert.equal(response.status(), 200);
     assert.equal(response.headers()["x-reviewer-fixture-sql"], "0");
     assert.equal(response.headers()["set-cookie"], undefined);
+    await checkExecutiveDemo(page,evidence);
+    await page.locator('#reviewer-perspective').selectOption('manager');
+    await page.waitForFunction(()=>document.getElementById('reviewer-perspective')?.value==='manager');
     await page.emulateMedia({ reducedMotion: "reduce" });
     const opener = page.getByRole("button", {name: "Campus priorities", exact:true});
     for (const [label,width,height] of [["desktop",1600,1280],["ipad-portrait",820,1180],["ipad-landscape",1180,820],["phone",390,844]]) {
