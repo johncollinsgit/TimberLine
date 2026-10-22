@@ -272,6 +272,24 @@ it('retains unknown and suppression holds across APP_KEY rotation', function ():
     expect($row->fresh()->event_state)->toBe('hard_bounce')->and($outbox->heldAddress($row->recipient))->toBeTrue();
 });
 
+it('rejects tenant-tagged evidence from the platform lane without releasing its hold', function (): void {
+    Bus::fake([SendPlatformEmail::class]);
+    $outbox = platformFixtureOutbox(fn () => throw new RuntimeException('unknown result'));
+    $email = platformFixtureEmail();
+    $id = $outbox->enqueue($email, Envelope::create($email))[0];
+    expect($outbox->submit($id))->toBe('unknown');
+    $row = PlatformEmailDelivery::findOrFail($id);
+    $event = platformFixtureEvent($row);
+    foreach (['ses:tenant', 'tenant_id', 'marketing_email_delivery_id'] as $tag) {
+        $invalid = $event;
+        $invalid['mail']['tags'][$tag] = ['foreign-tenant'];
+        expect(app(PlatformSesDeliveryEvents::class)->handle($invalid, 'foreign-'.$tag)['matched'])->toBe(0);
+    }
+    expect($row->fresh()->state)->toBe('unknown')->and($row->fresh()->provider_message_id)->toBeNull()
+        ->and($row->fresh()->event_hashes)->toBeEmpty();
+    expect(app(PlatformSesDeliveryEvents::class)->handle($event, 'valid-platform')['updated'])->toBe(1);
+});
+
 it('never regresses durable claims through stale or edited model saves', function (): void {
     Bus::fake([SendPlatformEmail::class]);
     $outbox = platformFixtureOutbox(fn () => new Result(['MessageId' => 'receipt']));

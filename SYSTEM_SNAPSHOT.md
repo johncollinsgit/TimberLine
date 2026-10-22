@@ -1,3 +1,4 @@
+<!-- SES readiness source candidate: final-claim permanent holds, strict event identity/destination binding and public password-reset admission. No activation/deployment. See docs/operations/ses-readiness-review-2026-10-22.md. -->
 ## Synthetic Fleet Calendar presentation (2026-10-22; source candidate)
 
 The isolated browser demo adds three synthetic Calendar examples linked by job

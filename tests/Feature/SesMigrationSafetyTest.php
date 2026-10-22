@@ -75,6 +75,87 @@ class SesMigrationSafetyTest extends TestCase
         $this->assertNull(data_get($delivery->fresh()->metadata, 'ses_attempt'));
     }
 
+    public function test_final_claim_blocks_existing_recipient_holds_even_without_marketing_options(): void
+    {
+        [$delivery, $message, $config] = $this->fixture();
+        config(['ses_migration.max_per_second' => 100]);
+        $provider = $this->provider(fn () => throw new RuntimeException('Must not reach provider'));
+        foreach (['bounced', 'suppressed'] as $status) {
+            \App\Models\MessagingContactChannelState::query()->updateOrCreate(
+                ['tenant_id' => $delivery->tenant_id, 'email' => strtoupper($delivery->email)],
+                ['email_status' => $status],
+            );
+            $result = $provider->sendEmail($message, $config);
+            $this->assertSame('ses_recipient_suppressed', $result['error_code']);
+            $this->assertFalse($result['retryable']);
+            $this->assertNull(data_get($delivery->fresh()->metadata, 'ses_attempt'));
+        }
+    }
+
+    public function test_recipient_hold_is_scoped_to_its_tenant_at_final_claim(): void
+    {
+        [$delivery, $message, $config] = $this->fixture();
+        $other = Tenant::create(['name' => 'Other fixture', 'slug' => 'other-ses-fixture']);
+        \App\Models\MessagingContactChannelState::create(['tenant_id' => $other->id,
+            'email' => $delivery->email, 'email_status' => 'suppressed']);
+        $provider = $this->provider(fn () => \GuzzleHttp\Promise\Create::promiseFor(new Result(['MessageId' => 'ses.opaque-id'])));
+        $this->assertTrue($provider->sendEmail($message, $config)['success']);
+    }
+
+    public function test_feedback_received_after_queueing_blocks_a_new_delivery_at_final_claim(): void
+    {
+        [$delivery, $message, $config] = $this->fixture();
+        config(['ses_migration.max_per_second' => 100]);
+        $queued = MarketingEmailDelivery::create(['tenant_id' => $delivery->tenant_id,
+            'provider' => 'ses_tenant', 'email' => $delivery->email, 'status' => 'queued']);
+        $calls = 0;
+        $provider = $this->provider(function () use (&$calls) {
+            $calls++;
+
+            return \GuzzleHttp\Promise\Create::promiseFor(new Result(['MessageId' => 'ses.opaque-id']));
+        });
+        $this->assertTrue($provider->sendEmail($message, $config)['success']);
+        app(SesDeliveryEvents::class)->handle($this->event($delivery, 'Complaint'), 'late-complaint');
+        $result = $provider->sendEmail([...$message, 'custom_args' => ['marketing_email_delivery_id' => $queued->id]], $config);
+        $this->assertSame('ses_recipient_suppressed', $result['error_code']);
+        $this->assertSame(1, $calls);
+        $this->assertNull(data_get($queued->fresh()->metadata, 'ses_attempt'));
+    }
+
+    public function test_permanent_provider_holds_survive_unsubscribe_reconsent_and_late_temporary_feedback(): void
+    {
+        [$delivery, $message, $config] = $this->fixture();
+        config(['ses_migration.max_per_second' => 100]);
+        $provider = $this->provider(fn () => \GuzzleHttp\Promise\Create::promiseFor(new Result(['MessageId' => 'ses.opaque-id'])));
+        $this->assertTrue($provider->sendEmail($message, $config)['success']);
+        $state = \App\Models\MessagingContactChannelState::create(['tenant_id' => $delivery->tenant_id,
+            'email' => $delivery->email, 'email_status' => 'unsubscribed']);
+        $events = app(SesDeliveryEvents::class);
+        $events->handle($this->event($delivery, 'Complaint'), 'complaint-after-unsubscribe');
+        $this->assertSame('unsubscribed', $state->fresh()->email_status);
+        $this->assertSame('complaint', data_get($delivery->fresh()->metadata, 'ses_attempt.recipient_hold'));
+        $state->update(['email_status' => 'subscribed']);
+        $temporary = $this->event($delivery, 'Bounce');
+        $temporary['bounce']['bounceType'] = 'Transient';
+        $temporary['bounce']['bouncedRecipients'][0]['status'] = '4.2.2';
+        $temporary['bounce']['bouncedRecipients'][0]['diagnosticCode'] = 'Mailbox full';
+        $events->handle($temporary, 'late-temporary-feedback');
+        $this->assertSame('complaint', data_get($delivery->fresh()->metadata, 'ses_attempt.recipient_hold'));
+        $queued = MarketingEmailDelivery::create(['tenant_id' => $delivery->tenant_id,
+            'provider' => 'ses_tenant', 'email' => $delivery->email, 'status' => 'queued']);
+        $result = $provider->sendEmail([...$message, 'custom_args' => ['marketing_email_delivery_id' => $queued->id]], $config);
+        $this->assertSame('ses_recipient_suppressed', $result['error_code']);
+        $this->assertNull(data_get($queued->fresh()->metadata, 'ses_attempt'));
+        config(['ses_migration.tenant_enabled' => false]);
+        Http::preventStrayRequests();
+        $rollback = app(\App\Services\Marketing\Email\TenantEmailDispatchService::class)->sendEmail(
+            $queued->email, 'Fixture', 'Fixture only', ['tenant_id' => $delivery->tenant_id, 'delivery_id' => $queued->id],
+        );
+        $this->assertSame('ses_recipient_suppressed', $rollback['error_code']);
+        $this->assertFalse($rollback['retryable']);
+        Http::assertNothingSent();
+    }
+
     public function test_receipt_is_persisted_and_replays_do_not_send_again(): void
     {
         [$delivery, $message, $config] = $this->fixture();
@@ -364,6 +445,27 @@ class SesMigrationSafetyTest extends TestCase
         $this->assertSame(1, $service->handle($event, 'named-source')['updated']);
         $this->assertSame(1, $service->handle($event, 'named-source')['duplicates']);
         $this->assertDatabaseHas('messaging_contact_channel_states', ['tenant_id' => $delivery->tenant_id, 'email' => $delivery->email, 'email_status' => 'suppressed']);
+    }
+
+    public function test_feedback_requires_single_identity_tags_and_original_destination(): void
+    {
+        [$delivery, $message, $config] = $this->fixture();
+        app(SesSendSafety::class)->claim($delivery->id, $delivery->tenant_id, $delivery->email,
+            ['TenantName' => $config['tenant_name'], 'ConfigurationSetName' => $config['configuration_set'], 'FromEmailAddress' => $config['from_email']]);
+        $event = $this->event($delivery, 'Complaint');
+        foreach (['tenant_id', 'marketing_email_delivery_id', 'ses:configuration-set'] as $tag) {
+            $invalid = $event;
+            $invalid['mail']['tags'][$tag][] = 'foreign-context';
+            $this->assertSame(0, app(SesDeliveryEvents::class)->handle($invalid, 'multiple-'.$tag)['matched']);
+        }
+        foreach ([['other@example.test'], [$delivery->email, 'other@example.test'], []] as $destination) {
+            $invalid = $event;
+            $invalid['mail']['destination'] = $destination;
+            $this->assertSame(0, app(SesDeliveryEvents::class)->handle($invalid, 'wrong-destination')['matched']);
+        }
+        $this->assertNull($delivery->fresh()->provider_message_id);
+        $this->assertDatabaseMissing('messaging_contact_channel_states', ['tenant_id' => $delivery->tenant_id]);
+        $this->assertSame(1, app(SesDeliveryEvents::class)->handle($event, 'valid-context')['updated']);
     }
 
     private function event(MarketingEmailDelivery $delivery, string $type): array

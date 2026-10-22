@@ -1,5 +1,14 @@
 # SendGrid to Amazon SES migration
 
+## October 22 readiness repair candidate
+
+See [the source review, proposed bounded cohort and unsent case draft](ses-readiness-review-2026-10-22.md).
+Final tenant claims recheck permanent recipient holds; feedback shares their
+tenant lock. Event identities/destinations bind to one delivery, and the platform
+lane rejects native-tenant tags. Public reset requests have atomic shared-cache
+IP/recipient admission before token generation. These are source changes only;
+SendGrid and all existing SES-off gates remain in place pending review/release.
+
 ## Verified starting point and ownership
 
 On October 20, 2026, production `/ready` and GitHub main both reported
