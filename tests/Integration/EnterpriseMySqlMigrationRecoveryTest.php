@@ -54,11 +54,18 @@ final class EnterpriseMySqlMigrationRecoveryTest extends TestCase
         Schema::table('tenant_user', fn (Blueprint $table) => $table->dropUnique('ee_tu_membership'));
         Schema::table('team_projects', fn (Blueprint $table) => $table->dropIndex('team_project_tenant_archive_idx'));
         Schema::table('team_operation_records', fn (Blueprint $table) => $table->dropUnique('tor_source'));
+        DB::table('team_operation_records')->insert(['id' => '10000000-0000-4000-8000-000000000001', 'tenant_id' => 9901,
+            'area_id' => '10000000-0000-4000-8000-000000000002', 'kind' => 'ent_ai_usage', 'source_key' => 'synthetic-voice-retention',
+            'title' => 'Private AI usage', 'data' => $encrypted, 'voice_expires_at' => '2026-01-01 00:00:00']);
+        Schema::table('team_operation_records', fn (Blueprint $table) => $table->dropIndex('tor_voice_sessions'));
+        Schema::table('team_operation_records', fn (Blueprint $table) => $table->dropIndex('tor_voice_previews'));
+        $voice = require database_path('migrations/2026_10_22_000600_add_private_voice_retention.php');
+        $voiceRoot = require base_path('database/migrations/2026_10_22_190000_add_private_voice_retention.php');
         $identity = require database_path('migrations/2026_10_21_000100_create_enterprise_identity.php');
         $access = require database_path('migrations/2026_10_21_000200_create_enterprise_access_profiles.php');
         $shared = require database_path('migrations/2026_10_21_000300_create_enterprise_shared_work_schema.php');
         $mailboxes = require database_path('migrations/2026_10_22_000400_create_enterprise_mailboxes.php');
-        foreach ([$identity, $access, $shared, $mailboxes] as $migration) {
+        foreach ([$identity, $access, $shared, $mailboxes, $voice, $voiceRoot] as $migration) {
             $migration->up();
             $migration->up();
             $migration->down(); // Code rollback must retain all evidence.
@@ -78,6 +85,10 @@ final class EnterpriseMySqlMigrationRecoveryTest extends TestCase
         $this->assertTrue(Schema::hasIndex('tenant_user', 'ee_tu_membership', 'unique'));
         $this->assertTrue(Schema::hasIndex('team_projects', 'team_project_tenant_archive_idx'));
         $this->assertTrue(Schema::hasIndex('team_operation_records', 'tor_source', 'unique'));
+        foreach (['tor_voice_expiry', 'tor_voice_sessions', 'tor_voice_previews'] as $index) {
+            $this->assertTrue(Schema::hasIndex('team_operation_records', $index));
+        }
+        $this->assertSame($encrypted, DB::table('team_operation_records')->where('source_key', 'synthetic-voice-retention')->value('data'));
         foreach (['tenant_module_states', 'team_file_chunks', 'team_operation_attempts', 'team_operation_revisions'] as $table) {
             $this->assertTrue(Schema::hasTable($table));
         }

@@ -23,11 +23,13 @@ on:
       - 'resources/data/enterprise/**'
       - 'resources/views/enterprise/**'
       - 'resources/js/enterprise/**'
+      - 'resources/js/ai-voice-conversation.js'
       - 'vite.enterprise.config.js'
       - 'scripts/everbranch-team/enterprise-*'
       - 'tests/Feature/Enterprise/**'
       - 'tests/Feature/LeesMcRaeCampusDemoTest.php'
       - 'tests/e2e/enterprise-*'
+      - 'tests/browser/enterprise-voice-jobs.smoke.mjs'
       - 'tests/Support/enterprise-https-router.php'
       - 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php'
       - 'tests/Integration/EnterpriseTrialBudgetMySqlConcurrencyTest.php'
@@ -43,6 +45,7 @@ on:
       - 'package.json'
       - 'database/migrations/**'
       - 'docs/operations/enterprise-ci.md'
+      - 'docs/operations/enterprise-voice-*.md'
   workflow_dispatch:
 
 permissions:
@@ -91,6 +94,10 @@ jobs:
       - run: npm ci
       - name: Check private transport and isolated sample contracts
         run: node --test tests/e2e/enterprise-transport.test.mjs tests/e2e/enterprise-reviewer-sample.test.mjs tests/e2e/enterprise-workspace-tour.test.mjs tests/e2e/enterprise-procedures-ui.test.mjs tests/e2e/enterprise-resource-presentation.test.mjs
+      - name: Check voice lifecycle and scoped job lookup without providers
+        run: |
+          npm run test:ai-voice
+          php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseVoiceJobsTest.php tests/Feature/Enterprise/EnterpriseVoiceAssistantTest.php --compact --display-warnings
       - run: npm run build:enterprise
       - name: Check shared reviewer rendering without account or route authority
         run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseReviewerRenderTest.php tests/Feature/Enterprise/EnterpriseResourcePresentationTest.php tests/Feature/Enterprise/EnterpriseReviewerTrialEntryTest.php tests/Feature/EnterpriseReviewerPublicTest.php tests/Feature/LeesMcRaeCampusDemoTest.php --compact --display-warnings
@@ -108,6 +115,11 @@ jobs:
         run: |
           ENTERPRISE_BROWSER_ENGINE=chromium ENTERPRISE_EVIDENCE=test-results/enterprise/chromium node scripts/everbranch-team/enterprise-browser-smoke.mjs
           ENTERPRISE_BROWSER_ENGINE=webkit ENTERPRISE_EVIDENCE=test-results/enterprise/webkit node scripts/everbranch-team/enterprise-browser-smoke.mjs
+      - name: Check job voice controls with fake speech in Chromium and WebKit
+        env:
+          VOICE_WEBKIT: '1'
+          VOICE_EVIDENCE_DIR: test-results/enterprise/voice-jobs
+        run: node tests/browser/enterprise-voice-jobs.smoke.mjs
       - name: Check reviewer tour and shared renderer in Chromium and WebKit
         timeout-minutes: 15
         env:

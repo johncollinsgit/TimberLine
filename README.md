@@ -12,6 +12,13 @@ contract, verification and remaining hardware/provider acceptance.
 
 # Everbranch
 
+Ask Everbranch has a separate default-off, source-only voice prototype with
+permission-scoped job grounding, replaceable generation, bounded history/cost
+reservations, cancellation and exact manual email/SMS draft previews. Fake tests
+do not establish live AI, physical speech or message delivery. See the
+[voice implementation and owner handoff](docs/operations/enterprise-voice-jobs.md)
+and [remaining activation decision](docs/operations/enterprise-voice-live-decision.md).
+
 Read the [current product, setup and release map](docs/operations/everbranch-current-state.md)
 for the supported offer, request-to-workspace steps, access/readiness distinctions
 and versioned evidence. The last independently verified checkpoint is

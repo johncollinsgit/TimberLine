@@ -7,7 +7,7 @@ export default defineConfig({
     plugins: [
         react(),
         laravel({
-            input: ["resources/js/enterprise/workspace.tsx"],
+            input: ["resources/js/enterprise/workspace.tsx", "resources/js/enterprise/voice-jobs-entry.js"],
             publicDirectory: "apps/enterprise/public",
             hotFile: "apps/enterprise/public/hot",
             refresh: false,
