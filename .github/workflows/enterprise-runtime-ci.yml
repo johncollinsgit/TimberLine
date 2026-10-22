@@ -98,7 +98,9 @@ jobs:
         run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseContractorCertificatesTest.php tests/Feature/Enterprise/EnterpriseReportExportTest.php --compact --display-warnings
       - name: Check controlled trial pages in the dedicated runtime without providers
         run: php vendor/bin/pest -c phpunit.enterprise.xml tests/Feature/Enterprise/EnterpriseTrialPagesTest.php --compact --display-warnings
-      - run: npx playwright install --with-deps chromium webkit
+      - name: Install browser dependencies
+        timeout-minutes: 15
+        run: npx playwright install --with-deps chromium webkit
       - name: Check persistent Enterprise UI in Chromium and WebKit
         env:
           ENTERPRISE_TEST_PHP: php

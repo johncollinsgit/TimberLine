@@ -303,11 +303,11 @@ try {
     exact: true
   }).click();
   await page.getByRole('heading', {name:'Contractors & plans',exact:true}).waitFor();
-  await page.getByLabel('Record title', {exact:true}).fill('Synthetic contractor');
+  await page.locator('#planning-form').getByLabel('Record title', {exact:true}).fill('Synthetic contractor');
   await page.getByRole('button', {name:'Save record',exact:true}).click();
   await page.locator('#planning-list').getByText('Synthetic contractor', {exact:true}).waitFor();
   await page.getByLabel('Record type').selectOption('schedule');
-  await page.getByLabel('Record title', {exact:true}).fill('Synthetic date block');
+  await page.locator('#planning-form').getByLabel('Record title', {exact:true}).fill('Synthetic date block');
   await page.getByLabel('Start date', {exact:true}).fill('2026-11-04');
   await page.getByLabel('End date (inclusive)', {exact:true}).fill('2026-11-05');
   await page.getByRole('button', {name:'Save record',exact:true}).click();
