@@ -23,6 +23,9 @@ Before committing, comparisons verified current-main HighLevel controllers,
 services, views, scripts, routes, configuration and tests were unchanged, and
 Enterprise application/runtime/view/controller/test paths matched PR478 source.
 The integration adds no provider, billing, migration or authorization behavior.
+Both browser installers have a 45-minute bound: repeated 15-minute attempts
+expired while the Ubuntu mirror was still transferring dependencies. Browser
+checks are retained unchanged; this is not a check waiver.
 The data-free schema and additive recovery registrations remain subject to the
 normal MySQL gate; they are not backups.
 
