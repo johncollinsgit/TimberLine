@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit bootstrap="vendor/autoload.php" colors="true">
+    <testsuites>
+        <testsuite name="Enterprise independent runtime">
+            <file>tests/Feature/Enterprise/EnterpriseRuntimeTest.php</file>
+            <file>tests/Feature/Enterprise/EnterpriseRolePreviewTest.php</file>
+            <file>tests/Feature/Enterprise/EnterpriseVoiceRuntimeTest.php</file>
+            <file>tests/Feature/Enterprise/EnterpriseAppManifestTest.php</file>
+            <file>tests/Feature/Enterprise/EnterpriseSchemaTest.php</file>
+            <file>tests/Feature/Enterprise/EnterprisePrefixMountTest.php</file>
+            <file>tests/Feature/Enterprise/EnterpriseClientProvisioningTest.php</file>
+            <file>tests/Integration/EnterpriseClientProvisioningMySqlTest.php</file>
+            <file>tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php</file>
+            <file>tests/Integration/EnterpriseTrialBudgetMySqlConcurrencyTest.php</file>
+        </testsuite>
+    </testsuites>
+    <php>
+        <env name="APP_ENV" value="testing" force="true"/>
+        <env name="ENTERPRISE_APP_ENV" value="testing" force="true"/>
+        <env name="ENTERPRISE_APP_KEY" value="base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=" force="true"/>
+        <env name="ENTERPRISE_RUNTIME_ISOLATED" value="true" force="true"/>
+    </php>
+</phpunit>

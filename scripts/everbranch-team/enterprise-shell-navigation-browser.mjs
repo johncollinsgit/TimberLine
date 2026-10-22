@@ -1,0 +1,163 @@
+import assert from "node:assert/strict";
+
+// Invoked by an existing isolated browser harness. This module never starts a
+// server, seeds college data, installs an adapter or makes a provider request.
+const nav = async (page) =>
+    page.evaluate(() =>
+        Object.fromEntries(
+            new URLSearchParams(
+                location.pathname.startsWith("/platform/demos/")
+                    ? location.hash.slice(1)
+                    : location.search,
+            ),
+        ),
+    );
+const tourState = async (page) =>
+    page.evaluate(() =>
+        Object.fromEntries(
+            Object.entries(sessionStorage).filter(([key]) =>
+                key.startsWith("everbranch-priorities-"),
+            ),
+        ),
+    );
+
+export async function verifyFilteredRequestMap(
+    page,
+    { synthetic, areaId, includedId, excludedId, query },
+) {
+    assert.equal(
+        synthetic,
+        true,
+        "Use isolated fictional fixture records only",
+    );
+    assert.ok(areaId && includedId && excludedId && query);
+    await page.evaluate(
+        ({ areaId }) =>
+            document.dispatchEvent(
+                new CustomEvent("enterprise:navigate", {
+                    detail: { area: areaId, section: "requests" },
+                }),
+            ),
+        { areaId },
+    );
+    await page.locator(`#request-list [data-open="${includedId}"]`).waitFor();
+    await page.locator("#search").fill(query);
+    await page.locator('[data-view="map"]').click();
+    assert.equal(
+        await page.locator(`#request-list [data-open="${includedId}"]`).count(),
+        1,
+    );
+    assert.equal(
+        await page.locator(`#request-list [data-open="${excludedId}"]`).count(),
+        0,
+    );
+    assert.equal(
+        await page.locator(`#map-markers [data-map="${includedId}"]`).count(),
+        1,
+    );
+    assert.equal(
+        await page.locator(`#map-markers [data-map="${excludedId}"]`).count(),
+        0,
+    );
+    const listIds = await page
+        .locator("#request-list [data-open]")
+        .evaluateAll((rows) => rows.map((row) => row.dataset.open));
+    const markerIds = await page
+        .locator("#map-markers [data-map]")
+        .evaluateAll((rows) => rows.map((row) => row.dataset.map));
+    assert.ok(
+        markerIds.every((id) => listIds.includes(id)),
+        "Pins must remain a subset of the same filtered authorized rows",
+    );
+    await page.locator(`#map-markers [data-map="${includedId}"]`).click();
+    assert.equal((await nav(page)).selected, includedId);
+    assert.equal((await nav(page)).section, "requests");
+    await page.locator("#search").fill("");
+}
+
+export async function verifyShellNavigationHistory(
+    page,
+    { synthetic, areaId, projectId, otherAreaId },
+) {
+    assert.equal(
+        synthetic,
+        true,
+        "Use isolated fictional fixture records only",
+    );
+    assert.ok(areaId && projectId && otherAreaId && areaId !== otherAreaId);
+    const initialTour = await tourState(page);
+    await page.evaluate(
+        ({ areaId, projectId }) =>
+            document.dispatchEvent(
+                new CustomEvent("enterprise:navigate", {
+                    detail: {
+                        area: areaId,
+                        section: "projects",
+                        selected: projectId,
+                    },
+                }),
+            ),
+        { areaId, projectId },
+    );
+    await page.locator("#search").fill("");
+    await page.locator("#discussion-body").waitFor();
+    const original = await page.locator("#discussion-body").inputValue();
+    const retained =
+        "Synthetic unsent note retained through navigation history.";
+    await page.locator("#discussion-body").fill(retained);
+    await page.locator('[data-view="list"]').click();
+    await page.locator('[data-view="calendar"]').click();
+    assert.equal((await nav(page)).view, "calendar");
+    await page.locator(`#areas [data-area="${otherAreaId}"]`).click();
+    await page.waitForFunction(
+        (id) =>
+            new URLSearchParams(
+                location.pathname.startsWith("/platform/demos/")
+                    ? location.hash.slice(1)
+                    : location.search,
+            ).get("area_id") === id,
+        otherAreaId,
+    );
+    await page.goBack();
+    await page.locator(`#request-list [data-open="${projectId}"]`).waitFor();
+    await page.locator("#discussion-body").waitFor();
+    assert.equal((await nav(page)).area_id, areaId);
+    assert.equal((await nav(page)).selected, projectId);
+    assert.equal(
+        await page
+            .locator('[data-view="calendar"]')
+            .getAttribute("aria-pressed"),
+        "true",
+    );
+    assert.equal(await page.locator("#discussion-body").inputValue(), retained);
+    await page.goBack();
+    await page.locator("#discussion-body").waitFor();
+    assert.equal(
+        await page.locator('[data-view="list"]').getAttribute("aria-pressed"),
+        "true",
+    );
+    await page.goForward();
+    await page.locator("#discussion-body").waitFor();
+    assert.equal(
+        await page
+            .locator('[data-view="calendar"]')
+            .getAttribute("aria-pressed"),
+        "true",
+    );
+    assert.equal(await page.locator("#discussion-body").inputValue(), retained);
+    await page.reload();
+    await page.locator("#discussion-body").waitFor();
+    assert.equal(
+        await page
+            .locator('[data-view="calendar"]')
+            .getAttribute("aria-pressed"),
+        "true",
+    );
+    assert.equal(await page.locator("#discussion-body").inputValue(), retained);
+    assert.deepEqual(
+        await tourState(page),
+        initialTour,
+        "Navigation history cannot replace the saved tour step",
+    );
+    await page.locator("#discussion-body").fill(original);
+}

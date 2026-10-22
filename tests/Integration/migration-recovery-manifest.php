@@ -3,6 +3,34 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_22_190000_add_private_voice_retention.php' => [
+        'test' => 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['retained encrypted voice and metering rows survive partial expiry column and named index creation; repeated recovery and code rollback preserve evidence'],
+    ],
+    '2026_10_22_000600_add_private_voice_retention.php' => [
+        'test' => 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['isolated runtime expiry column and named indexes recover independently without content or accounting loss'],
+    ],
+    '2026_10_22_000500_create_enterprise_client_silo.php' => [
+        'test' => 'tests/Integration/EnterpriseClientProvisioningMySqlTest.php',
+        'scenarios' => ['retained encrypted client receipt and native department survive missing unique indexes; repeated recovery and down preserve data; independent first-claim processes serialize behind the real database lock without creating access'],
+    ],
+    '2026_10_22_000400_create_enterprise_mailboxes.php' => [
+        'test' => 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['encrypted existing mailbox and domain proof survive missing grant table and named index/foreign-key repair; replay creates no accounts credentials or grants'],
+    ],
+    '2026_10_21_000100_create_enterprise_identity.php' => [
+        'test' => 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['identity tables and rows retained before named unique keys and membership foreign-key repair; replay never creates memberships'],
+    ],
+    '2026_10_21_000200_create_enterprise_access_profiles.php' => [
+        'test' => 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['retained profiles and identity survive missing module state table; replay never bootstraps profiles or entitlements'],
+    ],
+    '2026_10_21_000300_create_enterprise_shared_work_schema.php' => [
+        'test' => 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['pinned shared schema repairs missing operation/file tables and project/record indexes while retaining native work evidence'],
+    ],
     '2026_10_20_200000_create_platform_email_deliveries.php' => [
         'test' => 'tests/Integration/PlatformMailMySqlRecoveryTest.php',
         'scenarios' => ['encrypted MIME retained before child table creation', 'recipient, unknown claim and event hashes retained before every named index and parent constraint', 'completed DDL replay before migration bookkeeping', 'duplicate identities or changed named constraints stop without deleting evidence'],
