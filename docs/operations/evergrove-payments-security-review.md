@@ -1,6 +1,6 @@
 # Evergrove Payments independent acceptance matrix
 
-This matrix applies to the separate native/backend payment lane. It does not authorize collection, enable the existing POS simulator in production, or certify PCI compliance. Implementation review and executable results are recorded separately once the agents finish their milestone.
+This matrix applies to the separate native/backend payment lane. It does not authorize collection, enable the existing POS simulator in production, or certify PCI compliance. Results below describe fixture-only source checks; physical and provider acceptance remain separate.
 
 ## Independent review checkpoint — 2026-10-22
 
