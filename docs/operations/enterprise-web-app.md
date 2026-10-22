@@ -41,8 +41,14 @@ instructions and explicit update/reload choices. The UI never refreshes itself;
 it checks a no-store current-version response only on request, explains retained
 drafts and uncertain receipts/file re-selection, requires a confirmation, and
 blocks refresh while any shared private transport mutation is still pending.
-Network failure releases the in-flight count without claiming the write failed:
-the existing exact retry receipt remains the reconciliation mechanism. Existing
+Whole photo/file batches also block refresh during hashing and between chunks.
+Uncertain core workspace and planning commands retain an additional page-local
+blocker after HTTP settles, until their exact retry confirms the original action.
+These receipts are memory-only: the UI never promises they survive reload. A
+before-unload warning also protects these active or unresolved operations where
+the browser permits it. Other stored drafts/receipts remain subject to existing
+browser-storage limits; unsaved fields and file selections are not guaranteed.
+Network failure releases the HTTP count without claiming the write failed. Existing
 workflow before-unload warnings remain in force. Browser install events are
 reported as browser events, not proof of an actual device acceptance test.
 This source adds **no service worker, operational cache,

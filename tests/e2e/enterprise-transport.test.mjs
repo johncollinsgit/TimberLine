@@ -61,6 +61,23 @@ test('private transport passes exact binary bytes and exposes denial status', as
     const denied = environment({fetch: async () => ({ok: false, status: 403, json: async () => ({message: 'Permission changed.'})})});
     await assert.rejects(denied.create(boot).request('/enterprise/data'), error => error.status === 403 && error.message === 'Permission changed.');
 });
+
+test('refresh blockers outlive settled uncertain HTTP and remain independent across operations', async () => {
+    const {context, create} = environment({fetch: async () => { throw new Error('Uncertain outcome'); }});
+    const lifecycle = context.EverbranchTransport;
+    lifecycle.setRefreshBlocker('workspace-command', true);
+    lifecycle.setRefreshBlocker('planning:area-a', true);
+    lifecycle.setRefreshBlocker('workspace-command', true);
+    assert.equal(lifecycle.refreshBlockers, 2);
+    await assert.rejects(create(boot).request('/enterprise/commands', {request_id: 'retain-exact'}), /Uncertain/);
+    assert.equal(lifecycle.pendingWrites, 0);
+    assert.equal(lifecycle.refreshBlockers, 2);
+    lifecycle.setRefreshBlocker('workspace-command', false);
+    assert.equal(lifecycle.refreshBlockers, 1);
+    lifecycle.setRefreshBlocker('planning:area-a', false);
+    lifecycle.setRefreshBlocker('planning:area-a', false);
+    assert.equal(lifecycle.refreshBlockers, 0);
+});
 test('sample mode fails closed without its explicit adapter and rejects unknown runtimes', () => {
     const {create, calls} = environment();
     assert.throws(() => create({...boot, runtime: 'sample'}), /sample adapter/);

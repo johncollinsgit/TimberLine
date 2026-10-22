@@ -12,7 +12,7 @@
  <div class="eai-actions"><button type="button" id="enterprise-install-device" hidden>Install on this device</button><button type="button" id="enterprise-update-check">Check for update</button></div>
  <p role="status" aria-live="polite" id="enterprise-update-status">Check the current server when ready. The app never reloads your work automatically.</p>
  <section id="enterprise-update-preview" hidden>
-  <p><strong>Before refreshing:</strong> finish saves/uploads and review uncertain actions. Existing drafts and exact retry receipts remain in this browser where storage is available. Unsent file selections cannot be restored automatically: keep the original photo/file to select again. Existing unsaved-work warnings still apply.</p>
+  <p><strong>Before refreshing:</strong> finish saves/uploads and resolve retained workspace or planning actions using their exact retry. Refresh is blocked while those actions remain in this page. Other stored drafts and receipts are retained where browser storage is available; not every unsaved field is stored. Unsent file selections cannot be restored automatically: keep the original photo/file to select again. Existing unsaved-work warnings still apply.</p>
   <label><input id="enterprise-update-confirm" type="checkbox">I reviewed my work and am ready to refresh this page.</label>
   <button type="button" id="enterprise-update-reload" disabled>Refresh to current version</button>
  </section>
@@ -23,7 +23,8 @@
     const boot = @json($enterpriseInstall), get = id => document.getElementById('enterprise-' + id), dialog = get('install-dialog'), open = get('install-open');
     let installation = null, checking = false;
     const writes = () => globalThis.EverbranchTransport?.pendingWrites || 0;
-    const lock = () => { get('update-reload').disabled = !get('update-confirm').checked || writes() > 0 || checking; };
+    const blocked = () => globalThis.EverbranchTransport?.refreshBlockers || 0;
+    const lock = () => { get('update-reload').disabled = !get('update-confirm').checked || writes() > 0 || blocked() > 0 || checking; };
     const destination = value => { const url = new URL(value, location.href); if (url.origin !== location.origin || url.username || url.password) throw new Error('The current application update route is unavailable.'); return url; };
     function close() { if(dialog.open)dialog.close();open.focus(); }
     open.onclick = () => { dialog.showModal();get('install-title').focus();lock(); };
@@ -41,8 +42,9 @@
         finally{checking=false;get('update-check').disabled=false;lock();}
     };
     get('update-confirm').onchange=lock;
-    document.addEventListener('enterprise:network-activity',()=>{if(writes()>0)get('update-confirm').checked=false;lock();if(dialog.open)get('update-status').textContent=writes()>0?'A save or upload is in progress. Refresh is paused until it finishes; review any uncertain outcome before continuing.':'The request has settled. Check its recorded result or exact retry, then confirm again when ready to refresh.';});
-    get('update-reload').onclick=()=>{if(writes()||checking||!get('update-confirm').checked)return;location.reload();};
+    document.addEventListener('enterprise:network-activity',()=>{if(writes()>0||blocked()>0)get('update-confirm').checked=false;lock();if(dialog.open)get('update-status').textContent=writes()>0?'A save or upload is in progress. Refresh is paused until it finishes; review any uncertain outcome before continuing.':blocked()>0?'Refresh is paused. Finish the upload or resolve the retained workspace or planning action using its exact retry before continuing.':'The request has settled. Check its recorded result or exact retry, then confirm again when ready to refresh.';});
+    addEventListener('beforeunload',event=>{if(writes()||blocked()){event.preventDefault();event.returnValue='';}});
+    get('update-reload').onclick=()=>{if(writes()||blocked()||checking||!get('update-confirm').checked)return;location.reload();};
     const header=document.querySelector('.topbar');if(header)header.append(open);else{const strip=document.createElement('div');strip.className='eai-workflow-strip';strip.append(open);document.getElementById('enterprise-workflow')?.before(strip);}
 })();
 </script>

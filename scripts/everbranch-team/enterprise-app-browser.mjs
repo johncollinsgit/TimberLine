@@ -20,6 +20,46 @@ export async function checkEnterpriseApp(page,evidence,packet,tenant) {
     await page.locator('#enterprise-install-open').click();await page.locator('#enterprise-update-check').click();
     await page.locator('#enterprise-update-status').getByText('An updated server version is available. Review the refresh details before continuing.',{exact:true}).waitFor();
     await page.locator('#enterprise-update-confirm').check();assert.equal(await page.locator('#enterprise-update-reload').isEnabled(),true);
+    await page.keyboard.press('Escape');
+    // A committed command with a dropped response must retain its original key
+    // and block refresh even after the HTTP counter returns to zero.
+    const coreBodies=[];
+    await page.locator('[data-section=projects]').click();
+    await page.route('**/enterprise/commands?*',async route=>{coreBodies.push(route.request().postDataJSON());if(coreBodies.length===1){await route.fetch();return route.abort();}return route.continue();});
+    await page.locator('#create-project').click();
+    await page.locator('#create-form [name=title]').fill('Synthetic update safety project');
+    await page.locator('#create-form button[type=submit]').click();
+    await page.locator('#retry').waitFor({state:'visible'});
+    await page.locator('#cancel-create').click();
+    await page.waitForFunction(()=>EverbranchTransport.pendingWrites===0&&EverbranchTransport.refreshBlockers===1);
+    await page.locator('#enterprise-install-open').click();await page.locator('#enterprise-update-confirm').check();
+    assert.equal(await page.locator('#enterprise-update-reload').isDisabled(),true,'A settled uncertain core command must still block refresh');
+    await page.keyboard.press('Escape');await page.locator('#retry').click();
+    await page.waitForFunction(()=>EverbranchTransport.pendingWrites===0&&EverbranchTransport.refreshBlockers===0);
+    assert.deepEqual(coreBodies[1],coreBodies[0]);await page.unroute('**/enterprise/commands?*');
+    await page.route('**/enterprise/commands?*',route=>route.fulfill({status:422,contentType:'application/json',body:JSON.stringify({message:'Synthetic definitive validation rejection'})}));
+    await page.locator('#create-project').click();await page.locator('#create-form [name=title]').fill('Rejected synthetic project');await page.locator('#create-form button[type=submit]').click();
+    await page.locator('#status').filter({hasText:'The server rejected this action'}).waitFor();
+    assert.equal(await page.evaluate(()=>EverbranchTransport.refreshBlockers),0,'A first-attempt definitive rejection must permit correction');
+    assert.equal(await page.locator('#retry').isHidden(),true);await page.locator('#cancel-create').click();await page.unroute('**/enterprise/commands?*');
+    const planningBodies=[];
+    await page.locator('[data-section=contractors]').click();
+    await page.locator('#planning-form [name=title]').fill('Synthetic update safety contractor');
+    await page.route('**/enterprise/planning?*',async route=>{if(route.request().method()!=='POST')return route.continue();planningBodies.push(route.request().postDataJSON());if(planningBodies.length===1){await route.fetch();return route.abort();}return route.continue();});
+    await page.locator('#planning-save').click();await page.locator('#planning-retry').waitFor({state:'visible'});
+    await page.waitForFunction(()=>EverbranchTransport.pendingWrites===0&&EverbranchTransport.refreshBlockers===1);
+    await page.locator('#enterprise-install-open').click();await page.locator('#enterprise-update-confirm').check();
+    assert.equal(await page.locator('#enterprise-update-reload').isDisabled(),true,'An uncertain planning receipt in memory must still block refresh');
+    await page.keyboard.press('Escape');await page.locator('#planning-retry').click();
+    await page.locator('#status').getByText('Planning record saved.',{exact:true}).waitFor();
+    await page.waitForFunction(()=>EverbranchTransport.pendingWrites===0&&EverbranchTransport.refreshBlockers===0);
+    assert.deepEqual(planningBodies[1],planningBodies[0]);await page.unroute('**/enterprise/planning?*');
+    await page.route('**/enterprise/planning?*',route=>route.request().method()==='POST'?route.fulfill({status:422,contentType:'application/json',body:JSON.stringify({message:'Synthetic definitive planning rejection'})}):route.continue());
+    await page.locator('#planning-form [name=title]').fill('Rejected synthetic contractor');await page.locator('#planning-save').click();
+    await page.locator('#status').filter({hasText:'The server rejected this action'}).waitFor();
+    assert.equal(await page.evaluate(()=>EverbranchTransport.refreshBlockers),0);assert.equal(await page.locator('#planning-retry').isHidden(),true);await page.unroute('**/enterprise/planning?*');
+    await page.locator('[data-section=finance]').click();await page.locator('[data-finance-record="'+packet.id+'"]').click();
+    await page.locator('#enterprise-install-open').click();await page.locator('#enterprise-update-confirm').check();
     let release;const held=new Promise(resolve=>{release=resolve;});
     await page.route('**/enterprise/finance/commands?*',async route=>{const response=await route.fetch();await held;await route.fulfill({response});});
     const save=page.evaluate(async({packet,tenant})=>{
@@ -44,5 +84,5 @@ export async function checkEnterpriseApp(page,evidence,packet,tenant) {
     await page.locator('#enterprise-update-reload').click();await page.locator('#finance-new').waitFor({state:'visible'});
     await page.locator('[data-finance-record="'+packet.id+'"]').click();await page.locator('#finance-history').getByText('Version '+saved.version,{exact:true}).waitFor();
     await page.unroute('**/enterprise/app-version');
-    console.log('PASS installable app foundation: real manifest/standalone declaration, no service worker, instructions/focus, simulated newer version, pending-write refresh fence and explicit reload preserves the persistent packet. No physical installation or hosted update is claimed.');
+    console.log('PASS installable app foundation: real manifest/standalone declaration, no service worker, instructions/focus, simulated newer version, pending-write and uncertain core/planning refresh fences, exact retries and explicit reload preserves the persistent packet. No physical installation or hosted update is claimed.');
 }

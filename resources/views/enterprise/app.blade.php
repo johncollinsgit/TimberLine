@@ -87,6 +87,7 @@
     view = 'list',
     map = false,
     pending = null,
+    pendingUncertain = false,
     createAction = '',
     draft = null,
     busy = false;
@@ -137,18 +138,28 @@
     if (busy) return;
     busy = true;
     pending = body;
+    globalThis.EverbranchTransport.setRefreshBlocker('workspace-command', true);
     $('retry').hidden = true;
     message('Saving…');
     try {
       const result = await api(urls.commands, body);
       pending = null;
+      pendingUncertain = false;
+      globalThis.EverbranchTransport.setRefreshBlocker('workspace-command', false);
       $('create-dialog').close();
       if (body.action === 'workspace.create') area = result.id;
       await load();
       message('Saved.');
     } catch (error) {
-      message(error.message + ' Your action is retained in this page for retry.', true);
-      $('retry').hidden = false;
+      if (!pendingUncertain && [403,404,409,422].includes(error.status)) {
+        pending = null;
+        globalThis.EverbranchTransport.setRefreshBlocker('workspace-command', false);
+        message(error.message + ' The server rejected this action. Review current access and correct or reload the form before trying again.', true);
+      } else {
+        pendingUncertain = true;
+        message(error.message + ' Your action is retained in this page for exact retry. Refresh is paused until its outcome is confirmed.', true);
+        $('retry').hidden = false;
+      }
     } finally {
       busy = false;
     }

@@ -4,12 +4,21 @@
     'use strict';
     const root = globalThis;
     let pendingWrites = 0;
+    const refreshBlockers = new Set();
+    const notify = () => {
+        if (root.document?.dispatchEvent && root.CustomEvent) root.document.dispatchEvent(new root.CustomEvent('enterprise:network-activity', {detail: {pendingWrites, refreshBlockers: refreshBlockers.size}}));
+    };
     const activity = delta => {
         pendingWrites += delta;
-        if (root.document?.dispatchEvent && root.CustomEvent) root.document.dispatchEvent(new root.CustomEvent('enterprise:network-activity', {detail: {pendingWrites}}));
+        notify();
     };
     root.EverbranchTransport = Object.freeze({
         get pendingWrites() { return pendingWrites; },
+        get refreshBlockers() { return refreshBlockers.size; },
+        setRefreshBlocker(key, blocked) {
+            if (blocked) refreshBlockers.add(key); else refreshBlockers.delete(key);
+            notify();
+        },
         create(boot) {
             const mode = boot.runtime ?? 'private';
             if (!['private', 'sample'].includes(mode)) throw new Error('Unsupported Enterprise runtime.');
