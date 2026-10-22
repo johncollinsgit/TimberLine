@@ -35,7 +35,7 @@ class OperatorDashboardService
             'weekly_cost_cents' => (int) $weekCost, 'ytd_revenue_cents' => (int) $revenue, 'active_paying_tenants' => $paying,
             'break_even_clients' => $averageWeekly ? (int) ceil($weekCost / $averageWeekly) : null,
             'costs' => OperatorRecurringCost::query()->where('active', true)->orderBy('vendor')->get(),
-            'open_tickets' => TenantSupportTicket::withoutGlobalScopes()->whereNotIn('status', ['resolved', 'closed'])->count(),
+            'open_tickets' => TenantSupportTicket::withoutGlobalScopes()->legacySupport()->whereNotIn('status', ['resolved', 'closed'])->count(),
             'usage' => $usage,
         ];
     }

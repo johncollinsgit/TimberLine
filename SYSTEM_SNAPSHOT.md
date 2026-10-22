@@ -3013,3 +3013,13 @@ and DKIM are verified. Approved simulator resources are being configured.
 Platform SMTP remains SendGrid; actual AWS delivery/application event acceptance,
 runtime credentials, production access and a separate platform retry/event
 contract remain required before completion.
+## Software service support (October 22 source candidate, disabled)
+
+Native tenant support now has a department-private candidate queue with explicit
+owner/client/member bindings, replay-safe submissions/replies, private files,
+status history and fake-only owner SMS/email outbox. A test-only mutually signed
+campus transport contract preserves separate identities/stores; production
+adapters and actual bindings remain absent. Upload downloads default deny pending
+fresh scanner clearance. Native IDs do not identify Enterprise users. No
+provisioning, role grants or provider activation.
+See [the scope and review package](docs/operations/software-service-support.md).

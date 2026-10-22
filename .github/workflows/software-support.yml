@@ -1,0 +1,94 @@
+name: Software support acceptance
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/SoftwareSupport/**'
+      - 'config/software_support.php'
+      - 'routes/software-support*'
+      - 'tests/Feature/SoftwareSupport/**'
+      - 'tests/Support/SoftwareSupportTransportFixtures.php'
+      - 'routes/api.php'
+      - 'tests/Integration/SoftwareSupportMySqlRecoveryTest.php'
+      - 'database/migrations/2026_10_22_180000_create_software_support_records.php'
+      - 'database/schema/**'
+      - '.github/workflows/software-support.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: software-support-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  mysql-support:
+    name: software support MySQL acceptance
+    runs-on: ubuntu-latest
+    environment: Testing
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: everbranch_ci
+          MYSQL_ROOT_PASSWORD: root
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping --host=127.0.0.1 --password=root"
+          --health-interval=5s --health-timeout=5s --health-retries=12
+    env:
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: everbranch_ci
+      DB_USERNAME: root
+      DB_PASSWORD: root
+      APP_ENV: testing
+      MAIL_MAILER: array
+      LOG_CHANNEL: 'null'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql, pdo_sqlite, sodium
+          tools: composer:v2
+          coverage: none
+      - name: Configure existing Flux dependency access
+        env:
+          FLUX_USERNAME: ${{ secrets.FLUX_USERNAME }}
+          FLUX_LICENSE_KEY: ${{ secrets.FLUX_LICENSE_KEY }}
+        run: composer config http-basic.composer.fluxui.dev "$FLUX_USERNAME" "$FLUX_LICENSE_KEY"
+      - run: composer install --no-interaction --prefer-dist --optimize-autoloader
+      - name: Prepare isolated test application
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          mkdir -p .tmp/views
+      - name: Verify support privacy, fake transport and retained-row recovery on MySQL
+        env:
+          VIEW_COMPILED_PATH: /tmp/software-support-views
+        run: |
+          mkdir -p "$VIEW_COMPILED_PATH"
+          php vendor/bin/pest tests/Feature/SoftwareSupport tests/Integration/SoftwareSupportMySqlRecoveryTest.php --compact
+      - name: Generate data-free baseline candidate from this exact tree
+        run: |
+          mkdir -p .tmp/support-baseline
+          cp database/schema/mysql-schema.sha256 .tmp/support-baseline/committed.sha256
+          scripts/ci/refresh-mysql-schema-baseline.sh
+          cp database/schema/mysql-schema.sql database/schema/mysql-schema.sha256 .tmp/support-baseline/
+          git rev-parse HEAD > .tmp/support-baseline/checkout-sha.txt
+          printf '%s\n' '${{ github.event.pull_request.head.sha }}' > .tmp/support-baseline/pr-head-sha.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: software-support-schema-${{ github.event.pull_request.head.sha }}
+          path: .tmp/support-baseline/
+          retention-days: 7
+          if-no-files-found: error
+      - name: Verify generated MySQL schema and blank-database boot
+        run: scripts/ci/verify-mysql-schema-baseline.sh
+      - name: Require the reviewed fingerprint committed in the PR
+        run: cmp .tmp/support-baseline/committed.sha256 database/schema/mysql-schema.sha256

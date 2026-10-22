@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_22_180000_create_software_support_records.php' => [
+        'test' => 'tests/Integration/SoftwareSupportMySqlRecoveryTest.php',
+        'scenarios' => ['table and saved rows retained before replay and scope indexes'],
+    ],
     '2026_10_20_200000_create_platform_email_deliveries.php' => [
         'test' => 'tests/Integration/PlatformMailMySqlRecoveryTest.php',
         'scenarios' => ['encrypted MIME retained before child table creation', 'recipient, unknown claim and event hashes retained before every named index and parent constraint', 'completed DDL replay before migration bookkeeping', 'duplicate identities or changed named constraints stop without deleting evidence'],

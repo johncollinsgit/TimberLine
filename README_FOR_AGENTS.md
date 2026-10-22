@@ -2331,3 +2331,14 @@ and DKIM are verified. Approved simulator resources are being configured.
 Platform SMTP remains SendGrid; actual AWS delivery/application event acceptance,
 runtime credentials, production access and a separate platform retry/event
 contract remain required before completion.
+## Software service support (October 22 source candidate, disabled)
+
+Read [the software support runbook](docs/operations/software-service-support.md)
+before changing department-private support. Reuse the native ticket engine;
+preserve its exclusion from legacy tenant-wide help/search paths. Explicit active
+memberships and owner/client/department bindings are required. Campus Enterprise
+has independent auth/database/storage; a test-only signed transport contract is
+available but its production adapters/bindings remain unimplemented. Read the
+campus transport handoff before integration. Uploads default deny without fresh
+approved scanner clearance. Owner
+notification intents are fake-only; destinations never belong in source or UI.

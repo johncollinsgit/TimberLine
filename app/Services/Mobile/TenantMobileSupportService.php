@@ -20,13 +20,13 @@ class TenantMobileSupportService
     /** @return array<string,mixed> */
     public function index(int $tenantId): array
     {
-        return ['tickets' => TenantSupportTicket::withoutGlobalScopes()->where('tenant_id', $tenantId)->with(['creator:id,name', 'assignee:id,name'])->withCount('messages')->latest('last_activity_at')->latest('id')->limit(100)->get()->map(fn (TenantSupportTicket $ticket): array => $this->summary($ticket))->values()];
+        return ['tickets' => TenantSupportTicket::withoutGlobalScopes()->legacySupport()->where('tenant_id', $tenantId)->with(['creator:id,name', 'assignee:id,name'])->withCount('messages')->latest('last_activity_at')->latest('id')->limit(100)->get()->map(fn (TenantSupportTicket $ticket): array => $this->summary($ticket))->values()];
     }
 
     /** @return array<string,mixed> */
     public function show(int $tenantId, int $ticketId): array
     {
-        $ticket = TenantSupportTicket::withoutGlobalScopes()->where('tenant_id', $tenantId)->with(['creator:id,name', 'assignee:id,name', 'messages.user:id,name'])->findOrFail($ticketId);
+        $ticket = TenantSupportTicket::withoutGlobalScopes()->legacySupport()->where('tenant_id', $tenantId)->with(['creator:id,name', 'assignee:id,name', 'messages.user:id,name'])->findOrFail($ticketId);
 
         return ['ticket' => $this->summary($ticket), 'messages' => $ticket->messages->map(fn (TenantSupportTicketMessage $message): array => [
             'id' => (int) $message->id,
@@ -76,7 +76,7 @@ class TenantMobileSupportService
     /** @return array<string,mixed> */
     public function reply(int $tenantId, int $ticketId, User $user, string $body, string $context): array
     {
-        $ticket = TenantSupportTicket::withoutGlobalScopes()->where('tenant_id', $tenantId)->findOrFail($ticketId);
+        $ticket = TenantSupportTicket::withoutGlobalScopes()->legacySupport()->where('tenant_id', $tenantId)->findOrFail($ticketId);
         TenantSupportTicketMessage::withoutGlobalScopes()->create(['tenant_support_ticket_id' => $ticket->id, 'tenant_id' => $tenantId, 'user_id' => (int) $user->id, 'author_context' => $context, 'body' => $body]);
         $ticket->forceFill(['last_activity_at' => now(), 'status' => $context === 'landlord' && $ticket->status === 'open' ? 'in_progress' : $ticket->status])->save();
 
@@ -86,7 +86,7 @@ class TenantMobileSupportService
     /** @return array<string,mixed> */
     public function landlordIndex(string $status = 'open'): array
     {
-        $tickets = TenantSupportTicket::withoutGlobalScopes()->with(['tenant:id,name', 'creator:id,name', 'assignee:id,name'])->withCount('messages');
+        $tickets = TenantSupportTicket::withoutGlobalScopes()->legacySupport()->with(['tenant:id,name', 'creator:id,name', 'assignee:id,name'])->withCount('messages');
         if ($status === 'open') {
             $tickets->whereNotIn('status', ['resolved', 'closed']);
         } elseif ($status !== 'all') {
@@ -99,7 +99,7 @@ class TenantMobileSupportService
     /** @return array<string,mixed> */
     public function landlordShow(int $ticketId): array
     {
-        $ticket = TenantSupportTicket::withoutGlobalScopes()->findOrFail($ticketId);
+        $ticket = TenantSupportTicket::withoutGlobalScopes()->legacySupport()->findOrFail($ticketId);
 
         return $this->show((int) $ticket->tenant_id, (int) $ticket->id);
     }
@@ -107,7 +107,7 @@ class TenantMobileSupportService
     /** @return array<string,mixed> */
     public function triage(int $ticketId, User $actor, array $input): array
     {
-        $ticket = TenantSupportTicket::withoutGlobalScopes()->findOrFail($ticketId);
+        $ticket = TenantSupportTicket::withoutGlobalScopes()->legacySupport()->findOrFail($ticketId);
         $before = ['status' => $ticket->status, 'priority' => $ticket->priority, 'assigned_to_user_id' => $ticket->assigned_to_user_id];
         $status = $input['status'] ?? null;
         $changes = array_filter([
@@ -130,7 +130,7 @@ class TenantMobileSupportService
     public function createBudEscalation(Tenant $tenant, User $user, string $question, string $reply, string $confidence, array $transcript = []): array
     {
         $key = 'bud:'.sha1($tenant->id.'|'.$user->id.'|'.mb_strtolower(trim($question)));
-        $existing = TenantSupportTicket::withoutGlobalScopes()->where('dedupe_key', $key)->first();
+        $existing = TenantSupportTicket::withoutGlobalScopes()->legacySupport()->where('dedupe_key', $key)->first();
         if ($existing) {
             return $this->show((int) $tenant->id, (int) $existing->id);
         }

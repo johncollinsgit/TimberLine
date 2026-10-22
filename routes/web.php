@@ -2599,3 +2599,5 @@ require __DIR__.'/website-invoices.php';
 require __DIR__.'/pos.php';
 
 require __DIR__.'/campus-demo.php';
+
+require __DIR__.'/software-support.php';
