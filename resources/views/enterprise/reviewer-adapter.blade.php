@@ -39,6 +39,8 @@
         chooser.value = adapter.snapshot().persona;
         chooser.onchange = () => {
             adapter.setPersona(chooser.value);
+            // Preserve the selected workflow/run and retained draft across perspectives.
+            if(document.getElementById('enterprise-workflow')){location.reload();return;}
             const next=adapter.href(boot.routes.back+'#section='+(chooser.value==='executive'?'home':chooser.value==='requester'?'requester':'requests')+'&area_id='+EverbranchSampleTransport.ids.area);
             if(new URL(next,location.href).pathname===location.pathname){history.pushState(null,'',next);location.reload();}else adapter.navigate(next);
         };

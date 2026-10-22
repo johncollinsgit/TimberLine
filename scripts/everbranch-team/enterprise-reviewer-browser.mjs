@@ -214,9 +214,12 @@ try {
     await page
         .getByRole("region", { name: "Linked native task", exact: true })
         .waitFor();
+    const selectedWorkflowUrl = page.url();
     await page
         .getByLabel("Sample perspective", { exact: true })
         .selectOption("worker");
+    await page.getByRole("region", { name: "Linked native task", exact: true }).waitFor();
+    assert.equal(page.url(), selectedWorkflowUrl, "Perspective switch retains workflow and run");
     await page
         .getByLabel("Complete sound check (native task)", { exact: true })
         .check();
