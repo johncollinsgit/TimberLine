@@ -1,3 +1,23 @@
+## Evergrove Payments iPhone foundation (2026-10-22; local source only)
+
+The separate `app/Services/PaymentsCore` package adds deny-by-default internal
+provider-neutral orchestration with immutable bindings, integer server-priced
+line semantics, durable local attempts/recovery and original-payment refunds.
+Its SQLite reference journal refuses live bindings. No HTTP endpoints, enabled
+server authorizer, provider adapter, production schema or simulator changes ship.
+Read `docs/operations/evergrove-payments-core.md` before integration.
+
+The separate `native/evergrove-payments-ios` rehearsal app embeds the existing
+Alpha Printing Android home-screen demo register as unchanged local JavaScript/CSS
+inside a restricted SwiftUI/WKWebView shell, alongside a distinct native recovery
+lab. No native provider bridge, real merchant or live checkout is included. Read
+its README, `docs/operations/evergrove-payments-iphone-launch.md` and
+`docs/operations/evergrove-payments-security-review.md` for test scope, on-site
+steps and remote-completion gates. The isolated payment workflow tests these
+contracts without secrets or changing the shared production release workflow.
+Test evidence does not establish merchant, physical iPhone, provider or production
+payment acceptance.
+
 ## Fleet dispatch usability (2026-10-22; release candidate)
 
 Jobs now starts with imported HighLevel addresses and times, searchable van/crew/
