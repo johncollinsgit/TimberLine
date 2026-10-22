@@ -2311,3 +2311,11 @@ boundary are independent of retail. Never copy production users/data/credentials
 or run legacy membership/profile backfills. Reuse canonical tenant/Teams rails;
 department restrictions must hold through every native graph access path. All
 Enterprise rollout and writes remain off until reviewed; no new deployment exists.
+
+The October 22 source increment is documented in
+`docs/architecture/enterprise-next-slice.md`. Preserve the default-off feature
+gates, internal discussion-task exclusion from operational progress, private file
+scanner quarantine, separate owner/admin cost visibility and current-permission
+Ask citations. Model transport reuse does not activate paid AI. Mailbox preview/
+confirmation is fake-adapter tested; the default gateway has no connections or
+sending capability. Do not substitute retail/owner credentials or create grants.

@@ -89,7 +89,7 @@ The actual campus v3 HTML and rendered screenshot were inspected. The Enterprise
 shell retains the dark green Everbranch sidebar, cream surface, serif headings
 and stylesheet tokens. Request/project List/Calendar/Map navigation and map
 selection open permission-controlled details. Hide Map/View Map remain explicit.
-Contractor navigation truthfully states that its future workflow is unavailable.
+Contractor navigation exposes the separately gated planning groundwork below.
 No college name, real department, incident, personnel or campus dataset is seeded.
 
 Map markers use authorized saved latitude/longitude on a coordinate grid. There
@@ -126,6 +126,10 @@ It creates a named disposable testing SQLite fixture, uses a separate headless
 process, blocks external requests, and deletes its database afterward. Synthetic
 fixture credentials and a fixed test-only key never configure an actual account.
 Screenshots/output are local evidence, not customer or deployment records.
+The harness uses loopback HTTPS with a one-use self-signed certificate; its
+temporary key/certificate files are deleted before browser requests. No system
+trust setting changes. This tests the unchanged secure session-cookie contract
+in both Chromium and WebKit. OpenSSL is required for that disposable fixture.
 
 The new `.github/workflows/enterprise-runtime-ci.yml` runs the separate runtime,
 schema lint and opt-in MySQL 8.4 recovery suite. No deployment job is added.
@@ -133,6 +137,73 @@ Required CI results, independent production configuration, MFA/account setup
 requirements, backup/restore and release review remain gates to production.
 
 ## Next phases
+
+### October 22 collaboration and Ask source increment
+
+See `docs/architecture/enterprise-next-slice.md` for the bounded milestone and
+following phases. All four new flags default off: `ENTERPRISE_COLLABORATION_ENABLED`,
+`ENTERPRISE_PLANNING_ENABLED`, `ENTERPRISE_ASK_ENABLED` and
+`ENTERPRISE_EMAIL_DRAFTS_ENABLED`. Existing rollout, tenant allowlist and write
+freeze still apply. No provider, scanner, mailbox, real account or grant is
+configured by source changes.
+
+Project detail is larger and includes bottom notes/file composition. The first
+explicit project discussion mutation creates one native backing task. Its
+immutable `enterprise_discussion_project` marker keeps it out of operational
+search/feeds and project progress. It retains the project's native ACL and
+department scope. Reads never create a thread. Notes have stable actor/request
+receipts; files use the existing private resumable/checksummed upload service.
+Supported types are JPEG, PNG, PDF and UTF-8 text up to 10 MB. Upload retries
+recheck access and uploader identity. Downloads are attachments with no-store,
+nosniff and sandbox headers, never public URLs. The separate scanner defaults
+off; unscanned bytes remain quarantined. Future confidential contractor contracts
+must not be attached to a broadly visible project discussion.
+
+Per-tab draft storage is keyed to tenant, user, area and selected target and is
+cleared on normal sign-out. Text and stable pending-note/upload keys survive
+reasonable navigation/reload; selected File objects must be reselected after
+interruption. Current authorization is checked before drafts redisplay. Desktop,
+phone and iPad portrait/landscape browser viewports are checked; physical iPad
+keyboard/camera/Photos/file-picker acceptance is not established by simulation.
+
+Planning records reuse encrypted operation storage, tenant serialization and
+immutable revisions. Contractor register entries create no user/portal access.
+Date blocks are inclusive date-only plans per contractor/department, with overlap
+refusal and explicit cancellation. They are not room reservations, hourly staff
+capacity or promised completion dates. Costs are separate organization-owner/admin
+records with integer minor units, explicit currency and estimate/recorded-cost
+basis. No purchasing, payment, ERP or accounting reconciliation is implied.
+Read projections filter permissions before result limits and use constant bounded
+coverage disclosure rather than hidden-record threshold signals.
+
+Ask Everbranch is chat-based and user/role aware. Each question rebuilds current
+authorized selected-department evidence and returns server-owned citations/links,
+record versions, timestamp and coverage limits. No source HTML, generated URL,
+tool invocation or historical chat becomes authority. The default is explicitly
+record-backed facts; general model interpretation is not connected. The owned
+AI Branch's unchanged Responses transport is extracted into `ResponsesTransport`;
+the Enterprise selection adapter is exercised with fake HTTP and rejects
+non-testing execution. It has no production binding, credential fallback, billing
+or usage approval shortcut. A real model connection requires its own reviewed
+metering/budget and data-processing acceptance. Notes, file contents and mailbox
+messages are not retrieved in this increment.
+
+Email uses an unconnected own-mailbox gateway contract, not the owner's sender.
+There is no mailbox/grant/OAuth setup endpoint. With a fake authorized adapter,
+drafts persist exact sender/recipient/subject/body, source/binding digest and a
+15-minute approval. Confirmation rechecks current tenant/user/department, sender,
+source versions and exact digest under the tenant lock. Dispatch claims commit
+before I/O; ambiguous results retain a single uncertain attempt without automatic
+retry. Provider acceptance is not confirmed delivery. The runtime's default
+gateway lists no mailboxes and cannot dispatch. Real connection, consent/policy,
+delivery and reconciliation acceptance remain later gates.
+
+Additional focused checks:
+
+```sh
+php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseNextSliceTest.php --compact
+php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise tests/Feature/Team tests/Feature/AiBranch --compact
+```
 
 Reservations and maintenance conflicts; staff capacity/time; contractor
 assignments/documents/costs; budgets; versioned workflows and gated notifications;

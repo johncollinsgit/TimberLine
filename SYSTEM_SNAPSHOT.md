@@ -2992,3 +2992,10 @@ Default-disabled workspace/request triage/assignment/progress/completion reuses
 native work and audit tables with shared graph-level department fences. No retail
 deployment, production grants, billing or providers are activated. See
 `docs/operations/everbranch-enterprise.md` for boundaries, checks and launch gaps.
+
+October 22 source increment adds separately default-off larger project details,
+private resumable attachments/notes, contractor/date/cost planning, record-backed
+Ask Everbranch chat and a fake-tested own-mailbox preview/confirmation contract.
+No production model/mailbox binding, provider credentials, sends or grants exist.
+See `docs/architecture/enterprise-next-slice.md`; tablet checks are browser viewport
+simulation, not physical iPad acceptance.

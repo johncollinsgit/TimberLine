@@ -9,16 +9,21 @@ on:
       - 'app/Providers/Enterprise*.php'
       - 'app/Http/Middleware/EnsureEnterpriseRuntime.php'
       - 'app/Services/Team/**'
+      - 'app/Services/AiBranch/ResponsesTransport.php'
+      - 'app/Services/AiBranch/AiBranchProvider.php'
       - 'app/Policies/Team*.php'
       - 'config/enterprise.php'
       - 'routes/enterprise.php'
       - 'resources/views/enterprise/**'
       - 'scripts/everbranch-team/enterprise-*'
       - 'tests/Feature/Enterprise/**'
+      - 'tests/Support/enterprise-https-router.php'
       - 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php'
       - 'tests/Integration/migration-recovery-manifest.php'
       - 'phpunit.enterprise.xml'
       - '.github/workflows/enterprise-runtime-ci.yml'
+      - '.github/workflows/tests.yml'
+      - '.github/workflows/lint.yml'
       - 'composer.lock'
       - 'package-lock.json'
       - 'database/migrations/**'
@@ -66,10 +71,18 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - name: Check persistent Enterprise UI in a disposable database
+      - run: npx playwright install --with-deps chromium webkit
+      - name: Check persistent Enterprise UI in Chromium and WebKit
         env:
           ENTERPRISE_TEST_PHP: php
           EVERBRANCH_PLAYWRIGHT_MODULE: node_modules/playwright/index.mjs
-          ENTERPRISE_EVIDENCE: test-results/enterprise
-        run: node scripts/everbranch-team/enterprise-browser-smoke.mjs
+        run: |
+          ENTERPRISE_BROWSER_ENGINE=chromium ENTERPRISE_EVIDENCE=test-results/enterprise/chromium node scripts/everbranch-team/enterprise-browser-smoke.mjs
+          ENTERPRISE_BROWSER_ENGINE=webkit ENTERPRISE_EVIDENCE=test-results/enterprise/webkit node scripts/everbranch-team/enterprise-browser-smoke.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: enterprise-ui-${{ github.run_id }}
+          path: test-results/enterprise
+          if-no-files-found: ignore
+          retention-days: 7
