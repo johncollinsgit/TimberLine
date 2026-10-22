@@ -11,9 +11,10 @@ import { checkMappedOperationsWorkflow } from './enterprise-operations-workflow-
 import { checkRollCallWorkspace } from './enterprise-roll-call-browser.mjs';
 import { checkResourceWorkspace } from './enterprise-resources-browser.mjs';
 import { checkTaskEvidenceWorkflow } from './enterprise-task-evidence-browser.mjs';
+import { checkPrivateWorkspaceTour } from './enterprise-private-tour-browser.mjs';
 const operationsMode = process.env.ENTERPRISE_TEST_OPERATIONS === '1';
 const operationsScenario = process.env.ENTERPRISE_OPERATIONS_SCENARIO || 'all';
-assert.ok(['all', 'mapped', 'roll-call', 'resources', 'task-evidence'].includes(operationsScenario), 'Unsupported Operations browser scenario');
+assert.ok(['all', 'mapped', 'roll-call', 'resources', 'task-evidence', 'tour'].includes(operationsScenario), 'Unsupported Operations browser scenario');
 const php = process.env.ENTERPRISE_TEST_PHP;
 assert.ok(php, 'ENTERPRISE_TEST_PHP is required');
 const {
@@ -52,6 +53,7 @@ const env = {
   ENTERPRISE_ROLL_CALL_ENABLED: operationsMode ? 'true' : 'false',
   ENTERPRISE_RESOURCES_ENABLED: operationsMode ? 'true' : 'false',
   ENTERPRISE_REQUESTER_ENABLED: operationsMode ? 'true' : 'false',
+  ENTERPRISE_TOUR_ENABLED: operationsMode ? 'true' : 'false',
   ENTERPRISE_TENANT_ALLOWLIST: '1'
 };
 const keyFile = db + '.key', certFile = db + '.crt';
@@ -122,7 +124,7 @@ try {
     if (url.hostname === '127.0.0.1') {
       // The combined synthetic scenario performs far more actions than a single user.
       // Respect the real server throttle; never disable it for browser acceptance.
-      if (operationsMode && operationsScenario === 'all' && !url.pathname.startsWith('/build/')) {
+      if (operationsMode && ['all', 'tour'].includes(operationsScenario) && !url.pathname.startsWith('/build/')) {
         await (dynamicQueue = dynamicQueue.then(async () => {
           const delay = Math.max(0, dynamicDispatch + 800 - Date.now());
           if (delay) await new Promise(resolve => setTimeout(resolve, delay));
@@ -155,6 +157,7 @@ try {
     if (['all', 'roll-call'].includes(operationsScenario)) await checkRollCallWorkspace(page,evidence);
     if (['all', 'resources'].includes(operationsScenario)) await checkResourceWorkspace(page,evidence);
     if (['all', 'task-evidence'].includes(operationsScenario)) await checkTaskEvidenceWorkflow(page,evidence);
+    if (['all', 'tour'].includes(operationsScenario)) await checkPrivateWorkspaceTour(page,evidence);
   } else {
   await page.getByRole('button', {
     name: 'New workspace',

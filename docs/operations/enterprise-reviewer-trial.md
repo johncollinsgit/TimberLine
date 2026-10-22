@@ -84,7 +84,9 @@ type, rather than creating or impersonating an employee. There is no new schema.
 prior-spend baseline and synthetic storage anchor are pinned once initialized.
 Changing either refuses a reset. All channels and server-side acceptance calls
 must reserve on this same ledger. Source/fixture tests are not real prior-cost
-evidence. Untracked manual provider tests must be included before activation.
+evidence. Related manual trial/acceptance provider tests must be included before
+activation. Unrelated historical account usage is excluded. This work has made
+zero paid calls.
 
 A global MySQL named lock and the existing tenant serialization row protect
 reservations. Provider IO occurs after committed transactions, never inside a
@@ -191,3 +193,9 @@ credential reuse/configuration, verified sender/number and route/fee readiness,
 prior-spend evidence, provider-account acceptance, authenticated delivery events,
 scanner acceptance and reviewed protected deployment. Until then all live flags
 remain disabled and no genuine trial action is claimed complete.
+
+The existing approved app origin can host this separate runtime via a reviewed
+narrow /enterprise/trial mount with scoped independent cookies. No new domain
+or site is required; see enterprise-same-origin-trial-mount.md. The adopted owner
+plan authorizes the reviewed public demo release through GitHub-to-Forge; it
+does not waive any channel configuration, destination or exact-send approval.

@@ -3,11 +3,11 @@
 namespace Tests\Feature\Enterprise;
 
 use App\Enterprise\Trial\ReviewerTrial;
+use App\Http\Middleware\EnterpriseCsrfToken;
 use App\Models\TeamArea;
 use App\Models\TeamOperationRecord;
 use App\Models\Tenant;
 use Illuminate\Contracts\Console\Kernel;
-use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\TestCase;
 use Illuminate\Http\Request;
 use Illuminate\Session\ArraySessionHandler;
@@ -134,7 +134,7 @@ final class EnterpriseTrialPagesTest extends TestCase
 
     public function test_controlled_web_mutations_require_csrf_even_with_a_valid_invitation(): void
     {
-        $this->app->bind(ValidateCsrfToken::class, fn ($app) => new class($app, $app['encrypter']) extends ValidateCsrfToken
+        $this->app->bind(EnterpriseCsrfToken::class, fn ($app) => new class($app, $app['encrypter']) extends EnterpriseCsrfToken
         {
             protected function runningUnitTests()
             {
@@ -154,6 +154,55 @@ final class EnterpriseTrialPagesTest extends TestCase
             $this->get(self::ORIGIN.$uri)->assertNotFound();
         }
         $this->get(self::ORIGIN.'/enterprise/trial/task/'.str_repeat('a', 43).'?email=private%40example.invalid')->assertNotFound();
+        Http::assertNothingSent();
+    }
+
+    public function test_same_origin_trial_cookie_is_scoped_and_never_overwrites_retail_xsrf_cookie(): void
+    {
+        config(['enterprise_runtime.trial_mount_only' => true, 'session.path' => '/enterprise/trial']);
+        $response = $this->withUnencryptedCookie('XSRF-TOKEN', 'synthetic-retail-cookie')->get(self::ORIGIN.'/enterprise/trial')
+            ->assertOk()->assertCookieMissing('XSRF-TOKEN');
+        $cookies = array_values(array_filter($response->headers->getCookies(), fn ($cookie) => $cookie->getName() === 'everbranch_enterprise_session'));
+        $this->assertCount(1, $cookies);
+        $this->assertSame('/enterprise/trial', $cookies[0]->getPath());
+        $this->assertTrue($cookies[0]->isSecure());
+        $this->assertTrue($cookies[0]->isHttpOnly());
+        $this->assertNull($cookies[0]->getDomain());
+        $this->getJson(self::ORIGIN.'/enterprise/trial/session')->assertForbidden()->assertCookieMissing('XSRF-TOKEN');
+        Http::assertNothingSent();
+    }
+
+    public function test_trial_mount_rejects_other_paths_and_unsafe_cookie_scope_before_starting_a_session(): void
+    {
+        config(['enterprise_runtime.trial_mount_only' => true, 'session.path' => '/enterprise/trial']);
+        foreach (['/', '/login', '/teams', '/enterprise/data', '/enterprise/trial-other', '/enterprise/trials'] as $path) {
+            $response = $this->get(self::ORIGIN.$path)->assertNotFound();
+            $this->assertSame([], $response->headers->getCookies());
+        }
+        config(['session.path' => '/']);
+        $response = $this->get(self::ORIGIN.'/enterprise/trial')->assertStatus(503);
+        $this->assertSame([], $response->headers->getCookies());
+        config(['session.path' => '/enterprise/trial', 'session.cookie' => 'laravel_session']);
+        $this->get(self::ORIGIN.'/enterprise/trial')->assertStatus(503);
+        Http::assertNothingSent();
+    }
+
+    public function test_scoped_trial_retains_real_csrf_validation_and_other_enterprise_pages_keep_their_cookie(): void
+    {
+        $this->app->bind(EnterpriseCsrfToken::class, fn ($app) => new class($app, $app['encrypter']) extends EnterpriseCsrfToken
+        {
+            protected function runningUnitTests()
+            {
+                return false;
+            }
+        });
+        config(['enterprise_runtime.trial_mount_only' => true, 'session.path' => '/enterprise/trial']);
+        $this->postJson(self::ORIGIN.'/enterprise/trial/start', ['reviewer_code' => 'synthetic-pages-invitation'])->assertStatus(419);
+        $this->withSession(['_token' => 'synthetic-scoped-csrf'])->postJson(self::ORIGIN.'/enterprise/trial/start',
+            ['reviewer_code' => 'synthetic-pages-invitation'], ['X-CSRF-TOKEN' => 'synthetic-scoped-csrf'])
+            ->assertOk()->assertJsonPath('sample', true)->assertCookieMissing('XSRF-TOKEN');
+        config(['enterprise_runtime.trial_mount_only' => false, 'session.path' => '/']);
+        $this->get(self::ORIGIN.'/login')->assertOk()->assertCookie('XSRF-TOKEN');
         Http::assertNothingSent();
     }
 }

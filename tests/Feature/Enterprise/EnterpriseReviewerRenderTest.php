@@ -43,3 +43,30 @@ test('the actual workflow document uses the sample adapter and explicit bootstra
     DB::disableQueryLog();
     Http::assertNothingSent();
 });
+
+test('private workspace tour requires both server flags and never includes sample adapter or perspective controls', function (): void {
+    Http::preventStrayRequests();
+    $presentation = reviewerRenderPresentation();
+    $presentation['runtime'] = 'private';
+    $presentation['identity']['userName'] = 'Signed-in reviewer';
+    $presentation['routes']['logout'] = '/logout';
+    config(['enterprise.runtime' => true]);
+    foreach ([[false, false], [true, false], [false, true], [true, true]] as [$enabled, $sampleData]) {
+        config(['enterprise.tour_enabled' => $enabled, 'enterprise.sample_data' => $sampleData]);
+        $html = view('enterprise.app', ['presentation' => $presentation, 'enterpriseRole' => 'current member'])->render();
+        expect($html)->not->toContain('EverbranchSampleTransport =', 'id="reviewer-perspective"', 'id="reviewer-reset-open"', 'sample-request-audio');
+        if ($enabled && $sampleData) {
+            expect($html)->toContain('SERVER-BACKED DEMONSTRATION WORKSPACE', 'EverbranchWorkspaceTour.mount', 'CURRENT WORKSPACE', 'Email preview unavailable in this navigation tour');
+            $document = new DOMDocument;
+            @$document->loadHTML($html);
+            expect((new DOMXPath($document))->query('//*[@data-tour-email-cta]')->length)->toBe(0);
+            expect($html)->not->toContain('class="ert-email-paper"');
+        } else {
+            expect($html)->not->toContain('data-reviewer-tour-root', 'EverbranchWorkspaceTour.mount');
+        }
+    }
+    config(['enterprise.runtime' => false, 'enterprise.tour_enabled' => true, 'enterprise.sample_data' => true]);
+    $html = view('enterprise.app', ['presentation' => $presentation, 'enterpriseRole' => 'current member'])->render();
+    expect($html)->not->toContain('data-reviewer-tour-root', 'EverbranchWorkspaceTour.mount');
+    Http::assertNothingSent();
+});

@@ -11,7 +11,7 @@ return [
     'store' => null,
     'lottery' => [2, 100],
     'cookie' => 'everbranch_enterprise_session',
-    'path' => '/',
+    'path' => env('ENTERPRISE_SESSION_PATH', '/'),
     'domain' => null,
     'secure' => true,
     'http_only' => true,

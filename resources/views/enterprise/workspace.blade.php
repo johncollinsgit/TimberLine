@@ -5,6 +5,7 @@
         'csrf' => csrf_token(),
         'routes' => [
             'workflows' => url('/enterprise/workflows'),
+            'operations' => url('/enterprise/operations'),
             'back' => route('enterprise.index', ['tenant' => $tenant->slug, 'area_id' => $scope['area_id'], 'section' => 'projects', 'selected' => $scope['project_id']]),
         ],
     ];
@@ -26,4 +27,4 @@
 @viteReactRefresh
 @vite('resources/js/enterprise/workspace.tsx')
 @endif
-</head><body>@if($enterpriseSample)@includeIf('enterprise.reviewer-adapter')@endif<div id="enterprise-workflow" data-bootstrap="{{ json_encode($workflowBoot, JSON_THROW_ON_ERROR) }}"></div><noscript>This workflow workspace requires JavaScript. Return to <a href="{{ $enterprisePresentation['routes']['back'] }}">Enterprise Projects</a>.</noscript>@if($enterpriseSample)<script type="module">{!! $inlineAssets['js'] ?? '' !!}</script>@endif</body></html>
+</head><body>@includeIf('enterprise.runtime-designation')@if($enterpriseSample)@includeIf('enterprise.reviewer-adapter')@endif<div id="enterprise-workflow" data-bootstrap="{{ json_encode($workflowBoot, JSON_THROW_ON_ERROR) }}"></div><noscript>This workflow workspace requires JavaScript. Return to <a href="{{ $enterprisePresentation['routes']['back'] }}">Enterprise Projects</a>.</noscript>@if($enterpriseSample)<script type="module">{!! $inlineAssets['js'] ?? '' !!}</script>@endif</body></html>

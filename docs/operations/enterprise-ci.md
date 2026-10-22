@@ -6,12 +6,17 @@ Chromium/WebKit checks. It also runs these focused reviewer-operations gates:
 
 | Gate | Entry point | Boundary exercised |
 | --- | --- | --- |
-| Transport and sample contracts | `node --test tests/e2e/enterprise-transport.test.mjs tests/e2e/enterprise-reviewer-sample.test.mjs` | Private identity/CSRF and replay contracts; isolated synthetic transport, roles and sample work. |
+| Transport and sample contracts | `node --test tests/e2e/enterprise-transport.test.mjs tests/e2e/enterprise-reviewer-sample.test.mjs tests/e2e/enterprise-workspace-tour.test.mjs` | Private identity/CSRF and replay contracts; isolated synthetic transport, roles and sample work. |
 | Shared view rendering and public route boundary | `php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseReviewerRenderTest.php tests/Feature/EnterpriseReviewerPublicTest.php tests/Feature/LeesMcRaeCampusDemoTest.php --compact` | Actual shared Blade/workflow views render explicit sample presentation without account authority or operational SQL; public controller host, query, session and response boundaries remain covered. |
 | Controlled trial pages | `php vendor/bin/pest -c phpunit.enterprise.xml tests/Feature/Enterprise/EnterpriseTrialPagesTest.php --compact` | Dedicated runtime, canonical origin, real browser CSRF enforcement, limited capability pages and expired/revoked access. Provider requests are blocked. |
 | Reviewer tour | `node scripts/everbranch-team/enterprise-reviewer-tour-browser.mjs` | Tracked tour markup, accessible controls, responsive sample email and viewport behavior. |
 | Full shared reviewer renderer | `node scripts/everbranch-team/enterprise-reviewer-browser.mjs` | Actual isolated HTTP kernel/controller/CSP plus the shared Enterprise and ReactFlow renderers; synthetic work, roles, resources, requests and meetings. |
-| Native operations | `node scripts/everbranch-team/enterprise-browser-smoke.mjs` with `ENTERPRISE_TEST_OPERATIONS=1 ENTERPRISE_OPERATIONS_SCENARIO=all` | Persistent mapped workflow tasks, interruption/retry behavior, Roll Call meeting preview/confirmation/PDF and Resources asset/reservation conflicts. |
+| Native operations | `node scripts/everbranch-team/enterprise-browser-smoke.mjs` with `ENTERPRISE_TEST_OPERATIONS=1 ENTERPRISE_OPERATIONS_SCENARIO=all` | Persistent mapped workflow tasks, interruption/retry behavior, Roll Call meeting preview/confirmation/PDF, Resources conflicts and the signed-in tour opening current authorized records without replay writes. |
+
+The signed-in tour helper `enterprise-private-tour-browser.mjs` runs inside the
+native operations `all` scenario. It creates fictional projects and requests
+through real HTTP, verifies triage/assignment/progress and workflow save/reload,
+and checks retained drafts, current identity, authorized links and zero tour POSTs.
 
 Both reviewer browser scripts and the native operations harness run sequentially
 in Chromium and WebKit. Browser steps share the already installed Playwright

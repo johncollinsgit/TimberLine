@@ -37,8 +37,13 @@ return (new ApplicationBuilder($app))
     ->withRouting(web: $root.'/routes/enterprise.php')
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->append(EnsureEnterpriseRuntime::class);
+        $middleware->append(\App\Http\Middleware\EnsureEnterprisePrefixMount::class);
+        $middleware->append(\App\Http\Middleware\EnsureEnterpriseTrialMount::class);
+        $middleware->web(replace: [
+            \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class => \App\Http\Middleware\EnterpriseCsrfToken::class,
+        ]);
         $middleware->redirectGuestsTo(fn () => route('login'));
-        $middleware->redirectUsersTo('/');
+        $middleware->redirectUsersTo(fn () => url('/'));
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->dontFlash(['password', 'password_confirmation', 'current_password', 'token', 'code', 'state', 'error_description', 'reviewer_code']);

@@ -216,6 +216,6 @@ class RollCall
 
     public function url(Tenant $tenant, array $query): string
     {
-        return rtrim((string) config('app.url'), '/').route('enterprise.index', ['tenant' => $tenant->slug, ...$query], false);
+        return route('enterprise.index', ['tenant' => $tenant->slug, ...$query]);
     }
 }

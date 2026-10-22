@@ -157,7 +157,11 @@
             get(name).textContent = value;
         };
         function paint() {
-            const scene = scenes[clock.index];
+            const scene = {
+                ...scenes[clock.index],
+                ...(actions.describeScene?.(clock.index, scenes[clock.index]) ||
+                    {}),
+            };
             root.dataset.tourScene = String(clock.index);
             root.dataset.tourPlaying = String(clock.playing);
             text("count", `Scene ${clock.index + 1} of ${scenes.length}`);
@@ -174,16 +178,22 @@
                     ? "Replay from start"
                     : "Next scene",
             );
-            get("try").hidden = clock.index !== scenes.length - 1;
+            get("try").hidden =
+                actions.hideTrial === true || clock.index !== scenes.length - 1;
             get("try").disabled = typeof actions.onTryIt !== "function";
             get("try").textContent =
                 typeof actions.onTryIt === "function"
                     ? "Try it out"
                     : "Controlled trial connection pending";
             get("trial-status").hidden =
+                actions.hideTrial === true ||
                 clock.index !== scenes.length - 1 ||
                 typeof actions.onTryIt === "function";
-            get("email-open").hidden = ![1, 4, 5].includes(clock.index);
+            get("email-open").hidden =
+                actions.emailPreview === false ||
+                ![1, 4, 5].includes(clock.index);
+            get("screen").disabled =
+                actions.canNavigate?.(clock.index) === false;
             get("screen").dataset.screen = scene.section;
             get("progress").value = clock.elapsed;
             get("progress").setAttribute(
@@ -222,6 +232,7 @@
                 );
                 previousIndex = clock.index;
             }
+            actions.onScene?.(clock.index, scene);
         }
         function stopFrame() {
             if (frame !== null) cancelAnimationFrame(frame);
@@ -318,7 +329,7 @@
                     );
             } else if (button.hasAttribute("data-tour-screen")) {
                 close();
-                actions.onNavigate?.(scenes[clock.index].section);
+                actions.onNavigate?.(scenes[clock.index].section, clock.index);
             } else if (button.hasAttribute("data-tour-try")) {
                 close();
                 actions.onTryIt?.();
@@ -357,6 +368,10 @@
             open,
             close,
             clock,
+            refresh() {
+                previousIndex = -1;
+                paint();
+            },
             destroy() {
                 close();
                 document.removeEventListener("visibilitychange", visibility);

@@ -37,7 +37,17 @@ const markup = (
         /\{\{ base64_encode\(file_get_contents\(resource_path\('js\/enterprise\/reviewer\/assets\/lees-mcrae-official-wordmark.png'\)\)\) \}\}/g,
         image.toString("base64"),
     )
-    .replace(/\{\{--[\s\S]*?--\}\}/g, "");
+    .replace(/\{\{--[\s\S]*?--\}\}/g, "")
+    // This standalone fixture selects the public branch of the shared Blade
+    // markup. Actual private/public Blade rendering is covered by PHP tests.
+    .replace(
+        /@if\(\$enterpriseWorkspaceTour \?\? false\)[\s\S]*?@else([\s\S]*?)@endif/g,
+        "$1",
+    )
+    .replace(
+        /\{\{ \(\$enterpriseWorkspaceTour \?\? false\) \? '[^']*' : '([^']*)' \}\}/g,
+        "$1",
+    );
 assert.ok(
     !markup.includes("file_get_contents"),
     "Fixture must render the actual embedded brand asset",

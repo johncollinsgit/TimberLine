@@ -8,6 +8,9 @@ on:
       - 'app/Foundation/Enterprise*.php'
       - 'app/Providers/Enterprise*.php'
       - 'app/Http/Middleware/EnsureEnterpriseRuntime.php'
+      - 'app/Http/Middleware/EnterpriseCsrfToken.php'
+      - 'app/Http/Middleware/EnsureEnterpriseTrialMount.php'
+      - 'app/Http/Middleware/EnsureEnterprisePrefixMount.php'
       - 'app/Http/Controllers/LeesMcRaeCampusDemoController.php'
       - 'app/Services/Team/**'
       - 'app/Services/AiBranch/ResponsesTransport.php'
@@ -76,19 +79,19 @@ jobs:
           coverage: none
       - run: composer install --no-interaction --prefer-dist --no-scripts
       - run: php apps/enterprise/scripts/lint-schema.php
-      - run: php vendor/bin/phpunit -c phpunit.enterprise.xml
+      - run: php vendor/bin/phpunit -c phpunit.enterprise.xml --display-warnings
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
       - run: npm ci
       - name: Check private transport and isolated sample contracts
-        run: node --test tests/e2e/enterprise-transport.test.mjs tests/e2e/enterprise-reviewer-sample.test.mjs
+        run: node --test tests/e2e/enterprise-transport.test.mjs tests/e2e/enterprise-reviewer-sample.test.mjs tests/e2e/enterprise-workspace-tour.test.mjs
       - run: npm run build:enterprise
       - name: Check shared reviewer rendering without account or route authority
-        run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseReviewerRenderTest.php tests/Feature/EnterpriseReviewerPublicTest.php tests/Feature/LeesMcRaeCampusDemoTest.php --compact
+        run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseReviewerRenderTest.php tests/Feature/EnterpriseReviewerPublicTest.php tests/Feature/LeesMcRaeCampusDemoTest.php --compact --display-warnings
       - name: Check controlled trial pages in the dedicated runtime without providers
-        run: php vendor/bin/pest -c phpunit.enterprise.xml tests/Feature/Enterprise/EnterpriseTrialPagesTest.php --compact
+        run: php vendor/bin/pest -c phpunit.enterprise.xml tests/Feature/Enterprise/EnterpriseTrialPagesTest.php --compact --display-warnings
       - run: npx playwright install --with-deps chromium webkit
       - name: Check persistent Enterprise UI in Chromium and WebKit
         env:

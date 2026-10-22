@@ -164,6 +164,6 @@ class Briefing
 
     private function url(Tenant $tenant, string $areaId, string $section, string $id): string
     {
-        return rtrim((string) config('app.url'), '/').route('enterprise.index', ['tenant' => $tenant->slug, 'area_id' => $areaId, 'section' => $section, 'selected' => $id], false);
+        return route('enterprise.index', ['tenant' => $tenant->slug, 'area_id' => $areaId, 'section' => $section, 'selected' => $id]);
     }
 }

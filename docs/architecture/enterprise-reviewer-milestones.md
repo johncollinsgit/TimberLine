@@ -6,6 +6,25 @@ The October 22 owner specification is Library
 It was materialized and read on the Windows executor. This document records
 implementation boundaries; it does not replace the complete specification.
 
+## Release authorization clarification
+
+The owner's complete October22 plan authorizes restoring the requested public
+campus demonstration through the existing reviewed GitHub-to-Forge process.
+Earlier pre-plan no-deploy directions are superseded for that demonstration;
+required repository reviews/checks are not waived. No further generic release
+permission is needed after those gates, but credential/security/configuration
+grants and paid infrastructure remain separate. Keep unrelated Fleet/terminal
+work out and coordinate Forge with its existing release owner.
+
+The existing approved app.theeverbranch.com origin can host a narrowly mounted
+/enterprise/trial prefix backed by the independent Enterprise runtime, database,
+key and private storage. A new domain/site is not required. Source-only cookie
+isolation and exact mount requirements are in
+[the same-origin trial runbook](../operations/enterprise-same-origin-trial-mount.md).
+Public tour availability uses only ENTERPRISE_REVIEWER_DEMO_ENABLED=true in the
+retail runtime's reviewed release configuration. Production Enterprise writes,
+trial/provider switches and credentials stay disabled/unconfigured.
+
 ## Source and release boundary
 
 Draft PR458 (33cf2e64) supplies the independent Enterprise runtime and intake;
@@ -64,7 +83,8 @@ Independent Enterprise deployment still uses `npm run build:enterprise`.
    standard/maximum PDF checks. Report implemented, simulated and live-verified
    separately. Real SMS/email/AI acceptance requires approved accounts/config,
    exact recipients/content and the shared budget. Public restoration follows
-   reviewed GitHub gates and Forge; source readiness is not release approval.
+   reviewed GitHub gates and Forge under the adopted plan; source readiness alone
+   is not evidence that a release occurred.
 
 ## Location evidence
 
@@ -81,7 +101,10 @@ No invented pins or actual college records are created by source installation.
 
 The $5 shared lifetime allowance supersedes the earlier $1 AI-only test allowance;
 it does not approve credential creation/transfer/configuration, OAuth consent,
-SMS numbers, email receiving addresses, messages, subscriptions or deployment.
+SMS numbers, email receiving addresses, messages or subscriptions. The adopted
+plan separately authorizes restoring the public campus demonstration through
+reviewed GitHub gates and Forge; infrastructure, security and credential grants
+remain per-action approvals.
 The Avery AI Branch key has an existing no-reuse restriction. Provider project,
 credential destination, current model/rates and verified Everbranch service
 sender remain explicit owner decisions. Tour mail is a preview only. No real
@@ -114,7 +137,7 @@ explicit verified workspace mapping. No real college tenant is seeded.
   evidence are integrated; no unsigned callback or fake arrival is accepted.
 - Campus meeting commitment selectors currently use the selected workspace's
   authorized projects/people. Backend scopes remain independently checked.
-- The trial target is unconfigured. Tour clearly reports the pending controlled
+- The trial path mount is unconfigured. Tour clearly reports the pending controlled
   connection; replay never creates trial invitations or charges.
 
 See docs/operations/enterprise-provider-approval-actions.md for exact pending

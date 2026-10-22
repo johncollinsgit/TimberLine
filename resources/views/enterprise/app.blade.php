@@ -22,7 +22,9 @@
 <style>.shell{min-height:100vh}.sidebar{height:100vh}.detail-layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:18px}.work-detail{white-space:pre-wrap;overflow-wrap:anywhere}.map-panel{padding:0;overflow:hidden;margin-bottom:22px}.map-head{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}.map-head h2{font:26px Georgia,serif;margin:5px 0}.location-map{display:block;width:100%;height:330px;background:#edf2e7}.location-map button{cursor:pointer}.request-row{width:100%;text-align:left}.stack{display:grid;gap:12px}.stack label{display:grid;gap:6px;font-size:12px}.ent-skip{position:absolute;top:-80px;background:white;padding:15px;z-index:10}.ent-skip:focus{top:0}[hidden]{display:none!important}.notice-error{color:#913c31}.calendar-day{padding:15px;border-bottom:1px solid var(--line)}.calendar-day h3{font-size:12px}.field-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}#detail h2{font:25px Georgia,serif}#detail h3{font-size:12px}#map-holder{position:relative}#map-markers{position:absolute;inset:30px 20px 42px}.map-pin{position:absolute;transform:translate(-50%,-50%);padding:5px 8px;border:2px solid white;background:#315b43;color:white;border-radius:14px;font-size:11px;box-shadow:0 2px 5px #2343}#map-holder p{margin:8px 20px 16px}.sidebar-project.active{background:#ffffff12;border-radius:5px}.panel{min-width:0}pre{white-space:pre-wrap;overflow-wrap:anywhere}#request-list{min-width:0}.nav-item{min-height:44px}@media(max-width:1000px){.detail-layout{grid-template-columns:1fr}.sidebar{height:auto;min-height:0;position:static}.shell{grid-template-columns:190px 1fr}.content{padding:25px 18px}.topbar{padding:15px 18px}}@media(max-width:650px){.shell{grid-template-columns:1fr}.sidebar{padding:15px}.brand{padding-bottom:12px}.workspace-label{margin-top:12px}.sidebar nav{display:flex;flex-wrap:wrap}.nav-item{width:auto}.sidebar-bottom{display:none}.topbar{height:auto}.field-pair{grid-template-columns:1fr}.page-heading{align-items:flex-start;flex-direction:column}.page-heading h1{font-size:30px}.toolbar{flex-wrap:wrap}.sidebar-project{width:auto;display:inline-flex}}#work{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:18px}#work>.toolbar,#work>#coverage{grid-column:1/-1}#work>#map{grid-column:1}.detail-layout{display:contents}#request-list{grid-column:1}#detail{grid-column:2;grid-row:2 / span 2;align-self:start}@media(max-width:1000px){#work{display:block}.detail-layout{display:grid;grid-template-columns:1fr}#request-list,#detail{grid-column:auto;grid-row:auto}#work>.toolbar{margin-bottom:20px}}@media(max-width:800px){.sidebar .workspace-label{display:block}.sidebar .sidebar-project{display:inline-flex;width:auto}}
 @include('enterprise.next-styles')
 </style></head>
-<body><a class="ent-skip" href="#enterprise-main">Skip to workspace</a><div class="shell">
+<body>
+@includeIf('enterprise.runtime-designation')
+<a class="ent-skip" href="#enterprise-main">Skip to workspace</a><div class="shell">
 <aside class="sidebar" aria-label="Everbranch Enterprise"><div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 20c1-9 7-14 13-17 2 9-2 16-9 15M5 22l9-12"/></svg></span><div><strong>Everbranch</strong><small>Enterprise · Teams</small></div></div>
 <p class="workspace-label">Organization workspace</p><nav aria-label="Workspace sections"><button class="nav-item" data-section="home" id="home-nav" hidden>Campus overview</button><button class="nav-item active" data-section="requests">Requests</button><button class="nav-item" data-section="projects">Operations &amp; projects</button><button class="nav-item" data-section="contractors">Contractors</button><button class="nav-item" data-section="ask" id="ask-nav" hidden>Ask Everbranch</button>@includeIf('enterprise.operations-nav')</nav>
 <p class="workspace-label">Your workspaces</p><div id="areas"></div><div class="sidebar-bottom"><strong>{{ $enterprisePresentation["identity"]["name"] }}</strong><br>{{ $enterprisePresentation["identity"]["userName"] }}<br>Connected work. Clear ownership.@unless($enterpriseSample)<form id="enterprise-logout" method="post" action="{{ $enterprisePresentation['routes']['logout'] }}"><input type="hidden" name="_token" value="{{ $enterprisePresentation['csrf'] ?? '' }}"><button class="nav-item" type="submit">Sign out</button></form>@endunless</div></aside>
@@ -36,7 +38,7 @@
 <section class="panel map-panel" id="map" hidden><div class="map-head"><div><div class="eyebrow">Workspace locations</div><h2>See where the work happens.</h2></div><span class="caption">Select a marker for request details</span></div><div id="map-holder"><svg class="location-map" viewBox="0 0 1000 330" preserveAspectRatio="none" aria-hidden="true"><defs><pattern id="grid" width="100" height="66" patternUnits="userSpaceOnUse"><path d="M100 0H0V66" fill="none" stroke="#d9e2ce"/></pattern></defs><rect width="1000" height="330" fill="url(#grid)"/></svg><div id="map-markers"></div><p class="caption">Saved longitude/latitude positions on a coordinate grid. No campus basemap, GPS feed or external map provider is connected.</p></div><p class="caption" id="map-empty"></p></section>
 <div class="detail-layout"><section id="request-list" aria-label="Visible workspace work"></section><aside class="panel" id="detail" aria-label="Selected work details"><h2>Choose a request</h2><p class="subtle">Select a row or map marker to see its details and permitted actions.</p></aside></div><p class="caption" id="coverage"></p></div>
 </div></main></div>
-@if($enterpriseSample)@includeIf('enterprise.reviewer-tour')@endif
+@if($enterpriseSample)@includeIf('enterprise.reviewer-tour')@elseif(config('enterprise.runtime') === true && config('enterprise.tour_enabled', false) && config('enterprise.sample_data', false))@include('enterprise.workspace-tour')@endif
 <dialog id="create-dialog"><form id="create-form" class="stack"><h2 id="dialog-title">New request</h2><label>Title<input name="title" maxlength="100" required></label><label id="visibility-field" hidden>Visibility<select name="visibility"><option value="department_only">Department only</option><option value="shared">Shared across organization</option></select></label><div id="request-fields" class="stack"><label>Work description<textarea name="description" maxlength="5000" rows="4"></textarea></label><label>Due date<input name="due_on" type="date"></label><label>Location label<input name="location" maxlength="200"></label><div class="field-pair"><label>Latitude (optional)<input name="latitude" type="number" min="-90" max="90" step="any"></label><label>Longitude (optional)<input name="longitude" type="number" min="-180" max="180" step="any"></label></div></div><p class="caption" id="create-context"></p><div class="actions"><button class="button primary" type="submit">Save</button><button class="button" type="button" id="cancel-create">Cancel</button></div></form></dialog>
 <script>{!! file_get_contents(resource_path('js/enterprise/transport.js')) !!}</script>
 @if($enterpriseSample)
@@ -85,23 +87,41 @@
     $('status').classList.toggle('notice-error', error);
   }
   const api = (url, body, options) => transport.request(url, body, options);
+  let workspaceLoadGeneration = 0, workspaceLoaded = false;
+  function clearWorkspaceContext(failed = false) {
+    stashComposer();
+    data = {areas: [], requests: [], projects: [], members: []};
+    // Clear the tour synchronously, independent of optional panel reset hooks.
+    document.dispatchEvent(new CustomEvent('enterprise:tour-context', {detail: null}));
+    $('request-list').replaceChildren();
+    $('detail').replaceChildren();
+    $('map-markers').replaceChildren();
+    if (failed) $('areas').replaceChildren();
+    for (const id of ['create-workspace', 'create-request', 'create-project', 'campus-home', 'resource-workspace']) if ($(id)) $(id).hidden = true;
+    homeGeneration++;
+    homeArea = null;
+    $('briefing-body').replaceChildren();
+    resetNext();
+  }
   async function load() {
+    const generation = ++workspaceLoadGeneration, requestedArea = area;
+    clearWorkspaceContext();
+    message('Checking current workspace permissions.');
+    const current = () => generation === workspaceLoadGeneration && area === requestedArea;
+    let accepted = false;
     try {
-      const result = await api(urls.data + (area ? '&area_id=' + encodeURIComponent(area) : ''));
-      if (!data.features && !navigation.has('section') && result.features?.briefing) section = 'home';
+      const result = await api(urls.data + (requestedArea ? '&area_id=' + encodeURIComponent(requestedArea) : ''));
+      if (!current()) return;
+      accepted = true;
+      if (!workspaceLoaded && !navigation.has('section') && result.features?.briefing) section = 'home';
       data = result;
       area = data.selected_area_id;
+      workspaceLoaded = true;
+      message('');
       render();
     } catch (error) {
-      data = {
-        areas: [],
-        requests: [],
-        projects: [],
-        members: []
-      };
-      $('request-list').replaceChildren();
-      $('detail').replaceChildren();
-      resetNext();
+      if (generation !== workspaceLoadGeneration || (!accepted && area !== requestedArea)) return;
+      clearWorkspaceContext(true);
       message(error.message, true);
     }
   }
@@ -191,6 +211,7 @@
     discussionGeneration++;
     activeDiscussionKey = null;
     rememberUrl();
+    document.dispatchEvent(new CustomEvent('enterprise:tour-context', {detail: {data, area, section, selected, transport}}));
     if (['home', 'ask', 'contractors'].includes(section)) return;
     const r = (section === 'projects' ? data.projects : data.requests).find(r => r.id === selected);
     if (!r) {

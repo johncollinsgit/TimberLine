@@ -6,7 +6,13 @@ completion, resources/custody/reservation conflicts, requester-only public updat
 permission-filtered search and workspace preferences, Roll Call/meeting decisions
 and regenerated one-page PDFs. Shared renderer adapters let an isolated public
 sample use the same shell/workflow UI without employee resolution or provider IO.
-A six-scene tour previews email in-app and never sends. The controlled server-held
+A six-scene public tour previews email in-app and never sends. A separately
+gated, signed-in demonstration tour opens the current authorized server-backed
+screens without installing the sample adapter or mutating records. Read the
+[requirement traceability](docs/architecture/enterprise-requirement-traceability.md)
+for attributed Gemini Quick Notes, owner proposals, procedural recommendations
+and remaining quarterly-report, insurance-expiry and Finance/AP gaps.
+The controlled server-held
 synthetic trial is separate, default-off, with a shared $5 lifetime reservation
 ledger, exact confirmations, expiring links and quarantined private uploads.
 No provider credentials/grants, real recipients, paid calls or deployment are

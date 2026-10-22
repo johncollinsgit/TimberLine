@@ -16,6 +16,7 @@ return [
     'resources_enabled' => (bool) env('ENTERPRISE_RESOURCES_ENABLED', false),
     'roll_call_enabled' => (bool) env('ENTERPRISE_ROLL_CALL_ENABLED', false),
     'requester_enabled' => (bool) env('ENTERPRISE_REQUESTER_ENABLED', false),
+    'tour_enabled' => (bool) env('ENTERPRISE_TOUR_ENABLED', false),
     'reviewer_demo_enabled' => (bool) env('ENTERPRISE_REVIEWER_DEMO_ENABLED', false),
     'trial' => [
         'enabled' => (bool) env('ENTERPRISE_TRIAL_ENABLED', false),

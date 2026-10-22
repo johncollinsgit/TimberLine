@@ -62,7 +62,8 @@ body confirmation and separate send activation. No OAuth grant or real mail.
 
 ## Runtime, scanner and release
 
-Independent reviewed app origin/database/private storage and an explicitly marked
+The existing approved app origin can narrowly mount the independent runtime;
+its reviewed database/private storage and an explicitly marked
 synthetic trial anchor are prerequisites. Source never provisions real college
 organizations/users/memberships. Scanner endpoint configuration requires owner
 approval and actual clean/malicious/unavailable acceptance; until then files stay
@@ -71,11 +72,18 @@ outside this bounded slice; acceptance, open and explicit acknowledgment are
 separate, and delivery remains unverified.
 
 After source acceptance: dependency PR458 → PR459 → PR461 → reviewer milestone,
-required checks/reviews, owner-authorized merge, protected GitHub-to-Forge deploy,
+required checks/reviews, the already-authorized public-demo merge/release,
+protected GitHub-to-Forge deploy,
 then exact readiness SHA/route/config acceptance. No direct deployment, copied
 production records, DNS changes or grant bypass is authorized.
 
 Tour publication has no real email/SMS/AI delivery dependency. Its email is an
 in-app preview only. A reviewed source release may publish that isolated tour
 while the separate controlled trial stays disconnected and disabled; normal
-review, explicit merge/release approval and protected Forge gates still apply.
+review and protected Forge gates still apply under the owner's adopted plan.
+
+Prior-spend reconciliation is scoped to this requested shared trial and its
+related acceptance tests across channels/sessions. This work has made zero paid
+calls. Unrelated historical provider-account, Modern Forestry, Bud or Avery usage
+is excluded; an account-wide invoice total is not this trial baseline. A new
+origin or site is not a provider prerequisite: see enterprise-same-origin-trial-mount.md.

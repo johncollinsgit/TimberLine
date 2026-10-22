@@ -333,6 +333,16 @@ function Workspace({ boot }: { boot: any }) {
         } catch {}
         try {
             const x = await api(path, body);
+            if (path === base) {
+                if (x.id !== body.id || x.area_id !== scope.area_id || x.project_id !== scope.project_id)
+                    throw new Error("The saved workflow response does not match this project.");
+                // Pin the confirmed selection before retiring its exact-operation receipt.
+                // Reloading during follow-up reads can then reopen the durable record.
+                const url = new URL(location.href);
+                url.searchParams.set("workflow", x.id);
+                transport.replace(url);
+                setId(x.id);
+            }
             pending.current = null;
             setRestored(false);
             try {

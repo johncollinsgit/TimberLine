@@ -1,5 +1,38 @@
 # Shared Enterprise reviewer presentation
 
+## Signed-in demonstration tour
+
+The private workspace may display the same six-scene tour only when
+`enterprise.runtime === true`, `enterprise.tour_enabled`, and
+`enterprise.sample_data` are enabled by trusted server configuration. The tour
+flag defaults off. Its label is **Server-backed demonstration workspace**.
+This wrapper never installs the public sample adapter, sample perspectives,
+sample reset, sample email CTA or trial navigation. Its records remain in the
+separate Enterprise database and existing server authorization governs actions.
+
+`workspace-tour.js` consumes the shell's existing `enterprise:render` and
+`enterprise:tour-context` snapshots. It makes no requests or writes. Current
+record selection is validated against the loaded permission-filtered arrays;
+the selected authorized project opens the existing full workflow route. Missing
+records, feature restrictions, access reset and unavailable workspace context
+disable links explicitly. Destination routes recheck access. Same-screen
+navigation uses the existing selection and composer-draft lifecycle.
+
+The original opening and active-playback timing remain shared. Private scene
+cards expose the current identity, workspace and authorized sources, with links
+to Requests/Projects, Buildings/Calendar, People/Assets and Roll Call when
+available. Procedure support for owners, next actions, status, checkpoints,
+location and closure evidence is distinguished from future discovery. Current
+Roll Call/PDF is a dated snapshot; quarterly history/templates and automation,
+a dedicated insurance-expiry registry/alerts and an accounts-payable/finance
+ledger are not represented as completed features. The tour does not attribute
+brainstormed solutions to a customer or run them automatically.
+
+Private-wrapper checks: `node --test tests/e2e/enterprise-workspace-tour.test.mjs`
+and `EnterpriseReviewerRenderTest.php`. Actual authenticated persistence and
+touch-viewport acceptance use the separate native HTTP Operations browser
+fixture, rather than the public sample browser transport.
+
 Source candidate, October 22, 2026. The reviewer controller supplies a trusted
 `runtime: sample` presentation to the **existing Enterprise shell and workflow
 workspace**. It does not authenticate a real institution or choose a tenant.
@@ -96,4 +129,4 @@ the protected GitHub-to-Forge release process remain required before publishing.
 Tour publication has no real email/SMS/AI delivery dependency. Its email is an
 in-app preview only. A reviewed source release may publish that isolated tour
 while the separate controlled trial stays disconnected and disabled; normal
-review, explicit merge/release approval and protected Forge gates still apply.
+review and protected Forge gates still apply under the owner's adopted plan.
