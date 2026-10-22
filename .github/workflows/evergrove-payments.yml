@@ -2,10 +2,21 @@ name: Evergrove payment foundation
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, 'codex/evergrove-payments-iphone-*']
     paths:
       - '.github/workflows/evergrove-payments.yml'
       - 'app/Services/PaymentsCore/**'
+      - 'app/Providers/EvergrovePaymentsServiceProvider.php'
+      - 'app/Support/Auth/MobileAuthorizationClients.php'
+      - 'app/Http/Controllers/Mobile/EvergrovePaymentsController.php'
+      - 'app/Http/Controllers/Mobile/EverbranchMobileAuthController.php'
+      - 'app/Http/Controllers/Mobile/EverbranchMobileAuthorizationController.php'
+      - 'bootstrap/providers.php'
+      - 'routes/payments-mobile.php'
+      - 'routes/api.php'
+      - 'config/evergrove_payments.php'
+      - 'config/mobile_authorization.php'
+      - 'tests/Feature/PaymentsCore/**'
       - 'tests/PaymentsCore/**'
       - 'native/evergrove-payments-ios/**'
       - 'scripts/qa/evergrove-payments-bundle.py'
@@ -42,6 +53,8 @@ jobs:
         run: php tests/PaymentsCore/run.php
       - name: Verify independent adversarial cases
         run: php tests/PaymentsCore/adversarial.php
+      - name: Verify independent authorization and transaction boundaries
+        run: php tests/PaymentsCore/security-boundaries.php
       - name: Verify existing register contracts
         run: npm run test:pos
       - name: Verify shared native/backend fixture bytes

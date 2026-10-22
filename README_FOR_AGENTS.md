@@ -1,4 +1,15 @@
-## Evergrove Payments iPhone foundation (2026-10-22; local source only)
+## Evergrove Payments durable server contracts (2026-10-22; disabled source candidate)
+
+The follow-up adds an encrypted MySQL journal, migration recovery/concurrency,
+server-owned Website catalog/quote contracts with unavailable-by-default tax,
+and scoped mobile API contracts with a separately disabled PKCE client. All
+register/rollout settings are empty/off, provider registries are empty, and
+production collection remains hard-blocked pending atomic inventory/provider
+integration. The native offline demo is unchanged and does not call these APIs.
+See `docs/operations/evergrove-payments-production-contracts.md` before integration.
+Do not infer Alpha catalog, printing/postage/tax authority or merchant readiness.
+
+## Evergrove Payments iPhone foundation (2026-10-22; prior milestone)
 
 The separate `app/Services/PaymentsCore` package adds deny-by-default internal
 provider-neutral orchestration with immutable bindings, integer server-priced

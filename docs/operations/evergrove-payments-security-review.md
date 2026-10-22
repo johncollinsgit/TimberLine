@@ -2,7 +2,12 @@
 
 This matrix applies to the separate native/backend payment lane. It does not authorize collection, enable the existing POS simulator in production, or certify PCI compliance. Results below describe fixture-only source checks; physical and provider acceptance remain separate.
 
-## Independent review checkpoint — 2026-10-22
+## Independent foundation review checkpoint — PR #465, 2026-10-22
+
+The following evidence covers the foundation at PR #465. The later disabled
+MySQL/catalog/quote/mobile API milestone is described in
+[durable server contracts](evergrove-payments-production-contracts.md); its
+independent review and exact-head acceptance must be assessed separately.
 
 The credential-free foundation is acceptable for continued source review and rehearsal after the fixes below. **Real collection remains NO-GO.** The backend is an unregistered internal domain with no enabled authorizer, no provider implementation, no HTTP endpoints and a SQLite reference journal restricted to test bindings. The native app reuses the existing Alpha browser register offline inside an Evergrove-branded SwiftUI shell; the separate native recovery lab is fixture-only. These components are not an authenticated end-to-end checkout or native Terminal integration.
 
