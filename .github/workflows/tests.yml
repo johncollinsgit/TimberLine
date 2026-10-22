@@ -10,6 +10,7 @@ on:
       - codex/everbranch-enterprise-intake
       - codex/enterprise-collaboration-ask
       - codex/enterprise-workflow-briefing
+      - codex/enterprise-reviewer-operations
   workflow_dispatch:
 
 concurrency:

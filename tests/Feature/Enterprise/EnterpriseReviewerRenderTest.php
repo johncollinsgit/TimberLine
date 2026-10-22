@@ -60,6 +60,9 @@ test('private workspace tour requires both server flags and never includes sampl
             $document = new DOMDocument;
             @$document->loadHTML($html);
             expect((new DOMXPath($document))->query('//*[@data-tour-email-cta]')->length)->toBe(0);
+            $xpath = new DOMXPath($document);
+            expect($xpath->query('//*[@data-tour-open]')->item(0)->textContent)->toBe('Explore this workspace');
+            expect($xpath->query('//*[contains(@class,"ert-word")]/small')->item(0)->textContent)->toContain($presentation['identity']['name'])->not->toContain('Lees-McRae');
             expect($html)->not->toContain('class="ert-email-paper"');
         } else {
             expect($html)->not->toContain('data-reviewer-tour-root', 'EverbranchWorkspaceTour.mount');
