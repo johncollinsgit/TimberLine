@@ -51,9 +51,16 @@ export async function checkVoiceShell(page,evidence,{sample=false}={}) {
     await page.keyboard.press('Escape');await page.waitForFunction(kind=>document.querySelector(`[data-ask-preview=${kind}]`)===document.activeElement,kind);
   }
   for(const [label,width,height]of [['desktop',1440,1000],['phone',390,844],['ipad-portrait',820,1180],['ipad-landscape',1180,820]]){
-    await page.setViewportSize({width,height});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),true,`Voice overflow at ${label}`);
+    await page.setViewportSize({width,height});await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await page.locator('#ask-question').evaluate(field=>field.scrollIntoView({block:'center',behavior:'instant'}));await page.locator('#ask-question').focus();
+    const composer=await page.locator('#ask-question').evaluate(field=>{const box=field.getBoundingClientRect();return {top:box.top,bottom:box.bottom,width:box.width,height:box.height,viewport:innerHeight,display:getComputedStyle(field).display};});
+    assert.equal(composer.width>0&&composer.height>=44&&composer.top>=0&&composer.bottom<=composer.viewport,true,`Usable composer at ${label}: ${JSON.stringify(composer)}`);
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),true,`Voice overflow at ${label}`);
     await page.screenshot({path:resolve(evidence,`voice-${sample?'sample':'private'}-${label}.png`),fullPage:true});
   }
+  // Reduced visual area exercises scroll/composer layout, not a real device keyboard.
+  await page.setViewportSize({width:390,height:450});await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await page.locator('#ask-question').evaluate(field=>field.scrollIntoView({block:'center',behavior:'instant'}));await page.locator('#ask-question').focus();
+  assert.equal(await page.evaluate(()=>{const box=document.getElementById('ask-question').getBoundingClientRect();return box.top>=0&&box.bottom<=innerHeight;}),true,'Composer fits a reduced phone viewport');
+  await page.setViewportSize({width:1180,height:820});
   await page.locator('#ask-job-detail').getByRole('link',{name:'Open recorded request / map',exact:true}).click();
   await page.locator('#map').waitFor({state:'visible'});await page.locator('#detail h2').waitFor();
   const backToAsk=sample?null:page.waitForResponse(response=>new URL(response.url()).pathname.endsWith('/enterprise/data'));
