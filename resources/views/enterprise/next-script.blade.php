@@ -1,6 +1,6 @@
   const nextBase = urls.enterprise, teamBase = urls.team;
   const draftPrefix = `everbranch-enterprise-draft:${transport.mode === 'sample' ? 'sample:' : ''}${workspace}:${viewer}:`;
-  const selectionMemory = new Map(), noteBusy = new Set(), planningReceipts = new Map();
+  const selectionMemory = new Map(), noteBusy = new Set(), planningReceipts = new Map(), planningUncertain = new Set();
   let activeDiscussionKey = null, discussionGeneration = 0, planningData = null, planningPending = null, planningBusy = false, askBusy = false, askPending = null, emailPreview = null, emailPending = null, emailGeneration = 0, gmailConnection = null, gmailBusy = false;
   const nextQuery = () => '?tenant=' + encodeURIComponent(tenantSlug);
   function readDraft(key) { try { return JSON.parse(sessionStorage.getItem(draftPrefix + key) || '{}'); } catch { return {}; } }
@@ -115,6 +115,9 @@
   }
   async function digestBytes(bytes) { return [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(x => x.toString(16).padStart(2,'0')).join(''); }
   async function uploadFiles(target, files) {
+    const refreshKey = 'upload-batch:' + crypto.randomUUID();
+    globalThis.EverbranchTransport.setRefreshBlocker(refreshKey, true);
+    try {
     const status = text => { if (activeDiscussionKey === target.key && $('upload-status')) $('upload-status').textContent = text; };
     for (const file of files) {
       try {
@@ -139,6 +142,7 @@
         message(`${file.name}: ${completed.status === 'ready' ? 'verified and attached' : completed.status === 'quarantined' ? 'stored privately; held until a scanner is available' : 'rejected'}.`);
       } catch (error) { status(`${file.name}: ${error.message} Select the same file to resume.`); message(error.message, true); break; }
     }
+    } finally { globalThis.EverbranchTransport.setRefreshBlocker(refreshKey, false); }
   }
   async function loadPlanning() {
     $('planning-work').hidden = !data.features?.planning || !area;
@@ -167,8 +171,18 @@
   }
   async function savePlanning(body) {
     if (planningBusy || body.area_id !== area) return; planningBusy = true; planningPending = body; planningReceipts.set(body.area_id, body);
-    try { await api(`${nextBase}/planning${nextQuery()}`, body); planningReceipts.delete(body.area_id); if (area === body.area_id) { planningPending = null; $('planning-retry').hidden = true; $('planning-form').reset(); await loadPlanning(); message('Planning record saved.'); } }
-    catch (error) { if (area === body.area_id) { $('planning-retry').hidden = false; message(error.message + ' Exact record retained for retry.', true); } }
+    globalThis.EverbranchTransport.setRefreshBlocker('planning:' + body.area_id, true);
+    try { await api(`${nextBase}/planning${nextQuery()}`, body); planningReceipts.delete(body.area_id); planningUncertain.delete(body.request_id); globalThis.EverbranchTransport.setRefreshBlocker('planning:' + body.area_id, false); if (area === body.area_id) { planningPending = null; $('planning-retry').hidden = true; $('planning-form').reset(); await loadPlanning(); message('Planning record saved.'); } }
+    catch (error) {
+      const rejected = !planningUncertain.has(body.request_id) && [403,404,409,422].includes(error.status);
+      if (rejected) { planningReceipts.delete(body.area_id); globalThis.EverbranchTransport.setRefreshBlocker('planning:' + body.area_id, false); }
+      else planningUncertain.add(body.request_id);
+      if (area === body.area_id) {
+        if (rejected) planningPending = null;
+        $('planning-retry').hidden = rejected;
+        message(error.message + (rejected ? ' The server rejected this action. Review current access and correct or reload the form before trying again.' : ' Exact record retained for retry. Refresh is paused until its outcome is confirmed.'), true);
+      }
+    }
     finally { planningBusy = false; }
   }
   $('planning-kind').onchange = planningFields;

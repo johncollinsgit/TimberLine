@@ -1,4 +1,4 @@
-// Private procedures use the existing authenticated transport. No sample fallback.
+// Shared procedures use their explicit transport: authenticated server or fictional browser sample. No network fallback.
 const procedureEndpoint = (path, query = {}) =>
     `${urls.enterprise}${path}?${new URLSearchParams({ tenant: tenantSlug, ...query })}`;
 let procedureGeneration = 0,
@@ -43,7 +43,7 @@ function certificateRestore(scope) {
         return;
     certificatePending.set(scope, { body, busy: false });
 }
-const procedurePrivate = () => transport.mode === "private";
+const procedurePrivate = () => ["private", "sample"].includes(transport.mode);
 const procedureCurrent = (token) =>
     token.generation === procedureGeneration &&
     token.context === procedureContext &&
@@ -315,7 +315,9 @@ async function certificateLoad() {
         certificateLists(reminders.items || []);
         certificateLock();
         certificateNotice(
-            certificateWritable
+            transport.mode === "sample"
+                ? "Fictional browser-only certificate simulation. No college records, document review or external reminders are connected."
+                : certificateWritable
                 ? "Current manager records checked. Changes require their own explicit action."
                 : "Current manager records checked. Writes are paused or unavailable; this view is read only.",
         );
@@ -605,6 +607,15 @@ async function quarterlyDownload(event, format) {
         scope = area;
     let objectUrl = null;
     try {
+        if (transport.mode === "sample") {
+            const result = await api(procedureEndpoint("/reports/quarterly." + format, quarterlyDownloadQuery));
+            if (generation !== reportGeneration || area !== scope || section !== "roll_call") return;
+            if (result.sample_export !== true || result.mime !== (format === "csv" ? "text/csv" : "application/json") || typeof result.content !== "string") throw new Error("The fictional sample export is unavailable.");
+            objectUrl = URL.createObjectURL(new Blob([result.content], {type: result.mime}));
+            const anchor = document.createElement("a"); anchor.href=objectUrl; anchor.download="fictional-sample-period-activity." + format; document.body.append(anchor); anchor.click(); anchor.remove();
+            quarterlyNotice("Fictional browser-only " + format.toUpperCase() + " snapshot generated. No real college records or server export were requested.");
+            return;
+        }
         const target = new URL(
             transport.href(
                 procedureEndpoint(
@@ -819,6 +830,6 @@ document.addEventListener("enterprise:render", () => {
         $("quarterly-period").hidden = !area;
         $("quarterly-preview").disabled = false;
         quarterlyMode();
-        quarterlyNotice("Choose and explicitly preview a reporting window.");
+        quarterlyNotice(transport.mode === "sample" ? "Fictional browser-only reporting simulation. Choose a window to preview sample records and export a labeled snapshot." : "Choose and explicitly preview a reporting window.");
     }
 });

@@ -13,9 +13,10 @@ import { checkResourceWorkspace } from './enterprise-resources-browser.mjs';
 import { checkTaskEvidenceWorkflow } from './enterprise-task-evidence-browser.mjs';
 import { checkPrivateWorkspaceTour } from './enterprise-private-tour-browser.mjs';
 import { checkProceduresWorkspace } from './enterprise-procedures-browser.mjs';
+import { checkFinanceWorkspace } from './enterprise-finance-browser.mjs';
 const operationsMode = process.env.ENTERPRISE_TEST_OPERATIONS === '1';
 const operationsScenario = process.env.ENTERPRISE_OPERATIONS_SCENARIO || 'all';
-assert.ok(['all', 'mapped', 'roll-call', 'resources', 'task-evidence', 'tour', 'procedures'].includes(operationsScenario), 'Unsupported Operations browser scenario');
+assert.ok(['all', 'mapped', 'roll-call', 'resources', 'task-evidence', 'tour', 'procedures', 'finance'].includes(operationsScenario), 'Unsupported Operations browser scenario');
 const proceduresMode = operationsMode && ['all', 'procedures'].includes(operationsScenario);
 const independentProcedures = proceduresMode && process.env.ENTERPRISE_PROCEDURES_INDEPENDENT === '1';
 assert.ok(!independentProcedures || operationsScenario === 'procedures', 'Independent procedure flags require the bounded procedures scenario');
@@ -58,8 +59,10 @@ const env = {
   ENTERPRISE_RESOURCES_ENABLED: operationsMode ? 'true' : 'false',
   ENTERPRISE_REQUESTER_ENABLED: operationsMode ? 'true' : 'false',
   ENTERPRISE_TOUR_ENABLED: operationsMode ? 'true' : 'false',
+  ENTERPRISE_PWA_ENABLED: operationsMode ? 'true' : 'false',
   ENTERPRISE_CERTIFICATES_ENABLED: proceduresMode ? 'true' : 'false',
   ENTERPRISE_REPORTS_ENABLED: proceduresMode ? 'true' : 'false',
+  ENTERPRISE_FINANCE_ENABLED: operationsMode && ['all', 'finance'].includes(operationsScenario) ? 'true' : 'false',
   ENTERPRISE_TENANT_ALLOWLIST: proceduresMode ? '1,2' : '1'
 };
 const keyFile = db + '.key', certFile = db + '.crt';
@@ -130,7 +133,7 @@ try {
     if (url.hostname === '127.0.0.1') {
       // The combined synthetic scenario performs far more actions than a single user.
       // Respect the real server throttle; never disable it for browser acceptance.
-      if (operationsMode && ['all', 'tour', 'procedures'].includes(operationsScenario) && !url.pathname.startsWith('/build/')) {
+      if (operationsMode && ['all', 'tour', 'procedures', 'finance'].includes(operationsScenario) && !url.pathname.startsWith('/build/')) {
         await (dynamicQueue = dynamicQueue.then(async () => {
           const delay = Math.max(0, dynamicDispatch + 800 - Date.now());
           if (delay) await new Promise(resolve => setTimeout(resolve, delay));
@@ -165,6 +168,7 @@ try {
     if (['all', 'task-evidence'].includes(operationsScenario)) await checkTaskEvidenceWorkflow(page,evidence);
     if (['all', 'tour'].includes(operationsScenario)) await checkPrivateWorkspaceTour(page,evidence);
     if (['all', 'procedures'].includes(operationsScenario)) await checkProceduresWorkspace(page,evidence);
+    if (['all', 'finance'].includes(operationsScenario)) await checkFinanceWorkspace(page,evidence);
   } else {
   await page.getByRole('button', {
     name: 'New workspace',

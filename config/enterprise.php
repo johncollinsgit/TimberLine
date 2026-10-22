@@ -18,6 +18,8 @@ return [
     'requester_enabled' => (bool) env('ENTERPRISE_REQUESTER_ENABLED', false),
     'reports_enabled' => (bool) env('ENTERPRISE_REPORTS_ENABLED', false),
     'certificates_enabled' => (bool) env('ENTERPRISE_CERTIFICATES_ENABLED', false),
+    'finance_enabled' => (bool) env('ENTERPRISE_FINANCE_ENABLED', false),
+    'pwa_enabled' => (bool) env('ENTERPRISE_PWA_ENABLED', false),
     'certificates_timezone' => env('ENTERPRISE_CERTIFICATES_TIMEZONE', 'America/New_York'),
     'tour_enabled' => (bool) env('ENTERPRISE_TOUR_ENABLED', false),
     'reviewer_demo_enabled' => (bool) env('ENTERPRISE_REVIEWER_DEMO_ENABLED', false),

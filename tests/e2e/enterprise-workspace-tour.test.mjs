@@ -126,7 +126,7 @@ test("scene traceability uses current authorized records and exact native workfl
     );
     assert.match(
         tour.describe(2, {}).cards[2][1],
-        /No accounts-payable or finance ledger/,
+        /Invoice\/fund review packets are unavailable/,
     );
     assert.match(
         tour.describe(4, {}).cards[2][1],
@@ -389,5 +389,46 @@ test("new manager procedures are described only when enabled and their destinati
     assert.equal(tour.links(4).find(row=>row.id==='people').available,false);
     assert.equal(tour.links(5).find(row=>row.id==='roll-call').available,false);
     assert.equal(tour.open(5,'roll-call').available,false);
+    assert.equal(actions.length,0);
+});
+
+test("priorities navigate only current authorized features and preserve the selected project", () => {
+    const {tour,snapshot,actions}=fixture();
+    snapshot.data.features={reports:true,certificates:true,finance:true,resources:true,roll_call:true};
+    snapshot.data.can_review=true;
+    snapshot.data.can_manage=true;
+    tour.update(snapshot);
+    assert.match(tour.describe(2,{}).cards[2][1],/Finance keeps payment execution/);
+    assert.equal(tour.links(2).find(row=>row.id==='finance').available,true);
+    for (const [id,section] of [["visibility","projects"],["crews","roll_call"],["schedules","calendar"],["reports","roll_call"],["certificates","people"],["invoices","finance"],["funds","finance"]]) {
+        const item={id,section};
+        assert.equal(tour.priorityStatus(item).available,true,id);
+        assert.match(tour.priorityStatus(item).status,/Persistent feature/);
+        assert.equal(tour.openPriority(item).available,true);
+        assert.equal(actions.at(-1).detail.section,section);
+    }
+    assert.equal(actions[0].detail.selected,"p2");
+    assert.ok(actions.every(action=>action.type==="enterprise:navigate"));
+});
+
+test("priority role loss, disabled features and pending scopes never substitute sample destinations", () => {
+    const {tour,snapshot,actions}=fixture();
+    snapshot.data.features={reports:true,certificates:true,finance:true};
+    snapshot.data.can_review=false;
+    snapshot.data.can_manage=false;
+    tour.update(snapshot);
+    assert.match(tour.describe(2,{}).cards[2][1],/unavailable in the current workspace/);
+    assert.equal(tour.links(2).find(row=>row.id==='finance').available,false);
+    for (const id of ["reports","certificates","invoices","funds","unknown"]) {
+        assert.equal(tour.priorityStatus({id}).available,false);
+        assert.equal(tour.openPriority({id,section:"finance"}).available,false);
+    }
+    snapshot.data.can_review=true;
+    snapshot.data.can_manage=true;
+    snapshot.data.features={};
+    tour.update(snapshot);
+    assert.equal(tour.openPriority({id:"reports",section:"roll_call"}).available,false);
+    tour.update(null);
+    assert.equal(tour.openPriority({id:"visibility",section:"projects"}).available,false);
     assert.equal(actions.length,0);
 });

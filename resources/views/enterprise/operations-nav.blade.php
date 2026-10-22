@@ -5,3 +5,4 @@
 <button class="nav-item" data-section="assets" id="assets-nav" hidden>Assets</button>
 <button class="nav-item" data-section="workflows" id="workflows-nav" hidden>Workflows</button>
 <button class="nav-item" data-section="requester" id="requester-nav" hidden>My service requests</button>
+<button class="nav-item" data-section="finance" id="finance-nav" hidden>Invoice &amp; fund packets</button>

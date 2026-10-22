@@ -95,7 +95,7 @@ jobs:
       - name: Check shared reviewer rendering without account or route authority
         run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseReviewerRenderTest.php tests/Feature/Enterprise/EnterpriseResourcePresentationTest.php tests/Feature/Enterprise/EnterpriseReviewerTrialEntryTest.php tests/Feature/EnterpriseReviewerPublicTest.php tests/Feature/LeesMcRaeCampusDemoTest.php --compact --display-warnings
       - name: Check permission-filtered period reports and certificate register
-        run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseContractorCertificatesTest.php tests/Feature/Enterprise/EnterpriseReportExportTest.php --compact --display-warnings
+        run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseContractorCertificatesTest.php tests/Feature/Enterprise/EnterpriseReportExportTest.php tests/Feature/Enterprise/EnterpriseFinancePacketsTest.php tests/Feature/Enterprise/EnterpriseOperationsTest.php --compact --display-warnings
       - name: Check controlled trial pages in the dedicated runtime without providers
         run: php vendor/bin/pest -c phpunit.enterprise.xml tests/Feature/Enterprise/EnterpriseTrialPagesTest.php --compact --display-warnings
       - name: Install browser dependencies
@@ -128,6 +128,16 @@ jobs:
         run: |
           for engine in chromium webkit; do
             ENTERPRISE_BROWSER_ENGINE="$engine" ENTERPRISE_EVIDENCE="test-results/enterprise/operations/$engine" node scripts/everbranch-team/enterprise-browser-smoke.mjs
+          done
+      - name: Check priorities walkthrough and public procedural screens
+        timeout-minutes: 15
+        env:
+          ENTERPRISE_TEST_PHP: php
+          EVERBRANCH_PLAYWRIGHT_MODULE: node_modules/playwright/index.mjs
+        run: |
+          for engine in chromium webkit; do
+            ENTERPRISE_BROWSER_ENGINE="$engine" ENTERPRISE_EVIDENCE="test-results/enterprise/priorities/$engine" node scripts/everbranch-team/enterprise-priorities-browser.mjs
+            ENTERPRISE_BROWSER_ENGINE="$engine" ENTERPRISE_EVIDENCE="test-results/enterprise/public-procedures/$engine" node scripts/everbranch-team/enterprise-public-procedures-browser.mjs
           done
       - uses: actions/upload-artifact@v4
         if: always()

@@ -6,12 +6,14 @@
     <div class="panel stack">
         <div class="eyebrow">Current work. Clear next steps.</div>
         <h2>Roll Call</h2>
-        <p class="subtle">Bring emergencies, interrupted work, commitments and dependencies into the same conversation.</p>
+        <p class="subtle">Keep the operational Roll Call tickets handed to technicians on paper connected to shared owners, status and updates. Review daily work here and retain an optional dated printout; this is work dispatch, not attendance.</p>
+        <p class="caption" id="roll-work-mode"></p>
         <form id="roll-scope-form" class="roll-toolbar">
             <label>Meeting scope<select id="roll-scope" aria-label="Meeting scope"><option value="workspace">Selected workspace</option><option value="campus">Campus I can access</option><option value="project">One project</option><option value="team">Assigned person</option></select></label>
             <label id="roll-project-label" hidden>Project<select id="roll-project" aria-label="Scope project"></select></label>
             <label id="roll-person-label" hidden>Person<select id="roll-person" aria-label="Person"></select></label>
             <button class="button primary" type="submit">Refresh current work</button>
+            <button class="button" type="button" id="roll-my-work" hidden>My assigned daily work</button>
         </form>
         <p class="caption" id="roll-method"></p>
         <p class="roll-status" id="roll-status" role="status" aria-live="polite"></p>

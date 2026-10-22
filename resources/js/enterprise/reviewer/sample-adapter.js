@@ -15,6 +15,8 @@
         contractor: "50000000-0000-4000-8000-000000000001",
         building: "60000000-0000-4000-8000-000000000052",
         asset: "70000000-0000-4000-8000-000000000001",
+        certificate: "80000000-0000-4000-8000-000000000001",
+        finance: "90000000-0000-4000-8000-000000000001",
     });
     const clone = (value) => JSON.parse(JSON.stringify(value));
     const error = (message, status = 422) => {
@@ -312,6 +314,58 @@
             ],
             reservations: [],
             meetings: [],
+            certificates: [
+                {
+                    id: IDS.certificate,
+                    area_id: IDS.area,
+                    title: "Sample contractor certificate",
+                    contractor_id: IDS.contractor,
+                    contractor_title: "Sample campus contractor",
+                    contractor_status: "active",
+                    status: "active",
+                    version: 1,
+                    renewal_contact:
+                        "Sample renewal contact — no messages sent",
+                    warning_lead_days: 30,
+                    review_due_on: "2026-10-22",
+                    accepted: {
+                        document_reference:
+                            "FICTIONAL-COI-2026 — reference only",
+                        expires_on: "2026-10-25",
+                        reviewed_by: "1",
+                        reviewed_at: timestamp,
+                        review_reason: "Illustrative metadata review only",
+                    },
+                    pending: null,
+                    last_review: null,
+                    updated_at: timestamp,
+                },
+            ],
+            finance: [
+                {
+                    id: IDS.finance,
+                    area_id: IDS.area,
+                    title: "Event audio invoice — fictional packet",
+                    status: "draft",
+                    version: 1,
+                    project_id: IDS.project,
+                    contractor_id: IDS.contractor,
+                    amount_minor: 12500,
+                    currency: "USD",
+                    document_reference:
+                        "FICTIONAL-INVOICE-104 — no document fetched",
+                    fund_code: "SAMPLE-EVENT-01",
+                    restriction_reference:
+                        "Fictional source restriction: event audio only; Finance verification required",
+                    source_reference:
+                        "Fictional existing Finance packet AP-104",
+                    next_owner_id: "1",
+                    review: null,
+                    submission: null,
+                    external_completion: null,
+                    updated_at: timestamp,
+                },
+            ],
         };
     }
     async function digest(value) {
@@ -335,6 +389,10 @@
             state = JSON.parse(storage?.getItem(key) || "null");
         } catch {}
         if (!state || state.schema !== 1) state = seed();
+        // Add new illustrative records to older sample sessions without replacing user work.
+        const supplemental = seed();
+        state.certificates ??= supplemental.certificates;
+        state.finance ??= supplemental.finance;
         const members = [
             {
                 id: "1",
@@ -556,6 +614,9 @@
                     resources: true,
                     roll_call: state.persona !== "requester",
                     requester: true,
+                    reports: manager(),
+                    certificates: manager(),
+                    finance: manager(),
                 },
                 coverage:
                     "Fictional browser sample only. Perspective filtering is illustrative, not server authorization.",
@@ -564,6 +625,7 @@
                 can_manage: manager(),
                 can_submit: true,
                 can_coordinate: manager(),
+                can_review: manager(),
                 sample_data: true,
             };
         }
@@ -2412,7 +2474,687 @@
             }
             error("That sample meeting operation is unavailable.", 404);
         }
+        function procedureArea(query, body) {
+            coordinate();
+            return area(body?.area_id || query.get("area_id") || IDS.area).id;
+        }
+        function sampleCertificate(row) {
+            const today = new Date().toISOString().slice(0, 10),
+                accepted = row.accepted;
+            const reasons = [],
+                expiry = accepted?.expires_on;
+            let expiryState = accepted ? "unknown" : "unreviewed";
+            if (!accepted) reasons.push("unreviewed");
+            if (accepted && row.pending)
+                reasons.push("awaiting_replacement_review");
+            if (!accepted?.document_reference)
+                reasons.push("document_reference_missing");
+            if (!row.renewal_contact) reasons.push("renewal_contact_missing");
+            if (row.warning_lead_days === null)
+                reasons.push("warning_not_configured");
+            if (!row.review_due_on) reasons.push("review_not_scheduled");
+            else if (row.review_due_on <= today) reasons.push("review_due");
+            if (!expiry) reasons.push("expiry_unknown");
+            else if (expiry < today) reasons.push((expiryState = "expired"));
+            else if (expiry === today)
+                reasons.push((expiryState = "expires_today"));
+            else if (row.warning_lead_days === null)
+                expiryState = "not_configured";
+            else if (
+                (Date.parse(expiry) - Date.parse(today)) / 86400000 <=
+                row.warning_lead_days
+            ) {
+                reasons.push("expiry_warning");
+                expiryState = "warning";
+            } else expiryState = "outside_warning";
+            return {
+                ...clone(row),
+                reminder_reasons: row.status === "archived" ? [] : reasons,
+                expiry_state:
+                    row.status === "archived" ? "archived" : expiryState,
+                can_manage: manager() && row.status !== "archived",
+                as_of_on: today,
+                timezone: "UTC",
+                sample_data: true,
+            };
+        }
+        function certificateRequest(path, query, body) {
+            const selected = procedureArea(query, body),
+                match = path.match(
+                    /^\/enterprise\/certificates\/([^/]+)(\/history)?$/,
+                );
+            if (path === "/enterprise/certificates/commands") {
+                const action = body.action,
+                    existing = state.certificates.find((r) => r.id === body.id);
+                let row = existing;
+                if (row) {
+                    if (row.area_id !== selected)
+                        error(
+                            "Sample certificate is outside this department.",
+                            404,
+                        );
+                    checkVersion(row, body.expected_version);
+                    if (row.status === "archived")
+                        error(
+                            "Archived sample certificate cannot be changed.",
+                            409,
+                        );
+                } else {
+                    if (
+                        action !== "certificate.propose" ||
+                        Number(body.expected_version) !== 0
+                    )
+                        error("Sample certificate is unavailable.", 404);
+                    const contractor = get(state.plans, body.contractor_id);
+                    if (
+                        contractor.kind !== "contractor" ||
+                        contractor.area_id !== selected ||
+                        contractor.status !== "active"
+                    )
+                        error(
+                            "Choose an active same-department sample contractor.",
+                            422,
+                        );
+                    row = {
+                        id: body.id,
+                        area_id: selected,
+                        title: body.title,
+                        contractor_id: contractor.id,
+                        contractor_title: contractor.title,
+                        contractor_status: contractor.status,
+                        status: "active",
+                        version: 0,
+                        accepted: null,
+                        pending: null,
+                        last_review: null,
+                        renewal_contact: body.renewal_contact,
+                        warning_lead_days: body.warning_lead_days,
+                        review_due_on: body.review_due_on,
+                    };
+                    state.certificates.push(row);
+                }
+                if (action === "certificate.propose") {
+                    if (row.pending)
+                        error(
+                            "Review the current sample replacement first.",
+                            409,
+                        );
+                    row.pending = {
+                        replacement_id: body.replacement_id,
+                        document_reference: body.document_reference,
+                        expires_on: body.expires_on,
+                        proposed_at: now(),
+                        proposed_by: currentId(),
+                    };
+                } else if (action === "certificate.metadata")
+                    Object.assign(row, {
+                        title: body.title,
+                        renewal_contact: body.renewal_contact,
+                        warning_lead_days: body.warning_lead_days,
+                        review_due_on: body.review_due_on,
+                    });
+                else if (action === "certificate.review") {
+                    if (
+                        body.confirmed !== true ||
+                        !String(body.reason || "").trim() ||
+                        row.pending?.replacement_id !== body.replacement_id ||
+                        !["accept", "reject"].includes(body.decision)
+                    )
+                        error(
+                            "Confirm this exact sample replacement and review reason.",
+                            422,
+                        );
+                    if (body.decision === "accept") {
+                        if (
+                            !row.pending.document_reference ||
+                            !row.pending.expires_on
+                        )
+                            error(
+                                "Sample acceptance requires a reference and expiry.",
+                                422,
+                            );
+                        row.accepted = {
+                            document_reference: row.pending.document_reference,
+                            expires_on: row.pending.expires_on,
+                            reviewed_by: currentId(),
+                            reviewed_at: now(),
+                            review_reason: body.reason,
+                        };
+                    }
+                    row.last_review = {
+                        decision: body.decision,
+                        reason: body.reason,
+                        by: currentId(),
+                        at: now(),
+                    };
+                    row.pending = null;
+                } else if (action === "certificate.archive") {
+                    if (
+                        body.confirmed !== true ||
+                        !String(body.reason || "").trim()
+                    )
+                        error("Confirm the sample archive and reason.", 422);
+                    row.status = "archived";
+                } else error("Unsupported sample certificate action.", 422);
+                row.version++;
+                row.updated_at = now();
+                audit(row.id, "sample." + action, { status: row.status });
+                return sampleCertificate(row);
+            }
+            if (match && match[1] !== "reminders") {
+                const row = get(state.certificates, match[1]);
+                if (row.area_id !== selected)
+                    error(
+                        "Sample certificate is outside this department.",
+                        404,
+                    );
+                return match[2]
+                    ? {
+                          items: clone(state.histories[row.id] || []),
+                          coverage: "Fictional browser-only revision history.",
+                      }
+                    : sampleCertificate(row);
+            }
+            const rows = state.certificates
+                .filter((r) => r.area_id === selected)
+                .map(sampleCertificate);
+            return {
+                items: path.endsWith("/reminders")
+                    ? rows.filter((r) => r.reminder_reasons.length)
+                    : rows,
+                contractors: clone(
+                    state.plans.filter(
+                        (r) =>
+                            r.kind === "contractor" && r.area_id === selected,
+                    ),
+                ),
+                can_manage: true,
+                as_of_on: new Date().toISOString().slice(0, 10),
+                timezone: "UTC",
+                partial: false,
+                has_more: false,
+                coverage:
+                    "Fictional browser-only records; no insurance provider or notification is connected.",
+            };
+        }
+        function sampleFinance(row) {
+            return {
+                ...clone(row),
+                next_owner_eligible: row.next_owner_id === "1",
+                can_manage: row.status !== "externally_completed",
+                can_decide:
+                    row.status === "submitted" &&
+                    row.next_owner_id === currentId(),
+                authority:
+                    "Fictional internal routing only. No fund verification, college records or payment execution.",
+            };
+        }
+        function financeRequest(path, query, body) {
+            const selected = procedureArea(query, body),
+                match = path.match(
+                    /^\/enterprise\/finance\/([^/]+)(\/history)?$/,
+                );
+            if (path === "/enterprise/finance/commands") {
+                let row = state.finance.find((r) => r.id === body.id);
+                const action = body.action;
+                if (row) {
+                    if (row.area_id !== selected)
+                        error("Sample packet is outside this department.", 404);
+                    checkVersion(row, body.expected_version);
+                    if (row.status === "externally_completed")
+                        error(
+                            "Completed sample packets preserve their references.",
+                            409,
+                        );
+                } else {
+                    if (
+                        action !== "packet.save" ||
+                        Number(body.expected_version) !== 0
+                    )
+                        error("Sample packet is unavailable.", 404);
+                    row = {
+                        id: body.id,
+                        area_id: selected,
+                        status: "draft",
+                        version: 0,
+                        review: null,
+                        submission: null,
+                        external_completion: null,
+                    };
+                    state.finance.push(row);
+                }
+                if (
+                    action !== "packet.save" &&
+                    (body.confirmed !== true ||
+                        !String(body.reason || "").trim())
+                )
+                    error(
+                        "Review and confirm this exact sample packet with a reason.",
+                        422,
+                    );
+                if (action === "packet.save") {
+                    if (!["draft", "needs_changes"].includes(row.status))
+                        error("Reopen this packet before editing.", 409);
+                    const p = project(body.project_id);
+                    if (p.enterprise_area_id !== selected || p.archived)
+                        error(
+                            "Choose a project in this sample department.",
+                            404,
+                        );
+                    if (body.contractor_id) {
+                        const c = get(state.plans, body.contractor_id);
+                        if (
+                            c.kind !== "contractor" ||
+                            c.area_id !== selected ||
+                            c.status !== "active"
+                        )
+                            error(
+                                "Choose a same-department sample contractor.",
+                                422,
+                            );
+                    }
+                    if (String(body.next_owner_id) !== "1")
+                        error(
+                            "Choose the sample manager as the financial reviewer.",
+                            422,
+                        );
+                    if (
+                        !Number.isSafeInteger(body.amount_minor) ||
+                        body.amount_minor < 0 ||
+                        body.amount_minor > 1000000000 ||
+                        !/^[A-Z]{3}$/.test(body.currency) ||
+                        !String(body.title || "").trim()
+                    )
+                        error(
+                            "Enter a bounded amount, currency and title.",
+                            422,
+                        );
+                    for (const field of [
+                        "title",
+                        "project_id",
+                        "contractor_id",
+                        "amount_minor",
+                        "currency",
+                        "document_reference",
+                        "fund_code",
+                        "restriction_reference",
+                        "source_reference",
+                    ])
+                        row[field] = body[field];
+                    row.next_owner_id = String(body.next_owner_id);
+                    row.status = "draft";
+                    row.review = null;
+                    row.submission = null;
+                } else if (action === "packet.submit") {
+                    if (
+                        !["draft", "needs_changes"].includes(row.status) ||
+                        !row.document_reference ||
+                        !row.fund_code ||
+                        !row.source_reference
+                    )
+                        error(
+                            "Provide document, fund and existing source references before submitting.",
+                            422,
+                        );
+                    row.status = "submitted";
+                    row.submission = {
+                        by: currentId(),
+                        at: now(),
+                        reason: body.reason,
+                    };
+                } else if (action === "packet.review") {
+                    if (
+                        row.status !== "submitted" ||
+                        row.next_owner_id !== currentId()
+                    )
+                        error(
+                            "Only the assigned sample reviewer may decide the submitted packet.",
+                            409,
+                        );
+                    if (!["approved", "needs_changes"].includes(body.decision))
+                        error("Choose a sample review decision.", 422);
+                    row.status = body.decision;
+                    row.review = {
+                        by: currentId(),
+                        at: now(),
+                        reason: body.reason,
+                        decision: body.decision,
+                        version_reviewed: row.version,
+                    };
+                } else if (action === "packet.handoff") {
+                    if (String(body.next_owner_id) !== "1")
+                        error(
+                            "Choose an eligible sample financial reviewer.",
+                            422,
+                        );
+                    row.next_owner_id = "1";
+                } else if (action === "packet.reopen") {
+                    if (
+                        !["submitted", "approved", "needs_changes"].includes(
+                            row.status,
+                        )
+                    )
+                        error("This sample packet is already a draft.", 409);
+                    row.status = "draft";
+                    row.review = null;
+                    row.submission = null;
+                } else if (action === "packet.external_complete") {
+                    if (
+                        row.status !== "approved" ||
+                        row.next_owner_id !== currentId() ||
+                        !String(body.external_reference || "").trim()
+                    )
+                        error(
+                            "Record an external reference only after assigned-owner internal review.",
+                            409,
+                        );
+                    row.status = "externally_completed";
+                    row.external_completion = {
+                        by: currentId(),
+                        at: now(),
+                        reference: body.external_reference,
+                        reason: body.reason,
+                        verification:
+                            "Manual reference only; no payment verified",
+                    };
+                } else error("Unsupported sample packet action.", 422);
+                row.version++;
+                row.updated_at = now();
+                audit(row.id, "sample." + action, { status: row.status });
+                return sampleFinance(row);
+            }
+            if (match) {
+                const row = get(state.finance, match[1]);
+                if (row.area_id !== selected)
+                    error("Sample packet is outside this department.", 404);
+                return match[2]
+                    ? { items: clone(state.histories[row.id] || []) }
+                    : sampleFinance(row);
+            }
+            return {
+                items: state.finance
+                    .filter((r) => r.area_id === selected)
+                    .map(sampleFinance),
+                projects: clone(
+                    state.projects.filter(
+                        (p) => p.enterprise_area_id === selected && !p.archived,
+                    ),
+                ),
+                contractors: clone(
+                    state.plans.filter(
+                        (p) =>
+                            p.area_id === selected &&
+                            p.kind === "contractor" &&
+                            p.status === "active",
+                    ),
+                ),
+                approvers: [clone(members[0])],
+                can_manage: true,
+                partial: false,
+                has_more: false,
+                as_of: now(),
+                coverage:
+                    "Fictional browser-only packets. No authoritative accounting, real invoices or payment connection.",
+            };
+        }
+        function samplePeriod(query) {
+            const selected = procedureArea(query),
+                tz = query.get("timezone"),
+                mode = query.get("mode");
+            let start, end;
+            try {
+                new Intl.DateTimeFormat("en-US", { timeZone: tz }).format();
+            } catch {
+                error("Choose a valid reporting timezone.", 422);
+            }
+            const date = (value) => {
+                if (
+                    !/^\d{4}-\d{2}-\d{2}$/.test(value || "") ||
+                    new Date(value + "T00:00:00Z")
+                        .toISOString()
+                        .slice(0, 10) !== value
+                )
+                    error("Choose valid sample dates.", 422);
+                return new Date(value + "T00:00:00Z");
+            };
+            if (mode === "calendar_quarter") {
+                const year = Number(query.get("year")),
+                    q = Number(query.get("quarter"));
+                if (
+                    !Number.isInteger(year) ||
+                    year < 2000 ||
+                    year > 2100 ||
+                    ![1, 2, 3, 4].includes(q)
+                )
+                    error("Choose a valid calendar quarter.", 422);
+                start = new Date(Date.UTC(year, (q - 1) * 3, 1));
+                end = new Date(Date.UTC(year, q * 3, 1));
+            } else if (mode === "date_range") {
+                start = date(query.get("start_date"));
+                end = date(query.get("end_date"));
+                end.setUTCDate(end.getUTCDate() + 1);
+                if (end <= start || (end - start) / 86400000 > 366)
+                    error(
+                        "Choose an ordered sample window of at most 366 days.",
+                        422,
+                    );
+            } else error("Choose a reporting window.", 422);
+            // Convert the selected local midnight by Intl timezone offsets. This remains sample data, not a campus feed.
+            const localMidnight = (value) => {
+                let target = value.getTime();
+                const parts = new Intl.DateTimeFormat("en-CA", {
+                    timeZone: tz,
+                    year: "numeric",
+                    month: "2-digit",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                    hourCycle: "h23",
+                });
+                for (let i = 0; i < 3; i++) {
+                    const p = Object.fromEntries(
+                        parts
+                            .formatToParts(new Date(target))
+                            .filter((p) => p.type !== "literal")
+                            .map((p) => [p.type, Number(p.value)]),
+                    );
+                    const projected = Date.UTC(
+                        p.year,
+                        p.month - 1,
+                        p.day,
+                        p.hour,
+                        p.minute,
+                        p.second,
+                    );
+                    target += value.getTime() - projected;
+                }
+                return new Date(target).toISOString();
+            };
+            const startUtc = localMidnight(start),
+                endUtc = localMidnight(end),
+                stamp = now(),
+                projectFilter = query.get("project_id");
+            if (
+                projectFilter &&
+                project(projectFilter).enterprise_area_id !== selected
+            )
+                error("Sample project is outside this department.", 404);
+            const current = [],
+                add = (type, row, title, status, owner, due) =>
+                    current.push({
+                        entity_type: type,
+                        id: row.id,
+                        project_id:
+                            type === "project"
+                                ? row.id
+                                : row.project_id || row.data?.project_id,
+                        title,
+                        status,
+                        owner_id: owner,
+                        due_on: due,
+                        updated_at: row.updated_at || null,
+                        version: row.version,
+                        source_url: recordUrl(
+                            type === "request" ? "requests" : "projects",
+                            type === "task" ? row.project_id : row.id,
+                            selected,
+                        ),
+                    });
+            for (const p of state.projects.filter(
+                (p) =>
+                    p.enterprise_area_id === selected &&
+                    (!projectFilter || p.id === projectFilter),
+            ))
+                add(
+                    "project",
+                    p,
+                    p.name,
+                    p.archived ? "archived" : "active",
+                    null,
+                    null,
+                );
+            for (const t of state.tasks.filter(
+                (t) =>
+                    t.enterprise_area_id === selected &&
+                    (!projectFilter || t.project_id === projectFilter),
+            ))
+                add(
+                    "task",
+                    t,
+                    t.title,
+                    t.completed_at ? "completed" : "active",
+                    t.assignee_id,
+                    t.due_on,
+                );
+            for (const r of state.requests.filter(
+                (r) =>
+                    r.area_id === selected &&
+                    (!projectFilter || r.data.project_id === projectFilter),
+            ))
+                add(
+                    "request",
+                    r,
+                    r.title,
+                    r.status,
+                    r.data.created_by,
+                    r.due_on,
+                );
+            const recorded = [];
+            for (const r of current)
+                for (const event of state.histories[r.id] || [])
+                    if (
+                        event.at >= startUtc &&
+                        event.at < endUtc &&
+                        event.at <= stamp
+                    )
+                        recorded.push({
+                            entity_type: r.entity_type,
+                            id: r.id,
+                            current_title: r.title,
+                            action: event.event.action,
+                            recorded_at: event.at,
+                            version: event.version,
+                            source_url: r.source_url,
+                        });
+            return {
+                schema_version: 1,
+                report_type: "period_activity",
+                generated_at_utc: stamp,
+                sample_data: true,
+                label: "FICTIONAL BROWSER SAMPLE — operational period export",
+                selection: {
+                    area_id: selected,
+                    project_id: projectFilter || null,
+                },
+                window: {
+                    timezone: tz,
+                    start_local: start.toISOString().slice(0, 10),
+                    end_local_inclusive: new Date(end - 86400000)
+                        .toISOString()
+                        .slice(0, 10),
+                    start_utc: startUtc,
+                    end_utc_exclusive: endUtc,
+                    observed_through_utc: endUtc < stamp ? endUtc : stamp,
+                    period_in_progress: startUtc <= stamp && endUtc > stamp,
+                    period_state:
+                        startUtc > stamp
+                            ? "future"
+                            : endUtc > stamp
+                              ? "in_progress"
+                              : "closed",
+                },
+                current_records: current,
+                recorded_events: recorded,
+                coverage: {
+                    current_records: {
+                        returned: current.length,
+                        omitted_visible_candidates: 0,
+                        limits: { project: 100, task: 500, request: 200 },
+                    },
+                    recorded_events: {
+                        returned: recorded.length,
+                        omitted_matching_events: 0,
+                        limit: 1000,
+                    },
+                },
+                exclusions: [
+                    "All real college records and live feeds",
+                    "Invoice, fund, insurance and document contents",
+                    "Private notes and mailbox data",
+                ],
+                snapshot_notice:
+                    "Fictional browser-only snapshot; download again to refresh. Not an approved quarterly template or historical reconstruction.",
+            };
+        }
         async function handle(path, query, body, options) {
+            if (path.startsWith("/enterprise/certificates"))
+                return certificateRequest(path, query, body);
+            if (path.startsWith("/enterprise/finance"))
+                return financeRequest(path, query, body);
+            if (path.startsWith("/enterprise/reports/quarterly")) {
+                const report = samplePeriod(query);
+                if (path.endsWith(".json"))
+                    return {
+                        sample_export: true,
+                        mime: "application/json",
+                        content: JSON.stringify(report, null, 2),
+                    };
+                if (path.endsWith(".csv")) {
+                    const csv = (value) =>
+                        '"' + String(value ?? "").replace(/"/g, '""') + '"';
+                    const rows = [
+                        [
+                            "sample_data",
+                            "generated_at",
+                            "window_start",
+                            "window_end",
+                            "type",
+                            "title",
+                            "status",
+                        ],
+                        ...report.current_records.map((r) => [
+                            "FICTIONAL BROWSER SAMPLE",
+                            report.generated_at_utc,
+                            report.window.start_local,
+                            report.window.end_local_inclusive,
+                            r.entity_type,
+                            /^[\s\u0000-\u001f]*[=+@-]/u.test(r.title)
+                                ? "'" + r.title
+                                : r.title,
+                            r.status,
+                        ]),
+                    ];
+                    return {
+                        sample_export: true,
+                        mime: "text/csv",
+                        content: rows
+                            .map((r) => r.map(csv).join(","))
+                            .join("\r\n"),
+                    };
+                }
+                return report;
+            }
             if (path === "/enterprise/data") return data(query);
             if (path === "/enterprise/commands") return command(body);
             if (path.startsWith("/enterprise/workflows"))

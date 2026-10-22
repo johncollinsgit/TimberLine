@@ -39,7 +39,7 @@ export async function checkResourceWorkspace(page,evidence) {
         receipts.push(route.request().postDataJSON());
         if(!dropped){dropped=true;await route.fetch();return route.abort();}return route.continue();
     });
-    await page.locator('#res-save').click();await page.getByText(/The outcome is unconfirmed/).waitFor();
+    await page.locator('#res-save').click();await page.locator('#res-form-status').filter({hasText:'The outcome is unconfirmed'}).waitFor();
     await page.reload();await page.waitForFunction(()=>document.getElementById('res-status')?.textContent.includes('permissions confirmed'));
     await page.locator('#res-new').click();await page.getByRole('button',{name:'Retry exact saved action',exact:true}).click();
     await page.waitForFunction(()=>!document.getElementById('res-dialog').open);

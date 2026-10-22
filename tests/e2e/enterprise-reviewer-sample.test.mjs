@@ -63,16 +63,227 @@ function sample() {
 }
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
+test("fictional certificate replacement retains accepted expiry until exact manager review and isolates perspectives", async () => {
+    const { adapter, api } = sample(),
+        ids = api.ids;
+    const list = await adapter.request(
+            `/enterprise/certificates?area_id=${ids.area}`,
+        ),
+        original = list.items[0];
+    assert.equal(original.accepted.expires_on, "2026-10-25");
+    const proposal = {
+        action: "certificate.propose",
+        id: original.id,
+        area_id: ids.area,
+        request_id: webcrypto.randomUUID(),
+        expected_version: original.version,
+        replacement_id: webcrypto.randomUUID(),
+        document_reference: "FICTIONAL replacement reference",
+        expires_on: "2027-10-25",
+    };
+    const proposed = await adapter.request(
+        "/enterprise/certificates/commands",
+        proposal,
+    );
+    assert.equal(proposed.accepted.expires_on, original.accepted.expires_on);
+    assert.equal(proposed.pending.expires_on, "2027-10-25");
+    assert.ok(
+        proposed.reminder_reasons.includes("awaiting_replacement_review"),
+    );
+    assert.equal(
+        (await adapter.request("/enterprise/certificates/commands", proposal))
+            .replayed,
+        true,
+    );
+    await assert.rejects(
+        adapter.request("/enterprise/certificates/commands", {
+            action: "certificate.review",
+            id: original.id,
+            area_id: ids.area,
+            request_id: webcrypto.randomUUID(),
+            expected_version: proposed.version,
+            replacement_id: webcrypto.randomUUID(),
+            decision: "accept",
+            reason: "Wrong replacement",
+            confirmed: true,
+        }),
+        /exact sample replacement/,
+    );
+    const reviewed = await adapter.request(
+        "/enterprise/certificates/commands",
+        {
+            action: "certificate.review",
+            id: original.id,
+            area_id: ids.area,
+            request_id: webcrypto.randomUUID(),
+            expected_version: proposed.version,
+            replacement_id: proposal.replacement_id,
+            decision: "accept",
+            reason: "Fictional metadata review",
+            confirmed: true,
+        },
+    );
+    assert.equal(reviewed.accepted.expires_on, "2027-10-25");
+    assert.equal(reviewed.pending, null);
+    adapter.setPersona("worker");
+    assert.equal(
+        (await adapter.request("/enterprise/data")).features.certificates,
+        false,
+    );
+    await assert.rejects(
+        adapter.request(`/enterprise/certificates?area_id=${ids.area}`),
+        /manager/,
+    );
+    await assert.rejects(
+        adapter.request("/enterprise/certificates/commands", proposal),
+        /perspective/,
+    );
+});
+
+test("fictional quarterly exports are explicit snapshots with DST boundaries and no financial or private record contents", async () => {
+    const { adapter, api } = sample(),
+        ids = api.ids;
+    const endpoint = `/enterprise/reports/quarterly?area_id=${ids.area}&mode=date_range&timezone=America%2FNew_York&start_date=2026-11-01&end_date=2026-11-01`;
+    const report = await adapter.request(endpoint);
+    assert.equal(report.sample_data, true);
+    assert.match(report.label, /FICTIONAL BROWSER SAMPLE/);
+    assert.equal(
+        (Date.parse(report.window.end_utc_exclusive) -
+            Date.parse(report.window.start_utc)) /
+            3600000,
+        25,
+    );
+    assert.equal(report.current_records.length, 4);
+    assert.ok(
+        report.current_records.every(
+            (r) => !["finance", "certificate"].includes(r.entity_type),
+        ),
+    );
+    const download = await adapter.request(
+        endpoint.replace("quarterly?", "quarterly.json?"),
+    );
+    assert.equal(download.sample_export, true);
+    assert.equal(JSON.parse(download.content).sample_data, true);
+    assert.match(
+        (
+            await adapter.request(
+                endpoint.replace("quarterly?", "quarterly.csv?"),
+            )
+        ).content,
+        /FICTIONAL BROWSER SAMPLE/,
+    );
+    await assert.rejects(
+        adapter.request(
+            endpoint.replace(ids.area, ids.it) + `&project_id=${ids.project}`,
+        ),
+        /outside/,
+    );
+    adapter.setPersona("requester");
+    await assert.rejects(adapter.request(endpoint), /manager/);
+});
+
+test("fictional invoice packet requires versioned review, preserves external reference and never becomes payment execution", async () => {
+    const { adapter, api } = sample(),
+        ids = api.ids;
+    let row = (await adapter.request(`/enterprise/finance?area_id=${ids.area}`))
+        .items[0];
+    assert.equal(row.status, "draft");
+    const command = (action, extra = {}) => ({
+        action,
+        id: row.id,
+        area_id: ids.area,
+        request_id: webcrypto.randomUUID(),
+        expected_version: row.version,
+        reason: "Fictional procedure walkthrough",
+        confirmed: true,
+        ...extra,
+    });
+    const submit = command("packet.submit");
+    row = await adapter.request("/enterprise/finance/commands", submit);
+    assert.equal(row.status, "submitted");
+    assert.equal(
+        (await adapter.request("/enterprise/finance/commands", submit))
+            .replayed,
+        true,
+    );
+    await assert.rejects(
+        adapter.request("/enterprise/finance/commands", {
+            action: "packet.save",
+            ...plain(row),
+            request_id: webcrypto.randomUUID(),
+            expected_version: row.version,
+        }),
+        /Reopen/,
+    );
+    row = await adapter.request(
+        "/enterprise/finance/commands",
+        command("packet.review", { decision: "approved" }),
+    );
+    assert.equal(row.status, "approved");
+    assert.equal(row.review.by, "1");
+    assert.match(row.authority, /No fund verification/);
+    row = await adapter.request(
+        "/enterprise/finance/commands",
+        command("packet.reopen"),
+    );
+    assert.equal(row.status, "draft");
+    assert.equal(row.review, null);
+    row = await adapter.request(
+        "/enterprise/finance/commands",
+        command("packet.submit"),
+    );
+    row = await adapter.request(
+        "/enterprise/finance/commands",
+        command("packet.review", { decision: "approved" }),
+    );
+    row = await adapter.request(
+        "/enterprise/finance/commands",
+        command("packet.external_complete", {
+            external_reference: "FICTIONAL existing AP reference 105",
+        }),
+    );
+    assert.equal(row.status, "externally_completed");
+    assert.match(row.external_completion.verification, /no payment verified/i);
+    await assert.rejects(
+        adapter.request(
+            "/enterprise/finance/commands",
+            command("packet.reopen"),
+        ),
+        /preserve/,
+    );
+    adapter.setPersona("worker");
+    assert.equal(
+        (await adapter.request("/enterprise/data")).features.finance,
+        false,
+    );
+    await assert.rejects(
+        adapter.request(`/enterprise/finance/${row.id}?area_id=${ids.area}`),
+        /manager/,
+    );
+    await assert.rejects(
+        adapter.request("/enterprise/finance/commands", submit),
+        /perspective/,
+    );
+});
+
 test("approved same-origin root and prefixed trial links navigate outside sample screens without network fallback", () => {
     const { adapter, boot, context } = sample();
     let destination = null;
-    context.location.assign = (value) => { destination = value; };
-    for (const path of ["/enterprise/trial", "/enterprise-campus/enterprise/trial"]) {
+    context.location.assign = (value) => {
+        destination = value;
+    };
+    for (const path of [
+        "/enterprise/trial",
+        "/enterprise-campus/enterprise/trial",
+    ]) {
         boot.routes.trial = "https://sample.example" + path;
         assert.equal(adapter.href(boot.routes.trial), path);
         adapter.navigate(boot.routes.trial);
         assert.equal(destination, path);
-        assert.throws(() => adapter.navigate("https://evil.example" + path), /stays within/);
+        assert.throws(
+            () => adapter.navigate("https://evil.example" + path),
+            /stays within/,
+        );
         assert.equal(destination, path);
     }
 });
