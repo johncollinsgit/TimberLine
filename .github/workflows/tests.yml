@@ -105,6 +105,11 @@ jobs:
       - name: Run PHP tests in parallel
         run: php -d memory_limit=1G ./vendor/bin/pest --parallel --compact
 
+      # Keep standalone PHPUnit-style SES cases explicit as well as the full
+      # parallel suite; local multi-file parallel selection can omit them.
+      - name: Verify SES recipient, signature and reset abuse boundaries
+        run: php -d memory_limit=1G ./vendor/bin/pest --compact tests/Feature/SesMigrationSafetyTest.php tests/Feature/SesSubscriptionConfirmationTest.php tests/Feature/Auth/PasswordResetEmailAbuseTest.php
+
   mysql-migration:
     name: mysql migration recovery
     runs-on: ubuntu-latest

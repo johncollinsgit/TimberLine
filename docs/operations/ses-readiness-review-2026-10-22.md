@@ -108,6 +108,9 @@ results before merge. Required local suites: `SesMigrationSafetyTest`,
 subscription and unsubscribe/failure-policy tests. Existing protected MySQL
 `SesSendConcurrencyTest`/`PlatformMailConcurrencyTest` remain mandatory for real
 database locks/caps. SQLite tests do not establish cross-process MySQL behavior.
+The Linux job also runs the SES recipient/signature/subscription/reset boundary
+files explicitly in serial, so standalone PHPUnit class discovery is visible
+independently of the full parallel test count.
 
 Before any appeal claims these changes are operational, separately approve the
 protected release, verify exact `/ready` SHA and production gates, inspect only
