@@ -183,7 +183,9 @@ class FleetOperationsService
     public function dispatch(Installation $install, Record $job, array $vehicles): array
     {
         $j = $job->payload;
-        abort_unless($job->status === 'active' && isset($j['latitude'], $j['longitude']), 422, 'Set job coordinates before requesting suggestions.');
+        abort_unless($job->status === 'active' && isset($j['latitude'], $j['longitude']), 422, ($j['location_status'] ?? null) === 'unavailable'
+            ? 'Nearby vans is temporarily unavailable. Your assignment is saved; choose a van manually or try again later.'
+            : 'Choose a saved job address or check the full street address, city and ZIP before finding nearby vans.');
         $profiles = Record::forTenantId($install->tenant_id)->where('kind', 'profile')->get()->keyBy('device_id');
         $jobs = Record::forTenantId($install->tenant_id)->where('kind', 'job')->where('status', 'active')->get();
         $scheduledStart = $j['scheduled_start'] ?? $j['crm_start'] ?? null;
@@ -230,7 +232,7 @@ class FleetOperationsService
         }
         usort($suggestions, fn ($a, $b) => $a['straight_line_miles'] <=> $b['straight_line_miles']);
 
-        return ['suggestions' => $suggestions, 'basis' => 'Distance is straight-line, not road mileage or ETA. Availability, skills and stock are manager-maintained. Confirm before dispatch.'];
+        return ['suggestions' => $suggestions, 'location_provider' => $j['location_provider'] ?? null, 'basis' => 'Distance is straight-line, not road mileage or ETA. Availability, skills and stock are manager-maintained. Confirm before dispatch.'];
     }
 
     private function miles(float $a, float $b, float $c, float $d): float
@@ -242,6 +244,11 @@ class FleetOperationsService
 
     private function serialize(Record $r): array
     {
-        return ['id' => $r->id, 'device_id' => $r->device_id, 'status' => $r->status, 'event_at' => $r->event_at?->toIso8601String(), 'details' => $r->payload];
+        $payload = $r->payload;
+        if (($payload['location_provider'] ?? null) === 'google' && (empty($payload['geocoded_at']) || CarbonImmutable::parse($payload['geocoded_at'])->lte(now()->subDays(30)))) {
+            $payload = array_replace($payload, ['latitude' => null, 'longitude' => null, 'location_status' => 'pending']);
+        }
+
+        return ['id' => $r->id, 'device_id' => $r->device_id, 'status' => $r->status, 'event_at' => $r->event_at?->toIso8601String(), 'details' => $payload];
     }
 }

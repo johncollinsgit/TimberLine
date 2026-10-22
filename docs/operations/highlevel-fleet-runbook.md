@@ -1,3 +1,45 @@
+## Address-first dispatch and everyday forms (2026-10-22; release candidate)
+
+- Jobs reads the address supplied on a HighLevel appointment/opportunity (or its
+  included contact address), plus customer name and schedule. No new contact
+  permission, CRM writes, CSV import, or native job creation. A record without
+  an address can reuse another active job's address from this client or accept
+  a typed street address. Never expose coordinates as dispatcher input.
+- Search jobs by title/customer/address/van/crew and filter all/today/upcoming/
+  unassigned. Van choices search names, crews and scheduled stop addresses;
+  scheduled stops are distinguished from tracker update times. A van can be
+  assigned manually even when address lookup is unavailable. Save & find nearby
+  vans first saves the current form, then applies existing availability, fresh
+  GPS, time-conflict, job-type and material rules. Assign van saves the choice.
+  Distances remain approximate straight-line miles, not road mileage or ETA.
+- `FleetJobLocationService` resolves a selected active job within the installation
+  tenant on the server. Existing exact address points are reused; a changed
+  imported address invalidates its old point unless a dispatcher chose an
+  explicit address override. Failed, partial, ambiguous or coarse geocodes never
+  invent a point or prevent saving an assignment.
+- Optional server-only `GOOGLE_MAPS_GEOCODING_API_KEY` falls back to the existing
+  Places key. Keys never enter the browser. Only a single exact street-level
+  Google geocode is accepted. Derived points expire after 30 days and the
+  existing `highlevel:fleet-maintain` scheduler clears them even if CRM refreshes
+  the record timestamp. Source addresses are customer data, not Google content.
+  Google-derived job points must not render on Leaflet/OpenStreetMap; they can
+  render on configured Google Maps. Approximate dispatch results include the
+  Google Maps attribution when derived from that provider. Customer GPS routes
+  continue to use Bouncie geometry without road snapping or external routing.
+- Vans stores crew/driver names, availability, reusable job-type chips and
+  material rows (name + quantity). No comma or name=quantity syntax. Suggestions
+  come only from this workspace. Invalid/duplicate rows are rejected in the UI;
+  server validation/tenant guards remain authoritative. Maintenance uses the
+  shared searchable van picker; recurrence and trip distance allowances are
+  secondary. Notes/status labels and settings omit implementation jargon.
+- Unsaved forms pause automatic page refresh. Saving one form preserves other
+  edited forms; leaving the page asks before discarding changes. Search/filter
+  hides rows without rebuilding forms. The demo keeps changes only in memory.
+- Validate PHP location/sync/ownership/retention tests, Chromium/WebKit browser
+  flows (address reuse, keyboard van selection, material entry, draft retention,
+  responsive forms), production build and lint. Release through protected CI
+  and Forge; verify exact `/ready` SHA and Safari after deployment.
+
 ## Onboarding, CRM discovery, recorded routes and presentation demo (2026-10-22)
 
 Release candidate; source verification is separate from deployment and pilot activation.

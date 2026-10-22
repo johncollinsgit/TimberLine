@@ -115,6 +115,8 @@ class FleetJobSourceService
             $safe[$key] = ['source' => $type, 'source_id' => $sourceId, 'reference' => $row['id'],
                 'title' => substr((string) ($row['title'] ?? $row['name'] ?? 'CRM job'), 0, 180),
                 'crm_status' => substr((string) ($row['appointmentStatus'] ?? $row['status'] ?? ''), 0, 50),
+                'crm_address' => FleetJobLocationService::address($row['address'] ?? $row['contact'] ?? null),
+                'customer_name' => mb_substr(trim((string) ($row['contact']['name'] ?? implode(' ', array_filter([$row['contact']['firstName'] ?? '', $row['contact']['lastName'] ?? ''])))), 0, 180),
                 'assigned_user' => substr((string) ($row['assignedUserId'] ?? $row['assignedTo'] ?? ''), 0, 100),
                 'crm_start' => $this->date($row['startTime'] ?? null), 'crm_end' => $this->date($row['endTime'] ?? null), 'synced_at' => now()->toIso8601String()];
         }
@@ -130,7 +132,13 @@ class FleetJobSourceService
             Record::forTenantId($install->tenant_id)->where('kind', 'job')->update(['status' => 'inactive']);
             foreach ($safe as $key => $p) {
                 $record = Record::firstOrNew(['tenant_id' => $install->tenant_id, 'kind' => 'job', 'source_key' => $key]);
-                $record->fill(['payload' => array_replace($record->payload ?? [], $p), 'event_at' => now(),
+                $existing = $record->payload ?? [];
+                // A changed imported address invalidates its old point, but a
+                // dispatcher's explicit local address remains their choice.
+                if (empty($existing['address_override']) && ($existing['crm_address'] ?? null) !== $p['crm_address']) {
+                    $existing = array_replace($existing, ['latitude' => null, 'longitude' => null, 'geocoded_at' => null, 'location_provider' => null, 'location_status' => 'pending']);
+                }
+                $record->fill(['payload' => array_replace($existing, $p), 'event_at' => now(),
                     'status' => in_array($p['crm_status'], ['cancelled', 'invalid', 'noshow'], true) ? 'inactive' : 'active'])->save();
             }
             Record::updateOrCreate(['tenant_id' => $install->tenant_id, 'kind' => 'job_source', 'source_key' => hash('sha256', 'source')],

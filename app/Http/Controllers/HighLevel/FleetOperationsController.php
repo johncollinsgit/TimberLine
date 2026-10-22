@@ -29,7 +29,7 @@ class FleetOperationsController extends Controller
 
     public function profile(Request $request, int $device, FleetOperationsService $ops)
     {
-        $p = $request->validate(['crew' => 'present|string|max:180', 'available' => 'required|boolean',
+        $p = $request->validate(['crew' => 'present|nullable|string|max:180|required_if:available,true', 'available' => 'required|boolean',
             'skills' => 'present|array|max:50', 'skills.*' => 'string|max:80|distinct', 'materials' => 'present|array|max:100', 'materials.*' => 'numeric|min:0|max:100000']);
         $record = $ops->save($this->install($request), 'profile', $p, $device);
         $this->audit($request, 'profile.saved', $record->id);
@@ -37,19 +37,20 @@ class FleetOperationsController extends Controller
         return response()->json(['saved' => true]);
     }
 
-    public function job(Request $request, int $job, FleetOperationsService $ops)
+    public function job(Request $request, int $job, FleetOperationsService $ops, \App\Services\HighLevel\FleetJobLocationService $locations)
     {
         $install = $this->install($request);
         $record = $ops->record($install, $job, 'job');
-        abort_unless($record->status === 'active', 422, 'Sync the current CRM source first.');
+        abort_unless($record->status === 'active', 422, 'Refresh jobs before saving this job.');
         $p = $request->validate(['device_id' => 'nullable|integer|min:1', 'latitude' => 'nullable|numeric|between:-90,90|required_with:longitude',
             'longitude' => 'nullable|numeric|between:-180,180|required_with:latitude', 'scheduled_start' => 'nullable|date',
             'scheduled_end' => 'nullable|date|after:scheduled_start|required_with:scheduled_start',
+            'address' => 'sometimes|nullable|string|max:500', 'location_job_id' => 'sometimes|nullable|integer|min:1',
             'skills' => 'present|array|max:50', 'skills.*' => 'string|max:80|distinct', 'materials' => 'present|array|max:100', 'materials.*' => 'numeric|min:0|max:100000']);
         if (! empty($p['device_id'])) {
             $ops->device($install, $p['device_id']);
         }
-        $ops->save($install, 'job', $p, record: $record);
+        $ops->save($install, 'job', $locations->prepare($install, $record, $p), record: $record);
         $this->audit($request, 'job.context', $record->id);
 
         return response()->json(['saved' => true]);
@@ -134,7 +135,11 @@ class FleetOperationsController extends Controller
     {
         $install = $this->install($request);
 
-        return response()->json($ops->dispatch($install, $ops->record($install, $job, 'job'), $fleet->bootstrap($install)['vehicles']));
+        $record = $ops->record($install, $job, 'job');
+        abort_unless($record->status === 'active', 422, 'Refresh jobs before assigning a van.');
+        $record = app(\App\Services\HighLevel\FleetJobLocationService::class)->ensure($install, $record);
+
+        return response()->json($ops->dispatch($install, $record, $fleet->bootstrap($install)['vehicles']));
     }
 
     private function install(Request $request): Installation
