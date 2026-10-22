@@ -11,6 +11,7 @@ on:
       - codex/enterprise-collaboration-ask
       - codex/enterprise-workflow-briefing
       - codex/enterprise-reviewer-operations
+      - codex/enterprise-client-provisioning
   workflow_dispatch:
 
 concurrency:

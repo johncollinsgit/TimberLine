@@ -83,13 +83,41 @@ suppresses the redundant `XSRF-TOKEN` response cookie, retaining real meta/form
 CSRF validation without shadowing retail's cookie. Standalone behavior remains
 unchanged. The trial-only and full-workspace modes cannot be combined.
 
-Trial and Gmail activation are explicitly refused in full-prefix mode until
-their links/callbacks receive a separate reviewed prefix adaptation. No provider
-credential or flag is needed to demonstrate persistent campus work. Briefing,
+The source supports independently gated Gmail and controlled-trial integrations
+under this full prefix. `MountUrls` constructs integration URLs from the exact
+canonical HTTPS origin plus the trusted `ENTERPRISE_BASE_PATH`, never from a
+forwarded-prefix header or user input. The global mount guard also rejects a
+different scheme, host or port before starting sessions. No provider credential
+or flag is needed to demonstrate persistent campus work. Briefing,
 Roll Call, native workflow operations and private authentication links use the
 trusted request prefix. Login, the main shell and workflow workspace display a
 persistent fictional-demonstration designation when the private sample flag is
 true; that designation creates no user, membership, entitlement or write grant.
+
+For own-user Gmail, the separately approved Google web client must register
+exactly `https://app.theeverbranch.com/enterprise-campus/enterprise/gmail/callback`,
+and `ENTERPRISE_GMAIL_REDIRECT_URI` must equal it. A root callback, different
+prefix, alternate origin, query or fragment cannot substitute. Connect and
+callback independently check the actual trusted request base URL; callbacks
+return only to the same prefixed user's Ask context. Saved OAuth states,
+connections and reviewed mailbox bindings include the mount fingerprint. A
+mount/client change requires a fresh connection and invalidates old reviewed
+draft authority; it never migrates a grant or reuses another user's mailbox.
+
+The controlled trial uses `/enterprise-campus/enterprise/trial` under this
+mode, including its boot API base, wordmark, opaque task links, update/upload
+and authorized download routes. Its canonical-origin setting remains origin
+only. Reviewer sessions and capabilities freeze the mount context, so moving
+the mount invalidates old sessions/links. Opening a new explicitly approved
+session does **not** reset the shared $5 lifetime ledger or release unknown
+reservations. Trial email still uses its separately approved service sender;
+reviewers do not connect Gmail. Prefix support creates no provider readiness.
+
+Keep all integration flags false until their individual approvals and current
+provider prerequisites are satisfied. These are source/fake-provider results,
+not live OAuth, delivery, scanning, hosting or persistence acceptance. The
+separate root trial-only mapping below remains supported with an empty
+`ENTERPRISE_BASE_PATH`; it must not be combined with the full-workspace mode.
 
 Actual hosting still needs approval and configuration for the isolated database
 and credentials, a separate stable encryption key, durable private environment
@@ -104,8 +132,12 @@ assignment, checklist/approval and fresh-request persistence across reload,
 browser sessions and an atomic release; check tenant/role denial and unchanged
 retail sessions. Until then report this as **source-ready prefix support**, not
 an available persistent workspace. The focused
-`EnterprisePrefixMountTest.php` uses actual PHP server variables and disposable
-native records; it does not establish production hosting or provision access.
+`EnterprisePrefixMountTest.php` uses actual PHP server variables, cookie-bearing
+same-origin JSON requests and disposable native records. It checks prefixed
+Gmail exchange/303/replay and denial boundaries, trial links/cross-device task
+updates/quarantined uploads, real CSRF, idempotent confirmation, uncertain cost
+holds and unchanged lifetime accounting across a mount change. Provider HTTP
+is faked; it does not establish hosting, live acceptance or provision access.
 
 ## Optional controlled trial on the same origin
 

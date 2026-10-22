@@ -33,7 +33,10 @@ Required deployment configuration is Enterprise-only:
 - `ENTERPRISE_GMAIL_CLIENT_ID` and `ENTERPRISE_GMAIL_CLIENT_SECRET` for the
   separately approved confidential web client.
 - `ENTERPRISE_GMAIL_REDIRECT_URI`, exactly the canonical HTTPS Enterprise
-  `app.url` origin plus `/enterprise/gmail/callback`. A different host, path,
+  `app.url` origin plus the trusted `ENTERPRISE_BASE_PATH` (empty standalone)
+  plus `/enterprise/gmail/callback`. For `/enterprise-campus` this is exactly
+  `https://app.theeverbranch.com/enterprise-campus/enterprise/gmail/callback`.
+  A different host, mount, path,
   query, fragment, userinfo or HTTP URI is refused. This exact URI must be
   registered with Google by the authorized owner.
 - An explicit tenant in `ENTERPRISE_GMAIL_TENANT_ALLOWLIST` and separate
@@ -75,6 +78,11 @@ response is a private, noncached authorization URL; the UI navigates only after
 the signed-in user explicitly clicks Connect. The service freezes tenant, user,
 department, fresh email, browser/session binding, client/secret fingerprint and
 registered redirect, with PKCE S256 and a ten-minute state expiry.
+The trusted mount is frozen into the client/consent fingerprint. Actual request
+scheme/host/port and PHP base URL must match the configured origin and prefix
+before starting consent or exchanging a code. Forwarded-prefix headers and a
+root callback cannot replace a configured full-prefix mount. A mount change
+requires fresh consent; old states and reviewed bindings fail closed.
 
 Starting a reconnect begins a new local consent epoch, immediately invalidating
 old previews and superseding old OAuth states. It does not preserve a usable old

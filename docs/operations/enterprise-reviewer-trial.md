@@ -52,6 +52,18 @@ profile and have `TeamArea.settings.synthetic_fixture === true`. The trial
 never creates a tenant, employee, department membership or mailbox grant. This
 marked synthetic anchor must not contain real campus work.
 
+The same service can run standalone, at the separately guarded root trial-only
+mapping, or under the trusted full-workspace `ENTERPRISE_BASE_PATH`. Canonical
+origin remains HTTPS origin only; full-prefix mode generates boot, wordmark and
+opaque task/update/upload/download URLs beneath that exact configured prefix.
+Actual request origin and PHP base URL must match. Sessions/capabilities freeze
+the mount and reject replay after it changes. Fresh approved sessions retain
+the existing lifetime ledger and all unknown reservations; a mount change is
+not a budget reset. The source adaptation enables no channel or hosting and
+does not establish real provider acceptance. See
+`enterprise-same-origin-trial-mount.md` for both supported mount modes and
+remaining per-action approvals.
+
 The principal configuration keys are:
 
 - `enabled`, `tenant_id`, `area_id`, `canonical_origin` (exact HTTPS application

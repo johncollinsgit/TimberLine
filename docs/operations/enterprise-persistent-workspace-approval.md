@@ -39,8 +39,16 @@ The trusted mapping must also set ENTERPRISE_RUNTIME_ROOT to the reviewed persis
 ENTERPRISE_SESSION_PATH=/enterprise-campus, ENTERPRISE_APP_URL=https://app.theeverbranch.com (origin only), and
 ENTERPRISE_RUNTIME_ISOLATED=true. The optional prefix guard checks actual server
 base URL, raw URI and host-only Secure/HttpOnly cookie scope before web sessions.
-Trial and Gmail activation fail closed in full-prefix mode until their paths
-are separately adapted. Other provider/channel switches remain false.
+Source support now adapts independently gated Gmail and controlled-trial paths
+to this trusted prefix, with actual-kernel/fake-provider coverage. Own-user
+Gmail requires the exact separately registered callback
+https://app.theeverbranch.com/enterprise-campus/enterprise/gmail/callback;
+reviewer service-sender links use /enterprise-campus/enterprise/trial/task/{opaque}.
+Saved authorization freezes the origin/mount; changing it invalidates old
+states/connections/reviewer links without resetting lifetime trial accounting.
+All provider/channel switches remain false until separate configuration,
+consent/sender/destination and real acceptance approvals. No hosting, OAuth
+grant, provider configuration or live delivery occurred in this source work.
 
 ## Proposed fictional workspace and access
 

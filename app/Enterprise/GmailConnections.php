@@ -34,15 +34,9 @@ class GmailConnections
     public function settings(): ?array
     {
         $config = (array) config('enterprise.gmail', []);
-        $origin = parse_url((string) config('app.url'));
         $redirect = $config['redirect_uri'] ?? null;
-        if (! is_array($origin) || ($origin['scheme'] ?? '') !== 'https' || ! isset($origin['host'])
-            || isset($origin['user']) || isset($origin['pass']) || isset($origin['query']) || isset($origin['fragment'])
-            || ! in_array($origin['path'] ?? '', ['', '/'], true) || ! is_string($redirect)) {
-            return null;
-        }
-        $expected = 'https://'.$origin['host'].(isset($origin['port']) ? ':'.$origin['port'] : '').'/enterprise/gmail/callback';
-        if ($redirect !== $expected || ! is_string($config['client_id'] ?? null) || ! preg_match('/^[a-zA-Z0-9._-]{1,255}$/D', $config['client_id'])
+        $expected = MountUrls::url('/enterprise/gmail/callback');
+        if ($expected === null || $redirect !== $expected || ! is_string($config['client_id'] ?? null) || ! preg_match('/^[a-zA-Z0-9._-]{1,255}$/D', $config['client_id'])
             || ! is_string($config['client_secret'] ?? null) || $config['client_secret'] === '' || strlen($config['client_secret']) > 4096) {
             return null;
         }
@@ -83,7 +77,7 @@ class GmailConnections
 
     private function fingerprint(): string
     {
-        return hash('sha256', json_encode([$this->settings(), config('app.env'), self::SCOPES], JSON_THROW_ON_ERROR));
+        return hash('sha256', json_encode([$this->settings(), config('app.env'), self::SCOPES, MountUrls::context()], JSON_THROW_ON_ERROR));
     }
 
     private function actor(Tenant $tenant, User $user, string $areaId, bool $configured = true, bool $write = true): array
@@ -115,6 +109,7 @@ class GmailConnections
 
     public function connect(Tenant $tenant, User $user, string $areaId, Request $request): array
     {
+        abort_unless(MountUrls::matches($request), 403, 'Use the canonical Enterprise mount.');
         $this->actor($tenant, $user, $areaId);
         abort_unless((string) $request->user()?->id === (string) $user->id, 403);
         $settings = $this->settings();
@@ -157,6 +152,7 @@ class GmailConnections
 
     public function callback(Request $request): array
     {
+        abort_unless(MountUrls::matches($request), 403, 'Use the canonical Enterprise mount.');
         $input = $request->validate(['state' => ['required', 'string', 'regex:/^[a-f0-9-]{36}\.[A-Za-z0-9_-]{43}$/D'],
             'code' => ['nullable', 'string', 'max:4096'], 'error' => ['nullable', 'string', 'max:100']]);
         $stateId = explode('.', $input['state'], 2)[0];
@@ -166,7 +162,7 @@ class GmailConnections
         abort_unless($user instanceof User, 403);
         $data = $row->data;
         $this->actor($tenant, $user, $row->area_id);
-        abort_unless($request->getSchemeAndHttpHost().$request->getPathInfo() === $this->settings()['redirect_uri'], 403, 'Use the exact registered Enterprise callback.');
+        abort_unless($request->getSchemeAndHttpHost().$request->getBaseUrl().$request->getPathInfo() === $this->settings()['redirect_uri'], 403, 'Use the exact registered Enterprise callback.');
         abort_unless($data['user_id'] === (string) $user->id && hash_equals($data['state_hash'], hash('sha256', $input['state']))
             && hash_equals($data['session_hash'], $this->sessionHash($request)) && $data['email'] === strtolower($user->fresh()->email), 403, 'The OAuth browser or signed-in identity changed.');
         abort_unless(! $request->has('tenant') || $request->query('tenant') === $tenant->slug, 403);

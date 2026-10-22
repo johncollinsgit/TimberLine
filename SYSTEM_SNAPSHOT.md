@@ -1,3 +1,15 @@
+## Enterprise integrations under a trusted application prefix (source candidate, October 22)
+
+Gmail callbacks and controlled-trial pages/links now derive their origin and
+prefix from validated server configuration. OAuth and trial authority include
+the mount context; moving a pending operation to another mount fails closed.
+The source supports `/enterprise-campus` without enabling any provider or
+changing the separate trial-only mount. See
+[the mount runbook](docs/operations/enterprise-same-origin-trial-mount.md).
+Actual hosting, Google consent, service credentials, recipients and live sends
+remain separately gated. Tests use fake providers; no operational connection,
+paid call or recovery capability is established by this candidate.
+
 ## Reusable Enterprise client setup and procedural records (source candidate, October 22)
 
 The isolated runtime now has candidate trusted per-client runtime roots and
