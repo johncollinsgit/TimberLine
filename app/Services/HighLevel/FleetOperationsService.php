@@ -183,7 +183,9 @@ class FleetOperationsService
     public function dispatch(Installation $install, Record $job, array $vehicles): array
     {
         $j = $job->payload;
-        abort_unless($job->status === 'active' && isset($j['latitude'], $j['longitude']), 422, 'Add a complete job address and save it before finding nearby vans.');
+        abort_unless($job->status === 'active' && isset($j['latitude'], $j['longitude']), 422, ($j['location_status'] ?? null) === 'unavailable'
+            ? 'Nearby vans is temporarily unavailable. Your assignment is saved; choose a van manually or try again later.'
+            : 'Choose a saved job address or check the full street address, city and ZIP before finding nearby vans.');
         $profiles = Record::forTenantId($install->tenant_id)->where('kind', 'profile')->get()->keyBy('device_id');
         $jobs = Record::forTenantId($install->tenant_id)->where('kind', 'job')->where('status', 'active')->get();
         $scheduledStart = $j['scheduled_start'] ?? $j['crm_start'] ?? null;

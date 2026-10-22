@@ -58,7 +58,7 @@ async function fixture(browserType, options, check) {
                 return res.end(JSON.stringify({saved:true,count:1}));
             }
             if(route==='bouncie/connect') return res.end(JSON.stringify({url:`${origin}/oauth/approve`}));
-            if(route==='operations/trips/301/path')return res.end(JSON.stringify({points:[{lat:34.8,lng:-82.3},{lat:34.9,lng:-82.4}],trips:[],message:'Full recorded trip geometry is unavailable. Retained GPS samples are shown as isolated dots, not a driving route.'}));
+            if(route==='operations/trips/301/path')return res.end(JSON.stringify({points:[{lat:34.8,lng:-82.3},{lat:34.9,lng:-82.4}],trips:[],message:'Only a few locations were recorded. Dots show those locations; a full route is unavailable.'}));
             if(route.startsWith('operations/vehicles/') && route.includes('/history?')) {
                 state.historyRequests++;
                 const id=Number(route.split('/')[2]);
@@ -166,7 +166,7 @@ for(const browserType of [chromium,webkit]) {
             await frame.getByRole('button',{name:'Trips & routes',exact:true}).click();
             await frame.locator('.ops-item summary').first().click();
             await frame.getByRole('button',{name:'View route'}).click();
-            await frame.getByText('Full recorded trip geometry is unavailable. Retained GPS samples are shown as isolated dots, not a driving route.',{exact:true}).waitFor();
+            await frame.getByText('Only a few locations were recorded. Dots show those locations; a full route is unavailable.',{exact:true}).waitFor();
             assert.equal(await frame.locator('.trip-map .leaflet-overlay-pane path').count(),2);
         });
     });

@@ -791,3 +791,11 @@ test('CRM imports customer addresses and changed addresses invalidate derived po
     $source->syncAutomatic($install, true);
     expect($job->refresh()->payload)->toMatchArray(['crm_address' => '300 Main St', 'address_override' => 'Saved alternative address', 'latitude' => 34.9]);
 });
+
+test('address parsing rejects incomplete contact locations and retains structured street addresses', function () {
+    $locations = \App\Services\HighLevel\FleetJobLocationService::class;
+    expect($locations::address(['name' => 'Customer', 'city' => 'Greenville', 'country' => 'US']))->toBeNull()
+        ->and($locations::address(['address' => '100 Main St', 'city' => 'Greenville', 'postalCode' => '29601']))->toBe('100 Main St, Greenville, 29601')
+        ->and($locations::address(['address' => ['address1' => '100 Main St', 'city' => 'Greenville']]))->toBe('100 Main St, Greenville')
+        ->and($locations::address('https://zoom.example/meeting'))->toBeNull();
+});

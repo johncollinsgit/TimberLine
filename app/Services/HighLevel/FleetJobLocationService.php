@@ -11,7 +11,13 @@ class FleetJobLocationService
     public static function address(mixed $value): ?string
     {
         if (is_array($value)) {
+            if (is_array($value['address'] ?? null)) {
+                return self::address($value['address']);
+            }
             $value['address1'] = $value['address1'] ?? $value['address'] ?? $value['street'] ?? null;
+            if (! filled($value['address1'])) {
+                return null;
+            }
             $value['postalCode'] = $value['postalCode'] ?? $value['postal_code'] ?? null;
             $value = implode(', ', array_filter(array_map(fn ($key) => is_scalar($value[$key] ?? null) ? trim((string) $value[$key]) : '',
                 ['address1', 'address2', 'city', 'state', 'postalCode', 'country'])));
@@ -43,7 +49,7 @@ class FleetJobLocationService
         $patch = ['address_override' => $address === ($old['crm_address'] ?? null) ? null : $address,
             'location_job_id' => $source->id, 'latitude' => null, 'longitude' => null,
             'location_address_hash' => $address ? hash('sha256', $address) : null, 'location_status' => $address ? 'pending' : 'missing',
-            'geocoded_at' => null, 'location_provider' => null];
+            'geocoded_at' => null, 'location_provider' => null, 'location_checked_at' => now()->toIso8601String()];
         unset($input['address'], $input['location_job_id']);
         if ($address) {
             $saved = $source->payload;
@@ -63,8 +69,9 @@ class FleetJobLocationService
     public function ensure(Installation $install, Record $job): Record
     {
         $p = $job->payload;
-        $expired = filled($p['geocoded_at'] ?? null) && \Carbon\CarbonImmutable::parse($p['geocoded_at'])->lte(now()->subDays(30));
-        if (self::effective($p) && ($expired || ! isset($p['latitude'], $p['longitude']))) {
+        $expired = ($p['location_provider'] ?? null) === 'google' && (empty($p['geocoded_at']) || \Carbon\CarbonImmutable::parse($p['geocoded_at'])->lte(now()->subDays(30)));
+        $justChecked = filled($p['location_checked_at'] ?? null) && \Carbon\CarbonImmutable::parse($p['location_checked_at'])->gt(now()->subSeconds(30));
+        if (self::effective($p) && ($expired || (! $justChecked && ! isset($p['latitude'], $p['longitude'])))) {
             $patch = $this->prepare($install, $job, ['address' => self::effective($p)]);
 
             return app(FleetOperationsService::class)->save($install, 'job', $patch, record: $job);
