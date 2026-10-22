@@ -38,6 +38,9 @@ Route::middleware(['auth', 'verified', ResolveWorkspace::class, \App\Http\Middle
     Route::post('/enterprise/files/{id}/caption', [\App\Enterprise\FileCaptionController::class, 'save'])->whereUuid('id')->name('enterprise.files.caption.save');
     Route::get('/enterprise/search', \App\Enterprise\CampusSearchController::class)->name('enterprise.search');
     Route::post('/enterprise/voice/jobs', \App\Enterprise\VoiceJobsController::class)->middleware('throttle:20,1,enterprise-voice-jobs:')->name('enterprise.voice.jobs');
+    Route::post('/enterprise/voice/turns', [\App\Enterprise\VoiceAssistantController::class, 'turn'])->middleware('throttle:20,1,enterprise-voice-turns:')->name('enterprise.voice.turns');
+    Route::post('/enterprise/voice/sessions/{id}/cancel', [\App\Enterprise\VoiceAssistantController::class, 'cancel'])->whereUuid('id')->name('enterprise.voice.cancel');
+    Route::post('/enterprise/voice/previews', [\App\Enterprise\VoiceAssistantController::class, 'preview'])->middleware('throttle:20,1,enterprise-voice-previews:')->name('enterprise.voice.preview');
     Route::get('/enterprise/roll-call', [\App\Enterprise\RollCallController::class, 'index'])->name('enterprise.roll_call');
     Route::get('/enterprise/meetings', [\App\Enterprise\RollCallController::class, 'meetings'])->name('enterprise.meetings');
     Route::post('/enterprise/meetings', [\App\Enterprise\RollCallController::class, 'save'])->name('enterprise.meetings.save');

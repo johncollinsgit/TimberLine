@@ -16,6 +16,19 @@ const server = createServer(async (request, response) => {
     if (!files.has(url.pathname)) { response.writeHead(404); response.end(); return }
     response.setHeader('Content-Type', 'application/javascript'); response.end(await readFile(resolve('.' + url.pathname))); return
   }
+  if (['/generate', '/preview', '/cancel'].includes(url.pathname)) {
+    let text = ''; for await (const chunk of request) text += chunk
+    const input = JSON.parse(text); response.setHeader('Content-Type', 'application/json')
+    if (url.pathname === '/cancel') { response.end(JSON.stringify({ status: 'cancelled' })); return }
+    if (url.pathname === '/preview') {
+      response.end(JSON.stringify({ session_id: input.session_id, channel: 'email', to: input.to, subject: 'Synthetic repair update', body: 'Fictional dorm repair draft.', expires_at: 'synthetic expiry', status: 'preview_only', delivery_ready: false, can_confirm: false, recipient_verified: false, notice: 'SIMULATED exact preview. Delivery disconnected. Nothing was sent.' })); return
+    }
+    const draft = /draft/i.test(input.question)
+    response.end(JSON.stringify({ mode: 'generated', provider_dispatch: true, provider_simulated: true, session_id: input.session_id, request_id: input.request_id,
+      scope: { tenant_id: 'fictional', user_id: 'presenter', area_id: 'operations' }, outcome: draft ? 'draft_proposed' : 'matched',
+      reply: draft ? 'A simulated draft is ready. Nothing was sent.' : 'Simulated generated response grounded in the fictional pipe job.', coverage: 'Synthetic component test only.',
+      job: draft ? null : job, candidates: [], draft_proposal: draft ? { channel: 'email', subject: 'Synthetic repair update', body: 'Fictional dorm repair draft.', to: null, delivery_ready: false } : null })); return
+  }
   if (url.pathname === '/lookup') {
     calls++; let text = ''; for await (const chunk of request) text += chunk
     const input = JSON.parse(text); await new Promise(resolve => setTimeout(resolve, delay))
@@ -29,9 +42,11 @@ const server = createServer(async (request, response) => {
   response.setHeader('Content-Type', 'text/html')
   response.end(`<!doctype html><html lang="en"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ask Everbranch component fixture</title><style>body{font:16px system-ui;margin:20px;max-width:700px}button,input{font:inherit;padding:12px;margin:4px}input{width:85%}section{border:1px solid #ccc;padding:12px;margin:12px 0}pre{white-space:pre-wrap}button{min-height:44px}</style><h1>Ask Everbranch</h1><p>FICTIONAL COMPONENT TEST · fake speech · no provider sends</p><section id="voice"></section><form id="ask"><label>Question<input id="question" maxlength="1500"></label><button>Ask</button></form><section id="answers" aria-label="Checked replies"></section><section id="detail" aria-label="Existing job detail">No job selected</section><section id="map" aria-label="Recorded location">No location selected</section><script type="module">
 import { mountVoiceJobs } from '/resources/js/enterprise/voice-jobs.js';
+const transport = path => async (body,{signal}={}) => {const response=await fetch(path,{method:'POST',body:JSON.stringify(body),signal});const result=await response.json();if(!response.ok)throw new Error(result.message);return result};
 window.session = mountVoiceJobs(document.getElementById('voice'), {
  context:()=>({runtime:'private',authenticated:true,tenantId:'fictional',userId:'presenter',areaId:'operations'}),
  Recognition:window.SpeechRecognition,Utterance:window.SpeechSynthesisUtterance,synthesis:window.speechSynthesis,
+ ...(location.search.includes('generated=1') ? {generate:transport('/generate'),cancelSession:transport('/cancel'),preparePreview:transport('/preview')} : {}),
  lookup:async(body,{signal})=>{const response=await fetch('/lookup',{method:'POST',body:JSON.stringify(body),signal});const result=await response.json();if(!response.ok)throw new Error(result.message);return result},
  openJob:async(job,{signal})=>{if(signal.aborted)return false;document.getElementById('detail').textContent=job.title+' · '+job.status+' · '+job.handler;document.getElementById('map').textContent=job.location.label+' · '+job.location.provenance;return true},
  onReply:result=>{const line=document.createElement('p');line.textContent=result.reply+' Response: '+result.latency_ms+' ms';document.getElementById('answers').append(line);for(const candidate of result.candidates){const button=document.createElement('button');button.textContent=candidate.title;button.onclick=()=>window.session.choose(candidate.id);document.getElementById('answers').append(button)}},
@@ -85,8 +100,28 @@ try {
       assert.equal(calls, beforeHidden)
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth); assert.equal(overflow, false)
       await page.screenshot({ path: resolve(out, engine.name() + '-voice-jobs.png'), fullPage: true })
+      await page.goto(origin + '/?generated=1')
+      await page.getByRole('button', { name: 'Talk', exact: true }).click()
+      await page.evaluate(() => window.captures.at(-1).result('Show pipe job'))
+      await page.getByRole('status').filter({ hasText: /^Speaking/ }).waitFor()
+      await page.getByText(/Simulated provider response for testing/).waitFor()
+      await page.getByRole('button', { name: 'Stop', exact: true }).click()
+      await page.getByRole('button', { name: 'Talk', exact: true }).click()
+      await page.evaluate(() => window.captures.at(-1).result('Draft an email about the pipe'))
+      await page.getByRole('status').filter({ hasText: /^Speaking/ }).waitFor()
+      const capturesBeforeReview = await page.evaluate(() => { const count = window.captures.length; window.speeches.at(-1).onend(); return count })
+      await page.getByRole('status').filter({ hasText: /Microphone off/ }).waitFor()
+      assert.equal(await page.evaluate(() => window.captures.length), capturesBeforeReview)
+      await page.getByLabel('Exact draft recipient').fill('fictional-preview@example.invalid')
+      await page.getByRole('button', { name: 'Preview draft', exact: true }).click()
+      await page.getByText(/To: fictional-preview@example.invalid/).waitFor()
+      assert.equal(await page.getByRole('button', { name: /^(Send|Confirm)$/ }).count(), 0)
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false)
+      await page.screenshot({ path: resolve(out, engine.name() + '-voice-draft-preview.png'), fullPage: true })
+      await page.evaluate(() => window.session.stop())
+      assert.equal(await page.getByLabel('Exact draft recipient').isVisible(), false)
       assert.deepEqual(errors, []); assert.deepEqual(external, [])
-      results.push({ engine: engine.name(), width: 390, calls, explicitStart: true, jobAndLocationOpen: true, followup: true, ambiguity: true, interrupt: true, stopPending: true, hiddenStops: true, revocation: true, micDenial: true, externalRequests: external, pageErrors: errors, physicalAcousticAcceptance: false, liveAI: false })
+      results.push({ engine: engine.name(), width: 390, calls, explicitStart: true, jobAndLocationOpen: true, followup: true, ambiguity: true, interrupt: true, stopPending: true, hiddenStops: true, revocation: true, micDenial: true, simulatedGeneration: true, exactManualDraftPreview: true, noSendControl: true, externalRequests: external, pageErrors: errors, physicalAcousticAcceptance: false, liveAI: false })
     } finally { await browser.close() }
   }
 } finally { await new Promise(resolve => server.close(resolve)) }

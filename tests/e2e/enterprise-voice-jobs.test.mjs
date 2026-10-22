@@ -93,3 +93,89 @@ test('total turns, wait timeout and unsupported speech are bounded without autom
   finish(result()); await pending; assert.equal(f.opened.length, 0); assert.equal(f.queries.length, 1); f.session.dispose()
   const unavailable = createVoiceConversation({ onState() {}, onError: error => errors.push(error) }); unavailable.start(); assert.match(errors.at(-1), /unavailable in this browser/)
 })
+
+function generativeFixture(handler, extra = {}) {
+  const a = audio(), clock = fakeClock(), replies = [], previews = [], canceled = [], opened = [], errors = []
+  let next = 0
+  const current = { runtime: 'private', authenticated: true, tenantId: 'tenant', userId: 'viewer', areaId: 'operations' }
+  const generated = (input, patch = {}) => result({ mode: 'generated', provider_dispatch: true, provider_simulated: true, session_id: input.session_id, request_id: input.request_id, ...patch })
+  const session = createVoiceJobs({ ...a, context: () => current, uuid: () => `fixture-${++next}`,
+    lookup: async () => result(), generate: (input, options) => handler(input, options, generated),
+    cancelSession: async input => { canceled.push(input) },
+    openJob: async job => { opened.push(job); return true }, onReply: value => replies.push(value), onPreview: value => previews.push(value),
+    onState() {}, onTranscript() {}, onError: value => errors.push(value), voiceOptions: { clock }, ...extra })
+  return { ...a, session, replies, previews, canceled, opened, errors, clock, current }
+}
+
+test('explicit configured fake adapter supports job navigation and bounded spoken followup, then cancels its exact session', async () => {
+  const inputs = []
+  const f = generativeFixture(async (input, options, generated) => { inputs.push(input); return generated(input) })
+  f.session.start(); await f.captures[0].result('Show the pipe job')
+  assert.equal(f.replies[0].provider_simulated, true); assert.equal(f.opened[0].id, 'pipe')
+  f.speeches[0].onend(); f.clock.tick(350); await f.captures[1].result('Where is it?')
+  assert.equal(inputs[0].session_id, inputs[1].session_id); assert.notEqual(inputs[0].request_id, inputs[1].request_id)
+  assert.equal(inputs[1].focus, 'pipe'); assert.equal('history' in inputs[1], false)
+  f.session.stop(); await Promise.resolve(); await Promise.resolve()
+  assert.deepEqual(f.canceled, [{ area_id: 'operations', session_id: inputs[0].session_id }])
+})
+
+test('draft proposal never dispatches a preview until exact manual recipient and cannot return after stop', async () => {
+  let finish, requests = []
+  const f = generativeFixture(async (input, options, generated) => generated(input, { outcome: 'draft_proposed', job: null, draft_proposal: { channel: 'email', subject: 'Fictional repair', body: 'Fictional body', to: null, delivery_ready: false } }), {
+    preparePreview: (input, options) => { requests.push(input); return new Promise(resolve => { finish = resolve }) },
+  })
+  await f.session.ask('Draft an email about the pipe')
+  assert.equal(requests.length, 0); assert.equal(f.opened.length, 0)
+  const pending = f.session.previewDraft('fixture@example.invalid')
+  assert.equal(requests[0].to, 'fixture@example.invalid'); assert.equal('body' in requests[0], false); assert.equal('confirmed' in requests[0], false)
+  f.session.stop()
+  finish({ session_id: requests[0].session_id, to: requests[0].to, subject: 'Fictional repair', body: 'Fictional body', status: 'preview_only', delivery_ready: false, can_confirm: false, recipient_verified: false })
+  assert.equal(await pending, null); assert.equal(f.previews.length, 0)
+  await assert.rejects(f.session.previewDraft('fixture@example.invalid'), /current generated draft/)
+})
+
+test('stale rejected request cannot cancel its successor session', async () => {
+  const calls = []; let rejectA, finishB
+  const f = generativeFixture((input, options, generated) => {
+    calls.push(input)
+    return calls.length === 1 ? new Promise((resolve, reject) => { rejectA = reject }) : new Promise(resolve => { finishB = () => resolve(generated(input)) })
+  })
+  const first = f.session.ask('Question A')
+  const second = f.session.ask('Question B')
+  rejectA(new Error('Aborted old request')); await assert.rejects(first, /Aborted/)
+  await Promise.resolve(); assert.deepEqual(f.canceled.map(row => row.session_id), [calls[0].session_id])
+  finishB(); await second
+  assert.equal(f.replies.length, 1); assert.equal(f.replies[0].session_id, calls[1].session_id)
+  f.session.dispose()
+})
+
+test('missing generation configuration retains zero-dispatch fallback and sample runtime never invokes an adapter', async () => {
+  const f = generativeFixture(async () => result())
+  await f.session.ask('Show pipe'); f.session.stop(); await Promise.resolve()
+  assert.equal(f.replies[0].mode, 'record_backed'); assert.equal(f.canceled.length, 0)
+  const g = generativeFixture(async () => { throw new Error('Must not call sample adapter') })
+  g.current.runtime = 'sample'; g.current.authenticated = false
+  await g.session.ask('Show pipe'); assert.equal(g.replies[0].provider_dispatch, false); g.session.dispose()
+})
+
+test('unverified generated session identity and a delivery-enabled preview fail closed', async () => {
+  const f = generativeFixture(async (input, options, generated) => generated(input, { session_id: 'foreign' }))
+  await assert.rejects(f.session.ask('Show pipe'), /scope could not be verified/); assert.equal(f.opened.length, 0)
+  const g = generativeFixture(async (input, options, generated) => generated(input, { outcome: 'draft_proposed', job: null }), {
+    preparePreview: async input => ({ session_id: input.session_id, to: input.to, subject: '', body: 'Synthetic', status: 'preview_only', delivery_ready: true, can_confirm: true, recipient_verified: false }),
+  })
+  await g.session.ask('Draft message'); await assert.rejects(g.session.previewDraft('fixture@example.invalid'), /preview could not be verified/)
+  assert.equal(g.previews.length, 0); g.session.dispose()
+})
+
+test('spoken draft pauses microphone after playback while retaining explicit manual preview', async () => {
+  const f = generativeFixture(async (input, options, generated) => generated(input, { outcome: 'draft_proposed', job: null }), {
+    preparePreview: async input => ({ session_id: input.session_id, to: input.to, subject: 'Fixture', body: 'Synthetic draft', status: 'preview_only', delivery_ready: false, can_confirm: false, recipient_verified: false }),
+  })
+  f.session.start(); await f.captures[0].result('Draft an email about the pipe')
+  f.speeches[0].onend(); f.clock.tick(350)
+  assert.equal(f.captures.length, 1); assert.equal(f.session.isActive(), false); assert.equal(f.canceled.length, 0)
+  const preview = await f.session.previewDraft('fixture@example.invalid')
+  assert.equal(preview.to, 'fixture@example.invalid'); assert.equal(f.previews.length, 1)
+  f.session.stop(); await Promise.resolve(); assert.equal(f.canceled.length, 1)
+})
