@@ -17,9 +17,11 @@ import { checkFinanceWorkspace } from './enterprise-finance-browser.mjs';
 import { checkRolePreview } from './enterprise-role-preview-browser.mjs';
 import { checkShellNavigation } from './enterprise-navigation-browser.mjs';
 import {checkVoiceShell} from './enterprise-voice-shell-browser.mjs';
+import {checkVoiceGeneration} from './enterprise-voice-generation-browser.mjs';
 const operationsMode = process.env.ENTERPRISE_TEST_OPERATIONS === '1';
 const operationsScenario = process.env.ENTERPRISE_OPERATIONS_SCENARIO || 'all';
-assert.ok(['all', 'mapped', 'roll-call', 'resources', 'task-evidence', 'tour', 'procedures', 'finance', 'roles', 'navigation', 'voice'].includes(operationsScenario), 'Unsupported Operations browser scenario');
+assert.ok(['all', 'mapped', 'roll-call', 'resources', 'task-evidence', 'tour', 'procedures', 'finance', 'roles', 'navigation', 'voice', 'voice-generation'].includes(operationsScenario), 'Unsupported Operations browser scenario');
+const voiceGenerationMode = operationsMode && operationsScenario === 'voice-generation';
 const proceduresMode = operationsMode && ['all', 'procedures', 'roles'].includes(operationsScenario);
 const independentProcedures = proceduresMode && process.env.ENTERPRISE_PROCEDURES_INDEPENDENT === '1';
 assert.ok(!independentProcedures || operationsScenario === 'procedures', 'Independent procedure flags require the bounded procedures scenario');
@@ -53,7 +55,10 @@ const env = {
   ENTERPRISE_COLLABORATION_ENABLED: 'true',
   ENTERPRISE_PLANNING_ENABLED: 'true',
   ENTERPRISE_ASK_ENABLED: 'true',
-  ENTERPRISE_VOICE_JOBS_ENABLED: operationsMode && ['all','voice'].includes(operationsScenario) ? 'true':'false',
+  ENTERPRISE_VOICE_JOBS_ENABLED: operationsMode && ['all','voice','voice-generation'].includes(operationsScenario) ? 'true':'false',
+  ENTERPRISE_VOICE_GENERATION_ENABLED: voiceGenerationMode ? 'true' : 'false',
+  ENTERPRISE_VOICE_DRAFTS_ENABLED: voiceGenerationMode ? 'true' : 'false',
+  ENTERPRISE_TEST_VOICE_PROVIDER: voiceGenerationMode ? '1' : '0',
   ENTERPRISE_EMAIL_DRAFTS_ENABLED: 'true',
   ENTERPRISE_WORKFLOW_ENABLED: 'true',
   ENTERPRISE_BRIEFING_ENABLED: 'true',
@@ -176,6 +181,7 @@ try {
     if (['all', 'navigation'].includes(operationsScenario)) await checkShellNavigation(page);
     if (['all', 'roles'].includes(operationsScenario)) await checkRolePreview(page,evidence);
     if (['all', 'voice'].includes(operationsScenario)) await checkVoiceShell(page,evidence);
+    if (voiceGenerationMode) await checkVoiceGeneration(page,evidence);
   } else {
   await page.getByRole('button', {
     name: 'New workspace',

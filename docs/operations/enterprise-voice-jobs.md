@@ -1,5 +1,28 @@
 # Ask Everbranch voice prototype
 
+## Integrated private-shell increment (October 22)
+
+The Enterprise integration branch mounts the reviewed optional generation,
+exact-session cancellation and preview adapters in the existing Ask pane and
+final tour screen. Completed typed/spoken turns retain server history; replacing
+an unresolved turn or explicit Stop/context/disposal cancels the exact old scope.
+Generated, simulated and record-backed replies are labeled separately before
+and after explicit requests. Source job opening still re-reads current canonical
+task/version/department authority. No model-created URL or recipient is trusted.
+
+Private actual-kernel Chromium/WebKit acceptance replaces only the provider and
+speech devices, preserving authentication, CSRF, encrypted history and the real
+reservation ledger. It covers two typed turns and a spoken follow-up, manual
+email/SMS recipient previews and exact replay/conflict, cancellation after
+departure or department change, late-result suppression and phone/tablet layouts.
+This does not verify real microphone hardware, provider delivery or paid AI.
+
+Unknown AI outcomes now pause new tenant reservations/dispatch claims until
+reconciled, without zeroing unknown exposure or blocking completed exact replay.
+Already-dispatched costs are not a guaranteed account cap. The controlled trial
+continues to refuse generation until its shared-ledger adapter is reviewed.
+See [the concrete runtime decision packet](enterprise-runtime-approval-packet.md).
+
 Source-only, default-off increment in draft PR 472, based on Enterprise checkpoint
 `7512e27dc71075b909049d3229ceb4bf7a23cf22`. No merge, deployment, provider activation,
 credentials, paid calls, real messages, accounts or grants. The Enterprise owner

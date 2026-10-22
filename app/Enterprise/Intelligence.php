@@ -139,6 +139,7 @@ class Intelligence
 
                 return ['record' => $existing, 'replayed' => true];
             }
+            $this->assertReconciled($tenant);
             $used = 0;
             foreach (TeamOperationRecord::query()->where(['tenant_id' => $tenant->id, 'kind' => 'ent_ai_usage'])->cursor() as $row) {
                 $used += (int) ($row->data['charged_microusd'] ?? $row->data['reserved_microusd'] ?? 0);
@@ -159,12 +160,21 @@ class Intelligence
                 ...($purpose === 'voice_answer' ? ['provider_simulated' => $record->data['provider_simulated'] ?? false] : [])];
         }
         try {
-            $this->actor($tenant, $user, $areaId);
-            $this->voiceGate($purpose);
-            abort_unless(hash_equals($settingsHash, hash('sha256', json_encode($this->purposeSettings($purpose), JSON_THROW_ON_ERROR))), 409, 'AI configuration changed before dispatch.');
-            if ($purpose === 'voice_answer') {
-                app(VoiceAssistant::class)->assertDispatch($tenant, $user, $areaId, $payload['session_id'] ?? '', $requestId);
-            }
+            $this->store->locked($tenant, function () use ($tenant, $user, $areaId, $purpose, $settingsHash, $payload, $requestId, $record): void {
+                $this->actor($tenant, $user, $areaId);
+                $this->voiceGate($purpose);
+                $this->assertReconciled($tenant);
+                abort_unless(hash_equals($settingsHash, hash('sha256', json_encode($this->purposeSettings($purpose), JSON_THROW_ON_ERROR))), 409, 'AI configuration changed before dispatch.');
+                if ($purpose === 'voice_answer') {
+                    app(VoiceAssistant::class)->assertDispatch($tenant, $user, $areaId, $payload['session_id'] ?? '', $requestId);
+                }
+                $current = TeamOperationRecord::query()->where(['tenant_id' => $tenant->id, 'kind' => 'ent_ai_usage'])->findOrFail($record->id);
+                abort_unless($current->status === 'reserved' && ! isset($current->data['dispatch_claim']), 409, 'This AI dispatch was already claimed. Reconcile its existing outcome.');
+                $current->data = $current->data + ['dispatch_claim' => (string) Str::uuid(), 'dispatch_claimed_at' => now()->toIso8601String()];
+                $current->version++;
+                $current->save();
+                $this->store->audit($current, $user->id, 'ai.dispatch_claimed');
+            });
         } catch (\Throwable $error) {
             $this->finish($tenant, $user, $record->id, 'cancelled', ['charged_microusd' => 0]);
             throw $error;
@@ -197,6 +207,13 @@ class Intelligence
             ...($purpose === 'voice_answer' ? ['provider_simulated' => $provider->simulated()] : [])];
     }
 
+    /** Caller holds the tenant lock. An unknown paid outcome is never reset by a new key, session or purpose. */
+    private function assertReconciled(Tenant $tenant): void
+    {
+        abort_if(TeamOperationRecord::query()->where(['tenant_id' => $tenant->id, 'kind' => 'ent_ai_usage', 'status' => 'uncertain'])->exists(),
+            409, 'Enterprise AI spending is paused because a prior provider outcome is uncertain. Reconcile that existing outcome before starting another request.');
+    }
+
     private function voiceGate(string $purpose): void
     {
         if ($purpose === 'voice_answer') {
@@ -208,6 +225,11 @@ class Intelligence
     {
         $this->store->locked($tenant, function () use ($tenant, $user, $id, $status, $result): void {
             $record = TeamOperationRecord::query()->where(['tenant_id' => $tenant->id, 'kind' => 'ent_ai_usage'])->findOrFail($id);
+            // A pre-dispatch cancellation may release only this still-unclaimed reservation.
+            // A concurrent uncertain/claimed outcome must retain its full existing exposure.
+            if ($status === 'cancelled' && ($record->status !== 'reserved' || isset($record->data['dispatch_claim']))) {
+                return;
+            }
             if (($record->data['purpose'] ?? null) === 'voice_answer' && (($record->data['content_expired'] ?? false) || ! $record->voice_expires_at || now()->gte($record->voice_expires_at))) {
                 unset($result['value']);
                 $result['content_expired'] = true;

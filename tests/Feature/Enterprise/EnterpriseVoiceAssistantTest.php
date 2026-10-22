@@ -1,5 +1,7 @@
 <?php
 
+use App\Enterprise\Intelligence;
+use App\Enterprise\RecordStore;
 use App\Enterprise\RequestWorkflow;
 use App\Enterprise\VoiceAssistant;
 use App\Enterprise\VoiceCompletionProvider;
@@ -165,22 +167,97 @@ test('cancel before first request creates a tombstone and cancel during provider
     Http::assertNothingSent();
 });
 
-test('provider uncertainty and over-bound usage retain reservations and never automatically repeat a call', function (): void {
+test('provider uncertainty malformed output and over-bound usage pause every new tenant session and request without releasing reservations', function (string $mode): void {
     [$tenant, $owner, $area, $provider] = vaFixture();
-    foreach (['timeout', 'usage'] as $mode) {
-        $session = (string) Str::uuid();
-        $request = (string) Str::uuid();
-        $provider->respond = $mode === 'timeout' ? fn () => throw new RuntimeException('Synthetic timeout') : fn ($value) => $provider->response($value, 10, 801);
-        vaTurn($tenant, $owner, $area, $session, $request)->assertStatus(503);
-        vaTurn($tenant, $owner, $area, $session, $request)->assertConflict();
-        vaTurn($tenant, $owner, $area, $session)->assertConflict();
-    }
+    $session = (string) Str::uuid();
+    $request = (string) Str::uuid();
+    $provider->respond = match ($mode) {
+        'timeout' => fn () => throw new RuntimeException('Synthetic unknown provider outcome'),
+        'excess_usage' => fn ($value) => $provider->response($value, 10, 801),
+        'malformed_usage' => fn ($value) => array_replace($provider->response($value), ['input_tokens' => 'unknown']),
+        'malformed_json' => fn ($value) => array_replace($provider->response($value), ['reply' => '{invalid-json']),
+    };
+    vaTurn($tenant, $owner, $area, $session, $request)->assertStatus(503);
+    $usage = TeamOperationRecord::query()->where('kind', 'ent_ai_usage')->sole();
+    $retained = $usage->data;
+    expect($usage->status)->toBe('uncertain')->and($retained['reserved_microusd'])->toBe(1900)
+        ->and($retained)->not->toHaveKey('charged_microusd');
+    vaTurn($tenant, $owner, $area, $session, $request)->assertConflict();
+    vaTurn($tenant, $owner, $area, $session)->assertConflict();
+    $provider->respond = null;
+    vaTurn($tenant, $owner, $area)->assertConflict();
+    $otherOwner = teamMember($tenant, 'owner');
+    vaTurn($tenant, $otherOwner, $area)->assertConflict();
+    // A new purpose must not turn a fresh request UUID into another paid attempt either.
+    expect(fn () => app(Intelligence::class)->generate($tenant, $owner, $area, 'briefing', ['sources' => []], (string) Str::uuid()))
+        ->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+    expect($provider->calls)->toBe(1)->and(TeamOperationRecord::query()->where('kind', 'ent_ai_usage')->count())->toBe(1)
+        ->and($usage->fresh()->data)->toBe($retained);
+    Http::assertNothingSent();
+})->with(['timeout', 'excess_usage', 'malformed_usage', 'malformed_json']);
+
+test('completed exact replay remains available while another tenant outcome is uncertain and other tenants can continue', function (): void {
+    [$tenant, $owner, $area, $provider] = vaFixture();
+    $session = (string) Str::uuid();
+    $request = (string) Str::uuid();
+    $complete = vaTurn($tenant, $owner, $area, $session, $request)->assertOk()->json();
+    $provider->respond = fn () => throw new RuntimeException('Synthetic uncertain second call');
+    vaTurn($tenant, $owner, $area)->assertStatus(503);
     expect($provider->calls)->toBe(2);
-    foreach (TeamOperationRecord::query()->where('kind', 'ent_ai_usage')->get() as $usage) {
-        expect($usage->status)->toBe('uncertain')->and($usage->data)->not->toHaveKey('charged_microusd');
-    }
+    vaTurn($tenant, $owner, $area, $session, $request)->assertOk()->assertJsonPath('replayed', true)
+        ->assertJsonPath('usage.receipt_id', $complete['usage']['receipt_id']);
+    $ledgerReplay = app(Intelligence::class)->generate($tenant, $owner, $area, 'voice_answer', $provider->inputs[0], $request);
+    expect($ledgerReplay['replayed'])->toBeTrue()->and($ledgerReplay['usage_id'])->toBe($complete['usage']['receipt_id']);
+    vaTurn($tenant, $owner, $area)->assertConflict();
+    expect($provider->calls)->toBe(2);
+    [$otherTenant, $otherOwner, $otherArea, $otherProvider] = vaFixture();
+    vaTurn($otherTenant, $otherOwner, $otherArea)->assertOk();
+    expect($otherProvider->calls)->toBe(1)->and(TeamOperationRecord::query()->where(['tenant_id' => $otherTenant->id, 'kind' => 'ent_ai_usage'])->sole()->status)->toBe('completed');
+    expect(TeamOperationRecord::query()->where(['tenant_id' => $tenant->id, 'kind' => 'ent_ai_usage', 'status' => 'uncertain'])->count())->toBe(1);
     Http::assertNothingSent();
 });
+
+test('a reserved request cannot claim dispatch after uncertainty and cancellation never releases an uncertain cost', function (string $race): void {
+    [$tenant, $owner, $area, $provider] = vaFixture();
+    app()->instance(RecordStore::class, new class($race) extends RecordStore
+    {
+        private bool $inserted = false;
+
+        public function __construct(private string $race) {}
+
+        public function locked(\App\Models\Tenant $tenant, callable $callback): mixed
+        {
+            $result = parent::locked($tenant, $callback);
+            if (! $this->inserted && ($reserved = TeamOperationRecord::query()->where(['tenant_id' => $tenant->id, 'kind' => 'ent_ai_usage', 'status' => 'reserved'])->first())) {
+                $this->inserted = true;
+                // Simulate another request committing its unknown result between reservation and dispatch claim.
+                if ($this->race === 'other_request') {
+                    TeamOperationRecord::query()->create(['id' => (string) Str::uuid(), 'tenant_id' => $tenant->id, 'area_id' => $reserved->area_id,
+                        'kind' => 'ent_ai_usage', 'source_key' => hash('sha256', 'synthetic-competing-outcome'), 'visibility' => 'area',
+                        'title' => 'Synthetic committed uncertainty', 'status' => 'uncertain', 'version' => 1,
+                        'data' => ['reserved_microusd' => 123, 'user_id' => $reserved->data['user_id'], 'purpose' => 'briefing']]);
+                } else {
+                    $reserved->update(['status' => 'uncertain', 'data' => $reserved->data + ['charged_microusd' => 9999]]);
+                }
+            }
+
+            return $result;
+        }
+    });
+    vaTurn($tenant, $owner, $area)->assertConflict();
+    expect($provider->calls)->toBe(0);
+    $held = TeamOperationRecord::query()->where(['tenant_id' => $tenant->id, 'kind' => 'ent_ai_usage', 'status' => 'uncertain'])->sole();
+    if ($race === 'other_request') {
+        expect($held->data['reserved_microusd'])->toBe(123)->and($held->data)->not->toHaveKey('charged_microusd');
+        $cancelled = TeamOperationRecord::query()->where(['tenant_id' => $tenant->id, 'kind' => 'ent_ai_usage', 'status' => 'cancelled'])->sole();
+        expect($cancelled->data['reserved_microusd'])->toBe(1900)->and($cancelled->data['charged_microusd'])->toBe(0)
+            ->and($cancelled->data)->not->toHaveKey('dispatch_claim');
+    } else {
+        expect($held->data['reserved_microusd'])->toBe(1900)->and($held->data['charged_microusd'])->toBe(9999)
+            ->and(TeamOperationRecord::query()->where(['tenant_id' => $tenant->id, 'kind' => 'ent_ai_usage', 'status' => 'cancelled'])->count())->toBe(0);
+    }
+    Http::assertNothingSent();
+})->with(['other_request', 'this_reservation']);
 
 test('source edits and membership revocation during generation cannot return prior facts', function (): void {
     [$tenant, $owner, $area, $provider] = vaFixture();

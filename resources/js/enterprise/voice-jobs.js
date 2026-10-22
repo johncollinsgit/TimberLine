@@ -84,15 +84,23 @@ export function createVoiceJobs({ context, lookup, openJob, onReply, onState, on
   const voice = createVoiceConversation({ ...voiceOptions, Recognition, Utterance, synthesis,
     continueListening: () => !proposal,
     send: query, onState, onTranscript, onError(message) { cancelRemote(); onError?.(message) } })
+  // A completed turn belongs to the conversation, independent of mic/playback state.
+  // Replacing unresolved work must retire its remote session before creating another.
+  function pauseForTurn() {
+    generation++
+    if (waiting) { waiting.abort(); waiting = null; cancelRemote() }
+    proposal = null
+    voice.stop()
+  }
   function stop() { generation++; waiting?.abort(); waiting = null; cancelRemote(); voice.stop() }
   return {
-    start() { try { if (disposed) return; checkScope(); voice.start() } catch (error) { onError(error.message) } },
+    start() { try { if (disposed) return; checkScope(); pauseForTurn(); voice.start() } catch (error) { onError(error.message) } },
     stop,
     interrupt: () => voice.interrupt(),
-    async ask(question) { stop(); return query(question) },
+    async ask(question) { pauseForTurn(); return query(question) },
     async choose(id) {
       if (!choices.some(row => row.id === id)) throw new Error('Choose one of the current permitted jobs.')
-      stop(); return query('Show the selected job', { focus: id, recordOnly: true })
+      pauseForTurn(); return query('Show the selected job', { focus: id, recordOnly: true })
     },
     async previewDraft(to) {
       const current = checkScope(), draft = proposal, token = generation
@@ -122,7 +130,9 @@ export function mountVoiceJobs(host, options) {
   talk.textContent = 'Talk'; stop.textContent = 'Stop'; interrupt.textContent = 'Interrupt reply'
   status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite')
   const lookupDisclosure = 'Ask Everbranch - Record-backed job lookup. Browser speech may be processed online. No message sending is connected here. You can type instead.'
-  disclosure.textContent = lookupDisclosure
+  disclosure.textContent = typeof options.generate === 'function'
+    ? 'Ask Everbranch - Explicit questions may use configured AI from permitted job facts and reserve provider cost. Missing approval uses record lookup only. Browser speech may be processed online. Drafts are previews; nothing can be sent here. You can type instead.'
+    : lookupDisclosure
   disclosure.className = 'caption'; host.append(talk, stop, interrupt, status, disclosure)
   const draft = doc.createElement('section'), draftText = doc.createElement('pre'), recipient = doc.createElement('input'), previewButton = doc.createElement('button'), exactPreview = doc.createElement('pre')
   draft.hidden = true; recipient.type = 'text'; recipient.maxLength = 254; recipient.setAttribute('aria-label', 'Exact draft recipient'); recipient.autocomplete = 'off'

@@ -1,3 +1,15 @@
+## Enterprise private generated conversation (source candidate, October 22)
+
+The same Ask pane now optionally connects the reviewed disabled voice generation
+adapter: bounded encrypted server history, current source revalidation, pinned
+scope cancellation, explicit generated/simulated/record-backed labels and exact
+human-recipient message previews without a send executor. The existing usage
+ledger identifies Voice answer separately. Actual-shell acceptance fakes only
+the provider and speech devices, preserving authentication and reservations.
+The controlled shared trial still refuses generation; credentials, hosted
+presenter access, shared spend approval and hardware acceptance remain pending.
+Read [the concrete approval packet](docs/operations/enterprise-runtime-approval-packet.md).
+
 ## Enterprise voice finale and admin usage (source candidate, October 22)
 
 The existing Ask pane now integrates explicit Talk, record-backed current-job

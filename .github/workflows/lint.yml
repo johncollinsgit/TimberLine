@@ -15,6 +15,7 @@ on:
       - codex/enterprise-prefixed-integrations
       - codex/enterprise-painpoint-demo
       - codex/enterprise-executive-visibility
+      - codex/enterprise-voice-finale
   workflow_dispatch:
 
 concurrency:

@@ -31,6 +31,7 @@ on:
       - 'tests/e2e/enterprise-*'
       - 'tests/browser/enterprise-voice-jobs.smoke.mjs'
       - 'tests/Support/enterprise-https-router.php'
+      - 'tests/Support/enterprise-browser-voice-provider.php'
       - 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php'
       - 'tests/Integration/EnterpriseTrialBudgetMySqlConcurrencyTest.php'
       - 'tests/Integration/EnterpriseClientProvisioningMySqlTest.php'
@@ -96,6 +97,7 @@ jobs:
         run: node --test tests/e2e/enterprise-transport.test.mjs tests/e2e/enterprise-reviewer-sample.test.mjs tests/e2e/enterprise-workspace-tour.test.mjs tests/e2e/enterprise-procedures-ui.test.mjs tests/e2e/enterprise-resource-presentation.test.mjs tests/e2e/enterprise-shell-navigation.test.mjs tests/e2e/enterprise-preference-lifecycle.test.mjs tests/e2e/enterprise-theme.test.mjs tests/e2e/enterprise-executive.test.mjs tests/e2e/enterprise-role-preview.test.mjs tests/js/enterprise-sample-voice.test.mjs tests/js/enterprise-usage.test.mjs tests/e2e/ai-voice-conversation.test.mjs tests/e2e/enterprise-voice-jobs.test.mjs
       - name: Check voice lifecycle and scoped job lookup without providers
         run: |
+          node --test tests/e2e/enterprise-voice-shell-scope.test.mjs
           php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseVoiceJobsTest.php tests/Feature/Enterprise/EnterpriseVoiceAssistantTest.php --compact --display-warnings
       - run: npm run build:enterprise
       - name: Check shared reviewer rendering without account or route authority
@@ -151,6 +153,17 @@ jobs:
           for engine in chromium webkit; do
             ENTERPRISE_BROWSER_ENGINE="$engine" ENTERPRISE_EVIDENCE="test-results/enterprise/priorities/$engine" node scripts/everbranch-team/enterprise-priorities-browser.mjs
             ENTERPRISE_BROWSER_ENGINE="$engine" ENTERPRISE_EVIDENCE="test-results/enterprise/public-procedures/$engine" node scripts/everbranch-team/enterprise-public-procedures-browser.mjs
+          done
+      - name: Check generated voice in actual private shell with provider-only fake
+        timeout-minutes: 10
+        env:
+          ENTERPRISE_TEST_PHP: php
+          EVERBRANCH_PLAYWRIGHT_MODULE: node_modules/playwright/index.mjs
+          ENTERPRISE_TEST_OPERATIONS: '1'
+          ENTERPRISE_OPERATIONS_SCENARIO: voice-generation
+        run: |
+          for engine in chromium webkit; do
+            ENTERPRISE_BROWSER_ENGINE="$engine" ENTERPRISE_EVIDENCE="test-results/enterprise/voice-generation/$engine" node scripts/everbranch-team/enterprise-browser-smoke.mjs
           done
       - uses: actions/upload-artifact@v4
         if: always()

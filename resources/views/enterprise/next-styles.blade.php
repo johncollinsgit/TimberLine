@@ -7,3 +7,6 @@
 /* A growing workspace list must remain reachable inside the desktop sticky rail. */
 .sidebar{align-self:start;min-height:0;overflow-y:auto;overscroll-behavior-y:contain}
 @media(max-width:1000px){.sidebar{overflow-y:visible;overscroll-behavior-y:auto}}
+
+#ask-voice-controls>section{width:100%;min-width:0}#ask-voice-controls pre{overflow-wrap:anywhere;font:14px/1.7 inherit}#ask-voice-controls input,#ask-voice-controls button{min-height:44px}#ask-voice-controls [aria-label="Exact draft recipient"]{display:block;width:100%;margin:12px 0}
+@media(max-width:650px){#ask-voice-controls input{font-size:16px}}

@@ -230,7 +230,9 @@
                     ["Authorized job lookup", feature("ask") && feature("voice_jobs")
                         ? 'Open Ask Everbranch for current authorized jobs. "Show event audio job" is a fictional sample example; current matches depend on your records.'
                         : "Ask Everbranch job lookup and Talk are unavailable in the current workspace configuration."],
-                    ["Follow up on the same job", 'Ask "Where is it?" or "Who is assigned?" against the chosen job. Deterministic record lookup is not generative AI; unavailable facts are not invented.'],
+                    ["Follow up on the same job", feature("voice_generation")
+                        ? 'Ask "Where is it?" or "Who is assigned?". Approved configured generation is labeled separately from record lookup; missing provider or budget approval falls back to permitted records. Unavailable facts stay explicit.'
+                        : 'Ask "Where is it?" or "Who is assigned?" against the chosen job. Deterministic record lookup is not generative AI; unavailable facts are not invented.'],
                     ["Optional Talk · draft previews", "Talk requires your own button press and microphone permission when supported. Email/text previews stay Draft / not sent; no delivery is established."],
                 ];
             const copy = [

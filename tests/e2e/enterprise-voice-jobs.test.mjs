@@ -125,6 +125,85 @@ test('explicit configured fake adapter supports job navigation and bounded spoke
   assert.deepEqual(f.canceled, [{ area_id: 'operations', session_id: inputs[0].session_id }])
 })
 
+test('completed typed turns retain one owned server conversation with distinct turn keys and exact followup focus', async () => {
+  const inputs = []
+  const f = generativeFixture(async (input, options, generated) => { inputs.push(input); return generated(input) })
+  await f.session.ask('Show the pipe job')
+  await f.session.ask('Who is assigned?')
+  await f.session.ask('Where is it?')
+  assert.equal(new Set(inputs.map(input => input.session_id)).size, 1)
+  assert.equal(new Set(inputs.map(input => input.request_id)).size, 3)
+  assert.deepEqual(inputs.slice(1).map(input => input.focus), ['pipe', 'pipe'])
+  assert.equal(inputs.some(input => 'history' in input), false)
+  assert.equal(f.replies.length, 3); assert.equal(f.captures.length, 0); assert.equal(f.speeches.length, 0)
+  await Promise.resolve(); assert.equal(f.canceled.length, 0)
+  f.session.stop(); await Promise.resolve()
+  assert.deepEqual(f.canceled, [{ area_id: 'operations', session_id: inputs[0].session_id }])
+})
+
+test('typed and spoken turns share settled history while stale playback cannot restart capture', async () => {
+  const inputs = []
+  const f = generativeFixture(async (input, options, generated) => { inputs.push(input); return generated(input) })
+  await f.session.ask('Show the pipe job')
+  f.session.start(); await f.captures[0].result('Where is it?')
+  const stalePlayback = f.speeches[0]
+  await f.session.ask('Who is assigned?')
+  stalePlayback.onend(); f.clock.tick(350)
+  assert.equal(f.captures.length, 1); assert.equal(f.session.isActive(), false)
+  f.session.start(); await f.captures[1].result('What is its status?')
+  assert.equal(new Set(inputs.map(input => input.session_id)).size, 1)
+  assert.equal(new Set(inputs.map(input => input.request_id)).size, 4)
+  assert.deepEqual(inputs.slice(1).map(input => input.focus), ['pipe', 'pipe', 'pipe'])
+  assert.equal(f.replies.length, 4); assert.equal(f.canceled.length, 0)
+  f.session.dispose(); await Promise.resolve(); assert.equal(f.canceled.length, 1)
+})
+
+test('explicit ambiguity choice rechecks the record without discarding its settled generated conversation', async () => {
+  const inputs = [], lookups = []
+  const f = generativeFixture(async (input, options, generated) => {
+    inputs.push(input)
+    return inputs.length === 1 ? generated(input, { outcome: 'choose', job: null, candidates: [{ id: 'pipe', title: 'Pipe' }] }) : generated(input)
+  }, { lookup: async input => { lookups.push(input); return result() } })
+  await f.session.ask('Show repair job')
+  await f.session.choose('pipe')
+  await f.session.ask('Who is assigned?')
+  assert.equal(inputs[0].session_id, inputs[1].session_id)
+  assert.notEqual(inputs[0].request_id, inputs[1].request_id)
+  assert.equal(inputs[1].focus, 'pipe')
+  assert.deepEqual(lookups, [{ area_id: 'operations', question: 'Show the selected job', focus: 'pipe' }])
+  assert.equal(f.canceled.length, 0)
+  f.session.dispose()
+})
+
+test('replacing an unresolved typed turn with Talk aborts and cancels only the old session', async () => {
+  const inputs = []; let finish, firstSignal
+  const f = generativeFixture((input, options, generated) => {
+    inputs.push(input)
+    if (inputs.length === 1) { firstSignal = options.signal; return new Promise(resolve => { finish = () => resolve(generated(input)) }) }
+    return generated(input)
+  })
+  const first = f.session.ask('Question still waiting')
+  f.session.start(); assert.equal(firstSignal.aborted, true)
+  await f.captures[0].result('Show the pipe job')
+  finish(); await first
+  assert.notEqual(inputs[0].session_id, inputs[1].session_id)
+  assert.equal(f.replies.length, 1); assert.equal(f.replies[0].session_id, inputs[1].session_id)
+  assert.deepEqual(f.canceled, [{ area_id: 'operations', session_id: inputs[0].session_id }])
+  f.session.dispose()
+})
+
+test('Stop, context changes and disposal still cancel completed remote conversations exactly once', async () => {
+  for (const action of ['stop', 'contextChanged', 'dispose']) {
+    const inputs = []
+    const f = generativeFixture(async (input, options, generated) => { inputs.push(input); return generated(input) })
+    await f.session.ask('Show the pipe job')
+    if (action === 'contextChanged') f.current.areaId = 'different-area'
+    f.session[action](); await Promise.resolve()
+    assert.deepEqual(f.canceled, [{ area_id: 'operations', session_id: inputs[0].session_id }])
+    f.session.dispose(); await Promise.resolve(); assert.equal(f.canceled.length, 1)
+  }
+})
+
 test('draft proposal never dispatches a preview until exact manual recipient and cannot return after stop', async () => {
   let finish, requests = []
   const f = generativeFixture(async (input, options, generated) => generated(input, { outcome: 'draft_proposed', job: null, draft_proposal: { channel: 'email', subject: 'Fictional repair', body: 'Fictional body', to: null, delivery_ready: false } }), {
