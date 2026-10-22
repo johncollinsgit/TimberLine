@@ -15,7 +15,7 @@ class TrialBoundary
         $parts = is_string($origin) ? parse_url($origin) : false;
         abort_unless(is_array($parts) && ($parts['scheme'] ?? '') === 'https' && isset($parts['host'])
             && ! isset($parts['user']) && ! isset($parts['pass']) && ! isset($parts['path']) && ! isset($parts['query']) && ! isset($parts['fragment'])
-            && $origin === rtrim((string) config('app.url'), '/') && $request->getSchemeAndHttpHost() === $origin && $request->query() === [], 404);
+            && $origin === MountUrls::origin() && MountUrls::matches($request) && $request->query() === [], 404);
         app(\App\Enterprise\Trial\TrialStore::class)->tenant();
 
         return $next($request);

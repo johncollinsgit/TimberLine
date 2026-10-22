@@ -86,6 +86,36 @@ opens the browser's fictional sample request. It is not a bearer trial link.
 The separate controlled trial's verified service sender, approved recipient,
 exact preview and shared $5 budget are independent of this presentation.
 
+### Approved Try-it-out destination
+
+Public tour navigation is independently default-disabled. In the **retail
+presentation environment**, an authorized operator must approve the exact
+destination and configure both `ENTERPRISE_REVIEWER_TRIAL_DESTINATION` (empty
+by default) and `ENTERPRISE_REVIEWER_TRIAL_DESTINATION_APPROVED=true` (false by
+default). This work does not set either value. For the proposed full mount the
+reviewable destination is exactly
+`https://app.theeverbranch.com/enterprise-campus/enterprise/trial`; the separately
+supported root trial-only destination is
+`https://app.theeverbranch.com/enterprise/trial`.
+
+The public renderer supplies `routes.trial` only when explicit boolean approval
+and a canonical HTTPS same-origin URL are both present. The exact port must
+match, and the path must be `/enterprise/trial` or a clean explicitly configured
+prefix followed by `/enterprise/trial`. Credentials, query/fragment, encoded
+characters, double slashes, traversal and alternate origins are refused; a
+request query cannot override configuration. Missing/invalid approval keeps
+the tour's connection-pending state. The existing sample adapter retains its
+same-origin navigation boundary. Link rendering performs no operational SQL,
+session, identity, trial-store or provider resolution, and public CSP stays
+unchanged.
+
+Approving this destination publishes only a navigation entry. It does not
+authorize hosting changes, an invitation/recipient, credentials, Gmail consent,
+provider activation, paid acceptance or sending. The controlled runtime must
+independently enforce its own approval, CSRF, synthetic storage and lifetime
+budget gates after navigation. Never place a reviewer code, address or token
+in this public destination.
+
 Sample PDF links create fresh single-page Letter snapshots from current browser
 priorities and meeting notes. They label sample scope, generation time and
 overflow counts, and link to the complete sample view. They are not continuously

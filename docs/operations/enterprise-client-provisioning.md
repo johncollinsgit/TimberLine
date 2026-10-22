@@ -152,8 +152,13 @@ The proposed initial existing-origin deployment remains server
 targets, not proof of authorization or hosting. Review minimum database grants,
 stable independent key, runtime/cache release bindings, prefix/build mapping and
 the exact approved demo owner/tenant before performing those operator actions.
-Follow `enterprise-same-origin-trial-mount.md`; trial and Gmail stay disabled in
-full-prefix mode. No second site, new domain or DNS cutover is required.
+Follow `enterprise-same-origin-trial-mount.md`; source now supports prefixed
+Gmail callbacks and controlled-trial links, but both remain default-disabled
+pending their separate provider/configuration/consent and acceptance approvals.
+For this proposed mount, register only the exact approved callback
+`https://app.theeverbranch.com/enterprise-campus/enterprise/gmail/callback`.
+Provisioning never creates those credentials, grants or approvals. No second
+site, new domain or DNS cutover is required.
 
 `EnterpriseClientProvisioningTest` boots the actual runtime against disposable
 SQLite and includes a second non-campus client's catalog, role/default storage,

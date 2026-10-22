@@ -26,6 +26,9 @@ class ReviewerPresentation
                 'back' => '/platform/demos/lees-mcrae', 'logout' => null],
             'locations' => app(LocationCatalog::class)->all(), 'scope' => $scope,
             'navigation' => ['area_id' => $scope['area_id'], 'section' => 'home']];
+        if (($trial = $this->trialDestination($request)) !== null) {
+            $presentation['routes']['trial'] = $trial;
+        }
         $bootstrap = ['project' => ['id' => $scope['project_id'], 'name' => 'Campus event readiness - sample'], 'members' => [],
             'can_design' => false, 'can_run' => false, 'items' => [], 'templates' => []];
         $html = view($workflow ? 'enterprise.workspace' : 'enterprise.app', ['presentation' => $presentation, 'enterpriseRole' => 'sample perspective',
@@ -39,6 +42,25 @@ class ReviewerPresentation
         return response($html)->withHeaders(['Content-Type' => 'text/html; charset=UTF-8', 'Cache-Control' => 'no-store, private',
             'Referrer-Policy' => 'no-referrer', 'X-Robots-Tag' => 'noindex, nofollow, noarchive', 'X-Content-Type-Options' => 'nosniff',
             'Content-Security-Policy' => "default-src 'none'; script-src 'nonce-{$nonce}'; style-src 'nonce-{$nonce}'; style-src-attr 'unsafe-inline'; img-src data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'; worker-src 'none'; frame-src 'none'; font-src 'none'; manifest-src 'none'"]);
+    }
+
+    /** Link publication is separate operator approval, never trial/provider authority. No operational resolution. */
+    private function trialDestination(Request $request): ?string
+    {
+        if (config('enterprise.reviewer_trial_destination_approved') !== true) {
+            return null;
+        }
+        $destination = config('enterprise.reviewer_trial_destination');
+        $origin = MountUrls::origin();
+        $parts = is_string($destination) ? parse_url($destination) : false;
+        if ($origin === null || $request->getSchemeAndHttpHost() !== $origin || ! is_array($parts)
+            || isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment'])
+            || ! is_string($parts['path'] ?? null) || ! preg_match('~^(?:/[A-Za-z0-9_-]+)*/enterprise/trial$~D', $parts['path'])
+            || $destination !== $origin.$parts['path']) {
+            return null;
+        }
+
+        return $destination;
     }
 
     private function assets(): array

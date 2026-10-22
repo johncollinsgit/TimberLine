@@ -2,6 +2,7 @@
 
 namespace App\Enterprise\Trial;
 
+use App\Enterprise\MountUrls;
 use App\Models\TeamOperationRecord;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -53,8 +54,8 @@ class ReviewerTrial
         abort_unless(is_string($id) && Str::isUuid($id), 403, 'An approved reviewer session is required.');
         $session = $this->store->row('ent_trial_session', $id);
         $this->approved($session);
-        abort_unless(hash_equals($session->data['browser_hash'], $this->browser($request)), 403);
-        abort_unless($request->getSchemeAndHttpHost() === $this->origin(), 403, 'Use the approved first-party trial origin.');
+        abort_unless(hash_equals($session->data['browser_hash'], $this->browser($request)), 403, 'The original approved reviewer browser session is required.');
+        abort_unless(MountUrls::matches($request) && $request->getSchemeAndHttpHost() === $this->origin(), 403, 'Use the approved first-party trial mount.');
 
         return $session;
     }
@@ -85,6 +86,7 @@ class ReviewerTrial
 
     public function start(Request $request, string $code): array
     {
+        abort_unless(MountUrls::matches($request) && $request->getSchemeAndHttpHost() === $this->origin(), 403, 'Use the approved first-party trial mount.');
         $this->store->tenant();
         abort_if(strlen($code) < 16 || strlen($code) > 200, 403, 'An approved reviewer invitation is required.');
         $id = null;
@@ -150,15 +152,14 @@ class ReviewerTrial
         $parts = is_string($origin) ? parse_url($origin) : false;
         abort_unless(is_array($parts) && ($parts['scheme'] ?? '') === 'https' && isset($parts['host'])
             && ! isset($parts['user']) && ! isset($parts['pass']) && ! isset($parts['query']) && ! isset($parts['fragment']) && ! isset($parts['path']), 503, 'An exact first-party HTTPS trial origin must be configured.');
-        $app = parse_url((string) config('app.url'));
-        abort_unless(is_array($app) && ($app['host'] ?? null) === $parts['host'] && ($app['port'] ?? null) === ($parts['port'] ?? null), 503, 'The trial origin must belong to this application.');
+        abort_unless($origin === MountUrls::origin(), 503, 'The trial origin must belong to this application.');
 
         return $origin;
     }
 
     private function contextHash(): string
     {
-        return hash('sha256', json_encode([$this->store->tenant()->id, config('enterprise.trial.area_id'), $this->origin(), config('app.url')], JSON_THROW_ON_ERROR));
+        return hash('sha256', json_encode([$this->store->tenant()->id, config('enterprise.trial.area_id'), $this->origin(), config('app.url'), MountUrls::context()], JSON_THROW_ON_ERROR));
     }
 
     private function sources(TeamOperationRecord $task, array $fields): array
@@ -197,7 +198,7 @@ class ReviewerTrial
             $capability = null;
             if ($channel !== 'ai') {
                 $token = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
-                $url = $this->origin().'/enterprise/trial/task/'.$token;
+                $url = MountUrls::url('/enterprise/trial/task/'.$token);
                 $capability = $this->store->create('ent_trial_link', 'link:'.$token, ['session_id' => $session->id, 'task_id' => $task->id,
                     'channel' => $channel, 'expires_at' => $session->data['expires_at'], 'opened_at' => null, 'open_count' => 0], 'pending');
                 $primary = reset($sources);
@@ -207,7 +208,7 @@ class ReviewerTrial
                     : "Lees-McRae College - Everbranch demonstration\nFictional sample request.\n".implode("\n", array_map(fn ($key, $value) => $key.': '.$value, array_keys($primary['fields']), $primary['fields']))."\nView sample request: ".$url;
                 if ($channel === 'email') {
                     $rows = implode('', array_map(fn ($key, $value) => '<tr><th align="left" style="padding:9px;color:#335441">'.e(ucwords(str_replace('_', ' ', $key))).'</th><td style="padding:9px">'.e($value).'</td></tr>', array_keys($primary['fields']), $primary['fields']));
-                    $content['html'] = '<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#f3f4ee;font:16px Arial;color:#20382c"><table role="presentation" width="100%"><tr><td align="center"><table role="presentation" width="100%" style="max-width:600px;background:#fff"><tr><td style="padding:28px;background:#174b36;color:white"><img src="'.e($this->origin().'/enterprise/trial/wordmark.png').'" width="220" alt="Lees-McRae College" style="max-width:100%;height:auto"><div style="font:24px Georgia">Lees-McRae College</div><p>Everbranch Enterprise demonstration</p></td></tr><tr><td style="padding:24px"><h1 style="font-size:24px">Your sample request needs an update</h1><p>These are fictional work details, not a real campus assignment.</p><table width="100%">'.$rows.'</table><p style="margin:28px 0"><a style="display:inline-block;padding:16px 24px;background:#174b36;color:white;text-decoration:none;border-radius:8px" href="'.e($url).'">View sample request</a></p><p style="font-size:13px;color:#58675d">This approved test was sent by Everbranch. No college mailbox access is requested. The private sample link expires with this reviewer trial.</p></td></tr></table></td></tr></table></body></html>';
+                    $content['html'] = '<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#f3f4ee;font:16px Arial;color:#20382c"><table role="presentation" width="100%"><tr><td align="center"><table role="presentation" width="100%" style="max-width:600px;background:#fff"><tr><td style="padding:28px;background:#174b36;color:white"><img src="'.e(MountUrls::url('/enterprise/trial/wordmark.png')).'" width="220" alt="Lees-McRae College" style="max-width:100%;height:auto"><div style="font:24px Georgia">Lees-McRae College</div><p>Everbranch Enterprise demonstration</p></td></tr><tr><td style="padding:24px"><h1 style="font-size:24px">Your sample request needs an update</h1><p>These are fictional work details, not a real campus assignment.</p><table width="100%">'.$rows.'</table><p style="margin:28px 0"><a style="display:inline-block;padding:16px 24px;background:#174b36;color:white;text-decoration:none;border-radius:8px" href="'.e($url).'">View sample request</a></p><p style="font-size:13px;color:#58675d">This approved test was sent by Everbranch. No college mailbox access is requested. The private sample link expires with this reviewer trial.</p></td></tr></table></td></tr></table></body></html>';
                 }
             }
             $quote = $this->transport->quote($channel, $content);

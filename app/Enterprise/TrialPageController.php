@@ -16,7 +16,7 @@ final class TrialPageController
         $parts = is_string($origin) ? parse_url($origin) : false;
         abort_unless(is_array($parts) && ($parts['scheme'] ?? '') === 'https' && isset($parts['host'])
             && ! isset($parts['user']) && ! isset($parts['pass']) && ! isset($parts['path']) && ! isset($parts['query']) && ! isset($parts['fragment'])
-            && $origin === rtrim((string) config('app.url'), '/') && $request->getSchemeAndHttpHost() === $origin, 404);
+            && $origin === MountUrls::origin() && MountUrls::matches($request), 404);
         // Invitations, contacts and capability authority never come from query parameters.
         abort_unless($request->query() === [], 404);
         app(TrialStore::class)->tenant();
@@ -37,7 +37,7 @@ final class TrialPageController
     {
         $this->guard($request);
 
-        return $this->page('enterprise.trial', ['base' => '/enterprise/trial']);
+        return $this->page('enterprise.trial', ['base' => MountUrls::url('/enterprise/trial')]);
     }
 
     public function task(Request $request, string $token, ReviewerTrial $trial)
@@ -46,7 +46,7 @@ final class TrialPageController
         $trial->capability($token); // Does not mark an open; the separate data request does.
 
         return $this->page('enterprise.trial-task', [
-            'base' => '/enterprise/trial/task/'.rawurlencode($token),
+            'base' => MountUrls::url('/enterprise/trial/task/'.$token),
             'storage_key' => 'everbranch-controlled-task:'.hash('sha256', $token),
         ]);
     }
