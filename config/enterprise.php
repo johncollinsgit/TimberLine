@@ -9,6 +9,7 @@ return [
     'collaboration_enabled' => (bool) env('ENTERPRISE_COLLABORATION_ENABLED', false),
     'planning_enabled' => (bool) env('ENTERPRISE_PLANNING_ENABLED', false),
     'ask_enabled' => (bool) env('ENTERPRISE_ASK_ENABLED', false),
+    'voice_jobs_enabled' => (bool) env('ENTERPRISE_VOICE_JOBS_ENABLED', false),
     'email_drafts_enabled' => (bool) env('ENTERPRISE_EMAIL_DRAFTS_ENABLED', false),
     'workflow_enabled' => (bool) env('ENTERPRISE_WORKFLOW_ENABLED', false),
     'briefing_enabled' => (bool) env('ENTERPRISE_BRIEFING_ENABLED', false),

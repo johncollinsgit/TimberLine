@@ -3117,3 +3117,12 @@ messages. The later reviewer trial specifies a service sender without reviewer
 mailbox access and supersedes that allowance with a $5 shared lifetime cap across
 all trial providers; no recipients or credential grants are approved. See
 `docs/operations/enterprise-gmail.md` and `docs/operations/enterprise-integrations.md`.
+## Ask Everbranch job voice prototype (2026-10-22; default-off source)
+
+See `docs/operations/enterprise-voice-jobs.md`. A scoped read-only operational
+job lookup reuses canonical Enterprise task/request access and the existing
+browser capture/playback loop. Optional Talk controls expose bounded sessions,
+explicit interrupt and typed fallback. No tour/header/fixture integration, paid
+provider call, communication send or production activation is included. Shell
+integration and physical iPad/iPhone speech acceptance remain pending; fake
+browser speech is not live AI or acoustic evidence.
