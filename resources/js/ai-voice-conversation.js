@@ -1,6 +1,7 @@
 // One microphone turn -> the existing scoped chat -> spoken reply -> next turn.
 // No recognition runs during playback and no callback survives Stop/replacement.
 export function createVoiceConversation({ Recognition, Utterance, synthesis, send, onState, onTranscript, onError, language = 'en-US',
+  continueListening = () => true,
   maxTurns = 12, maxSessionMs = 600_000, responseTimeoutMs = 45_000,
   clock = { setTimeout: (...args) => setTimeout(...args), clearTimeout: id => clearTimeout(id), now: () => performance.now() } }) {
   let active = false, epoch = 0, capture = null, timer = null, sessionTimer = null, speech = null, request = null, turns = 0, deadline = 0
@@ -53,6 +54,7 @@ export function createVoiceConversation({ Recognition, Utterance, synthesis, sen
         spoken.onend = () => {
           if (!active || turn !== epoch || speech !== spoken) return
           speech = null; clearTimer()
+          if (!continueListening()) { stop(); return }
           if (turns >= maxTurns) { fail('Voice turn limit reached. Start a new session to continue.'); return }
           onState('starting')
           timer = clock.setTimeout(() => listen(turn), 350)

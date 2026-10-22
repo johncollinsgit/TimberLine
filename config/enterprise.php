@@ -10,6 +10,12 @@ return [
     'planning_enabled' => (bool) env('ENTERPRISE_PLANNING_ENABLED', false),
     'ask_enabled' => (bool) env('ENTERPRISE_ASK_ENABLED', false),
     'voice_jobs_enabled' => (bool) env('ENTERPRISE_VOICE_JOBS_ENABLED', false),
+    'voice_generation_enabled' => (bool) env('ENTERPRISE_VOICE_GENERATION_ENABLED', false),
+    'voice_drafts_enabled' => (bool) env('ENTERPRISE_VOICE_DRAFTS_ENABLED', false),
+    'voice_rates' => [
+        'input_ceiling_microusd_per_million' => (int) env('ENTERPRISE_VOICE_INPUT_CEILING_MICROUSD_PER_MILLION', 0),
+        'output_ceiling_microusd_per_million' => (int) env('ENTERPRISE_VOICE_OUTPUT_CEILING_MICROUSD_PER_MILLION', 0),
+    ],
     'email_drafts_enabled' => (bool) env('ENTERPRISE_EMAIL_DRAFTS_ENABLED', false),
     'workflow_enabled' => (bool) env('ENTERPRISE_WORKFLOW_ENABLED', false),
     'briefing_enabled' => (bool) env('ENTERPRISE_BRIEFING_ENABLED', false),
