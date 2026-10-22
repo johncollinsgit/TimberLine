@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Mobile;
 use App\Http\Controllers\Controller;
 use App\Models\MobileAuthorizationCode;
 use App\Models\User;
+use App\Support\Auth\MobileAuthorizationClients;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +14,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Laravel\Fortify\Contracts\TwoFactorAuthenticationProvider;
 use Laravel\Fortify\Fortify;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class EverbranchMobileAuthController extends Controller
 {
@@ -74,12 +76,13 @@ class EverbranchMobileAuthController extends Controller
     public function exchange(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'client_id' => ['required', 'in:everbranch-mobile'],
-            'redirect_uri' => ['required', 'in:everbranch://auth/callback'],
+            'client_id' => ['required', 'string', 'max:80'],
+            'redirect_uri' => ['required', 'string', 'max:255'],
             'code' => ['required', 'string', 'max:255'],
             'code_verifier' => ['required', 'string', 'min:43', 'max:128', 'regex:/^[A-Za-z0-9._~-]+$/'],
             'device_name' => ['nullable', 'string', 'max:160'],
         ]);
+        MobileAuthorizationClients::assertAllowed($validated['client_id'], $validated['redirect_uri']);
 
         $authorization = DB::transaction(function () use ($validated): MobileAuthorizationCode {
             $row = MobileAuthorizationCode::query()
@@ -104,8 +107,10 @@ class EverbranchMobileAuthController extends Controller
 
         $user = $authorization->user;
         abort_unless($user instanceof User && $user->is_active !== false, 403);
+        $payments = MobileAuthorizationClients::isPayments($validated['client_id']);
+        abort_if($payments && ! $user->hasVerifiedEmail(), 403);
 
-        return $this->tokenResponse($user, $validated['device_name'] ?? $authorization->device_name ?? 'Everbranch mobile');
+        return $this->tokenResponse($user, $validated['device_name'] ?? $authorization->device_name ?? 'Everbranch mobile', $payments);
     }
 
     public function refresh(Request $request): JsonResponse
@@ -115,7 +120,21 @@ class EverbranchMobileAuthController extends Controller
 
         $name = trim((string) $request->input('device_name', $user->currentAccessToken()?->name ?? 'Everbranch mobile'));
         $oldToken = $user->currentAccessToken();
-        $response = $this->tokenResponse($user, $name !== '' ? $name : 'Everbranch mobile');
+        // Refresh preserves the original token's lane; a legacy/password token
+        // can never acquire payment abilities by choosing a device name.
+        $payments = $oldToken instanceof PersonalAccessToken
+            && array_intersect(['payments:read', 'payments:write'], $oldToken->abilities ?? []) !== [];
+        $preservedAbilities = $oldToken instanceof PersonalAccessToken
+            ? array_values(array_intersect(['mobile:read', 'mobile:write'], $oldToken->abilities ?? []))
+            : null;
+        if ($payments) {
+            MobileAuthorizationClients::assertAllowed(MobileAuthorizationClients::PAYMENTS_CLIENT, MobileAuthorizationClients::PAYMENTS_REDIRECT);
+            abort_unless($user->hasVerifiedEmail(), 403);
+            $preservedAbilities = array_values(array_intersect(
+                ['mobile:read', 'mobile:write', 'payments:read', 'payments:write'], $oldToken->abilities ?? [],
+            ));
+        }
+        $response = $this->tokenResponse($user, $name !== '' ? $name : 'Everbranch mobile', $payments, $preservedAbilities);
         $oldToken?->delete();
 
         return $response;
@@ -161,12 +180,12 @@ class EverbranchMobileAuthController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    protected function tokenResponse(User $user, string $deviceName): JsonResponse
+    protected function tokenResponse(User $user, string $deviceName, bool $payments = false, ?array $preservedAbilities = null): JsonResponse
     {
         $expiresAt = now()->addDays(30);
         $token = $user->createToken(
             'Everbranch mobile:'.mb_substr(trim($deviceName), 0, 120),
-            ['mobile:read', 'mobile:write'],
+            $preservedAbilities ?? ($payments ? ['mobile:read', 'mobile:write', 'payments:read', 'payments:write'] : ['mobile:read', 'mobile:write']),
             $expiresAt
         );
 

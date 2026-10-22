@@ -10,10 +10,13 @@ use Throwable;
 
 /** Durable reference journal for disposable local/test databases ONLY.
  * BEGIN IMMEDIATE serializes reservation/claim/refund budgets across processes.
- * No production migration or Laravel connection is registered by this package.
+ * This reference implementation is rehearsal-only and never application-bound;
+ * the separate MySQL implementation owns the production persistence contract.
  */
-final class SqlitePaymentJournal
+final class SqlitePaymentJournal implements PaymentJournal
 {
+    private bool $ownsTransaction = false;
+
     public function __construct(private PDO $db)
     {
         if ($db->getAttribute(PDO::ATTR_DRIVER_NAME) !== 'sqlite') {
@@ -111,12 +114,21 @@ final class SqlitePaymentJournal
 
     public function get(int $tenantId, string $id): array
     {
+        $this->assertReadableBoundary();
         $row = $this->query('SELECT * FROM payment_core_operations WHERE tenant_id = ? AND id = ?', [$tenantId, $id]);
         if (! $row) {
             throw new DomainException('Payment operation is unavailable.');
         }
 
         return $this->decode($row);
+    }
+
+    public function findByRequest(int $tenantId, string $requestId): ?array
+    {
+        $this->assertReadableBoundary();
+        Contract::id($requestId);
+
+        return $this->byRequest($tenantId, $requestId);
     }
 
     public function claim(int $tenantId, string $id): bool
@@ -230,6 +242,7 @@ final class SqlitePaymentJournal
             throw new DomainException('Payment journal requires its own committed transaction boundary.');
         }
         $this->db->exec('BEGIN IMMEDIATE');
+        $this->ownsTransaction = true;
         try {
             $result = $work();
             $this->db->exec('COMMIT');
@@ -238,6 +251,15 @@ final class SqlitePaymentJournal
         } catch (Throwable $error) {
             $this->db->exec('ROLLBACK');
             throw $error;
+        } finally {
+            $this->ownsTransaction = false;
+        }
+    }
+
+    private function assertReadableBoundary(): void
+    {
+        if (! $this->ownsTransaction && $this->db->inTransaction()) {
+            throw new DomainException('Payment journal requires its own committed transaction boundary.');
         }
     }
 
