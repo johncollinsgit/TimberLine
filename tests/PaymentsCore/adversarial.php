@@ -63,7 +63,7 @@ final class ReviewProvider implements PaymentProvider
             throw new RuntimeException('synthetic timeout');
         }
 
-return $this->result($r);
+        return $this->result($r);
     }
 
     public function findPayment(array $r): ?ProviderEvidence
