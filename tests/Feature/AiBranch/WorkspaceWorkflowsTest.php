@@ -25,6 +25,7 @@ beforeEach(function () {
     Http::preventStrayRequests();
     config(['ai_branch.enabled' => true, 'ai_branch.workspace_context_enabled' => true, 'ai_branch.assistant_enabled' => true,
         'ai_branch.actions_enabled' => true, 'ai_branch.workspace_workflows_enabled' => true, 'ai_branch.api_key' => 'fake',
+        'ai_branch.audio_rates_valid_until' => now()->addMonth()->toIso8601String(),
         'ai_branch.model' => 'test-model', 'ai_branch.input_micros_per_million' => 1000000, 'ai_branch.output_micros_per_million' => 4000000]);
 });
 
