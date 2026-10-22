@@ -151,6 +151,18 @@ it('freezes the owner routing target with a mutation replay key', function (): v
     expect($this->owner->db->query('SELECT count(*) FROM tickets')->fetchColumn())->toBe(1);
 });
 
+it('rejects ambiguous receiver routing instead of choosing a client by order', function (): void {
+    ($this->installReceiver)([$this->bindings[0], new DepartmentBinding('fixture-campus', 'campus-workspace:7', 'department-it', 'campus-user:7',
+        'different-owner-workspace', 'different-client', 'technology', ['submit'])]);
+    try {
+        $this->client->dispatch('department-it', (string) Str::uuid(), 'submit', $this->payload);
+        test()->fail('Ambiguous mapping selected a destination.');
+    } catch (\Symfony\Component\HttpKernel\Exception\HttpException $error) {
+        expect($error->getStatusCode())->toBe(403);
+    }
+    expect($this->owner->db->query('SELECT count(*) FROM tickets')->fetchColumn())->toBe(0);
+});
+
 it('rejects a valid but mismatched signed response and hard-denies every production flag', function (): void {
     $receipt = $this->client->dispatch('department-it', (string) Str::uuid(), 'submit', $this->payload);
     $oldResponse = $this->transport->lastResponse;

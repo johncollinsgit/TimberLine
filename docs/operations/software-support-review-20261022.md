@@ -8,6 +8,11 @@ retain their original source-head boundaries.
 
 ## Follow-up milestone
 
+- The follow-up head **f63a2e5** passed disposable MySQL support acceptance in
+  run **39836596160**, including the committed baseline comparison and blank
+  database boot. A final fail-closed ambiguous-mapping check was then added;
+  its targeted transport suite passed **7 tests, 34 assertions**. Final exact
+  head checks are recorded on PR473 to avoid changing the tested head for notes.
 - **54 local tests passed, 1,086 assertions:** signed campus/owner packets,
   independent stores, interrupted/repeated mutations, current mapping/membership
   revocation, response substitution and target changes, hard production denial,

@@ -41,7 +41,8 @@ identifiers are namespaced by that issuer; numeric equality with an owner
 database identifier has no authority. The private receiver-owned mapping matches
 **all four** source references exactly, limits operations, then supplies its
 own `ownerWorkspace`, `clientReference`, `ownerDepartment`. It does not grant
-membership or copy a role. Configuration is absent; fixtures are explicit
+membership or copy a role. Missing or ambiguous mappings deny access rather
+than choosing a destination by array order. Configuration is absent; fixtures are explicit
 synthetic examples only. Future real bindings need exact reviewed identifiers,
 current authorized principals, revocation policy and audit evidence.
 

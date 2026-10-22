@@ -23,8 +23,10 @@ final class TestReceiver
             'command.principal' => ['required', 'string', 'max:120'], 'command.request_key' => ['required', 'uuid'],
             'command.operation' => ['required', 'in:submit,read,reply'], 'command.payload' => ['required', 'array'],
         ])->validate();
-        $binding = collect($this->bindings)->first(fn (DepartmentBinding $candidate) => $candidate->matches($command));
-        abort_unless($binding, 403);
+        $matches = collect($this->bindings)->filter(fn (DepartmentBinding $candidate) => $candidate->matches($command));
+        // Missing OR ambiguous routing fails closed; never choose a client by array order.
+        abort_unless($matches->count() === 1, 403);
+        $binding = $matches->first();
         $rules = match ($command['operation']) {
             'submit' => ['payload' => ['array:subject,category,priority,body'], 'payload.subject' => ['required', 'string', 'max:180'],
                 'payload.category' => ['required', 'in:help,bug,billing,feature,account'], 'payload.priority' => ['required', Rule::in(Service::PRIORITIES)],
