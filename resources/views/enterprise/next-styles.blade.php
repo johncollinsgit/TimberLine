@@ -3,3 +3,7 @@
 
 /* Keep the chat composer in its panel when voice details make the adjacent column taller. */
 .ask-grid{align-items:start}.ask-composer{position:relative;bottom:auto}
+
+/* A growing workspace list must remain reachable inside the desktop sticky rail. */
+.sidebar{align-self:start;min-height:0;overflow-y:auto;overscroll-behavior-y:contain}
+@media(max-width:1000px){.sidebar{overflow-y:visible;overscroll-behavior-y:auto}}

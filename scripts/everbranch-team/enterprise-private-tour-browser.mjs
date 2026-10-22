@@ -12,6 +12,8 @@ export async function checkPrivateWorkspaceTour(page,evidence) {
         },{path,body,tenant});
         assert.equal(response.status,200,JSON.stringify(response.body));return response.body;
     };
+    // Reproduce the long navigation rail in a real multi-department client, even in this bounded scenario.
+    for(let index=0;index<8;index++)await api('/enterprise/commands',{action:'workspace.create',id:crypto.randomUUID(),request_id:crypto.randomUUID(),title:`Synthetic navigation overflow ${index+1}`,visibility:'department_only'});
     const area=(await api('/enterprise/commands',{action:'workspace.create',id:crypto.randomUUID(),request_id:crypto.randomUUID(),title:'Synthetic private tour workspace',visibility:'department_only'})).id;
     const recoveryArea=(await api('/enterprise/commands',{action:'workspace.create',id:crypto.randomUUID(),request_id:crypto.randomUUID(),title:'Synthetic private recovery workspace',visibility:'department_only'})).id;
     await api('/enterprise/commands',{action:'project.create',id:crypto.randomUUID(),request_id:crypto.randomUUID(),area_id:area,title:'Synthetic unrelated first project'});
@@ -118,6 +120,7 @@ export async function checkPrivateWorkspaceTour(page,evidence) {
     let barrier;
     try{await Promise.race([readStarted,new Promise((_,reject)=>{barrier=setTimeout(()=>reject(new Error('Confirmed-save follow-up read did not begin')),30000);})]);}finally{clearTimeout(barrier);}
     assert.equal(new URL(page.url()).searchParams.get('workflow'),savedReply.id,'Confirmed save must pin selection before its follow-up read completes');
+    await page.getByRole('button',{name:'Retry exact operation',exact:true}).waitFor({state:'hidden'});
     assert.equal(await page.getByRole('button',{name:'Retry exact operation',exact:true}).count(),0,'Confirmed save must not remain retryable');
     try{await page.reload({waitUntil:'domcontentloaded'});}finally{releaseRead();}
     await page.unroute('**/enterprise/workflows?*');
@@ -139,6 +142,9 @@ export async function checkPrivateWorkspaceTour(page,evidence) {
             return route.fulfill({status:403,json:{message:'Synthetic current workspace access refused'}});
         return route.continue();
     });
+    const navigation=page.locator(`#areas [data-area="${area}"]`);
+    await navigation.scrollIntoViewIfNeeded();
+    assert.equal(await navigation.evaluate(el=>{const box=el.getBoundingClientRect();return box.top>=0&&box.bottom<=innerHeight;}),true,'Workspace remains reachable in the long sticky navigation rail after returning from the full-screen builder');
     await page.locator(`#areas [data-area="${area}"]`).click();
     await page.locator('#status').getByText('Synthetic current workspace access refused',{exact:true}).waitFor();
     await open();await scene(2);

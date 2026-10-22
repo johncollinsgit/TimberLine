@@ -27,6 +27,11 @@ The signed-in tour helper `enterprise-private-tour-browser.mjs` runs inside the
 native operations `all` scenario. It creates fictional projects and requests
 through real HTTP, verifies triage/assignment/progress and workflow save/reload,
 and checks retained drafts, current identity, authorized links and zero tour POSTs.
+It also creates a long fictional workspace list and verifies an actual sidebar
+click after returning from the full-screen builder. The desktop sticky rail
+scrolls independently; tablet/phone retain document-flow navigation. The combined
+two-engine scenario has a 25-minute ceiling because it preserves real server
+throttles rather than disabling them for the larger synthetic action sequence.
 
 Both reviewer browser scripts and the native operations harness run sequentially
 in Chromium and WebKit. Browser steps share the already installed Playwright
