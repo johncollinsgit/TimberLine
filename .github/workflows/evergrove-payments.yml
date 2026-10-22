@@ -1,0 +1,76 @@
+name: Evergrove payment foundation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/evergrove-payments.yml'
+      - 'app/Services/PaymentsCore/**'
+      - 'tests/PaymentsCore/**'
+      - 'native/evergrove-payments-ios/**'
+      - 'scripts/qa/evergrove-payments-bundle.py'
+      - 'resources/js/pos-*.js'
+      - 'resources/css/pos-browser-demo.css'
+      - 'resources/views/pos/browser-demo.blade.php'
+      - 'public/brand/everbranch-mark.svg'
+      - 'public/images/pos/counter-illustration.webp'
+      - 'tests/e2e/pos-*.test.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evergrove-payments-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: payment contracts and register reuse
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_sqlite
+          coverage: none
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Verify durable orchestration and process races
+        run: php tests/PaymentsCore/run.php
+      - name: Verify independent adversarial cases
+        run: php tests/PaymentsCore/adversarial.php
+      - name: Verify existing register contracts
+        run: npm run test:pos
+      - name: Verify shared native/backend fixture bytes
+        run: cmp tests/PaymentsCore/fixtures/native-checkout.json native/evergrove-payments-ios/Tests/EvergrovePaymentsCoreTests/Fixtures/native-checkout.json
+      - name: Verify offline native bundle and canonical source identity
+        run: python3 scripts/qa/evergrove-payments-bundle.py --repo-root . --native-root native/evergrove-payments-ios
+
+  native:
+    name: native core and unsigned simulator build
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: native/evergrove-payments-ios
+    steps:
+      - uses: actions/checkout@v6
+      - name: Record toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+      - name: Verify native recovery contracts
+        run: swift test --scratch-path "$RUNNER_TEMP/evergrove-payments-swift"
+      - name: Verify independent crash recovery and live denial
+        run: |
+          swiftc -module-cache-path "$RUNNER_TEMP/evergrove-adversarial-cache" Sources/EvergrovePaymentsCore/*.swift scripts/NativeAdversarial.swift -o "$RUNNER_TEMP/evergrove-native-adversarial"
+          "$RUNNER_TEMP/evergrove-native-adversarial"
+      - name: Build unsigned iPhone simulator app
+        run: >-
+          xcodebuild -project EvergrovePayments.xcodeproj
+          -scheme EvergrovePayments -configuration Debug
+          -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath "$RUNNER_TEMP/evergrove-payments-native"
+          CODE_SIGNING_ALLOWED=NO build
