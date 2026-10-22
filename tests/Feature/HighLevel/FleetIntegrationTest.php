@@ -731,3 +731,63 @@ test('individual trip review uses the matching provider trace and never guesses 
     expect($ops->path($w[0], $trip)['trips'])->toBe([]);
     $this->travelBack();
 });
+
+test('job addresses resolve from this accounts saved jobs without exposing coordinate inputs', function () {
+    $w = highlevelWorkspace();
+    $other = highlevelWorkspace('location-two');
+    $ops = app(\App\Services\HighLevel\FleetOperationsService::class);
+    $job = $ops->save($w[0], 'job', ['title' => 'Inspection', 'crm_address' => '100 Main St, Greenville, SC']);
+    $source = $ops->save($w[0], 'job', ['title' => 'Existing site', 'crm_address' => '200 Main St, Greenville, SC', 'latitude' => 34.85, 'longitude' => -82.40]);
+    $foreign = $ops->save($other[0], 'job', ['crm_address' => 'Private other client site']);
+    foreach ([$job, $source, $foreign] as $record) {
+        $record->update(['status' => 'active']);
+    }
+    Http::fake(['*/users/crm-admin' => Http::response(highlevelHttpUser())]);
+    $this->withHeaders(['Authorization' => 'Bearer '.highlevelSession($w[0], $w[2]), 'X-Everbranch-Parent-Origin' => 'https://app.bridgecitymarketing.agency']);
+    $body = ['skills' => ['inspection'], 'materials' => ['wire' => 20], 'address' => '200 Main St, Greenville, SC', 'location_job_id' => $source->id];
+    $this->putJson('/crm/fleet/api/operations/jobs/'.$job->id, $body)->assertOk();
+    expect($job->refresh()->payload)->toMatchArray(['address_override' => $body['address'], 'latitude' => 34.85, 'longitude' => -82.40, 'materials' => ['wire' => 20]]);
+    $this->putJson('/crm/fleet/api/operations/jobs/'.$job->id, array_replace($body, ['location_job_id' => $foreign->id]))->assertNotFound();
+    expect($job->refresh()->payload['address_override'])->toBe($body['address']);
+});
+
+test('address changes never reuse old points and ambiguous or unavailable lookups preserve manual assignment', function () {
+    $w = highlevelWorkspace();
+    $ops = app(\App\Services\HighLevel\FleetOperationsService::class);
+    $locations = app(\App\Services\HighLevel\FleetJobLocationService::class);
+    $job = $ops->save($w[0], 'job', ['crm_address' => '100 Main St', 'latitude' => 34.85, 'longitude' => -82.40]);
+    config(['services.google_maps.geocoding_api_key' => 'fixture-key']);
+    Http::fake(['maps.googleapis.com/*' => Http::sequence()
+        ->push(['status' => 'OK', 'results' => [['partial_match' => true, 'geometry' => ['location_type' => 'ROOFTOP', 'location' => ['lat' => 34, 'lng' => -82]]]]])
+        ->push(['status' => 'OVER_QUERY_LIMIT'])
+        ->push(['status' => 'OK', 'results' => [['geometry' => ['location_type' => 'ROOFTOP', 'location' => ['lat' => 35.1, 'lng' => -82.1]]]]])]);
+    $patch = $locations->prepare($w[0], $job, ['address' => '200 Main St']);
+    expect($patch)->toMatchArray(['latitude' => null, 'longitude' => null, 'location_status' => 'check_address']);
+    $patch = $locations->prepare($w[0], $job, ['address' => '200 Main St', 'device_id' => 123]);
+    expect($patch)->toMatchArray(['latitude' => null, 'location_status' => 'unavailable', 'device_id' => 123]);
+    $ops->save($w[0], 'job', $locations->prepare($w[0], $job, ['address' => '200 Main St']), record: $job);
+    expect($job->refresh()->payload)->toMatchArray(['latitude' => 35.1, 'longitude' => -82.1, 'location_provider' => 'google']);
+    Http::assertSentCount(3);
+    $locations->prepare($w[0], $job, ['address' => '200 Main St']);
+    Http::assertSentCount(3);
+    $job->update(['payload' => array_replace($job->payload, ['geocoded_at' => now()->subDays(31)->toIso8601String()])]);
+    $this->artisan('highlevel:fleet-maintain')->assertSuccessful();
+    expect($job->refresh()->payload)->toMatchArray(['latitude' => null, 'longitude' => null, 'address_override' => '200 Main St']);
+});
+
+test('CRM imports customer addresses and changed addresses invalidate derived points but preserve dispatch choices', function () {
+    [$install] = highlevelWorkspace();
+    $events = fn ($street) => ['events' => [['id' => 'site-job', 'calendarId' => 'calendar-one', 'title' => 'Panel inspection', 'address' => $street, 'contact' => ['name' => 'Example customer']]]];
+    Http::fake(['*/calendars/?*' => Http::response(['calendars' => [['id' => 'calendar-one', 'locationId' => 'location-one']]]),
+        '*/opportunities/pipelines*' => Http::response(['pipelines' => []]), '*/calendars/events?*' => Http::sequence()->push($events('100 Main St'))->push($events('200 Main St'))->push($events('300 Main St'))]);
+    $source = app(\App\Services\HighLevel\FleetJobSourceService::class);
+    $source->syncAutomatic($install, true);
+    $job = \App\Models\HighLevel\FleetOperationRecord::where('kind', 'job')->sole();
+    expect($job->payload)->toMatchArray(['crm_address' => '100 Main St', 'customer_name' => 'Example customer']);
+    $job->update(['payload' => array_replace($job->payload, ['latitude' => 34.8, 'longitude' => -82.4, 'device_id' => 42, 'skills' => ['inspection']])]);
+    $source->syncAutomatic($install, true);
+    expect($job->refresh()->payload)->toMatchArray(['crm_address' => '200 Main St', 'latitude' => null, 'longitude' => null, 'device_id' => 42, 'skills' => ['inspection']]);
+    $job->update(['payload' => array_replace($job->payload, ['address_override' => 'Saved alternative address', 'latitude' => 34.9, 'longitude' => -82.5])]);
+    $source->syncAutomatic($install, true);
+    expect($job->refresh()->payload)->toMatchArray(['crm_address' => '300 Main St', 'address_override' => 'Saved alternative address', 'latitude' => 34.9]);
+});

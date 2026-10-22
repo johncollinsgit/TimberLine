@@ -53,6 +53,7 @@ $workflowCommerceRedirect = static fn (string $provider): string => ($canonicalL
 return [
 
     'google_maps' => [
+        'geocoding_api_key' => env('GOOGLE_MAPS_GEOCODING_API_KEY'),
         'places_api_key' => env('GOOGLE_MAPS_PLACES_API_KEY', env('GOOGLE_PLACES_API_KEY')),
         'fleet_api_key' => env('GOOGLE_MAPS_FLEET_API_KEY'),
         // Testing key must never render real fleet locations.

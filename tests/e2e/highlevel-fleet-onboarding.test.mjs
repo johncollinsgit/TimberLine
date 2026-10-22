@@ -114,7 +114,7 @@ for(const browserType of [chromium,webkit]) {
             assert.match(await frame.locator('#setup-panel').innerText(),/do not need to reconnect/);
             assert.equal(await frame.getByRole('link',{name:'Contact support for activation'}).count(),1);
             await shot(page,'onboarding-activation',browserType);
-            await frame.getByRole('button',{name:'Jobs & dispatch',exact:true}).click();
+            await frame.getByRole('button',{name:'Jobs',exact:true}).click();
             await frame.locator('.ops-item summary').filter({hasText:'Panel inspection'}).waitFor();
             assert.equal(await frame.locator('#source-form').count(),0);
             assert.ok(state.syncs>=1);
@@ -153,10 +153,10 @@ for(const browserType of [chromium,webkit]) {
             await page.evaluate(()=>{window.respond=true;});
             await frame.getByRole('button',{name:'Try CRM sign-in again'}).click();
             await frame.getByRole('heading',{name:'Choose up to 100 vehicles'}).waitFor();
-            await frame.getByRole('button',{name:'Jobs & dispatch',exact:true}).click();
-            await frame.getByText(/CRM work could not refresh/).waitFor();
+            await frame.getByRole('button',{name:'Jobs',exact:true}).click();
+            await frame.getByText(/Jobs could not refresh/).waitFor();
             state.crmError=false;
-            await frame.getByRole('button',{name:'Refresh CRM work'}).click();
+            await frame.getByRole('button',{name:'Refresh jobs'}).click();
             await frame.locator('.ops-item summary').filter({hasText:'Panel inspection'}).waitFor();
             assert.equal(state.writes.length,0);
         });
@@ -165,7 +165,7 @@ for(const browserType of [chromium,webkit]) {
         await fixture(browserType,{connected:true,selected:['imei-1'],approved:true,collection:true,samplePath:true},async({frame})=>{
             await frame.getByRole('button',{name:'Trips & routes',exact:true}).click();
             await frame.locator('.ops-item summary').first().click();
-            await frame.getByRole('button',{name:'View reported path'}).click();
+            await frame.getByRole('button',{name:'View route'}).click();
             await frame.getByText('Full recorded trip geometry is unavailable. Retained GPS samples are shown as isolated dots, not a driving route.',{exact:true}).waitFor();
             assert.equal(await frame.locator('.trip-map .leaflet-overlay-pane path').count(),2);
         });

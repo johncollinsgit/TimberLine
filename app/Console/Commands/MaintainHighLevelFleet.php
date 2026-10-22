@@ -32,6 +32,14 @@ class MaintainHighLevelFleet extends Command
             app(\App\Services\HighLevel\FleetOperationsService::class)->maintenance($install);
         });
         \App\Models\HighLevel\FleetOperationRecord::whereIn('kind', ['trip', 'telemetry', 'job', 'job_source'])->where('event_at', '<', now()->subDays(30))->delete();
+        // Imported job addresses are customer data; Google-derived points have
+        // their own 30-day cache lifetime even when CRM refreshes event_at.
+        \App\Models\HighLevel\FleetOperationRecord::where('kind', 'job')->each(function ($record): void {
+            $p = $record->payload;
+            if (($p['location_provider'] ?? null) === 'google' && (empty($p['geocoded_at']) || \Carbon\CarbonImmutable::parse($p['geocoded_at'])->lte(now()->subDays(30)))) {
+                $record->update(['payload' => array_replace($p, ['latitude' => null, 'longitude' => null, 'geocoded_at' => null, 'location_provider' => null, 'location_status' => 'pending'])]);
+            }
+        });
         $this->info('HighLevel Fleet maintenance completed.');
 
         return self::SUCCESS;

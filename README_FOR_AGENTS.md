@@ -1,3 +1,12 @@
+## Fleet dispatch usability (2026-10-22; release candidate)
+
+Jobs now starts with imported HighLevel addresses and times, searchable van/crew/
+scheduled-stop choices, job-type chips and material quantity rows. Vans is a
+separate searchable crew/stock editor. Trip distance checks and recurring service
+settings are secondary. The fictional demo uses the same controls. See
+`docs/operations/highlevel-fleet-runbook.md` for address lookup, isolation,
+Google-derived point lifetime/map restrictions and release verification.
+
 ## CRM Fleet onboarding, recorded routes and guided demo (2026-10-22; release candidate)
 
 Trip review uses matching Bouncie geometry, with sparse samples drawn as dots. The fictional demo bundles real-road driving shapes; it never sends customer coordinates to a public router.

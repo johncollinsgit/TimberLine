@@ -7,6 +7,8 @@ export function createDemo(){
     const positions=names.map((_,i)=>roadRoutes.vehicles[i+1]?.[1].points.at(-1)||[34.821,-82.405]);
     const record=(id,device_id,details,status='open',at=iso(-5))=>({id,device_id,details,status,event_at:at});
     const jobs=[record(201,null,{source:'calendar',reference:'DEMO-appointment-201',title:'Panel inspection · Downtown',crm_status:'confirmed',assigned_user:'Demo dispatcher',device_id:2,latitude:34.8534,longitude:-82.3975,crm_start:iso(-45),crm_end:iso(35),skills:['inspection'],materials:{}},'active'),record(202,null,{source:'calendar',reference:'DEMO-appointment-202',title:'Service visit · North Main',crm_status:'confirmed',device_id:1,latitude:34.886,longitude:-82.393,crm_start:iso(55),crm_end:iso(115),skills:['service'],materials:{wire:40}},'active'),record(203,null,{source:'calendar',reference:'DEMO-appointment-203',title:'Lighting repair · Eastside',crm_status:'confirmed',latitude:34.871,longitude:-82.349,crm_start:iso(20),crm_end:iso(80),skills:['service'],materials:{wire:20}},'active'),record(204,null,{source:'pipeline',reference:'DEMO-opportunity-204',title:'New installation · Southside',crm_status:'open',device_id:3,latitude:34.819,longitude:-82.371,scheduled_start:iso(100),scheduled_end:iso(180),skills:['installation'],materials:{fixtures:6}},'active'),record(205,null,{source:'calendar',reference:'DEMO-appointment-205',title:'Service follow-up · Main Street',device_id:1,crm_start:iso(-100),crm_end:iso(-65),latitude:34.85,longitude:-82.4,skills:['service'],materials:{}},'active'),record(206,null,{source:'calendar',reference:'DEMO-appointment-206',title:'Second nearby service visit',device_id:1,crm_start:iso(-90),crm_end:iso(-60),latitude:34.85,longitude:-82.39,skills:['service'],materials:{}},'active')];
+    const addresses=['100 E North St, Greenville, SC','801 N Main St, Greenville, SC','410 E North St, Greenville, SC','601 S Main St, Greenville, SC','206 S Main St, Greenville, SC','300 River St, Greenville, SC'];
+    jobs.forEach((j,i)=>{j.details.crm_address=addresses[i];j.details.customer_name=['Oak Street Offices','North Main Workshop','Eastside Studio','Southside Lighting','Main Street Shop','River Street Office'][i];});
     const crews=['Alex + Jordan','Taylor + Morgan','Sam + Casey','Riley + Jamie','','Drew + Avery'];
     return {demo:true,workspace:{name:'Demo · Greenville Service Company'},vehicles:names.map((name,i)=>({id:i+1,device_id:`DEMO-${i+1}`,name,costs:{fuel:[420,510,640,480,120,360][i],maintenance:[180,220,260,300,350,160][i],insurance:[135,140,160,145,150,130][i]},location:i===4?null:{latitude:positions[i][0],longitude:positions[i][1],reported_at:iso(i===3?-95:-3),older_reading:i===3}})),
         route_range:{today:day(0),yesterday:day(-1),earliest:day(-29),timezone:'America/New_York',retention_days:30},
@@ -35,7 +37,7 @@ export function demoRequest(d,path,method,body){
     const id=Number(path.split('/')[2]);
     if(path.endsWith('/dispatch')){
         const job=d.operations.jobs.find(j=>j.id===id),j=job?.details,start=Date.parse(j?.scheduled_start||j?.crm_start),end=Date.parse(j?.scheduled_end||j?.crm_end);
-        if(!j||j.latitude==null||j.longitude==null||!Number.isFinite(start)||!Number.isFinite(end)||end<=start)throw new Error('Confirm job coordinates and start/end times before requesting suggestions.');
+        if(!j||j.latitude==null||j.longitude==null||!Number.isFinite(start)||!Number.isFinite(end)||end<=start)throw new Error('Choose a saved job address and start and finish times first.');
         const suggestions=d.vehicles.flatMap(v=>{
             const p=d.operations.profiles.find(p=>p.device_id===v.id)?.details||{};
             if(!p.available||!p.crew||!v.location||v.location.older_reading||(j.skills||[]).some(s=>!(p.skills||[]).includes(s))||Object.entries(j.materials||{}).some(([name,qty])=>(p.materials?.[name]||0)<qty))return [];
@@ -50,6 +52,12 @@ export function demoRequest(d,path,method,body){
     if(lists[resource]){
         const item=d.operations[lists[resource]].find(r=>resource==='profiles'?r.device_id===id:r.id===id);
         if(!item)throw new Error('Demo record is unavailable.');
+        if(resource==='jobs'&&Object.hasOwn(body,'address')){
+            const source=d.operations.jobs.find(j=>j.id===body.location_job_id),p=source?.details;
+            const same=p&&(p.address_override||p.crm_address)===body.address;
+            body={...body,address_override:body.address===item.details.crm_address?null:body.address,latitude:same?p.latitude:null,longitude:same?p.longitude:null,location_status:same?'ready':'check_address'};
+            delete body.address;
+        }
         item.details={...item.details,...body};if(resource==='alerts')item.status=body.status;
         if(resource==='trips'){const threshold=body.expected_miles==null?null:body.expected_miles+Math.max(body.extra_miles,body.expected_miles*body.extra_percent/100);item.route_review=threshold==null?'baseline_needed':item.details.distance_miles>threshold?'review':'within_tolerance';}
         return {saved:true};
