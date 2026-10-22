@@ -105,7 +105,14 @@ class Workflows
             unset($edge);
         }
 
-        return $scope + ['items' => $items, 'templates' => $template ? [['key' => 'maintenance', 'name' => 'Illustrative maintenance workflow', 'sample' => true, 'definition' => $template]] : [],
+        $client = app(ClientPresentation::class)->settings($tenant, $user);
+        $templates = $template ? [['key' => 'maintenance', 'name' => 'Illustrative maintenance workflow', 'sample' => true, 'definition' => $template]] : [];
+        if ($client !== []) {
+            $templates = $template ? array_map(fn ($item) => ['key' => $item['key'], 'name' => $item['name'],
+                'sample' => (bool) config('enterprise.sample_data'), 'definition' => $template], $client['workflow_defaults'] ?? []) : [];
+        }
+
+        return $scope + ['items' => $items, 'templates' => $templates,
             'coverage' => 'Up to 100 workflows in this project from a bounded scan of 1000 department workflow records.', 'as_of' => now()->toIso8601String()];
     }
 

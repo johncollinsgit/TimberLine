@@ -250,7 +250,8 @@ class Resources
             abort_unless($input['level'] === 'facility', 422, 'Official map entries are unverified facility records, not surveyed rooms or floors.');
             $entry = $this->catalog->entry($input['catalog_map_number']);
             abort_if($row->exists && isset($data['map_number']) && $data['map_number'] !== $entry['map_number'], 409, 'Catalog identity is immutable.');
-            $data = array_replace($data, $entry, ['source_url' => $this->catalog->all()['source_url'], 'source_page' => 2, 'hierarchy_verified' => false]);
+            $data = array_replace($data, $entry, ['source_url' => $entry['source_url'] ?? $this->catalog->all()['source_url'],
+                'source_page' => array_key_exists('source_page', $entry) ? $entry['source_page'] : 2, 'hierarchy_verified' => false]);
             $input['title'] = $entry['name'];
         }
         if (isset($data['map_number'])) {

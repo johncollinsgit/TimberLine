@@ -11,6 +11,7 @@ on:
       - 'app/Http/Middleware/EnterpriseCsrfToken.php'
       - 'app/Http/Middleware/EnsureEnterpriseTrialMount.php'
       - 'app/Http/Middleware/EnsureEnterprisePrefixMount.php'
+      - 'app/Http/Middleware/EnsureEnterpriseClientSilo.php'
       - 'app/Http/Controllers/LeesMcRaeCampusDemoController.php'
       - 'app/Services/Team/**'
       - 'app/Services/AiBranch/ResponsesTransport.php'
@@ -30,6 +31,7 @@ on:
       - 'tests/Support/enterprise-https-router.php'
       - 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php'
       - 'tests/Integration/EnterpriseTrialBudgetMySqlConcurrencyTest.php'
+      - 'tests/Integration/EnterpriseClientProvisioningMySqlTest.php'
       - 'tests/Integration/migration-recovery-manifest.php'
       - 'phpunit.enterprise.xml'
       - 'phpunit.team.xml'
@@ -88,10 +90,12 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Check private transport and isolated sample contracts
-        run: node --test tests/e2e/enterprise-transport.test.mjs tests/e2e/enterprise-reviewer-sample.test.mjs tests/e2e/enterprise-workspace-tour.test.mjs
+        run: node --test tests/e2e/enterprise-transport.test.mjs tests/e2e/enterprise-reviewer-sample.test.mjs tests/e2e/enterprise-workspace-tour.test.mjs tests/e2e/enterprise-procedures-ui.test.mjs tests/e2e/enterprise-resource-presentation.test.mjs
       - run: npm run build:enterprise
       - name: Check shared reviewer rendering without account or route authority
-        run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseReviewerRenderTest.php tests/Feature/EnterpriseReviewerPublicTest.php tests/Feature/LeesMcRaeCampusDemoTest.php --compact --display-warnings
+        run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseReviewerRenderTest.php tests/Feature/Enterprise/EnterpriseResourcePresentationTest.php tests/Feature/EnterpriseReviewerPublicTest.php tests/Feature/LeesMcRaeCampusDemoTest.php --compact --display-warnings
+      - name: Check permission-filtered period reports and certificate register
+        run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseContractorCertificatesTest.php tests/Feature/Enterprise/EnterpriseReportExportTest.php --compact --display-warnings
       - name: Check controlled trial pages in the dedicated runtime without providers
         run: php vendor/bin/pest -c phpunit.enterprise.xml tests/Feature/Enterprise/EnterpriseTrialPagesTest.php --compact --display-warnings
       - run: npx playwright install --with-deps chromium webkit

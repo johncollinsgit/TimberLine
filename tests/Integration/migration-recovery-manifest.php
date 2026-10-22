@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_22_000500_create_enterprise_client_silo.php' => [
+        'test' => 'tests/Integration/EnterpriseClientProvisioningMySqlTest.php',
+        'scenarios' => ['retained encrypted client receipt and native department survive missing unique indexes; repeated recovery and down preserve data; independent first-claim processes serialize behind the real database lock without creating access'],
+    ],
     '2026_10_22_000400_create_enterprise_mailboxes.php' => [
         'test' => 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php',
         'scenarios' => ['encrypted existing mailbox and domain proof survive missing grant table and named index/foreign-key repair; replay creates no accounts credentials or grants'],

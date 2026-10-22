@@ -53,6 +53,14 @@ Route::middleware(['auth', 'verified', ResolveWorkspace::class, \App\Http\Middle
     Route::post('/enterprise/resources/commands', [\App\Enterprise\ResourcesController::class, 'command'])->name('enterprise.resources.command');
     Route::get('/enterprise/resources/{id}/history', [\App\Enterprise\ResourcesController::class, 'history'])->whereUuid('id')->name('enterprise.resources.history');
     Route::get('/enterprise/resources/{id}', [\App\Enterprise\ResourcesController::class, 'show'])->whereUuid('id')->name('enterprise.resources.show');
+    Route::get('/enterprise/reports/quarterly', [\App\Enterprise\ReportExportController::class, 'show'])->name('enterprise.reports.quarterly');
+    Route::get('/enterprise/reports/quarterly.csv', [\App\Enterprise\ReportExportController::class, 'csv'])->name('enterprise.reports.quarterly.csv');
+    Route::get('/enterprise/reports/quarterly.json', [\App\Enterprise\ReportExportController::class, 'json'])->name('enterprise.reports.quarterly.json');
+    Route::get('/enterprise/certificates', [\App\Enterprise\ContractorCertificatesController::class, 'index'])->name('enterprise.certificates');
+    Route::get('/enterprise/certificates/reminders', [\App\Enterprise\ContractorCertificatesController::class, 'reminders'])->name('enterprise.certificates.reminders');
+    Route::get('/enterprise/certificates/{id}/history', [\App\Enterprise\ContractorCertificatesController::class, 'history'])->whereUuid('id')->name('enterprise.certificates.history');
+    Route::get('/enterprise/certificates/{id}', [\App\Enterprise\ContractorCertificatesController::class, 'show'])->whereUuid('id')->name('enterprise.certificates.show');
+    Route::post('/enterprise/certificates/commands', [\App\Enterprise\ContractorCertificatesController::class, 'command'])->name('enterprise.certificates.command');
     Route::get('/enterprise/preferences', [\App\Enterprise\WorkspacePreferencesController::class, 'show'])->name('enterprise.preferences');
     Route::post('/enterprise/preferences', [\App\Enterprise\WorkspacePreferencesController::class, 'save'])->name('enterprise.preferences.save');
     Route::get('/enterprise/requester', [\App\Enterprise\RequesterController::class, 'index'])->name('enterprise.requester');

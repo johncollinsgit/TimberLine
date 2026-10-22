@@ -20,7 +20,8 @@ class EnterpriseController
         $tenant = $request->attributes->get('current_tenant');
         $actor = $this->access->actor($tenant, $request->user());
 
-        return response()->view('enterprise.app', ['tenant' => $tenant, 'enterpriseRole' => $actor['role']])->header('Cache-Control', 'private, no-store');
+        return response()->view('enterprise.app', ['tenant' => $tenant, 'enterpriseRole' => $actor['role'],
+            'clientBranding' => app(ClientPresentation::class)->settings($tenant, $request->user())['branding'] ?? []])->header('Cache-Control', 'private, no-store');
     }
 
     public function data(Request $request)
@@ -68,9 +69,11 @@ class EnterpriseController
                 'ask' => (bool) config('enterprise.ask_enabled'), 'email_drafts' => (bool) config('enterprise.email_drafts_enabled'),
                 'workflow' => (bool) config('enterprise.workflow_enabled'), 'briefing' => (bool) config('enterprise.briefing_enabled'),
                 'operations' => (bool) config('enterprise.operations_enabled'), 'resources' => (bool) config('enterprise.resources_enabled'),
-                'roll_call' => (bool) config('enterprise.roll_call_enabled'), 'requester' => (bool) config('enterprise.requester_enabled')],
+                'roll_call' => (bool) config('enterprise.roll_call_enabled'), 'requester' => (bool) config('enterprise.requester_enabled'),
+                'reports' => (bool) config('enterprise.reports_enabled'), 'certificates' => (bool) config('enterprise.certificates_enabled')],
             'can_manage' => config('enterprise.writes_enabled') && in_array($actor['role'], ['owner', 'admin'], true),
             'can_submit' => $area && WorkspaceAccess::canSubmit($actor, $area->id),
+            'can_review' => $area && WorkspaceAccess::permits($actor, $area->id, false, true),
             'can_coordinate' => $area && WorkspaceAccess::permits($actor, $area->id, true, true),
             'members' => $members->map(fn ($u) => ['id' => (string) $u->id, 'name' => $u->name])->values()])->header('Cache-Control', 'private, no-store');
     }

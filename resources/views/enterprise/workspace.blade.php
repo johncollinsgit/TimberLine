@@ -1,7 +1,8 @@
 @php
     $enterprisePresentation = $presentation ?? [
         'runtime' => 'private',
-        'identity' => ['tenantSlug' => $tenant->slug, 'viewer' => (string) auth()->id(), 'workspace' => (string) $tenant->id, 'name' => $tenant->name, 'userName' => auth()->user()->name],
+        'branding' => $clientBranding ?? [],
+        'identity' => ['tenantSlug' => $tenant->slug, 'viewer' => (string) auth()->id(), 'workspace' => (string) $tenant->id, 'name' => $clientBranding['organization_name'] ?? $tenant->name, 'userName' => auth()->user()->name],
         'csrf' => csrf_token(),
         'routes' => [
             'workflows' => url('/enterprise/workflows'),
@@ -26,5 +27,8 @@
 @else
 @viteReactRefresh
 @vite('resources/js/enterprise/workspace.tsx')
+@endif
+@if(!$enterpriseSample && preg_match('/^#[0-9a-fA-F]{6}$/D', $enterprisePresentation['branding']['accent'] ?? ''))
+<style>:root{--gold:{{ $enterprisePresentation['branding']['accent'] }};--ew-accent:{{ $enterprisePresentation['branding']['accent'] }}}</style>
 @endif
 </head><body>@includeIf('enterprise.runtime-designation')@if($enterpriseSample)@includeIf('enterprise.reviewer-adapter')@endif<div id="enterprise-workflow" data-bootstrap="{{ json_encode($workflowBoot, JSON_THROW_ON_ERROR) }}"></div><noscript>This workflow workspace requires JavaScript. Return to <a href="{{ $enterprisePresentation['routes']['back'] }}">Enterprise Projects</a>.</noscript>@if($enterpriseSample)<script type="module">{!! $inlineAssets['js'] ?? '' !!}</script>@endif</body></html>

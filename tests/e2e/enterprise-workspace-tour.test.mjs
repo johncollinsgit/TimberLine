@@ -373,3 +373,21 @@ test("an older success cannot restore records or roles while the new workspace i
         false,
     );
 });
+
+
+test("new manager procedures are described only when enabled and their destinations recheck current role", () => {
+    const {tour,snapshot,actions}=fixture();
+    snapshot.data.features={certificates:true,reports:true};
+    snapshot.data.can_review=true;
+    tour.update(snapshot);
+    assert.match(tour.describe(4,{}).cards[2][1],/internal reminders; external alerts remain disconnected/);
+    assert.match(tour.describe(5,{}).cards[2][1],/Quarter\/date activity exports/);
+    assert.equal(tour.links(4).find(row=>row.id==='people').available,true);
+    assert.equal(tour.links(5).find(row=>row.id==='roll-call').available,true);
+    snapshot.data.can_review=false;
+    tour.update(snapshot);
+    assert.equal(tour.links(4).find(row=>row.id==='people').available,false);
+    assert.equal(tour.links(5).find(row=>row.id==='roll-call').available,false);
+    assert.equal(tour.open(5,'roll-call').available,false);
+    assert.equal(actions.length,0);
+});

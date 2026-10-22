@@ -13,7 +13,8 @@ require dirname(__DIR__, 2).'/vendor/autoload.php';
 $app = require dirname(__DIR__, 2).'/apps/enterprise/bootstrap/app.php';
 $kernel = $app->make(Illuminate\Contracts\Http\Kernel::class);
 $kernel->bootstrap();
-config(['enterprise.reviewer_demo_enabled' => true]);
+// Model the public retail composition: sample rendering never enables private runtime authority.
+config(['enterprise.reviewer_demo_enabled' => true, 'enterprise.runtime' => false]);
 // The public retail route flushes retained Livewire assets. Enterprise deliberately
 // does not load that retail provider; this fixture composes only the no-op flush.
 $app->instance('livewire', new class

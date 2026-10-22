@@ -3,7 +3,8 @@
     // Its identity is presentation only; authorization remains in the private backend.
     $enterprisePresentation = $presentation ?? [
         'runtime' => 'private',
-        'identity' => ['tenantSlug' => $tenant->slug, 'viewer' => (string) auth()->id(), 'workspace' => (string) $tenant->id, 'name' => $tenant->name, 'userName' => auth()->user()->name],
+        'branding' => $clientBranding ?? [],
+        'identity' => ['tenantSlug' => $tenant->slug, 'viewer' => (string) auth()->id(), 'workspace' => (string) $tenant->id, 'name' => $clientBranding['organization_name'] ?? $tenant->name, 'userName' => auth()->user()->name],
         'csrf' => csrf_token(),
         'routes' => [
             'data' => route('enterprise.data', ['tenant' => $tenant->slug]),
@@ -21,7 +22,10 @@
 @include('enterprise.campus-styles')
 <style>.shell{min-height:100vh}.sidebar{height:100vh}.detail-layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:18px}.work-detail{white-space:pre-wrap;overflow-wrap:anywhere}.map-panel{padding:0;overflow:hidden;margin-bottom:22px}.map-head{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}.map-head h2{font:26px Georgia,serif;margin:5px 0}.location-map{display:block;width:100%;height:330px;background:#edf2e7}.location-map button{cursor:pointer}.request-row{width:100%;text-align:left}.stack{display:grid;gap:12px}.stack label{display:grid;gap:6px;font-size:12px}.ent-skip{position:absolute;top:-80px;background:white;padding:15px;z-index:10}.ent-skip:focus{top:0}[hidden]{display:none!important}.notice-error{color:#913c31}.calendar-day{padding:15px;border-bottom:1px solid var(--line)}.calendar-day h3{font-size:12px}.field-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}#detail h2{font:25px Georgia,serif}#detail h3{font-size:12px}#map-holder{position:relative}#map-markers{position:absolute;inset:30px 20px 42px}.map-pin{position:absolute;transform:translate(-50%,-50%);padding:5px 8px;border:2px solid white;background:#315b43;color:white;border-radius:14px;font-size:11px;box-shadow:0 2px 5px #2343}#map-holder p{margin:8px 20px 16px}.sidebar-project.active{background:#ffffff12;border-radius:5px}.panel{min-width:0}pre{white-space:pre-wrap;overflow-wrap:anywhere}#request-list{min-width:0}.nav-item{min-height:44px}@media(max-width:1000px){.detail-layout{grid-template-columns:1fr}.sidebar{height:auto;min-height:0;position:static}.shell{grid-template-columns:190px 1fr}.content{padding:25px 18px}.topbar{padding:15px 18px}}@media(max-width:650px){.shell{grid-template-columns:1fr}.sidebar{padding:15px}.brand{padding-bottom:12px}.workspace-label{margin-top:12px}.sidebar nav{display:flex;flex-wrap:wrap}.nav-item{width:auto}.sidebar-bottom{display:none}.topbar{height:auto}.field-pair{grid-template-columns:1fr}.page-heading{align-items:flex-start;flex-direction:column}.page-heading h1{font-size:30px}.toolbar{flex-wrap:wrap}.sidebar-project{width:auto;display:inline-flex}}#work{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:18px}#work>.toolbar,#work>#coverage{grid-column:1/-1}#work>#map{grid-column:1}.detail-layout{display:contents}#request-list{grid-column:1}#detail{grid-column:2;grid-row:2 / span 2;align-self:start}@media(max-width:1000px){#work{display:block}.detail-layout{display:grid;grid-template-columns:1fr}#request-list,#detail{grid-column:auto;grid-row:auto}#work>.toolbar{margin-bottom:20px}}@media(max-width:800px){.sidebar .workspace-label{display:block}.sidebar .sidebar-project{display:inline-flex;width:auto}}
 @include('enterprise.next-styles')
-</style></head>
+</style>@if(!$enterpriseSample && preg_match('/^#[0-9a-fA-F]{6}$/D', $enterprisePresentation['branding']['accent'] ?? ''))
+<style>:root{--gold:{{ $enterprisePresentation['branding']['accent'] }};--ew-accent:{{ $enterprisePresentation['branding']['accent'] }}}</style>
+@endif
+</head>
 <body>
 @includeIf('enterprise.runtime-designation')
 <a class="ent-skip" href="#enterprise-main">Skip to workspace</a><div class="shell">
@@ -34,6 +38,7 @@
 @include('enterprise.home')
 @include('enterprise.next-panels')
 @includeIf('enterprise.operations-panels')
+@includeIf('enterprise.procedures-workspace')
 <div id="work"><div class="toolbar"><div class="actions" role="group" aria-label="Work view"><button class="button" data-view="list" aria-pressed="true">List</button><button class="button" data-view="calendar" aria-pressed="false">Calendar</button><button class="button" data-view="map" aria-pressed="false">Map</button></div><label>Find work <input id="search" type="search" placeholder="Search visible work"></label><button class="button" id="map-toggle">View Map</button></div>
 <section class="panel map-panel" id="map" hidden><div class="map-head"><div><div class="eyebrow">Workspace locations</div><h2>See where the work happens.</h2></div><span class="caption">Select a marker for request details</span></div><div id="map-holder"><svg class="location-map" viewBox="0 0 1000 330" preserveAspectRatio="none" aria-hidden="true"><defs><pattern id="grid" width="100" height="66" patternUnits="userSpaceOnUse"><path d="M100 0H0V66" fill="none" stroke="#d9e2ce"/></pattern></defs><rect width="1000" height="330" fill="url(#grid)"/></svg><div id="map-markers"></div><p class="caption">Saved longitude/latitude positions on a coordinate grid. No campus basemap, GPS feed or external map provider is connected.</p></div><p class="caption" id="map-empty"></p></section>
 <div class="detail-layout"><section id="request-list" aria-label="Visible workspace work"></section><aside class="panel" id="detail" aria-label="Selected work details"><h2>Choose a request</h2><p class="subtle">Select a row or map marker to see its details and permitted actions.</p></aside></div><p class="caption" id="coverage"></p></div>
@@ -312,6 +317,7 @@
   });
   @include('enterprise.next-script')
   @includeIf('enterprise.operations-script')
+  @includeIf('enterprise.procedures-script')
   document.addEventListener('enterprise:navigate', event => {
     const next = event.detail || {};
     if (next.section && !allowedSections.includes(next.section)) return;

@@ -28,13 +28,24 @@ final class EnterpriseServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $this->commands([\App\Enterprise\Provisioning\ProvisionClientCommand::class]);
         DB::prohibitDestructiveCommands($this->app->isProduction());
         Gate::policy(TeamProject::class, TeamProjectPolicy::class);
         Gate::policy(TeamTask::class, TeamTaskPolicy::class);
         Event::listen(CommandStarting::class, function (CommandStarting $event): void {
+            $silo = app(\App\Enterprise\Provisioning\ClientSilo::class);
+            if ($silo->enabled() && in_array($event->command, ['db:wipe', 'db:seed', 'key:generate', 'migrate:fresh', 'migrate:refresh', 'migrate:reset', 'migrate:rollback'], true)) {
+                throw new \RuntimeException('Destructive or identity-generating commands are unavailable in a client runtime.');
+            }
             if ((str_starts_with((string) $event->command, 'migrate') || in_array($event->command, ['db:wipe', 'db:seed', 'schema:dump'], true))
                 && ! EnsureEnterpriseRuntime::configured()) {
                 throw new \RuntimeException('Enterprise schema commands require isolated runtime configuration.');
+            }
+            if ($silo->enabled() && (str_starts_with((string) $event->command, 'migrate') || $event->command === 'schema:dump')) {
+                $silo->binding();
+                if (\Illuminate\Support\Facades\Schema::hasTable('enterprise_client_silos') && $silo->row()) {
+                    $silo->assertReady();
+                }
             }
         });
         // Laravel ordinarily suppresses console-event rerouting during tests.

@@ -118,6 +118,7 @@
     $('roll-editor-message').textContent=rollPendingConfirm?'A confirmation is awaiting a verified response. Editing is locked; retry the same request.':rollPendingSave?'A save is awaiting a verified response. Editing is locked; retry the same request.':rollModel?.version?`Saved meeting v${rollModel.version}.${rollDirty?' You have unsaved notes; save them before previewing.':''}`:'This is an unsaved meeting draft.';
   }
   async function rollLoad() {
+    if(data.features?.roll_call!==true)return;
     const token=rollToken(); rollNotice('Checking current permissions and records.');
     $('roll-meeting-form').hidden=true;$('roll-meeting-form').reset();for(const kind of ['decisions','blockers','commitments'])$(`roll-${kind}`).replaceChildren();$('roll-preview-panel').hidden=true;$('roll-priorities').replaceChildren();
     try {
@@ -194,7 +195,7 @@
     finally{if(rollCurrent(token)){rollBusy=false;rollStore();rollPaintEditor();}}
   }
   function renderRollCall() {
-    const active=section==='roll_call';$('roll-call-panel').hidden=!active;
+    const active=section==='roll_call'&&data.features?.roll_call===true;$('roll-call-panel').hidden=!active;
     if(!active){rollCapture();rollStore();if(rollContext){rollGeneration++;rollContext=null;}return;}
     $('work').hidden=true;$('heading').textContent='Make the next move clear.';$('breadcrumb').textContent='Roll Call';
     if(!['campus','workspace','project','team'].includes(rollScope))rollScope='workspace';

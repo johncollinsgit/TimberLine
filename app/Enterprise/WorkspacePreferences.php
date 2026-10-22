@@ -63,12 +63,14 @@ class WorkspacePreferences
         $personal = $rows->firstWhere('source_key', $this->source($user, $areaId, false));
         $area = $this->access->area($tenant, $actor, $areaId);
         $role = WorkspaceAccess::permits($actor, $areaId, true, true) ? 'manager' : (WorkspaceAccess::permits($actor, $areaId, true) ? 'employee' : 'viewer');
+        $client = app(ClientPresentation::class)->settings($tenant, $user)['role_defaults'][$role] ?? [];
+        $clientLayout = array_intersect_key($client, array_flip(['density', 'view']));
         $defaults = ['density' => 'comfortable', 'view' => 'list', 'favorites' => [], 'filter' => 'all'];
-        $defaults = array_replace($defaults, $shared?->data['defaults'] ?? [], $shared?->data['roles'][$role] ?? [], $personal?->data['settings'] ?? []);
+        $defaults = array_replace($defaults, $clientLayout, $shared?->data['defaults'] ?? [], $shared?->data['roles'][$role] ?? [], $personal?->data['settings'] ?? []);
         $defaults['favorites'] = $this->favorites($tenant, $actor, $areaId, $defaults['favorites']);
 
         return ['area_id' => $areaId, 'effective' => $defaults, 'personal_version' => $personal?->version ?? 0,
-            'shared_version' => $shared?->version ?? 0, 'role' => $role, 'intake_published' => ($area->settings['enterprise_request_intake'] ?? false) === true,
+            'shared_version' => $shared?->version ?? 0, 'role' => $role, 'role_label' => $client['label'] ?? ucfirst($role), 'intake_published' => ($area->settings['enterprise_request_intake'] ?? false) === true,
             'layout_defaults' => array_intersect_key($shared?->data['defaults'] ?? [], array_flip(['density', 'view', 'filter'])),
             'role_defaults' => $shared?->data['roles'] ?? [],
             'can_manage' => WorkspaceAccess::permits($actor, $areaId, true, true),

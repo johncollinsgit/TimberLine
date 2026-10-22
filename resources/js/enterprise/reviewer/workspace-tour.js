@@ -85,7 +85,7 @@
                     "roll-call",
                     "Roll Call",
                     "roll_call",
-                    feature("roll_call"),
+                    feature("roll_call") || (feature("reports") && context?.data?.can_review),
                 );
             }
             if (index === 4) {
@@ -93,7 +93,7 @@
                     "people",
                     "People & contractors",
                     "people",
-                    feature("planning") || feature("operations"),
+                    feature("planning") || feature("operations") || (feature("certificates") && context?.data?.can_review),
                 );
                 add("assets", "Assets", "assets", feature("resources"));
                 add("calendar", "Calendar", "calendar", feature("resources"));
@@ -103,7 +103,7 @@
                     "roll-call",
                     "Roll Call and meeting notes",
                     "roll_call",
-                    feature("roll_call"),
+                    feature("roll_call") || (feature("reports") && context?.data?.can_review),
                 );
                 add("projects", "Projects", "projects", Boolean(p), p?.id);
             }
@@ -184,7 +184,9 @@
                     ],
                     [
                         "Insurance boundary",
-                        "Generic due tasks/evidence only; dedicated expiry registry and alerts pending discovery.",
+                        feature("certificates")
+                            ? "Manager-only certificate metadata register, reviewed replacements and internal reminders; external alerts remain disconnected."
+                            : "Generic due tasks/evidence only; dedicated expiry registry and alerts pending discovery.",
                     ],
                 ];
             if (index === 5)
@@ -199,7 +201,9 @@
                     ],
                     [
                         "Reporting boundary",
-                        "Quarterly history/templates and automated reporting remain pending discovery.",
+                        feature("reports")
+                            ? "Quarter/date activity exports distinguish current records and recorded events. Approved report templates and external submission still require review."
+                            : "Quarterly history/templates and automated reporting remain pending discovery.",
                     ],
                 ];
             const copy = [
