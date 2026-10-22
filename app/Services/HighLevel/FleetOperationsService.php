@@ -139,7 +139,7 @@ class FleetOperationsService
 
     public function path(Installation $install, Record $trip): array
     {
-        $this->device($install, $trip->device_id);
+        $device = $this->device($install, $trip->device_id);
         $access = app(FleetTrackingAccessService::class);
         $settings = $access->settings($install->tenant);
         abort_unless($install->hasSubscriptionAccess() && $access->enabledFor($install->tenant) && $access->isPolicyApproved($settings), 403);
@@ -151,8 +151,33 @@ class FleetOperationsService
             ->where('recorded_at', '>=', now()->subDays(max(1, min(30, $settings->retention_days))))
             ->whereBetween('recorded_at', [CarbonImmutable::parse($p['started_at']), CarbonImmutable::parse($p['ended_at'])])->orderBy('recorded_at')->limit(2001)->get();
 
+        $traces = [];
+        $start = CarbonImmutable::parse($p['started_at']);
+        $end = CarbonImmutable::parse($p['ended_at']);
+        if ($start->gte(now()->subDays(max(1, min(30, $settings->retention_days)))) && $end->lte(now()) && $end->gt($start)) {
+            $map = app(\App\Services\FleetTracking\FleetMapService::class);
+            $zone = $map->range($install->tenant, new \Illuminate\Http\Request)['timezone'];
+            $history = $map->history($install->tenant, $device->field_service_vehicle_id, new \Illuminate\Http\Request([
+                'start' => $start->setTimezone($zone)->toDateString(), 'end' => $end->setTimezone($zone)->toDateString(),
+            ]));
+            $matches = collect($history['trips'])->filter(function ($trace) use ($p, $start, $end) {
+                if (filled($p['provider_trip_hash'] ?? null)) {
+                    return hash_equals($p['provider_trip_hash'], $trace['id']);
+                }
+
+                // Older webhook records lack the provider hash. Only an exact,
+                // unique timestamp match can identify their recorded geometry.
+                return CarbonImmutable::parse($trace['started_at'])->eq($start) && CarbonImmutable::parse($trace['ended_at'])->eq($end);
+            })->values();
+            if ($matches->count() === 1) {
+                $traces = $matches->all();
+            }
+        }
+
         return ['points' => $points->take(2000)->map(fn ($point) => ['lat' => (float) $point->latitude, 'lng' => (float) $point->longitude, 'at' => $point->recorded_at->toIso8601String()])->all(),
-            'truncated' => $points->count() > 2000, 'message' => 'Reported GPS samples; gaps between samples are not a verified road route.'];
+            'trips' => $traces, 'truncated' => $points->count() > 2000, 'message' => $traces
+                ? 'Recorded Bouncie trip geometry. Missing geometry and sampling gaps are not joined; isolated samples remain dots.'
+                : 'Full recorded trip geometry is unavailable. Retained GPS samples are shown as isolated dots, not a driving route.'];
     }
 
     public function dispatch(Installation $install, Record $job, array $vehicles): array

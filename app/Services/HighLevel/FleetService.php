@@ -117,6 +117,7 @@ class FleetService
             })->all();
 
         return ['workspace' => ['name' => $tenant->name], 'vehicles' => $vehicles,
+            'route_range' => app(\App\Services\FleetTracking\FleetMapService::class)->range($tenant, new \Illuminate\Http\Request),
             'connection' => ['status' => $connection?->status ?? 'disconnected', 'label' => $connection?->external_account_label, 'health' => $health],
             'settings' => ['retention_days' => min(30, $settings->retention_days), 'policy_approved' => $this->access->isPolicyApproved($settings),
                 'policy_version' => $settings->policy_version, 'policy_sha256' => $settings->policy_sha256,

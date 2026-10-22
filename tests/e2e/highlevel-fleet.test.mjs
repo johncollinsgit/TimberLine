@@ -6,6 +6,8 @@ import { chromium, webkit } from '@playwright/test';
 
 const manifest = JSON.parse(readFileSync('public/build/manifest.json', 'utf8'));
 const entry = manifest['resources/js/highlevel/fleet.js'];
+const styleFiles = node => [...(node.css||[]), ...(node.imports||[]).flatMap(key=>styleFiles(manifest[key]))];
+const styles = [...new Set(styleFiles(entry))];
 const fixture = {
   workspace:{name:'Pilot fleet'}, vehicles:Array.from({length:100}, (_,i)=>({id:i+1,device_id:`imei-${i+1}`,name:`Van ${i+1}`,location:{latitude:34.5+i/1000,longitude:-82,reported_at:new Date(Date.now()-3600000).toISOString(),older_reading:true}})),
   connection:{status:'connected',label:'Pilot Bouncie',health:{status:'connected'}},
@@ -24,7 +26,7 @@ for (const browserType of [chromium, webkit]) {
       }
       if(req.url==='/launch'){
         res.setHeader('Content-Type','text/html');
-        return res.end(`<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><div id="fleet-app"></div><script id="fleet-config" type="application/json">${JSON.stringify({challenge:'c'.repeat(64),parentOrigins:[parentOrigin]})}</script>${(entry.css||[]).map(css=>`<link rel="stylesheet" href="/build/${css}">`).join('')}<script type="module" src="/build/${entry.file}"></script>`);
+        return res.end(`<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><div id="fleet-app"></div><script id="fleet-config" type="application/json">${JSON.stringify({challenge:'c'.repeat(64),parentOrigins:[parentOrigin]})}</script>${styles.map(css=>`<link rel="stylesheet" href="/build/${css}">`).join('')}<script type="module" src="/build/${entry.file}"></script>`);
       }
       if(req.url.startsWith('/build/')){
         res.setHeader('Content-Type',req.url.endsWith('.css')?'text/css':'application/javascript');
@@ -79,6 +81,7 @@ for (const browserType of [chromium, webkit]) {
       await frame.locator('.vehicle-row').click();
       assert.match(await frame.locator('#vehicle-details').innerText(),/older reading can mean the vehicle is parked/);
       await frame.getByRole('button',{name:'Connection',exact:true}).click();
+      await frame.getByText('Manage Bouncie connection',{exact:true}).click();
       assert.equal(await frame.getByRole('button',{name:'Reconnect Bouncie'}).isEnabled(),true);
       await frame.getByRole('button',{name:'Choose vehicles'}).click();
       await frame.locator('#device-form').waitFor();
@@ -104,7 +107,7 @@ for (const browserType of [chromium, webkit]) {
   test(`${browserType.name()} shows the complete isolated demo and keeps changes off real APIs`, async()=>{
     let calls=0;const server=createServer((req,res)=>{
       if(req.url==='/demo'){
-        res.setHeader('Content-Type','text/html');return res.end(`<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><div id="fleet-app"></div><script id="fleet-config" type="application/json">{"demo":true,"parentOrigins":[]}</script>${(entry.css||[]).map(css=>`<link rel="stylesheet" href="/build/${css}">`).join('')}<script type="module" src="/build/${entry.file}"></script>`);
+        res.setHeader('Content-Type','text/html');return res.end(`<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><div id="fleet-app"></div><script id="fleet-config" type="application/json">{"demo":true,"parentOrigins":[]}</script>${styles.map(css=>`<link rel="stylesheet" href="/build/${css}">`).join('')}<script type="module" src="/build/${entry.file}"></script>`);
       }
       if(req.url.startsWith('/build/')){res.setHeader('Content-Type',req.url.endsWith('.css')?'text/css':'application/javascript');return res.end(readFileSync(`public${req.url}`));}
       calls++;res.statusCode=404;res.end('{}');
@@ -115,6 +118,28 @@ for (const browserType of [chromium, webkit]) {
       await page.goto(`http://127.0.0.1:${server.address().port}/demo`);
       await page.getByText('DEMO · Fictional fleet data',{exact:true}).waitFor();
       assert.equal(await page.locator('.vehicle-row').count(),6);
+      await page.getByRole('heading',{name:'See the whole fleet',exact:true}).waitFor();
+      if(process.env.HIGHLEVEL_SCREENSHOT_DIR && browserType.name()==='chromium'){mkdirSync(process.env.HIGHLEVEL_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:`${process.env.HIGHLEVEL_SCREENSHOT_DIR}/demo-guided-tour.png`,fullPage:true});}
+      await page.getByText('2 example trips',{exact:true}).first().waitFor();
+      assert.equal(await page.locator('.leaflet-overlay-pane path').count(),10);
+      await page.getByRole('button',{name:'Uncheck all vehicles'}).click();
+      assert.equal(await page.locator('.leaflet-overlay-pane path').count(),0);
+      await page.getByRole('searchbox',{name:'Search vehicles'}).fill('Van 02');
+      await page.getByRole('button',{name:'Show search results on map'}).click();
+      assert.equal(await page.locator('.leaflet-overlay-pane path').count(),2);
+      assert.equal(await page.getByRole('checkbox',{name:'Show Van 02 · Downtown crew on map'}).isChecked(),true);
+      await page.getByRole('searchbox',{name:'Search vehicles'}).fill('');
+      await page.getByRole('button',{name:'Show search results on map'}).click();
+      assert.equal(await page.locator('.leaflet-overlay-pane path').count(),10);
+      for(let i=0;i<4;i++)await page.locator('#tour-next').click();
+      await page.getByRole('heading',{name:'Plan maintenance and costs',exact:true}).waitFor();
+      assert.equal(await page.getByRole('heading',{name:'Upcoming maintenance',exact:true}).count(),1);
+      assert.equal(await page.getByRole('heading',{name:'Recently completed service',exact:true}).count(),1);
+      assert.match(await page.locator('#content').innerText(),/Fictional maintenance and costs|Transmission service/);
+      assert.equal(await page.locator('[data-service]').count(),7);
+      await page.getByRole('button',{name:'Explore on my own'}).click();
+      await page.getByRole('button',{name:'Fleet',exact:true}).click();
+
       assert.equal(await page.locator('.leaflet-container').count(),1);
       assert.match(await page.locator('#vehicle-details').innerText(),/Alex \+ Jordan|North Main/);
       await page.getByRole('button',{name:'Connection health',exact:true}).click();
@@ -132,6 +157,8 @@ for (const browserType of [chromium, webkit]) {
       await page.getByRole('button',{name:'Save alert review'}).first().click();
       await page.getByText('Saved.',{exact:true}).waitFor();
       await page.getByRole('button',{name:'Jobs & dispatch',exact:true}).click();
+      await page.getByRole('button',{name:'Refresh CRM work',exact:true}).click();
+      await page.getByText('Fictional CRM work is already loaded. The live app refreshes this account’s work automatically.',{exact:true}).waitFor();
       await page.locator('.ops-item summary').filter({hasText:'Lighting repair'}).click();
       const job=page.locator('details').filter({hasText:'Lighting repair'});
       await job.getByRole('button',{name:'Suggest crews'}).click();
@@ -147,6 +174,11 @@ for (const browserType of [chromium, webkit]) {
       }
       await page.setViewportSize({width:390,height:844});
       assert.equal(await page.locator('.shell').evaluate(el=>el.scrollWidth<=el.clientWidth),true);
+      await page.getByRole('button',{name:'Fleet',exact:true}).click();
+      assert.equal(await page.locator('.shell').evaluate(el=>el.scrollWidth<=el.clientWidth),true);
+      assert.ok((await page.locator('#route-range input[name="start"]').boundingBox()).width>=130);
+      assert.ok((await page.locator('#route-range input[name="end"]').boundingBox()).width>=130);
+      if(process.env.HIGHLEVEL_SCREENSHOT_DIR && browserType.name()==='chromium')await page.screenshot({path:`${process.env.HIGHLEVEL_SCREENSHOT_DIR}/demo-mobile-map.png`,fullPage:true});
       assert.deepEqual(errors,[]);assert.equal(calls,0);
     }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
   });

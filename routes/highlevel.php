@@ -37,6 +37,7 @@ Route::prefix('crm/fleet')->name('highlevel.')->middleware([HighLevelSurface::cl
                 Route::put('/operations/alerts/{alert}', [FleetOperationsController::class, 'alert']);
                 Route::put('/operations/trips/{trip}', [FleetOperationsController::class, 'trip']);
                 Route::get('/operations/trips/{trip}/path', [FleetOperationsController::class, 'path']);
+                Route::get('/operations/vehicles/{device}/history', [FleetOperationsController::class, 'history']);
                 Route::get('/operations/jobs/{job}/dispatch', [FleetOperationsController::class, 'dispatch']);
                 Route::get('/devices', [FleetController::class, 'devices']);
                 Route::put('/devices', [FleetController::class, 'select']);

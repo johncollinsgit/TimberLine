@@ -19,9 +19,9 @@ class FleetOperationsController extends Controller
 
     public function sync(Request $request, FleetJobSourceService $jobs)
     {
-        $p = $request->validate(['type' => 'required|in:calendar,pipeline', 'source_id' => 'required|string|regex:/^[A-Za-z0-9_-]{1,100}$/']);
+        $p = $request->validate(['type' => 'required|in:automatic,calendar,pipeline', 'force' => 'sometimes|boolean', 'source_id' => 'required_unless:type,automatic|nullable|string|regex:/^[A-Za-z0-9_-]{1,100}$/']);
         $install = $this->install($request);
-        $result = $jobs->sync($install, $p['type'], $p['source_id']);
+        $result = $p['type'] === 'automatic' ? $jobs->syncAutomatic($install, $p['force'] ?? false) : $jobs->sync($install, $p['type'], $p['source_id']);
         $this->audit($request, 'jobs.sync');
 
         return response()->json($result);
@@ -59,6 +59,7 @@ class FleetOperationsController extends Controller
     {
         $p = $request->validate(['device_id' => 'required|integer|min:1', 'title' => 'required|string|max:180', 'assignee' => 'nullable|string|max:180',
             'due_miles' => 'nullable|numeric|min:0|max:10000000|required_without:due_date', 'due_date' => 'nullable|date|required_without:due_miles',
+            'estimated_cost' => 'nullable|numeric|min:0|max:1000000',
             'interval_miles' => 'nullable|numeric|min:1|max:1000000', 'interval_days' => 'nullable|integer|min:1|max:3650']);
         $record = $ops->save($this->install($request), 'service_plan', $p, $p['device_id']);
         $this->audit($request, 'maintenance.plan', $record->id);
@@ -69,6 +70,7 @@ class FleetOperationsController extends Controller
     public function service(Request $request, FleetOperationsService $ops)
     {
         $p = $request->validate(['plan_id' => 'required|integer|min:1', 'odometer' => 'required|numeric|min:0|max:10000000',
+            'actual_cost' => 'nullable|numeric|min:0|max:1000000',
             'serviced_at' => 'required|date|before_or_equal:today', 'notes' => 'nullable|string|max:2000']);
         $ops->completeService($this->install($request), $p);
         $this->audit($request, 'maintenance.completed', $p['plan_id']);
@@ -115,6 +117,17 @@ class FleetOperationsController extends Controller
         $install = $this->install($request);
 
         return response()->json($ops->path($install, $ops->record($install, $trip, 'trip')));
+    }
+
+    public function history(Request $request, int $device, FleetOperationsService $ops, \App\Services\FleetTracking\FleetMapService $map)
+    {
+        $install = $this->install($request);
+        $mapping = $ops->device($install, $device);
+
+        // Reuse the Collins recorded-trip projection, after resolving the
+        // installation's selected device. Never accept a caller-supplied tenant.
+        return response()->json($map->history($install->tenant, $mapping->field_service_vehicle_id, $request))
+            ->header('Cache-Control', 'no-store, private');
     }
 
     public function dispatch(Request $request, int $job, FleetOperationsService $ops, FleetService $fleet)
