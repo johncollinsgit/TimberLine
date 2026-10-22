@@ -3,7 +3,7 @@
 October 22, 2026. Draft PR 472 now contains disabled source for grounded generation,
 replaceable transport/reservation interfaces, owned bounded history, cancellation
 and exact human-recipient draft previews. Tests use fake providers and speech.
-No model call, paid use, credential probe/configuration, live send, merge or deploy
+No model call, paid use, provider credential probe/configuration, live send, merge or deploy
 has occurred. Record lookup alone is not the completed crowning assistant.
 
 ## Proposed smallest live acceptance scope (unapproved)
@@ -14,7 +14,7 @@ has occurred. Record lookup alone is not the completed crowning assistant.
 | Existing credential | Owner identifies one **already existing explicitly permitted Enterprise** OpenAI project and key ID, without revealing its secret. Destination is the exact isolated Enterprise runtime's `ENTERPRISE_AI_API_KEY`, bound to tenant/model/rates/fingerprint. | No eligible key has been verified. Avery's Everbranch AI Branch key and Jarvis credentials cannot be reused. A new key/account/OAuth needs separate exact approval. |
 | Actor/runtime | One existing verified presenter ID, one clearly fictional tenant and department ID, accepted build/HTTPS mount; no accounts/grants created. | Owner supplies exact nonsecret IDs and destination; campus owner integrates the existing Ask pane/job/map. |
 | Internal acceptance spend | One ten-minute session, at most 12 calls, **proposed $0.05 inclusive remaining lifetime ceiling on that single tenant's existing Enterprise AI ledger**, counting prior usage/reservations; no probes outside this same session/ceiling. Freeze allowance and expiry before first call. | No additional voice spend approved. Freeze current used/reserved total, approved inclusive rates and exact settings; if less remaining capacity, reduce test scope. No per-session/tenant multiplication, reset, top-up or shared-trial escape. These are suggested test safety bounds, not customer pricing or included usage. |
-| Per-call bound | 12,000 input bytes including instructions/framing/history, 800 output tokens; current cited Standard rates imply a worst-case reservation of 1,600 micro-USD ($0.0016) per call and $0.0192 for twelve calls. | Revalidate applicable rate/tier/region immediately before approval; fail closed on uncertainty. Estimated usage is not settled provider invoice cost. |
+| Per-call bound | 12,000 input bytes including instructions/framing/history, 800 output tokens; current cited Standard rates imply a worst-case reservation of 1,900 micro-USD ($0.0019) per call and $0.0228 for twelve calls, including the documented default 1.25x cache-write input rate. | Approve separate inclusive voice input/output ceilings (default zero) of at least 125,000/500,000 micro-USD per million for this proposal; account/tier/region may require more. Revalidate immediately before approval; fail closed on uncertainty. Estimated usage is not settled provider invoice cost. |
 | Content/retention | Eight current permitted job projections, six messages (three pairs), no finance/mailbox/private student data; ten-minute expiry and indexed bounded content scrub, including usage values. | Configure and prove `enterprise:voice-prune --limit=1000` cadence for idle data in the intended runtime before activation. No live scheduler has been enabled. |
 | Actions | Generated answers/open/read/clarify and **draft proposals only**. Human exact email/E.164 entry, immutable preview, five previews/session, no confirmation or send endpoint. | Recipient identity/consent and sender are unverified. No live messages are approved; never describe a preview as delivery. |
 
@@ -23,7 +23,14 @@ and [Standard pricing](https://developers.openai.com/api/docs/pricing), opened o
 October 22, list text input/output at $0.10/$0.50 per million tokens. Luna is a
 text model; browser speech is not OpenAI audio acceptance. Arithmetic above is
 an inference from those rates and conservative input bounds, not proof of actual
-account access, billing or authorization. No server key was inspected.
+account access, billing or authorization. No provider key was inspected.
+The separate default-zero voice rate ceilings must cover at least 1.25x configured
+base input and the configured base output. [Prompt caching documentation](https://developers.openai.com/api/docs/guides/prompt-caching)
+describes default cache writes and longer provider retention. Local ten-minute
+scrubbing and `store=false` do not promise ten-minute provider deletion; account
+retention/abuse-monitoring/cache policy needs separate acceptance before private
+data use. Token-derived cost uses the inclusive ceiling conservatively and remains
+an estimate pending provider reconciliation.
 
 Source includes only the existing Responses adapter. Future browser+Luna,
 Groq Whisper turbo+Luna+Deepgram Aura, or Gemini Live/OpenAI Realtime comparison

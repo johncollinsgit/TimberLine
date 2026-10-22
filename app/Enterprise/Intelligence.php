@@ -75,11 +75,27 @@ class Intelligence
     {
         $settings = $this->settings();
         if ($settings !== null && $purpose === 'voice_answer') {
+            $inputCeiling = config('enterprise.voice_rates.input_ceiling_microusd_per_million', 0);
+            $outputCeiling = config('enterprise.voice_rates.output_ceiling_microusd_per_million', 0);
+            // Responses defaults for current models can bill a 30-minute cache write
+            // at 1.25x base input. Never activate voice using only the older base rate.
+            // The operator must approve inclusive ceilings for the exact account/tier.
+            if (! is_int($inputCeiling) || ! is_int($outputCeiling) || $inputCeiling < intdiv($settings['input_rate'] * 5 + 3, 4)
+                || $outputCeiling < $settings['output_rate'] || $inputCeiling > 1000000000 || $outputCeiling > 1000000000) {
+                return null;
+            }
+            $settings['input_rate'] = $inputCeiling;
+            $settings['output_rate'] = $outputCeiling;
             $settings['max_input'] = min(12000, $settings['max_input']);
             $settings['max_output'] = min(800, $settings['max_output']);
         }
 
         return $settings;
+    }
+
+    public function voiceReady(Tenant $tenant): bool
+    {
+        return $this->status($tenant)['ready'] && $this->purposeSettings('voice_answer') !== null;
     }
 
     private function instructions(string $purpose): string
@@ -100,6 +116,7 @@ class Intelligence
         $this->voiceGate($purpose);
         $actor = $this->actor($tenant, $user, $areaId);
         $settings = $this->purposeSettings($purpose);
+        abort_unless($settings !== null, 503, 'Approved inclusive voice rates are unavailable. No provider request was made.');
         $json = json_encode(['actor' => ['id' => (string) $user->id, 'name' => $user->fresh()->name, 'role' => $actor['role'],
             'tenant_id' => (string) $tenant->id, 'area_id' => $areaId], 'data' => $payload], JSON_THROW_ON_ERROR);
         $instructions = $this->instructions($purpose);

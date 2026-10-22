@@ -39,7 +39,7 @@ const server = createServer(async (request, response) => {
       reply: outcome === 'matched' ? 'Fictional dorm pipe burst. Location: fictional dorm entrance. Due date not recorded.' : outcome === 'choose' ? 'Choose the exact permitted job.' : 'Review a separate exact message preview. Nothing was sent.',
       job: outcome === 'matched' ? job : null, candidates: outcome === 'choose' ? [{ id: 'pipe', title: job.title }, { id: 'window', title: 'Fictional dorm window' }] : [] })); return
   }
-  response.setHeader('Content-Type', 'text/html')
+  response.setHeader('Content-Type', 'text/html; charset=utf-8')
   response.end(`<!doctype html><html lang="en"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ask Everbranch component fixture</title><style>body{font:16px system-ui;margin:20px;max-width:700px}button,input{font:inherit;padding:12px;margin:4px}input{width:85%}section{border:1px solid #ccc;padding:12px;margin:12px 0}pre{white-space:pre-wrap}button{min-height:44px}</style><h1>Ask Everbranch</h1><p>FICTIONAL COMPONENT TEST · fake speech · no provider sends</p><section id="voice"></section><form id="ask"><label>Question<input id="question" maxlength="1500"></label><button>Ask</button></form><section id="answers" aria-label="Checked replies"></section><section id="detail" aria-label="Existing job detail">No job selected</section><section id="map" aria-label="Recorded location">No location selected</section><script type="module">
 import { mountVoiceJobs } from '/resources/js/enterprise/voice-jobs.js';
 const transport = path => async (body,{signal}={}) => {const response=await fetch(path,{method:'POST',body:JSON.stringify(body),signal});const result=await response.json();if(!response.ok)throw new Error(result.message);return result};
@@ -120,6 +120,8 @@ try {
       await page.screenshot({ path: resolve(out, engine.name() + '-voice-draft-preview.png'), fullPage: true })
       await page.evaluate(() => window.session.stop())
       assert.equal(await page.getByLabel('Exact draft recipient').isVisible(), false)
+      assert.equal(await page.getByLabel('Exact draft recipient').inputValue(), '')
+      assert.equal(await page.locator('#voice').textContent().then(text => text.includes('fictional-preview@example.invalid')), false)
       assert.deepEqual(errors, []); assert.deepEqual(external, [])
       results.push({ engine: engine.name(), width: 390, calls, explicitStart: true, jobAndLocationOpen: true, followup: true, ambiguity: true, interrupt: true, stopPending: true, hiddenStops: true, revocation: true, micDenial: true, simulatedGeneration: true, exactManualDraftPreview: true, noSendControl: true, externalRequests: external, pageErrors: errors, physicalAcousticAcceptance: false, liveAI: false })
     } finally { await browser.close() }

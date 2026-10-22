@@ -62,10 +62,11 @@ function vaFixture(): array
     $r = $command(['action' => 'request.create', 'area_id' => $area, 'title' => 'Fictional dorm pipe', 'description' => 'Synthetic work only', 'location' => 'Fictional dorm entrance']);
     $r = $command(['action' => 'request.triage', 'area_id' => $area, 'id' => $r['id'], 'expected_version' => $r['version']]);
     $r = $command(['action' => 'request.assign', 'area_id' => $area, 'id' => $r['id'], 'expected_version' => $r['version'], 'project_id' => $project, 'assignee_id' => (string) $owner->id]);
-    config(['enterprise.intelligence' => ['enabled' => true, 'api_key' => 'synthetic-voice-key-not-real', 'model' => 'gpt-6-luna',
-        'input_rate_microusd_per_million' => 100000, 'output_rate_microusd_per_million' => 500000,
-        'max_input' => 12000, 'max_output' => 800, 'lifetime_cap_microusd' => 100000,
-        'rates_valid_until' => now()->addDay()->toIso8601String(), 'tenant_allowlist' => [(string) $tenant->id]]]);
+    config(['enterprise.voice_rates' => ['input_ceiling_microusd_per_million' => 125000, 'output_ceiling_microusd_per_million' => 500000],
+        'enterprise.intelligence' => ['enabled' => true, 'api_key' => 'synthetic-voice-key-not-real', 'model' => 'gpt-6-luna',
+            'input_rate_microusd_per_million' => 100000, 'output_rate_microusd_per_million' => 500000,
+            'max_input' => 12000, 'max_output' => 800, 'lifetime_cap_microusd' => 100000,
+            'rates_valid_until' => now()->addDay()->toIso8601String(), 'tenant_allowlist' => [(string) $tenant->id]]]);
     $provider = new FixtureVoiceProvider($r['data']['task_id']);
     app()->instance(VoiceCompletionProvider::class, $provider);
 
@@ -97,15 +98,16 @@ test('generative source uses scoped current facts and bounded server history wit
     expect($provider->calls)->toBe(2)->and($provider->inputs[1]['history'])->toHaveCount(2);
     expect(TeamOperationRecord::query()->where('kind', 'ent_ai_usage')->count())->toBe(2);
     $usage = TeamOperationRecord::query()->find($first['usage']['receipt_id']);
-    expect($usage->status)->toBe('completed')->and($usage->data['charged_microusd'])->toBe(4)->and($usage->data['reserved_microusd'])->toBe(1600);
+    expect($usage->status)->toBe('completed')->and($usage->data['charged_microusd'])->toBe(4)->and($usage->data['reserved_microusd'])->toBe(1900);
     expect(DB::table('team_tasks')->count())->toBe(1);
     Http::assertNothingSent();
 });
 
 test('disabled generation missing reservation and controlled-trial budget retain zero-dispatch record lookup', function (): void {
     [$tenant, $owner, $area, $provider] = vaFixture();
-    foreach (['disabled', 'missing', 'trial'] as $mode) {
+    foreach (['disabled', 'missing', 'trial', 'insufficient_cache_ceiling'] as $mode) {
         config(['enterprise.voice_generation_enabled' => $mode !== 'disabled', 'enterprise.intelligence.enabled' => $mode !== 'missing', 'enterprise.trial.enabled' => $mode === 'trial']);
+        config(['enterprise.voice_rates.input_ceiling_microusd_per_million' => $mode === 'insufficient_cache_ceiling' ? 100000 : 125000]);
         vaTurn($tenant, $owner, $area)->assertOk()->assertJsonPath('mode', 'record_backed')->assertJsonPath('provider_dispatch', false);
     }
     expect($provider->calls)->toBe(0)->and(TeamOperationRecord::query()->whereIn('kind', ['ent_ai_usage', 'ent_voice_session'])->count())->toBe(0);
@@ -258,7 +260,7 @@ test('bounded expiry scrub removes conversations drafts recipients and usage val
         expect($row->data)->not->toHaveKeys(['history', 'pending_payload', 'preview', 'last_result', 'value']);
     }
     $usage = TeamOperationRecord::query()->where('kind', 'ent_ai_usage')->sole();
-    expect($usage->status)->toBe('completed')->and($usage->data['charged_microusd'])->toBe(4)->and($usage->data['reserved_microusd'])->toBe(1600);
+    expect($usage->status)->toBe('completed')->and($usage->data['charged_microusd'])->toBe(4)->and($usage->data['reserved_microusd'])->toBe(1900);
     vaTurn($tenant, $owner, $area, $session, $turn)->assertConflict();
     Http::assertNothingSent();
 });
@@ -300,5 +302,18 @@ test('turn session and exact preview counts are bounded before another provider 
     }
     vaTurn($tenant, $owner, $area)->assertStatus(429);
     expect($provider->calls)->toBe(13)->and(TeamOperationRecord::query()->where('kind', 'ent_voice_preview')->count())->toBe(5);
+    Http::assertNothingSent();
+});
+
+test('inclusive cache-write ceiling is reserved before dispatch and remains conservative at maximum usage', function (): void {
+    [$tenant, $owner, $area, $provider] = vaFixture();
+    config(['enterprise.intelligence.lifetime_cap_microusd' => 1899]);
+    vaTurn($tenant, $owner, $area)->assertStatus(429);
+    expect($provider->calls)->toBe(0);
+    config(['enterprise.intelligence.lifetime_cap_microusd' => 1900]);
+    $provider->respond = fn ($value, $settings) => $provider->response($value, $settings['max_input'], $settings['max_output']);
+    vaTurn($tenant, $owner, $area)->assertOk()->assertJsonPath('usage.reserved_microusd', 1900)->assertJsonPath('usage.cost_microusd', 1900);
+    vaTurn($tenant, $owner, $area)->assertStatus(429);
+    expect($provider->calls)->toBe(1);
     Http::assertNothingSent();
 });

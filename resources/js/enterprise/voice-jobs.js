@@ -110,6 +110,7 @@ export function createVoiceJobs({ context, lookup, openJob, onReply, onState, on
     contextChanged() { stop(); selected = null; choices = []; boundScope = null },
     dispose() { stop(); disposed = true; selected = null; choices = [] },
     isActive: () => voice.isActive(),
+    hasDraft: () => !!proposal,
   }
 }
 
@@ -127,9 +128,10 @@ export function mountVoiceJobs(host, options) {
   draft.hidden = true; recipient.type = 'text'; recipient.maxLength = 254; recipient.setAttribute('aria-label', 'Exact draft recipient'); recipient.autocomplete = 'off'
   previewButton.type = 'button'; previewButton.textContent = 'Preview draft'; draftText.style.whiteSpace = exactPreview.style.whiteSpace = 'pre-wrap'
   draft.append(draftText, recipient, previewButton, exactPreview); host.append(draft)
+  const clearDraft = () => { draft.hidden = true; draftText.textContent = ''; recipient.value = ''; exactPreview.textContent = '' }
   const labels = { idle: 'Ready. Microphone off.', starting: 'Starting microphone…', listening: 'Listening. Finish speaking to look up a job.', thinking: 'Checking permitted job records. Microphone paused.', speaking: 'Speaking. Microphone paused.' }
   const session = createVoiceJobs({ ...options,
-    onState(phase) { status.textContent = labels[phase]; talk.disabled = phase !== 'idle'; stop.disabled = phase === 'idle' && draft.hidden; interrupt.disabled = phase !== 'speaking'; options.onState?.(phase) },
+    onState(phase) { if (phase === 'idle' && !session.hasDraft()) clearDraft(); status.textContent = labels[phase]; talk.disabled = phase !== 'idle'; stop.disabled = phase === 'idle' && draft.hidden; interrupt.disabled = phase !== 'speaking'; options.onState?.(phase) },
     onReply(result) {
       disclosure.textContent = result.mode === 'generated'
         ? `Ask Everbranch - ${result.provider_simulated ? 'Simulated provider response for testing' : 'AI-generated response from permitted job facts'}. ${result.coverage || ''} Nothing was sent or changed. Browser speech may be processed online.`
@@ -141,19 +143,19 @@ export function mountVoiceJobs(host, options) {
       options.onReply?.(result)
     },
     onPreview(value) {
-      exactPreview.textContent = `Exact ${value.channel} preview\nTo: ${value.to}\nSubject: ${value.subject}\n${value.body}\nExpires: ${value.expires_at}\n${value.notice}`
+      exactPreview.textContent = `Exact ${value.channel} preview\nTo: ${value.to}\nSubject: ${value.subject}\n${value.body}\nDigest: ${value.digest || 'Not provided by fixture'}\nExpires: ${value.expires_at}\n${value.notice}`
       options.onPreview?.(value)
     },
-    onError(message) { draft.hidden = true; stop.disabled = !session.isActive(); status.textContent = message; options.onError?.(message) } })
+    onError(message) { clearDraft(); stop.disabled = !session.isActive(); status.textContent = message; options.onError?.(message) } })
   previewButton.onclick = async () => {
     previewButton.disabled = true; exactPreview.textContent = ''
     try { await session.previewDraft(recipient.value) } catch (error) { status.textContent = error.message }
     finally { previewButton.disabled = false }
   }
-  const stopReview = () => { draft.hidden = true; session.stop() }
-  talk.onclick = () => { draft.hidden = true; session.start() }; stop.onclick = stopReview; interrupt.onclick = () => session.interrupt()
+  const stopReview = () => { clearDraft(); session.stop() }
+  talk.onclick = () => { clearDraft(); session.start() }; stop.onclick = stopReview; interrupt.onclick = () => session.interrupt()
   const hidden = () => { if (doc.hidden) stopReview() }, pagehide = stopReview
   doc.addEventListener('visibilitychange', hidden); doc.defaultView.addEventListener('pagehide', pagehide)
   stop.disabled = true; interrupt.disabled = true; status.textContent = labels.idle
-  return { ...session, stop: stopReview, contextChanged() { draft.hidden = true; session.contextChanged() }, dispose() { session.dispose(); doc.removeEventListener('visibilitychange', hidden); doc.defaultView.removeEventListener('pagehide', pagehide); host.replaceChildren() } }
+  return { ...session, stop: stopReview, contextChanged() { clearDraft(); session.contextChanged() }, dispose() { session.dispose(); doc.removeEventListener('visibilitychange', hidden); doc.defaultView.removeEventListener('pagehide', pagehide); host.replaceChildren() } }
 }

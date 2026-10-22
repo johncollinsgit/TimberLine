@@ -14,7 +14,7 @@ class IntelligenceVoiceReservation implements VoiceCostReservation
     public function ready(Tenant $tenant): bool
     {
         // A separate per-tenant cap must never escape the controlled trial's shared $5 ledger.
-        return ! config('enterprise.trial.enabled') && $this->intelligence->status($tenant)['ready'];
+        return ! config('enterprise.trial.enabled') && $this->intelligence->voiceReady($tenant);
     }
 
     public function generate(Tenant $tenant, User $user, string $area, array $payload, string $requestId): array
