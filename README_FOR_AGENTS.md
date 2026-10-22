@@ -1,3 +1,13 @@
+## Evergrove Payments iPhone foundation (2026-10-22; local source only)
+
+The separate `app/Services/PaymentsCore` package adds deny-by-default internal
+provider-neutral orchestration with immutable bindings, integer server-priced
+line semantics, durable local attempts/recovery and original-payment refunds.
+Its SQLite reference journal refuses live bindings. No HTTP endpoints, enabled
+server authorizer, provider adapter, production schema or simulator changes ship.
+Read `docs/operations/evergrove-payments-core.md` before integration. Test evidence
+does not establish merchant, iPhone, provider or production payment acceptance.
+
 ## Wren editable saved applications (October 25, 2026; source candidate)
 
 The family portal can reopen unsettled registrations through Edit application &
