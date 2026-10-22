@@ -3013,3 +3013,11 @@ and DKIM are verified. Approved simulator resources are being configured.
 Platform SMTP remains SendGrid; actual AWS delivery/application event acceptance,
 runtime credentials, production access and a separate platform retry/event
 contract remain required before completion.
+## Reusable service proposals (October 22; draft source, disabled)
+
+`App\Proposals` adds tenant-scoped catalogs/clients/draft templates, owner drafts
+and previews, immutable private password publications, scoped review comments
+and non-binding exact-selection agreement requests. The regular and Enterprise
+owner-lane binding registry and recipient hosts ship empty. No real workspace
+is provisioned or bound; no signature/payment/provider activation is included.
+See [the architecture and acceptance gates](docs/architecture/reusable-proposals.md).

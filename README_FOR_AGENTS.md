@@ -2331,3 +2331,13 @@ and DKIM are verified. Approved simulator resources are being configured.
 Platform SMTP remains SendGrid; actual AWS delivery/application event acceptance,
 runtime credentials, production access and a separate platform retry/event
 contract remain required before completion.
+## Reusable service proposals (October 22; draft source, disabled)
+
+Read [the proposal boundary](docs/architecture/reusable-proposals.md) before
+mounting or activating the shared engine. Native business tenants, Enterprise
+department areas, client tenants and HighLevel locations are distinct. No owner
+binding is inferred by name. Keep published versions and exact selections,
+review display names, final signature evidence and provider lifecycles separate.
+Lees-McRae has client-only prices and no-markup usage; never copy that offer into
+global rates. Both feature flags and binding/host lists default closed. The
+campus header/tour and payment stack remain under their existing owners.
