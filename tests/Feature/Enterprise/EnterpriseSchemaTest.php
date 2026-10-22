@@ -53,9 +53,13 @@ final class EnterpriseSchemaTest extends TestCase
         foreach (['orders', 'customers', 'shopify_stores', 'tenant_payment_accounts', 'website_orders', 'marketing_profiles', 'field_service_jobs', 'password_reset_tokens', 'sessions'] as $table) {
             $this->assertFalse(Schema::hasTable($table), $table.' must not be installed');
         }
-        $this->assertCount(3, DB::table('migrations')->get());
+        foreach (['tenant_mail_domains', 'tenant_mailboxes', 'tenant_mailbox_users'] as $table) {
+            $this->assertTrue(Schema::hasTable($table));
+            $this->assertSame(0, DB::table($table)->count(), $table.' must start empty');
+        }
+        $this->assertCount(4, DB::table('migrations')->get());
         $this->install();
-        $this->assertCount(3, DB::table('migrations')->get());
+        $this->assertCount(4, DB::table('migrations')->get());
         $this->assertCount(6, EnterpriseSchema::sharedVersionOne());
     }
 

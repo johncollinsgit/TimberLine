@@ -2319,3 +2319,13 @@ scanner quarantine, separate owner/admin cost visibility and current-permission
 Ask citations. Model transport reuse does not activate paid AI. Mailbox preview/
 confirmation is fake-adapter tested; the default gateway has no connections or
 sending capability. Do not substitute retail/owner credentials or create grants.
+## Enterprise workflow workspace (October 22 source candidate)
+
+The isolated Enterprise application now has a dedicated project workflow workspace,
+screen/form builder, reviewed activation, durable human runs/history, authorized
+Home briefing and regenerated one-page PDF. Build its assets separately with
+`npm run build:enterprise`. Real-capable Responses/own-user SMTP adapters and empty
+mailbox schema require separately approved configuration; source installation grants
+no access or provider connection. Read `docs/architecture/enterprise-workflow-workspace.md`
+and `docs/operations/enterprise-integrations.md`. All new rollout flags default off;
+neither draft PR nor fixture evidence establishes deployment or live acceptance.

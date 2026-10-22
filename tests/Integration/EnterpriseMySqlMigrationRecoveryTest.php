@@ -34,12 +34,20 @@ final class EnterpriseMySqlMigrationRecoveryTest extends TestCase
         DB::table('tenants')->insert(['id' => 9901, 'name' => 'Synthetic durable tenant', 'slug' => 'synthetic-durable']);
         DB::table('users')->insert(['id' => 9901, 'name' => 'Synthetic durable member', 'email' => 'mysql-recovery@example.invalid', 'password' => 'synthetic-fixture-only']);
         DB::table('team_work_locks')->insert(['tenant_id' => 9901]);
+        DB::table('tenant_mail_domains')->insert(['id' => 9901, 'tenant_id' => 9901, 'domain' => 'mysql-recovery.example.invalid',
+            'transport' => 'direct', 'status' => 'pending_dns', 'dns_records' => '{"proof":"synthetic-durable-proof"}']);
+        $encrypted = \Illuminate\Support\Facades\Crypt::encryptString('{"password":"synthetic-only-no-provider"}');
+        DB::table('tenant_mailboxes')->insert(['id' => 9901, 'tenant_id' => 9901, 'tenant_mail_domain_id' => 9901,
+            'address' => 'member@mysql-recovery.example.invalid', 'display_name' => 'Synthetic retained mailbox', 'provider_credentials' => $encrypted]);
 
         // MySQL retains these tables/data while later DDL or bookkeeping is absent.
         Schema::drop('team_operation_attempts');
         Schema::drop('team_operation_revisions');
         Schema::drop('team_file_chunks');
         Schema::drop('tenant_module_states');
+        Schema::drop('tenant_mailbox_users');
+        Schema::table('tenant_mailboxes', fn (Blueprint $table) => $table->dropUnique('ee_mail_address'));
+        Schema::table('tenant_mailboxes', fn (Blueprint $table) => $table->dropForeign('ee_mail_domain_fk'));
         Schema::table('users', fn (Blueprint $table) => $table->dropUnique('ee_users_email'));
         Schema::table('tenant_user', fn (Blueprint $table) => $table->dropForeign('ee_tu_user_fk'));
         Schema::table('tenant_user', fn (Blueprint $table) => $table->dropForeign('ee_tu_tenant_fk'));
@@ -49,7 +57,8 @@ final class EnterpriseMySqlMigrationRecoveryTest extends TestCase
         $identity = require database_path('migrations/2026_10_21_000100_create_enterprise_identity.php');
         $access = require database_path('migrations/2026_10_21_000200_create_enterprise_access_profiles.php');
         $shared = require database_path('migrations/2026_10_21_000300_create_enterprise_shared_work_schema.php');
-        foreach ([$identity, $access, $shared] as $migration) {
+        $mailboxes = require database_path('migrations/2026_10_22_000400_create_enterprise_mailboxes.php');
+        foreach ([$identity, $access, $shared, $mailboxes] as $migration) {
             $migration->up();
             $migration->up();
             $migration->down(); // Code rollback must retain all evidence.
@@ -57,6 +66,11 @@ final class EnterpriseMySqlMigrationRecoveryTest extends TestCase
         $this->assertSame('Synthetic durable tenant', DB::table('tenants')->where('id', 9901)->value('name'));
         $this->assertSame('mysql-recovery@example.invalid', DB::table('users')->where('id', 9901)->value('email'));
         $this->assertTrue(DB::table('team_work_locks')->where('tenant_id', 9901)->exists());
+        $this->assertSame($encrypted, DB::table('tenant_mailboxes')->where('id', 9901)->value('provider_credentials'));
+        $this->assertStringContainsString('synthetic-durable-proof', DB::table('tenant_mail_domains')->where('id', 9901)->value('dns_records'));
+        $this->assertSame(0, DB::table('tenant_mailbox_users')->count());
+        $this->assertTrue(Schema::hasIndex('tenant_mailboxes', 'ee_mail_address', 'unique'));
+        $this->assertSame('tenant_mail_domains', collect(Schema::getForeignKeys('tenant_mailboxes'))->firstWhere('name', 'ee_mail_domain_fk')['foreign_table']);
         foreach (['tenant_user', 'tenant_access_profiles', 'tenant_module_entitlements'] as $table) {
             $this->assertSame(0, DB::table($table)->count());
         }

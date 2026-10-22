@@ -36,8 +36,10 @@ class EmailDrafts
             }
         }
 
-        return ['mailboxes' => $items, 'delivery_ready' => $this->gateway->ready(), 'status' => $this->gateway->ready()
-            ? 'Exact preview and confirmation required.' : 'No delivery transport connected. No mailbox messages are read or sent.'];
+        $ready = $this->gateway->ready() && $items !== [];
+
+        return ['mailboxes' => $items, 'delivery_ready' => $ready, 'status' => $ready
+            ? 'Exact preview and confirmation required.' : 'No delivery transport connected for your authorized mailbox. No mailbox messages are read or sent.'];
     }
 
     private function sources(Tenant $tenant, User $user, string $areaId, array $refs): array

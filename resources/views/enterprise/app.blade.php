@@ -6,11 +6,12 @@
 </style></head>
 <body><a class="ent-skip" href="#enterprise-main">Skip to workspace</a><div class="shell">
 <aside class="sidebar" aria-label="Everbranch Enterprise"><div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 20c1-9 7-14 13-17 2 9-2 16-9 15M5 22l9-12"/></svg></span><div><strong>Everbranch</strong><small>Enterprise · Teams</small></div></div>
-<p class="workspace-label">Organization workspace</p><nav aria-label="Workspace sections"><button class="nav-item active" data-section="requests">Requests</button><button class="nav-item" data-section="projects">Operations &amp; projects</button><button class="nav-item" data-section="contractors">Contractors</button><button class="nav-item" data-section="ask" id="ask-nav" hidden>Ask Everbranch</button></nav>
+<p class="workspace-label">Organization workspace</p><nav aria-label="Workspace sections"><button class="nav-item" data-section="home" id="home-nav" hidden>Campus overview</button><button class="nav-item active" data-section="requests">Requests</button><button class="nav-item" data-section="projects">Operations &amp; projects</button><button class="nav-item" data-section="contractors">Contractors</button><button class="nav-item" data-section="ask" id="ask-nav" hidden>Ask Everbranch</button></nav>
 <p class="workspace-label">Your workspaces</p><div id="areas"></div><div class="sidebar-bottom"><strong>{{ $tenant->name }}</strong><br>{{ auth()->user()->name }}<br>Connected work. Clear ownership.<form method="post" action="{{ route('logout') }}">@csrf<button class="nav-item" type="submit">Sign out</button></form></div></aside>
 <main class="main" id="enterprise-main"><header class="topbar"><div class="breadcrumb">{{ $tenant->name }} <span>/</span> <strong id="breadcrumb">Requests</strong></div><span class="badge" id="visibility">Loading workspace</span></header>
 <div class="content"><div class="eyebrow">Everbranch Enterprise</div><div class="page-heading"><div><h1 id="heading">Turn requests into owned work.</h1><p class="subtle">One place for intake, assignment and visible progress.</p></div><div class="actions"><button class="button" id="create-workspace" hidden>New workspace</button><button class="button primary" id="create-request" hidden>New request</button><button class="button primary" id="create-project" hidden>New project</button></div></div>
 <p id="status" role="status" aria-live="polite"></p><button class="button" id="retry" hidden>Retry the same action</button>
+@include('enterprise.home')
 @include('enterprise.next-panels')
 <div id="work"><div class="toolbar"><div class="actions" role="group" aria-label="Work view"><button class="button" data-view="list" aria-pressed="true">List</button><button class="button" data-view="calendar" aria-pressed="false">Calendar</button><button class="button" data-view="map" aria-pressed="false">Map</button></div><label>Find work <input id="search" type="search" placeholder="Search visible work"></label><button class="button" id="map-toggle">View Map</button></div>
 <section class="panel map-panel" id="map" hidden><div class="map-head"><div><div class="eyebrow">Workspace locations</div><h2>See where the work happens.</h2></div><span class="caption">Select a marker for request details</span></div><div id="map-holder"><svg class="location-map" viewBox="0 0 1000 330" preserveAspectRatio="none" aria-hidden="true"><defs><pattern id="grid" width="100" height="66" patternUnits="userSpaceOnUse"><path d="M100 0H0V66" fill="none" stroke="#d9e2ce"/></pattern></defs><rect width="1000" height="330" fill="url(#grid)"/></svg><div id="map-markers"></div><p class="caption">Saved longitude/latitude positions on a coordinate grid. No campus basemap, GPS feed or external map provider is connected.</p></div><p class="caption" id="map-empty"></p></section>
@@ -45,7 +46,7 @@
     },
     area = new URLSearchParams(location.search).get('area_id'),
     selected = new URLSearchParams(location.search).get('selected'),
-    section = ['projects', 'contractors', 'ask'].includes(new URLSearchParams(location.search).get('section')) ? new URLSearchParams(location.search).get('section') : 'requests',
+    section = ['home', 'projects', 'contractors', 'ask'].includes(new URLSearchParams(location.search).get('section')) ? new URLSearchParams(location.search).get('section') : 'requests',
     view = 'list',
     map = false,
     pending = null,
@@ -74,12 +75,13 @@
     const result = await response.json().catch(() => ({
       message: 'The server could not confirm this action.'
     }));
-    if (!response.ok) throw new Error(result.message || result.error || 'This action is unavailable.');
+    if (!response.ok) {const error = new Error(result.message || result.error || 'This action is unavailable.');error.status=response.status;throw error;}
     return result;
   }
   async function load() {
     try {
       const result = await api(urls.data + (area ? '&area_id=' + encodeURIComponent(area) : ''));
+      if (!data.features && !new URLSearchParams(location.search).has('section') && result.features?.briefing) section = 'home';
       data = result;
       area = data.selected_area_id;
       render();
@@ -139,6 +141,7 @@
     $('heading').textContent = section === 'projects' ? 'Work with clear ownership.' : section === 'contractors' ? 'Trusted partners, connected work.' : 'Turn requests into owned work.';
     $('breadcrumb').textContent = section === 'projects' ? 'Operations & projects' : section === 'contractors' ? 'Contractors' : 'Requests';
     renderNext();
+    renderHome();
     $('map').hidden = !map;
     $('map-toggle').textContent = map ? 'Hide Map' : 'View Map';
     document.querySelectorAll('[data-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === view)));
@@ -175,7 +178,7 @@
     discussionGeneration++;
     activeDiscussionKey = null;
     rememberUrl();
-    if (['ask', 'contractors'].includes(section)) return;
+    if (['home', 'ask', 'contractors'].includes(section)) return;
     const r = (section === 'projects' ? data.projects : data.requests).find(r => r.id === selected);
     if (!r) {
       $('detail').innerHTML = '<h2>Choose work</h2><p class="subtle">Select a row or map marker for details.</p>';
@@ -183,6 +186,7 @@
     }
     if (section === 'projects') {
       $('detail').innerHTML = `<h2>${esc(r.name)}</h2><span class="badge">${esc($('visibility').textContent)}</span><p class="work-detail">${esc(r.description)}</p><p class="caption">Project version ${r.version}. Requests can be assigned into this project during triage.</p>`;
+      if (data.features?.workflow) { const launch = document.createElement('a'); launch.className = 'button primary'; launch.textContent = 'Open workflow workspace'; launch.href = '/projects/workspace?tenant=' + encodeURIComponent(tenantSlug) + '&area_id=' + encodeURIComponent(area) + '&project_id=' + encodeURIComponent(r.id); $('detail').append(launch); }
       mountDiscussion('project', r.id);
       return;
     }
@@ -214,6 +218,7 @@
     };
     mountDiscussion('request', r.id);
   }
+  @include('enterprise.home-script')
   function create(action) {
     if (pending) return message('Retry the retained action before starting another.', true);
     createAction = action;

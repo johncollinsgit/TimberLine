@@ -1,7 +1,7 @@
   const nextBase = @json(url('/enterprise')), teamBase = @json(url('/team'));
   const draftPrefix = `everbranch-enterprise-draft:${workspace}:${viewer}:`;
   const selectionMemory = new Map(), noteBusy = new Set(), planningReceipts = new Map();
-  let activeDiscussionKey = null, discussionGeneration = 0, planningData = null, planningPending = null, planningBusy = false, askBusy = false, emailPreview = null, emailPending = null, emailGeneration = 0;
+  let activeDiscussionKey = null, discussionGeneration = 0, planningData = null, planningPending = null, planningBusy = false, askBusy = false, askPending = null, emailPreview = null, emailPending = null, emailGeneration = 0;
   const nextQuery = () => '?tenant=' + encodeURIComponent(tenantSlug);
   function readDraft(key) { try { return JSON.parse(sessionStorage.getItem(draftPrefix + key) || '{}'); } catch { return {}; } }
   function writeDraft(key, value) { try { sessionStorage.setItem(draftPrefix + key, JSON.stringify(value)); } catch {} }
@@ -31,7 +31,7 @@
     $('ask').hidden = section !== 'ask';
     $('work').hidden = ['ask', 'contractors'].includes(section);
     document.querySelectorAll('[data-section]').forEach(b => b.classList.toggle('active', b.dataset.section === section));
-    if (section === 'ask') { $('heading').textContent = 'Ask with the right context.'; $('breadcrumb').textContent = 'Ask Everbranch'; loadMailboxes(); }
+    if (section === 'ask') { $('heading').textContent = 'Ask with the right context.'; $('breadcrumb').textContent = 'Ask Everbranch'; if(!$('ask-question').value) $('ask-question').value=readDraft('ask:'+area).pending?.question||''; loadMailboxes(); }
     if (section === 'contractors') loadPlanning();
     rememberUrl();
   }
@@ -156,11 +156,17 @@
   function chatMessage(text, className) { const node = document.createElement('div'); node.className = 'chat-turn ' + (className || ''); node.textContent = text; $('chat-log').append(node); return node; }
   $('ask-form').onsubmit = async e => {
     e.preventDefault(); if (askBusy || !area) return; const question = $('ask-question').value.trim(); if (!question) return;
+    askPending = readDraft('ask:' + area).pending || null;
+    if (askPending && askPending.question !== question) return message('The previous Ask request is retained. Retry its exact text to check the outcome before asking a different question.', true);
+    askPending ||= {area_id:area,question,request_id:crypto.randomUUID()};
+    writeDraft('ask:' + area, {pending:askPending});
     askBusy = true; $('ask-submit').disabled = true; const requestedArea = area;
     chatMessage(question,'question'); $('ask-question').value = '';
     try {
-      const result = await api(`${nextBase}/ask${nextQuery()}`, {area_id:area,question});
+      const result = await api(`${nextBase}/ask${nextQuery()}`, askPending);
       if (area !== requestedArea) return;
+      askPending = null;
+      writeDraft('ask:' + requestedArea, {});
       const answer = chatMessage(result.reply);
       const labels = {status:'Status',due_on:'Due date',starts_on:'Start date',ends_on:'End date (inclusive)',amount_minor:'Amount in minor units',currency:'Currency',basis:'Basis',updated_at:'Recorded at'};
       for (const source of result.sources) {
@@ -198,6 +204,6 @@
     catch (error) { message(error.message, true); }
     finally { $('email-confirm').disabled = false; }
   };
-  document.querySelector('form[action="{{ route('logout') }}"]')?.addEventListener('submit', () => { for (const key of Object.keys(sessionStorage)) if (key.startsWith(draftPrefix)) sessionStorage.removeItem(key); });
+  document.querySelector('form[action="{{ route('logout') }}"]')?.addEventListener('submit', () => { for (const key of Object.keys(sessionStorage)) if (key.startsWith(draftPrefix) || key.startsWith(`enterprise-workflow:${workspace}:${viewer}:`)) sessionStorage.removeItem(key); });
   window.addEventListener('pagehide', stashComposer);
   window.visualViewport?.addEventListener('resize', () => {document.documentElement.style.setProperty('--visible-height', window.visualViewport.height + 'px'); if (document.activeElement?.matches('#discussion-body,#ask-question')) document.activeElement.scrollIntoView({block:'nearest'});});

@@ -2,6 +2,7 @@
   "extends": "./tsconfig.json",
   "include": [
     "resources/js/workflows/**/*.ts",
-    "resources/js/workflows/**/*.tsx"
+    "resources/js/workflows/**/*.tsx",
+    "resources/js/enterprise/**/*.tsx"
   ]
 }

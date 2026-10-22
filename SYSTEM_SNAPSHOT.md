@@ -2999,3 +2999,13 @@ Ask Everbranch chat and a fake-tested own-mailbox preview/confirmation contract.
 No production model/mailbox binding, provider credentials, sends or grants exist.
 See `docs/architecture/enterprise-next-slice.md`; tablet checks are browser viewport
 simulation, not physical iPad acceptance.
+## Enterprise operating workflow source candidate (October 22)
+
+`/projects/workspace` in the separate Enterprise runtime provides a full-screen
+React Flow workspace, bounded screen/form design, digest-reviewed activation and
+persisted human runs with current authorization. Home/PDF use authorized as-of
+facts with explicit coverage. Enterprise's own Vite artifact, encrypted AI usage
+reservations and empty native-shaped mailbox DDL preserve the independent
+application/database boundary. No credentials, grants, provider calls, sends or
+deployment are created. See `docs/architecture/enterprise-workflow-workspace.md`;
+real provider/scanner and physical iPad acceptance remain separate gates.

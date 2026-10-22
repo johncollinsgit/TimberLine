@@ -6,6 +6,7 @@ import { request as httpRequest } from 'node:http';
 import { once } from 'node:events';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { checkWorkflowWorkspace } from './enterprise-workflow-browser.mjs';
 const php = process.env.ENTERPRISE_TEST_PHP;
 assert.ok(php, 'ENTERPRISE_TEST_PHP is required');
 const {
@@ -37,10 +38,13 @@ const env = {
   ENTERPRISE_PLANNING_ENABLED: 'true',
   ENTERPRISE_ASK_ENABLED: 'true',
   ENTERPRISE_EMAIL_DRAFTS_ENABLED: 'true',
+  ENTERPRISE_WORKFLOW_ENABLED: 'true',
+  ENTERPRISE_BRIEFING_ENABLED: 'true',
+  ENTERPRISE_SAMPLE_DATA: 'true',
   ENTERPRISE_TENANT_ALLOWLIST: '1'
 };
 const keyFile = db + '.key', certFile = db + '.crt';
-let server, serverExit, proxy, browser;
+let server, serverExit, proxy, browser, page;
 try {
   const seeded = spawnSync(php, ['scripts/everbranch-team/enterprise-browser-fixture.php'], {
     env,
@@ -93,6 +97,7 @@ try {
     } : {})
   });
   const context = await browser.newContext({
+    hasTouch: true,
     ignoreHTTPSErrors: true, // This context only: the one-use self-signed loopback fixture.
     viewport: {
       width: 1440,
@@ -105,8 +110,8 @@ try {
     external.push(route.request().url());
     return route.abort();
   });
-  const page = await context.newPage(),
-    errors = [];
+  page = await context.newPage();
+  const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   await page.goto(origin + '/login');
   await page.getByLabel('Email', {
@@ -328,9 +333,13 @@ try {
     assert.ok(await page.locator('#ask-submit').evaluate(el => el.getBoundingClientRect().height >= 44),`${label} Ask touch target`);
     await page.screenshot({path:resolve(evidence,`enterprise-ask-${label}.png`),fullPage:true});
   }
+  await checkWorkflowWorkspace(page,evidence);
   assert.deepEqual(errors, []);
   assert.deepEqual(external, []);
   console.log(`PASS (${browserEngine}): independent runtime intake lifecycle and map; contractor/date planning; larger project details, retained drafts, exact interrupted note retry, resumable private quarantined upload; desktop/phone/iPad portrait/landscape viewport layout and touch targets; user-aware record-backed Ask citations and disconnected mailbox; zero external requests and JavaScript errors. Viewport simulation only, not physical iPad acceptance.`);
+} catch(error) {
+  if(page) {await page.screenshot({path:resolve(evidence,'failure.png'),fullPage:true}).catch(()=>{});await writeFile(resolve(evidence,'failure.txt'),`${error.stack}\n${await page.locator('body').innerText().catch(()=>'Unavailable')}`).catch(()=>{});}
+  throw error;
 } finally {
   if (browser) await browser.close();
   if (proxy) {proxy.closeAllConnections(); await new Promise(resolve => proxy.close(resolve));}

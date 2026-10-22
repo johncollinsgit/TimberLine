@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_22_000400_create_enterprise_mailboxes.php' => [
+        'test' => 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php',
+        'scenarios' => ['encrypted existing mailbox and domain proof survive missing grant table and named index/foreign-key repair; replay creates no accounts credentials or grants'],
+    ],
     '2026_10_21_000100_create_enterprise_identity.php' => [
         'test' => 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php',
         'scenarios' => ['identity tables and rows retained before named unique keys and membership foreign-key repair; replay never creates memberships'],
