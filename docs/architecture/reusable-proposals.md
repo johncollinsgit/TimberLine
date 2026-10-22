@@ -125,10 +125,14 @@ and refuses external requests. It does not prove physical device acceptance.
 
 The additive migration has a manifest entry, named repairable indexes/foreign
 keys and a real disposable-MySQL recovery test wired into the existing CI job.
-No local MySQL executable/service was available in this task, so real MySQL
-recovery and the data-free schema baseline must be run/reviewed through the
-existing disposable MySQL workflow. Do not hand-edit schema artifacts or claim
-SQLite establishes MySQL recovery.
+No local MySQL executable/service was available in this task. The registered
+recovery test and prior-schema rehearsal passed in the existing MySQL CI job.
+The baseline workflow now generates exact-head candidates for same-repository
+migration PRs, using the existing guarded disposable MySQL environment; normal
+committed-fingerprint verification remains mandatory. Generated SQL and its
+fingerprint must be independently reviewed together before committing. Exact-head
+CI outcomes belong in the PR evidence. Do not hand-edit schema artifacts or
+claim SQLite establishes MySQL recovery.
 
 Keep a draft PR and independent code/visual review. No merge/deploy or production
 flag/configuration changes. Live workspace bindings, recipient hosts, legal
