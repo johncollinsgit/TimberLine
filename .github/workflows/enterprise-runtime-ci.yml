@@ -21,6 +21,8 @@ on:
       - 'tests/Integration/migration-recovery-manifest.php'
       - 'phpunit.enterprise.xml'
       - '.github/workflows/enterprise-runtime-ci.yml'
+      - '.github/workflows/tests.yml'
+      - '.github/workflows/lint.yml'
       - 'composer.lock'
       - 'package-lock.json'
       - 'database/migrations/**'

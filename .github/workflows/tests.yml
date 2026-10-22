@@ -7,6 +7,7 @@ on:
       - main
       - master
       - workos
+      - codex/everbranch-enterprise-intake
   workflow_dispatch:
 
 concurrency:
