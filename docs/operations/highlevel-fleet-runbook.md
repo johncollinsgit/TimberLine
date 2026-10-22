@@ -1,3 +1,31 @@
+## Synthetic Calendar → job → materials presentation (2026-10-22)
+
+- Confirmed visible non-BridgeCity context in Safari: Everbranch Fleet Test Client
+  A, HighLevel location `vnuVtVmlgTsMAyCQdbuY`. No demo records are written there.
+  Presentation target is the existing isolated `/crm/fleet/demo` browser surface.
+- Three clearly prefixed DEMO Calendar examples link to browser job IDs 207–209:
+  termite callback (11:15–12:00 Eastern), routine pest inspection (12:30–13:15),
+  rodent follow-up (14:00–14:30), on the current Eastern date. Addresses and
+  customers are explicitly fictional. Two existing demo vans/crews carry 12 bait
+  stations, 10 inspection traps and 8 rodent traps against demands of 6, 4 and 3.
+- Calendar displays the linked job's current saved time, address, van and material
+  demand. Open linked job expands that exact record; Back to calendar event
+  returns focus to the same event. Material status compares demand to assigned
+  van stock and distinguishes unknown stock, unassigned vans and shortages.
+  Demand edits never reserve, decrement or purchase stock.
+- `#calendar` directly opens the demo calendar. Normal entry retains the guided
+  seven-step tour. Next, Back, Skip this step, Explore on my own (close), and
+  Restart guided tour are exercised with record navigation at desktop/phone sizes.
+- This is browser-only Calendar simulation, not live Calendar synchronization or
+  proof of HighLevel event creation. No invites, notifications, provider writes,
+  OAuth changes, tracking activation or live client cap changes. Real HighLevel
+  calendar reads continue through the existing read-only installation service.
+- Verified local fallback: `http://127.0.0.1:8765/#calendar`, served by the existing
+  full-demo preview. Source lives in `resources/js/highlevel/demo.js`, `fleet.js`
+  and `operations.js`. Do not describe source as hosted until its protected release
+  and exact `/ready` SHA are verified. Local browser evidence lives in untracked
+  `output/calendar/`; release checks remain mandatory.
+
 ## Address-first dispatch and everyday forms (2026-10-22; release candidate)
 
 - Jobs reads the address supplied on a HighLevel appointment/opportunity (or its

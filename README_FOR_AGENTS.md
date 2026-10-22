@@ -1,3 +1,11 @@
+## Synthetic Fleet Calendar presentation (2026-10-22; source candidate)
+
+The isolated browser demo adds three synthetic Calendar examples linked by job
+ID to address/time, assigned van/team and required-versus-available material
+quantities. It sends no HighLevel Calendar/provider requests, invitations or
+stock mutations. `#calendar` opens the presentation directly. Live CRM sync and
+vehicle limits remain unchanged. See the Fleet runbook for evidence and access.
+
 ## Fleet dispatch usability (2026-10-22; release candidate)
 
 Jobs now starts with imported HighLevel addresses and times, searchable van/crew/

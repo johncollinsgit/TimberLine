@@ -114,7 +114,7 @@ for (const browserType of [chromium, webkit]) {
     });await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
     const browser=await browserType.launch();
     try{
-      const page=await browser.newPage({viewport:{width:1440,height:1000}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+      const page=await browser.newPage({viewport:{width:1440,height:1000}});const errors=[],writes=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(!['GET','HEAD','OPTIONS'].includes(r.method()))writes.push(r.url());});
       await page.goto(`http://127.0.0.1:${server.address().port}/demo`);
       await page.getByText('DEMO · Fictional fleet data',{exact:true}).waitFor();
       assert.equal(await page.locator('.vehicle-row').count(),6);
@@ -137,7 +137,60 @@ for (const browserType of [chromium, webkit]) {
       assert.equal(await page.getByRole('heading',{name:'Recently completed service',exact:true}).count(),1);
       assert.match(await page.locator('#content').innerText(),/Fictional maintenance and costs|Transmission service/);
       assert.equal(await page.locator('[data-service]').count(),7);
+      await page.getByRole('button',{name:'Back',exact:true}).click();
+      await page.getByRole('heading',{name:'Review a trip route',exact:true}).waitFor();
+      await page.getByRole('button',{name:'Skip this step',exact:true}).click();
+      await page.getByRole('heading',{name:'Plan maintenance and costs',exact:true}).waitFor();
       await page.getByRole('button',{name:'Explore on my own'}).click();
+      await page.getByRole('button',{name:'Restart guided tour'}).click();
+      await page.getByRole('heading',{name:'See the whole fleet',exact:true}).waitFor();
+      await page.getByRole('button',{name:'Explore on my own'}).click();
+      assert.equal(await page.locator('#demo-tour').count(),0);
+      await page.getByRole('button',{name:'Calendar',exact:true}).click();
+      assert.equal(await page.locator('[data-calendar-event]').count(),3);
+      const eventSearch=page.getByRole('searchbox',{name:'Search demo events, customers or addresses'});
+      await eventSearch.fill('no matching example');
+      await page.getByText('No demo events match your search.',{exact:true}).waitFor();
+      assert.equal(await page.locator('[data-calendar-event]:visible').count(),0);
+      await eventSearch.fill('');
+
+      const event=page.locator('[data-calendar-event="DEMO-event-207"]');
+      assert.match(await event.innerText(),/DEMO — termite callback|100 Demo Lane/);
+      assert.match(await event.innerText(),/bait stations/);
+      assert.equal(await event.locator('tbody tr td').nth(1).innerText(),'6 each');
+      assert.equal(await event.locator('tbody tr td').nth(2).innerText(),'12');
+      await event.getByRole('button',{name:'Open linked job'}).click();
+      const linked=page.locator('[data-job-id="207"]');
+      assert.equal(await linked.getAttribute('open'),'');
+      assert.match(await linked.innerText(),/DEMO — termite callback|Demo Customer A/);
+      assert.equal(await linked.locator('[name="device_id"]').inputValue(),'1');
+      await linked.getByRole('button',{name:'Back to calendar event'}).click();
+      assert.equal(await event.evaluate(el=>document.activeElement===el),true);
+      await page.setViewportSize({width:390,height:844});
+      assert.equal(await page.locator('.shell').evaluate(el=>el.scrollWidth<=el.clientWidth),true);
+      await event.getByRole('button',{name:'Open linked job'}).click();
+      assert.equal(await page.locator('.shell').evaluate(el=>el.scrollWidth<=el.clientWidth),true);
+      await linked.getByRole('button',{name:'Add material',exact:true}).click();
+      const duplicate=linked.locator('.material-row').last();
+      await duplicate.getByLabel('Material',{exact:true}).fill('bait stations');
+      await linked.getByRole('button',{name:'Save assignment',exact:true}).click();
+      await page.getByText('Combine the two bait stations rows into one quantity.',{exact:true}).waitFor();
+      await duplicate.getByRole('button',{name:'Remove material'}).click();
+      await linked.locator('[data-material-qty]').fill('15');
+      await linked.getByRole('button',{name:'Save assignment',exact:true}).click();
+      await page.getByText('Saved.',{exact:true}).waitFor();
+      await page.locator('[data-job-id="207"] summary').click();
+      await linked.getByRole('button',{name:'Back to calendar event'}).click();
+      assert.match(await event.innerText(),/Need 3 more/);
+      // Stock remains display-only: saving job demand does not decrement it.
+      assert.equal(await event.locator('tbody tr td').nth(2).innerText(),'12');
+      if(process.env.HIGHLEVEL_SCREENSHOT_DIR&&browserType.name()==='chromium')await page.screenshot({path:`${process.env.HIGHLEVEL_SCREENSHOT_DIR}/calendar-phone.png`,fullPage:true});
+      await page.setViewportSize({width:1440,height:1000});
+      await page.locator('[data-calendar-event="DEMO-event-209"]').getByRole('button',{name:'Open linked job'}).click();
+      assert.equal(await page.locator('[data-job="209"] [name="device_id"]').inputValue(),'2');
+      await page.getByRole('button',{name:'Calendar',exact:true}).click();
+      if(process.env.HIGHLEVEL_SCREENSHOT_DIR&&browserType.name()==='chromium')await page.screenshot({path:`${process.env.HIGHLEVEL_SCREENSHOT_DIR}/calendar-desktop.png`,fullPage:true});
+
       await page.getByRole('button',{name:'Fleet',exact:true}).click();
 
       assert.equal(await page.locator('.leaflet-container').count(),1);
@@ -230,7 +283,11 @@ for (const browserType of [chromium, webkit]) {
       assert.ok((await page.locator('#route-range input[name="start"]').boundingBox()).width>=130);
       assert.ok((await page.locator('#route-range input[name="end"]').boundingBox()).width>=130);
       if(process.env.HIGHLEVEL_SCREENSHOT_DIR && browserType.name()==='chromium')await page.screenshot({path:`${process.env.HIGHLEVEL_SCREENSHOT_DIR}/demo-mobile-map.png`,fullPage:true});
-      assert.deepEqual(errors,[]);assert.equal(calls,0);
+      await page.goto(`http://127.0.0.1:${server.address().port}/demo#calendar`);
+      await page.getByRole('heading',{name:'Calendar',exact:true}).waitFor();
+      assert.equal(await page.locator('[data-calendar-event]').count(),3);
+      assert.equal(await page.locator('#demo-tour').count(),0);
+      assert.deepEqual(errors,[]);assert.deepEqual(writes,[]);assert.equal(calls,0);
     }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
   });
 }
