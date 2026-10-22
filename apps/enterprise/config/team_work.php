@@ -10,5 +10,6 @@ return [
     'file_max_bytes' => 10 * 1024 * 1024,
     'file_tenant_quota_bytes' => 64 * 1024 * 1024,
     'file_user_active_limit' => 3,
-    'scanner' => ['enabled' => false, 'host' => '127.0.0.1', 'port' => 3310],
+    'scanner' => ['enabled' => (bool) env('ENTERPRISE_FILE_SCANNER_ENABLED', false),
+        'host' => env('ENTERPRISE_CLAMD_HOST', '127.0.0.1'), 'port' => (int) env('ENTERPRISE_CLAMD_PORT', 3310)],
 ];

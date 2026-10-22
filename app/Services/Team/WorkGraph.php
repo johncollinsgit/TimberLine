@@ -585,6 +585,13 @@ final class WorkGraph
                 }
                 $task['enterprise_area_id'] = $scope;
             }
+            if (isset($command['enterprise_discussion_project'])) {
+                $discussionProject = $command['enterprise_discussion_project'];
+                if ($scope === null || count($memberships) !== 1 || ! isset($memberships[$discussionProject]) || $parent !== null || $assignee !== null) {
+                    self::fail('invalid_discussion_scope');
+                }
+                $task['enterprise_discussion_project'] = $discussionProject;
+            }
             if (! in_array($task['priority'], ['low', 'normal', 'high', 'urgent'], true)) {
                 self::fail('invalid_priority');
             }
@@ -926,6 +933,9 @@ final class WorkGraph
         $this->authorize($actor);
         $results = [];
         foreach ($state['tasks'] as $task) {
+            if (isset($task['enterprise_discussion_project'])) {
+                continue; // Backing records for discussion/files are not operational work.
+            }
             if (! $this->taskAccess($state, $task, $actor)) {
                 continue;
             }

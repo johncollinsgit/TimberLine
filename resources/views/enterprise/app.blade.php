@@ -2,15 +2,16 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="csrf-token" content="{{ csrf_token() }}"><title>Everbranch Enterprise · {{ $tenant->name }}</title>
 @include('enterprise.campus-styles')
 <style>.shell{min-height:100vh}.sidebar{height:100vh}.detail-layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:18px}.work-detail{white-space:pre-wrap;overflow-wrap:anywhere}.map-panel{padding:0;overflow:hidden;margin-bottom:22px}.map-head{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}.map-head h2{font:26px Georgia,serif;margin:5px 0}.location-map{display:block;width:100%;height:330px;background:#edf2e7}.location-map button{cursor:pointer}.request-row{width:100%;text-align:left}.stack{display:grid;gap:12px}.stack label{display:grid;gap:6px;font-size:12px}.ent-skip{position:absolute;top:-80px;background:white;padding:15px;z-index:10}.ent-skip:focus{top:0}[hidden]{display:none!important}.notice-error{color:#913c31}.calendar-day{padding:15px;border-bottom:1px solid var(--line)}.calendar-day h3{font-size:12px}.field-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px}#detail h2{font:25px Georgia,serif}#detail h3{font-size:12px}#map-holder{position:relative}#map-markers{position:absolute;inset:30px 20px 42px}.map-pin{position:absolute;transform:translate(-50%,-50%);padding:5px 8px;border:2px solid white;background:#315b43;color:white;border-radius:14px;font-size:11px;box-shadow:0 2px 5px #2343}#map-holder p{margin:8px 20px 16px}.sidebar-project.active{background:#ffffff12;border-radius:5px}.panel{min-width:0}pre{white-space:pre-wrap;overflow-wrap:anywhere}#request-list{min-width:0}.nav-item{min-height:44px}@media(max-width:1000px){.detail-layout{grid-template-columns:1fr}.sidebar{height:auto;min-height:0;position:static}.shell{grid-template-columns:190px 1fr}.content{padding:25px 18px}.topbar{padding:15px 18px}}@media(max-width:650px){.shell{grid-template-columns:1fr}.sidebar{padding:15px}.brand{padding-bottom:12px}.workspace-label{margin-top:12px}.sidebar nav{display:flex;flex-wrap:wrap}.nav-item{width:auto}.sidebar-bottom{display:none}.topbar{height:auto}.field-pair{grid-template-columns:1fr}.page-heading{align-items:flex-start;flex-direction:column}.page-heading h1{font-size:30px}.toolbar{flex-wrap:wrap}.sidebar-project{width:auto;display:inline-flex}}#work{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:18px}#work>.toolbar,#work>#coverage{grid-column:1/-1}#work>#map{grid-column:1}.detail-layout{display:contents}#request-list{grid-column:1}#detail{grid-column:2;grid-row:2 / span 2;align-self:start}@media(max-width:1000px){#work{display:block}.detail-layout{display:grid;grid-template-columns:1fr}#request-list,#detail{grid-column:auto;grid-row:auto}#work>.toolbar{margin-bottom:20px}}@media(max-width:800px){.sidebar .workspace-label{display:block}.sidebar .sidebar-project{display:inline-flex;width:auto}}
+@include('enterprise.next-styles')
 </style></head>
 <body><a class="ent-skip" href="#enterprise-main">Skip to workspace</a><div class="shell">
 <aside class="sidebar" aria-label="Everbranch Enterprise"><div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 20c1-9 7-14 13-17 2 9-2 16-9 15M5 22l9-12"/></svg></span><div><strong>Everbranch</strong><small>Enterprise · Teams</small></div></div>
-<p class="workspace-label">Organization workspace</p><nav aria-label="Workspace sections"><button class="nav-item active" data-section="requests">Requests</button><button class="nav-item" data-section="projects">Operations &amp; projects</button><button class="nav-item" data-section="contractors">Contractors</button></nav>
+<p class="workspace-label">Organization workspace</p><nav aria-label="Workspace sections"><button class="nav-item active" data-section="requests">Requests</button><button class="nav-item" data-section="projects">Operations &amp; projects</button><button class="nav-item" data-section="contractors">Contractors</button><button class="nav-item" data-section="ask" id="ask-nav" hidden>Ask Everbranch</button></nav>
 <p class="workspace-label">Your workspaces</p><div id="areas"></div><div class="sidebar-bottom"><strong>{{ $tenant->name }}</strong><br>{{ auth()->user()->name }}<br>Connected work. Clear ownership.<form method="post" action="{{ route('logout') }}">@csrf<button class="nav-item" type="submit">Sign out</button></form></div></aside>
 <main class="main" id="enterprise-main"><header class="topbar"><div class="breadcrumb">{{ $tenant->name }} <span>/</span> <strong id="breadcrumb">Requests</strong></div><span class="badge" id="visibility">Loading workspace</span></header>
 <div class="content"><div class="eyebrow">Everbranch Enterprise</div><div class="page-heading"><div><h1 id="heading">Turn requests into owned work.</h1><p class="subtle">One place for intake, assignment and visible progress.</p></div><div class="actions"><button class="button" id="create-workspace" hidden>New workspace</button><button class="button primary" id="create-request" hidden>New request</button><button class="button primary" id="create-project" hidden>New project</button></div></div>
 <p id="status" role="status" aria-live="polite"></p><button class="button" id="retry" hidden>Retry the same action</button>
-<section id="contractors" class="panel" hidden><h2>Contractors</h2><p class="subtle">Contractor assignments, documents and costs are planned for a later phase. Your organization has no contractor workflow enabled here.</p></section>
+@include('enterprise.next-panels')
 <div id="work"><div class="toolbar"><div class="actions" role="group" aria-label="Work view"><button class="button" data-view="list" aria-pressed="true">List</button><button class="button" data-view="calendar" aria-pressed="false">Calendar</button><button class="button" data-view="map" aria-pressed="false">Map</button></div><label>Find work <input id="search" type="search" placeholder="Search visible work"></label><button class="button" id="map-toggle">View Map</button></div>
 <section class="panel map-panel" id="map" hidden><div class="map-head"><div><div class="eyebrow">Workspace locations</div><h2>See where the work happens.</h2></div><span class="caption">Select a marker for request details</span></div><div id="map-holder"><svg class="location-map" viewBox="0 0 1000 330" preserveAspectRatio="none" aria-hidden="true"><defs><pattern id="grid" width="100" height="66" patternUnits="userSpaceOnUse"><path d="M100 0H0V66" fill="none" stroke="#d9e2ce"/></pattern></defs><rect width="1000" height="330" fill="url(#grid)"/></svg><div id="map-markers"></div><p class="caption">Saved longitude/latitude positions on a coordinate grid. No campus basemap, GPS feed or external map provider is connected.</p></div><p class="caption" id="map-empty"></p></section>
 <div class="detail-layout"><section id="request-list" aria-label="Visible workspace work"></section><aside class="panel" id="detail" aria-label="Selected work details"><h2>Choose a request</h2><p class="subtle">Select a row or map marker to see its details and permitted actions.</p></aside></div><p class="caption" id="coverage"></p></div>
@@ -42,9 +43,9 @@
       projects: [],
       members: []
     },
-    area = null,
-    selected = null,
-    section = 'requests',
+    area = new URLSearchParams(location.search).get('area_id'),
+    selected = new URLSearchParams(location.search).get('selected'),
+    section = ['projects', 'contractors', 'ask'].includes(new URLSearchParams(location.search).get('section')) ? new URLSearchParams(location.search).get('section') : 'requests',
     view = 'list',
     map = false,
     pending = null,
@@ -91,6 +92,7 @@
       };
       $('request-list').replaceChildren();
       $('detail').replaceChildren();
+      resetNext();
       message(error.message, true);
     }
   }
@@ -121,8 +123,10 @@
   function render() {
     $('areas').innerHTML = data.areas.map(a => `<button class="sidebar-project ${a.id === area ? 'active' : ''}" data-area="${esc(a.id)}"><span class="dot"></span>${esc(a.name)}</button>`).join('');
     $('areas').querySelectorAll('[data-area]').forEach(b => b.onclick = () => {
+      rememberSelection();
       area = b.dataset.area;
-      selected = null;
+      selected = selectionMemory.get(area + ':' + section) || null;
+      resetNext();
       load();
     });
     const a = data.areas.find(a => a.id === area);
@@ -134,6 +138,7 @@
     $('work').hidden = section === 'contractors';
     $('heading').textContent = section === 'projects' ? 'Work with clear ownership.' : section === 'contractors' ? 'Trusted partners, connected work.' : 'Turn requests into owned work.';
     $('breadcrumb').textContent = section === 'projects' ? 'Operations & projects' : section === 'contractors' ? 'Contractors' : 'Requests';
+    renderNext();
     $('map').hidden = !map;
     $('map-toggle').textContent = map ? 'Hide Map' : 'View Map';
     document.querySelectorAll('[data-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === view)));
@@ -166,6 +171,11 @@
     detail();
   }
   function detail() {
+    stashComposer();
+    discussionGeneration++;
+    activeDiscussionKey = null;
+    rememberUrl();
+    if (['ask', 'contractors'].includes(section)) return;
     const r = (section === 'projects' ? data.projects : data.requests).find(r => r.id === selected);
     if (!r) {
       $('detail').innerHTML = '<h2>Choose work</h2><p class="subtle">Select a row or map marker for details.</p>';
@@ -173,6 +183,7 @@
     }
     if (section === 'projects') {
       $('detail').innerHTML = `<h2>${esc(r.name)}</h2><span class="badge">${esc($('visibility').textContent)}</span><p class="work-detail">${esc(r.description)}</p><p class="caption">Project version ${r.version}. Requests can be assigned into this project during triage.</p>`;
+      mountDiscussion('project', r.id);
       return;
     }
     $('detail').innerHTML = `<span class="badge">${esc(r.status)}</span><h2>${esc(r.title)}</h2><p class="work-detail">${esc(r.data.description)}</p><h3>Location</h3><p class="subtle">${esc(r.data.location || 'Not provided')}</p><h3>Progress</h3><p class="work-detail">${esc(r.data.progress_note || r.data.triage_note || 'No update yet.')}</p>${r.data.task_id ? `<p class="caption">Linked task: ${esc(r.task?.title || r.data.task_id)}<br>Assignee: ${esc(data.members.find(m => m.id === r.task?.assignee_id)?.name || 'Existing workspace member')}</p>` : ''}<div class="stack">${r.can_coordinate && r.status === 'submitted' ? '<label>Triage note<textarea id="action-note" maxlength="2000"></textarea></label><button class="button primary" data-action="request.triage">Triage request</button>' : ''}${r.can_coordinate && r.status === 'triaged' ? `<label>Project<select id="assign-project">${data.projects.filter(p => !p.archived).map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select></label><label>Existing editor<select id="assign-member">${data.members.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')}</select></label><button class="button primary" data-action="request.assign">Assign task</button>` : ''}${r.can_progress && ['assigned', 'in_progress'].includes(r.status) ? '<label>Progress note<textarea id="action-note" maxlength="2000"></textarea></label><button class="button" data-action="request.progress">Save progress</button><button class="button primary" data-action="request.complete">Complete work</button>' : ''}<button class="button" id="show-history">Audit history</button><div id="history"></div></div>`;
@@ -201,6 +212,7 @@
         message(e.message, true);
       }
     };
+    mountDiscussion('request', r.id);
   }
   function create(action) {
     if (pending) return message('Retry the retained action before starting another.', true);
@@ -250,11 +262,14 @@
     render();
   });
   document.querySelectorAll('[data-section]').forEach(b => b.onclick = () => {
+    rememberSelection();
+    message('');
     section = b.dataset.section;
-    selected = null;
+    selected = selectionMemory.get(area + ':' + section) || null;
     document.querySelectorAll('[data-section]').forEach(x => x.classList.toggle('active', x === b));
     render();
   });
+  @include('enterprise.next-script')
   load();
 })();
 </script></body></html>

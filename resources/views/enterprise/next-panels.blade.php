@@ -1,0 +1,23 @@
+<section id="contractors" class="next-panel" hidden>
+  <h2>Contractors &amp; plans</h2><p class="subtle" id="planning-status">Planning is not enabled for this workspace. No contractor access is granted here.</p>
+  <div class="planning-grid" id="planning-work" hidden><div class="panel"><h3>Department records</h3><div id="planning-list"></div></div>
+  <form id="planning-form" class="panel stack" hidden><h3>Record a plan</h3>
+    <label>Record type<select name="kind" id="planning-kind"><option value="contractor">Contractor</option><option value="schedule">Planned date block</option><option value="cost" id="cost-option">Cost record</option></select></label>
+    <label>Record title<input name="title" maxlength="100" required></label>
+    <label id="planning-project-field" hidden>Project<select name="project_id" id="planning-project"></select></label>
+    <div id="planning-schedule-fields" class="stack" hidden><label>Contractor<select name="contractor_id" id="planning-contractor"></select></label><div class="field-pair"><label>Start date<input name="starts_on" type="date"></label><label>End date (inclusive)<input name="ends_on" type="date"></label></div></div>
+    <div id="planning-cost-fields" class="stack" hidden><label>Amount in minor units (USD cents)<input name="amount_minor" type="number" min="0" max="1000000000" step="1"></label><label>Currency<select name="currency"><option>USD</option><option>CAD</option><option>EUR</option><option>GBP</option></select></label><label>Basis<select name="basis"><option value="estimate">Estimate</option><option value="recorded_cost">Manually recorded cost</option></select></label></div>
+    <p class="caption">Date blocks check overlaps for the same contractor in this department. No account, purchase, reservation, payment or notification is created. Costs are private to organization owners/admins.</p>
+    <button class="button primary" type="submit" id="planning-save">Save record</button><button class="button" type="button" id="planning-retry" hidden>Retry the same record</button>
+  </form></div>
+</section>
+<section id="ask" class="next-panel" hidden>
+  <h2>Ask Everbranch</h2><p class="subtle">Signed in as {{ auth()->user()->name }} · {{ $enterpriseRole ?? 'current authorized role' }}. Answers use your selected workspace and current permissions.</p>
+  <p class="caption">Model interpretation is not connected in this increment. Chat returns current server-checked record facts and links; it cannot interpret arbitrary requests or perform actions.</p>
+  <div class="ask-grid"><div class="panel"><div id="chat-log" class="chat-log" role="log" aria-live="polite"><p class="caption">Ask about visible requests, project status or recorded plans. Each turn checks current access. Chat is per page; old answers are not reused as evidence.</p></div>
+  <form id="ask-form" class="stack ask-composer"><label>Message Ask Everbranch<textarea id="ask-question" maxlength="1500" required placeholder="What is planned in this workspace?"></textarea></label><button class="button primary" type="submit" id="ask-submit">Ask</button></form></div>
+  <div class="panel stack"><h3>Email in your context</h3><p class="caption" id="mailbox-status">No delivery transport connected. No mailbox messages are read or sent.</p>
+  <form id="email-form" class="stack" hidden><label>Your authorized sender<select id="email-mailbox"></select></label><label>Exact recipient<input id="email-to" type="email" maxlength="254" required></label><label>Subject<input id="email-subject" maxlength="200" required></label><label>Message body<textarea id="email-body" maxlength="10000" rows="6" required></textarea></label><button class="button" type="submit">Preview exact draft</button></form>
+  <div id="email-preview" hidden></div><button class="button primary" id="email-confirm" hidden>Confirm this exact email</button>
+  <p class="caption">Chat and record content cannot send an email. Sending requires your own explicitly authorized mailbox and a separate exact preview and confirmation. Real connections and delivery are a later acceptance step.</p></div></div>
+</section>

@@ -17,7 +17,10 @@ class EnterpriseController
 
     public function index(Request $request)
     {
-        return response()->view('enterprise.app', ['tenant' => $request->attributes->get('current_tenant')])->header('Cache-Control', 'private, no-store');
+        $tenant = $request->attributes->get('current_tenant');
+        $actor = $this->access->actor($tenant, $request->user());
+
+        return response()->view('enterprise.app', ['tenant' => $tenant, 'enterpriseRole' => $actor['role']])->header('Cache-Control', 'private, no-store');
     }
 
     public function data(Request $request)
@@ -61,6 +64,8 @@ class EnterpriseController
             'areas' => $areas->map(fn ($a) => ['id' => $a->id, 'name' => $a->name, 'visibility' => $a->profile === 'enterprise_shared' ? 'shared' : 'department_only'])->values(),
             'requests' => array_slice($items, 0, 100), 'projects' => $projects, 'coverage' => 'up_to_100_visible_requests_scan_1000', 'has_more' => count($items) > 100,
             'scan_partial' => $scanned === 1000,
+            'features' => ['collaboration' => (bool) config('enterprise.collaboration_enabled'), 'planning' => (bool) config('enterprise.planning_enabled'),
+                'ask' => (bool) config('enterprise.ask_enabled'), 'email_drafts' => (bool) config('enterprise.email_drafts_enabled')],
             'can_manage' => config('enterprise.writes_enabled') && in_array($actor['role'], ['owner', 'admin'], true),
             'can_submit' => $area && WorkspaceAccess::canSubmit($actor, $area->id),
             'can_coordinate' => $area && WorkspaceAccess::permits($actor, $area->id, true, true),

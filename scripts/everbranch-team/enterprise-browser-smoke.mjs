@@ -6,9 +6,11 @@ import { pathToFileURL } from 'node:url';
 const php = process.env.ENTERPRISE_TEST_PHP;
 assert.ok(php, 'ENTERPRISE_TEST_PHP is required');
 const {
-  chromium
+  chromium, webkit
 } = await import(pathToFileURL(resolve(process.env.EVERBRANCH_PLAYWRIGHT_MODULE)).href);
 const db = resolve(`apps/enterprise/storage/framework/testing/enterprise-browser-${Date.now()}.sqlite`);
+const browserEngine = process.env.ENTERPRISE_BROWSER_ENGINE || 'chromium';
+assert.ok(['chromium','webkit'].includes(browserEngine),'Unsupported test browser engine');
 await mkdir(resolve('apps/enterprise/storage/framework/testing'), {
   recursive: true
 });
@@ -28,6 +30,10 @@ const env = {
   ENTERPRISE_DB_DATABASE: db,
   ENTERPRISE_ENABLED: 'true',
   ENTERPRISE_WRITES_ENABLED: 'true',
+  ENTERPRISE_COLLABORATION_ENABLED: 'true',
+  ENTERPRISE_PLANNING_ENABLED: 'true',
+  ENTERPRISE_ASK_ENABLED: 'true',
+  ENTERPRISE_EMAIL_DRAFTS_ENABLED: 'true',
   ENTERPRISE_TENANT_ALLOWLIST: '1'
 };
 let server, browser;
@@ -55,9 +61,9 @@ try {
     await new Promise(r => setTimeout(r, 250));
   }
   assert.ok(ready, 'Isolated local server did not start');
-  browser = await chromium.launch({
+  browser = await (browserEngine === 'webkit' ? webkit : chromium).launch({
     headless: true,
-    ...(process.env.ENTERPRISE_CHROME ? {
+    ...(browserEngine !== 'chromium' ? {} : process.env.ENTERPRISE_CHROME ? {
       executablePath: process.env.ENTERPRISE_CHROME
     } : process.platform === 'win32' ? {
       executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe'
@@ -228,12 +234,80 @@ try {
     name: 'Contractors',
     exact: true
   }).click();
-  await page.getByText('Contractor assignments, documents and costs are planned for a later phase.', {
-    exact: false
-  }).waitFor();
+  await page.getByRole('heading', {name:'Contractors & plans',exact:true}).waitFor();
+  await page.getByLabel('Record title', {exact:true}).fill('Synthetic contractor');
+  await page.getByRole('button', {name:'Save record',exact:true}).click();
+  await page.locator('#planning-list').getByText('Synthetic contractor', {exact:true}).waitFor();
+  await page.getByLabel('Record type').selectOption('schedule');
+  await page.getByLabel('Record title', {exact:true}).fill('Synthetic date block');
+  await page.getByLabel('Start date', {exact:true}).fill('2026-11-04');
+  await page.getByLabel('End date (inclusive)', {exact:true}).fill('2026-11-05');
+  await page.getByRole('button', {name:'Save record',exact:true}).click();
+  await page.locator('#planning-list').getByText('Synthetic date block', {exact:true}).waitFor();
+  await page.getByRole('button', {name:'Operations & projects',exact:true}).click();
+  await page.getByRole('button', {name:'Synthetic repair project',exact:true}).click();
+  const draftNote = 'Synthetic unsent project draft <img src=x onerror="window.__enterpriseInjection=1">';
+  await page.getByLabel('Add a note').fill(draftNote);
+  await page.getByRole('button', {name:'Requests',exact:true}).click();
+  await page.getByRole('button', {name:'Operations & projects',exact:true}).click();
+  await page.waitForFunction(value => document.getElementById('discussion-body')?.value === value, draftNote);
+  await page.reload();
+  await page.waitForFunction(value => document.getElementById('discussion-body')?.value === value, draftNote);
+  let droppedNote = false;
+  await page.route('**/enterprise/discussion/project/*/comments?*', async route => {
+    if (!droppedNote) {droppedNote = true; await route.fetch(); return route.abort();}
+    return route.continue();
+  });
+  await page.getByRole('button', {name:'Post note',exact:true}).click();
+  await page.locator('#status').filter({hasText:'retained for retry'}).waitFor();
+  await page.getByRole('button', {name:'Post note',exact:true}).click();
+  await page.locator('.discussion-note').filter({hasText:'Synthetic unsent project draft'}).waitFor();
+  assert.equal(await page.locator('.discussion-note').filter({hasText:'Synthetic unsent project draft'}).count(),1,'Interrupted note was duplicated');
+  assert.equal(await page.locator('#discussion img').count(),0,'Record text became HTML');
+  assert.equal(await page.evaluate(() => window.__enterpriseInjection),undefined,'Record text executed a script');
+  let droppedChunk = false;
+  await page.route('**/team/file-uploads/*/chunks/*?*', async route => {
+    if (!droppedChunk) {droppedChunk = true; await route.fetch(); return route.abort();}
+    return route.continue();
+  });
+  const attachment = {name:'synthetic-resume.txt',mimeType:'text/plain',buffer:Buffer.from('Synthetic resumable attachment. '.repeat(12000))};
+  await page.locator('#discussion-files-picker').setInputFiles(attachment);
+  await page.locator('#upload-status').filter({hasText:'Select the same file to resume'}).waitFor();
+  await page.locator('#discussion-files-picker').setInputFiles([]);
+  await page.locator('#discussion-files-picker').setInputFiles(attachment);
+  await page.locator('#discussion-files').getByText('synthetic-resume.txt · quarantined', {exact:true}).waitFor();
+  assert.equal(await page.locator('#discussion-files .file-row').count(),1,'Interrupted upload was duplicated');
+  assert.equal(await page.locator('#discussion-files').getByRole('link',{name:'Download',exact:true}).count(),0,'Unscanned bytes became downloadable');
+  await page.locator('#discussion-files-picker').setInputFiles([
+    {name:'synthetic-brief.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF')},
+    {name:'synthetic-photo.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jxioAAAAASUVORK5CYII=','base64')}
+  ]);
+  await page.locator('#discussion-files').getByText('synthetic-photo.png · quarantined',{exact:true}).waitFor();
+  await page.locator('#discussion-files').getByText('synthetic-brief.pdf · quarantined',{exact:true}).waitFor();
+  assert.equal(await page.locator('#discussion-files .file-row').count(),3,'Supported photo/PDF/text uploads did not persist');
+  for (const [label,width,height] of [['desktop',1440,1000],['ipad-portrait',820,1180],['ipad-landscape',1180,820],['phone',390,844]]) {
+    await page.setViewportSize({width,height});
+    await page.getByLabel('Add a note').fill(`Unsent ${label} draft`);
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),`${label} horizontal overflow`);
+    assert.ok(await page.locator('#note-submit').evaluate(el => el.getBoundingClientRect().height >= 44),`${label} note touch target too small`);
+    assert.ok(await page.locator('#discussion-files-picker').evaluate(el => el.accept.includes('application/pdf') && el.accept.includes('image/jpeg')),`${label} photo/PDF picker missing`);
+    await page.screenshot({path:resolve(evidence,`enterprise-next-${label}.png`),fullPage:true});
+  }
+  await page.getByRole('button', {name:'Ask Everbranch',exact:true}).click();
+  await page.getByLabel('Message Ask Everbranch').fill('What is planned?');
+  await page.getByRole('button', {name:'Ask',exact:true}).click();
+  await page.locator('#chat-log a').filter({hasText:'View source:'}).first().waitFor();
+  await page.locator('#chat-log p').filter({hasText:'Synthetic date block'}).first().waitFor();
+  await page.locator('#mailbox-status').filter({hasText:'No delivery transport connected'}).waitFor();
+  for (const [label,width,height] of [['ipad-portrait',820,1180],['ipad-landscape',1180,820],['phone',390,844]]) {
+    await page.setViewportSize({width,height});
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),`${label} Ask overflow`);
+    assert.ok(await page.locator('#ask-submit').evaluate(el => el.getBoundingClientRect().height >= 44),`${label} Ask touch target`);
+    await page.screenshot({path:resolve(evidence,`enterprise-ask-${label}.png`),fullPage:true});
+  }
   assert.deepEqual(errors, []);
   assert.deepEqual(external, []);
-  console.log('PASS: independent-runtime login, workspace/project/request creation, triage, task assignment, map detail, Hide/View Map, calendar, completion, audit, reload persistence, mobile fit, contractor navigation; zero external requests and JavaScript errors.');
+  console.log(`PASS (${browserEngine}): independent runtime intake lifecycle and map; contractor/date planning; larger project details, retained drafts, exact interrupted note retry, resumable private quarantined upload; desktop/phone/iPad portrait/landscape viewport layout and touch targets; user-aware record-backed Ask citations and disconnected mailbox; zero external requests and JavaScript errors. Viewport simulation only, not physical iPad acceptance.`);
 } finally {
   if (browser) await browser.close();
   if (server) server.kill();

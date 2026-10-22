@@ -12,7 +12,7 @@ if (! $app->environment('testing') || config('database.connections.enterprise.dr
 $tenant = \App\Models\Tenant::create(['name' => 'Synthetic Enterprise', 'slug' => 'synthetic-enterprise']);
 \App\Models\TenantAccessProfile::create(['tenant_id' => $tenant->id, 'plan_key' => 'base', 'operating_mode' => 'direct', 'source' => 'test']);
 \App\Models\TenantModuleEntitlement::create(['tenant_id' => $tenant->id, 'module_key' => 'team_work', 'enabled_status' => 'enabled', 'availability_status' => 'available', 'entitlement_source' => 'test']);
-$user = \App\Models\User::forceCreate(['name' => 'Fixture Owner', 'email' => 'fixture-owner@example.invalid', 'password' => \Illuminate\Support\Facades\Hash::make('Synthetic-browser-only-2026!'),
+$user = \App\Models\User::forceCreate(['id' => random_int(100000, 2147483647), 'name' => 'Fixture Owner', 'email' => 'fixture-owner@example.invalid', 'password' => \Illuminate\Support\Facades\Hash::make('Synthetic-browser-only-2026!'),
     'is_active' => true, 'role' => 'member', 'email_verified_at' => now()]);
 $tenant->users()->attach($user->id, ['role' => 'owner', 'membership_active' => true]);
 echo "Synthetic Enterprise browser fixture created.\n";
