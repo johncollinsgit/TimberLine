@@ -1,3 +1,12 @@
+## Pest-control Fleet preview (2026-10-22; source candidate)
+
+Keep `/crm/fleet/demo/pest-control` separate from `/crm/fleet/demo` and the real
+embedded workspace. Its 250 synthetic trucks, jobs, illustrative map, reviews,
+assignments, message previews and setup rehearsal stay in namespaced session
+storage or page memory. No CRM/provider request, send, grant, billing, customer
+write or production allowance change is authorized by a demo action. Maintain
+clear fictional labels and bounded lists. See `docs/operations/highlevel-fleet-pest-demo.md`.
+
 ## Fictional hosted POS demo boundary (2026-10-21; source candidate)
 
 `/platform/demos/alpha-printing-pos` is a separate public fictional browser
