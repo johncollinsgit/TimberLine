@@ -30,14 +30,16 @@ class EmailDrafts
         foreach ($this->gateway->mailboxes($tenant, $user, $areaId) as $row) {
             try {
                 $binding = $this->gateway->authorize($tenant, $user, $areaId, $row['id']);
-                $items[] = ['id' => $binding['id'], 'address' => $binding['address']];
+                $items[] = ['id' => $binding['id'], 'address' => $binding['address'], 'delivery_ready' => $this->gateway->readyFor($binding)];
             } catch (\Symfony\Component\HttpKernel\Exception\HttpException) {
                 // A provider listing is never itself an authorization grant.
             }
         }
 
-        return ['mailboxes' => $items, 'delivery_ready' => $this->gateway->ready(), 'status' => $this->gateway->ready()
-            ? 'Exact preview and confirmation required.' : 'No delivery transport connected. No mailbox messages are read or sent.'];
+        $ready = collect($items)->contains(fn ($item) => $item['delivery_ready']);
+
+        return ['mailboxes' => $items, 'delivery_ready' => $ready, 'status' => $ready
+            ? 'Exact preview and confirmation required.' : 'No delivery transport connected for your authorized mailbox. No mailbox messages are read or sent.'];
     }
 
     private function sources(Tenant $tenant, User $user, string $areaId, array $refs): array
@@ -103,7 +105,7 @@ class EmailDrafts
 
         return ['id' => $record->id, 'area_id' => $record->area_id, 'status' => $record->status, 'digest' => $data['digest'], 'expires_at' => $data['expires_at'],
             'from' => $data['payload']['mailbox']['address'], ...array_intersect_key($data['payload'], array_flip(['to', 'subject', 'body'])),
-            'delivery_ready' => $this->gateway->ready(), 'provider_receipt' => $data['provider_receipt'] ?? null];
+            'delivery_ready' => $this->gateway->readyFor($data['payload']['mailbox']), 'provider_receipt' => $data['provider_receipt'] ?? null];
     }
 
     public function confirm(Tenant $tenant, User $user, string $id, string $digest): array
@@ -117,7 +119,7 @@ class EmailDrafts
             }
             abort_unless($record->status === 'draft', 409, 'Dispatch is unresolved or closed. Do not resend; reconcile the existing attempt.');
             abort_unless(now()->lt(\Carbon\CarbonImmutable::parse($data['expires_at'])), 409, 'This approval expired. Create a new draft.');
-            abort_unless($this->gateway->ready(), 503, 'No email transport connected. No email was sent.');
+            abort_unless($this->gateway->readyFor($data['payload']['mailbox']), 503, 'This sender transport is not enabled. No email was sent.');
             $record->status = 'dispatching';
             $record->version++;
             $record->save();

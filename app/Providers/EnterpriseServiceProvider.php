@@ -22,6 +22,8 @@ final class EnterpriseServiceProvider extends ServiceProvider
     {
         $this->app->scoped(TenantContext::class);
         $this->app['config']->set('enterprise.runtime', true);
+        $this->app->bind(\App\Enterprise\AskModel::class, \App\Enterprise\IntelligenceAskModel::class);
+        $this->app->bind(\App\Enterprise\MailboxGateway::class, \App\Enterprise\EnterpriseMailboxGateway::class);
     }
 
     public function boot(): void

@@ -18,6 +18,11 @@ class MailboxGateway
         return false;
     }
 
+    public function readyFor(array $mailbox): bool
+    {
+        return $this->ready();
+    }
+
     public function authorize(Tenant $tenant, User $user, string $areaId, string $id): array
     {
         foreach ($this->mailboxes($tenant, $user, $areaId) as $mailbox) {

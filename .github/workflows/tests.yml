@@ -8,6 +8,7 @@ on:
       - master
       - workos
       - codex/everbranch-enterprise-intake
+      - codex/enterprise-collaboration-ask
   workflow_dispatch:
 
 concurrency:

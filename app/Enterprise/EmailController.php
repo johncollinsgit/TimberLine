@@ -15,7 +15,7 @@ class EmailController
 
     public function create(Request $request, EmailDrafts $drafts)
     {
-        $data = $request->validate(['area_id' => ['required', 'uuid'], 'mailbox_id' => ['required', 'uuid'], 'request_id' => ['required', 'uuid'],
+        $data = $request->validate(['area_id' => ['required', 'uuid'], 'mailbox_id' => ['required', 'string', 'regex:/^(?:[a-f0-9-]{36}|[1-9][0-9]{0,18})$/D'], 'request_id' => ['required', 'uuid'],
             'to' => ['required', 'email:rfc', 'max:254', 'not_regex:/[\r\n]/'], 'subject' => ['required', 'string', 'max:200', 'not_regex:/[\r\n]/'],
             'body' => ['required', 'string', 'max:10000'], 'source_refs' => ['sometimes', 'array', 'max:10'],
             'source_refs.*' => ['required', 'string', 'distinct', 'max:100']]);

@@ -41,7 +41,7 @@ return (new ApplicationBuilder($app))
         $middleware->redirectUsersTo('/');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        $exceptions->dontFlash(['password', 'password_confirmation', 'current_password', 'token']);
+        $exceptions->dontFlash(['password', 'password_confirmation', 'current_password', 'token', 'code', 'state', 'error_description']);
         // The shared retail error views depend on its layout/assets. Enterprise
         // errors retain their actual HTTP status without booting that UI.
         $exceptions->render(function (HttpExceptionInterface $exception, Request $request) {

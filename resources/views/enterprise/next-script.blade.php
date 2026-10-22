@@ -1,7 +1,7 @@
   const nextBase = @json(url('/enterprise')), teamBase = @json(url('/team'));
   const draftPrefix = `everbranch-enterprise-draft:${workspace}:${viewer}:`;
   const selectionMemory = new Map(), noteBusy = new Set(), planningReceipts = new Map();
-  let activeDiscussionKey = null, discussionGeneration = 0, planningData = null, planningPending = null, planningBusy = false, askBusy = false, emailPreview = null, emailPending = null, emailGeneration = 0;
+  let activeDiscussionKey = null, discussionGeneration = 0, planningData = null, planningPending = null, planningBusy = false, askBusy = false, askPending = null, emailPreview = null, emailPending = null, emailGeneration = 0, gmailConnection = null, gmailBusy = false;
   const nextQuery = () => '?tenant=' + encodeURIComponent(tenantSlug);
   function readDraft(key) { try { return JSON.parse(sessionStorage.getItem(draftPrefix + key) || '{}'); } catch { return {}; } }
   function writeDraft(key, value) { try { sessionStorage.setItem(draftPrefix + key, JSON.stringify(value)); } catch {} }
@@ -22,6 +22,7 @@
     discussionGeneration++; activeDiscussionKey = null;
     emailGeneration++; emailPending = null; emailPreview = null; $('email-form').reset(); $('email-preview').hidden = true;
     $('mailbox-status').textContent = 'No delivery transport connected. No mailbox messages are read or sent.';
+    gmailConnection=null; $('gmail-connect').disabled=true; $('gmail-disconnect').hidden=true; $('gmail-status').textContent='Choose an authorized workspace to check your Gmail connection.';
     $('chat-log').replaceChildren(); $('email-preview').replaceChildren(); $('email-confirm').hidden = true;
     $('planning-list').replaceChildren(); planningData = null;
   }
@@ -31,7 +32,7 @@
     $('ask').hidden = section !== 'ask';
     $('work').hidden = ['ask', 'contractors'].includes(section);
     document.querySelectorAll('[data-section]').forEach(b => b.classList.toggle('active', b.dataset.section === section));
-    if (section === 'ask') { $('heading').textContent = 'Ask with the right context.'; $('breadcrumb').textContent = 'Ask Everbranch'; loadMailboxes(); }
+    if (section === 'ask') { $('heading').textContent = 'Ask with the right context.'; $('breadcrumb').textContent = 'Ask Everbranch'; if(!$('ask-question').value) $('ask-question').value=readDraft('ask:'+area).pending?.question||''; loadMailboxes(); }
     if (section === 'contractors') loadPlanning();
     rememberUrl();
   }
@@ -156,11 +157,17 @@
   function chatMessage(text, className) { const node = document.createElement('div'); node.className = 'chat-turn ' + (className || ''); node.textContent = text; $('chat-log').append(node); return node; }
   $('ask-form').onsubmit = async e => {
     e.preventDefault(); if (askBusy || !area) return; const question = $('ask-question').value.trim(); if (!question) return;
+    askPending = readDraft('ask:' + area).pending || null;
+    if (askPending && askPending.question !== question) return message('The previous Ask request is retained. Retry its exact text to check the outcome before asking a different question.', true);
+    askPending ||= {area_id:area,question,request_id:crypto.randomUUID()};
+    writeDraft('ask:' + area, {pending:askPending});
     askBusy = true; $('ask-submit').disabled = true; const requestedArea = area;
     chatMessage(question,'question'); $('ask-question').value = '';
     try {
-      const result = await api(`${nextBase}/ask${nextQuery()}`, {area_id:area,question});
+      const result = await api(`${nextBase}/ask${nextQuery()}`, askPending);
       if (area !== requestedArea) return;
+      askPending = null;
+      writeDraft('ask:' + requestedArea, {});
       const answer = chatMessage(result.reply);
       const labels = {status:'Status',due_on:'Due date',starts_on:'Start date',ends_on:'End date (inclusive)',amount_minor:'Amount in minor units',currency:'Currency',basis:'Basis',updated_at:'Recorded at'};
       for (const source of result.sources) {
@@ -179,13 +186,38 @@
     if (!area || !data.features?.email_drafts) return;
     const requestedArea = area;
     try {
-      const result = await api(`${nextBase}/mailboxes${nextQuery()}&area_id=${encodeURIComponent(area)}`);
+      const [mailboxResult,gmailResult] = await Promise.allSettled([api(`${nextBase}/mailboxes${nextQuery()}&area_id=${encodeURIComponent(area)}`),api(`${nextBase}/gmail${nextQuery()}&area_id=${encodeURIComponent(area)}`)]);
       if (area !== requestedArea || section !== 'ask' || generation !== emailGeneration) return;
-      $('mailbox-status').textContent = result.status;
-      $('email-mailbox').innerHTML = result.mailboxes.map(m => `<option value="${esc(m.id)}">${esc(m.address)}</option>`).join('');
-      $('email-form').hidden = !result.mailboxes.length;
-    } catch (error) { $('mailbox-status').textContent = error.message; }
+      const result=mailboxResult.status==='fulfilled'?mailboxResult.value:null;
+      $('mailbox-status').textContent = result?result.status:mailboxResult.reason.message;
+      $('email-mailbox').innerHTML = result?result.mailboxes.map(m => `<option value="${esc(m.id)}">${esc(m.address)}</option>`).join(''):'';
+      $('email-form').hidden = !result?.mailboxes.length;
+      if(gmailResult.status!=='fulfilled')throw gmailResult.reason;
+      const gmail=gmailResult.value;
+      gmailConnection=gmail.connection_id?gmail:null;
+      $('gmail-status').textContent=gmail.status;
+      $('gmail-connect').disabled=!gmail.can_connect||gmailBusy; $('gmail-connect').textContent=gmail.connected?'Reconnect Google Workspace':'Connect Google Workspace';
+      $('gmail-disconnect').hidden=!gmail.connection_id; $('gmail-disconnect').disabled=gmailBusy;
+    } catch (error) { if(area!==requestedArea||section!=='ask'||generation!==emailGeneration)return; gmailConnection=null; $('gmail-connect').disabled=true;$('gmail-disconnect').hidden=true;$('mailbox-status').textContent = error.message; }
   }
+  $('gmail-connect').onclick=async()=>{
+    if(gmailBusy||!area)return;gmailBusy=true;$('gmail-connect').disabled=true;const requestedArea=area,generation=emailGeneration;
+    try {
+      const result=await api(`${nextBase}/gmail/connect${nextQuery()}`,{area_id:requestedArea});
+      if(area!==requestedArea||section!=='ask'||generation!==emailGeneration)return;
+      const url=new URL(result.authorization_url);
+      if(url.origin!=='https://accounts.google.com'||url.pathname!=='/o/oauth2/v2/auth'||url.username||url.password||url.hash)throw new Error('An unsupported Google consent destination was returned.');
+      location.assign(url.href);
+    }catch(error){if(area===requestedArea&&generation===emailGeneration)message(error.message,true);}
+    finally{gmailBusy=false;if(area===requestedArea&&section==='ask')loadMailboxes();}
+  };
+  $('gmail-disconnect').onclick=async()=>{
+    if(gmailBusy||!gmailConnection||!area)return;
+    const exact=gmailConnection,requestedArea=area,generation=emailGeneration;gmailBusy=true;$('gmail-disconnect').disabled=true;
+    try {const result=await api(`${nextBase}/gmail/${encodeURIComponent(exact.connection_id)}/disconnect${nextQuery()}`,{area_id:requestedArea});if(area!==requestedArea||section!=='ask'||generation!==emailGeneration)return;emailPreview=null;emailPending=null;$('email-preview').replaceChildren();$('email-preview').hidden=true;$('email-confirm').hidden=true;message(result.provider_revocation==='uncertain'?'Gmail is disconnected here. Google revocation could not be confirmed; review access in your Google account.':'Gmail disconnected. Existing approvals can no longer send.');}
+    catch(error){if(area===requestedArea&&generation===emailGeneration)message(error.message,true);}
+    finally{gmailBusy=false;if(area===requestedArea&&section==='ask')loadMailboxes();}
+  };
   $('email-form').oninput = () => {emailGeneration++; emailPreview = null; emailPending = null; $('email-confirm').hidden = true; $('email-preview').hidden = true;};
   $('email-form').onsubmit = async e => {
     e.preventDefault(); const generation = emailGeneration; const body = emailPending || {area_id:area,mailbox_id:$('email-mailbox').value,to:$('email-to').value,subject:$('email-subject').value,body:$('email-body').value,source_refs:[],request_id:crypto.randomUUID()}; if (body.area_id !== area) return; emailPending = body;
@@ -198,6 +230,6 @@
     catch (error) { message(error.message, true); }
     finally { $('email-confirm').disabled = false; }
   };
-  document.querySelector('form[action="{{ route('logout') }}"]')?.addEventListener('submit', () => { for (const key of Object.keys(sessionStorage)) if (key.startsWith(draftPrefix)) sessionStorage.removeItem(key); });
+  document.querySelector('form[action="{{ route('logout') }}"]')?.addEventListener('submit', () => { for (const key of Object.keys(sessionStorage)) if (key.startsWith(draftPrefix) || key.startsWith(`enterprise-workflow:${workspace}:${viewer}:`)) sessionStorage.removeItem(key); });
   window.addEventListener('pagehide', stashComposer);
   window.visualViewport?.addEventListener('resize', () => {document.documentElement.style.setProperty('--visible-height', window.visualViewport.height + 'px'); if (document.activeElement?.matches('#discussion-body,#ask-question')) document.activeElement.scrollIntoView({block:'nearest'});});

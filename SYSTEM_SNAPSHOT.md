@@ -2999,3 +2999,23 @@ Ask Everbranch chat and a fake-tested own-mailbox preview/confirmation contract.
 No production model/mailbox binding, provider credentials, sends or grants exist.
 See `docs/architecture/enterprise-next-slice.md`; tablet checks are browser viewport
 simulation, not physical iPad acceptance.
+## Enterprise operating workflow source candidate (October 22)
+
+`/projects/workspace` in the separate Enterprise runtime provides a full-screen
+React Flow workspace, bounded screen/form design, digest-reviewed activation and
+persisted human runs with current authorization. Home/PDF use authorized as-of
+facts with explicit coverage. Enterprise's own Vite artifact, encrypted AI usage
+reservations and empty native-shaped mailbox DDL preserve the independent
+application/database boundary. No credentials, grants, provider calls, sends or
+deployment are created. See `docs/architecture/enterprise-workflow-workspace.md`;
+real provider/scanner and physical iPad acceptance remain separate gates.
+
+The October 22 Gmail increment adds per-user send-only OAuth code with a dedicated
+callback, encrypted token refresh/revocation, exact sender-specific confirmation
+and durable no-retry dispatch. It creates no grants or Google credentials and
+defaults off. John is the intended first mailbox; the approved $1 total synthetic
+AI test budget does not approve credential installation, OAuth consent or real
+messages. The later reviewer trial specifies a service sender without reviewer
+mailbox access and supersedes that allowance with a $5 shared lifetime cap across
+all trial providers; no recipients or credential grants are approved. See
+`docs/operations/enterprise-gmail.md` and `docs/operations/enterprise-integrations.md`.

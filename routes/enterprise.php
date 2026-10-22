@@ -11,16 +11,36 @@ Route::get('/login', [SessionController::class, 'create'])->name('login');
 Route::post('/login', [SessionController::class, 'store'])->middleware('throttle:5,1')->name('login.store');
 Route::post('/logout', [SessionController::class, 'destroy'])->middleware('auth')->name('logout');
 Route::get('/verify-email', fn () => response('A verified Enterprise account is required. Contact your organization administrator.', 403))->name('verification.notice');
+// The one-use state resolves its own frozen tenant; never accept a callback tenant query.
+Route::get('/enterprise/gmail/callback', [\App\Enterprise\GmailController::class, 'callback'])
+    ->middleware([\App\Enterprise\GmailCallbackSession::class, 'throttle:10,1,enterprise-gmail-callback:'])->name('enterprise.gmail.callback');
 Route::middleware(['auth', 'verified', ResolveWorkspace::class, \App\Http\Middleware\EnsureTeamWorkViewer::class, 'throttle:120,1'])->group(function (): void {
     Route::get('/', [EnterpriseController::class, 'index'])->name('enterprise.index');
     Route::get('/teams', [EnterpriseController::class, 'index'])->name('team.index');
     Route::get('/enterprise/data', [EnterpriseController::class, 'data'])->name('enterprise.data');
+    Route::get('/enterprise/integrations', [\App\Enterprise\IntegrationController::class, 'status'])->name('enterprise.integrations');
+    Route::get('/projects/workspace', [\App\Enterprise\WorkspaceController::class, 'show'])->name('enterprise.workspace');
+    Route::get('/enterprise/briefing', [\App\Enterprise\BriefingController::class, 'show'])->name('enterprise.briefing');
+    Route::post('/enterprise/briefing/refresh', [\App\Enterprise\BriefingController::class, 'refresh'])->middleware('throttle:10,1,enterprise-briefing:')->name('enterprise.briefing.refresh');
+    Route::get('/enterprise/briefing.pdf', [\App\Enterprise\BriefingController::class, 'pdf'])->name('enterprise.briefing.pdf');
+    Route::get('/enterprise/workflows', [\App\Enterprise\WorkflowController::class, 'index'])->name('enterprise.workflows');
+    Route::post('/enterprise/workflows', [\App\Enterprise\WorkflowController::class, 'save'])->name('enterprise.workflows.save');
+    Route::post('/enterprise/workflows/preview', [\App\Enterprise\WorkflowController::class, 'preview'])->name('enterprise.workflows.preview');
+    Route::post('/enterprise/workflows/propose', [\App\Enterprise\WorkflowController::class, 'propose'])->middleware('throttle:10,1,enterprise-propose:')->name('enterprise.workflows.propose');
+    Route::get('/enterprise/workflows/{id}/data', [\App\Enterprise\WorkflowController::class, 'show'])->whereUuid('id')->name('enterprise.workflows.show');
+    Route::post('/enterprise/workflows/{id}/activate', [\App\Enterprise\WorkflowController::class, 'activate'])->whereUuid('id')->name('enterprise.workflows.activate');
+    Route::post('/enterprise/workflows/{id}/pause', [\App\Enterprise\WorkflowController::class, 'pause'])->whereUuid('id')->name('enterprise.workflows.pause');
+    Route::post('/enterprise/workflows/{id}/runs', [\App\Enterprise\WorkflowController::class, 'start'])->whereUuid('id')->name('enterprise.workflows.start');
+    Route::post('/enterprise/workflows/{id}/runs/{run}/advance', [\App\Enterprise\WorkflowController::class, 'advance'])->whereUuid('id')->whereUuid('run')->name('enterprise.workflows.advance');
     Route::post('/enterprise/commands', [EnterpriseController::class, 'command'])->name('enterprise.commands');
     Route::get('/enterprise/requests/{id}/history', [EnterpriseController::class, 'history'])->whereUuid('id')->name('enterprise.history');
     Route::get('/enterprise/planning', [\App\Enterprise\PlanningController::class, 'index'])->name('enterprise.planning');
     Route::post('/enterprise/planning', [\App\Enterprise\PlanningController::class, 'save'])->name('enterprise.planning.save');
     Route::post('/enterprise/ask', [\App\Enterprise\AskController::class, 'ask'])->middleware('throttle:20,1,enterprise-ask:')->name('enterprise.ask');
     Route::get('/enterprise/mailboxes', [\App\Enterprise\EmailController::class, 'mailboxes'])->name('enterprise.mailboxes');
+    Route::get('/enterprise/gmail', [\App\Enterprise\GmailController::class, 'status'])->name('enterprise.gmail.status');
+    Route::post('/enterprise/gmail/connect', [\App\Enterprise\GmailController::class, 'connect'])->middleware('throttle:5,1,enterprise-gmail-connect:')->name('enterprise.gmail.connect');
+    Route::post('/enterprise/gmail/{id}/disconnect', [\App\Enterprise\GmailController::class, 'disconnect'])->whereUuid('id')->name('enterprise.gmail.disconnect');
     Route::post('/enterprise/email-drafts', [\App\Enterprise\EmailController::class, 'create'])->name('enterprise.email.create');
     Route::get('/enterprise/email-drafts/{id}', [\App\Enterprise\EmailController::class, 'preview'])->whereUuid('id')->name('enterprise.email.preview');
     Route::post('/enterprise/email-drafts/{id}/confirm', [\App\Enterprise\EmailController::class, 'confirm'])->whereUuid('id')->name('enterprise.email.confirm');
