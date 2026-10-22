@@ -102,38 +102,54 @@ class FleetController extends Controller
     public function bouncieCallback(Request $request, OAuthStateService $states, BouncieConnector $connector,
         EmbeddedSessionService $sessions, FleetService $fleet, LandlordOperatorActionAuditService $audit)
     {
-        $state = $states->consume('bouncie', (string) $request->query('state'));
-        $session = EmbeddedSession::findOrFail($state->session_id);
-        abort_unless(! $session->revoked_at && $session->expires_at->isFuture() && ! $session->binding->revoked_at, 403);
-        $install = $session->installation;
-        abort_unless($install->setupAllowed(), 403);
-        $sessions->verify($install, $session->binding->provider_user_id);
-        abort_if($request->filled('error'), 422, 'Bouncie authorization was cancelled.');
-        $request->attributes->set('bouncie_code_verifier', $state->payload['verifier'] ?? '');
-        $request->attributes->set('bouncie_redirect_uri', config('highlevel.bouncie_redirect_uri'));
-        Cache::lock('hl:bouncie:'.$install->id, 90)->block(5, function () use ($connector, $install, $request, $fleet, $session, $audit): void {
-            DB::transaction(function () use ($connector, $install, $request, $fleet, $session, $audit): void {
-                Installation::whereKey($install->id)->lockForUpdate()->firstOrFail();
-                abort_unless($install->refresh()->setupAllowed(), 403);
-                $old = $fleet->connection($install)?->external_account_id;
-                try {
-                    $connection = $connector->handleCallback($install->tenant, $request);
-                } catch (\Throwable) {
-                    abort(503, 'Bouncie authorization could not complete. Start the connection again.');
-                }
-                if ($old && $old !== $connection->external_account_id) {
-                    // Replacing accounts invalidates all old mappings before any new
-                    // devices can be selected. Retained GPS stays tenant-owned.
-                    DB::table('fleet_provider_device_claims')->where('integration_connection_id', $connection->id)->update(['integration_connection_id' => null]);
-                    \App\Models\FleetTrackingDevice::forTenantId($install->tenant_id)->where('provider', 'bouncie')->update(['status' => 'inactive', 'uninstalled_at' => now()]);
-                }
-                $connection->update(['connected_by_user_id' => $session->binding->user_id]);
-                $audit->record($install->tenant_id, $session->binding->user_id, 'highlevel.bouncie.connected',
-                    targetType: 'integration_connection', targetId: $connection->id);
+        try {
+            $state = $states->consume('bouncie', (string) $request->query('state'));
+            $session = EmbeddedSession::findOrFail($state->session_id);
+            abort_unless(! $session->revoked_at && $session->expires_at->isFuture() && ! $session->binding->revoked_at, 403);
+            $install = $session->installation;
+            abort_unless($install->setupAllowed(), 403);
+            $sessions->verify($install, $session->binding->provider_user_id);
+            if ($request->filled('error')) {
+                return response()->view('highlevel.complete', ['title' => 'Bouncie sign-in cancelled',
+                    'message' => 'Your saved setup has not changed. Return to Fleet and choose Connect or Reconnect Bouncie when you are ready.',
+                    'notify' => true, 'completionMessage' => 'EVERBRANCH_BOUNCIE_CANCELLED'], 422);
+            }
+            $request->attributes->set('bouncie_code_verifier', $state->payload['verifier'] ?? '');
+            $request->attributes->set('bouncie_redirect_uri', config('highlevel.bouncie_redirect_uri'));
+            Cache::lock('hl:bouncie:'.$install->id, 90)->block(5, function () use ($connector, $install, $request, $fleet, $session, $audit): void {
+                DB::transaction(function () use ($connector, $install, $request, $fleet, $session, $audit): void {
+                    Installation::whereKey($install->id)->lockForUpdate()->firstOrFail();
+                    abort_unless($install->refresh()->setupAllowed(), 403);
+                    $old = $fleet->connection($install)?->external_account_id;
+                    try {
+                        $connection = $connector->handleCallback($install->tenant, $request);
+                    } catch (\Throwable) {
+                        abort(503, 'Bouncie authorization could not complete. Start the connection again.');
+                    }
+                    if ($old && $old !== $connection->external_account_id) {
+                        // Replacing accounts invalidates all old mappings before any new
+                        // devices can be selected. Retained GPS stays tenant-owned.
+                        DB::table('fleet_provider_device_claims')->where('integration_connection_id', $connection->id)->update(['integration_connection_id' => null]);
+                        \App\Models\FleetTrackingDevice::forTenantId($install->tenant_id)->where('provider', 'bouncie')->update(['status' => 'inactive', 'uninstalled_at' => now()]);
+                    }
+                    $connection->update(['connected_by_user_id' => $session->binding->user_id]);
+                    $audit->record($install->tenant_id, $session->binding->user_id, 'highlevel.bouncie.connected',
+                        targetType: 'integration_connection', targetId: $connection->id);
+                });
             });
-        });
 
-        return response()->view('highlevel.complete', ['title' => 'Bouncie connected', 'message' => 'Return to Everbranch in your CRM to select your vehicles. You can close this window.', 'notify' => true]);
+            return response()->view('highlevel.complete', ['title' => 'Bouncie connected', 'message' => 'Return to Everbranch in your CRM to select your vehicles. You can close this window.', 'notify' => true]);
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $error) {
+            if (! in_array($error->getStatusCode(), [403, 503], true)) {
+                throw $error;
+            }
+
+            return response()->view('highlevel.complete', ['title' => 'Bouncie connection not completed',
+                'message' => $error->getStatusCode() === 403
+                    ? 'This sign-in expired or CRM access changed. Return to Fleet and start Bouncie sign-in again.'
+                    : 'Bouncie sign-in is temporarily unavailable. Your saved setup is preserved. Return to Fleet and try again shortly.',
+                'notify' => true, 'completionMessage' => 'EVERBRANCH_BOUNCIE_FAILED'], $error->getStatusCode());
+        }
     }
 
     public function disconnect(Request $request, FleetService $fleet)

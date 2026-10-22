@@ -1,3 +1,50 @@
+## Onboarding, CRM discovery, recorded routes and presentation demo (2026-10-22)
+
+Release candidate; source verification is separate from deployment and pilot activation.
+
+- CRM client administrators sign in through the existing signed account context;
+  no separate Fleet password or CRM/source ID is requested. Initial sign-in has
+  visible progress, timeout/retry instructions and a guide. Renewed sessions
+  carry an opaque installation/user scope; switching client/user clears the old
+  view and refuses an in-flight save before using the new context.
+- A three-step checklist follows confirmed server state: connect Bouncie, choose
+  vehicles, review policy/retention and collection settings. Bouncie completion
+  opens vehicle selection automatically. Cancellation, expired authorization,
+  blocked popups, empty lists and provider failures have recovery messages.
+  Reconnect/disconnect are secondary controls. Settings and vehicle saves lead
+  to the actual next step. Fully saved setup can still require support to
+  activate the pilot; connecting Bouncie never implies active tracking.
+- On opening the client workspace, automatic CRM work discovery reads calendars
+  and open opportunity pipelines from its installed location. It refreshes every
+  five minutes while visible, with a manual refresh control. Appointments span
+  seven days back through fourteen days ahead. Open opportunities remain labeled
+  pipeline work, not confirmed appointments; missing coordinates, schedules and
+  crew assignments remain unknown. There are no CRM writes or native job creation.
+  The complete read is bounded to fifty sources/five hundred work references;
+  any failed/malformed/unauthorized/oversized read preserves the prior snapshot
+  and planning overlays. Missing read scopes require agency reauthorization.
+- Fleet checkboxes and search control only display layers, never saved device
+  ownership or collection. Recorded routes reuse `FleetMapService::history`, the
+  Collins projection, through installation-scoped
+  `GET /crm/fleet/api/operations/vehicles/{device}/history?start=YYYY-MM-DD&end=YYYY-MM-DD`.
+  The device must be selected, active and bound to this installation's Bouncie
+  connection. Dates use account timezone and retained 1–30-day limits. Provider
+  trips retain separate simplified geometry and breaks; representative samples
+  remain dots. Per-vehicle loading/errors and incomplete geometry stay visible.
+  The browser loads at most three histories concurrently and keeps them only in
+  page memory. Both Leaflet and configured production Google Maps draw layers.
+- Maintenance groups overdue/due and upcoming plans, recorded completed service,
+  optional USD estimates and actual costs. Missing costs remain unrecorded.
+  These encrypted planning records neither charge nor update accounting/provider
+  billing. No schema change is needed.
+- `/crm/fleet/demo` remains a separate, cookie-free, fictional six-vehicle
+  presentation. Its seven-step click-through tour covers routes, connection
+  health, work/dispatch, trip review, maintenance/costs and alerts. Multiple
+  overdue/upcoming services, three completed services and per-truck operating
+  budgets are illustrative. Demo mutations stay in memory and reset on reload;
+  demo history never calls real CRM or Bouncie APIs. The separate draft
+  250-truck pest-control demo is not merged by this change.
+
 # Everbranch Fleet private CRM app
 
 ## Current operating mode — 2026-10-07
@@ -179,7 +226,7 @@ No unconfigured installation collects locations by default.
 4. Connection: authorize that client's Bouncie account in a top-level popup.
    Allow popups for the Everbranch app. Third-party cookies need not be enabled.
 5. Choose up to 100 devices. Devices must come from that authorized account and
-   cannot already be actively owned by another workspace. The 26th selection
+   cannot already be actively owned by another workspace. The 101st selection
    is rejected by the server. Save, then open Fleet.
 6. Check vehicle name, location and **provider last reported** timestamp. An old
    parked-vehicle reading is labelled **older location reading**, never assumed
@@ -335,9 +382,10 @@ to a CRM workspace during this setup.
 ## Fleet operations and isolated demo (2026-10-08)
 
 Everbranch owns the software, hosting, fleet settings and planning. HighLevel
-remains the work source. No `FieldServiceJob` is required or created. Managers
+remains the work source. No `FieldServiceJob` is required or created. The original release let managers
 choose a calendar or an open-opportunity pipeline, then sync a bounded source
-snapshot. Only title, reference, status, assignee and supplied schedule are kept,
+snapshot. The October 22 update above supersedes that picker with automatic
+discovery of this account’s calendars and open pipelines. Only title, reference, status, assignee and supplied schedule are kept,
 with encrypted fleet coordinates/schedule/skills/stock overlays. Configure the
 source after learning where the client keeps work; do not infer jobs from contacts.
 The additional read scopes are `calendars.readonly`, `calendars/events.readonly`

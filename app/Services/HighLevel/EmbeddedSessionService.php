@@ -54,7 +54,8 @@ class EmbeddedSessionService
                 'token_hash' => hash('sha256', $token), 'parent_origin' => $parent,
                 'expires_at' => now()->addMinutes((int) config('highlevel.session_minutes', 15))]);
 
-            return ['token' => $token, 'expires_at' => $session->expires_at->toIso8601String()];
+            return ['token' => $token, 'expires_at' => $session->expires_at->toIso8601String(),
+                'session_scope' => hash_hmac('sha256', $install->id.'|'.$binding->id, (string) config('app.key'))];
         });
     }
 

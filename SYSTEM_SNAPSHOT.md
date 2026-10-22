@@ -1,3 +1,14 @@
+## CRM Fleet onboarding, recorded routes and guided demo (2026-10-22; release candidate)
+
+See `docs/operations/highlevel-fleet-runbook.md`. The embedded Fleet surface now
+shows a saved-state setup checklist, automatic CRM account sign-in and work
+source discovery, Bouncie popup recovery, selected-vehicle recorded trip layers,
+and optional USD maintenance estimates/actual costs. The separate fictional demo
+adds a seven-step tour, overdue/upcoming/completed maintenance and illustrative
+truck budgets. No provider activation, policy approval, billing, permissions or
+vehicle limit is changed by this source update. Verify the protected release and
+`/ready` before reporting it live.
+
 ## Fictional browser POS demonstration (2026-10-21; source candidate)
 
 The separate public `/platform/demos/alpha-printing-pos` source candidate uses

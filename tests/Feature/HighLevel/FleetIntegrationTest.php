@@ -545,3 +545,162 @@ test('trip paths use precise time bounds, device ownership and configured retent
     $other = highlevelWorkspace('location-two');
     expect(fn () => $ops->path($other[0], $trip))->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
 });
+
+test('automatic CRM sync combines account calendars and open pipelines without a source id', function () {
+    [$install, $tenant, $user] = highlevelWorkspace();
+    [$other, $otherTenant] = highlevelWorkspace('location-two');
+    $ops = app(\App\Services\HighLevel\FleetOperationsService::class);
+    $foreign = $ops->save($other, 'job', ['title' => 'Other client job']);
+    Http::fake([
+        '*/users/crm-admin' => Http::response(highlevelHttpUser()),
+        '*/calendars/?*' => Http::response(['calendars' => [
+            ['id' => 'calendar-a', 'name' => 'Installations', 'locationId' => 'location-one'],
+            ['id' => 'calendar-b', 'name' => 'Service', 'locationId' => 'location-one'],
+            ['id' => 'foreign-calendar', 'locationId' => 'location-two'],
+        ]]),
+        '*/opportunities/pipelines*' => Http::response(['pipelines' => [['id' => 'pipeline-a', 'name' => 'Open work'], ['id' => 'foreign-pipeline', 'locationId' => 'location-two']]]),
+        '*/calendars/events?*' => fn ($request) => Http::response(['events' => [
+            ['id' => $request['calendarId'].'-event', 'calendarId' => $request['calendarId'], 'locationId' => 'location-one', 'title' => 'Scheduled visit', 'appointmentStatus' => 'confirmed', 'startTime' => now()->toIso8601String()],
+            ['id' => $request['calendarId'].'-cancelled', 'calendarId' => $request['calendarId'], 'appointmentStatus' => 'cancelled'],
+        ]]),
+        '*/opportunities/search*' => Http::response(['opportunities' => [['id' => 'open-job', 'pipelineId' => 'pipeline-a', 'locationId' => 'location-one', 'name' => 'Open work', 'status' => 'open']]]),
+    ]);
+    $this->withHeaders(['Authorization' => 'Bearer '.highlevelSession($install, $user), 'X-Everbranch-Parent-Origin' => 'https://app.bridgecitymarketing.agency'])
+        ->postJson('/crm/fleet/api/operations/sync', ['type' => 'automatic', 'tenant_id' => $otherTenant->id, 'location_id' => 'location-two'])
+        ->assertOk()->assertJsonPath('count', 3);
+    $records = \App\Models\HighLevel\FleetOperationRecord::forTenantId($tenant->id);
+    expect((clone $records)->where('kind', 'job')->where('status', 'active')->count())->toBe(3)
+        ->and((clone $records)->where('kind', 'job_source')->sole()->payload['sources'])->toHaveCount(3)
+        ->and($foreign->refresh()->status)->toBe('open')
+        ->and(\App\Models\FieldServiceJob::count())->toBe(0);
+    Http::assertNotSent(fn ($request) => $request->method() !== 'GET');
+    Http::assertSent(fn ($request) => str_contains($request->url(), '/opportunities/search') && $request['status'] === 'open' && $request['location_id'] === 'location-one');
+    $count = count(Http::recorded());
+    app(\App\Services\HighLevel\FleetJobSourceService::class)->syncAutomatic($install);
+    expect(count(Http::recorded()))->toBe($count);
+});
+
+test('failed or incomplete automatic CRM reads preserve existing jobs and fleet context', function () {
+    [$install, $tenant] = highlevelWorkspace();
+    $source = app(\App\Services\HighLevel\FleetJobSourceService::class);
+    $ops = app(\App\Services\HighLevel\FleetOperationsService::class);
+    $old = $ops->save($install, 'job', ['title' => 'Saved work', 'latitude' => 34.5]);
+    $old->update(['status' => 'active']);
+    Http::fake([
+        '*/calendars/?*' => Http::response(['calendars' => [['id' => 'calendar-a', 'locationId' => 'location-one']]]),
+        '*/opportunities/pipelines*' => Http::response(['pipelines' => [['id' => 'pipeline-a']]]),
+        '*/calendars/events?*' => Http::response(['events' => [['id' => 'new-event', 'calendarId' => 'calendar-a', 'appointmentStatus' => 'confirmed']]]),
+        '*/opportunities/search*' => Http::response([], 403),
+    ]);
+    expect(fn () => $source->syncAutomatic($install))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+    expect($old->refresh()->status)->toBe('active')->and($old->payload['latitude'])->toBe(34.5)
+        ->and(\App\Models\HighLevel\FleetOperationRecord::forTenantId($tenant->id)->where('kind', 'job')->count())->toBe(1);
+    Http::fake(['*/calendars/?*' => Http::response(['unexpected' => []]), '*/opportunities/pipelines*' => Http::response(['pipelines' => []])]);
+    expect(fn () => $source->syncAutomatic($install))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+    expect($old->refresh()->status)->toBe('active');
+});
+
+test('automatic CRM resync preserves overlays and records a truthful empty account', function () {
+    [$install, $tenant] = highlevelWorkspace();
+    $source = app(\App\Services\HighLevel\FleetJobSourceService::class);
+    Http::fake([
+        '*/calendars/?*' => Http::response(['calendars' => [['id' => 'calendar-a', 'locationId' => 'location-one']]]),
+        '*/opportunities/pipelines*' => Http::response(['pipelines' => []]),
+        '*/calendars/events?*' => Http::response(['events' => [['id' => 'event-a', 'calendarId' => 'calendar-a', 'title' => 'Visit', 'appointmentStatus' => 'confirmed']]]),
+    ]);
+    $source->syncAutomatic($install);
+    $job = \App\Models\HighLevel\FleetOperationRecord::forTenantId($tenant->id)->where('kind', 'job')->sole();
+    $job->update(['payload' => [...$job->payload, 'latitude' => 34.5, 'skills' => ['installation']]]);
+    $this->travel(6)->minutes();
+    $source->syncAutomatic($install);
+    expect($job->refresh()->payload['latitude'])->toBe(34.5)->and($job->payload['skills'])->toBe(['installation']);
+    $this->travel(6)->minutes();
+    Http::swap(new \Illuminate\Http\Client\Factory);
+    Http::preventStrayRequests();
+    Http::fake(['*/calendars/?*' => Http::response(['calendars' => []]), '*/opportunities/pipelines*' => Http::response(['pipelines' => []])]);
+    expect($source->syncAutomatic($install, true)['count'])->toBe(0)->and($job->refresh()->status)->toBe('inactive');
+});
+
+test('automatic CRM work capacity and foreign locations cannot replace a saved snapshot', function () {
+    [$install] = highlevelWorkspace();
+    $ops = app(\App\Services\HighLevel\FleetOperationsService::class);
+    $saved = $ops->save($install, 'job', ['title' => 'Keep this']);
+    $saved->update(['status' => 'active']);
+    Http::fake([
+        '*/calendars/?*' => Http::response(['calendars' => [['id' => 'calendar-a', 'locationId' => 'location-one']]]),
+        '*/opportunities/pipelines*' => Http::response(['pipelines' => []]),
+        '*/calendars/events?*' => Http::response(['events' => array_fill(0, 501, ['id' => 'event-a', 'calendarId' => 'calendar-a'])]),
+    ]);
+    $source = app(\App\Services\HighLevel\FleetJobSourceService::class);
+    expect(fn () => $source->syncAutomatic($install))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+    Http::fake([
+        '*/calendars/?*' => Http::response(['calendars' => [['id' => 'calendar-a', 'locationId' => 'location-one']]]),
+        '*/opportunities/pipelines*' => Http::response(['pipelines' => []]),
+        '*/calendars/events?*' => Http::response(['events' => [['id' => 'foreign', 'calendarId' => 'calendar-a', 'locationId' => 'location-two']]]),
+    ]);
+    expect(fn () => $source->syncAutomatic($install))->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+    expect($saved->refresh()->status)->toBe('active');
+});
+
+test('cancelled Bouncie sign in returns an actionable popup and keeps the connection unchanged', function () {
+    [$install, , $user, $connection] = highlevelWorkspace();
+    highlevelSession($install, $user);
+    $state = app(OAuthStateService::class)->issue('bouncie', [], EmbeddedSession::first());
+    Http::fake(['*/users/crm-admin' => Http::response(highlevelHttpUser())]);
+    $this->get('/crm/fleet/bouncie/callback?'.http_build_query(['state' => $state, 'error' => 'access_denied']))
+        ->assertStatus(422)->assertSee('Bouncie sign-in cancelled')->assertSee('Return to Fleet')->assertSee('EVERBRANCH_BOUNCIE_CANCELLED', false);
+    expect($connection->refresh()->status)->toBe('connected')->and($connection->access_token)->toBe('bouncie-token-location-one');
+    Http::assertNotSent(fn ($request) => str_contains($request->url(), 'bouncie'));
+});
+
+test('embedded session scope stays stable for renewal and changes for another client', function () {
+    [$install] = highlevelWorkspace();
+    [$other] = highlevelWorkspace('location-two');
+    Http::fake(['*/users/crm-admin' => Http::response(highlevelHttpUser())]);
+    $sessions = app(EmbeddedSessionService::class);
+    $issue = fn ($location) => $sessions->exchange(highlevelCipher(['companyId' => 'company-one', 'activeLocation' => $location, 'userId' => 'crm-admin']), $sessions->challenge(), 'https://app.bridgecitymarketing.agency');
+    $first = $issue('location-one');
+    expect($issue('location-one')['session_scope'])->toBe($first['session_scope'])
+        ->and($issue('location-two')['session_scope'])->not->toBe($first['session_scope']);
+});
+
+test('CRM selected vehicle history reuses recorded Bouncie geometry with tenant and activation gates', function () {
+    $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-22T18:00:00Z'));
+    $w = highlevelWorkspace();
+    $device = highlevelOperationsDevice($w);
+    $other = highlevelWorkspace('location-two');
+    $foreign = highlevelOperationsDevice($other, 'foreign-history');
+    Http::fake([
+        '*/users/crm-admin' => Http::response(highlevelHttpUser()),
+        'https://api.bouncie.dev/v1/trips*' => Http::response([
+            ['imei' => $device->external_device_id, 'transactionId' => 'trip-a', 'startTime' => now()->subHours(2)->toIso8601String(), 'endTime' => now()->subHour()->toIso8601String(), 'distance' => 4.2,
+                'gps' => ['type' => 'LineString', 'coordinates' => [[-82.60, 34.82], [-82.601, 34.821], [-82.602, 34.822]]]],
+            ['imei' => 'foreign-history', 'transactionId' => 'foreign', 'startTime' => now()->subHours(2)->toIso8601String(), 'endTime' => now()->subHour()->toIso8601String()],
+        ]),
+    ]);
+    $this->withHeaders(['Authorization' => 'Bearer '.highlevelSession($w[0], $w[2]), 'X-Everbranch-Parent-Origin' => 'https://app.bridgecitymarketing.agency']);
+    $this->getJson('/crm/fleet/api/operations/vehicles/'.$device->id.'/history?tenant_id='.$other[1]->id)
+        ->assertOk()->assertHeader('Cache-Control')->assertJsonPath('status', 'ready')->assertJsonCount(1, 'trips')
+        ->assertJsonPath('trips.0.distance_miles', 4.2)->assertJsonPath('trips.0.geometry_status', 'trace')->assertDontSee('foreign-history')->assertDontSee('bouncie-token');
+    $this->getJson('/crm/fleet/api/operations/vehicles/'.$foreign->id.'/history')->assertNotFound();
+    $this->getJson('/crm/fleet/api/operations/vehicles/'.$device->id.'/history?start=2020-01-01')->assertUnprocessable();
+    config(['highlevel.collection_enabled' => false]);
+    $this->getJson('/crm/fleet/api/operations/vehicles/'.$device->id.'/history')->assertOk()->assertJsonPath('status', 'disabled')->assertJsonCount(0, 'trips');
+    Http::assertSent(fn ($request) => str_contains($request->url(), '/trips') && $request['imei'] === $device->external_device_id && $request['gps-format'] === 'geojson');
+    Http::assertNotSent(fn ($request) => $request->method() !== 'GET');
+    $this->travelBack();
+});
+
+test('maintenance records optional service estimates and actual costs without billing writes', function () {
+    $w = highlevelWorkspace();
+    $device = highlevelOperationsDevice($w);
+    Http::fake(['*/users/crm-admin' => Http::response(highlevelHttpUser())]);
+    $this->withHeaders(['Authorization' => 'Bearer '.highlevelSession($w[0], $w[2]), 'X-Everbranch-Parent-Origin' => 'https://app.bridgecitymarketing.agency']);
+    $this->postJson('/crm/fleet/api/operations/plans', ['device_id' => $device->id, 'title' => 'Oil service', 'due_date' => now()->toDateString(), 'estimated_cost' => 110.50])->assertOk();
+    $plan = \App\Models\HighLevel\FleetOperationRecord::where('kind', 'service_plan')->sole();
+    expect($plan->payload['estimated_cost'])->toEqual(110.50);
+    $this->postJson('/crm/fleet/api/operations/service', ['plan_id' => $plan->id, 'odometer' => 24000, 'serviced_at' => now()->toDateString(), 'actual_cost' => 105.25])->assertOk();
+    expect(\App\Models\HighLevel\FleetOperationRecord::where('kind', 'service_log')->sole()->payload['actual_cost'])->toEqual(105.25);
+    $this->postJson('/crm/fleet/api/operations/plans', ['device_id' => $device->id, 'title' => 'Bad cost', 'due_date' => now()->toDateString(), 'estimated_cost' => -1])->assertUnprocessable();
+    Http::assertNotSent(fn ($request) => $request->method() !== 'GET');
+});
