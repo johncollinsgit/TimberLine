@@ -11,6 +11,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import "./workspace.css";
+import "./transport.js";
 
 type Field = {
     key: string;
@@ -26,6 +27,7 @@ type Step = {
     position: { x: number; y: number };
     screen?: { title: string; description: string; fields: Field[] };
     assignee_id?: string;
+    task_id?: string;
     condition?: { field: string; operator: string; value: string | boolean };
 };
 type Definition = {
@@ -40,7 +42,20 @@ if (mount)
     );
 
 function Workspace({ boot }: { boot: any }) {
+    const [transport] = useState(() =>
+        (globalThis as any).EverbranchTransport.create({
+            ...boot,
+            identity: boot.identity ?? {tenantSlug: boot.tenant, viewer: boot.user_id, workspace: boot.tenant_id},
+        }),
+    );
     const incoming = new URL(location.href);
+    if (transport.mode === 'sample') {
+        incoming.search = incoming.hash.slice(1);
+        incoming.hash = '';
+    }
+    for (const key of ['tab', 'workflow', 'run']) {
+        if (!incoming.searchParams.has(key) && boot.navigation?.[key]) incoming.searchParams.set(key, boot.navigation[key]);
+    }
     const tabs = ["canvas", "screens", "runs", "settings"];
     const [tab, setTab] = useState(
         tabs.includes(incoming.searchParams.get("tab") || "")
@@ -68,33 +83,24 @@ function Workspace({ boot }: { boot: any }) {
         generation = useRef(0),
         liveDef = useRef(def);
     const scope = boot.scope;
-    const base = "/enterprise/workflows";
-    const key = `enterprise-workflow:${boot.tenant_id}:${boot.user_id}:${scope.area_id}:${scope.project_id}`;
+    const base = boot.routes?.workflows ?? "/enterprise/workflows";
+    const key = `enterprise-workflow:${transport.mode === 'sample' ? 'sample:' : ''}${boot.tenant_id}:${boot.user_id}:${scope.area_id}:${scope.project_id}`;
     const canDesign = record?.can_design ?? list.can_design;
     const members = record?.members ?? list.members ?? [];
+    const tasks = record?.tasks ?? list.tasks ?? [];
+    const operationsEnabled = record?.operations_enabled ?? list.operations_enabled ?? false;
+    const operationsBase = boot.routes?.operations ?? "/enterprise/operations";
     const chosen = def.nodes.find((n) => n.id === selected);
+    const chosenTask = tasks.find((task: any) => task.id === chosen?.task_id);
+    const memberName = (userId: string | null) => userId ? members.find((member: any) => member.id === userId)?.name ?? `Account ${userId}` : "Owning department";
     liveDef.current = def;
     async function api(path: string, body?: any) {
         const url = new URL(path, location.origin);
         url.searchParams.set("tenant", boot.tenant);
-        const r = await fetch(url, {
-            credentials: "same-origin",
-            headers: {
-                Accept: "application/json",
-                "Content-Type": "application/json",
-                "X-CSRF-TOKEN": document.querySelector<HTMLMetaElement>(
-                    'meta[name="csrf-token"]',
-                )!.content,
-                "X-Team-Viewer": boot.user_id,
-                "X-Team-Workspace": boot.tenant_id,
-            },
-            ...(body ? { method: "POST", body: JSON.stringify(body) } : {}),
-        });
-        const out = await r.json().catch(() => ({
-            message: "The server did not confirm the operation.",
-        }));
-        if (!r.ok) {
-            if ([403, 404].includes(r.status)) {
+        try {
+            return await transport.request(url.href, body);
+        } catch (e: any) {
+            if ([403, 404].includes(e.status)) {
                 ++generation.current;
                 setRecord(null);
                 setRun(null);
@@ -108,15 +114,8 @@ function Workspace({ boot }: { boot: any }) {
                     members: [],
                 });
             }
-            const e: any = new Error(
-                out.errors
-                    ? Object.values(out.errors).flat().join(" ")
-                    : out.message || "Operation unavailable.",
-            );
-            e.status = r.status;
             throw e;
         }
-        return out;
     }
     const query = `?area_id=${encodeURIComponent(scope.area_id)}&project_id=${encodeURIComponent(scope.project_id)}`;
     async function refresh(nextId: string | null = id, restore = false) {
@@ -186,7 +185,7 @@ function Workspace({ boot }: { boot: any }) {
                 } catch {}
                 if (
                     operation &&
-                    (operation.path === base ||
+                    (operation.path === base || operation.path === operationsBase + "/commands" ||
                         new RegExp(
                             "^" +
                                 base +
@@ -222,7 +221,7 @@ function Workspace({ boot }: { boot: any }) {
         else url.searchParams.delete("workflow");
         if (run) url.searchParams.set("run", run.id);
         else url.searchParams.delete("run");
-        history.replaceState(null, "", url);
+        transport.replace(url);
     }, [tab, id, run?.id]);
     useEffect(() => {
         if (!run) return;
@@ -358,6 +357,15 @@ function Workspace({ boot }: { boot: any }) {
         } finally {
             setBusy(false);
         }
+    }
+    async function refreshSelectedRun(workflowId: string | null = id, runId: string | null = run?.id ?? null) {
+        if (!workflowId) return;
+        const token = ++generation.current;
+        const latest = await api(`${base}/${encodeURIComponent(workflowId)}/data`);
+        if (token !== generation.current) return;
+        if (latest.workflow.area_id !== scope.area_id || latest.workflow.project_id !== scope.project_id) throw new Error("This workflow belongs to a different project.");
+        setRecord(latest);
+        setRun(latest.runs.find((item: any) => item.id === runId) ?? null);
     }
     async function save() {
         const nextId = id || crypto.randomUUID();
@@ -529,7 +537,7 @@ function Workspace({ boot }: { boot: any }) {
     return (
         <div className="ew-shell">
             <aside className="ew-sidebar">
-                <a className="ew-brand" href={boot.back}>
+                <a className="ew-brand" href={transport.href(boot.back)}>
                     <span aria-hidden="true">♧</span>
                     <span>
                         Everbranch<small>Enterprise · Workflows</small>
@@ -580,7 +588,7 @@ function Workspace({ boot }: { boot: any }) {
                         </button>
                     )}
                 </div>
-                <a className="ew-back" href={boot.back}>
+                <a className="ew-back" href={transport.href(boot.back)}>
                     ← Back to Projects
                 </a>
             </aside>
@@ -594,6 +602,11 @@ function Workspace({ boot }: { boot: any }) {
                         <p className="ew-subtle">
                             Design the handoff. See every decision.
                         </p>
+                        {transport.mode === "sample" && (
+                            <p className="ew-subtle" role="note">
+                                Sample execution — browser records, not the server-backed workflow engine
+                            </p>
+                        )}
                     </div>
                     <div className="ew-actions">
                         <span className="ew-badge">
@@ -640,6 +653,10 @@ function Workspace({ boot }: { boot: any }) {
                             onClick={() => {
                                 const p = pending.current!;
                                 mutate(p.path, p.body, async () => {
+                                    if (p.path === operationsBase + "/commands") {
+                                        await refreshSelectedRun(id, run?.id ?? incoming.searchParams.get("run"));
+                                        return;
+                                    }
                                     setDirty(false);
                                     const workflowId =
                                         p.path === base
@@ -969,6 +986,7 @@ function Workspace({ boot }: { boot: any }) {
                                                 "assignment",
                                                 "approval",
                                             ].includes(chosen.type) && (
+                                                <>
                                                 <label>
                                                     {chosen.type === "approval"
                                                         ? "Existing approver"
@@ -1000,6 +1018,7 @@ function Workspace({ boot }: { boot: any }) {
                                                                         "approval" ||
                                                                     m.can_approve,
                                                             )
+                                                            .filter((m: any) => chosen.type !== "assignment" || !chosenTask || m.id === chosenTask.ball_user_id)
                                                             .map((m: any) => (
                                                                 <option
                                                                     key={m.id}
@@ -1010,6 +1029,19 @@ function Workspace({ boot }: { boot: any }) {
                                                             ))}
                                                     </select>
                                                 </label>
+                                                {(operationsEnabled || chosen.task_id) && <>
+                                                    <label>Canonical project task
+                                                        <select aria-label="Canonical project task" value={chosen.task_id ?? ""} disabled={!canDesign || busy || !!pending.current || !operationsEnabled} onChange={event => {
+                                                            const task = tasks.find((item: any) => item.id === event.target.value);
+                                                            patchStep({task_id: task?.id, ...(chosen.type === "assignment" && task?.ball_user_id ? {assignee_id: task.ball_user_id} : {})});
+                                                        }}>
+                                                            <option value="">Choose an existing task</option>
+                                                            {tasks.map((task: any) => <option key={task.id} value={task.id}>{task.title}{task.version === 0 ? " (setup required)" : ""}</option>)}
+                                                        </select>
+                                                    </label>
+                                                    <p className="ew-subtle">{chosenTask ? `Current ball: ${memberName(chosenTask.ball_user_id)}. Native version ${chosenTask.task_version}; operations version ${chosenTask.version}.` : "Map this step to an existing configured task before activation. Selecting a task grants no access and creates no task."}</p>
+                                                </>}
+                                                </>
                                             )}
                                             {chosen.type === "condition" && (
                                                 <>
@@ -1658,6 +1690,22 @@ function Workspace({ boot }: { boot: any }) {
                                             <p>
                                                 {runNode?.screen?.description}
                                             </p>
+                                            {run.linked_task && <section className="ew-collected" aria-label="Linked native task">
+                                                <h3>Canonical task</h3>
+                                                <a href={transport.href(run.linked_task.url)}>{run.linked_task.title}</a>
+                                                <dl><dt>Accountable owner</dt><dd>{memberName(run.linked_task.owner_user_id)}</dd><dt>Current ball</dt><dd>{memberName(run.linked_task.ball_user_id)}</dd><dt>Next action</dt><dd>{run.linked_task.next_action || "Not recorded"}</dd><dt>Due</dt><dd>{run.linked_task.due_on || "Not recorded"}</dd></dl>
+                                                <progress max={100} value={run.linked_task.progress_percent} aria-label="Native task checklist progress"/>
+                                                <p>{run.linked_task.progress_percent}% performed · {Number(run.linked_task.completion_score).toFixed(1)} / 4.0{run.linked_task.approval_required ? " · awaiting verification" : ""}</p>
+                                                <p className="ew-subtle">Native version {run.linked_task.task_version}; operations version {run.linked_task.version}. Current task: {run.linked_task.status}.</p>
+                                                {(run.linked_task.checklist || []).map((item: any) => <label className="ew-check" key={item.id}>
+                                                    <input aria-label={`${item.label} (native task)`} type="checkbox" checked={item.completed} disabled={busy || dirty || !!pending.current || !run.linked_task.can_update || ["interrupted", "closed", "completed"].includes(run.linked_task.status)} onChange={() => mutate(operationsBase + "/commands", {
+                                                        action: "task.check", task_id: run.linked_task.id, expected_version: run.linked_task.version, expected_task_version: run.linked_task.task_version,
+                                                        request_id: crypto.randomUUID(), item_id: item.id, completed: !item.completed,
+                                                    }, async () => {await refreshSelectedRun();})}/><span>{item.label} (weight {item.weight})</span>
+                                                </label>)}
+                                                <button disabled={busy || !!pending.current} onClick={async () => {setBusy(true);try {await refreshSelectedRun();setNotice("Current native task and run refreshed.");} catch (error: any) {setNotice(error.message);} finally {setBusy(false);}}}>Refresh native task &amp; run</button>
+                                                <p className="ew-subtle">Complete the native checklist before continuing an assignment. Only an existing authorized manager can verify 4.0. Interrupted work must be explicitly resumed in Operations.</p>
+                                            </section>}
                                             {run.collected_fields?.length >
                                                 0 && (
                                                 <section className="ew-collected">
@@ -1758,6 +1806,7 @@ function Workspace({ boot }: { boot: any }) {
                                                                                 crypto.randomUUID(),
                                                                             expected_version:
                                                                                 run.version,
+                                                                            ...(run.linked_task ? {expected_task_version: run.linked_task.task_version, expected_operations_version: run.linked_task.version} : {}),
                                                                             values,
                                                                             decision,
                                                                         },

@@ -65,8 +65,14 @@ class WorkflowController
 
     public function advance(Request $request, string $id, string $run, Workflows $workflows)
     {
-        $input = $request->validate(['request_id' => ['required', 'uuid'], 'expected_version' => ['required', 'integer', 'min:1'], 'values' => ['sometimes', 'array'], 'decision' => ['sometimes', 'in:complete,approve,reject']]);
+        $input = $request->validate(['request_id' => ['required', 'uuid'], 'expected_version' => ['required', 'integer', 'min:1'], 'expected_task_version' => ['sometimes', 'integer', 'min:1'],
+            'expected_operations_version' => ['sometimes', 'integer', 'min:1'], 'values' => ['sometimes', 'array'], 'decision' => ['sometimes', 'in:complete,approve,reject']]);
         $input['expected_version'] = (int) $input['expected_version'];
+        foreach (['expected_task_version', 'expected_operations_version'] as $key) {
+            if (isset($input[$key])) {
+                $input[$key] = (int) $input[$key];
+            }
+        }
 
         return $this->json($workflows->advance($request->attributes->get('current_tenant'), $request->user(), $id, $run, $input));
     }

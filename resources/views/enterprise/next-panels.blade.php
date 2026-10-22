@@ -12,11 +12,11 @@
   </form></div>
 </section>
 <section id="ask" class="next-panel" hidden>
-  <h2>Ask Everbranch</h2><p class="subtle">Signed in as {{ auth()->user()->name }} · {{ $enterpriseRole ?? 'current authorized role' }}. Answers use your selected workspace and current permissions.</p>
+  <h2>Ask Everbranch</h2><p class="subtle">Signed in as {{ $enterprisePresentation['identity']['userName'] }} · {{ $enterpriseRole ?? 'current authorized role' }}. Answers use your selected workspace and current permissions.</p>
   <p class="caption">Answers use server-checked records and links. Approved model access can prioritize those sources. Chat cannot send email or perform work changes.</p>
   <div class="ask-grid"><div class="panel"><div id="chat-log" class="chat-log" role="log" aria-live="polite"><p class="caption">Ask about visible requests, project status or recorded plans. Each turn checks current access. Chat is per page; old answers are not reused as evidence.</p></div>
   <form id="ask-form" class="stack ask-composer"><label>Message Ask Everbranch<textarea id="ask-question" maxlength="1500" required placeholder="What is planned in this workspace?"></textarea></label><button class="button primary" type="submit" id="ask-submit">Ask</button></form></div>
-  <div class="panel stack"><h3>Email in your context</h3><p class="caption" id="mailbox-status">No delivery transport connected. No mailbox messages are read or sent.</p>
+  <div class="panel stack" id="email-context-panel" @if($enterpriseSample) hidden @endif><h3>Email in your context</h3><p class="caption" id="mailbox-status">No delivery transport connected. No mailbox messages are read or sent.</p>
   <section class="stack" aria-label="Your Google Workspace connection"><p class="caption" id="gmail-status">Google Workspace setup and your explicit consent are required. Inbox contents are never read.</p><div class="actions"><button class="button" type="button" id="gmail-connect" disabled>Connect Google Workspace</button><button class="button" type="button" id="gmail-disconnect" hidden>Disconnect Gmail</button></div></section>
   <form id="email-form" class="stack" hidden><label>Your authorized sender<select id="email-mailbox"></select></label><label>Exact recipient<input id="email-to" type="email" maxlength="254" required></label><label>Subject<input id="email-subject" maxlength="200" required></label><label>Message body<textarea id="email-body" maxlength="10000" rows="6" required></textarea></label><button class="button" type="submit">Preview exact draft</button></form>
   <div id="email-preview" hidden></div><button class="button primary" id="email-confirm" hidden>Confirm this exact email</button>

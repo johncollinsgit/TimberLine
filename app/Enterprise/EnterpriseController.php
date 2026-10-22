@@ -60,13 +60,15 @@ class EnterpriseController
             ->filter(fn ($user) => in_array($actor['active_roles'][(string) $user->id] ?? '', ['owner', 'admin', 'member'], true)
                 && WorkspaceAccess::permits(array_replace($actor, ['user_id' => (string) $user->id, 'role' => $actor['active_roles'][(string) $user->id]]), $area->id, true)) : collect();
 
-        return response()->json(['workspace' => ['id' => $tenant->id, 'name' => $tenant->name], 'selected_area_id' => $selected,
+        return response()->json(['workspace' => ['id' => $tenant->id, 'name' => $tenant->name], 'viewer_id' => (string) $request->user()->id, 'selected_area_id' => $selected,
             'areas' => $areas->map(fn ($a) => ['id' => $a->id, 'name' => $a->name, 'visibility' => $a->profile === 'enterprise_shared' ? 'shared' : 'department_only'])->values(),
             'requests' => array_slice($items, 0, 100), 'projects' => $projects, 'coverage' => 'up_to_100_visible_requests_scan_1000', 'has_more' => count($items) > 100,
             'scan_partial' => $scanned === 1000,
             'features' => ['collaboration' => (bool) config('enterprise.collaboration_enabled'), 'planning' => (bool) config('enterprise.planning_enabled'),
                 'ask' => (bool) config('enterprise.ask_enabled'), 'email_drafts' => (bool) config('enterprise.email_drafts_enabled'),
-                'workflow' => (bool) config('enterprise.workflow_enabled'), 'briefing' => (bool) config('enterprise.briefing_enabled')],
+                'workflow' => (bool) config('enterprise.workflow_enabled'), 'briefing' => (bool) config('enterprise.briefing_enabled'),
+                'operations' => (bool) config('enterprise.operations_enabled'), 'resources' => (bool) config('enterprise.resources_enabled'),
+                'roll_call' => (bool) config('enterprise.roll_call_enabled'), 'requester' => (bool) config('enterprise.requester_enabled')],
             'can_manage' => config('enterprise.writes_enabled') && in_array($actor['role'], ['owner', 'admin'], true),
             'can_submit' => $area && WorkspaceAccess::canSubmit($actor, $area->id),
             'can_coordinate' => $area && WorkspaceAccess::permits($actor, $area->id, true, true),

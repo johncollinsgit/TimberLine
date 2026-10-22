@@ -9,6 +9,7 @@ on:
       - workos
       - codex/everbranch-enterprise-intake
       - codex/enterprise-collaboration-ask
+      - codex/enterprise-workflow-briefing
   workflow_dispatch:
 
 concurrency:

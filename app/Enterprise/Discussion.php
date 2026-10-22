@@ -20,7 +20,12 @@ class Discussion
         abort_unless(config('enterprise.collaboration_enabled'), 404);
         $actor = $this->access->actor($tenant, $user, $create);
         $state = $this->work->state($tenant->id);
-        if ($kind === 'request') {
+        if ($kind === 'task') {
+            abort_unless($this->graph->can($state, $actor, 'task', $id, $create), 404);
+            $native = $this->graph->read($state, $actor, 'task', $id);
+            $this->access->area($tenant, $actor, $native['enterprise_area_id'] ?? '');
+            $taskId = $id;
+        } elseif ($kind === 'request') {
             $record = TeamOperationRecord::query()->where(['tenant_id' => $tenant->id, 'kind' => 'enterprise_request'])->findOrFail($id);
             app(RequestWorkflow::class)->view($tenant, $actor, $record);
             $taskId = $record->data['task_id'] ?? null;
@@ -65,10 +70,15 @@ class Discussion
         $result = $this->resolve($tenant, $user, $kind, $id);
         $task = $result['task'];
         $comments = array_values(array_filter($task['comments'] ?? [], fn ($row) => $row['deleted_at'] === null));
+        $files = $task ? $this->files->listing($tenant, $user, $task['id']) : [];
+        if ($task && config('enterprise.operations_enabled')) {
+            $captions = collect(app(FileCaptions::class)->forTask($tenant, $user, $task['id']))->keyBy('id');
+            $files = array_map(fn ($file) => $file + ['caption' => $captions[$file['id']]['caption'] ?? '', 'caption_version' => $captions[$file['id']]['version'] ?? 0], $files);
+        }
 
         return ['task_id' => $task['id'] ?? null, 'can_write' => $result['can_write'],
             'comments' => array_slice(array_map(fn ($row) => array_intersect_key($row, array_flip(['id', 'author_id', 'body', 'created_at'])), $comments), -100),
-            'files' => $task ? $this->files->listing($tenant, $user, $task['id']) : [],
+            'files' => $files,
             'coverage' => 'Latest 100 notes. Files inherit this native task and department visibility; confidential contracts need a separate future document lane.'];
     }
 

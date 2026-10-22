@@ -1,3 +1,24 @@
+## Enterprise campus operations candidate (2026-10-22; draft, disabled)
+
+The separate Enterprise app/database runtime now has candidate canonical task
+ownership, interruption/resumption, explicit handoffs, manager-verified checklist
+completion, resources/custody/reservation conflicts, requester-only public updates,
+permission-filtered search and workspace preferences, Roll Call/meeting decisions
+and regenerated one-page PDFs. Shared renderer adapters let an isolated public
+sample use the same shell/workflow UI without employee resolution or provider IO.
+A six-scene tour previews email in-app and never sends. The controlled server-held
+synthetic trial is separate, default-off, with a shared $5 lifetime reservation
+ledger, exact confirmations, expiring links and quarantined private uploads.
+No provider credentials/grants, real recipients, paid calls or deployment are
+established by this source. All new rollout flags default off. Read
+[the milestone boundaries](docs/architecture/enterprise-reviewer-milestones.md),
+[CI acceptance gates](docs/operations/enterprise-ci.md),
+[reviewer presentation](docs/operations/enterprise-reviewer-presentation.md),
+[Roll Call](docs/operations/enterprise-roll-call.md) and
+[controlled trial](docs/operations/enterprise-reviewer-trial.md) before activation.
+The protected dependency stack is PR458 → PR459 → PR461 → this candidate;
+PR460 is unrelated Fleet work. Release requires reviewed GitHub gates and Forge.
+
 ## Fictional hosted POS demo boundary (2026-10-21; source candidate)
 
 `/platform/demos/alpha-printing-pos` is a separate public fictional browser
