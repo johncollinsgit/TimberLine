@@ -1,3 +1,13 @@
+## Pest-control Fleet preview (2026-10-22; source candidate)
+
+`/crm/fleet/demo/pest-control` is an isolated browser-only dispatcher rehearsal
+with 250 synthetic trucks, four fictional branches, attention links, explainable
+dispatch, message previews, setup guidance and tab-local preferences/reviews.
+The original Fleet demo, production 100-selected-vehicle limit, grants, providers
+and collection gates are unchanged. An illustrative map makes no external calls.
+This UI fixture is not production load or live integration acceptance. See
+`docs/operations/highlevel-fleet-pest-demo.md` for verification and publication.
+
 ## Fictional browser POS demonstration (2026-10-21; source candidate)
 
 The separate public `/platform/demos/alpha-printing-pos` source candidate uses

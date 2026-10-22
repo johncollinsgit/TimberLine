@@ -16,6 +16,7 @@ Route::prefix('crm/fleet')->name('highlevel.')->middleware([HighLevelSurface::cl
             Route::get('/launch', [HighLevelController::class, 'launch'])->name('launch');
             Route::view('/guide', 'highlevel.guide')->name('guide');
             Route::get('/demo', fn () => view('highlevel.fleet', ['parentOrigins' => [], 'demo' => true]))->name('demo');
+            Route::view('/demo/pest-control', 'highlevel.pest-demo')->name('demo.pest-control');
             Route::get('/install', [HighLevelController::class, 'install'])->name('install');
             Route::get('/oauth/callback', [HighLevelController::class, 'callback'])->name('oauth.callback');
             Route::get('/session/challenge', [HighLevelController::class, 'challenge'])->middleware('throttle:30,1');
