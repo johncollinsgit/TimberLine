@@ -7972,6 +7972,109 @@ CREATE TABLE `service_inquiries` (
   KEY `service_inquiries_email_idx` (`email`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `service_proposal_assets`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `service_proposal_assets` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_by` bigint unsigned DEFAULT NULL,
+  `kind` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `revision` int unsigned NOT NULL DEFAULT '1',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `sp_a_tenant_id_uq` (`tenant_id`,`id`),
+  CONSTRAINT `sp_a_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `service_proposal_comments`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `service_proposal_comments` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_by` bigint unsigned DEFAULT NULL,
+  `version_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `request_key` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `sp_c_tenant_id_uq` (`tenant_id`,`id`),
+  UNIQUE KEY `sp_c_request_uq` (`tenant_id`,`version_id`,`request_key`),
+  CONSTRAINT `sp_c_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
+  CONSTRAINT `sp_c_version_fk` FOREIGN KEY (`tenant_id`, `version_id`) REFERENCES `service_proposal_versions` (`tenant_id`, `id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `service_proposal_drafts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `service_proposal_drafts` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_by` bigint unsigned DEFAULT NULL,
+  `client_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `revision` int unsigned NOT NULL DEFAULT '1',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `sp_d_tenant_id_uq` (`tenant_id`,`id`),
+  KEY `sp_d_client_fk` (`tenant_id`,`client_id`),
+  CONSTRAINT `sp_d_client_fk` FOREIGN KEY (`tenant_id`, `client_id`) REFERENCES `service_proposal_assets` (`tenant_id`, `id`) ON DELETE RESTRICT,
+  CONSTRAINT `sp_d_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `service_proposal_reviews`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `service_proposal_reviews` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_by` bigint unsigned DEFAULT NULL,
+  `version_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `selection_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `request_key` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `sp_r_tenant_id_uq` (`tenant_id`,`id`),
+  UNIQUE KEY `sp_r_request_uq` (`tenant_id`,`version_id`,`request_key`),
+  CONSTRAINT `sp_r_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
+  CONSTRAINT `sp_r_version_fk` FOREIGN KEY (`tenant_id`, `version_id`) REFERENCES `service_proposal_versions` (`tenant_id`, `id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `service_proposal_versions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `service_proposal_versions` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_by` bigint unsigned DEFAULT NULL,
+  `draft_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `number` int unsigned NOT NULL,
+  `content_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `token_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `password_hash` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `publish_key` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `access_result` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `expires_at` timestamp NOT NULL,
+  `revoked_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `sp_v_tenant_id_uq` (`tenant_id`,`id`),
+  UNIQUE KEY `sp_v_number_uq` (`tenant_id`,`draft_id`,`number`),
+  UNIQUE KEY `sp_v_token_uq` (`token_hash`),
+  UNIQUE KEY `sp_v_publish_uq` (`tenant_id`,`draft_id`,`publish_key`),
+  CONSTRAINT `sp_v_draft_fk` FOREIGN KEY (`tenant_id`, `draft_id`) REFERENCES `service_proposal_drafts` (`tenant_id`, `id`) ON DELETE RESTRICT,
+  CONSTRAINT `sp_v_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `sessions`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -13135,3 +13238,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (307,'2026_10_20_14
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (308,'2026_10_20_200000_create_platform_email_deliveries',32);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (309,'2026_10_21_160000_create_pos_simulation_tables',33);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (310,'2026_10_22_190000_add_private_voice_retention',34);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (311,'2026_10_22_150000_create_service_proposal_tables',35);

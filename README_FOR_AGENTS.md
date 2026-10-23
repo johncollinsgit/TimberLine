@@ -7,8 +7,10 @@ workflow workspace. These names grant no campus access. Client operational data
 and proposal-owner data require separate singleton silos, keys and storage. The
 client runtime and owner runtime have independent provisioning/access gates. Read
 [the unified review runbook](docs/operations/enterprise-proposal-review-release.md).
-The combined MySQL baseline must be workflow-generated and reviewed before the
-candidate is release eligible. No live provisioning or provider calls occurred.
+The combined MySQL baseline was workflow-generated and independently reviewed;
+see [its provenance](docs/operations/enterprise-proposal-schema-provenance.md).
+Final-head fingerprint/recovery CI remains mandatory. No live provisioning or
+provider calls occurred.
 
 ## Earlier Enterprise integration rehearsal
 

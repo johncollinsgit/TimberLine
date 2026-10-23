@@ -45,12 +45,24 @@ try {
     // Keep the actual public 30/min limiter enabled, including refreshes and
     // failed requests. The synthetic multi-person scenario respects its budget.
     serial=serial.then(async()=>{
-      await new Promise(done=>setTimeout(done,Math.max(0,dispatched+2150-Date.now())));dispatched=Date.now();
+      await new Promise(done=>setTimeout(done,Math.max(0,dispatched+2150-Date.now())));
+      // A browser may cancel a queued refresh while navigating. It must not
+      // leave an unended upstream request holding every later real request.
+      if(req.destroyed||res.destroyed)return;
+      dispatched=Date.now();
       await new Promise(done=>{
-        const upstream=httpRequest({hostname:'127.0.0.1',port:8894,path:req.url,method:req.method,headers:req.headers},response=>{
-          res.writeHead(response.statusCode,response.headers);response.pipe(res);response.on('end',done);
+        let upstream;
+        const finish=()=>{req.off('aborted',abort);res.off('close',abort);done();};
+        const abort=()=>{upstream?.destroy();finish();};
+        upstream=httpRequest({hostname:'127.0.0.1',port:8894,path:req.url,method:req.method,headers:req.headers},response=>{
+          if(res.destroyed){response.destroy();finish();return;}
+          res.writeHead(response.statusCode,response.headers);response.pipe(res);
+          response.once('end',finish);response.once('close',finish);
         });
-        upstream.on('error',()=>{if(!res.headersSent)res.writeHead(503);res.end('Fixture starting');done();});req.pipe(upstream);
+        req.once('aborted',abort);res.once('close',abort);
+        upstream.once('error',()=>{if(!res.destroyed){if(!res.headersSent)res.writeHead(503);res.end('Fixture starting');}finish();});
+        if(req.aborted||res.destroyed){abort();return;}
+        if(req.readableEnded)upstream.end();else req.pipe(upstream);
       });
     });
   });proxy.listen(8895,'127.0.0.1');await once(proxy,'listening');
@@ -95,6 +107,17 @@ try {
   }
   const ross=await reviewer('Ross'),sarah=await reviewer('Sarah'),paul=await reviewer('Paul');
   console.log(`${engine}: three actual password-unlocked contexts ready`);
+  // Aborting a queued refresh must leave the following authenticated request usable.
+  await ross.page.evaluate(async()=>{
+    const url=globalThis.EverbranchCampusReviewBoot.urls.data_pages.home;
+    const controller=new AbortController();
+    const first=fetch(url,{credentials:'same-origin'}).then(response=>{if(!response.ok)throw Error('Real refresh failed');});
+    const cancelled=fetch(url,{credentials:'same-origin',signal:controller.signal}).then(()=>{throw Error('Queued refresh was not cancelled');},error=>{if(error.name!=='AbortError')throw error;});
+    setTimeout(()=>controller.abort(),10);
+    await Promise.all([first,cancelled]);
+  });
+  await refresh(ross.page);
+  results.push('A cancelled queued refresh does not stall later authenticated requests.');
   const hostile='<img src=x onerror="globalThis.reviewInjected=true"><script>alert(1)</script> & quoted feedback';
   await save(ross.page,hostile);await refresh(sarah.page);
   assert.ok(await sarah.page.locator('#review-comments').innerText().then(text=>text.includes(hostile)));
@@ -195,6 +218,9 @@ try {
     assert.ok(dimensions.page<=width+1,`${label} page overflow ${JSON.stringify(dimensions)}`);assert.ok(dimensions.dialog<=dimensions.client+1,`${label} dialog overflow ${JSON.stringify(dimensions)}`);
     await paul.page.screenshot({path:resolve(evidence,label+'.png'),fullPage:true});
     await paul.page.keyboard.press('Escape');assert.equal(await paul.page.locator('#review-dialog').evaluate(node=>node.open),false);
+    // Native dialog close events are queued in WebKit. Require the actual
+    // event-driven focus return, rather than sampling before that event runs.
+    await paul.page.waitForFunction(()=>document.activeElement?.id==='review-open');
     assert.equal(await paul.page.evaluate(()=>document.activeElement.id),'review-open');await open(paul.page);
     assert.equal(await paul.page.locator('#review-body').inputValue(),'Retained unsent '+label+' draft');
   }

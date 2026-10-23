@@ -102,7 +102,7 @@
     finally{clearTimeout(timer);posting=false;render();}
   });
   const open=document.getElementById('review-open'),close=document.getElementById('review-close');
-  open?.addEventListener('click',()=>{priorFocus=document.activeElement;if(!dialog.open)dialog.showModal();void refresh();});
+  open?.addEventListener('click',event=>{priorFocus=event.currentTarget;if(!dialog.open)dialog.showModal();void refresh();});
   close?.addEventListener('click',()=>dialog.close());dialog.addEventListener('close',()=>{saveDraft();priorFocus?.focus();});
   document.getElementById('review-refresh')?.addEventListener('click',()=>void refresh());
   for(const holder of document.querySelectorAll('.erp-proposal')){const link=document.createElement('a');link.href=safeUrl(urls.proposal);link.className='ert-button primary';link.textContent='Open proposal';holder.replaceChildren(link);}

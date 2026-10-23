@@ -1,7 +1,7 @@
 <?php
 
-use App\Proposals\OwnerController;
 use App\Proposals\CampusReviewController;
+use App\Proposals\OwnerController;
 use App\Proposals\RecipientController;
 use Illuminate\Support\Facades\Route;
 
