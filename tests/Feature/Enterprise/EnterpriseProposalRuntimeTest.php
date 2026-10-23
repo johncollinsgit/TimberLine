@@ -145,6 +145,33 @@ final class EnterpriseProposalRuntimeTest extends TestCase
             'Synthetic reviewer password', 7, Str::uuid()->toString(), 'reviewer');
     }
 
+    public function test_review_activity_uses_the_private_mounted_runtime_and_current_owner_authority(): void
+    {
+        [$tenant, $owner] = $this->owner();
+        config(['service_proposals.campus_review.enabled' => true, 'service_proposals.campus_review.build_id' => 'synthetic-activity-build']);
+        app()->instance(\App\Proposals\CampusReviewManifest::class, new class extends \App\Proposals\CampusReviewManifest
+        {
+            protected function sourceHash(): string
+            {
+                return str_repeat('a', 64);
+            }
+        });
+        ['version' => $version, 'token' => $token] = $this->publication($tenant, $owner);
+        $url = $this->url('/service-proposals/'.$token);
+        $this->postWithToken($url.'/unlock', ['password' => 'Synthetic reviewer password'])->assertRedirect();
+        $event = ['event' => 'proposal_section', 'page' => 'scope', 'event_id' => (string) Str::uuid(), 'version_hash' => $version->content_hash];
+        $this->post($url.'/activity', $event)->assertStatus(419);
+        $this->postWithToken($url.'/activity', $event)->assertOk()->assertJsonPath('recorded', true);
+        $this->assertCount(1, glob($this->runtime.'/storage/app/private/proposal-activity/'.$tenant->id.'/*.jsonl'));
+        $path = $this->ownerPath($tenant).'/versions/'.$version->id.'/activity';
+        $this->get($path)->assertRedirect();
+        $this->actingAs($owner)->get($path)->assertOk()->assertSee('Review activity')->assertSee('Password unlocked')->assertSee('Financial');
+        $owner->tenants()->updateExistingPivot($tenant->id, ['membership_active' => false]);
+        $this->get($path)->assertForbidden();
+        Http::assertNothingSent();
+        Mail::assertNothingSent();
+    }
+
     public function test_publication_notice_opens_the_exact_mounted_recipient_gate_once_without_leaking_password_or_namespace(): void
     {
         [$tenant, $owner] = $this->owner();

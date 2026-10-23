@@ -2,6 +2,7 @@
 <dialog id="review-dialog" class="panel" aria-labelledby="campus-review-title" data-campus-review>
     <button class="button" type="button" id="review-close" data-campus-review-close>Close review</button>
     <h2 id="campus-review-title">Review this campus page</h2>
+    <p>Pages opened and tour progress are shared with Evergrove Software as review activity.</p>
     <p>Fictional demonstration. Shared feedback is saved to this exact proposal version and campus build. Display names are self-selected, not verified identities, accounts, signatures or campus permissions.</p>
     <p><a class="button" id="review-proposal" href="{{ $campusReviewContext['urls']['proposal'] }}" data-campus-proposal>Open proposal</a></p>
     <label for="campus-review-page">Page being reviewed</label>

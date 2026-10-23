@@ -119,7 +119,7 @@ class CampusReviewController
         }
         $name = $request->session()->get('service_proposal_name.'.$version->id);
 
-        return ['version_id' => $version->id, 'version_hash' => $version->content_hash, 'build_id' => $manifest['build_id'],
+        return ['activity_url' => route('service-proposals.recipient.activity', $token), 'version_id' => $version->id, 'version_hash' => $version->content_hash, 'build_id' => $manifest['build_id'],
             'source_hash' => $manifest['source_hash'], 'client_reference' => $manifest['client_reference'], 'page' => $page, 'pages' => $manifest['pages'],
             'reviewer_name' => in_array($name, $version->payload['reviewer_names'] ?? [], true) ? $name : null,
             'reviewer_names' => $version->payload['reviewer_names'] ?? [], 'comments' => $visible,

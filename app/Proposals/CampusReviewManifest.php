@@ -31,7 +31,10 @@ class CampusReviewManifest
     /** Fixed local source groups only; never accepts a file path from a reviewer. */
     protected function sourceHash(): string
     {
-        $paths = ['app/Enterprise/ReviewerPresentation.php', 'app/Enterprise/LocationCatalog.php',
+        $paths = ['app/Proposals/Activity.php', 'app/Proposals/ActivityController.php', 'app/Proposals/RecordActivity.php',
+            'app/Proposals/RateLimits.php', 'app/Proposals/ResponsePolicy.php', 'app/Proposals/CampusReviewController.php', 'routes/service-proposals.php',
+            'resources/js/service-proposals/activity.js', 'resources/views/service-proposals/activity-bridge.blade.php',
+            'app/Enterprise/ReviewerPresentation.php', 'app/Enterprise/LocationCatalog.php',
             'app/Proposals/CampusReviewManifest.php', 'resources/views/service-proposals/campus-review.blade.php',
             'resources/data/enterprise/lees-mcrae-locations.json', 'resources/data/enterprise/official-campus-plan.png',
             'resources/data/enterprise/campus-map-points.json',
