@@ -41,8 +41,10 @@ and checks retained drafts, current identity, authorized links and zero tour POS
 It also creates a long fictional workspace list and verifies an actual sidebar
 click after returning from the full-screen builder. The desktop sticky rail
 scrolls independently; tablet/phone retain document-flow navigation. The combined
-two-engine scenario has a 25-minute ceiling because it preserves real server
-throttles rather than disabling them for the larger synthetic action sequence.
+two-engine scenario has a 45-minute ceiling because it preserves real server
+throttles rather than disabling them for the larger synthetic action sequence. Measured
+partial runs already exceed 23 minutes combined before the final navigation,
+role and voice checks; the bound preserves both complete engine runs.
 
 Both reviewer browser scripts and the native operations harness run sequentially
 in Chromium and WebKit. Browser steps share the already installed Playwright

@@ -37,6 +37,7 @@ export async function checkEnterpriseApp(page,evidence,packet,tenant) {
     await page.keyboard.press('Escape');await page.locator('#retry').click();
     await page.waitForFunction(()=>EverbranchTransport.pendingWrites===0&&EverbranchTransport.refreshBlockers===0);
     assert.deepEqual(coreBodies[1],coreBodies[0]);await page.unroute('**/enterprise/commands?*');
+    await page.waitForFunction(()=>document.getElementById('status').textContent==='Saved.');
     await page.route('**/enterprise/commands?*',route=>route.fulfill({status:422,contentType:'application/json',body:JSON.stringify({message:'Synthetic definitive validation rejection'})}));
     await openProjectWizard(page,'Rejected synthetic project');await page.locator('#job-save').click();
     await page.locator('#status').filter({hasText:'The server rejected this action'}).waitFor();
