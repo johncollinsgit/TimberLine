@@ -361,7 +361,8 @@ test('reviewed PDF commercial snapshot survives normal owner saves and catalog d
         ->and($asset->fresh()->getRawOriginal('payload'))->toBe($catalogRaw);
     $this->get($draftPath.'/preview')->assertOk()->assertSee('Contract term and renewal')->assertSee('12-month term')->assertSee('60 days')->assertSee('90 days')
         ->assertSee('No routine subscription-pause entitlement')->assertSee('What setup includes')->assertSee('Staged fees')->assertSee('Support requests are submitted through the ticketing system.')
-        ->assertDontSee('phased billing remains to be agreed')->assertDontSee('Contract duration: to be agreed.')->assertSee('Agree the discovery sessions and the initial department focus.')->assertDontSee('No fixed onsite frequency or hours are assumed.');
+        ->assertDontSee('phased billing remains to be agreed')->assertDontSee('Contract duration: to be agreed.')->assertSee('Agree the discovery sessions and the initial department focus.')->assertDontSee('No fixed onsite frequency or hours are assumed.')
+        ->assertSee($copy['client_details']['rollout'])->assertDontSee('Billing start and rollout duration are not finalized.');
     foreach ([['catalog_ids' => [$payload['items'][0]['id']]], ['usage_plan' => 'workspace_allowance'], ['scope_notes' => 'Changed contractual scope.'], ['approach_key' => null]] as $change) {
         $this->put($draftPath, [...$input, 'revision' => 4, ...$change])->assertStatus(409);
         expect($this->draft->fresh()->revision)->toBe(4)->and($this->draft->fresh()->payload)->toBe($this->draft->payload);
@@ -369,13 +370,35 @@ test('reviewed PDF commercial snapshot survives normal owner saves and catalog d
     ['version' => $newVersion, 'token' => $newToken] = $this->service->publish($this->tenant, $this->owner->id, $this->draft->id, 4, 'Test proposal password', 7, Str::uuid()->toString());
     $newUrl = 'https://evergrove.test/service-proposals/'.$newToken;
     $this->post($newUrl.'/unlock', ['password' => 'Test proposal password']);
-    $this->get($newUrl)->assertOk()->assertSee('value="12"', false)->assertSee('Contract term and renewal');
+    $this->get($newUrl)->assertOk()->assertSee('value="12"', false)->assertSee('Contract term and renewal')
+        ->assertSee($copy['client_details']['rollout'])->assertDontSee('Billing start and rollout duration are not finalized.');
+    $selectionResponse = $this->post($newUrl.'/selection', ['version_hash' => $newVersion->content_hash,
+        'request_key' => session('service_proposal_request.'.$newVersion->id), 'selected' => [$payload['items'][0]['id']], 'terms' => [$payload['items'][0]['id'] => 12]])
+        ->assertOk()->assertSee('Review your selected scope.')->assertSee('1 year(s)')->assertSee('3,000.00')->assertSee('1,000.00')
+        ->assertSee($copy['client_details']['rollout'])->assertDontSee('Billing start and rollout duration are not finalized.')
+        ->assertSee('12-month term')->assertSee('60 days')->assertSee('90 days')->assertSee('No routine subscription-pause entitlement')
+        ->assertSee('Support requests are submitted through the ticketing system.')->assertSee('No unlimited AI, voice, text or email commitment.');
+    foreach ($copy['client_details']['commercial_sections'] as $section) {
+        $selectionResponse->assertSee($section['heading']);
+        foreach ($section['paragraphs'] ?? [] as $paragraph) {
+            $selectionResponse->assertSee($paragraph);
+        }
+    }
+    expect(Review::count())->toBe(0);
     $selection = $this->service->selection($newVersion->payload, [['id' => $payload['items'][0]['id'], 'term_months' => 12]]);
     expect($selection['totals_cents'])->toBe(['month' => 100000, 'one_time' => 300000])->and($selection['services'][0]['term_months'])->toBe(12)
         ->and(fn () => $this->service->selection($newVersion->payload, [['id' => $payload['items'][0]['id']]]))->toThrow(\Illuminate\Validation\ValidationException::class);
     $oldUrl = 'https://evergrove.test/service-proposals/'.$oldToken;
     $this->post($oldUrl.'/unlock', ['password' => 'Test proposal password']);
-    $this->get($oldUrl)->assertOk()->assertSee('Contract duration: to be agreed.')->assertDontSee('Contract term and renewal')->assertSee('No fixed onsite frequency or hours are assumed.');
+    $this->get($oldUrl)->assertOk()->assertSee('Contract duration: to be agreed.')->assertDontSee('Contract term and renewal')->assertSee('No fixed onsite frequency or hours are assumed.')
+        ->assertSee('<p class="muted">If selected, the three-workspace bundle reserves three department scopes; it does not activate all three at once. Billing start and rollout duration are not finalized.</p>', false);
+    $oldSelection = $this->post($oldUrl.'/selection', ['version_hash' => $oldVersion->content_hash,
+        'request_key' => session('service_proposal_request.'.$oldVersion->id), 'selected' => [$oldVersion->payload['items'][0]['id']]])
+        ->assertOk()->assertSee('Billing start and rollout duration are not finalized.')->assertSee('Working together, with clear boundaries.')
+        ->assertDontSee('Contract term and renewal')->assertDontSee('<h2>Implementation Timeline, Client Dependencies, and Billing Commencement</h2>', false);
+    foreach (['rollout', 'activation', 'support', 'travel', 'usage'] as $key) {
+        $oldSelection->assertSee($oldVersion->payload['client_details'][$key]);
+    }
     expect($oldVersion->fresh()->content_hash)->toBe($oldHash)->and($oldVersion->fresh()->getRawOriginal('payload'))->toBe($oldRaw)
         ->and($oldVersion->fresh()->payload['items'][0]['terms_months'])->toBe([])->and(Version::count())->toBe(2)->and(Review::count())->toBe(0)
         ->and(DB::table('tenant_billing_orders')->count())->toBe(0);

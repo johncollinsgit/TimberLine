@@ -60,7 +60,11 @@
             <h4>Make the first department work. Then move forward.</h4>
             <ol class="rollout-sequence"><li><span>01</span><strong>First working department</strong><small>Implement and accept the initial scope.</small></li><li><span>02</span><strong>Second department · pending</strong><small>Proceed after the first acceptance gate.</small></li><li><span>03</span><strong>Third department · pending</strong><small>Proceed after the prior acceptance gate.</small></li></ol>
             <p class="rollout-gate"><strong>Each acceptance gate:</strong> scoped workflows, user training, permissions and data boundaries, and support handover are reviewed and accepted before the next department activates.</p>
+            @if(is_string($rolloutNote ?? null) && trim($rolloutNote) !== '')
+            <p class="muted">{{ $rolloutNote }}</p>
+            @else
             <p class="muted">If selected, the three-workspace bundle reserves three department scopes; it does not activate all three at once. Billing start and rollout duration are not finalized.</p>
+            @endif
         </div>
     </div>
 
