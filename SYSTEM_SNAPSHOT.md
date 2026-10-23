@@ -1,3 +1,14 @@
+## Text conversation UI candidate (October 23; disabled, not live-verified)
+
+A separate default-off UI gate exposes setup/availability in the existing Ask pane,
+not a second chat product. Explicit approved sends use the bounded backend;
+read-only recovery checks current scope/source stamps without redispatch. Browser
+storage holds receipt IDs only. Stop/navigation fence late replies, and explicit
+clear preserves all spend evidence. Matching tour guidance distinguishes generated
+text, deterministic record checks and queued voice. Local managed-runtime browser
+acceptance uses fake provider HTTP and fictional records only. See
+[the text UI contract](docs/operations/enterprise-conversation.md#text-ui-milestone-separate-from-connection-activation).
+
 ## Text conversation backend candidate (October 23; disabled, not live-verified)
 
 The separate Conversation route can send a bounded, current authorized evidence
@@ -6,8 +17,9 @@ single campus TrialBudget lifetime $5 ledger, with full model-context reservatio
 durable single dispatch, verified bounded usage settlement and uncertainty holds.
 All other Enterprise billable routes stay server-off while this trial is enabled;
 retail provider routes are unchanged. Current record checks remain explicitly
-deterministic. The backend has no exposed conversation UI, saved assistants,
-long-term memory, audio input/output, sending or business-record tools. Its local
+deterministic. The separately gated text UI reuses the existing Ask pane and
+read-only recovery; saved assistants, long-term memory, audio input/output,
+sending and business-record tools remain unavailable. Its local
 HTTP provider responses are simulated; actual provider acceptance is still gated.
 See [the conversation connection and acceptance contract](docs/operations/enterprise-conversation.md).
 

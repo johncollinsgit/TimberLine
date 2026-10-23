@@ -188,6 +188,25 @@ class Assistant
         });
     }
 
+    /** Recovery reads only existing encrypted state. It never reserves, dispatches or refunds a turn. */
+    public function show(Tenant $tenant, User $user, string $area, string $id): array
+    {
+        $this->connection->authority($tenant, $user, $area);
+        $row = $this->row($tenant, $user, $area, $id);
+        abort_unless(in_array($row->status, ['active', 'pending'], true), 409, 'This conversation ended. Start a new one.');
+        $data = $row->data;
+        $current = $this->snapshot($tenant, $user, $area, $data['intent'], $data['building_id']);
+        abort_unless(isset($data['stamp']) && hash_equals($data['stamp'], $current['stamp']), 409,
+            'Current sources or access changed. Clear this conversation before starting another.');
+
+        return ['scope' => ['tenant_id' => (string) $tenant->id, 'user_id' => (string) $user->id, 'area_id' => $area],
+            'session_id' => $id, 'state' => $row->status === 'pending' ? 'unconfirmed' : 'active', 'intent' => $data['intent'],
+            'building_id' => $data['building_id'], 'expires_at' => $data['expires_at'], 'history' => $data['history'],
+            'last_result' => $row->status === 'active' ? ($data['last_result'] ?? null) : null,
+            'pending_request_id' => $data['pending_uuid'] ?? null, 'provider_dispatch' => false,
+            'message' => $row->status === 'pending' ? 'This turn is pending or uncertain. Cost exposure stays held; status checks never repeat the provider request.' : 'Restored from the current authorized short conversation.'];
+    }
+
     public function end(Tenant $tenant, User $user, string $area, string $id): array
     {
         $access = app(WorkspaceAccess::class);

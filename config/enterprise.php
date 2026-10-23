@@ -9,6 +9,7 @@ return [
     'collaboration_enabled' => (bool) env('ENTERPRISE_COLLABORATION_ENABLED', false),
     'planning_enabled' => (bool) env('ENTERPRISE_PLANNING_ENABLED', false),
     'conversation' => [
+        'ui_enabled' => (bool) env('ENTERPRISE_CONVERSATION_UI_ENABLED', false),
         'enabled' => (bool) env('ENTERPRISE_CONVERSATION_ENABLED', false),
         'api_key' => env('ENTERPRISE_CONVERSATION_API_KEY'),
         'project_id' => env('ENTERPRISE_CONVERSATION_PROJECT_ID'), 'organization_id' => env('ENTERPRISE_CONVERSATION_ORGANIZATION_ID'),

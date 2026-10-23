@@ -6,6 +6,27 @@ use Illuminate\Http\Request;
 
 class Controller
 {
+    public function status(Request $request, Readiness $readiness)
+    {
+        $input = $request->validate(['area_id' => ['required', 'uuid']]);
+
+        abort_unless(config('enterprise.conversation.ui_enabled'), 404);
+        $access = app(\App\Enterprise\WorkspaceAccess::class);
+        $tenant = $request->attributes->get('current_tenant');
+        $access->area($tenant, $access->actor($tenant, $request->user()), $input['area_id']);
+
+        return response()->json($readiness->inspect($request->attributes->get('current_tenant'), $request->user(), $input['area_id']))
+            ->header('Cache-Control', 'private, no-store');
+    }
+
+    public function show(Request $request, string $id, Assistant $assistant)
+    {
+        $input = $request->validate(['area_id' => ['required', 'uuid']]);
+
+        return response()->json($assistant->show($request->attributes->get('current_tenant'), $request->user(), $input['area_id'], $id))
+            ->header('Cache-Control', 'private, no-store');
+    }
+
     public function turn(Request $request, Assistant $assistant)
     {
         $input = $request->validate(['area_id' => ['required', 'uuid'], 'intent' => ['required', 'in:overview,building,costs'],

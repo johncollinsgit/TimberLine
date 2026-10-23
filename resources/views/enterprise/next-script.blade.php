@@ -1,4 +1,5 @@
   @include('enterprise.read-only-assistant-script')
+  @include('enterprise.conversation-script')
   const nextBase = urls.enterprise, teamBase = urls.team;
   const draftPrefix = `everbranch-enterprise-draft:${transport.mode === 'sample' ? 'sample:' : ''}${workspace}:${viewer}:`;
   const selectionMemory = new Map(), noteBusy = new Set(), planningReceipts = new Map(), planningUncertain = new Set();
@@ -21,6 +22,7 @@
   }
   function resetNext() {
     resetReadOnlyAssistant();
+    resetConversation();
     if(typeof resetVoice==='function')resetVoice();
     if (typeof resetOperations === 'function') resetOperations();
     discussionGeneration++; activeDiscussionKey = null;
@@ -33,15 +35,16 @@
   function renderNext() {
     if(typeof renderVoice==='function')renderVoice();
     renderReadOnlyAssistant();
-    $('generated-ask-panel').hidden = !data.features?.ask;
-    $('ask-model-caption').hidden = !data.features?.ask;
+    $('generated-ask-panel').hidden = !data.features?.ask && !data.features?.conversation_ui;
+    $('ask-model-caption').hidden = !data.features?.ask && !data.features?.conversation_ui;
+    renderConversation();
     $('email-context-panel').hidden = !data.features?.email_drafts;
-    $('ask-nav').hidden = !data.features?.ask && !data.features?.read_only_assistant;
-    if (section === 'ask' && !data.features?.ask && !data.features?.read_only_assistant) section = 'requests';
+    $('ask-nav').hidden = !data.features?.ask && !data.features?.read_only_assistant && !data.features?.conversation_ui;
+    if (section === 'ask' && !data.features?.ask && !data.features?.read_only_assistant && !data.features?.conversation_ui) section = 'requests';
     $('ask').hidden = section !== 'ask';
     $('work').hidden = ['ask', 'contractors'].includes(section);
     document.querySelectorAll('[data-section]').forEach(b => b.classList.toggle('active', b.dataset.section === section));
-    if (section === 'ask') { $('heading').textContent = 'Ask with the right context.'; $('breadcrumb').textContent = 'Ask Everbranch'; if(!$('ask-question').value) $('ask-question').value=readDraft('ask:'+area).pending?.question||''; loadMailboxes(); }
+    if (section === 'ask') { $('heading').textContent = 'Ask with the right context.'; $('breadcrumb').textContent = 'Ask Everbranch'; if(!conversationMode()&&!$('ask-question').value) $('ask-question').value=readDraft('ask:'+area).pending?.question||''; loadMailboxes(); }
     if (section === 'contractors') loadPlanning();
     rememberUrl();
   }
@@ -205,6 +208,7 @@
   };
   function chatMessage(text, className) { const node = document.createElement('div'); node.className = 'chat-turn ' + (className || ''); node.textContent = text; $('chat-log').append(node); return node; }
   $('ask-form').onsubmit = async e => {
+    if(conversationMode())return conversationSend(e);
     e.preventDefault(); if (askBusy || !area) return; const question = $('ask-question').value.trim(); if (!question) return;
     askPending = readDraft('ask:' + area).pending || null;
     if (askPending && askPending.question !== question) return message('The previous Ask request is retained. Retry its exact text to check the outcome before asking a different question.', true);

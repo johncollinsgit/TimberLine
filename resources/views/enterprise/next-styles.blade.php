@@ -13,18 +13,30 @@
 
 #read-only-assistant{margin-bottom:22px}#read-only-answer a{display:inline-block;min-height:44px;padding:10px 0;overflow-wrap:anywhere}#read-only-answer{overflow-wrap:anywhere}#read-only-answer summary{min-height:44px;cursor:pointer}#read-only-form{max-width:650px}
 /* Use the approved Enterprise system-palette disclosure at WebKit's usable target size. */
-#read-only-form select:not([multiple]){
+#read-only-form select:not([multiple]),#conversation-controls select:not([multiple]){
   -webkit-appearance:none;appearance:none;min-height:44px;height:44px;color-scheme:light;
   padding:10px 36px 10px 11px;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' style='color-scheme:light%20dark'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='CanvasText' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat:no-repeat;background-position:right 12px center;background-size:12px 8px;
 }
 @media(forced-colors:active){
-  #read-only-form select:not([multiple]){color-scheme:light dark;background-color:Canvas;color:CanvasText;border-color:ButtonText}
-  #read-only-form select:disabled:not([multiple]){color:GrayText;border-color:GrayText}
+  #read-only-form select:not([multiple]),#conversation-controls select:not([multiple]){color-scheme:light dark;background-color:Canvas;color:CanvasText;border-color:ButtonText}
+  #read-only-form select:disabled:not([multiple]),#conversation-controls select:disabled:not([multiple]){color:GrayText;border-color:GrayText}
 }
 @media(forced-colors:active) and (prefers-color-scheme:dark){
-  #read-only-form select:not([multiple]){
+  #read-only-form select:not([multiple]),#conversation-controls select:not([multiple]){
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' style='color-scheme:dark'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='CanvasText' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   }
 }
+
+/* The text conversation shares Ask's existing log/composer and never starts audio. */
+.ask-grid:has(#generated-ask-panel[data-conversation="true"]){grid-template-columns:minmax(0,1fr)}
+#conversation-controls{margin-bottom:18px}#conversation-controls h3{font:24px Georgia,serif;margin:0}
+#conversation-controls button,#conversation-controls summary{min-height:44px}#conversation-controls summary{cursor:pointer;padding:10px 0}
+#conversation-controls select{min-height:44px}#conversation-controls .field-pair>*{min-width:0}
+#generated-ask-panel[data-conversation="true"] .chat-log:empty{display:none}
+#generated-ask-panel[data-conversation="true"] .ask-composer{margin-top:16px}
+#generated-ask-panel[data-conversation="true"] textarea[readonly]{background:#f3f3ed}
+#conversation-clear-confirm{border:1px solid var(--line);border-radius:8px;padding:14px}
+.conversation-answer a{overflow-wrap:anywhere;min-height:44px;display:inline-flex;align-items:center}
+@media(max-width:650px){#conversation-controls .field-pair{display:grid;grid-template-columns:1fr}#conversation-controls select{font-size:16px}}

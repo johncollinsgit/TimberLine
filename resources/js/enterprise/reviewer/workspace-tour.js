@@ -123,7 +123,7 @@
                 add("projects", "Projects", "projects", Boolean(p), p?.id);
             }
             if (index === 6) {
-                add("ask", feature("read_only_assistant") ? "Check current records" : "Open Ask Everbranch and optional Talk", "ask", feature("read_only_assistant") || (feature("ask") && feature("voice_jobs")));
+                add("ask", feature("conversation_ui") ? "Ask about current work" : feature("read_only_assistant") ? "Check current records" : "Open Ask Everbranch and optional Talk", "ask", feature("conversation_ui") || feature("read_only_assistant") || (feature("ask") && feature("voice_jobs")));
             }
             return items;
         }
@@ -242,6 +242,12 @@
                     ["Inspect the evidence", "Open a source to see the saved record. Building counts use explicit links; checked results may be incomplete."],
                     ["Recorded costs", feature("read_only_costs") ? "Compare checked estimates with recorded costs by project and currency. An estimate is not an approved budget." : "Financial records are unavailable for your current role. No additional access is granted."],
                 ];
+            if (index === 6 && feature("conversation_ui"))
+                records = [
+                    ["Text conversation", context?.data?.conversation?.ready === true ? "Choose a focus, then Send to OpenAI. Follow up in the same short conversation." : "Text conversation awaits approved setup. No question can be sent from this screen yet."],
+                    ["Check the evidence", "Open a linked source or calculation input. Saved records can be incomplete; estimates are not approved budgets."],
+                    ["Stop or resume", "Stop waiting hides a late reply without cancelling its cost. Check this conversation to restore it; nothing is sent again automatically."],
+                ];
             const copy = [
                 "Open the campus overview to find current work. Use Buildings when you want to start with a location.",
                 "Scan or sort Requests, then open a row for details. Close or Escape returns to the same list.",
@@ -249,7 +255,11 @@
                 "Scan or sort Projects, then open a row for details. Close or Escape returns to the same list.",
                 "Open People & contractors to review available contacts. Use Assets to check recorded equipment holders and locations.",
                 "Open Roll Call to review priorities and record a decision. Confirm the owner and date before changing a task.",
-                feature("read_only_assistant")
+                feature("conversation_ui")
+                    ? context?.data?.conversation?.ready === true
+                        ? "Write a question and Send to OpenAI. Check the linked records before acting on a generated reply."
+                        : "Text conversation is unavailable until setup is approved. Use deterministic record checks to inspect permitted saved records."
+                    : feature("read_only_assistant")
                     ? "Choose a record check, then inspect its sources. These deterministic record checks use no AI model and make no changes."
                     : feature("ask") && feature("voice_jobs")
                     ? "Open Ask Everbranch and enter a job question. Inspect the source record before acting on the answer."
@@ -257,7 +267,7 @@
             ];
             return {
                 text: copy[index],
-                ...(index === 6 && feature("read_only_assistant") ? {title: "Check current records", target: "read-only-assistant", targets: ["read-only-intent", "read-only-answer"]} : {}),
+                ...(index === 6 && feature("conversation_ui") ? {title: context?.data?.conversation?.ready === true ? "Ask about current work" : "Check conversation availability", target: context?.data?.conversation?.ready === true ? "ask-form" : "conversation-controls", targets: ["conversation-status"]} : index === 6 && feature("read_only_assistant") ? {title: "Check current records", target: "read-only-assistant", targets: ["read-only-intent", "read-only-answer"]} : {}),
                 role: `Signed in: ${boot.identity.userName || "current user"} · Current workspace: ${workspace?.name || "unavailable"}`,
                 cards: records,
                 detail: ready()
@@ -408,8 +418,18 @@
                 if (!result.available) status.textContent = result.message;
             },
         });
+        const finale = root.querySelector('[data-tour-scene="6"]');
+        const finaleLabel = finale?.lastChild?.textContent;
+        function paintFinaleLabel(value) {
+            if (!finale?.lastChild) return;
+            const conversation = value?.data?.features?.conversation_ui === true;
+            const label = conversation ? "Ask Everbranch · text" : finaleLabel;
+            if (finale.lastChild.textContent !== label) finale.lastChild.textContent = label;
+            finale.dataset.tourFeature = conversation ? "conversation-controls" : "ask-voice-controls";
+        }
         const update = (event) => {
             navigation.update(event.detail);
+            paintFinaleLabel(event.detail);
             signature = "";
             tour.refresh();
         };
@@ -417,6 +437,7 @@
         document.addEventListener("enterprise:tour-context", update);
         document.addEventListener("enterprise:reset", () => {
             navigation.update(null);
+            paintFinaleLabel(null);
             signature = "";
             tour.refresh();
         });

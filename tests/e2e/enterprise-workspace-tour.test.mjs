@@ -501,3 +501,21 @@ test('read-only assistant tour describes only current permitted record checks an
     controller.update(null);
     assert.equal(controller.links(6)[0].available, false);
 });
+
+
+test("conversation finale distinguishes approved text, unavailable setup and deterministic record checks", () => {
+    const {tour,snapshot}=fixture();
+    snapshot.data.features.conversation_ui=true;
+    snapshot.data.conversation={ready:false};
+    tour.update(snapshot);
+    assert.equal(tour.describe(6,{}).target,"conversation-controls");
+    assert.match(tour.describe(6,{}).text,/unavailable until setup is approved/);
+    assert.doesNotMatch(JSON.stringify(tour.describe(6,{})),/microphone permission|generative AI is ready/);
+    snapshot.data.conversation.ready=true; tour.update(snapshot);
+    assert.equal(tour.describe(6,{}).target,"ask-form");
+    assert.match(tour.describe(6,{}).text,/Send to OpenAI/);
+    assert.match(JSON.stringify(tour.describe(6,{}).cards),/nothing is sent again automatically/);
+    snapshot.data.features.conversation_ui=false; snapshot.data.features.read_only_assistant=true; tour.update(snapshot);
+    assert.equal(tour.describe(6,{}).target,"read-only-assistant");
+    assert.match(tour.describe(6,{}).text,/use no AI model/);
+});
