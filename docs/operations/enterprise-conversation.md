@@ -58,3 +58,8 @@ Recovery rechecks the current actor, approved connection, unexpired owned sessio
 Generated answers identify current linked sources and expose deterministic calculation inputs. Estimates are never called approved budgets, missing figures stay missing, and sample records remain labeled. Local browser evidence uses fake HTTP, a fictional model/key and an explicitly seeded private SQLite fixture only; it does not establish live OpenAI or voice acceptance. The fixture converts its in-memory fictional provisioning setup to a disposable persisted SQLite binding solely for the separate browser server, without changing runtime isolation controls.
 
 Checks: `php vendor/bin/phpunit -c phpunit.enterprise.xml tests/Feature/Enterprise/EnterpriseConversationUiTest.php`; `node --test tests/e2e/enterprise-conversation.test.mjs tests/e2e/enterprise-workspace-tour.test.mjs`; after `npm run build:enterprise` and Playwright Chromium/WebKit installation, `ENTERPRISE_TEST_PHP=php node tests/browser/enterprise-conversation.smoke.mjs`. This browser script starts only loopback TLS/PHP servers and deletes its temporary fictional state. CI runs it after browser installation.
+
+
+## Optional private saved configuration
+
+A separately default-off saved-assistant milestone can supply current private purpose/instructions and fixed permitted read checks to this same bounded text route. It cannot override connection settings, tools or record access. Its ID/version/current available checks are part of the source stamp, so changing/deleting it or losing access denies old history/replay before another dispatch. See [the saved assistant contract](enterprise-saved-assistants.md). Persistent preference/fact memory remains a separate milestone.

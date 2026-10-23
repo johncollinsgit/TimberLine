@@ -14,6 +14,7 @@
             <file>tests/Feature/Enterprise/EnterpriseConversationTest.php</file>
             <file>tests/Feature/Enterprise/EnterpriseConversationApprovalTest.php</file>
             <file>tests/Feature/Enterprise/EnterpriseConversationUiTest.php</file>
+            <file>tests/Feature/Enterprise/EnterpriseSavedAssistantsTest.php</file>
             <file>tests/Feature/Enterprise/EnterpriseProposalRuntimeTest.php</file>
             <file>tests/Feature/Enterprise/EnterprisePrefixMountTest.php</file>
             <file>tests/Feature/Enterprise/EnterpriseClientProvisioningTest.php</file>

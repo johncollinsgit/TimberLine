@@ -1,5 +1,6 @@
   @include('enterprise.read-only-assistant-script')
   @include('enterprise.conversation-script')
+  @include('enterprise.saved-assistant-script')
   const nextBase = urls.enterprise, teamBase = urls.team;
   const draftPrefix = `everbranch-enterprise-draft:${transport.mode === 'sample' ? 'sample:' : ''}${workspace}:${viewer}:`;
   const selectionMemory = new Map(), noteBusy = new Set(), planningReceipts = new Map(), planningUncertain = new Set();

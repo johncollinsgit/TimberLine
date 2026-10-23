@@ -515,6 +515,12 @@ test("conversation finale distinguishes approved text, unavailable setup and det
     assert.equal(tour.describe(6,{}).target,"ask-form");
     assert.match(tour.describe(6,{}).text,/Send to OpenAI/);
     assert.match(JSON.stringify(tour.describe(6,{}).cards),/nothing is sent again automatically/);
+    snapshot.data.features.saved_assistants=true; snapshot.data.saved_assistants={can_manage:false}; tour.update(snapshot);
+    assert.equal(tour.describe(6,{}).cards[3][0],"Inspect your saved assistants");
+    assert.ok(tour.describe(6,{}).targets.includes("saved-assistant-choice"));
+    snapshot.data.saved_assistants.can_manage=true; tour.update(snapshot);
+    assert.equal(tour.describe(6,{}).cards[3][0],"Make a private assistant");
+    assert.match(tour.describe(6,{}).cards[3][1],/persistent memory is a separate feature/);
     snapshot.data.features.conversation_ui=false; snapshot.data.features.read_only_assistant=true; tour.update(snapshot);
     assert.equal(tour.describe(6,{}).target,"read-only-assistant");
     assert.match(tour.describe(6,{}).text,/use no AI model/);

@@ -40,3 +40,7 @@
 #conversation-clear-confirm{border:1px solid var(--line);border-radius:8px;padding:14px}
 .conversation-answer a{overflow-wrap:anywhere;min-height:44px;display:inline-flex;align-items:center}
 @media(max-width:650px){#conversation-controls .field-pair{display:grid;grid-template-columns:1fr}#conversation-controls select{font-size:16px}}
+
+#saved-assistants{border:1px solid var(--line);border-radius:8px;padding:16px}#saved-assistants h4{font:20px Georgia,serif;margin:0}
+#saved-assistants fieldset{border:1px solid var(--line);padding:12px}#saved-assistants fieldset label,#saved-assistants .saved-assistant-confirm{display:flex;align-items:center;gap:10px;min-height:44px}
+#saved-assistants input[type=checkbox]{min-height:24px;height:24px;width:24px;flex:0 0 24px}#saved-assistant-delete-confirm{border-top:1px solid var(--line);padding-top:14px}

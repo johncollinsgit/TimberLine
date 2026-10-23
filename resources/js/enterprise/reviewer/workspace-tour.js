@@ -248,6 +248,8 @@
                     ["Check the evidence", "Open a linked source or calculation input. Saved records can be incomplete; estimates are not approved budgets."],
                     ["Stop or resume", "Stop waiting hides a late reply without cancelling its cost. Check this conversation to restore it; nothing is sent again automatically."],
                 ];
+            if (index === 6 && feature("conversation_ui") && feature("saved_assistants"))
+                records.push([context?.data?.saved_assistants?.can_manage ? "Make a private assistant" : "Inspect your saved assistants", context?.data?.saved_assistants?.can_manage ? "Save a purpose, instructions and permitted read checks. This never adds access; persistent memory is a separate feature." : "A saved purpose and instructions keep your current permissions. Unavailable checks stay unavailable."]);
             const copy = [
                 "Open the campus overview to find current work. Use Buildings when you want to start with a location.",
                 "Scan or sort Requests, then open a row for details. Close or Escape returns to the same list.",
@@ -267,7 +269,7 @@
             ];
             return {
                 text: copy[index],
-                ...(index === 6 && feature("conversation_ui") ? {title: context?.data?.conversation?.ready === true ? "Ask about current work" : "Check conversation availability", target: context?.data?.conversation?.ready === true ? "ask-form" : "conversation-controls", targets: ["conversation-status"]} : index === 6 && feature("read_only_assistant") ? {title: "Check current records", target: "read-only-assistant", targets: ["read-only-intent", "read-only-answer"]} : {}),
+                ...(index === 6 && feature("conversation_ui") ? {title: context?.data?.conversation?.ready === true ? "Ask about current work" : "Check conversation availability", target: context?.data?.conversation?.ready === true ? "ask-form" : "conversation-controls", targets: ["conversation-status", ...(feature("saved_assistants") ? ["saved-assistant-choice"] : [])]} : index === 6 && feature("read_only_assistant") ? {title: "Check current records", target: "read-only-assistant", targets: ["read-only-intent", "read-only-answer"]} : {}),
                 role: `Signed in: ${boot.identity.userName || "current user"} · Current workspace: ${workspace?.name || "unavailable"}`,
                 cards: records,
                 detail: ready()

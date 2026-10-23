@@ -1,3 +1,13 @@
+## Saved assistant configuration candidate (October 23; disabled, not live-verified)
+
+A separate default-off flag adds private purpose/instructions/fixed read-check
+configuration to the existing Ask pane. Current actor/department/object policies
+remain authoritative; profile selection never changes provider/model authority.
+Versioned confirmed saves/deletes use encrypted storage and content-free audit.
+Profile edits and access loss invalidate short-session reuse. Persistent scoped
+preference/fact memory and two-way voice are separate milestones. See
+[the saved assistant contract](docs/operations/enterprise-saved-assistants.md).
+
 ## Text conversation UI candidate (October 23; disabled, not live-verified)
 
 A separate default-off UI gate exposes setup/availability in the existing Ask pane,
@@ -18,8 +28,8 @@ durable single dispatch, verified bounded usage settlement and uncertainty holds
 All other Enterprise billable routes stay server-off while this trial is enabled;
 retail provider routes are unchanged. Current record checks remain explicitly
 deterministic. The separately gated text UI reuses the existing Ask pane and
-read-only recovery; saved assistants, long-term memory, audio input/output,
-sending and business-record tools remain unavailable. Its local
+read-only recovery. Saved configuration is separately gated; long-term memory,
+audio input/output, sending and business-record tools remain unavailable. Its local
 HTTP provider responses are simulated; actual provider acceptance is still gated.
 See [the conversation connection and acceptance contract](docs/operations/enterprise-conversation.md).
 

@@ -1,7 +1,7 @@
   let conversationGeneration=0, conversationScope=null, conversationState=null, conversationBusy=false, conversationAvailability=null, conversationOperation=null, conversationRenderedReady=false;
   const conversationMode=()=>transport.mode==='private'&&data.features?.conversation_ui===true;
   const conversationKey=()=>`everbranch-conversation-v1:${new URL(nextBase,location.href).pathname}:${workspace}:${viewer}:${area}`;
-  const conversationScopeValue=()=>JSON.stringify([transport.mode,String(workspace),String(viewer),String(data.viewer_id||viewer),area,data.features?.read_only_costs===true,data.features?.read_only_assistant===true,data.features?.resources===true]);
+  const conversationScopeValue=()=>JSON.stringify([transport.mode,String(workspace),String(viewer),String(data.viewer_id||viewer),area,data.features?.read_only_costs===true,data.features?.read_only_assistant===true,data.features?.resources===true,data.features?.saved_assistants===true]);
   function conversationReceipt(value) {
     try {if(value===null)sessionStorage.removeItem(conversationKey());else sessionStorage.setItem(conversationKey(),JSON.stringify({session_id:value.session_id,request_id:value.request_id}));return true;}catch{return false;}
   }
@@ -15,6 +15,7 @@
   function conversationCurrent(generation,scope) {return generation===conversationGeneration&&scope===conversationScope&&scope===conversationScopeValue()&&conversationMode()&&section==='ask';}
   function resetConversation() {
     conversationGeneration++;conversationScope=null;conversationState=null;conversationBusy=false;conversationAvailability=null;conversationOperation=null;conversationRenderedReady=false;
+    if(typeof resetSavedAssistants==='function')resetSavedAssistants();
     $('conversation-controls').hidden=true;$('conversation-clear-confirm').hidden=true;$('conversation-forget').hidden=true;$('conversation-status').textContent='';
     if($('generated-ask-panel').dataset.conversation==='true'){$('chat-log').replaceChildren();$('ask-question').value='';$('ask-question').readOnly=false;}
     delete $('generated-ask-panel').dataset.conversation;
@@ -22,16 +23,17 @@
   function conversationFields() {
     const enabled=conversationAvailability?.ready===true&&conversationScoped(conversationAvailability),intent=$('conversation-intent').value;
     const locked=conversationBusy||!!conversationState;
-    for(const option of $('conversation-intent').options)option.disabled=!enabled||conversationAvailability?.intents?.[option.value]!==true;
+    for(const option of $('conversation-intent').options)option.disabled=!enabled||conversationAvailability?.intents?.[option.value]!==true||(typeof savedAssistantAllows==='function'&&!savedAssistantAllows(option.value));
     $('conversation-intent').disabled=locked||!enabled;$('conversation-building').disabled=locked||!enabled;
     $('conversation-building-field').hidden=intent!=='building';
     const pending=conversationState&&conversationState.phase!=='active';
     $('ask-question').readOnly=!enabled||!!pending||conversationBusy;
-    $('ask-submit').disabled=!enabled||!!pending||conversationBusy||conversationAvailability?.intents?.[intent]!==true||(intent==='building'&&!$('conversation-building').value);
+    $('ask-submit').disabled=!enabled||!!pending||conversationBusy||conversationAvailability?.intents?.[intent]!==true||(intent==='building'&&!$('conversation-building').value)||(typeof savedAssistantCanSend==='function'&&!savedAssistantCanSend())||(typeof savedAssistantAllows==='function'&&!savedAssistantAllows(intent));
     $('ask-submit').textContent='Send to OpenAI';$('ask-question-label').textContent='Ask about this workspace';
     $('conversation-stop').hidden=!conversationBusy||conversationOperation!=='turn';$('conversation-check').disabled=conversationBusy;
     $('conversation-check').textContent=conversationState?'Check this conversation':'Check availability';
     $('conversation-clear').hidden=!conversationState;$('conversation-clear').disabled=conversationBusy;$('conversation-clear-yes').disabled=conversationBusy;$('conversation-clear-no').disabled=conversationBusy;$('conversation-forget').disabled=conversationBusy;
+    if(typeof savedAssistantFields==='function')savedAssistantFields();
   }
   function renderConversation() {
     if(!conversationMode()){if(conversationScope!==null)resetConversation();return false;}
@@ -56,6 +58,7 @@
     }
     const amount=value=>Number.isSafeInteger(value)&&value>=0?'$'+(value/1000000).toFixed(6):'unavailable';
     $('conversation-allowance').textContent=conversationAvailability?.ready?`Checked remaining lifetime allowance: ${amount(availability.remaining_microusd)}. Maximum held before one reply: ${amount(availability.maximum_turn_microusd)}. Final access and allowance are checked again on Send.`:'The shared $5 lifetime trial is unavailable until its connection and cost bounds are approved.';
+    if(typeof renderSavedAssistants==='function')renderSavedAssistants();
     conversationFields();return true;
   }
   function conversationSource(source) {
@@ -98,9 +101,11 @@
   }
   async function conversationSend(event) {
     event.preventDefault();if(!conversationMode()||conversationBusy||conversationAvailability?.ready!==true||!conversationScoped(conversationAvailability)||conversationState&&conversationState.phase!=='active')return;
-    const question=$('ask-question').value.trim(),intent=$('conversation-intent').value;if(!question||conversationAvailability.intents?.[intent]!==true)return;
+    if(typeof savedAssistantCanSend==='function'&&!savedAssistantCanSend())return;
+    const question=$('ask-question').value.trim(),intent=$('conversation-intent').value;if(!question||conversationAvailability.intents?.[intent]!==true||(typeof savedAssistantAllows==='function'&&!savedAssistantAllows(intent)))return;
     const previousState=conversationState?{...conversationState}:null;
     const session=conversationState?.session_id||crypto.randomUUID(),requestId=crypto.randomUUID(),body={area_id:area,intent,session_id:session,request_id:requestId,question};
+    if(typeof selectedSavedAssistant==='function'&&selectedSavedAssistant())body.assistant_id=selectedSavedAssistant().id;
     if(intent==='building'){body.building_id=$('conversation-building').value;if(!body.building_id)return;}
     if(!conversationReceipt({session_id:session,request_id:requestId})){$('conversation-status').textContent='This browser cannot retain receipt IDs for recovery. No question was sent.';return;}
     conversationState={session_id:session,request_id:requestId,phase:'waiting'};conversationBusy=true;conversationOperation='turn';
@@ -137,6 +142,8 @@
       if(!conversationCurrent(generation,scope))return;
       if(!conversationScoped(result)||result.session_id!==id||result.provider_dispatch!==false)throw new Error('Recovery scope changed.');
       $('chat-log').replaceChildren();$('ask-question').value='';
+      if(result.assistant_id&&(!(typeof selectedSavedAssistant==='function')||!savedAssistantEnabled()||!savedAssistantList().some(value=>value.id===result.assistant_id)))throw new Error('Saved assistant is unavailable.');
+      if(typeof selectedSavedAssistant==='function')$('saved-assistant-choice').value=result.assistant_id||'';
       $('conversation-intent').value=result.intent;$('conversation-building').value=result.building_id||'';
       if(!Array.isArray(result.history)||!result.history.every(item=>['user','assistant'].includes(item.role)&&typeof item.text==='string'))throw new Error('Conversation history is invalid.');
       const history=result.history,previous=result.last_result?history.slice(0,-1):history;
