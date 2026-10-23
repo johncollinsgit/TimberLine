@@ -1,3 +1,4 @@
+import {clickEnterpriseNavigation} from './enterprise-mobile-navigation-browser.mjs';
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
 
@@ -195,7 +196,7 @@ export async function checkRolePreview(
     try {
         await page.locator("[data-erp-refresh]").click();
         await arrived;
-        await page.locator('[data-section="projects"]').click();
+        await clickEnterpriseNavigation(page,page.locator('[data-section="projects"]'));
         assert.equal(
             await page.locator("#enterprise-role-preview").isHidden(),
             true,
@@ -212,7 +213,7 @@ export async function checkRolePreview(
         true,
         "Late success cannot restore a former scope",
     );
-    await page.locator('[data-section="people"]').click();
+    await clickEnterpriseNavigation(page,page.locator('[data-section="people"]'));
     await page.waitForFunction(
         () => !document.querySelector("[data-erp-member]").disabled,
     );

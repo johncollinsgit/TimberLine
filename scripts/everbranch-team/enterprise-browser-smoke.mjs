@@ -1,6 +1,7 @@
 import {checkJobManagement} from './enterprise-jobs-browser.mjs';
 import {createProjectThroughWizard} from './enterprise-job-wizard-browser.mjs';
 import assert from 'node:assert/strict';
+import {clickEnterpriseNavigation} from './enterprise-mobile-navigation-browser.mjs';
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdir, writeFile, readFile, unlink } from 'node:fs/promises';
 import { createServer as createHttpsServer, request as httpsRequest } from 'node:https';
@@ -319,10 +320,10 @@ try {
     fullPage: true
   });
   await closeWorkDetail(page);
-  await page.getByRole('button', {
+  await clickEnterpriseNavigation(page,page.getByRole('button', {
     name: 'Contractors',
     exact: true
-  }).click();
+  }));
   await page.getByRole('heading', {name:'Contractors & plans',exact:true}).waitFor();
   await page.locator('#planning-form').getByLabel('Record title', {exact:true}).fill('Synthetic contractor');
   await page.getByRole('button', {name:'Save record',exact:true}).click();
@@ -333,14 +334,14 @@ try {
   await page.getByLabel('End date (inclusive)', {exact:true}).fill('2026-11-05');
   await page.getByRole('button', {name:'Save record',exact:true}).click();
   await page.locator('#planning-list').getByText('Synthetic date block', {exact:true}).waitFor();
-  await page.getByRole('button', {name:'Projects',exact:true}).click();
+  await clickEnterpriseNavigation(page,page.getByRole('button', {name:'Projects',exact:true}));
   await page.locator('#work-status').selectOption('all');
   await page.locator(`#request-list [data-open="${fixtureProjectId}"]`).first().click();
   const draftNote = 'Synthetic unsent project draft <img src=x onerror="window.__enterpriseInjection=1">';
   await page.getByLabel('Add a note').fill(draftNote);
   await closeWorkDetail(page);
-  await page.getByRole('button', {name:'Requests',exact:true}).click();
-  await page.getByRole('button', {name:'Projects',exact:true}).click();
+  await clickEnterpriseNavigation(page,page.getByRole('button', {name:'Requests',exact:true}));
+  await clickEnterpriseNavigation(page,page.getByRole('button', {name:'Projects',exact:true}));
   await page.locator('#work-status').selectOption('all');
   await page.locator(`#request-list [data-open="${fixtureProjectId}"]`).first().click();
   await page.waitForFunction(value => document.getElementById('discussion-body')?.value === value, draftNote);
@@ -387,7 +388,7 @@ try {
     await page.screenshot({path:resolve(evidence,`enterprise-next-${label}.png`),fullPage:true});
   }
   await closeWorkDetail(page);
-  await page.getByRole('button', {name:'Ask Everbranch',exact:true}).click();
+  await clickEnterpriseNavigation(page,page.getByRole('button', {name:'Ask Everbranch',exact:true}));
   await page.getByLabel('Message Ask Everbranch').fill('What is planned?');
   await page.getByRole('button', {name:'Ask',exact:true}).click();
   await page.locator('#chat-log a').filter({hasText:'View source:'}).first().waitFor();

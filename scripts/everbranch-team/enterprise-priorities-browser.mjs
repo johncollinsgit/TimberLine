@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import {openEnterpriseAction} from './enterprise-mobile-navigation-browser.mjs';
 import {checkExecutiveDemo} from './enterprise-executive-browser.mjs';
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -135,7 +136,7 @@ try {
     const opener = page.getByRole("button", {name: "Priorities", exact:true});
     for (const [label,width,height] of [["desktop",1600,1280],["ipad-portrait",820,1180],["ipad-landscape",1180,820],["phone",390,844]]) {
         await page.setViewportSize({width,height});
-        await opener.click();
+        const focusReturn=await openEnterpriseAction(page,'Priorities',opener);
         const dialog=page.locator("[data-priorities-dialog]");
         await page.getByRole("heading",{name:"Explore campus work.",exact:true}).waitFor();
         assert.equal(await dialog.locator("[data-priority-card]").count(),8);
@@ -148,10 +149,10 @@ try {
             await page.screenshot({path:resolve(evidence,'priorities-phone-bottom.png'),fullPage:true});
         }
         await page.keyboard.press("Escape");
-        assert.equal(await opener.evaluate(e=>e===document.activeElement),true,"focus return");
+        assert.equal(await focusReturn.evaluate(e=>e===document.activeElement),true,"focus return");
     }
     await page.setViewportSize({width:1440,height:1000});
-    await opener.click();
+    await openEnterpriseAction(page,'Priorities',opener);
     await page.keyboard.press("Shift+Tab");
     assert.equal(await page.locator('[data-priorities-restart]').evaluate(e=>e===document.activeElement),true,'Modal reverse-tab trap');
     await page.keyboard.press("Tab");
@@ -202,7 +203,7 @@ try {
     await page.keyboard.press('Escape');
     await page.locator('[data-priorities-end]').click();
     assert.equal(await bar.isVisible(),false);
-    await opener.click();
+    await openEnterpriseAction(page,'Priorities',opener);
     await page.locator('[data-priority-open="visibility"]').click();
     await page.locator('#request-list [data-open]').first().waitFor();
     await page.locator('[data-priorities-toggle]').click();
