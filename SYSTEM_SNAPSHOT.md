@@ -1,3 +1,14 @@
+## Reviewed proposal commercial snapshot (October 23; source candidate)
+
+Proposal previews render the financial, implementation, support, usage and renewal
+sections from their saved payload. A reviewed draft can retain explicit catalog
+origins with draft-only term overrides; ordinary Save preserves its commercial
+snapshot and rejects scope changes until a new commercial review. Existing
+published versions keep their stored text and prices. See the
+[proposal contract](docs/architecture/reusable-proposals.md). Applying the exact
+saved-draft revision, publication and hosted acceptance remain separate operations;
+this source changes no catalog, billing, provider or permission state.
+
 ## Typed private memory candidate (October 23; disabled, not live-verified)
 
 The existing Ask pane has separately gated explicit typed formatting preferences

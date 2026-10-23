@@ -1,3 +1,13 @@
+## Reviewed proposal commercial snapshot (October 23; source candidate)
+
+Render commercial sections from the exact stored proposal, never current copy
+constants in an older publication. Reviewed draft-only term overrides retain
+explicit native catalog provenance. Preserve the stored commercial snapshot on
+ordinary Save and reject contractual scope changes until separately reviewed.
+Read [the proposal contract](docs/architecture/reusable-proposals.md) before
+changing this boundary. Source release does not apply a pending draft plan,
+publish a link, activate billing or authorize providers.
+
 ## Typed private memory candidate (October 23; disabled, not live-verified)
 
 The existing Ask pane has separately gated explicit typed formatting preferences

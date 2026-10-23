@@ -1,3 +1,11 @@
+## 2026-10-23 — Stored proposal commercial sections (source candidate)
+
+Show saved financial, implementation, support, usage and renewal sections with
+semantic fee tables, visible keyboard focus and narrow-screen table geometry.
+Save and reload retain reviewed terms and prices; changed contractual scope
+requires a new commercial review. Older publications retain their original copy.
+Runtime draft reconciliation, publication and hosted acceptance remain separate.
+
 ## 2026-10-23 — Explicit typed private memory candidate
 
 - Ask offers inspect/edit/delete for account-and-department memory, initially off
