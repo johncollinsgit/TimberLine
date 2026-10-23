@@ -18,6 +18,7 @@ import { checkRolePreview } from './enterprise-role-preview-browser.mjs';
 import { checkShellNavigation } from './enterprise-navigation-browser.mjs';
 import {checkVoiceShell} from './enterprise-voice-shell-browser.mjs';
 import {checkVoiceGeneration} from './enterprise-voice-generation-browser.mjs';
+import {closeWorkDetail} from './enterprise-work-detail-browser.mjs';
 const operationsMode = process.env.ENTERPRISE_TEST_OPERATIONS === '1';
 const operationsScenario = process.env.ENTERPRISE_OPERATIONS_SCENARIO || 'all';
 assert.ok(['all', 'mapped', 'roll-call', 'resources', 'task-evidence', 'tour', 'procedures', 'finance', 'roles', 'navigation', 'voice', 'voice-generation'].includes(operationsScenario), 'Unsupported Operations browser scenario');
@@ -256,6 +257,7 @@ try {
     name: 'Save progress',
     exact: true
   }).waitFor();
+  await closeWorkDetail(page);
   await page.getByRole('button', {
     name: 'Map',
     exact: true
@@ -268,6 +270,7 @@ try {
     path: resolve(evidence, 'enterprise-map-desktop.png'),
     fullPage: true
   });
+  await closeWorkDetail(page);
   await page.getByRole('button', {
     name: 'Hide Map',
     exact: true
@@ -299,6 +302,8 @@ try {
     exact: false
   }).waitFor();
   await page.reload();
+  await page.locator('#work-drawer[open]').waitFor();
+  await closeWorkDetail(page);
   await page.getByRole('button', {
     name: 'Synthetic inspection',
     exact: true
@@ -315,6 +320,7 @@ try {
     path: resolve(evidence, 'enterprise-mobile.png'),
     fullPage: true
   });
+  await closeWorkDetail(page);
   await page.getByRole('button', {
     name: 'Contractors',
     exact: true
@@ -333,8 +339,10 @@ try {
   await page.getByRole('button', {name:'Synthetic repair project',exact:true}).click();
   const draftNote = 'Synthetic unsent project draft <img src=x onerror="window.__enterpriseInjection=1">';
   await page.getByLabel('Add a note').fill(draftNote);
+  await closeWorkDetail(page);
   await page.getByRole('button', {name:'Requests',exact:true}).click();
   await page.getByRole('button', {name:'Operations & projects',exact:true}).click();
+  await page.getByRole('button', {name:'Synthetic repair project',exact:true}).click();
   await page.waitForFunction(value => document.getElementById('discussion-body')?.value === value, draftNote);
   await page.reload();
   await page.waitForFunction(value => document.getElementById('discussion-body')?.value === value, draftNote);
@@ -378,6 +386,7 @@ try {
     assert.ok(await page.locator('#discussion-files-picker').evaluate(el => el.accept.includes('application/pdf') && el.accept.includes('image/jpeg')),`${label} photo/PDF picker missing`);
     await page.screenshot({path:resolve(evidence,`enterprise-next-${label}.png`),fullPage:true});
   }
+  await closeWorkDetail(page);
   await page.getByRole('button', {name:'Ask Everbranch',exact:true}).click();
   await page.getByLabel('Message Ask Everbranch').fill('What is planned?');
   await page.getByRole('button', {name:'Ask',exact:true}).click();

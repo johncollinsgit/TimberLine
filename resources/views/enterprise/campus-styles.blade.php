@@ -107,4 +107,25 @@ html.work-detail-open{overflow:hidden}
 .enterprise-brand picture{display:block;background:#fff;border-radius:6px;overflow:hidden;line-height:0}
 .enterprise-brand-image{display:block;width:100%;height:auto;object-fit:contain}
 @media(max-width:650px){.sidebar .enterprise-brand{max-width:244px;padding-bottom:12px}}
+
+{{-- Keep single-choice Roll Call/report controls usable in WebKit's compact native theme. --}}
+#roll-call-panel select:not([multiple]),#quarterly-period select:not([multiple]){
+  -webkit-appearance:none;appearance:none;min-height:44px;color-scheme:light;
+  padding:10px 36px 10px 11px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' style='color-scheme:light%20dark'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='CanvasText' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;background-size:12px 8px;
+}
+@media(forced-colors:active){
+  #roll-call-panel select:not([multiple]),#quarterly-period select:not([multiple]){
+    color-scheme:light dark;background-color:Canvas;color:CanvasText;border-color:ButtonText;
+  }
+  #roll-call-panel select:disabled:not([multiple]),#quarterly-period select:disabled:not([multiple]){
+    color:GrayText;border-color:GrayText;
+  }
+}
+@media(forced-colors:active) and (prefers-color-scheme:dark){
+  #roll-call-panel select:not([multiple]),#quarterly-period select:not([multiple]){
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' style='color-scheme:dark'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='CanvasText' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  }
+}
 </style>

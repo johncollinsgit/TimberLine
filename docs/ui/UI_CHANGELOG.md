@@ -4,6 +4,7 @@
 - Match tour destinations to the full-width tables. Hide outside guide controls while the native detail drawer is open; Close/Escape returns to the same list and guide step.
 - Use the exact approved Rooted Peak horizontal SVG with its unchanged PNG fallback and proportions in the existing sidebar. Bind both asset files into the immutable reviewer source fingerprint.
 - Let request intake select an active saved building in the current workspace. Validate its identity/version on the server; typed location text remains unlinked. Serialize resource history as explicit UTC without rewriting stored audit evidence.
+- Keep Roll Call and period-report selects at least 44px high in WebKit, with visible arrows and native keyboard, disabled and focus behavior.
 - Keep existing tenant/record permissions, provider gates and release checks. Local responsive browser checks do not establish physical-device or hosted acceptance.
 
 ## 2026-10-23 — Full-width Enterprise work tables and dismissible details (source candidate)
