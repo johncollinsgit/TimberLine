@@ -43,6 +43,8 @@ on:
       - 'tests/Support/enterprise-browser-voice-provider.php'
       - 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php'
       - 'tests/Integration/EnterpriseTrialBudgetMySqlConcurrencyTest.php'
+      - 'tests/Integration/EnterpriseConversationMySqlConcurrencyTest.php'
+      - 'tests/Support/EnterpriseConversationFixture.php'
       - 'tests/Integration/EnterpriseClientProvisioningMySqlTest.php'
       - 'tests/Integration/migration-recovery-manifest.php'
       - 'phpunit.enterprise.xml'

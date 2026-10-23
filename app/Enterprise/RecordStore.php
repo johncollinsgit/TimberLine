@@ -14,7 +14,9 @@ class RecordStore
     public function locked(Tenant $tenant, callable $callback): mixed
     {
         return DB::transaction(function () use ($tenant, $callback) {
-            DB::table('team_work_locks')->insertOrIgnore(['tenant_id' => $tenant->id]);
+            // MySQL duplicate-key INSERT IGNORE holds a shared lock; concurrent FOR UPDATE upgrades can deadlock.
+            // A no-change upsert acquires the writer lock directly, including the first-row race.
+            DB::table('team_work_locks')->upsert([['tenant_id' => $tenant->id]], ['tenant_id'], ['tenant_id']);
             DB::table('team_work_locks')->where('tenant_id', $tenant->id)->lockForUpdate()->first();
 
             return $callback();

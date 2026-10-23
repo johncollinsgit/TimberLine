@@ -33,7 +33,7 @@ class ConnectedMailboxGateway extends MailboxGateway
 
     public function ready(): bool
     {
-        return (bool) config('enterprise.mailbox.enabled') && (bool) config('enterprise.mailbox.send_enabled')
+        return ! config('enterprise.conversation.enabled') && (bool) config('enterprise.mailbox.enabled') && (bool) config('enterprise.mailbox.send_enabled')
             && count((array) config('enterprise.mailbox.allowed_ids', [])) > 0
             && (bool) config('mailbox.direct_enabled') && is_string(config('mailbox.submission_host'))
             && preg_match('/^[a-zA-Z0-9.:-]{1,253}$/D', config('mailbox.submission_host')) === 1

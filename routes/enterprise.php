@@ -26,7 +26,7 @@ Route::get('/login', [SessionController::class, 'create'])->name('login');
 Route::post('/login', [SessionController::class, 'store'])->middleware('throttle:5,1')->name('login.store');
 Route::post('/logout', [SessionController::class, 'destroy'])->middleware('auth')->name('logout');
 Route::get('/verify-email', fn () => response('A verified Enterprise account is required. Contact your organization administrator.', 403))->name('verification.notice');
-Route::prefix('/enterprise/trial')->middleware([\App\Enterprise\TrialBoundary::class, 'throttle:60,1,enterprise-trial:'])->group(function (): void {
+Route::prefix('/enterprise/trial')->middleware([\App\Enterprise\Conversation\OtherPaidPaths::class, \App\Enterprise\TrialBoundary::class, 'throttle:60,1,enterprise-trial:'])->group(function (): void {
     $controller = \App\Enterprise\Trial\TrialController::class;
     Route::get('/', [\App\Enterprise\TrialPageController::class, 'index'])->name('enterprise.trial');
     Route::get('/session', [$controller, 'show'])->name('enterprise.trial.session');
@@ -54,7 +54,7 @@ Route::middleware(['auth', 'verified', ResolveWorkspace::class, \App\Http\Middle
     Route::post('/enterprise/files/{id}/caption', [\App\Enterprise\FileCaptionController::class, 'save'])->whereUuid('id')->name('enterprise.files.caption.save');
     Route::get('/enterprise/search', \App\Enterprise\CampusSearchController::class)->name('enterprise.search');
     Route::post('/enterprise/voice/jobs', \App\Enterprise\VoiceJobsController::class)->middleware('throttle:20,1,enterprise-voice-jobs:')->name('enterprise.voice.jobs');
-    Route::post('/enterprise/voice/turns', [\App\Enterprise\VoiceAssistantController::class, 'turn'])->middleware('throttle:20,1,enterprise-voice-turns:')->name('enterprise.voice.turns');
+    Route::post('/enterprise/voice/turns', [\App\Enterprise\VoiceAssistantController::class, 'turn'])->middleware('throttle:20,1,enterprise-voice-turns:')->middleware(\App\Enterprise\Conversation\OtherPaidPaths::class)->name('enterprise.voice.turns');
     Route::post('/enterprise/voice/sessions/{id}/cancel', [\App\Enterprise\VoiceAssistantController::class, 'cancel'])->whereUuid('id')->name('enterprise.voice.cancel');
     Route::post('/enterprise/voice/previews', [\App\Enterprise\VoiceAssistantController::class, 'preview'])->middleware('throttle:20,1,enterprise-voice-previews:')->name('enterprise.voice.preview');
     Route::get('/enterprise/roll-call', [\App\Enterprise\RollCallController::class, 'index'])->name('enterprise.roll_call');
@@ -94,12 +94,12 @@ Route::middleware(['auth', 'verified', ResolveWorkspace::class, \App\Http\Middle
     Route::post('/enterprise/requester/{id}/updates', [\App\Enterprise\RequesterController::class, 'publish'])->whereUuid('id')->name('enterprise.requester.publish');
     Route::get('/projects/workspace', [\App\Enterprise\WorkspaceController::class, 'show'])->name('enterprise.workspace');
     Route::get('/enterprise/briefing', [\App\Enterprise\BriefingController::class, 'show'])->name('enterprise.briefing');
-    Route::post('/enterprise/briefing/refresh', [\App\Enterprise\BriefingController::class, 'refresh'])->middleware('throttle:10,1,enterprise-briefing:')->name('enterprise.briefing.refresh');
+    Route::post('/enterprise/briefing/refresh', [\App\Enterprise\BriefingController::class, 'refresh'])->middleware('throttle:10,1,enterprise-briefing:')->middleware(\App\Enterprise\Conversation\OtherPaidPaths::class)->name('enterprise.briefing.refresh');
     Route::get('/enterprise/briefing.pdf', [\App\Enterprise\BriefingController::class, 'pdf'])->name('enterprise.briefing.pdf');
     Route::get('/enterprise/workflows', [\App\Enterprise\WorkflowController::class, 'index'])->name('enterprise.workflows');
     Route::post('/enterprise/workflows', [\App\Enterprise\WorkflowController::class, 'save'])->name('enterprise.workflows.save');
     Route::post('/enterprise/workflows/preview', [\App\Enterprise\WorkflowController::class, 'preview'])->name('enterprise.workflows.preview');
-    Route::post('/enterprise/workflows/propose', [\App\Enterprise\WorkflowController::class, 'propose'])->middleware('throttle:10,1,enterprise-propose:')->name('enterprise.workflows.propose');
+    Route::post('/enterprise/workflows/propose', [\App\Enterprise\WorkflowController::class, 'propose'])->middleware('throttle:10,1,enterprise-propose:')->middleware(\App\Enterprise\Conversation\OtherPaidPaths::class)->name('enterprise.workflows.propose');
     Route::get('/enterprise/workflows/{id}/data', [\App\Enterprise\WorkflowController::class, 'show'])->whereUuid('id')->name('enterprise.workflows.show');
     Route::post('/enterprise/workflows/{id}/activate', [\App\Enterprise\WorkflowController::class, 'activate'])->whereUuid('id')->name('enterprise.workflows.activate');
     Route::post('/enterprise/workflows/{id}/pause', [\App\Enterprise\WorkflowController::class, 'pause'])->whereUuid('id')->name('enterprise.workflows.pause');
@@ -109,16 +109,18 @@ Route::middleware(['auth', 'verified', ResolveWorkspace::class, \App\Http\Middle
     Route::get('/enterprise/requests/{id}/history', [EnterpriseController::class, 'history'])->whereUuid('id')->name('enterprise.history');
     Route::get('/enterprise/planning', [\App\Enterprise\PlanningController::class, 'index'])->name('enterprise.planning');
     Route::post('/enterprise/planning', [\App\Enterprise\PlanningController::class, 'save'])->name('enterprise.planning.save');
+    Route::post('/enterprise/conversation/turns', [\App\Enterprise\Conversation\Controller::class, 'turn'])->middleware('throttle:20,1,enterprise-conversation:')->name('enterprise.conversation.turn');
+    Route::post('/enterprise/conversation/sessions/{id}/end', [\App\Enterprise\Conversation\Controller::class, 'end'])->whereUuid('id')->name('enterprise.conversation.end');
     Route::get('/enterprise/assistant-sources/{kind}/{id}', \App\Enterprise\ReadOnlyAssistantSourceController::class)->whereIn('kind', ['request', 'project', 'building', 'cost', 'task'])->whereUuid('id')->name('enterprise.assistant_source');
     Route::post('/enterprise/read-only-assistant', \App\Enterprise\ReadOnlyAssistantController::class)->middleware('throttle:20,1,enterprise-read-only-assistant:')->name('enterprise.read_only_assistant');
-    Route::post('/enterprise/ask', [\App\Enterprise\AskController::class, 'ask'])->middleware('throttle:20,1,enterprise-ask:')->name('enterprise.ask');
+    Route::post('/enterprise/ask', [\App\Enterprise\AskController::class, 'ask'])->middleware('throttle:20,1,enterprise-ask:')->middleware(\App\Enterprise\Conversation\OtherPaidPaths::class)->name('enterprise.ask');
     Route::get('/enterprise/mailboxes', [\App\Enterprise\EmailController::class, 'mailboxes'])->name('enterprise.mailboxes');
     Route::get('/enterprise/gmail', [\App\Enterprise\GmailController::class, 'status'])->name('enterprise.gmail.status');
     Route::post('/enterprise/gmail/connect', [\App\Enterprise\GmailController::class, 'connect'])->middleware('throttle:5,1,enterprise-gmail-connect:')->name('enterprise.gmail.connect');
     Route::post('/enterprise/gmail/{id}/disconnect', [\App\Enterprise\GmailController::class, 'disconnect'])->whereUuid('id')->name('enterprise.gmail.disconnect');
     Route::post('/enterprise/email-drafts', [\App\Enterprise\EmailController::class, 'create'])->name('enterprise.email.create');
     Route::get('/enterprise/email-drafts/{id}', [\App\Enterprise\EmailController::class, 'preview'])->whereUuid('id')->name('enterprise.email.preview');
-    Route::post('/enterprise/email-drafts/{id}/confirm', [\App\Enterprise\EmailController::class, 'confirm'])->whereUuid('id')->name('enterprise.email.confirm');
+    Route::post('/enterprise/email-drafts/{id}/confirm', [\App\Enterprise\EmailController::class, 'confirm'])->whereUuid('id')->middleware(\App\Enterprise\Conversation\OtherPaidPaths::class)->name('enterprise.email.confirm');
     Route::get('/enterprise/discussion/{kind}/{id}', [\App\Enterprise\DiscussionController::class, 'show'])->whereIn('kind', ['project', 'request', 'task'])->whereUuid('id')->name('enterprise.discussion');
     Route::post('/enterprise/discussion/{kind}/{id}/open', [\App\Enterprise\DiscussionController::class, 'open'])->whereIn('kind', ['project', 'request', 'task'])->whereUuid('id')->name('enterprise.discussion.open');
     Route::post('/enterprise/discussion/{kind}/{id}/comments', [\App\Enterprise\DiscussionController::class, 'comment'])->whereIn('kind', ['project', 'request', 'task'])->whereUuid('id')->name('enterprise.discussion.comment');

@@ -1,3 +1,16 @@
+## Text conversation backend candidate (October 23; disabled, not live-verified)
+
+The separate Conversation route can send a bounded, current authorized evidence
+snapshot to an exactly approved OpenAI Responses connection. It uses the existing
+single campus TrialBudget lifetime $5 ledger, with full model-context reservation,
+durable single dispatch, verified bounded usage settlement and uncertainty holds.
+All other Enterprise billable routes stay server-off while this trial is enabled;
+retail provider routes are unchanged. Current record checks remain explicitly
+deterministic. The backend has no exposed conversation UI, saved assistants,
+long-term memory, audio input/output, sending or business-record tools. Its local
+HTTP provider responses are simulated; actual provider acceptance is still gated.
+See [the conversation connection and acceptance contract](docs/operations/enterprise-conversation.md).
+
 ## Read-only COO record assistant (October 23; separate source candidate)
 
 `ENTERPRISE_READ_ONLY_ASSISTANT_ENABLED` defaults off. When explicitly enabled,

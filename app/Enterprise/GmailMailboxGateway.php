@@ -19,7 +19,7 @@ class GmailMailboxGateway extends MailboxGateway
 
     public function ready(): bool
     {
-        return $this->connections->configured() && (bool) config('enterprise.gmail.send_enabled');
+        return ! config('enterprise.conversation.enabled') && $this->connections->configured() && (bool) config('enterprise.gmail.send_enabled');
     }
 
     public function readyFor(array $mailbox): bool

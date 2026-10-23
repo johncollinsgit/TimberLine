@@ -16,7 +16,7 @@ class TrialTransport
     public function quote(string $channel, array $content): array
     {
         $config = (array) config('enterprise.trial.channels.'.$channel, []);
-        $ready = (bool) config('enterprise.trial.enabled') && (bool) ($config['enabled'] ?? false);
+        $ready = ! config('enterprise.conversation.enabled') && (bool) config('enterprise.trial.enabled') && (bool) ($config['enabled'] ?? false);
         try {
             $ready = $ready && is_string(config('enterprise.trial.rates_valid_until')) && now()->lt(\Carbon\CarbonImmutable::parse(config('enterprise.trial.rates_valid_until')));
         } catch (\Throwable) {
