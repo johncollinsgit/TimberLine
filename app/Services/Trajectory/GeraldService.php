@@ -87,27 +87,28 @@ class GeraldService
             'provisional' => $plan['provisional'], 'missing' => $plan['missing'], 'stale_accounts' => $plan['stale_accounts'], 'assumptions' => $plan['assumption'], 'categories' => app(WorkspaceService::class)->categories($space), 'debt_sample' => $debtContext, 'debt_sample_total' => count($debtRows), 'category_spending_sample' => $categoryContext, 'transactions' => $focus->all(),
             'budget' => ['income_sources' => array_map(fn ($r) => array_diff_key($r, ['ids' => true]), $dashboard['planning']['sources']), 'flexible_monthly_cents' => $dashboard['planning']['flexible_monthly_cents']], 'debt_plan' => array_intersect_key($dashboard['debt_progress'], array_flip(['version', 'method', 'target_months', 'included_keys', 'extra_monthly_cents']))];
         $payload = ['conversation_id' => $conversation->id, 'scope_ids' => $conversation->data['scope_ids'], 'question' => $data['question'], 'context' => $context];
+        $maximumInput = app(AiBranchProvider::class)->liveSettings(\App\Models\Tenant::findOrFail($space->tenant_id))['max_input'];
+        $messages = [['role' => 'user', 'content' => json_encode(['current_finance_context' => $context], JSON_THROW_ON_ERROR)]];
+        $history = [];
+        $historyBytes = 0;
+        foreach (array_reverse(array_slice($conversation->data['messages'], -10)) as $message) {
+            if ($historyBytes + strlen($message['text']) > 8000) {
+                break;
+            }
+            $history[] = ['role' => $message['role'], 'content' => $message['text']];
+            $historyBytes += strlen($message['text']);
+        }
+        $messages = [...$messages, ...array_reverse($history)];
+        $messages[] = ['role' => 'user', 'content' => $data['question']];
+        abort_if(strlen(json_encode($messages, JSON_THROW_ON_ERROR)) + 2500 > $maximumInput, 422, 'Shorten the question or start a fresh conversation.');
         DB::transaction(function () use ($conversation, $data): void {
             $locked = Record::whereKey($conversation->id)->lockForUpdate()->firstOrFail();
             $pending = $locked->data['pending_request'] ?? null;
             abort_unless($pending === null || $pending === $data['request_id'], 409, 'Gerald is still answering the previous question.');
             $locked->update(['data' => [...$locked->data, 'pending_request' => $data['request_id']]]);
         });
-        $answer = app(FinanceAiService::class)->run($user, $space, 'gerald_chat', $data['request_id'], $payload, function ($settings) use ($context, $conversation, $data, $facts) {
+        $answer = app(FinanceAiService::class)->run($user, $space, 'gerald_chat', $data['request_id'], $payload, function ($settings) use ($context, $messages, $facts) {
             $settings['finance_instructions'] = self::PERSONA.' Return ONLY JSON {"reply":string,"source_ids":[integer],"category_options":[{"id":integer,"categories":[string],"reason":string}],"plan_change":null|{"kind":"budget"|"debt","values":object}}. In reply use {{fact_name}} placeholders for ALL numbers, money, percentages and dates; never write numerical claims yourself. Use only financial_facts keys supplied. Category options must use supplied focused transaction IDs and allowed categories. Ask what a broad-retailer purchase was for rather than guessing. Discuss alternatives without applying transaction changes. For what-if questions suggest a plan_change for a preview; never calculate its financial outcome yourself. Plan changes may contain only flexible_monthly_cents, income_expectations (budget), or the supplied debt_plan fields (debt). Never claim a plan has been saved; confirmation is a separate server action. If there are two scopes, explain each and ask the user to select one before saving changes.';
-            $messages = [['role' => 'user', 'content' => json_encode(['current_finance_context' => $context], JSON_THROW_ON_ERROR)]];
-            $history = [];
-            $historyBytes = 0;
-            foreach (array_reverse(array_slice($conversation->data['messages'], -10)) as $message) {
-                if ($historyBytes + strlen($message['text']) > 8000) {
-                    break;
-                }
-                $history[] = ['role' => $message['role'], 'content' => $message['text']];
-                $historyBytes += strlen($message['text']);
-            }
-            $messages = [...$messages, ...array_reverse($history)];
-            $messages[] = ['role' => 'user', 'content' => $data['question']];
-            abort_if(strlen(json_encode($messages, JSON_THROW_ON_ERROR)) + 2500 > $settings['max_input'], 422, 'Shorten the question or start a fresh conversation.');
             $result = app(AiBranchProvider::class)->complete($messages, $settings);
             $parsed = json_decode($result['reply'], true);
             $reply = is_array($parsed) && is_string($parsed['reply'] ?? null) ? $parsed['reply'] : 'I could not verify that explanation. The current plan figures are shown below; the paperwork has declined to cooperate.';

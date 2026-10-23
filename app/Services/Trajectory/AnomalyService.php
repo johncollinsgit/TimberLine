@@ -23,7 +23,7 @@ class AnomalyService
                     continue;
                 }
                 // Leave the purchase itself out of its supporting history.
-                $past = $rows->where('reviewed', true)->where('category', '!=', 'uncategorized')->where('id', '!=', $row['id']);
+                $past = $rows->filter(fn ($r) => LedgerService::humanReviewed($r))->where('category', '!=', 'uncategorized')->where('id', '!=', $row['id']);
                 $groups = $past->groupBy('category')->sortByDesc(fn ($group) => $group->count());
                 $support = $groups->first() ?? collect();
                 $majority = $groups->keys()->first();

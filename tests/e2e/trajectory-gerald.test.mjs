@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGeraldVoice,pcmWave} from '../../resources/js/trajectory/gerald-voice.js';
+import {createGeraldVoice,pcmWave,recordMicrophone} from '../../resources/js/trajectory/gerald-voice.js';
 
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return {promise,resolve,reject};};
@@ -32,4 +32,14 @@ test('denied microphones and failed speech stop without automatic provider retri
 test('microphone uploads have bounded canonical mono PCM headers and clamp sample overflow',()=>{
   const bytes=pcmWave(new Float32Array([-2,0,2]));const v=new DataView(bytes);
   assert.equal(v.getUint32(4,true),42);assert.equal(v.getUint16(22,true),1);assert.equal(v.getUint32(24,true),24000);assert.equal(v.getUint32(40,true),6);assert.equal(v.getInt16(44,true),-32768);assert.equal(v.getInt16(48,true),32767);
+});
+
+test('audio initialization failure releases an already granted microphone',async()=>{
+  const descriptors=['navigator','AudioContext','MediaRecorder'].map(key=>[key,Object.getOwnPropertyDescriptor(globalThis,key)]);
+  let stopped=0;
+  Object.defineProperty(globalThis,'navigator',{configurable:true,value:{mediaDevices:{getUserMedia:async()=>({getTracks:()=>[{stop:()=>stopped++}]})}}});
+  globalThis.MediaRecorder=class {};
+  globalThis.AudioContext=class {constructor(){throw new Error('Audio initialization failed');}};
+  try{await assert.rejects(recordMicrophone(new AbortController().signal),/Audio initialization failed/);assert.equal(stopped,1);}
+  finally{for(const [key,descriptor] of descriptors){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];}}
 });

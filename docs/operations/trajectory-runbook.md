@@ -527,7 +527,8 @@ reservations and are not automatically retried. Operators use the existing
 
 Review my finances queues bounded `ReviewFinances` jobs over all available posted,
 allocated history rather than the dashboard's 250-item queue. It checkpoints
-transaction versions and reuses unchanged checks across reviews. Findings paginate
+transaction versions and human merchant evidence, reusing unchanged checks across
+reviews while reconsidering a merchant when its human decisions change. Findings paginate
 and show source changes. Provider allowance or format problems pause the review;
 Resume keeps completed checks and request identities. Unknown provider outcomes
 require usage reconciliation before resuming that request. The worker has one
@@ -535,7 +536,8 @@ attempt so an ambiguous provider dispatch is not repeated automatically.
 
 Automatic categorization and review-after-sync are explicit owner preferences,
 initially off. Automatic batches require at least three consistent reviewed merchant
-examples, independent model agreement and current source/support versions. Broad
+human examples, independent model agreement and current source/support versions.
+Automatic choices are marked separately and never reinforce later category evidence. Broad
 retailers, possible duplicates, money movements, medical-linked rows and reviewed
 choices cannot be automatically changed. Source or support changes reject the batch.
 Corrections use the existing ledger audit and versioned undo; undo now also covers

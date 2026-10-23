@@ -80,7 +80,6 @@ class AiBranchProvider
             }
         }
 
-
         return app(ResponsesTransport::class)->complete((string) config('ai_branch.api_key'), $input, $settings, ($settings['finance_instructions'] ?? self::INSTRUCTIONS)
             .' Use the current workspace context, date, and timezone when supplied. Cite source refs, never generate record URLs. All evidence lists are bounded samples. Unknown, restricted, unsupported, missing or stale sources are not proof that nothing needs attention.'
             .($purpose === 'briefing' ? ' For this briefing follow the supplied attention list in its exact server order. Summarize only these candidates and offer suggestions. If it is empty, say nothing was found in the checked sample and explain incomplete coverage. Do not invent new priorities or imply an action was performed.' : ''));

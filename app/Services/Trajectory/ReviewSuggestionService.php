@@ -13,7 +13,7 @@ class ReviewSuggestionService
     public function forEntries(Collection $entries, int $limit = 8): array
     {
         $candidates = $entries->filter(fn (array $entry): bool => $entry['editable'] && ! $entry['reviewed'] && $entry['amount_cents'] < 0 && $this->eligible($entry));
-        $reviewed = $entries->filter(fn (array $entry): bool => $entry['editable'] && $entry['reviewed'] && $entry['amount_cents'] < 0 && $this->eligible($entry));
+        $reviewed = $entries->filter(fn (array $entry): bool => $entry['editable'] && LedgerService::humanReviewed($entry) && $entry['amount_cents'] < 0 && $this->eligible($entry));
         $suggestions = [];
 
         foreach ($candidates->groupBy(fn (array $entry): string => ClassificationService::merchant($entry['merchant'])) as $merchant => $rows) {

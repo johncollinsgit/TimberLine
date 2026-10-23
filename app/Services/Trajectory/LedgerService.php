@@ -14,6 +14,13 @@ use Illuminate\Validation\ValidationException;
 
 class LedgerService
 {
+    public const AUTOMATIC_REVIEW = 'Automatically categorized by Gerald.';
+
+    public static function humanReviewed(array $entry): bool
+    {
+        return $entry['reviewed'] && ($entry['explanation'] ?? null) !== self::AUTOMATIC_REVIEW;
+    }
+
     public function ingest(Account $account, array $rows): int
     {
         return DB::transaction(function () use ($account, $rows): int {
@@ -93,11 +100,11 @@ class LedgerService
         });
     }
 
-    public function bulkClassify(User $user, Space $space, array $transactions, array $data): array
+    public function bulkClassify(User $user, Space $space, array $transactions, array $data, bool $automatic = false): array
     {
         app(FinanceAccess::class)->authorize($user, $space);
 
-        return DB::transaction(function () use ($user, $space, $transactions, $data): array {
+        return DB::transaction(function () use ($user, $space, $transactions, $data, $automatic): array {
             $ids = array_column($transactions, 'id');
             $versions = array_column($transactions, 'version', 'id');
             $rows = Transaction::where('space_id', $space->id)->whereIn('id', $ids)->lockForUpdate()->get()->keyBy('id');
@@ -111,7 +118,7 @@ class LedgerService
                 abort_unless(! $tx->pending && ! $tx->removed && ! $tx->reviewed, 422, 'Only posted transactions still needing review can be bulk categorized.');
                 abort_unless($tx->version === (int) $versions[$id], 409, 'A transaction changed. Refresh before applying this suggestion.');
                 $before = $tx->only(['category', 'flow', 'face_punched', 'bullshit_spending', 'reviewed', 'explanation', 'version']);
-                $tx->update([...$values, 'reviewed' => true, 'explanation' => 'Reviewed in a bulk suggestion.', 'version' => $tx->version + 1]);
+                $tx->update([...$values, 'reviewed' => true, 'explanation' => $automatic ? self::AUTOMATIC_REVIEW : 'Reviewed in a bulk suggestion.', 'version' => $tx->version + 1]);
                 Event::create(['space_id' => $space->id, 'actor_id' => $user->id, 'action' => 'bulk_classify', 'record_id' => $tx->id, 'before' => $before, 'after' => $tx->only(array_keys($before))]);
                 $updated[] = $tx->id;
             }

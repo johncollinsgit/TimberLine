@@ -37,10 +37,11 @@ export async function recordMicrophone(signal){
   if(!navigator.mediaDevices?.getUserMedia||!globalThis.MediaRecorder)throw new Error('Microphone recording is unavailable here. You can type to Gerald.');
   const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});
   if(signal.aborted){stream.getTracks().forEach(t=>t.stop());throw new Error('Recording stopped.');}
-  const AudioContext=globalThis.AudioContext||globalThis.webkitAudioContext;
-  const context=new AudioContext(),analyser=context.createAnalyser(),source=context.createMediaStreamSource(stream);source.connect(analyser);analyser.fftSize=512;
-  const recorder=new MediaRecorder(stream),chunks=[];let timer,frame,heard=false,lastSound=Date.now();
+  let context,source,timer,frame;
   try{
+    const AudioContext=globalThis.AudioContext||globalThis.webkitAudioContext;
+    context=new AudioContext();const analyser=context.createAnalyser();source=context.createMediaStreamSource(stream);source.connect(analyser);analyser.fftSize=512;
+    const recorder=new MediaRecorder(stream),chunks=[];let heard=false,lastSound=Date.now();
     const blob=await new Promise((resolve,reject)=>{
       const finish=()=>{if(recorder.state==='recording')recorder.stop();};
       signal.addEventListener('abort',()=>{finish();reject(new Error('Recording stopped.'));},{once:true});
@@ -55,5 +56,5 @@ export async function recordMicrophone(signal){
     const frames=Math.min(720000,Math.ceil(decoded.duration*24000));
     const offline=new OfflineAudioContext(1,frames,24000),input=offline.createBufferSource();input.buffer=decoded;input.connect(offline.destination);input.start();const rendered=await offline.startRendering();
     return new Blob([pcmWave(rendered.getChannelData(0))],{type:'audio/wav'});
-  }finally{clearTimeout(timer);cancelAnimationFrame(frame);stream.getTracks().forEach(t=>t.stop());source.disconnect();await context.close();}
+  }finally{clearTimeout(timer);if(frame!==undefined)cancelAnimationFrame(frame);stream.getTracks().forEach(t=>t.stop());source?.disconnect();if(context)await context.close();}
 }

@@ -147,9 +147,51 @@ test('approved automatic categories preserve prior reviews, avoid broad merchant
     }
     expect($audit->fresh()->data['automatic_count'])->toBe(5)->and($txs->last()->fresh()->reviewed)->toBeFalse();
     $automatic = $txs[3]->fresh();
-    expect($automatic->category)->toBe('groceries')->and($automatic->reviewed)->toBeTrue();
+    expect($automatic->category)->toBe('groceries')->and($automatic->reviewed)->toBeTrue()->and($automatic->explanation)->toBe(LedgerService::AUTOMATIC_REVIEW);
     $this->actingAs($this->owner)->postJson("/trajectory/spaces/{$this->space->id}/transactions/{$automatic->id}/undo", ['version' => $automatic->version])->assertOk();
     expect($automatic->fresh()->reviewed)->toBeFalse();
+});
+
+test('automatic decisions cannot reinforce themselves as human category evidence', function () {
+    Queue::fake();
+    $rows = [];
+    foreach (range(1, 5) as $i) {
+        $rows[] = ['id' => 'auto-history-'.$i, 'date' => now()->subDays($i)->toDateString(), 'merchant' => 'Corner Market', 'amount_cents' => -$i * 1000];
+    }
+    app(LedgerService::class)->ingest($this->account, $rows);
+    $txs = Transaction::orderBy('id')->get();
+    foreach ($txs->take(3) as $tx) {
+        $tx->update(['category' => 'groceries', 'reviewed' => true, 'explanation' => LedgerService::AUTOMATIC_REVIEW]);
+    }
+    $this->space->update(['settings' => [...$this->space->settings, 'gerald_review' => ['auto_categorize' => true, 'actor_id' => $this->owner->id]]]);
+    ($this->fakeReply)(['findings' => $txs->map(fn ($tx) => ['id' => $tx->id, 'category' => 'groceries', 'kind' => 'category', 'reason' => 'A possible grocery purchase.'])->all()]);
+    $service = app(FinanceAuditService::class);
+    $audit = $service->start($this->owner, $this->space);
+    while ($service->work($audit->fresh())) {
+    }
+    expect($audit->fresh()->data['automatic_count'])->toBe(0)->and($txs->last()->fresh()->reviewed)->toBeFalse();
+    Http::assertSent(fn ($request) => ($context = json_decode($request['input'][0]['content'], true)) && empty($context['reviewed_patterns']));
+});
+
+test('a human category decision refreshes merchant evidence while unrelated checks remain reusable', function () {
+    Queue::fake();
+    app(LedgerService::class)->ingest($this->account, [
+        ['id' => 'learn-1', 'date' => now()->subDays(3)->toDateString(), 'merchant' => 'Corner Market', 'amount_cents' => -1000],
+        ['id' => 'learn-2', 'date' => now()->subDays(2)->toDateString(), 'merchant' => 'Corner Market', 'amount_cents' => -2000],
+        ['id' => 'other', 'date' => now()->subDay()->toDateString(), 'merchant' => 'Other Shop', 'amount_cents' => -3000],
+    ]);
+    ($this->fakeReply)(['findings' => []]);
+    $service = app(FinanceAuditService::class);
+    $audit = $service->start($this->owner, $this->space);
+    while ($service->work($audit->fresh())) {
+    }
+    $tx = Transaction::orderBy('id')->first();
+    app(LedgerService::class)->classify($this->owner, $this->space, $tx, ['version' => $tx->version, 'category' => 'groceries', 'flow' => 'expense', 'face_punched' => false, 'bullshit_spending' => false]);
+    $second = $service->start($this->owner, $this->space);
+    while ($service->work($second->fresh())) {
+    }
+    expect($second->fresh()->data['reused'])->toBe(1);
+    Http::assertSentCount(2);
 });
 
 test('balance updates invalidate old spoken or on-screen budget readbacks', function () {
