@@ -618,6 +618,8 @@
     load();
   }
   globalThis.addEventListener('popstate', restoreNavigation);
+  // Stop departing read batches before a replacement document commits. A canceled navigation keeps fresh loads available.
+  globalThis.addEventListener('beforeunload',()=>{workspaceLoadGeneration++;projectCatalogGeneration++;});
   // A restored browser document must not revive cached operational facts or active voice.
   globalThis.addEventListener('pagehide',()=>clearWorkspaceContext(true));
   globalThis.addEventListener('pageshow',event=>{if(event.persisted)restoreNavigation();});

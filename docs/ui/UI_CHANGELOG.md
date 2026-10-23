@@ -1,5 +1,10 @@
 ## 2026-10-23 — Reviewer AI Coming soon placeholders (source candidate)
 
+Leaving a native page stops obsolete workspace/catalog read batches before the
+replacement document commits. Cancelling navigation retains drafts and exact
+retry state, and a fresh load remains available. Existing access controls and
+write behavior are preserved.
+
 Show compact Chats, Assistants and Voice cards in the fictional reviewer demo.
 Keep chat, microphone, generated workflow drafting, Home AI summaries and AI
 usage controls unavailable, with matching tour guidance. Do not invent existing

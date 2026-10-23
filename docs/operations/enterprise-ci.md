@@ -9,6 +9,13 @@ Chats, Assistants and Voice. Its browser assertions require inactive chat,
 microphone and generated-draft controls while preserving manual workspace work.
 Native signed-in voice/record-check fixtures keep their separate positive gates.
 
+Departing native pages invalidate their existing workspace and project-catalog
+read generations at `beforeunload`, before a replacement document commits. This
+stops obsolete batches from starting more reads during provisional navigation.
+Cancelling navigation preserves data, pending writes and exact retry receipts;
+a deliberate fresh load still works. Keep strict browser-error assertions and
+the existing request pacing. Do not suppress access-control errors to pass CI.
+
 The dedicated PHPUnit process uses the same `1G` test memory ceiling as the
 primary `phpunit.xml`. This accommodates the complete combined suite, including
 local PDF rendering; it does not change a production PHP limit. Fresh isolated
