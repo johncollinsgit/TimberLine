@@ -176,6 +176,32 @@ A data-only reconciliation needs its own exact target/catalog/version pins,
 14-path diff, rollback/replay review and approval; this source supplies no runtime
 write, publication, credential or CSP activation permission.
 
+## Proposal presentation and vetted images (source follow-on)
+
+The generic recipient reader uses a wider canvas, a responsive ordered phase grid
+and a single upper-right mountain/tree corner on a cream reading surface. The
+Evergrove company mark belongs to the proposal; the separate Enterprise platform
+identity, views, tours and reviewed campus fingerprint stay unchanged. All prices,
+terms, selections, named comments, publication and password behavior remain in the
+existing immutable proposal engine.
+
+Public artwork must contain only the intended art pixels. Do not publish the full
+business-card/editor screenshot inside a visually clipped downloadable asset.
+The corner reuses the approved clean landscape PNG bytes and the reviewed curved
+clip; it includes no leaves, footer band, other-corner artwork, scripts or remote
+references. Preserve the supplied scene rather than redrawing it. Passive CSS
+chevrons keep native selects and their labels, focus, keyboard and disabled
+behavior without requiring an SVG/data-image permission.
+
+The existing generic CSP has no image permission. The proposed image allowance is
+limited to the current request origin and the exact vetted public asset paths in
+`App\Proposals\ResponsePolicy`; it does not permit general self/data sources or
+external hosts. Its existing default/script/network/frame/form/base restrictions
+and the separately supplied trusted campus nonce policy remain unchanged. This
+policy expansion requires specific security confirmation after concrete review,
+and the independent release/hosted acceptance gates, before activation. Source
+preparation and local HTTP evidence do not establish deployment or publication.
+
 ## Verification and release gates
 
 Run local proposal tests with the repository PHP environment; optional

@@ -34,7 +34,7 @@
             <text x="620" y="178" text-anchor="middle" class="network-pending-title">Department 02</text><text x="620" y="206" text-anchor="middle" class="network-pending-label">Pending</text><text x="620" y="230" text-anchor="middle" class="network-pending-note">Next accepted scope</text>
             <circle cx="770" cy="350" r="95" fill="#f0f2e9" stroke="#bccab0" stroke-width="1.4"/>
             <text x="770" y="338" text-anchor="middle" class="network-pending-title">Department 03</text><text x="770" y="366" text-anchor="middle" class="network-pending-label">Pending</text><text x="770" y="390" text-anchor="middle" class="network-pending-note">Following acceptance</text>
-            <path d="M869 131c-12-22 1-35 24-38 0 23-4 34-24 38Z" fill="#c8d6b8"/><path d="m863 143 22-39" stroke="#8ca276" stroke-width="1.5"/>
+            <path class="proposal-network-leaf" d="M869 131c-12-22 1-35 24-38 0 23-4 34-24 38Z" fill="#c8d6b8"/><path class="proposal-network-leaf" d="m863 143 22-39" stroke="#8ca276" stroke-width="1.5"/>
         </svg>
         <svg class="department-network network-mobile" viewBox="0 0 360 690" fill="none" role="img" aria-labelledby="network-mobile-title network-mobile-desc">
             <title id="network-mobile-title">Start with one department, connect through agreed permissions</title>
@@ -75,7 +75,7 @@
             <path d="M24 167c78-33 121 24 200-2s105-44 179-21 120 37 180 9 119-51 180-18 136 42 209-7" stroke="#7b9866" stroke-width="2"/>
             <path d="M24 167c78-33 121 24 200-2s105-44 179-21 120 37 180 9 119-51 180-18 136 42 209-7" stroke="#f5f4ed" stroke-width="1" stroke-dasharray="2 9"/>
             <g fill="#f5f4ed" stroke="#688653" stroke-width="2"><circle cx="50" cy="159" r="5"/><circle cx="230" cy="163" r="5"/><circle cx="410" cy="146" r="5"/><circle cx="590" cy="150" r="5"/><circle cx="770" cy="138" r="5"/><circle cx="950" cy="139" r="5"/></g>
-            <path d="M926 90c-13-23 1-36 24-39 0 23-3 36-24 39Z" fill="#b4c59d"/><path d="m920 102 22-39" stroke="#779263" stroke-width="1.5"/>
+            <path class="proposal-landscape-leaf" d="M926 90c-13-23 1-36 24-39 0 23-3 36-24 39Z" fill="#b4c59d"/><path class="proposal-landscape-leaf" d="m920 102 22-39" stroke="#779263" stroke-width="1.5"/>
         </svg>
         <ol class="journey-overview-stages">
             @foreach(['Discover', 'Understand', 'Co-design', 'Pilot', 'Launch', 'Improve'] as $index=>$stage)

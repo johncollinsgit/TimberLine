@@ -88,26 +88,16 @@ a {
 }
 .ew-brand {
     text-decoration: none;
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    font:
-        25px Georgia,
-        serif;
-    padding: 0 8px 24px;
-    border-bottom: 1px solid #ffffff20;
-}
-.ew-brand > span:first-child {
-    color: #d7b854;
-    border: 1px solid #bba856;
-    padding: 5px;
-    border-radius: 5px;
-}
-.ew-brand small {
     display: block;
-    font: 10px system-ui;
-    letter-spacing: 1.5px;
-    margin-top: 6px;
+    padding: 8px;
+    border-radius: 5px;
+    background: #f7f5ee;
+}
+.ew-brand img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-width: 220px;
 }
 .ew-eyebrow {
     font: 10px system-ui;
@@ -515,12 +505,6 @@ legend {
     .ew-shell {
         grid-template-columns: 166px minmax(0, 1fr);
     }
-    .ew-brand {
-        font-size: 20px;
-    }
-    .ew-brand > span:first-child {
-        display: none;
-    }
     .ew-header {
         align-items: flex-start;
         flex-direction: column;
@@ -571,9 +555,6 @@ legend {
     .ew-sidebar {
         gap: 12px;
         padding: 15px;
-    }
-    .ew-brand {
-        padding-bottom: 12px;
     }
     .ew-sidebar > .ew-eyebrow {
         display: none;

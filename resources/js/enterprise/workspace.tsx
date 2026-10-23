@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -11,6 +12,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import "./workspace.css";
+import enterpriseLogo from "../../images/enterprise/Everbranch-Rooted-Peak-Aligned.svg?raw";
 import "./transport.js";
 
 type Field = {
@@ -548,10 +550,7 @@ function Workspace({ boot }: { boot: any }) {
         <div className="ew-shell">
             <aside className="ew-sidebar">
                 <a className="ew-brand" href={transport.href(boot.back)}>
-                    <span aria-hidden="true">♧</span>
-                    <span>
-                        Everbranch<small>Enterprise · Workflows</small>
-                    </span>
+                    <img src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(enterpriseLogo)}`} alt="Everbranch Enterprise by Evergrove Software" width="574.781" height="153.328" />
                 </a>
                 <p className="ew-eyebrow">OPERATING WORKSPACE</p>
                 <nav aria-label="Workflow workspace">
