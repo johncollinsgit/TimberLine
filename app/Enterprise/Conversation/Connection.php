@@ -8,7 +8,7 @@ use App\Enterprise\WorkspaceAccess;
 use App\Models\TeamOperationRecord;
 use App\Models\Tenant;
 use App\Models\User;
-use Carbon\CarbonImmutable;
+use Illuminate\Support\Str;
 
 /** Exact, independently approved campus trial connection. Never falls back to retail/ordinary AI credentials. */
 class Connection
@@ -38,7 +38,7 @@ class Connection
     /** Nonsecret fields only. Operator hashes the exact reviewed packet; a changed account/key/rate requires new approval. */
     public static function approvalFields(array $config): array
     {
-        $fields = array_intersect_key($config, array_flip(['approval_id', 'client_id', 'silo_id', 'mount', 'tenant_id', 'area_id', 'prior_spend_microusd', 'project_id', 'organization_id',
+        $fields = array_intersect_key($config, array_flip(['approval_id', 'client_id', 'silo_id', 'mount', 'tenant_id', 'area_id', 'ledger_id', 'prior_spend_microusd', 'project_id', 'organization_id',
             'model', 'model_context_tokens', 'model_context_evidence', 'max_output_tokens', 'input_ceiling_microusd_per_million',
             'output_ceiling_microusd_per_million', 'per_call_overhead_microusd', 'rates_evidence', 'valid_until', 'user_ids', 'prior_spend_evidence_hash']));
         $fields['credential_sha256'] = hash('sha256', (string) ($config['api_key'] ?? ''));
@@ -82,8 +82,15 @@ class Connection
         foreach ($config['user_ids'] as $id) {
             abort_unless(is_string($id) && ctype_digit($id) && (int) $id > 0, 503);
         }
+        $valid = false;
         try {
-            $valid = now()->lt(CarbonImmutable::parse($config['valid_until']));
+            $text = $config['valid_until'];
+            if (preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/D', $text)) {
+                $expiry = \DateTimeImmutable::createFromFormat(str_contains($text, '.') ? '!Y-m-d\TH:i:s.uP' : '!Y-m-d\TH:i:sP', $text);
+                $errors = \DateTimeImmutable::getLastErrors();
+                $valid = $expiry && ($errors === false || $errors['warning_count'] === 0 && $errors['error_count'] === 0)
+                    && $expiry->format('Y-m-d\TH:i:s') === substr($text, 0, 19) && now()->lt($expiry);
+            }
         } catch (\Throwable) {
             $valid = false;
         }
@@ -91,6 +98,14 @@ class Connection
             && is_string(config('enterprise.trial.prior_spend_evidence'))
             && hash_equals(hash('sha256', config('enterprise.trial.prior_spend_evidence')), (string) ($config['prior_spend_evidence_hash'] ?? '')),
             503, 'Current rates and verified aggregate prior trial spend are required.');
+        abort_unless(is_string($config['ledger_id'] ?? null) && Str::isUuid($config['ledger_id']), 503,
+            'A separately approved existing lifetime ledger is required.');
+        $ledgers = TeamOperationRecord::query()->where('kind', 'ent_trial_budget')->get();
+        $ledger = $ledgers->first();
+        abort_unless($ledgers->count() === 1 && $ledger->id === $config['ledger_id']
+            && (string) $ledger->tenant_id === (string) $config['tenant_id'] && $ledger->area_id === $config['area_id']
+            && $ledger->data['baseline'] === ['prior_microusd' => $config['prior_spend_microusd'], 'evidence_hash' => $config['prior_spend_evidence_hash']],
+            503, 'The separately approved lifetime ledger identity or baseline is unavailable. No ledger will be initialized.');
         $digest = hash('sha256', json_encode(self::approvalFields($config), JSON_THROW_ON_ERROR));
         abort_unless(is_string($config['approval_sha256'] ?? null) && hash_equals($digest, $config['approval_sha256']), 503,
             'Connection fields changed. Obtain a fresh exact approval before provider dispatch.');

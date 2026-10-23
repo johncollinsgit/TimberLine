@@ -60,6 +60,7 @@ final class EnterpriseConversationMySqlConcurrencyTest extends EnterpriseConvers
     public function test_actual_provider_route_serializes_final_allowance_and_exact_duplicates_across_workers(): void
     {
         config(['enterprise.trial.prior_spend_microusd' => 4979700]);
+        $this->seedApprovedLedger();
         $this->approve();
         $results = $this->workers(false);
         $this->assertEqualsCanonicalizing([200, 429, 429, 429], array_column($results, 'status'));
@@ -83,6 +84,7 @@ final class EnterpriseConversationMySqlConcurrencyTest extends EnterpriseConvers
     public function test_simultaneous_identical_initial_turns_have_only_one_durable_provider_dispatch(): void
     {
         config(['enterprise.trial.prior_spend_microusd' => 4979700]);
+        $this->seedApprovedLedger();
         $this->approve();
         $results = $this->workers(false, (string) \Illuminate\Support\Str::uuid(), (string) \Illuminate\Support\Str::uuid());
         $this->assertContains(200, array_column($results, 'status'));
@@ -97,6 +99,7 @@ final class EnterpriseConversationMySqlConcurrencyTest extends EnterpriseConvers
     public function test_uncertain_provider_outcome_cannot_release_allowance_to_competing_workers(): void
     {
         config(['enterprise.trial.prior_spend_microusd' => 4979700]);
+        $this->seedApprovedLedger();
         $this->approve();
         $results = $this->workers(false, uncertain: true);
         foreach ($results as $result) {
@@ -110,7 +113,15 @@ final class EnterpriseConversationMySqlConcurrencyTest extends EnterpriseConvers
         $this->turn()->assertStatus(503);
     }
 
-    private function workers(bool $replay, ?string $sessionId = null, ?string $requestId = null, bool $uncertain = false): array
+    public function test_ledger_deletion_after_readiness_while_reservation_waits_cannot_initialize_a_replacement(): void
+    {
+        $results = $this->workers(false, removeLedgerWhileHeld: true);
+        $this->assertSame([503, 503, 503, 503], array_column($results, 'status'));
+        $this->assertSame(0, array_sum(array_column($results, 'provider_calls')));
+        $this->assertSame(0, TeamOperationRecord::query()->whereIn('kind', ['ent_trial_budget', 'ent_trial_charge'])->count());
+    }
+
+    private function workers(bool $replay, ?string $sessionId = null, ?string $requestId = null, bool $uncertain = false, bool $removeLedgerWhileHeld = false): array
     {
         $dir = $this->runtime.'/race-'.bin2hex(random_bytes(4));
         mkdir($dir);
@@ -182,6 +193,15 @@ WORKER;
                 foreach ($processes as $process) {
                     $this->assertTrue($process->isRunning(), $process->getErrorOutput().$process->getOutput());
                 }
+                if ($removeLedgerWhileHeld) {
+                    $deadline = microtime(true) + 5;
+                    while (TeamOperationRecord::query()->where(['kind' => 'ent_conversation_session', 'status' => 'pending'])->count() < 4 && microtime(true) < $deadline) {
+                        usleep(10000);
+                    }
+                    $this->assertSame(4, TeamOperationRecord::query()->where(['kind' => 'ent_conversation_session', 'status' => 'pending'])->count(),
+                        'Every route passed readiness and staged its session before the approved ledger was removed.');
+                    TeamOperationRecord::query()->where('kind', 'ent_trial_budget')->delete();
+                }
                 DB::selectOne("SELECT RELEASE_LOCK('everbranch-reviewer-trial-budget') AS released");
                 $held = false;
             }
@@ -191,7 +211,7 @@ WORKER;
                 $this->assertTrue($process->isSuccessful(), $process->getErrorOutput());
                 $results[] = json_decode($process->getOutput(), true, 512, JSON_THROW_ON_ERROR);
             }
-            $this->assertCount($replay ? 0 : 1, glob($dir.'/provider-*'));
+            $this->assertCount($replay || $removeLedgerWhileHeld ? 0 : 1, glob($dir.'/provider-*'));
 
             return $results;
         } finally {

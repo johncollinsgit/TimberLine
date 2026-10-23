@@ -143,21 +143,25 @@ class Assistant
         $digest = hash('sha256', json_encode([$claim['payload'], $settings['settings_sha256'], $sessionId, $requestId], JSON_THROW_ON_ERROR));
         $key = 'conversation:'.$settings['silo_id'].':'.$user->id.':'.$sessionId.':'.$requestId;
         // Never acquire the global campaign lock while holding the native tenant/session lock.
-        $reservation = $this->budget->reserve('ai', $key, $digest, $settings['maximum_microusd']);
+        $reservation = $this->budget->reserve('ai', $key, $digest, $settings['maximum_microusd'], $settings['ledger_id']);
         abort_if($reservation['replayed'], 409, 'That paid turn already completed; no second call will be made. Its short answer may no longer be recoverable.');
         $this->assertCurrent($tenant, $user, $area, $this->row($tenant, $user, $area, $sessionId));
-        $this->budget->claimDispatch($reservation['id'], $digest);
+        $this->budget->claimDispatch($reservation['id'], $digest, $settings['ledger_id']);
         try {
             $this->assertCurrent($tenant, $user, $area, $this->row($tenant, $user, $area, $sessionId));
             $response = $this->provider->complete($settings, $claim['payload'], $requestId);
             $value = $this->value($response['reply'], $claim['snapshot']['sources']);
-            $this->budget->settle($reservation['id'], 'accepted', ['provider_id' => $response['provider_id'], 'purpose' => 'campus_text_conversation'], $response['maximum_actual_microusd']);
+            $this->budget->settle($reservation['id'], 'accepted', ['provider_id' => $response['provider_id'], 'purpose' => 'campus_text_conversation'], $response['maximum_actual_microusd'], $settings['ledger_id']);
         } catch (\Throwable) {
             try {
-                $this->budget->settle($reservation['id'], 'uncertain', ['purpose' => 'campus_text_conversation', 'status' => 'unverifiable_completion']);
+                $this->budget->settle($reservation['id'], 'uncertain', ['purpose' => 'campus_text_conversation', 'status' => 'unverifiable_completion'], null, $settings['ledger_id']);
             } catch (\Throwable) {
             }
-            $this->budget->pause();
+            try {
+                $this->budget->pause($settings['ledger_id']);
+            } catch (\Throwable) {
+                // A missing/replaced ledger cannot be initialized even during uncertainty cleanup.
+            }
             abort(503, 'The provider outcome is uncertain or invalid. Its full maximum stays reserved and the shared trial is paused. Do not retry with a new key.');
         }
 

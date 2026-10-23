@@ -12,6 +12,7 @@ return [
         'enabled' => (bool) env('ENTERPRISE_CONVERSATION_ENABLED', false),
         'api_key' => env('ENTERPRISE_CONVERSATION_API_KEY'),
         'project_id' => env('ENTERPRISE_CONVERSATION_PROJECT_ID'), 'organization_id' => env('ENTERPRISE_CONVERSATION_ORGANIZATION_ID'),
+        'ledger_id' => env('ENTERPRISE_CONVERSATION_LEDGER_ID'),
         'approval_id' => env('ENTERPRISE_CONVERSATION_APPROVAL_ID'), 'approval_sha256' => env('ENTERPRISE_CONVERSATION_APPROVAL_SHA256'),
         'client_id' => env('ENTERPRISE_CONVERSATION_CLIENT_ID'), 'silo_id' => env('ENTERPRISE_CONVERSATION_SILO_ID'),
         'mount' => env('ENTERPRISE_CONVERSATION_MOUNT'), 'tenant_id' => env('ENTERPRISE_CONVERSATION_TENANT_ID'), 'area_id' => env('ENTERPRISE_CONVERSATION_AREA_ID'),

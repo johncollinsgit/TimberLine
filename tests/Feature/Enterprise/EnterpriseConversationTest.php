@@ -96,6 +96,7 @@ final class EnterpriseConversationTest extends EnterpriseConversationFixture
     public function test_shared_campaign_prior_spend_and_other_channel_reservations_deny_the_actual_provider_route(): void
     {
         config(['enterprise.trial.prior_spend_microusd' => 4979701]);
+        $this->seedApprovedLedger();
         $this->approve();
         $before = app(TrialBudget::class)->reserve('email', 'synthetic-other-channel', hash('sha256', 'other'), 10000);
         $this->turn()->assertStatus(429);

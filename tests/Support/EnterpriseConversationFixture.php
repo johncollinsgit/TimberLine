@@ -4,6 +4,7 @@ namespace Tests\Support;
 
 use App\Enterprise\Conversation\Connection;
 use App\Enterprise\Provisioning\ClientProvisioner;
+use App\Enterprise\Trial\TrialBudget;
 use App\Models\TeamArea;
 use App\Models\TeamOperationRecord;
 use App\Models\Tenant;
@@ -88,6 +89,7 @@ abstract class EnterpriseConversationFixture extends TestCase
         $this->actingAs($this->user)->withoutVite();
         $this->project = $this->postJson($this->url('/enterprise/commands'), ['action' => 'project.create', 'area_id' => $this->area,
             'id' => (string) Str::uuid(), 'request_id' => (string) Str::uuid(), 'title' => 'Synthetic conversation project'])->assertOk()->json('id');
+        $this->seedApprovedLedger();
         $this->approve();
     }
 
@@ -131,9 +133,18 @@ abstract class EnterpriseConversationFixture extends TestCase
         return 'https://client.example.invalid/enterprise-campus'.$path.'?tenant='.$this->tenant->slug;
     }
 
+    /** Explicit fictional setup, never called by the application route or production operator. */
+    protected function seedApprovedLedger(): void
+    {
+        $this->assertSame(0, TeamOperationRecord::query()->where('kind', 'ent_trial_charge')->count(), 'A test may not reset a ledger after any spend.');
+        TeamOperationRecord::query()->where('kind', 'ent_trial_budget')->delete();
+        app(TrialBudget::class)->status();
+    }
+
     protected function approve(array $delta = []): void
     {
         $config = $delta + ['enabled' => true, 'api_key' => 'synthetic-key-no-provider-access', 'project_id' => 'proj_synthetic', 'organization_id' => null,
+            'ledger_id' => TeamOperationRecord::query()->where('kind', 'ent_trial_budget')->value('id') ?? '90000000-0000-4000-8000-000000000001',
             'approval_id' => 'Synthetic approval only', 'client_id' => config('enterprise_client.client_id'), 'silo_id' => config('enterprise_client.silo_id'),
             'mount' => '/enterprise-campus', 'tenant_id' => (string) $this->tenant->id, 'area_id' => $this->area, 'user_ids' => [(string) $this->user->id],
             'prior_spend_microusd' => config('enterprise.trial.prior_spend_microusd'),

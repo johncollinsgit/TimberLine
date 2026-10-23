@@ -21,10 +21,15 @@ class TrialBudget
         return ['prior_microusd' => $prior, 'evidence_hash' => hash('sha256', $evidence)];
     }
 
-    private function ledger(): TeamOperationRecord
+    private function ledger(?string $approvedLedgerId = null): TeamOperationRecord
     {
         $baseline = $this->baseline();
-        $existing = TeamOperationRecord::query()->where('kind', 'ent_trial_budget')->first();
+        $ledgers = TeamOperationRecord::query()->where('kind', 'ent_trial_budget')->get();
+        $existing = $ledgers->first();
+        if ($approvedLedgerId !== null) {
+            abort_unless($ledgers->count() === 1 && $existing->id === $approvedLedgerId, 503,
+                'The separately approved existing lifetime ledger is unavailable. Reconciliation is required; no ledger will be initialized.');
+        }
         if ($existing) {
             abort_unless((int) $existing->tenant_id === (int) $this->store->tenant()->id && $existing->area_id === config('enterprise.trial.area_id')
                 && $existing->data['baseline'] === $baseline, 503, 'The lifetime ledger anchor or prior-spend baseline changed. Reconcile rather than resetting the cap.');
@@ -53,12 +58,12 @@ class TrialBudget
     }
 
     /** Must commit before provider IO; callers use the same immutable key on interrupted retries. */
-    public function reserve(string $channel, string $key, string $inputHash, int $maximum): array
+    public function reserve(string $channel, string $key, string $inputHash, int $maximum, ?string $approvedLedgerId = null): array
     {
         abort_unless(in_array($channel, ['sms', 'email', 'ai', 'acceptance'], true) && $maximum > 0 && $maximum <= self::CAP, 422);
 
-        return $this->store->locked(function () use ($channel, $key, $inputHash, $maximum): array {
-            $ledger = $this->ledger();
+        return $this->store->locked(function () use ($channel, $key, $inputHash, $maximum, $approvedLedgerId): array {
+            $ledger = $this->ledger($approvedLedgerId);
             abort_if($ledger->data['paused'] ?? false, 503, 'The shared trial ledger is paused pending provider-cost reconciliation.');
             $source = hash('sha256', 'trial-charge:'.$key);
             $existing = TeamOperationRecord::query()->where(['tenant_id' => $ledger->tenant_id, 'kind' => 'ent_trial_charge', 'source_key' => $source])->first();
@@ -80,13 +85,16 @@ class TrialBudget
         });
     }
 
-    public function settle(string $id, string $status, array $outcome, ?int $actual = null): void
+    public function settle(string $id, string $status, array $outcome, ?int $actual = null, ?string $approvedLedgerId = null): void
     {
-        $overrun = $this->store->locked(function () use ($id, $status, $outcome, $actual): bool {
+        $overrun = $this->store->locked(function () use ($id, $status, $outcome, $actual, $approvedLedgerId): bool {
+            if ($approvedLedgerId !== null) {
+                $this->ledger($approvedLedgerId);
+            }
             $row = $this->store->row('ent_trial_charge', $id);
             abort_unless(in_array($row->status, ['reserved', 'dispatching'], true) && in_array($status, ['accepted', 'rejected', 'uncertain'], true), 409);
             if ($actual !== null && ($actual < 0 || $actual > $row->data['reserved_microusd'])) {
-                $ledger = $this->ledger();
+                $ledger = $this->ledger($approvedLedgerId);
                 $this->store->save($ledger, array_replace($ledger->data, ['paused' => true, 'pause_reason' => 'invalid_or_over_bound_provider_usage']));
                 $this->store->save($row, $row->data + ['outcome' => ['status' => 'uncertain'], 'charged_microusd' => max($row->data['reserved_microusd'], $actual)], 'uncertain');
                 $this->store->audit($ledger, 'trial.budget_frozen');
@@ -103,19 +111,19 @@ class TrialBudget
         abort_if($overrun, 503, 'Provider usage exceeded its approved bound. The shared trial ledger is frozen until reconciliation.');
     }
 
-    public function pause(): void
+    public function pause(?string $approvedLedgerId = null): void
     {
-        $this->store->locked(function (): void {
-            $ledger = $this->ledger();
+        $this->store->locked(function () use ($approvedLedgerId): void {
+            $ledger = $this->ledger($approvedLedgerId);
             $this->store->save($ledger, array_replace($ledger->data, ['paused' => true, 'pause_reason' => 'unverifiable_ai_usage']));
             $this->store->audit($ledger, 'trial.budget_frozen');
         });
     }
 
-    public function claimDispatch(string $id, string $digest): void
+    public function claimDispatch(string $id, string $digest, ?string $approvedLedgerId = null): void
     {
-        $this->store->locked(function () use ($id, $digest): void {
-            $ledger = $this->ledger();
+        $this->store->locked(function () use ($id, $digest, $approvedLedgerId): void {
+            $ledger = $this->ledger($approvedLedgerId);
             abort_if($ledger->data['paused'] ?? false, 503, 'The shared trial campaign is paused. No new provider dispatch is permitted.');
             $row = $this->store->row('ent_trial_charge', $id);
             abort_unless($row->status === 'reserved' && hash_equals($row->data['input_hash'], $digest), 409, 'This paid action was already dispatched or its input changed.');
