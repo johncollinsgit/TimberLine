@@ -70,6 +70,7 @@ try {
   assert.equal(await page.evaluate(()=>globalThis.unrelatedScriptExecuted),undefined,'Unrelated inline scripts stay blocked');
   await page.getByRole('link',{name:'Open campus review',exact:true}).click();
   await page.locator('#review-open').click();
+  await page.waitForFunction(()=>!document.querySelector('[data-campus-review-status]').textContent.startsWith('Loading'));
   await page.getByLabel('Your review display name').selectOption('Ross');
   await page.getByRole('button',{name:'Remember my display name'}).click();
   await page.waitForFunction(()=>document.querySelector('[data-campus-review-display-name]').textContent==='Ross');
@@ -86,8 +87,8 @@ try {
     assert.equal(current.status(),200);assert.equal((await current.json()).review.reviewer_name,name,'Parallel telemetry must retain the newer display name');
   }
   console.log(`${engine}: parallel activity/name requests preserve the current server name`);
-  await page.locator('[data-tour-open]').first().click();
-  await page.waitForResponse(response=>response.url().endsWith('/activity')&&response.request().postDataJSON()?.event==='tour_scene');
+  const firstScene=page.waitForResponse(response=>response.url().endsWith('/activity')&&response.request().postDataJSON()?.event==='tour_scene');
+  await page.locator('[data-tour-open]').first().click();assert.equal((await firstScene).status(),200);
   const sceneSaved=page.waitForResponse(response=>response.url().endsWith('/activity')&&response.request().postDataJSON()?.scene===7);
   await page.locator('[data-tour-scene="6"]').click();assert.equal((await sceneSaved).status(),200);
   console.log(`${engine}: proposal sections, campus navigation, selected name and scene 7 recorded; checking natural playback completion`);

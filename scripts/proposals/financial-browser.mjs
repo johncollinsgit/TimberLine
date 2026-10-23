@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {spawn, spawnSync} from 'node:child_process';
 import {createServer} from 'node:https';
 import {request as httpRequest} from 'node:http';
@@ -86,11 +87,23 @@ try {
   const url = origin+'/service-proposals/'+seed.versions.main.token;
   await page.goto(url);await page.getByLabel('Proposal password').fill(seed.password);
   await page.getByRole('button',{name:'Open proposal',exact:true}).click();
-  const response = await page.goto(url+'?section=scope');
-  assert.match(response.headers()['content-security-policy'],/default-src 'none'/);
-  assert.equal(await page.locator('script').count(),0);
+  let documentResponse = await page.goto(url+'?section=scope');
+  const fixedActivity=await readFile(resolve('resources/js/service-proposals/activity.js'),'utf8');
+  async function assertActivityPolicy(response){
+    assert.equal(await page.locator('script').count(),1,'Only the fixed local activity reporter is rendered');
+    assert.equal(await page.locator('script[data-review-activity-script]').count(),1);
+    const rendered=await page.locator('script[data-review-activity-script]').textContent();
+    assert.equal(rendered,fixedActivity,'The activity script must equal its reviewed source byte-for-byte');
+    const csp=response.headers()['content-security-policy'];
+    assert.match(csp,/default-src 'none'/);
+    const scripts=csp.match(/(?:^|;)\s*script-src\s+([^;]+)/);
+    assert.equal(scripts?.[1].trim(),"'sha256-"+createHash('sha256').update(rendered).digest('base64')+"'",'No extra script, origin or unsafe-inline permission');
+    assert.equal(csp.match(/(?:^|;)\s*script-src-attr\s+([^;]+)/)?.[1].trim(),"'none'");
+    assert.equal(csp.match(/(?:^|;)\s*connect-src\s+([^;]+)/)?.[1].trim(),"'self'");
+  }
+  await assertActivityPolicy(documentResponse);
   async function post(button) {
-    await Promise.all([page.waitForNavigation(),button.click()]);
+    [documentResponse]=await Promise.all([page.waitForNavigation(),button.click()]);
     assert.equal(new URL(page.url()).searchParams.get('section'),'scope');
     assert.equal(new URL(page.url()).hash,'#usage-estimator');
     assert.equal(await page.locator('[data-proposal-section="scope"]').isChecked(),true);
@@ -137,7 +150,7 @@ try {
   assert.match(await cards.nth(0).innerText(),/1,000.00 \/month/);
   assert.match(await cards.nth(1).innerText(),/2,500.00 \/month/);
   assert.match(await cards.nth(2).innerText(),/Pending · no matching fully modeled package/);
-  assert.equal(await page.locator('script').count(),0);
+  await assertActivityPolicy(documentResponse);
   assert.equal(await page.locator('[data-financial-prepare]').count(),0);
   await page.reload();assert.equal(await cards.count(),3);
   const sizes=[['desktop',1440,1000],['ipad',834,1194],['mobile',390,844],['zoom-reflow',640,450]];
@@ -170,7 +183,12 @@ try {
   assert.deepEqual(inspect(),before,'Planning must not change any encrypted proposal/access/business row');
   assert.deepEqual(external,[]);assert.deepEqual(errors,[]);
   assert.deepEqual(await page.evaluate(()=>globalThis.financialPolicyViolations),[]);
-  assert.ok(posts.every(p=>p.path.endsWith('/unlock')||p.path.endsWith('/financial-planning')));
+  assert.ok(posts.every(p=>p.path.endsWith('/unlock')||p.path.endsWith('/financial-planning')||p.path.endsWith('/activity')));
+  for(const post of posts.filter(p=>p.path.endsWith('/activity'))){
+    const report=JSON.parse(post.body);
+    assert.deepEqual(Object.keys(report).sort(),['event','event_id','page','scene','version_hash']);
+    assert.equal(report.event,'proposal_section');assert.ok(['overview','approach','scope','terms','review'].includes(report.page));assert.equal(report.scene,null);
+  }
   await writeFile(resolve(evidence,'result.json'),JSON.stringify({engine,status:'pass',synthetic:true,results,comparisonCount:3,persistedReload:true,isolatedSession:true,exactBusinessRowsUnchanged:true,external,errors,posts:posts.length},null,2));
   console.log(JSON.stringify({engine,status:'pass',viewports:results.length,comparisonCount:3,exactBusinessRowsUnchanged:true,external:0},null,2));
 }catch(error){
