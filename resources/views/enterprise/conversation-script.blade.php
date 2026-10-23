@@ -1,7 +1,7 @@
   let conversationGeneration=0, conversationScope=null, conversationState=null, conversationBusy=false, conversationAvailability=null, conversationOperation=null, conversationRenderedReady=false;
   const conversationMode=()=>transport.mode==='private'&&data.features?.conversation_ui===true;
   const conversationKey=()=>`everbranch-conversation-v1:${new URL(nextBase,location.href).pathname}:${workspace}:${viewer}:${area}`;
-  const conversationScopeValue=()=>JSON.stringify([transport.mode,String(workspace),String(viewer),String(data.viewer_id||viewer),area,data.features?.read_only_costs===true,data.features?.read_only_assistant===true,data.features?.resources===true,data.features?.saved_assistants===true]);
+  const conversationScopeValue=()=>JSON.stringify([transport.mode,String(workspace),String(viewer),String(data.viewer_id||viewer),area,data.features?.read_only_costs===true,data.features?.read_only_assistant===true,data.features?.resources===true,data.features?.saved_assistants===true,data.features?.private_memory===true]);
   function conversationReceipt(value) {
     try {if(value===null)sessionStorage.removeItem(conversationKey());else sessionStorage.setItem(conversationKey(),JSON.stringify({session_id:value.session_id,request_id:value.request_id}));return true;}catch{return false;}
   }
@@ -16,6 +16,7 @@
   function resetConversation() {
     conversationGeneration++;conversationScope=null;conversationState=null;conversationBusy=false;conversationAvailability=null;conversationOperation=null;conversationRenderedReady=false;
     if(typeof resetSavedAssistants==='function')resetSavedAssistants();
+    if(typeof resetPrivateMemory==='function')resetPrivateMemory();
     $('conversation-controls').hidden=true;$('conversation-clear-confirm').hidden=true;$('conversation-forget').hidden=true;$('conversation-status').textContent='';
     if($('generated-ask-panel').dataset.conversation==='true'){$('chat-log').replaceChildren();$('ask-question').value='';$('ask-question').readOnly=false;}
     delete $('generated-ask-panel').dataset.conversation;
@@ -28,12 +29,13 @@
     $('conversation-building-field').hidden=intent!=='building';
     const pending=conversationState&&conversationState.phase!=='active';
     $('ask-question').readOnly=!enabled||!!pending||conversationBusy;
-    $('ask-submit').disabled=!enabled||!!pending||conversationBusy||conversationAvailability?.intents?.[intent]!==true||(intent==='building'&&!$('conversation-building').value)||(typeof savedAssistantCanSend==='function'&&!savedAssistantCanSend())||(typeof savedAssistantAllows==='function'&&!savedAssistantAllows(intent));
+    $('ask-submit').disabled=!enabled||!!pending||conversationBusy||conversationAvailability?.intents?.[intent]!==true||(intent==='building'&&!$('conversation-building').value)||(typeof savedAssistantCanSend==='function'&&!savedAssistantCanSend())||(typeof savedAssistantAllows==='function'&&!savedAssistantAllows(intent))||(typeof memoryCanSend==='function'&&!memoryCanSend());
     $('ask-submit').textContent='Send to OpenAI';$('ask-question-label').textContent='Ask about this workspace';
     $('conversation-stop').hidden=!conversationBusy||conversationOperation!=='turn';$('conversation-check').disabled=conversationBusy;
     $('conversation-check').textContent=conversationState?'Check this conversation':'Check availability';
     $('conversation-clear').hidden=!conversationState;$('conversation-clear').disabled=conversationBusy;$('conversation-clear-yes').disabled=conversationBusy;$('conversation-clear-no').disabled=conversationBusy;$('conversation-forget').disabled=conversationBusy;
     if(typeof savedAssistantFields==='function')savedAssistantFields();
+    if(typeof memoryFields==='function')memoryFields();
   }
   function renderConversation() {
     if(!conversationMode()){if(conversationScope!==null)resetConversation();return false;}
@@ -59,6 +61,7 @@
     const amount=value=>Number.isSafeInteger(value)&&value>=0?'$'+(value/1000000).toFixed(6):'unavailable';
     $('conversation-allowance').textContent=conversationAvailability?.ready?`Checked remaining lifetime allowance: ${amount(availability.remaining_microusd)}. Maximum held before one reply: ${amount(availability.maximum_turn_microusd)}. Final access and allowance are checked again on Send.`:'The shared $5 lifetime trial is unavailable until its connection and cost bounds are approved.';
     if(typeof renderSavedAssistants==='function')renderSavedAssistants();
+    if(typeof renderPrivateMemory==='function')renderPrivateMemory();
     conversationFields();return true;
   }
   function conversationSource(source) {
@@ -74,6 +77,7 @@
     if(typeof result.reply!=='string'||!conversationScoped(result)||result.mode!=='openai_generated'||result.provider_dispatch!==true||result.session_id!==conversationState?.session_id||result.request_id!==requestId||!Array.isArray(result.sources)||!result.sources.every(conversationSource))throw new Error('This reply does not match the current workspace and source records. Check this conversation before continuing.');
     const refs=result.sources.map(source=>source.ref),amount=value=>value===null||Number.isSafeInteger(value);
     if(!Array.isArray(result.calculations)||!result.calculations.every(value=>typeof value.project==='string'&&typeof value.currency==='string'&&['estimate_minor','recorded_cost_minor','difference_minor'].every(key=>amount(value[key]))&&Array.isArray(value.input_refs)&&value.input_refs.every(ref=>refs.includes(ref)))||!Array.isArray(result.cited_refs)||!result.cited_refs.every(ref=>refs.includes(ref)))throw new Error('The reply evidence cannot be inspected.');
+    if(result.memory_opted_in===true&&(!Array.isArray(result.memory_used)||result.memory_used.length>8||!result.memory_used.every(item=>typeof item.id==='string'&&Number.isInteger(item.version)&&typeof item.captured_at==='string'&&typeof item.expires_at==='string'&&(item.type==='preference'&&({reply_length:['brief','standard'],date_style:['iso','long']})[item.key]?.includes(item.value)||item.type==='source_observation'&&refs.includes(item.source_ref)&&['status','priority','due_on','amount_minor','currency','basis'].includes(item.field)&&(item.value===null||typeof item.value==='string'||Number.isSafeInteger(item.value))))))throw new Error('Typed memory evidence cannot be inspected.');
     const answer=chatMessage(result.reply);answer.classList.add('conversation-answer');
     conversationText(answer,'p',result.provider_simulated?'Simulated OpenAI reply · local testing · no paid API call':'AI-generated text · check current sources','caption');
     if(result.sample_data)conversationText(answer,'p','Sample records · no live campus feed','caption');
@@ -94,18 +98,29 @@
       const facts=Object.entries(source.facts||{}).filter(([key])=>key!=='version').map(([key,value])=>`${key.replaceAll('_',' ')}: ${value??'not recorded'}`).join(' · ');
       conversationText(card,'p',facts,'caption');
       if(result.cited_refs?.includes(source.ref))conversationText(card,'p','Cited in this reply','caption');evidence.append(card);
+      if(typeof memorySourceAction==='function')memorySourceAction(card,source);
     }
     answer.append(evidence);
+    if(result.memory_opted_in){
+      const used=document.createElement('details');conversationText(used,'summary',`Inspect ${result.memory_used?.length||0} typed memory entries used`);
+      for(const item of result.memory_used||[]){
+        conversationText(used,'p',`${item.type==='preference'?'Formatting preference':'Current scoped observation'} · ${item.key||item.field}: ${item.value??'not recorded'} · Confirmed ${item.captured_at}; expires ${item.expires_at}.`,'caption');
+        if(item.source_ref){const source=result.sources.find(value=>value.ref===item.source_ref),link=conversationText(used,'a',`Observation source: ${source.title}`);link.href=transport.href(source.url);}
+      }
+      answer.append(used);
+    }
     conversationText(answer,'p',`As of ${result.as_of}. Current linked records remain the evidence; generated text can be wrong.`,'caption');
     answer.scrollIntoView({block:'nearest'});return true;
   }
   async function conversationSend(event) {
     event.preventDefault();if(!conversationMode()||conversationBusy||conversationAvailability?.ready!==true||!conversationScoped(conversationAvailability)||conversationState&&conversationState.phase!=='active')return;
     if(typeof savedAssistantCanSend==='function'&&!savedAssistantCanSend())return;
+    if(typeof memoryCanSend==='function'&&!memoryCanSend())return;
     const question=$('ask-question').value.trim(),intent=$('conversation-intent').value;if(!question||conversationAvailability.intents?.[intent]!==true||(typeof savedAssistantAllows==='function'&&!savedAssistantAllows(intent)))return;
     const previousState=conversationState?{...conversationState}:null;
     const session=conversationState?.session_id||crypto.randomUUID(),requestId=crypto.randomUUID(),body={area_id:area,intent,session_id:session,request_id:requestId,question};
     if(typeof selectedSavedAssistant==='function'&&selectedSavedAssistant())body.assistant_id=selectedSavedAssistant().id;
+    if(typeof memoryEnabled==='function'&&memoryEnabled()&&$('memory-use').checked)body.use_memory=true;
     if(intent==='building'){body.building_id=$('conversation-building').value;if(!body.building_id)return;}
     if(!conversationReceipt({session_id:session,request_id:requestId})){$('conversation-status').textContent='This browser cannot retain receipt IDs for recovery. No question was sent.';return;}
     conversationState={session_id:session,request_id:requestId,phase:'waiting'};conversationBusy=true;conversationOperation='turn';
@@ -144,6 +159,8 @@
       $('chat-log').replaceChildren();$('ask-question').value='';
       if(result.assistant_id&&(!(typeof selectedSavedAssistant==='function')||!savedAssistantEnabled()||!savedAssistantList().some(value=>value.id===result.assistant_id)))throw new Error('Saved assistant is unavailable.');
       if(typeof selectedSavedAssistant==='function')$('saved-assistant-choice').value=result.assistant_id||'';
+      if(result.use_memory&&(!(typeof memoryEnabled==='function')||!memoryEnabled()))throw new Error('Private memory is unavailable.');
+      if(typeof memoryEnabled==='function'&&memoryEnabled())$('memory-use').checked=result.use_memory===true;
       $('conversation-intent').value=result.intent;$('conversation-building').value=result.building_id||'';
       if(!Array.isArray(result.history)||!result.history.every(item=>['user','assistant'].includes(item.role)&&typeof item.text==='string'))throw new Error('Conversation history is invalid.');
       const history=result.history,previous=result.last_result?history.slice(0,-1):history;
@@ -163,6 +180,7 @@
       const result=await api(`${nextBase}/conversation/sessions/${encodeURIComponent(id)}/end${nextQuery()}`,{area_id:area,confirm_end:true});
       if(!conversationCurrent(generation,scope))return;if(result.session_id!==id||result.status!=='ended')throw new Error('Clear outcome unconfirmed.');
       conversationReceipt(null);conversationState=null;$('chat-log').replaceChildren();$('ask-question').value='';$('conversation-clear-confirm').hidden=true;
+      if(typeof memoryEnabled==='function'&&memoryEnabled())$('memory-use').checked=false;
       $('conversation-status').textContent='Conversation content cleared. Existing reservations and metering evidence remain.';
     }catch(error){if(conversationCurrent(generation,scope)){
       $('conversation-forget').hidden=error.status!==404;
@@ -173,6 +191,7 @@
   $('conversation-forget').onclick=()=>{
     if(conversationBusy||$('conversation-forget').hidden||!conversationReceipt(null))return;
     conversationGeneration++;conversationState=null;conversationAvailability=null;data.conversation={...data.conversation,ready:false};
+    if(typeof memoryEnabled==='function'&&memoryEnabled())$('memory-use').checked=false;
     $('chat-log').replaceChildren();$('ask-question').value='';$('conversation-clear-confirm').hidden=true;$('conversation-forget').hidden=true;
     $('conversation-status').textContent='Receipt removed from this browser only. Server content and existing cost exposure remain. Check current availability before starting a new conversation.';conversationFields();$('conversation-check').focus();
   };

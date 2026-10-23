@@ -10,7 +10,7 @@
     <label>Purpose<textarea id="saved-assistant-purpose" maxlength="250" rows="2" required></textarea></label>
     <label>Instructions<textarea id="saved-assistant-instructions" maxlength="500" rows="3" required></textarea></label>
     <fieldset><legend>Read-only checks</legend><p class="caption">Only checked, currently available checks are saved.</p><label><input type="checkbox" value="overview" data-saved-assistant-check> Current work</label><label><input type="checkbox" value="building" data-saved-assistant-check> Saved building work</label><label><input type="checkbox" value="costs" data-saved-assistant-check> Recorded costs and estimates</label></fieldset>
-    <p class="caption">Private to your account and this department. Save style and focus here, never passwords, keys or facts you need kept current. Persistent preference/fact memory is a separate feature. No provider, model, send or work-write tool can be added.</p>
+    <p class="caption">Private to your account and this department. Save style and focus here, never passwords, keys or facts you need kept current. Memory uses a separate explicit choice. No provider, model, send or work-write tool can be added.</p>
     <label class="saved-assistant-confirm"><input type="checkbox" id="saved-assistant-confirm"> I reviewed this private configuration. It changes no work or access.</label>
     <div class="actions"><button type="submit" class="button primary" id="saved-assistant-save">Save private assistant</button><button type="button" class="button" id="saved-assistant-cancel">Close configuration</button><button type="button" class="button" id="saved-assistant-delete" hidden>Delete saved assistant</button></div>
     <p class="caption" id="saved-assistant-provenance"></p>

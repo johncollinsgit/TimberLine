@@ -520,7 +520,12 @@ test("conversation finale distinguishes approved text, unavailable setup and det
     assert.ok(tour.describe(6,{}).targets.includes("saved-assistant-choice"));
     snapshot.data.saved_assistants.can_manage=true; tour.update(snapshot);
     assert.equal(tour.describe(6,{}).cards[3][0],"Make a private assistant");
-    assert.match(tour.describe(6,{}).cards[3][1],/persistent memory is a separate feature/);
+    assert.match(tour.describe(6,{}).cards[3][1],/memory uses a separate explicit choice/);
+    assert.ok(!tour.describe(6,{}).targets.includes("memory-use"));
+    snapshot.data.features.private_memory=true; tour.update(snapshot);
+    assert.ok(tour.describe(6,{}).targets.includes("memory-use"));
+    assert.ok(tour.describe(6,{}).targets.includes("memory-manager"));
+    assert.match(JSON.stringify(tour.describe(6,{}).cards),/changed sources or permissions withhold old observations/);
     snapshot.data.features.conversation_ui=false; snapshot.data.features.read_only_assistant=true; tour.update(snapshot);
     assert.equal(tour.describe(6,{}).target,"read-only-assistant");
     assert.match(tour.describe(6,{}).text,/use no AI model/);

@@ -68,6 +68,7 @@
       const labels = {amount_minor:'Amount in minor units',basis:'Basis',due_on:'Due date',updated_at:'Recorded at',priority:'Priority',status:'Status'};
       readOnlyText(card, 'p', Object.entries(source.facts).map(([key, value]) => `${labels[key] || key}: ${value ?? 'not recorded'}`).join(' · '));
       readOnlyText(card, 'p', source.ref, 'caption'); details.append(card);
+      if (typeof memorySourceAction === 'function') memorySourceAction(card, source);
     }
     host.append(details);
     readOnlyText(host, 'p', `As of ${result.as_of}. ${result.coverage}`, 'caption');

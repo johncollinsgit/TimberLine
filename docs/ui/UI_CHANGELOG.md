@@ -1,3 +1,15 @@
+## 2026-10-23 — Explicit typed private memory candidate
+
+- Ask offers inspect/edit/delete for account-and-department memory, initially off
+  for each conversation. Only typed formatting choices and explicitly previewed
+  current source observations can be saved; no arbitrary fact/secret field exists.
+- Each entry shows confirmation provenance and expiry. Changed or inaccessible
+  sources withhold observations; no additional retrieval authority is granted.
+- Save/delete confirmation, exact uncertain retries, late-response fences and
+  current scope checks mirror the existing Ask lifecycle. The matching tour
+  describes opt-in and current-source limits. Voice remains separate.
+- Source-only, default off; local fixture evidence uses fake HTTP and sample data.
+
 ## 2026-10-23 — Private saved assistants in Ask (separate disabled candidate)
 
 Let an authorized user explicitly save, inspect, edit and delete a private assistant's purpose, instructions and fixed currently permitted read checks in the existing Ask pane. Configuration never grants roles, adds provider tools, chooses a model/account or captures chat automatically. Profile selection is frozen during a short conversation; edits/deletion invalidate its stale context. Exact retries retain UUID/version, confirmations identify the configuration action, and role/department resets clear form content. Browser drafts are not persisted. The same tour points to the reader selector and distinguishes saved configuration from queued persistent memory. Native controls and responsive editor targets retain the existing accessibility palette and sizing. Local fake-provider evidence is separate from live model/voice acceptance.

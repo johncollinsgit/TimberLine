@@ -1,3 +1,15 @@
+## Typed private memory candidate (October 23; disabled, not live-verified)
+
+The existing Ask pane has separately gated explicit typed formatting preferences
+and bounded source observations, with encrypted per-account/department storage,
+provenance, versioned confirmation/edit/delete and 1/7/30-day retention. No free-text
+facts or automatic chat capture are accepted. Every observation is rechecked
+against current canonical source/access and can reach a model only after explicit
+opt-in and only when that source already belongs to the selected check. Expiry
+withholds values immediately; activation additionally requires approved bounded
+cleanup. No paid route, credential, provider connection or schedule is activated.
+See [the memory contract](docs/operations/enterprise-assistant-memory.md).
+
 ## Saved assistant configuration candidate (October 23; disabled, not live-verified)
 
 A separate default-off flag adds private purpose/instructions/fixed read-check

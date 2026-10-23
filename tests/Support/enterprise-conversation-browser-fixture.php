@@ -30,7 +30,8 @@ final class ConversationBrowserFixture extends \Tests\Support\EnterpriseConversa
         $silo->assertReady();
         $this->user->password = \Illuminate\Support\Facades\Hash::make('Fictional-conversation-browser-only!');
         $this->user->save();
-        config(['enterprise.conversation.ui_enabled' => true, 'enterprise.conversation.saved_assistants_enabled' => true]);
+        config(['enterprise.conversation.ui_enabled' => true, 'enterprise.conversation.saved_assistants_enabled' => true,
+            'enterprise.conversation.memory_enabled' => true, 'enterprise.conversation.memory_retention_ready' => true]);
         foreach ([[1000, 'estimate'], [1500, 'recorded_cost']] as [$amount, $basis]) {
             $this->postJson($this->url('/enterprise/planning'), ['kind' => 'cost', 'id' => (string) \Illuminate\Support\Str::uuid(),
                 'request_id' => (string) \Illuminate\Support\Str::uuid(), 'area_id' => $this->area, 'expected_version' => 0,

@@ -44,3 +44,7 @@
 #saved-assistants{border:1px solid var(--line);border-radius:8px;padding:16px}#saved-assistants h4{font:20px Georgia,serif;margin:0}
 #saved-assistants fieldset{border:1px solid var(--line);padding:12px}#saved-assistants fieldset label,#saved-assistants .saved-assistant-confirm{display:flex;align-items:center;gap:10px;min-height:44px}
 #saved-assistants input[type=checkbox]{min-height:24px;height:24px;width:24px;flex:0 0 24px}#saved-assistant-delete-confirm{border-top:1px solid var(--line);padding-top:14px}
+
+#private-memory{border:1px solid var(--line);border-radius:8px;padding:16px}#private-memory h4{font:20px Georgia,serif;margin:0}#private-memory h5{font:17px Georgia,serif;margin:0}
+#private-memory .memory-check{display:flex;align-items:center;gap:10px;min-height:44px}#private-memory input[type=checkbox]{min-height:24px;height:24px;width:24px;flex:0 0 24px}
+#memory-form,#memory-delete-confirm{border-top:1px solid var(--line);padding-top:14px;margin-top:14px}#memory-list a{min-height:44px;display:inline-flex;align-items:center;overflow-wrap:anywhere}

@@ -28,7 +28,7 @@ class Assistant
         return $row;
     }
 
-    private function snapshot(Tenant $tenant, User $user, string $area, string $intent, ?string $building, ?string $assistantId = null): array
+    private function snapshot(Tenant $tenant, User $user, string $area, string $intent, ?string $building, ?string $assistantId = null, bool $useMemory = false): array
     {
         $authority = $this->connection->authority($tenant, $user, $area);
         $profile = $assistantId !== null ? app(SavedAssistants::class)->context($tenant, $user, $area, $assistantId, $intent) : null;
@@ -47,18 +47,19 @@ class Assistant
                 'recorded_cost_minor' => $recorded !== [] ? $sum($recorded) : null, 'difference_minor' => $estimate !== [] && $recorded !== [] ? $sum($recorded) - $sum($estimate) : null,
                 'input_refs' => [...$estimate, ...$recorded], 'basis' => 'Checked selected inputs only; no approved budget.'];
         }
+        $memory = $useMemory ? app(PrivateMemory::class)->context($tenant, $user, $area, $sources) : [];
         $stamp = AskEverbranch::digest(['actor' => $authority['actor'], 'intent' => $intent, 'building' => $building,
             'sources' => $sources, 'calculations' => $calculations, 'connection' => $authority['settings']['settings_sha256']]
-            + ($profile !== null ? ['assistant_configuration' => $profile] : []));
+            + ($profile !== null ? ['assistant_configuration' => $profile] : []) + ($useMemory ? ['private_memory' => $memory] : []));
 
-        return ['sources' => $sources, 'calculations' => $calculations, 'stamp' => $stamp, 'settings' => $authority['settings'], 'assistant_configuration' => $profile];
+        return ['sources' => $sources, 'calculations' => $calculations, 'stamp' => $stamp, 'settings' => $authority['settings'], 'assistant_configuration' => $profile, 'private_memory' => $memory];
     }
 
     private function assertCurrent(Tenant $tenant, User $user, string $area, TeamOperationRecord $row): array
     {
         abort_unless($row->status === 'pending', 409, 'This conversation is no longer awaiting that turn.');
         $data = $row->data;
-        $current = $this->snapshot($tenant, $user, $area, $data['intent'], $data['building_id'], $data['assistant_id'] ?? null);
+        $current = $this->snapshot($tenant, $user, $area, $data['intent'], $data['building_id'], $data['assistant_id'] ?? null, (bool) ($data['use_memory'] ?? false));
         abort_unless(hash_equals($data['stamp'], $current['stamp']), 409, 'Current records, permissions or connection approval changed. Start a new conversation.');
 
         return $current;
@@ -82,7 +83,7 @@ class Assistant
         return $value;
     }
 
-    public function turn(Tenant $tenant, User $user, string $area, string $intent, ?string $building, string $question, string $sessionId, string $requestId, ?string $assistantId = null): array
+    public function turn(Tenant $tenant, User $user, string $area, string $intent, ?string $building, string $question, string $sessionId, string $requestId, ?string $assistantId = null, bool $useMemory = false): array
     {
         $this->connection->authority($tenant, $user, $area);
         if (preg_match('/^\s*(?:(?:please|can you|could you|would you)\s+)?(?:send|email|text|sms|delete|assign|approve|pay|reschedule|cancel|notify|purchase|reassign|remove)\b/iu', $question)) {
@@ -90,8 +91,8 @@ class Assistant
                 'sources' => [], 'calculations' => [], 'sample_data' => true, 'session_id' => $sessionId, 'request_id' => $requestId];
         }
         app(VoiceRetention::class)->prune(100, $tenant->id);
-        $inputHash = hash('sha256', json_encode([$intent, $building, $question, ...($assistantId !== null ? [$assistantId] : [])], JSON_THROW_ON_ERROR));
-        $claim = $this->store->locked($tenant, function () use ($tenant, $user, $area, $intent, $building, $question, $sessionId, $requestId, $inputHash, $assistantId): array {
+        $inputHash = hash('sha256', json_encode([$intent, $building, $question, ...($assistantId !== null ? [$assistantId] : []), ...($useMemory ? [true] : [])], JSON_THROW_ON_ERROR));
+        $claim = $this->store->locked($tenant, function () use ($tenant, $user, $area, $intent, $building, $question, $sessionId, $requestId, $inputHash, $assistantId, $useMemory): array {
             $this->connection->authority($tenant, $user, $area);
             $existing = TeamOperationRecord::query()->whereKey($sessionId)->exists();
             if ($existing) {
@@ -103,12 +104,12 @@ class Assistant
                     'kind' => 'ent_conversation_session', 'assigned_user_id' => $user->id, 'source_key' => hash('sha256', 'conversation:'.$user->id.':'.$sessionId),
                     'visibility' => 'area', 'title' => 'Private short conversation', 'status' => 'active', 'version' => 1, 'voice_expires_at' => now()->addMinutes(10),
                     'data' => ['user_id' => (string) $user->id, 'expires_at' => now()->addMinutes(10)->toIso8601String(), 'intent' => $intent,
-                        'building_id' => $building, 'assistant_id' => $assistantId, 'turns' => 0, 'history' => [], 'seen' => []]]);
+                        'building_id' => $building, 'assistant_id' => $assistantId, 'use_memory' => $useMemory, 'turns' => 0, 'history' => [], 'seen' => []]]);
             }
             $data = $row->data;
-            abort_unless(in_array($row->status, ['active', 'pending'], true) && $data['intent'] === $intent && $data['building_id'] === $building && ($data['assistant_id'] ?? null) === $assistantId,
+            abort_unless(in_array($row->status, ['active', 'pending'], true) && $data['intent'] === $intent && $data['building_id'] === $building && ($data['assistant_id'] ?? null) === $assistantId && (bool) ($data['use_memory'] ?? false) === $useMemory,
                 409, 'This conversation ended or belongs to another record check. Start a new one.');
-            $snapshot = $this->snapshot($tenant, $user, $area, $intent, $building, $assistantId);
+            $snapshot = $this->snapshot($tenant, $user, $area, $intent, $building, $assistantId, $useMemory);
             abort_unless(! isset($data['stamp']) || hash_equals($data['stamp'], $snapshot['stamp']), 409, 'Historical sources or access changed. Start a new conversation.');
             if (($data['last_uuid'] ?? null) === $requestId) {
                 abort_unless(hash_equals($data['input_hash'], $inputHash), 409, 'This turn key belongs to different text.');
@@ -131,6 +132,9 @@ class Assistant
                 'calculations' => $snapshot['calculations'], 'coverage' => 'At most eight current authorized saved sources. Sample data; no approved budget, live feed or staffing capacity.'];
             if ($snapshot['assistant_configuration'] !== null) {
                 $payload['assistant_configuration'] = $snapshot['assistant_configuration'];
+            }
+            if ($useMemory) {
+                $payload['private_memory'] = $snapshot['private_memory'];
             }
             Responses::assertPayload($payload);
             $row->data = array_replace($data, ['stamp' => $snapshot['stamp'], 'input_hash' => $inputHash, 'pending_uuid' => $requestId, 'pending_payload' => $payload]);
@@ -179,8 +183,9 @@ class Assistant
                 'reply' => $value['answer'], 'scope' => ['tenant_id' => (string) $tenant->id, 'user_id' => (string) $user->id, 'area_id' => $area],
                 'session_id' => $sessionId, 'request_id' => $requestId, 'sample_data' => true, 'as_of' => now()->toIso8601String(),
                 'sources' => $current['sources'], 'cited_refs' => $value['refs'],
+                'memory_opted_in' => (bool) ($data['use_memory'] ?? false), 'memory_used' => $current['private_memory'],
                 'calculations' => $current['calculations'], 'usage' => ['receipt_id' => $reservation['id'], 'held_or_charged_ceiling_microusd' => $response['maximum_actual_microusd'], 'provider_invoice_reconciled' => false],
-                'notice' => 'OpenAI-generated text; check the linked current sources. Calculations are server computed. No work changed or message sent. A selected saved assistant supplies preferences only; persistent preference/fact memory is unavailable. This conversation expires after ten minutes.'];
+                'notice' => 'OpenAI-generated text; check the linked current sources. Calculations are server computed. No work changed or message sent. A selected saved assistant supplies preferences only; explicitly opted-in typed memory supplies only current scoped preferences/observations, never additional authority. This conversation expires after ten minutes.'];
             $row->data = array_replace($data, ['history' => array_slice([...$data['history'], ['role' => 'user', 'text' => $data['pending_payload']['question']],
                 ['role' => 'assistant', 'text' => $value['answer']]], -6), 'turns' => $data['turns'] + 1, 'seen' => [...$data['seen'], $requestId],
                 'last_uuid' => $requestId, 'last_result' => $result, 'pending_uuid' => null, 'pending_payload' => null]);
@@ -200,13 +205,13 @@ class Assistant
         $row = $this->row($tenant, $user, $area, $id);
         abort_unless(in_array($row->status, ['active', 'pending'], true), 409, 'This conversation ended. Start a new one.');
         $data = $row->data;
-        $current = $this->snapshot($tenant, $user, $area, $data['intent'], $data['building_id'], $data['assistant_id'] ?? null);
+        $current = $this->snapshot($tenant, $user, $area, $data['intent'], $data['building_id'], $data['assistant_id'] ?? null, (bool) ($data['use_memory'] ?? false));
         abort_unless(isset($data['stamp']) && hash_equals($data['stamp'], $current['stamp']), 409,
             'Current sources or access changed. Clear this conversation before starting another.');
 
         return ['scope' => ['tenant_id' => (string) $tenant->id, 'user_id' => (string) $user->id, 'area_id' => $area],
             'session_id' => $id, 'state' => $row->status === 'pending' ? 'unconfirmed' : 'active', 'intent' => $data['intent'],
-            'building_id' => $data['building_id'], 'assistant_id' => $data['assistant_id'] ?? null, 'expires_at' => $data['expires_at'], 'history' => $data['history'],
+            'building_id' => $data['building_id'], 'assistant_id' => $data['assistant_id'] ?? null, 'use_memory' => (bool) ($data['use_memory'] ?? false), 'expires_at' => $data['expires_at'], 'history' => $data['history'],
             'last_result' => $row->status === 'active' ? ($data['last_result'] ?? null) : null,
             'pending_request_id' => $data['pending_uuid'] ?? null, 'provider_dispatch' => false,
             'message' => $row->status === 'pending' ? 'This turn is pending or uncertain. Cost exposure stays held; status checks never repeat the provider request.' : 'Restored from the current authorized short conversation.'];

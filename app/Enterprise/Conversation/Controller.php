@@ -31,14 +31,14 @@ class Controller
     {
         $input = $request->validate(['area_id' => ['required', 'uuid'], 'intent' => ['required', 'in:overview,building,costs'],
             'building_id' => ['nullable', 'required_if:intent,building', 'prohibited_unless:intent,building', 'uuid'],
-            'assistant_id' => ['nullable', 'uuid'], 'session_id' => ['required', 'uuid'], 'request_id' => ['required', 'uuid'], 'question' => ['required', 'string', 'max:1500'],
-            'history' => ['prohibited'], 'actor' => ['prohibited'], 'role' => ['prohibited'], 'role_preview' => ['prohibited'],
+            'use_memory' => ['sometimes', 'boolean'], 'assistant_id' => ['nullable', 'uuid'], 'session_id' => ['required', 'uuid'], 'request_id' => ['required', 'uuid'], 'question' => ['required', 'string', 'max:1500'],
+            'memory' => ['prohibited'], 'private_memory' => ['prohibited'], 'memory_ids' => ['prohibited'], 'history' => ['prohibited'], 'actor' => ['prohibited'], 'role' => ['prohibited'], 'role_preview' => ['prohibited'],
             'tenant_id' => ['prohibited'], 'user_id' => ['prohibited'], 'silo_id' => ['prohibited'], 'model' => ['prohibited'],
             'api_key' => ['prohibited'], 'project_id' => ['prohibited'], 'input_ceiling_microusd_per_million' => ['prohibited'],
             'tools' => ['prohibited'], 'source_url' => ['prohibited'], 'amount_minor' => ['prohibited'], 'confirmed' => ['prohibited']]);
 
         return response()->json($assistant->turn($request->attributes->get('current_tenant'), $request->user(), $input['area_id'],
-            $input['intent'], $input['building_id'] ?? null, $input['question'], $input['session_id'], $input['request_id'], $input['assistant_id'] ?? null))->header('Cache-Control', 'private, no-store');
+            $input['intent'], $input['building_id'] ?? null, $input['question'], $input['session_id'], $input['request_id'], $input['assistant_id'] ?? null, (bool) ($input['use_memory'] ?? false)))->header('Cache-Control', 'private, no-store');
     }
 
     public function end(Request $request, string $id, Assistant $assistant)

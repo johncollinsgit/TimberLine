@@ -3,6 +3,7 @@
   <p class="caption" id="conversation-context"></p>
   <p class="caption">OpenAI replies use your current saved records. Check linked sources; estimates are not approved budgets.</p>
   @include('enterprise.saved-assistant-controls')
+  @include('enterprise.private-memory-controls')
   <div class="field-pair">
     <label>Conversation focus<select id="conversation-intent"><option value="overview">Current work</option><option value="building">A saved building</option><option value="costs">Recorded costs and estimates</option></select></label>
     <label id="conversation-building-field" hidden>Saved building<select id="conversation-building"></select></label>

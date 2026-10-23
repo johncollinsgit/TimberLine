@@ -109,6 +109,10 @@ Route::middleware(['auth', 'verified', ResolveWorkspace::class, \App\Http\Middle
     Route::get('/enterprise/requests/{id}/history', [EnterpriseController::class, 'history'])->whereUuid('id')->name('enterprise.history');
     Route::get('/enterprise/planning', [\App\Enterprise\PlanningController::class, 'index'])->name('enterprise.planning');
     Route::post('/enterprise/planning', [\App\Enterprise\PlanningController::class, 'save'])->name('enterprise.planning.save');
+    Route::get('/enterprise/conversation/memories', [\App\Enterprise\Conversation\MemoryController::class, 'index'])->name('enterprise.conversation.memories');
+    Route::get('/enterprise/conversation/memories/preview', [\App\Enterprise\Conversation\MemoryController::class, 'preview'])->name('enterprise.conversation.memories.preview');
+    Route::post('/enterprise/conversation/memories', [\App\Enterprise\Conversation\MemoryController::class, 'save'])->name('enterprise.conversation.memories.save');
+    Route::post('/enterprise/conversation/memories/{id}/delete', [\App\Enterprise\Conversation\MemoryController::class, 'delete'])->whereUuid('id')->name('enterprise.conversation.memories.delete');
     Route::get('/enterprise/conversation/assistants', [\App\Enterprise\Conversation\SavedAssistantController::class, 'index'])->name('enterprise.conversation.assistants');
     Route::get('/enterprise/conversation/assistants/{id}', [\App\Enterprise\Conversation\SavedAssistantController::class, 'show'])->whereUuid('id')->name('enterprise.conversation.assistants.show');
     Route::post('/enterprise/conversation/assistants', [\App\Enterprise\Conversation\SavedAssistantController::class, 'save'])->name('enterprise.conversation.assistants.save');
