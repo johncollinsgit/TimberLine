@@ -47,3 +47,11 @@ isolation, hidden owner tests, retry deduplication, rejected extra fields,
 revocation, current-build checks and storage limits. The actual HTTPS browser
 check covers proposal CSP, section changes, campus pages, display names, scene
 selection and natural final-scene playback in Chromium and WebKit.
+
+All proposal routes use the framework session lock before loading the session.
+Background activity cannot save an older snapshot over a new name, password
+grant or financial cart. The lock uses the existing runtime cache store with
+a ten-second lease and wait bound.
+
+The HTTPS activity check also overlaps reports and name saves against real PHP
+workers on macOS/Linux, verifying the current name after each concurrent batch.

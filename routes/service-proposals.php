@@ -43,3 +43,11 @@ Route::middleware([\App\Proposals\ResponsePolicy::class, \App\Proposals\RecordAc
     Route::post('/usage-estimate', [RecipientController::class, 'estimate'])->name('estimate');
     Route::post('/request-agreement', [RecipientController::class, 'requestAgreement'])->name('request');
 });
+
+// Activity and foreground name/comment requests share one session. Lock before
+// loading it so a late report cannot overwrite a newer name, grant or cart.
+foreach (Route::getRoutes() as $proposalRoute) {
+    if (str_starts_with((string) $proposalRoute->getName(), 'service-proposals.')) {
+        $proposalRoute->block(10, 10);
+    }
+}

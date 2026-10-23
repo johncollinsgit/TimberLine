@@ -135,3 +135,15 @@ test('journal links and modified encrypted records fail without following the li
     expect(app(Activity::class)->read($this->version)['unavailable'])->toBeTrue()
         ->and(app(Activity::class)->read($this->version)['events'])->toBeEmpty();
 });
+
+test('background activity and foreground proposal actions share the framework session lock', function (): void {
+    $this->get($this->url)->assertOk();
+    foreach (['recipient.activity', 'recipient.show', 'recipient.unlock', 'recipient.reviewer-name',
+        'recipient.campus', 'recipient.campus.name', 'recipient.campus.comment', 'recipient.financial',
+        'owner.publish', 'owner.activity'] as $name) {
+        $route = \Illuminate\Support\Facades\Route::getRoutes()->getByName('service-proposals.'.$name);
+        expect($route)->not->toBeNull()
+            ->and($route->locksFor())->toBe(10)
+            ->and($route->waitsFor())->toBe(10);
+    }
+});

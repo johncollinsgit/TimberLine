@@ -21,7 +21,7 @@ await writeFile(database, '');
 const origin = 'https://127.0.0.1:8895';
 const evidence = resolve(process.env.PROPOSAL_BROWSER_EVIDENCE || `../evidence/proposals/review-${engine}`);
 await mkdir(evidence, {recursive: true});
-const env = {...process.env, PROPOSAL_REVIEW_BROWSER: '1', APP_ENV: 'testing',
+const env = {...process.env, ...(process.platform==='win32'?{}:{PHP_CLI_SERVER_WORKERS:'4'}), PROPOSAL_REVIEW_BROWSER: '1', APP_ENV: 'testing',
   APP_URL: origin, DB_CONNECTION: 'sqlite', DB_DATABASE: database,
   APP_KEY: 'base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=', LOG_CHANNEL: 'null'};
 const fixture = (...args) => {
@@ -39,32 +39,17 @@ try {
     ['req','-x509','-newkey','rsa:2048','-nodes','-keyout',keyFile,'-out',certFile,'-days','1','-subj','/CN=127.0.0.1','-addext','subjectAltName=IP:127.0.0.1'], {encoding:'utf8',windowsHide:true});
   assert.equal(generated.status,0,'Disposable loopback certificate generation failed');
   const key=await readFile(keyFile),cert=await readFile(certFile);await unlink(keyFile);await unlink(certFile);
-  server=spawn(php,['-S','127.0.0.1:8894','tests/Support/proposal-review-browser-router.php'],{env,windowsHide:true,stdio:['ignore','pipe','pipe']});
+  server=spawn(php,['-S','127.0.0.1:8894','tests/Support/proposal-review-browser-router.php'],{env,windowsHide:true,detached:process.platform!=='win32',stdio:['ignore','pipe','pipe']});
   for(const stream of [server.stdout,server.stderr])stream.on('data',chunk=>{serverLog+=chunk;});
   proxy=createServer({key,cert},(req,res)=>{
-    // Keep the actual public 30/min limiter enabled, including refreshes and
-    // failed requests. The synthetic multi-person scenario respects its budget.
-    serial=serial.then(async()=>{
-      await new Promise(done=>setTimeout(done,Math.max(0,dispatched+2150-Date.now())));
-      // A browser may cancel a queued refresh while navigating. It must not
-      // leave an unended upstream request holding every later real request.
-      if(req.destroyed||res.destroyed)return;
-      dispatched=Date.now();
-      await new Promise(done=>{
-        let upstream;
-        const finish=()=>{req.off('aborted',abort);res.off('close',abort);done();};
-        const abort=()=>{upstream?.destroy();finish();};
-        upstream=httpRequest({hostname:'127.0.0.1',port:8894,path:req.url,method:req.method,headers:req.headers},response=>{
-          if(res.destroyed){response.destroy();finish();return;}
-          res.writeHead(response.statusCode,response.headers);response.pipe(res);
-          response.once('end',finish);response.once('close',finish);
-        });
-        req.once('aborted',abort);res.once('close',abort);
-        upstream.once('error',()=>{if(!res.destroyed){if(!res.headersSent)res.writeHead(503);res.end('Fixture starting');}finish();});
-        if(req.aborted||res.destroyed){abort();return;}
-        if(req.readableEnded)upstream.end();else req.pipe(upstream);
-      });
+    // This short flow stays below the ordinary request budget. Forward in
+    // parallel to real PHP workers so telemetry/name saves overlap.
+    const upstream=httpRequest({hostname:'127.0.0.1',port:8894,path:req.url,method:req.method,headers:req.headers},response=>{
+      if(res.destroyed){response.destroy();return;}
+      res.writeHead(response.statusCode,response.headers);response.pipe(res);
     });
+    upstream.on('error',()=>{if(!res.destroyed){if(!res.headersSent)res.writeHead(503);res.end('Fixture starting');}});
+    req.on('aborted',()=>upstream.destroy());res.on('close',()=>{if(!res.writableEnded)upstream.destroy();});req.pipe(upstream);
   });proxy.listen(8895,'127.0.0.1');await once(proxy,'listening');
   browser=await(engine==='webkit'?webkit:chromium).launch({headless:true});
   const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1440,height:1000}});
@@ -91,6 +76,16 @@ try {
   await page.locator('#review-close').click();
   const pageSaved=page.waitForResponse(response=>response.url().endsWith('/activity')&&response.request().postDataJSON()?.event==='campus_page'&&response.request().postDataJSON()?.page==='projects');
   await page.locator('[data-section="projects"]').first().click();assert.equal((await pageSaved).status(),200);
+  const boot=await page.evaluate(()=>globalThis.EverbranchCampusReviewBoot);
+  const headers={Accept:'application/json','X-CSRF-TOKEN':boot.csrf_token};
+  for(const name of ['Sarah','Paul','Ross']){
+    const report=()=>context.request.post(boot.activity_url,{headers,data:{event:'proposal_section',page:'scope',scene:null,event_id:crypto.randomUUID(),version_hash:boot.version_hash}});
+    const responses=await Promise.all([report(),context.request.post(boot.urls.name,{headers,data:{version_hash:boot.version_hash,build_id:boot.build_id,source_hash:boot.source_hash,reviewer_name:name}}),report()]);
+    for(const response of responses)assert.equal(response.status(),200);
+    const current=await context.request.get(boot.urls.data,{headers:{Accept:'application/json'}});
+    assert.equal(current.status(),200);assert.equal((await current.json()).review.reviewer_name,name,'Parallel telemetry must retain the newer display name');
+  }
+  console.log(`${engine}: parallel activity/name requests preserve the current server name`);
   await page.locator('[data-tour-open]').first().click();
   await page.waitForResponse(response=>response.url().endsWith('/activity')&&response.request().postDataJSON()?.event==='tour_scene');
   const sceneSaved=page.waitForResponse(response=>response.url().endsWith('/activity')&&response.request().postDataJSON()?.scene===7);
@@ -112,7 +107,7 @@ try {
   for(const post of activityPosts)assert.deepEqual(Object.keys(post.body).sort(),['event','event_id','page','scene','version_hash']);
   assert.deepEqual(external,[]);assert.deepEqual(errors,[]);
   await page.screenshot({path:resolve(evidence,'tour-completed.png'),fullPage:true});
-  results.push('Actual password gate, hashed proposal script, section/campus navigation, selected name, scene 7 and natural final-scene playback persist in one encrypted visit. Unrelated inline scripts stay blocked; no external requests or form contents collected.');
+  results.push('Actual password gate, hashed proposal script, section/campus navigation, concurrent activity/name saves, scene 7 and natural final-scene playback persist in one encrypted visit. Unrelated inline scripts stay blocked; no external requests or form contents collected.');
   await writeFile(resolve(evidence,'result.json'),JSON.stringify({engine,status:'pass',results,eventCount:events.length,synthetic:true},null,2));
   console.log(JSON.stringify({engine,status:'pass',results,evidence},null,2));
 }catch(error){
@@ -121,7 +116,7 @@ try {
 }finally{
   await writeFile(resolve(evidence,'server.log'),serverLog);
   await browser?.close();if(proxy)await new Promise(done=>proxy.close(done));
-  if(server){server.kill();await once(server,'exit').catch(()=>{});}
+  if(server){if(process.platform==='win32')server.kill();else process.kill(-server.pid,'SIGTERM');await once(server,'exit').catch(()=>{});}
   // All recursive cleanup is restricted to this exact generated disposable path.
   assert.equal(dirname(database),testing);assert.match(basename(database),/^proposal-review-browser-[0-9]+\.sqlite$/);
   await rm(database+'.state',{recursive:true,force:true});
