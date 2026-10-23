@@ -1,5 +1,14 @@
 # Enterprise source verification
 
+The primary PHP 8.4 and isolated Enterprise workflows verify the known Ubuntu
+`mirror+file:/etc/apt/apt-mirrors.txt` indirection before PHP setup and remove only
+its exact Azure entry. Official HTTPS archive/security entries, source fields,
+keyring references and unrelated repositories remain unchanged. Unsupported
+formats fail before modification. This changes the observed slow download path;
+it does not cache OS packages or guarantee speed. Preserve every test, browser
+engine, timeout and loopback-only MySQL safeguard, and verify the actual source
+and result on a fresh runner before declaring the correction accepted.
+
 `.github/workflows/enterprise-runtime-ci.yml` preserves the isolated schema,
 MySQL 8.4 recovery, runtime composition, Enterprise build, and existing private
 Chromium/WebKit checks. It also runs these focused reviewer-operations gates:

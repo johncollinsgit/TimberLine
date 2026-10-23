@@ -1,3 +1,12 @@
+## CI Ubuntu package mirrors (October 23; source candidate)
+
+Both browser CI jobs remove the exact Azure entry from the runner's validated
+mirror-file list before PHP setup, retaining the official HTTPS Ubuntu archive
+and security entries. Unknown formats fail rather than falling back silently.
+Tests, browser engines, time bounds and MySQL safeguards are unchanged; OS
+packages still install and cold-runner performance requires actual observation.
+See [Enterprise CI](docs/operations/enterprise-ci.md).
+
 ## Reviewer AI tools deferred (October 23; source candidate)
 
 The fictional reviewer demonstration shows compact Coming soon placeholders for

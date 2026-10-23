@@ -1,3 +1,12 @@
+## CI Ubuntu package mirrors (October 23; source candidate)
+
+The primary PHP 8.4 and isolated Enterprise jobs verify the runner's known Ubuntu
+mirror-file format before PHP setup, then remove only its Azure mirror entry.
+Official HTTPS archive/security entries and signed source fields remain intact.
+Unsupported formats fail visibly. All tests, browser engines, time limits and
+loopback-only MySQL safeguards remain required. This does not cache OS packages
+or guarantee download speed. See [Enterprise CI](docs/operations/enterprise-ci.md).
+
 ## Reviewer AI tools deferred (October 23; source candidate)
 
 Keep the fictional reviewer demonstration's Chats, Assistants and Voice as
