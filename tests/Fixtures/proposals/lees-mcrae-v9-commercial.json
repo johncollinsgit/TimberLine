@@ -1,0 +1,176 @@
+{
+  "provenance": {
+    "library_file_id": "libfile_3d9946d31a7081918e8eea1dea3c232b",
+    "file_id": "file_00000000cdf481f7bb472c29c4dcf24c",
+    "version_id": "9",
+    "name": "Evergrove_Lees_McRae_Proposal_Draft.pdf",
+    "modified_at": "2026-10-23T06:48:21.426279Z",
+    "num_pages": 9,
+    "extraction": "Library authoritative pages4–7 text; line whitespace collapsed only for quotations; full parsed page text retained."
+  },
+  "client_details": {
+    "implementation_timeline_heading": "Implementation Timeline, Client Dependencies, and Billing Commencement",
+    "implementation_timeline": "Evergrove Software and Lees-McRae College will establish a mutually agreed implementation schedule for each workspace, including anticipated milestones, required institutional participation, testing, and activation. Evergrove will make commercially reasonable efforts to deliver each workspace according to the agreed schedule. The College agrees to provide timely access to necessary personnel, information, systems, approvals, and feedback. If Evergrove has substantially completed the agreed deliverables and the workspace is ready for its intended operational use, but activation is delayed due to institutional scheduling, internal approvals, unavailable personnel, or other circumstances outside Evergrove’s reasonable control, monthly subscription billing will commence 30 calendar days after Evergrove provides written notice of operational readiness. Any outstanding material defects attributable to Evergrove that prevent the workspace’s intended use must be resolved before billing commences under this provision. Delays attributable to Evergrove will not accelerate billing. This provision applies independently to each workspace and does not require simultaneous activation of multiple departments.",
+    "rollout": "No per-user seat fee within the agreed department scope. Departments roll out sequentially, not as though all were operating on day one. Billing-calendar dates are illustrative until agreed. The schedule above is milestone-based, not a commitment to fixed calendar dates.",
+    "activation": "A department's monthly subscription begins on its explicitly approved activation date, when the agreed initial workspace is usable and released for operational use, subject to the Implementation Timeline, Client Dependencies, and Billing Commencement provision.\n\nA demo visit, invitation, training session or first login alone does not trigger subscription billing.\n\nThe department's agreed launch checklist defines readiness. Future enhancements do not prevent launch once that initial scope is accepted.\n\nProposed access rule, still to confirm: the department head has setup access before launch; general staff access opens after department approval. COO review and authorized Evergrove maintenance access are separately scoped.",
+    "support": "Support requests are submitted through the ticketing system.\n\nSupport hours are Monday through Friday, 9 AM-5 PM Eastern, excluding holidays.\n\nInitial human response is within one business day. This is a response commitment, not a guaranteed resolution time.\n\nEach active workspace includes up to 60 minutes of scheduled video consultation per month.\n\nIncluded support covers questions, troubleshooting and maintenance of the agreed system. It does not include unlimited new development or unlimited consulting.\n\nAdditional time may be provided at Evergrove's discretion without expanding the ongoing contractual entitlement.",
+    "travel": "On-site work. Setup includes one discovery day per workspace, up to nine working hours: three days across the three-workspace package as departments onboard. Additional approved on-site work is $1,500 per day, up to nine working hours. Routine driving to Lees-McRae is included. Overnight travel receives a fixed, all-in quote before booking; campus lodging is not assumed.\n\nAdditional on-site work is agreed in advance at the rate and day length shown in the Financial summary section.\n\nRoutine driving to Lees-McRae is included. Visits requiring overnight travel receive a fixed, all-in quote before booking. Campus lodging can be discussed but is not assumed available.\n\nNew departments beyond the selected package, substantial new workflows, major integrations, large migrations and replacement of other software require a separate scope and written price approval.\n\nAdmissions and large-scale marketing deployments are not included in this initial proposal.",
+    "usage": "AI, voice, text and email. Your choice: a predictable prepaid usage budget with approved top-ups, or pay-as-you-go billing for actual attributable provider costs. Neither includes Evergrove markup. Amounts, spending limits and any included allowance remain to be agreed; $150 is not approved. Document the choice before activation. No automatic overage authorization, nonrefundable flat fee or unlimited usage commitment.\n\nThe proposal will explain how AI assistance and voice can help users find work, understand job status and interact with their workspace.\n\nAn optional usage estimator will show an illustrative monthly range based on active departments, expected users and usage intensity.\n\nActual provider usage for Lees-McRae will carry no Evergrove markup. Evergrove's service income remains in the setup and subscription fees.\n\nAdministrators will be able to see usage by department and feature, with estimates clearly separated from actual costs.\n\nStill to finalize: the client chooses a predictable prepaid usage budget with approved top-ups or pay-as-you-go actual attributable provider cost. Amounts, spending limits and any included allowance remain to be agreed. Document the selected method before activation; no automatic overage authorization. See the Financial summary section.\n\nNo unlimited AI, voice, text or email commitment.",
+    "commercial_sections": [
+      {
+        "heading": "Financial summary",
+        "paragraphs": [
+          "Billing-calendar dates are illustrative until agreed. The schedule above is milestone-based, not a commitment to fixed calendar dates.",
+          "No per-user seat fee within the agreed department scope. Departments roll out sequentially, not as though all were operating on day one.",
+          "Renewal. Successive 12-month terms; 60 days' notice of nonrenewal. Evergrove communicates any proposed price increase for the next term at least 90 days before renewal. Base subscription pricing stays fixed within the current term. No routine subscription-pause entitlement.",
+          "Activation and term. Monthly billing starts on each workspace's explicitly approved operational activation date, subject to the Implementation Timeline, Client Dependencies, and Billing Commencement provision, for a 12-month term. A demo visit, invitation, training session or first login alone does not trigger billing. Setup invoice due dates remain to be agreed.",
+          "On-site work. Setup includes one discovery day per workspace, up to nine working hours: three days across the three-workspace package as departments onboard. Additional approved on-site work is $1,500 per day, up to nine working hours. Routine driving to Lees-McRae is included. Overnight travel receives a fixed, all-in quote before booking; campus lodging is not assumed.",
+          "AI, voice, text and email. Your choice: a predictable prepaid usage budget with approved top-ups, or pay-as-you-go billing for actual attributable provider costs. Neither includes Evergrove markup. Amounts, spending limits and any included allowance remain to be agreed; $150 is not approved. Document the choice before activation. No automatic overage authorization, nonrefundable flat fee or unlimited usage commitment.",
+          "Proposed department controls. The college's authorized administrator chooses which departments may access credit-based AI, voice, text and email, with approved departmental budgets and approval for additional spending. Base workspace access is independent of that choice.",
+          "Extra scope. New departments beyond the package, substantial workflows, major integrations, large migrations and software replacement require a separate scope and written price approval. Admissions and large-scale marketing are excluded initially."
+        ],
+        "tables": [
+          {
+            "caption": "Starting packages",
+            "columns": [
+              "Package",
+              "One-time setup",
+              "Monthly fee"
+            ],
+            "rows": [
+              [
+                "One workspace",
+                "$3,000",
+                "$1,000 after activation"
+              ],
+              [
+                "Three workspaces",
+                "$7,000 total",
+                "$2,500 when all three are active"
+              ]
+            ]
+          },
+          {
+            "caption": "Staged fees",
+            "columns": [
+              "Dept.",
+              "Setup at onboarding",
+              "Total monthly at activation"
+            ],
+            "rows": [
+              [
+                "First",
+                "$3,000",
+                "$1,000"
+              ],
+              [
+                "Second",
+                "$2,000",
+                "$2,000"
+              ],
+              [
+                "Third",
+                "$2,000",
+                "$2,500"
+              ]
+            ]
+          }
+        ]
+      },
+      {
+        "heading": "Implementation Timeline, Client Dependencies, and Billing Commencement",
+        "paragraphs": [
+          "Evergrove Software and Lees-McRae College will establish a mutually agreed implementation schedule for each workspace, including anticipated milestones, required institutional participation, testing, and activation. Evergrove will make commercially reasonable efforts to deliver each workspace according to the agreed schedule. The College agrees to provide timely access to necessary personnel, information, systems, approvals, and feedback. If Evergrove has substantially completed the agreed deliverables and the workspace is ready for its intended operational use, but activation is delayed due to institutional scheduling, internal approvals, unavailable personnel, or other circumstances outside Evergrove’s reasonable control, monthly subscription billing will commence 30 calendar days after Evergrove provides written notice of operational readiness. Any outstanding material defects attributable to Evergrove that prevent the workspace’s intended use must be resolved before billing commences under this provision. Delays attributable to Evergrove will not accelerate billing. This provision applies independently to each workspace and does not require simultaneous activation of multiple departments."
+        ]
+      },
+      {
+        "heading": "Agree on readiness before launch",
+        "paragraphs": [
+          "A department's monthly subscription begins on its explicitly approved activation date, when the agreed initial workspace is usable and released for operational use, subject to the Implementation Timeline, Client Dependencies, and Billing Commencement provision.",
+          "A demo visit, invitation, training session or first login alone does not trigger subscription billing.",
+          "The department's agreed launch checklist defines readiness. Future enhancements do not prevent launch once that initial scope is accepted.",
+          "Proposed access rule, still to confirm: the department head has setup access before launch; general staff access opens after department approval. COO review and authorized Evergrove maintenance access are separately scoped."
+        ]
+      },
+      {
+        "heading": "What setup includes",
+        "bullets": [
+          "Department discovery and initial scope definition.",
+          "Design and configuration of the agreed initial workspace and workflows.",
+          "Agreed onboarding, pilot testing and launch preparation.",
+          "One on-site discovery day per workspace, up to nine working hours. The three-workspace package includes three such days as those departments begin onboarding.",
+          "During onboarding, one scheduled 30-minute video call per week, up to four calls per department.",
+          "Data import and integrations must be identified in the department's scope; this is not a promise to migrate or replace every existing system."
+        ]
+      },
+      {
+        "heading": "Ongoing support",
+        "paragraphs": [
+          "Support requests are submitted through the ticketing system.",
+          "Support hours are Monday through Friday, 9 AM-5 PM Eastern, excluding holidays.",
+          "Initial human response is within one business day. This is a response commitment, not a guaranteed resolution time.",
+          "Each active workspace includes up to 60 minutes of scheduled video consultation per month.",
+          "Included support covers questions, troubleshooting and maintenance of the agreed system. It does not include unlimited new development or unlimited consulting.",
+          "Additional time may be provided at Evergrove's discretion without expanding the ongoing contractual entitlement."
+        ]
+      },
+      {
+        "heading": "Additional work and on-site visits",
+        "paragraphs": [
+          "Additional on-site work is agreed in advance at the rate and day length shown in the Financial summary section.",
+          "Routine driving to Lees-McRae is included. Visits requiring overnight travel receive a fixed, all-in quote before booking. Campus lodging can be discussed but is not assumed available.",
+          "New departments beyond the selected package, substantial new workflows, major integrations, large migrations and replacement of other software require a separate scope and written price approval.",
+          "Admissions and large-scale marketing deployments are not included in this initial proposal."
+        ]
+      },
+      {
+        "heading": "AI voice text and email usage",
+        "paragraphs": [
+          "The proposal will explain how AI assistance and voice can help users find work, understand job status and interact with their workspace.",
+          "An optional usage estimator will show an illustrative monthly range based on active departments, expected users and usage intensity.",
+          "Actual provider usage for Lees-McRae will carry no Evergrove markup. Evergrove's service income remains in the setup and subscription fees.",
+          "Administrators will be able to see usage by department and feature, with estimates clearly separated from actual costs.",
+          "Still to finalize: the client chooses a predictable prepaid usage budget with approved top-ups or pay-as-you-go actual attributable provider cost. Amounts, spending limits and any included allowance remain to be agreed. Document the selected method before activation; no automatic overage authorization. See the Financial summary section.",
+          "No unlimited AI, voice, text or email commitment."
+        ]
+      },
+      {
+        "heading": "Contract term and renewal",
+        "paragraphs": [
+          "Each workspace starts with a 12-month term beginning at its approved activation or billing commencement under the Implementation Timeline, Client Dependencies, and Billing Commencement provision. Subscriptions are billed monthly during that term.",
+          "Renewal is for successive 12-month terms, with 60 days' notice of nonrenewal.",
+          "Evergrove provides a renewal reminder and communicates any proposed price increase for the next 12-month term at least 90 days before renewal.",
+          "Base subscription pricing remains fixed during the current term. No routine subscription-pause entitlement is included."
+        ]
+      }
+    ],
+    "pricing_note": "No per-user seat fee within the agreed department scope. Departments roll out sequentially, not as though all were operating on day one."
+  },
+  "unresolved": [
+    "Setup invoice due dates remain to be agreed.",
+    "Proposed access rule, still to confirm: the department head has setup access before launch; general staff access opens after department approval. COO review and authorized Evergrove maintenance access are separately scoped.",
+    "Amounts, spending limits and any included allowance remain to be agreed."
+  ],
+  "proposed_draft_item_terms_months": [
+    12
+  ],
+  "preserved_usage_plan": "unconfirmed",
+  "reference_adaptations": [
+    {
+      "from": "client-delay provision below",
+      "to": "Implementation Timeline, Client Dependencies, and Billing Commencement provision"
+    },
+    {
+      "from": "client-delay billing provision on page 4",
+      "to": "Implementation Timeline, Client Dependencies, and Billing Commencement provision"
+    },
+    {
+      "from": "client-delay provision on page 4",
+      "to": "Implementation Timeline, Client Dependencies, and Billing Commencement provision"
+    },
+    {
+      "from": "financial summary on page 4",
+      "to": "Financial summary section"
+    }
+  ]
+}

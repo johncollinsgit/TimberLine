@@ -136,6 +136,44 @@ Approved clause libraries, final agreement generation/signature execution,
 provider sandbox integrations and real delivery remain later work. No legal
 protection is guaranteed.
 
+## Stored commercial copy and ordinary saves (reviewed source follow-on)
+
+Additional financial, setup, support, usage and contract sections render only
+from the exact stored `client_details.commercial_sections` snapshot. Plain-text
+headings, paragraphs, bullets and accessible tables are escaped. Existing
+publications without these fields retain their five original details and optional
+implementation clause; source constants never add new terms to old versions.
+
+A separately reviewed `commercial_snapshot` marker identifies the source document,
+exact copy digest, native catalog origins and explicit draft-only term overrides.
+The native catalog id/revision remains an origin, not a claim that its unchanged
+payload contains the new draft terms. Catalog rows stay untouched. The marker's
+protected digest covers client, complete items/prices, client details, unresolved
+items, usage method, template, contractual scope notes and the provenance marker
+itself (excluding its own digest), with recursively sorted object keys and stable
+list order. It is integrity evidence, not a signature, grant or billing authority.
+
+Under the existing revision lock, ordinary Save preserves that protected
+commercial snapshot for the same client, service ID set, scope notes, usage method
+and template. Later catalog prices or terms cannot silently replace it. Title,
+introduction, reviewer names and journey retain existing editing behavior. Scope,
+client, services, usage method or template changes require a separately reviewed
+commercial revision; incomplete/drifted markers refuse Save and new publication.
+Existing drafts without the new sections/marker retain the original behavior.
+Never use the generator to reconcile an already saved target. Rollback to old Save
+code requires holding edits and a separately reviewed draft recovery plan.
+
+PDF v9 copy includes the staged setup and TOTAL monthly schedule, 12-month term,
+60-day nonrenewal notice, 90-day reminder/next-term price notice, fixed base price
+within the term, no routine pause, defined setup/support and unfinalized usage
+choice without markup or automatic overages. Numbered PDF-page references become
+actual online section titles only. None of this sends, signs, charges or enables a
+provider. Future readiness-notice billing still requires per-workspace evidence
+and human review; staged totals are not inferred per-workspace invoice allocations.
+A data-only reconciliation needs its own exact target/catalog/version pins,
+13-path diff, rollback/replay review and approval; this source supplies no runtime
+write, publication, credential or CSP activation permission.
+
 ## Verification and release gates
 
 Run local proposal tests with the repository PHP environment; optional
