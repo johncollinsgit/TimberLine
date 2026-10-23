@@ -10,6 +10,7 @@ use DomainException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class EnterpriseController
 {
@@ -65,13 +66,15 @@ class EnterpriseController
             ? app(Resources::class)->requestBuildings($tenant, $request->user(), $area->id)
             : ['items' => [], 'has_more' => false, 'coverage' => 'Saved building selection is unavailable. Location text remains available.'];
 
+        $workProjection = $area ? app(WorkProjection::class)->build($tenant, $actor, $area->id, $state, $projects, $items, $buildings) : ['projects' => [], 'tasks' => [], 'tasks_has_more' => false, 'tasks_coverage' => 'No selected department.'];
+
         return response()->json(['sample_data' => (bool) config('enterprise.sample_data'), 'workspace' => ['id' => $tenant->id, 'name' => $tenant->name], 'viewer_id' => (string) $request->user()->id, 'selected_area_id' => $selected,
-            'buildings' => $buildings,
+            'buildings' => $buildings, 'request_fields' => ['version' => 1, 'types' => RequestWorkflow::TYPES, 'priorities' => RequestWorkflow::PRIORITIES],
             'conversation' => app(\App\Enterprise\Conversation\Readiness::class)->inspect($tenant, $request->user(), $selected),
             'saved_assistants' => $selected && config('enterprise.conversation.saved_assistants_enabled') ? app(\App\Enterprise\Conversation\SavedAssistants::class)->listing($tenant, $request->user(), $selected) : null,
             'private_memory' => $selected && \App\Enterprise\Conversation\PrivateMemory::enabled() ? app(\App\Enterprise\Conversation\PrivateMemory::class)->listing($tenant, $request->user(), $selected) : null,
             'areas' => $areas->map(fn ($a) => ['id' => $a->id, 'name' => $a->name, 'visibility' => $a->profile === 'enterprise_shared' ? 'shared' : 'department_only'])->values(),
-            'requests' => array_slice($items, 0, 100), 'projects' => $projects, 'coverage' => 'up_to_100_visible_requests_scan_1000', 'has_more' => count($items) > 100,
+            'requests' => array_slice($items, 0, 100), ...$workProjection, 'coverage' => 'up_to_100_visible_requests_scan_1000', 'has_more' => count($items) > 100,
             'scan_partial' => $scanned === 1000,
             'features' => ['collaboration' => (bool) config('enterprise.collaboration_enabled'), 'planning' => (bool) config('enterprise.planning_enabled'),
                 'read_only_assistant' => (bool) config('enterprise.read_only_assistant_enabled'),
@@ -87,6 +90,7 @@ class EnterpriseController
                 'roll_call' => (bool) config('enterprise.roll_call_enabled'), 'requester' => (bool) config('enterprise.requester_enabled'),
                 'reports' => (bool) config('enterprise.reports_enabled'), 'certificates' => (bool) config('enterprise.certificates_enabled'),
                 'finance' => (bool) config('enterprise.finance_enabled') && Planning::financial($actor)],
+            'routing_departments' => $areas->filter(fn ($a) => WorkspaceAccess::permits($actor, $a->id, true, true))->map(fn ($a) => ['id' => $a->id, 'name' => $a->name])->values(),
             'can_manage' => config('enterprise.writes_enabled') && in_array($actor['role'], ['owner', 'admin'], true),
             'can_submit' => $area && WorkspaceAccess::canSubmit($actor, $area->id),
             'can_review' => $area && WorkspaceAccess::permits($actor, $area->id, false, true),
@@ -108,12 +112,25 @@ class EnterpriseController
 
     public function command(Request $request)
     {
+        if (in_array($request->input('action'), WorkManagement::ACTIONS, true)) {
+            $input = $request->validate(WorkManagement::rules());
+            try {
+                return response()->json(app(WorkManagement::class)->execute($request->attributes->get('current_tenant'), $request->user(), $input))->header('Cache-Control', 'private, no-store');
+            } catch (DomainException $e) {
+                return response()->json(['error' => $e->getMessage(), 'saved' => false], match ($e->getMessage()) {
+                    'conflict', 'idempotency_mismatch' => 409, 'access_denied' => 403, default => 422,
+                });
+            }
+        }
         $input = $request->validate([
-            'action' => ['required', 'in:workspace.create,project.create,request.create,request.triage,request.assign,request.progress,request.complete'],
+            'action' => ['required', 'in:workspace.create,project.create,request.create,request.triage,request.classify,request.assign,request.progress,request.complete'],
             'id' => ['required', 'uuid'], 'request_id' => ['required', 'uuid'], 'area_id' => ['required_unless:action,workspace.create', 'uuid'],
             'title' => ['required_if:action,workspace.create,project.create,request.create', 'string', 'max:100'],
             'visibility' => ['required_if:action,workspace.create', 'in:shared,department_only'],
             'expected_version' => ['required_unless:action,workspace.create,project.create', 'integer', 'min:0'],
+            'type' => ['prohibited'],
+            'request_type' => ['nullable', 'string', Rule::in(array_keys(RequestWorkflow::TYPES)), 'prohibited_unless:action,request.create,request.classify'],
+            'priority' => ['nullable', 'string', Rule::in(RequestWorkflow::PRIORITIES), 'prohibited_unless:action,request.create,request.classify'],
             'description' => ['nullable', 'string', 'max:5000'], 'location' => ['nullable', 'string', 'max:200'],
             'location_id' => ['nullable', 'required_with:location_version', 'uuid', 'prohibited_unless:action,request.create', 'prohibits:latitude,longitude'],
             'location_version' => ['nullable', 'required_with:location_id', 'integer', 'min:1', 'prohibited_unless:action,request.create'],

@@ -145,6 +145,53 @@ final class EnterpriseProposalRuntimeTest extends TestCase
             'Synthetic reviewer password', 7, Str::uuid()->toString(), 'reviewer');
     }
 
+    public function test_publication_notice_opens_the_exact_mounted_recipient_gate_once_without_leaking_password_or_namespace(): void
+    {
+        [$tenant, $owner] = $this->owner();
+        $prefix = '/enterprise-owner';
+        config(['enterprise_runtime.base_path' => $prefix, 'session.path' => $prefix]);
+        $this->withServerVariables(['SCRIPT_FILENAME' => $this->app->publicPath('index.php'),
+            'SCRIPT_NAME' => $prefix.'/index.php', 'PHP_SELF' => $prefix.'/index.php']);
+        $service = app(ProposalService::class);
+        $draft = $service->leesMcRaeDraft($tenant, $owner->id)->refresh();
+        $path = self::ORIGIN.$prefix.'/owner-workspaces/'.$tenant->slug.'/proposals/'.$draft->id;
+        $data = ['revision' => $draft->revision, 'password' => 'Synthetic reviewer password', 'days' => 7,
+            'publish_key' => Str::uuid()->toString(), 'confirm' => 1, 'audience' => 'reviewer'];
+        $this->actingAs($owner)->post($path.'/publish', $data)->assertStatus(419);
+        $this->assertSame(0, Version::count());
+        $this->postWithToken($path.'/publish', $data)->assertRedirect($path.'/edit');
+        $url = session('private_proposal_path');
+        $notice = $this->get($path.'/edit')->assertOk();
+        if (getenv('PROPOSAL_HANDOFF_CAPTURE') === '1') {
+            @mkdir(base_path('.tmp/recipient-handoff'), 0777, true);
+            file_put_contents(base_path('.tmp/recipient-handoff/mounted.html'), $notice->getContent());
+            file_put_contents(base_path('.tmp/recipient-handoff/mounted-headers.json'), json_encode($notice->headers->all(), JSON_THROW_ON_ERROR));
+        }
+        $this->assertMatchesRegularExpression('~^https://proposal\.example\.invalid/enterprise-owner/service-proposals/[A-Za-z0-9]{64}$~D', $url);
+        $token = basename($url);
+        $version = Version::sole();
+        $raw = DB::table('service_proposal_versions')->where('id', $version->id)->first();
+        $this->assertStringNotContainsString($token, $raw->access_result);
+        $this->assertStringNotContainsString($data['password'], json_encode($raw));
+        $notice->assertSee('Open private proposal')->assertDontSee($data['password']);
+        $dom = new \DOMDocument;
+        @$dom->loadHTML($notice->getContent());
+        $xpath = new \DOMXPath($dom);
+        $this->assertSame($url, $xpath->query('//a[normalize-space(.)="Open private proposal"]')->item(0)->getAttribute('href'));
+        $this->assertSame($url, $xpath->query('//input[@id="private-recipient-url"]')->item(0)->getAttribute('value'));
+        $this->get($url)->assertOk()->assertSee('A private proposal.')
+            ->assertSee('aria-label="Lees-McRae College"', false)
+            ->assertDontSee(e($version->payload['title']), false)->assertDontSee(e($version->payload['intro']), false);
+        $this->get(self::ORIGIN.$prefix.'/owner-workspaces/'.$tenant->slug.'/service-proposals/'.$token)->assertNotFound();
+        $this->get($path.'/edit')->assertOk()->assertDontSee('Open private proposal')->assertDontSee($token);
+        $this->postWithToken($path.'/publish', $data)->assertRedirect()->assertSessionHas('private_proposal_path', $url);
+        $this->assertSame(1, Version::count());
+        $this->assertSame($raw->payload, DB::table('service_proposal_versions')->where('id', $version->id)->value('payload'));
+        $this->assertSame($raw->content_hash, $version->fresh()->content_hash);
+        Http::assertNothingSent();
+        Mail::assertNothingSent();
+    }
+
     public function test_clean_runtime_composes_disabled_routes_and_empty_proposal_schema_without_grants(): void
     {
         $this->assertFalse(config('service_proposals.enabled'));
@@ -220,13 +267,15 @@ final class EnterpriseProposalRuntimeTest extends TestCase
         [$tenant, $owner] = $this->owner();
         ['version' => $version, 'token' => $token] = $this->publication($tenant, $owner);
         $path = $this->url('/service-proposals/'.$token);
-        $this->get($path)->assertOk()->assertSee('A private proposal.')->assertDontSee('Lees-McRae');
+        $this->get($path)->assertOk()->assertSee('A private proposal.')
+            ->assertSee('aria-label="Lees-McRae College"', false)
+            ->assertDontSee(e($version->payload['title']), false)->assertDontSee(e($version->payload['intro']), false);
         $this->postWithToken($path.'/comments', ['page' => 'overview', 'body' => 'Must not persist', 'comment_key' => Str::uuid()->toString()])->assertForbidden();
         $this->post($path.'/unlock', ['password' => 'Synthetic reviewer password'])->assertStatus(419);
         $this->postWithToken($path.'/unlock', ['password' => 'Synthetic reviewer password'])->assertRedirect($path);
         $this->get($path)->assertOk()->assertSee('Ross')->assertSee('Sarah')->assertSee('Paul')->assertSee('self-selected');
         $this->postWithToken($path.'/reviewer-name', ['reviewer_name' => 'Invented reviewer'])->assertSessionHasErrors('reviewer_name');
-        $this->postWithToken($path.'/reviewer-name', ['reviewer_name' => 'Ross'])->assertRedirect($path);
+        $this->postWithToken($path.'/reviewer-name', ['reviewer_name' => 'Ross'])->assertRedirect($path.'?section=review');
         $input = ['page' => 'approach', 'body' => '<script>review sentinel</script>', 'comment_key' => Str::uuid()->toString()];
         $this->postWithToken($path.'/comments', $input)->assertRedirect();
         $this->postWithToken($path.'/comments', $input)->assertRedirect();
@@ -258,7 +307,7 @@ final class EnterpriseProposalRuntimeTest extends TestCase
         ['version' => $version, 'token' => $token] = $this->publication($tenant, $owner);
         $path = $this->url('/service-proposals/'.$token);
         $this->postWithToken($path.'/unlock', ['password' => 'Synthetic reviewer password'])->assertRedirect($path);
-        $this->postWithToken($path.'/reviewer-name', ['reviewer_name' => 'Ross'])->assertRedirect($path);
+        $this->postWithToken($path.'/reviewer-name', ['reviewer_name' => 'Ross'])->assertRedirect($path.'?section=review');
         $response = $this->get($path)->assertOk()->assertSee('action="'.$path.'/comments"', false)->assertCookieMissing('XSRF-TOKEN');
         $this->assertTrue($response->headers->hasCacheControlDirective('private'));
         $this->assertTrue($response->headers->hasCacheControlDirective('no-store'));

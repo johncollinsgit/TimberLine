@@ -123,7 +123,8 @@ class Resources
             if (($row->data['level'] ?? null) !== 'facility') {
                 continue;
             }
-            $items[] = ['id' => $row->id, 'title' => $row->title, 'version' => $row->version];
+            $items[] = ['id' => $row->id, 'title' => $row->title, 'version' => $row->version,
+                'map_number' => $row->data['map_number'] ?? null, 'source_url' => $row->data['source_url'] ?? null];
             if (count($items) > 200) {
                 break;
             }

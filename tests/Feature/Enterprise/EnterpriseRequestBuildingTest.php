@@ -125,7 +125,7 @@ final class EnterpriseRequestBuildingTest extends TestCase
     {
         $building = $this->building();
         $projection = $this->projection();
-        $this->assertSame([['id' => $building['id'], 'title' => 'Synthetic North Hall', 'version' => 1]], $projection['buildings']['items']);
+        $this->assertSame([['id' => $building['id'], 'title' => 'Synthetic North Hall', 'version' => 1, 'map_number' => null, 'source_url' => null]], $projection['buildings']['items']);
         $this->assertFalse($projection['buildings']['has_more']);
         $request = $this->command($this->linkedInput($building, ['location' => 'Client-supplied misleading label']))->assertOk()
             ->assertJsonPath('data.location', 'Synthetic North Hall')->assertJsonPath('data.location_id', $building['id'])
@@ -233,7 +233,7 @@ final class EnterpriseRequestBuildingTest extends TestCase
         $projection = $this->projection()['buildings'];
         $this->assertCount(200, $projection['items']);
         $this->assertTrue($projection['has_more']);
-        $this->assertSame(['id', 'title', 'version'], array_keys($projection['items'][0]));
+        $this->assertSame(['id', 'title', 'version', 'map_number', 'source_url'], array_keys($projection['items'][0]));
     }
 
     public function test_disabled_resources_preserves_legacy_intake_and_current_permissions_fail_closed(): void

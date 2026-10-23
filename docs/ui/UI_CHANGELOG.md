@@ -1,3 +1,37 @@
+## 2026-10-23 — Jobs, incoming tickets and project details (source candidate)
+
+Show projects and incoming tickets in compact searchable rows with department,
+person and status controls. New ticket files an unassigned request without
+requiring a project; assignment and job wizards choose the current department,
+project, person and saved building. Roll Call opens permitted projects with
+in-house people, contractors and locations. One roomy Center/Side dialog retains
+comment drafts, selected photos and active uploads. Existing private quarantine
+and native edit permissions remain authoritative.
+
+Remove workspace slogans and keep layout/intake preferences in Settings. Use
+month grids for work due dates and Eastern resource bookings, with separate
+semantics. The campus map uses explicit current building links on the official
+plan. List and Calendar remain above an optional secondary map. The fictional
+browser dataset grows additively to 20 jobs, 10 field workers and five contractors;
+Blaine is a demo role. These fixtures create no real accounts or database seed.
+Local browser results remain separate from release and hosted verification.
+
+## 2026-10-23 — Proposal tabs, college animation, PDF and usage comparison (source candidate)
+
+Proposal previews, readers and selection summaries show one section at a time
+with native keyboard controls; switching preserves unsent form values and print
+reveals all sections. The Lees-McRae password page and Overview reuse the original
+college animation, with static reduced-motion rendering. The locked page receives
+only a branding boolean and keeps proposal content behind its existing password.
+
+A top-of-reader Download PDF action exports the complete saved proposal with its
+stored terms and prices. Financial offers up to three private planning scenarios
+for the quoted one- or three-workspace options, editable departmental AI, voice,
+email and SMS assumptions, and explicit university or department preferences.
+Unpriced costs and unselected preferences remain pending. These controls preserve
+the stored proposal and existing access; no provider, agreement or spending is
+activated. Local verification is separate from final hosted acceptance.
+
 ## 2026-10-23 — Stored proposal commercial sections (source candidate)
 
 Show saved financial, implementation, support, usage and renewal sections with

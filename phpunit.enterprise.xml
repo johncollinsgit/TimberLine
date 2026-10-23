@@ -10,6 +10,8 @@
             <file>tests/Feature/Enterprise/EnterpriseRequestCompletionTest.php</file>
             <file>tests/Feature/Enterprise/EnterpriseResourceHistoryTimestampTest.php</file>
             <file>tests/Feature/Enterprise/EnterpriseRequestBuildingTest.php</file>
+            <file>tests/Feature/Enterprise/EnterpriseRequestClassificationTest.php</file>
+            <file>tests/Feature/Enterprise/EnterpriseJobManagementTest.php</file>
             <file>tests/Feature/Enterprise/EnterpriseReadOnlyAssistantTest.php</file>
             <file>tests/Feature/Enterprise/EnterpriseConversationTest.php</file>
             <file>tests/Feature/Enterprise/EnterpriseConversationApprovalTest.php</file>
@@ -18,6 +20,8 @@
             <file>tests/Feature/Enterprise/EnterpriseSavedAssistantsTest.php</file>
             <file>tests/Feature/Enterprise/EnterprisePrivateMemoryTest.php</file>
             <file>tests/Feature/Enterprise/EnterpriseProposalRuntimeTest.php</file>
+            <file>tests/Feature/Enterprise/EnterpriseProposalPdfRuntimeTest.php</file>
+            <file>tests/Feature/Enterprise/EnterpriseFinancialScenarioRuntimeTest.php</file>
             <file>tests/Feature/Enterprise/EnterprisePrefixMountTest.php</file>
             <file>tests/Feature/Enterprise/EnterpriseClientProvisioningTest.php</file>
             <file>tests/Integration/EnterpriseClientProvisioningMySqlTest.php</file>
@@ -28,6 +32,7 @@
         </testsuite>
     </testsuites>
     <php>
+        <ini name="memory_limit" value="1G"/>
         <env name="APP_ENV" value="testing" force="true"/>
         <env name="ENTERPRISE_APP_ENV" value="testing" force="true"/>
         <env name="ENTERPRISE_APP_KEY" value="base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=" force="true"/>

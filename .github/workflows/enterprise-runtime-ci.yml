@@ -32,9 +32,11 @@ on:
       - 'vite.enterprise.config.js'
       - 'scripts/everbranch-team/enterprise-*'
       - 'scripts/proposals/review-browser.mjs'
+      - 'scripts/proposals/financial-browser.mjs'
       - 'tests/Feature/Enterprise/**'
       - 'tests/Feature/Proposals/**'
       - 'tests/Support/proposal-review-browser*.php'
+      - 'tests/Support/proposal-financial-browser-inspect.php'
       - 'tests/Feature/LeesMcRaeCampusDemoTest.php'
       - 'tests/e2e/enterprise-*'
       - 'tests/browser/enterprise-voice-jobs.smoke.mjs'
@@ -109,7 +111,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Check private transport and isolated sample contracts
-        run: node --test tests/e2e/enterprise-transport.test.mjs tests/e2e/enterprise-reviewer-sample.test.mjs tests/e2e/enterprise-workspace-tour.test.mjs tests/e2e/enterprise-procedures-ui.test.mjs tests/e2e/enterprise-resource-presentation.test.mjs tests/e2e/enterprise-resource-history-time.test.mjs tests/e2e/enterprise-buildings-map-state.test.mjs tests/e2e/enterprise-request-building.test.mjs tests/e2e/enterprise-read-only-assistant.test.mjs tests/e2e/enterprise-conversation.test.mjs tests/e2e/enterprise-saved-assistants.test.mjs tests/e2e/enterprise-private-memory.test.mjs tests/e2e/enterprise-tour-position.test.mjs tests/e2e/enterprise-work-table-drawer.test.mjs tests/e2e/enterprise-shell-navigation.test.mjs tests/e2e/enterprise-preference-lifecycle.test.mjs tests/e2e/enterprise-theme.test.mjs tests/e2e/enterprise-executive.test.mjs tests/e2e/enterprise-role-preview.test.mjs tests/js/enterprise-sample-voice.test.mjs tests/js/enterprise-usage.test.mjs tests/e2e/ai-voice-conversation.test.mjs tests/e2e/enterprise-voice-jobs.test.mjs
+        run: node --test tests/e2e/enterprise-transport.test.mjs tests/e2e/enterprise-reviewer-sample.test.mjs tests/e2e/enterprise-job-sample-upgrade.test.mjs tests/e2e/enterprise-job-sample-commands.test.mjs tests/e2e/enterprise-work-scope-map.test.mjs tests/e2e/enterprise-workspace-tour.test.mjs tests/e2e/enterprise-procedures-ui.test.mjs tests/e2e/enterprise-resource-presentation.test.mjs tests/e2e/enterprise-resource-history-time.test.mjs tests/e2e/enterprise-buildings-map-state.test.mjs tests/e2e/enterprise-request-building.test.mjs tests/e2e/enterprise-read-only-assistant.test.mjs tests/e2e/enterprise-conversation.test.mjs tests/e2e/enterprise-saved-assistants.test.mjs tests/e2e/enterprise-private-memory.test.mjs tests/e2e/enterprise-tour-position.test.mjs tests/e2e/enterprise-work-table-drawer.test.mjs tests/e2e/enterprise-detail-placement.test.mjs tests/e2e/enterprise-project-detail-generation.test.mjs tests/e2e/enterprise-work-views.test.mjs tests/e2e/enterprise-roll-call-projects.test.mjs tests/e2e/enterprise-shell-navigation.test.mjs tests/e2e/enterprise-preference-lifecycle.test.mjs tests/e2e/enterprise-theme.test.mjs tests/e2e/enterprise-executive.test.mjs tests/e2e/enterprise-role-preview.test.mjs tests/js/enterprise-sample-voice.test.mjs tests/js/enterprise-usage.test.mjs tests/e2e/ai-voice-conversation.test.mjs tests/e2e/enterprise-voice-jobs.test.mjs tests/e2e/enterprise-request-classification-draft.test.mjs
       - name: Check voice lifecycle and scoped job lookup without providers
         run: |
           node --test tests/e2e/enterprise-voice-shell-scope.test.mjs
@@ -145,6 +147,19 @@ jobs:
         run: |
           ENTERPRISE_BROWSER_ENGINE=chromium ENTERPRISE_EVIDENCE=test-results/enterprise/chromium node scripts/everbranch-team/enterprise-browser-smoke.mjs
           ENTERPRISE_BROWSER_ENGINE=webkit ENTERPRISE_EVIDENCE=test-results/enterprise/webkit node scripts/everbranch-team/enterprise-browser-smoke.mjs
+      - name: Check native job and ticket wizards in Chromium and WebKit
+        env:
+          ENTERPRISE_TEST_PHP: php
+          EVERBRANCH_PLAYWRIGHT_MODULE: node_modules/playwright/index.mjs
+        run: |
+          ENTERPRISE_TEST_OPERATIONS=1 ENTERPRISE_OPERATIONS_SCENARIO=jobs ENTERPRISE_BROWSER_ENGINE=chromium ENTERPRISE_EVIDENCE=test-results/enterprise/jobs/chromium node scripts/everbranch-team/enterprise-browser-smoke.mjs
+          ENTERPRISE_TEST_OPERATIONS=1 ENTERPRISE_OPERATIONS_SCENARIO=jobs ENTERPRISE_BROWSER_ENGINE=webkit ENTERPRISE_EVIDENCE=test-results/enterprise/jobs/webkit node scripts/everbranch-team/enterprise-browser-smoke.mjs
+      - name: Check Blaine demo ticket queue, project catalog and tour in Chromium and WebKit
+        env:
+          ENTERPRISE_TEST_PHP: php
+          EVERBRANCH_PLAYWRIGHT_MODULE: node_modules/playwright/index.mjs
+          ENTERPRISE_EVIDENCE: test-results/enterprise/job-sample
+        run: node scripts/everbranch-team/enterprise-job-sample-browser.mjs
       - name: Check job voice controls with fake speech in Chromium and WebKit
         env:
           VOICE_WEBKIT: '1'
@@ -158,6 +173,15 @@ jobs:
         run: |
           for engine in chromium webkit; do
             PROPOSAL_BROWSER_ENGINE="$engine" PROPOSAL_BROWSER_EVIDENCE="test-results/enterprise/proposal-review/$engine" node scripts/proposals/review-browser.mjs
+          done
+      - name: Check private Financial planning cart in Chromium and WebKit
+        timeout-minutes: 10
+        env:
+          ENTERPRISE_TEST_PHP: php
+          EVERBRANCH_PLAYWRIGHT_MODULE: node_modules/playwright/index.mjs
+        run: |
+          for engine in chromium webkit; do
+            PROPOSAL_BROWSER_ENGINE="$engine" PROPOSAL_BROWSER_EVIDENCE="test-results/enterprise/proposal-financial/$engine" node scripts/proposals/financial-browser.mjs
           done
       - name: Check reviewer tour and shared renderer in Chromium and WebKit
         timeout-minutes: 15

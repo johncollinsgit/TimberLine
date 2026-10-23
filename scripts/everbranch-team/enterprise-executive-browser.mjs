@@ -9,11 +9,11 @@ export async function checkExecutiveDemo(page, evidence) {
     );
     assert.match(
         await page.locator("#executive-demo").innerText(),
-        /Blaine J. Hansen/,
+        /Executive · read-only/,
     );
     assert.match(
         await page.locator("#executive-demo").innerText(),
-        /No real account/,
+        /no real account or grants/,
     );
     assert.equal(await page.locator("#executive-network button").count(), 4);
     assert.match(

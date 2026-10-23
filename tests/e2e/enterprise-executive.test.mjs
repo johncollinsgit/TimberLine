@@ -164,13 +164,13 @@ test("executive overview requires explicit sample persona and never resolves an 
     }
     f.api.mount(f.root, base());
     assert.equal(f.root.hidden, false);
-    assert.match(f.root.textContent, /Blaine J\. Hansen · COO/);
-    assert.match(f.root.textContent, /Demo admin persona/);
+    assert.match(f.root.textContent, /Executive · read-only/);
+    assert.match(f.root.textContent, /Demo/);
     assert.match(
         f.root.textContent,
-        /No real account, administrator grant or institutional authority/,
+        /no real account or grants/,
     );
-    assert.match(f.root.textContent, /browser simulation/i);
+    assert.match(f.root.textContent, /fictional browser records/i);
     assert.deepEqual(f.forbidden, []);
 });
 
@@ -308,4 +308,13 @@ test("source badges require exact configured HTTPS origins and supplied text is 
     );
     assert.match(f.root.textContent, /<img src=x/);
     assert.deepEqual(f.forbidden, []);
+});
+
+test("overview persona label follows its explicit model without an account or grant", () => {
+    const f = fixture();
+    f.api.mount(f.root, { ...base(), demoManager: true });
+    assert.match(f.root.textContent, /Blaine · demo manager/);
+    assert.doesNotMatch(f.root.textContent, /Executive · read-only/);
+    f.api.mount(f.root, { ...base(), demoManager: "true" });
+    assert.match(f.root.textContent, /Executive · read-only/);
 });

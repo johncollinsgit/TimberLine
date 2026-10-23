@@ -4,6 +4,12 @@
 MySQL 8.4 recovery, runtime composition, Enterprise build, and existing private
 Chromium/WebKit checks. It also runs these focused reviewer-operations gates:
 
+The dedicated PHPUnit process uses the same `1G` test memory ceiling as the
+primary `phpunit.xml`. This accommodates the complete combined suite, including
+local PDF rendering; it does not change a production PHP limit. Fresh isolated
+12-page owner/recipient PDF checks also pass at 128M. Do not replace the full
+suite with those focused checks or bypass its MySQL gates.
+
 | Gate | Entry point | Boundary exercised |
 | --- | --- | --- |
 | Transport and sample contracts | `node --test tests/e2e/enterprise-transport.test.mjs tests/e2e/enterprise-reviewer-sample.test.mjs tests/e2e/enterprise-workspace-tour.test.mjs` | Private identity/CSRF and replay contracts; isolated synthetic transport, roles and sample work. |
@@ -14,6 +20,8 @@ Chromium/WebKit checks. It also runs these focused reviewer-operations gates:
 | Reviewer tour | `node scripts/everbranch-team/enterprise-reviewer-tour-browser.mjs` | Tracked tour markup, accessible controls, responsive sample email and viewport behavior. |
 | Full shared reviewer renderer | `node scripts/everbranch-team/enterprise-reviewer-browser.mjs` | Actual isolated HTTP kernel/controller/CSP plus the shared Enterprise and ReactFlow renderers; synthetic work, roles, resources, requests and meetings. |
 | Native operations | `node scripts/everbranch-team/enterprise-browser-smoke.mjs` with `ENTERPRISE_TEST_OPERATIONS=1 ENTERPRISE_OPERATIONS_SCENARIO=all` | Persistent mapped workflow tasks, interruption/retry behavior, Roll Call meeting preview/confirmation/PDF, Resources conflicts and the signed-in tour opening current authorized records without replay writes. |
+| Native job editing | `node scripts/everbranch-team/enterprise-browser-smoke.mjs` with `ENTERPRISE_TEST_OPERATIONS=1 ENTERPRISE_OPERATIONS_SCENARIO=jobs` | Real authorized job creation, exact uncertain retry, task editing/removal, queue assignment and reload in a disposable runtime. Runs separately to preserve existing request limits. |
+| Blaine browser demonstration | `node scripts/everbranch-team/enterprise-job-sample-browser.mjs` | Additive fictional jobs/people/contractors, New ticket, queue assignment, Roll Call, map/months, Settings and shared detail controls; operational SQL is forbidden. |
 | Priority overview and guided exploration | `node scripts/everbranch-team/enterprise-priorities-browser.mjs` | Actual shared popup, icons, source/status labels, current priority, keyboard/focus/dismissal, persistent top controls and actual-screen spotlight. |
 | Public procedural screens | `node scripts/everbranch-team/enterprise-public-procedures-browser.mjs` | Same report/certificate/Finance interfaces using only explicit fictional sample transport; no SQL, cookies, operational API or provider calls. |
 | Persistent Finance packet | `enterprise-finance-browser.mjs` inside authenticated `all` or bounded `finance` scenario | Retained unsent form, exact interrupted save/reload/replay, single record, assigned review/reopen/history and inert hostile text. No payment is executed or inferred. |

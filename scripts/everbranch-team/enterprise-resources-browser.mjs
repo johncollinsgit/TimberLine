@@ -58,7 +58,7 @@ export async function checkResourceWorkspace(page,evidence) {
     await page.locator('#res-save').click();await page.waitForFunction(()=>!document.getElementById('res-dialog').open);
     await page.getByRole('button',{name:'Return asset',exact:true}).click();await page.locator('#res-form-location').selectOption(facility.id);await page.locator('#res-form-condition').fill('Synthetic returned condition');await page.locator('#res-save').click();await page.waitForFunction(()=>!document.getElementById('res-dialog').open);
     assert.equal((await api('/enterprise/resources/'+asset.id)).body.status,'available');
-    await navigate('calendar');await page.locator('#res-new').click();
+    await navigate('calendar');await page.locator('#res-list [data-month-picker]').fill('2026-11');await page.locator('#res-list [data-month-picker]').dispatchEvent('change');await page.locator('#res-new').click();
     await page.locator('#res-form-title').fill('Synthetic reviewed class');await page.locator('#res-form-resource').selectOption(room.id);
     await page.locator('#res-form-start').fill('2026-11-02T09:00');await page.locator('#res-form-end').fill('2026-11-02T10:00');
     await page.locator('#res-save').click();await page.waitForFunction(()=>!document.getElementById('res-dialog').open);

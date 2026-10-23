@@ -19,7 +19,9 @@ class RecipientController
     {
         $version = $this->access->recipient($request, $token);
         if (! $this->unlocked($request, $version)) {
-            return response()->view('service-proposals.unlock', compact('token'))->header('Cache-Control', 'private, no-store');
+            $leesMcRae = ($version->payload['client']['reference'] ?? null) === 'lees-mcrae-college';
+
+            return response()->view('service-proposals.unlock', compact('token', 'leesMcRae'))->header('Cache-Control', 'private, no-store');
         }
         $requestKey = $request->session()->get('service_proposal_request.'.$version->id);
         if (! $requestKey) {
@@ -30,8 +32,10 @@ class RecipientController
         $comments = Comment::where('tenant_id', $version->tenant_id)->where('version_id', $version->id)->oldest()->limit(500)->get();
         $reviewerName = $request->session()->get('service_proposal_name.'.$version->id);
         $commentKey = Str::uuid()->toString();
+        $financial = ! empty($version->payload['client_details']) ? app(FinancialPlanning::class)->view($request, $version->payload,
+            'recipient:'.$version->tenant_id.':'.$version->id.':'.$version->content_hash, route('service-proposals.recipient.financial', $token)) : null;
 
-        return response()->view('service-proposals.recipient', ['payload' => $version->payload, 'preview' => false, 'version' => $version, 'token' => $token, 'requestKey' => $requestKey, 'comments' => $comments, 'reviewerName' => $reviewerName, 'commentKey' => $commentKey])->header('Cache-Control', 'private, no-store');
+        return response()->view('service-proposals.recipient', ['payload' => $version->payload, 'preview' => false, 'version' => $version, 'token' => $token, 'requestKey' => $requestKey, 'comments' => $comments, 'reviewerName' => $reviewerName, 'commentKey' => $commentKey, 'financial' => $financial])->header('Cache-Control', 'private, no-store');
     }
 
     public function unlock(Request $request, string $token)
@@ -82,7 +86,7 @@ class RecipientController
         $data = $request->validate(['reviewer_name' => ['required', \Illuminate\Validation\Rule::in($version->payload['reviewer_names'] ?? [])]]);
         $request->session()->put('service_proposal_name.'.$version->id, $data['reviewer_name']);
 
-        return redirect()->route('service-proposals.recipient.show', $token);
+        return redirect()->route('service-proposals.recipient.show', ['token' => $token, 'section' => 'review']);
     }
 
     public function estimate(Request $request, string $token)
@@ -91,7 +95,22 @@ class RecipientController
         abort_unless($this->unlocked($request, $version) && ! empty($version->payload['client_details']), 403);
         $estimate = app(UsageEstimate::class)->calculate($request->only(['departments', 'low', 'high']));
 
-        return redirect()->to(route('service-proposals.recipient.show', $token).'#usage-estimator')->with('proposal_estimate', ['version_id' => $version->id, 'content_hash' => $version->content_hash, 'result' => $estimate]);
+        return redirect()->to(route('service-proposals.recipient.show', ['token' => $token, 'section' => 'scope']).'#usage-estimator')->with('proposal_estimate', ['version_id' => $version->id, 'content_hash' => $version->content_hash, 'result' => $estimate]);
+    }
+
+    public function financial(Request $request, string $token)
+    {
+        $version = $this->access->recipient($request, $token);
+        abort_unless($this->unlocked($request, $version) && ! empty($version->payload['client_details']), 403);
+        $planning = app(FinancialPlanning::class);
+        $redirect = redirect()->to(route('service-proposals.recipient.show', ['token' => $token, 'section' => 'scope']).'#usage-estimator');
+        try {
+            $planning->apply($request, $version->payload, 'recipient:'.$version->tenant_id.':'.$version->id.':'.$version->content_hash);
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            return $redirect->withErrors(['financial' => $exception->validator->errors()->all()])->withInput($planning->feedback($request));
+        }
+
+        return $redirect;
     }
 
     public function comment(Request $request, string $token)
@@ -103,6 +122,6 @@ class RecipientController
         $data = $request->validate(['page' => ['required', 'in:overview,approach,scope,pricing'], 'body' => ['required', 'string', 'max:4000'], 'comment_key' => ['required', 'uuid']]);
         $this->proposals->comment($version, $name, $data['page'], $data['body'], $data['comment_key']);
 
-        return redirect()->to(route('service-proposals.recipient.show', $token).'#review-comments')->with('status', 'Comment saved to this proposal version.');
+        return redirect()->to(route('service-proposals.recipient.show', ['token' => $token, 'section' => 'review']).'#review-comments')->with('status', 'Comment saved to this proposal version.');
     }
 }

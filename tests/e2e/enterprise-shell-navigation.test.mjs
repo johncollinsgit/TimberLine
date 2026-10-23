@@ -52,8 +52,7 @@ const composerSource = between(
     "  function resetNext",
 );
 const rowsSource = between(shell, "  function rows()", "  function render(");
-const locatedSource = shell.match(/    const located = [^\n]+;/)?.[0];
-assert.ok(locatedSource);
+const workViewsSource=await readFile(new URL('../../resources/js/enterprise/work-views.js',import.meta.url),'utf8');
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
 test("the patched shell compiles with Blade composition left to its existing partials", () => {
@@ -106,7 +105,9 @@ function fixture(mode = "private") {
         area: "a",
         selected: "r1",
         view: "list",
-        map: false,
+        map: false,projectCatalog:{items:[]},rollCallReturn:null,catalogReturn:null,catalogFilters:{statuses:{projects:"active",requests:"incoming"}},loadProjectCatalog(){},openJobWizard(){},
+        workMonth: "2026-10",
+        campusToday:()=>"2026-10-23",
         navigationPushPending: false,
         navigationSearchBatch: false,
         navigationViewOverride: null,
@@ -118,9 +119,10 @@ function fixture(mode = "private") {
         draftPrefix: "fixture:",
         data: { viewer_id: "u1", projects: [], requests: [] },
         preferencesState: null,
+        workSource(){return context.section==="projects"?context.data.projects:context.data.requests;},
         preferencesArea: null,
         $: (id) =>
-            id === "search" ? input : id === "discussion-body" ? note : {},
+            id === "search" ? input : id === "discussion-body" ? note : {value:"all"},
         sessionStorage: {
             get length() {
                 return storage.size;
@@ -144,6 +146,7 @@ function fixture(mode = "private") {
             throw new Error("Navigation must never fetch or call a provider");
         },
     });
+    vm.runInContext(workViewsSource,context);
     context.history = {
         state: null,
         pushState(state, _title, target) {
@@ -322,13 +325,13 @@ test("map uses exactly the list/calendar search and saved filter projection, inc
             title: "Audio check",
             status: "assigned",
             task: { assignee_id: "u1" },
-            data: { latitude: 36, longitude: -81 },
+            data: { location_id:"saved", location_version:1 },
         },
         {
             id: "complete",
             title: "Audio complete",
             status: "completed",
-            data: { latitude: 36.1, longitude: -81.1 },
+            data: { location_id:"saved", location_version:1 },
         },
         {
             id: "other",
@@ -346,12 +349,13 @@ test("map uses exactly the list/calendar search and saved filter projection, inc
     c.data.projects = [
         { id: "project", name: "Audio project", archived: false },
     ];
+    c.data.buildings={items:[{id:"saved",version:1,map_number:"52",source_url:c.EverbranchWorkViews.mapSource}]};
     c.preferencesArea = "a";
     vm.runInContext(rowsSource, c);
     const ids = () =>
         plain(
             vm.runInContext(
-                `(() => { const work=rows(); ${locatedSource} return {rows: work.map(r=>r.id), markers: located.map(r=>r.id)}; })()`,
+                `(() => { const work=rows(); const events=EverbranchWorkViews.workEvents(data,section,work); return {rows: work.map(r=>r.id), markers: events.filter(event=>event.mapNumber).map(event=>event.sourceId)}; })()`,
                 c,
             ),
         );

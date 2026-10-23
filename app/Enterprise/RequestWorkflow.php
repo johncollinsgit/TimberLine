@@ -16,10 +16,16 @@ use Illuminate\Support\Str;
 /** Enterprise-owned lifecycle over existing durable Teams records; no provider actions. */
 class RequestWorkflow
 {
+    public const TYPES = ['general' => 'General request', 'it_support' => 'IT support', 'event_setup' => 'Event setup', 'plumbing' => 'Plumbing', 'lighting' => 'Lighting', 'maintenance' => 'Maintenance'];
+
+    public const PRIORITIES = ['low', 'normal', 'high', 'urgent'];
+
     public function __construct(private WorkspaceAccess $access, private TeamWorkRepository $work, private WorkGraph $graph) {}
 
     public function execute(Tenant $tenant, User $user, array $input): array
     {
+        $this->validateFields($input);
+
         return DB::transaction(function () use ($tenant, $user, $input): array {
             DB::table('team_work_locks')->insertOrIgnore(['tenant_id' => $tenant->id]);
             DB::table('team_work_locks')->where('tenant_id', $tenant->id)->lockForUpdate()->first();
@@ -35,7 +41,7 @@ class RequestWorkflow
 
                     return ['id' => $area->id, 'replayed' => true];
                 }
-                $area = $this->access->area($tenant, $actor, $input['area_id'], in_array($input['action'], ['project.create', 'request.triage', 'request.assign'], true));
+                $area = $this->access->area($tenant, $actor, $input['area_id'], in_array($input['action'], ['project.create', 'request.triage', 'request.classify', 'request.assign'], true));
                 if ($input['action'] === 'project.create') {
                     $project = $this->graph->read($this->work->state($tenant->id), $actor, 'project', $input['id']);
 
@@ -63,7 +69,7 @@ class RequestWorkflow
                 $result = ['id' => $area->id, 'visibility' => $input['visibility']];
                 $this->audit($tenant->id, $area->id, 1, $user->id, ['action' => $action, 'after' => $result + ['name' => $area->name]]);
             } else {
-                $coordinate = in_array($action, ['project.create', 'request.triage', 'request.assign'], true);
+                $coordinate = in_array($action, ['project.create', 'request.triage', 'request.classify', 'request.assign'], true);
                 $area = $this->access->area($tenant, $actor, $input['area_id'], $coordinate);
                 if ($action === 'request.create') {
                     abort_unless(WorkspaceAccess::canSubmit($actor, $area->id), 403);
@@ -103,7 +109,7 @@ class RequestWorkflow
                 'kind' => 'enterprise_request', 'source_key' => hash('sha256', 'enterprise:'.$input['id']), 'visibility' => 'area',
                 'title' => $input['title'], 'status' => 'submitted', 'version' => 0,
                 'starts_on' => $input['due_on'] ?? null,
-                'data' => ['description' => $input['description'] ?? '', 'location' => $building?->title ?? $input['location'] ?? '',
+                'data' => array_intersect_key($input, array_flip(['request_type', 'priority'])) + ['description' => $input['description'] ?? '', 'location' => $building?->title ?? $input['location'] ?? '',
                     'latitude' => $building ? null : ($input['latitude'] ?? null), 'longitude' => $building ? null : ($input['longitude'] ?? null), 'created_by' => (string) $user->id]
                     + ($building ? ['location_id' => $building->id, 'location_version' => $building->version] : [])]);
         } else {
@@ -112,7 +118,10 @@ class RequestWorkflow
             $before = $this->view($tenant, $actor, $record);
         }
         $data = $record->data;
-        if ($action === 'request.triage') {
+        if ($action === 'request.classify') {
+            abort_unless(in_array($record->status, ['submitted', 'triaged'], true) && empty($data['task_id']), 409, 'Change an assigned task priority through its task controls.');
+            $data = array_replace($data, array_intersect_key($input, array_flip(['request_type', 'priority'])));
+        } elseif ($action === 'request.triage') {
             abort_unless($record->status === 'submitted', 409);
             $record->status = 'triaged';
             $data['triage_note'] = $input['note'] ?? '';
@@ -128,7 +137,7 @@ class RequestWorkflow
             $taskId = (string) Str::uuid();
             $this->work->execute($tenant->id, fn () => $this->access->actor($tenant, $user, true),
                 ['kind' => 'task.create', 'id' => $taskId, 'idempotency_key' => $input['request_id'], 'title' => $record->title,
-                    'description' => $data['description'], 'assignee_id' => $assignee, 'memberships' => [$project['id'] => []],
+                    'description' => $data['description'], 'priority' => $data['priority'] ?? 'normal', 'assignee_id' => $assignee, 'memberships' => [$project['id'] => []],
                     'due_on' => $record->starts_on?->toDateString()]);
             $data['task_id'] = $taskId;
             $data['project_id'] = $project['id'];
@@ -162,9 +171,9 @@ class RequestWorkflow
         $result = $this->view($tenant, $actor, $record);
         $auditAfter = $result;
         // Audit request-owned content only; historical graph projections can contain revoked references.
-        unset($auditAfter['task'], $auditAfter['can_coordinate'], $auditAfter['can_progress']);
+        unset($auditAfter['task'], $auditAfter['can_coordinate'], $auditAfter['can_progress'], $auditAfter['priority'], $auditAfter['priority_source']);
         if ($before !== null) {
-            unset($before['task'], $before['can_coordinate'], $before['can_progress']);
+            unset($before['task'], $before['can_coordinate'], $before['can_progress'], $before['priority'], $before['priority_source']);
         }
         $this->audit($tenant->id, $record->id, $record->version, $user->id, ['action' => $action, 'before' => $before, 'after' => $auditAfter]);
 
@@ -182,12 +191,32 @@ class RequestWorkflow
             $task = $this->graph->read($state, $actor, 'task', $data['task_id']);
         }
 
+        $intakePriority = in_array($data['priority'] ?? null, self::PRIORITIES, true) ? $data['priority'] : null;
+        $priority = $task ? (in_array($task['priority'] ?? null, self::PRIORITIES, true) ? $task['priority'] : null) : $intakePriority;
+
         return ['id' => $record->id, 'area_id' => $record->area_id, 'title' => $record->title, 'version' => $record->version,
+            'request_type' => is_string($data['request_type'] ?? null) && array_key_exists($data['request_type'], self::TYPES) ? $data['request_type'] : null,
+            'requested_priority' => $intakePriority, 'priority' => $priority, 'priority_source' => $task ? 'task' : ($intakePriority === null ? 'not_recorded' : 'request'),
             'status' => $task && $task['completed_at'] !== null ? 'completed' : ($record->status === 'completed' && $task ? 'assigned' : $record->status),
             'due_on' => $record->starts_on?->toDateString(), 'data' => $data, 'task' => $task,
             'can_coordinate' => WorkspaceAccess::permits($actor, $record->area_id, true, true),
             'can_progress' => WorkspaceAccess::permits($actor, $record->area_id, true)
                 && ((string) $record->assigned_user_id === $actor['user_id'] || WorkspaceAccess::permits($actor, $record->area_id, true, true))];
+    }
+
+    /** Internal/native command callers use the same finite values as HTTP; legacy omissions remain omissions. */
+    private function validateFields(array $input): void
+    {
+        abort_if(array_key_exists('type', $input), 422, 'Use the structured request_type field.');
+        foreach (['request_type' => array_keys(self::TYPES), 'priority' => self::PRIORITIES] as $key => $allowed) {
+            if (array_key_exists($key, $input)) {
+                abort_unless(in_array($input['action'], ['request.create', 'request.classify'], true)
+                    && ($input[$key] === null || is_string($input[$key]) && in_array($input[$key], $allowed, true)), 422, 'Invalid request classification.');
+            }
+        }
+        if ($input['action'] === 'request.classify') {
+            abort_unless(array_key_exists('request_type', $input) || array_key_exists('priority', $input), 422, 'Choose a request type or intake priority.');
+        }
     }
 
     private function audit(int $tenantId, string $id, int $version, int $userId, array $event): void

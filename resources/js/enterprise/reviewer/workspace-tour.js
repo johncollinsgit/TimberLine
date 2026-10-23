@@ -157,7 +157,9 @@
                     ],
                     [
                         "Procedure spine",
-                        "Open a row for the details and actions available to your account.",
+                        context?.data?.request_fields?.version === 1
+                            ? "Type describes the request. Priority comes from intake until assignment, then from the linked task."
+                            : "Open a row for the details and actions available to your account.",
                     ],
                 ];
             if (index === 2)
@@ -254,11 +256,11 @@
                 records.push(["Choose what to remember", "Inspect, edit or delete private typed preferences and source observations. Opt in for a conversation; changed sources or permissions withhold old observations."]);
             const copy = [
                 "Open the campus overview to find current work. Use Buildings when you want to start with a location.",
-                "Scan or sort Requests, then open a row for details. Close or Escape returns to the same list.",
+                "Review Incoming tickets by department and person. Move & assign walks through the destination, project, worker and building. Close or Escape returns to the queue.",
                 "Open the workflow workspace for your selected project. Review the form, assignment and approval before making changes.",
-                "Scan or sort Projects, then open a row for details. Close or Escape returns to the same list.",
+                "Filter Projects by department or person. New job guides details and assignment; Create project starts an empty project. Open a row for notes, files and current work controls. Close or Escape returns to the same list.",
                 "Open People & contractors to review available contacts. Use Assets to check recorded equipment holders and locations.",
-                "Open Roll Call to review priorities and record a decision. Confirm the owner and date before changing a task.",
+                "Browse permitted projects in Roll Call by department, person or contractor. Open a project for notes and files; Close returns to the same overview.",
                 feature("conversation_ui")
                     ? context?.data?.conversation?.ready === true
                         ? "Write a question and Send to OpenAI. Check the linked records before acting on a generated reply."
@@ -275,7 +277,9 @@
                 role: `Signed in: ${boot.identity.userName || "current user"} · Current workspace: ${workspace?.name || "unavailable"}`,
                 cards: records,
                 detail: ready()
-                    ? index === 1 && context.data.can_submit && feature("resources")
+                    ? index === 1 && context.data.can_submit && context.data.request_fields?.version === 1
+                        ? "In New request, choose a type and intake priority. Coordinators can change them before assignment."
+                        : index === 1 && context.data.can_submit && feature("resources")
                         ? "In New request, choose an available saved building to link the ticket. A typed location label alone stays unlinked."
                         : "Opening a screen changes no records. Use only the actions available to your account."
                     : "Waiting for the current authorized workspace. No sample record or alternate account will be substituted.",

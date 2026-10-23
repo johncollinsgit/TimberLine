@@ -442,9 +442,10 @@
         } catch {}
         if (!state || state.schema !== 1) {
             state = seed();
-            if (boot.defaultPersona === "executive")
-                state.persona = "executive";
+            if (["executive", "demo_manager"].includes(boot.defaultPersona))
+                state.persona = boot.defaultPersona;
         }
+        if (state.persona === "demo_manager" && boot.defaultPersona !== "demo_manager") state.persona = "executive";
         // Add new illustrative records to older sample sessions without replacing user work.
         const supplemental = seed();
         state.certificates ??= supplemental.certificates;
@@ -453,15 +454,20 @@
         if (!state.projects.some(row => row.id === IDS.facultyProject)) state.projects.push(clone(supplemental.projects.find(row => row.id === IDS.facultyProject)));
         if (!state.tasks.some(row => row.id === IDS.facultyTask)) state.tasks.push(clone(supplemental.tasks.find(row => row.id === IDS.facultyTask)));
         if (!state.requests.some(row => row.id === IDS.facultyRequest)) state.requests.push(clone(supplemental.requests.find(row => row.id === IDS.facultyRequest)));
-        const members = [
-            {
-                id: "1",
-                name: "Operations coordinator · sample",
-                can_approve: true,
-            },
-            { id: "2", name: "Campus worker · sample", can_approve: false },
-            { id: "3", name: "Student requester · sample", can_approve: false },
-        ];
+        const sampleUpgradeChanged=globalThis.EverbranchJobSample?.upgrade(state,boot,IDS)||false;
+        const members=globalThis.EverbranchJobSample?.members()||[{id:'1',name:'Operations coordinator',can_approve:true},{id:'2',name:'Campus worker',can_approve:false},{id:'3',name:'Student requester',can_approve:false}];
+        // The former default Executive option represented Blaine. Upgrade that
+        // retained sample once, only when the trusted presentation selects the
+        // explicit demo manager. Later deliberate perspective choices stay put.
+        const managerMigration = "blaine-demo-manager-v1";
+        let personaUpgradeChanged = false;
+        if (boot.defaultPersona === "demo_manager" && !state.sample_migrations?.[managerMigration]) {
+            if (state.persona === "executive") state.persona = "demo_manager";
+            state.sample_migrations ??= {};
+            state.sample_migrations[managerMigration] = { applied_at: now() };
+            personaUpgradeChanged = true;
+        }
+        if(sampleUpgradeChanged || personaUpgradeChanged){try{storage?.setItem(key,JSON.stringify(state));}catch{state.demo_storage_warning=true;}}
         const currentId = () =>
             state.persona === "executive"
                 ? "demo-executive"
@@ -470,8 +476,12 @@
                   : state.persona === "worker"
                     ? "2"
                     : "1";
-        const executive = () => state.persona === "executive";
-        const manager = () => ["manager", "executive"].includes(state.persona);
+        const readOnlyExecutive = () => state.persona === "executive";
+        const demoManager = () => state.persona === "demo_manager";
+        // Both share the overview and its ancillary read-only capabilities.
+        const executive = () => readOnlyExecutive() || demoManager();
+        const manager = () => ["manager", "executive", "demo_manager"].includes(state.persona);
+        const workCoordinator = () => manager() && !readOnlyExecutive();
         const canWrite = () =>
             !["requester", "executive"].includes(state.persona);
         function save() {
@@ -658,8 +668,10 @@
                 };
             return {
                 ...clone(row),
+                request_type:row.data.request_type||null,requested_priority:row.data.priority||null,
+                priority:task?.priority||row.data.priority||null,priority_source:task?.priority?'task':row.data.priority?'request':'not_recorded',
                 task: task ? clone(task) : null,
-                can_coordinate: manager() && !executive(),
+                can_coordinate: workCoordinator(),
                 can_progress:
                     canWrite() &&
                     (manager() || task?.assignee_id === currentId()),
@@ -683,6 +695,7 @@
             return {
                 runtime: "sample",
                 persona: "executive",
+                demoManager: demoManager(),
                 asOf: now(),
                 scope: "Configured fictional workspace records. No current college operating data or direct-report hierarchy is asserted.",
                 network: configured.map((row) => ({
@@ -826,16 +839,18 @@
                 requests: state.requests
                     .filter(
                         (row) =>
-                            row.area_id === selected &&
+                            row.status !== "removed" && row.area_id === selected &&
                             (state.persona !== "requester" ||
                                 row.data.created_by === currentId()),
                     )
                     .map(requestView),
-                projects: clone(
-                    state.projects
-                        .filter((row) => row.enterprise_area_id === selected)
-                        .filter(() => state.persona !== "requester"),
-                ),
+                projects: state.projects.filter(row=>row.enterprise_area_id===selected&&state.persona!=='requester').map(row=>globalThis.EverbranchJobSample?EverbranchJobSample.projectProjection(state,row,members,workCoordinator()):clone(row)),
+                tasks: state.persona==='requester'?[]:state.tasks.filter(row=>row.enterprise_area_id===selected&&!row.deleted).map(clone),
+                request_fields:{version:1,types:{general:'General request',it_support:'IT support',event_setup:'Event setup',plumbing:'Plumbing',lighting:'Lighting',maintenance:'Maintenance'},priorities:['low','normal','high','urgent']},
+                ...(state.demo_storage_warning?{demo_storage_warning:true}:{}),
+                tasks_has_more:false,tasks_coverage:'Returned fictional tasks in this browser.',
+                buildings:{items:state.persona==='requester'?[]:state.resources.filter(row=>row.kind==='location'&&row.area_id===selected&&row.status==='active'&&row.data.level==='facility').map(row=>({id:row.id,title:row.title,version:row.version,map_number:row.data.map_number||row.data.catalog_map_number,source_url:row.data.source_url||row.data.source})),has_more:false,coverage:'Saved fictional building records in this department.'},
+                routing_departments:manager()?clone(state.areas):[],
                 members:
                     state.persona === "requester"
                         ? []
@@ -862,8 +877,8 @@
                 has_more: false,
                 scan_partial: false,
                 can_manage: manager() && !executive(),
-                can_submit: !executive(),
-                can_coordinate: manager() && !executive(),
+                can_submit: !readOnlyExecutive() && (state.persona!=="requester" || selected===IDS.area),
+                can_coordinate: workCoordinator(),
                 can_review: manager(),
                 sample_data: true,
             };
@@ -1095,7 +1110,64 @@
                 new Blob([pdf], { type: "application/pdf" }),
             );
         }
+        function sampleJobCommand(body) {
+            const actions=['job.create','project.update','project.archive','task.create','task.update','task.delete','request.plan'];
+            if(!actions.includes(body.action))return null;
+            coordinate();area(body.area_id);
+            const member=id=>id===null||id===undefined||id===''?null:members.find(row=>row.id===String(id)&&row.id!=='3')||error('Choose a current sample worker.',422);
+            const savedBuilding=(areaId)=>{
+                if(!body.location_id)return null;
+                const row=get(state.resources,body.location_id);
+                if(row.kind!=='location'||row.area_id!==areaId||row.status!=='active'||row.data.level!=='facility')error('Choose a saved building in the destination department.',422);
+                checkVersion(row,body.location_version);return row;
+            };
+            const link=(row,building)=>{for(const key of ['location_id','location_version','location_reference','catalog_map_number','latitude','longitude'])delete row.data[key];row.data.location=building?.title||body.location||'';if(building){row.data.location_id=building.id;row.data.location_version=building.version;row.data.catalog_map_number=String(building.data.map_number||building.data.catalog_map_number||'');row.data.location_reference={id:building.id,version:building.version,map_number:row.data.catalog_map_number,source_url:building.data.source_url||building.data.source};}};
+            const result=(projectId,taskId,ticketId,areaId=body.area_id)=>({area_id:areaId,project_id:projectId,...(taskId?{task_id:taskId}:{}),...(ticketId?{ticket_id:ticketId}:{})});
+            if(body.action==='job.create'){
+                const assignee=member(body.assignee_id);if(!assignee)error('Choose an existing sample worker.');
+                const building=savedBuilding(body.area_id);command({action:'project.create',id:body.id,area_id:body.area_id,title:body.title});
+                const target=project(body.id);target.description=body.description||'';target.owner_id=currentId();target.due_on=body.due_on||null;target.updated_at=now();
+                let ticket=command({action:'request.create',id:uuid(),area_id:body.area_id,title:body.task_title||body.title,description:body.description||'',due_on:body.due_on,priority:body.priority||'normal',request_type:body.request_type||'general'});
+                const row=get(state.requests,ticket.id);link(row,building);
+                ticket=command({action:'request.triage',id:row.id,area_id:row.area_id,expected_version:row.version,note:'Reviewed through the assignment wizard.'});
+                ticket=command({action:'request.assign',id:row.id,area_id:row.area_id,expected_version:ticket.version,project_id:target.id,assignee_id:assignee.id});
+                return result(target.id,ticket.data.task_id,row.id);
+            }
+            if(body.action==='request.plan'){
+                const row=get(state.requests,body.id);if(row.area_id!==body.area_id||row.task_id||!['submitted','triaged'].includes(row.status))error('Only a current incoming ticket can be routed.',409);
+                checkVersion(row,body.expected_version);if(body.acknowledge_routing!==true&&body.acknowledge_routing!==1)error('Review and confirm the destination.',422);
+                const destination=area(body.target_area_id),target=project(body.project_id),assignee=member(body.assignee_id),building=savedBuilding(destination.id);
+                if(!assignee||target.enterprise_area_id!==destination.id||target.archived)error('Choose an active project and worker in the destination department.',422);
+                row.area_id=destination.id;link(row,building);row.version++;audit(row.id,'request.routed');
+                if(row.status==='submitted')command({action:'request.triage',id:row.id,area_id:row.area_id,expected_version:row.version,note:'Reviewed through the assignment wizard.'});
+                const assigned=command({action:'request.assign',id:row.id,area_id:row.area_id,expected_version:row.version,project_id:target.id,assignee_id:assignee.id});
+                return result(target.id,assigned.data.task_id,row.id,destination.id);
+            }
+            if(body.action.startsWith('project.')){
+                const row=project(body.id);if(row.enterprise_area_id!==body.area_id)error('Choose this project’s department.',404);checkVersion(row,body.expected_version);
+                if(body.action==='project.archive')row.archived=Boolean(body.archived);else{row.name=String(body.title).slice(0,100);row.description=String(body.description||'').slice(0,5000);row.due_on=body.due_on||null;}
+                row.version++;row.updated_at=now();audit(row.id,body.action);return result(row.id);
+            }
+            if(body.action==='task.create'){
+                const target=project(body.project_id);if(target.enterprise_area_id!==body.area_id||target.archived)error('Choose an active project in this department.',422);
+                if(state.tasks.some(row=>row.id===body.id))error('This sample task already exists.',409);
+                const assignee=member(body.assignee_id);const row={id:body.id,title:String(body.title).slice(0,100),description:body.description||'',version:1,assignee_id:assignee?.id||null,completed_at:null,due_on:body.due_on||null,enterprise_area_id:body.area_id,project_id:target.id,status:'active',priority:body.priority||'normal',owner_user_id:'1',accountable_owner_id:'1',ball_user_id:assignee?.id||null,next_action:'Review the assigned work.',blockers:[],checklist:[],approved:false,created_at:now(),updated_at:now()};state.tasks.push(row);target.tasks.push(row.id);audit(row.id,body.action);return result(target.id,row.id);
+            }
+            const task=get(state.tasks,body.id);if(task.deleted||task.enterprise_area_id!==body.area_id)error('This task is unavailable.',404);checkVersion(task,body.expected_version);
+            const row=state.requests.find(item=>item.data?.task_id===task.id);
+            if(row&&(row.id!==body.related_request_id||row.version!==Number(body.request_version)))error('The linked ticket changed. Reload before editing.',409);
+            if(body.action==='task.delete'){
+                if(body.acknowledge_removal!==true&&body.acknowledge_removal!==1)error('Confirm removal without deleting history.',422);
+                task.deleted=true;if(row)row.status='removed';
+            }else{
+                if(task.completed_at)error('Review completed work through its operational controls.',409);
+                const assignee=member(body.assignee_id);Object.assign(task,{title:String(body.title).slice(0,100),description:body.description||'',priority:body.priority||task.priority||'normal',assignee_id:assignee?.id||null,ball_user_id:assignee?.id||null,due_on:body.due_on||null});
+                if(row){row.title=task.title;row.due_on=task.due_on;row.data.description=task.description;}
+            }
+            task.version++;task.updated_at=now();if(row){row.version++;audit(row.id,body.action);}audit(task.id,body.action);return result(task.project_id,task.id);
+        }
         function command(body) {
+            const managed=sampleJobCommand(body);if(managed)return managed;
             const action = body.action;
             if (action === "workspace.create") {
                 coordinate();
@@ -1116,7 +1188,9 @@
                 state.projects.push({
                     id: body.id,
                     name: body.title,
-                    description: "Reviewer-created fictional project.",
+                    description: body.description || "Reviewer-created fictional project.",
+                    owner_id: currentId(),
+                    updated_at: now(),
                     enterprise_area_id: body.area_id,
                     version: 1,
                     archived: false,
@@ -1140,6 +1214,7 @@
                             5000,
                         ),
                         location: body.location ?? "",
+                        request_type:body.request_type||null,priority:body.priority||null,
                         latitude: null,
                         longitude: null,
                         created_by: currentId(),
@@ -1147,6 +1222,7 @@
                     },
                     task_id: null,
                 };
+                if(body.location_id){const building=get(state.resources,body.location_id);if(building.area_id!==body.area_id||building.kind!=='location'||building.status!=='active'||building.data.level!=='facility')error('Choose a current saved building in this department.',422);checkVersion(building,body.location_version);Object.assign(row.data,{location:building.title,location_id:building.id,location_version:building.version,catalog_map_number:String(building.data.map_number||building.data.catalog_map_number||''),location_reference:{id:building.id,version:building.version,map_number:String(building.data.map_number||building.data.catalog_map_number||''),source_url:building.data.source_url||building.data.source}});}
                 state.requests.unshift(row);
                 audit(row.id, action);
                 return requestView(row);
@@ -1155,7 +1231,8 @@
             checkVersion(row, body.expected_version);
             if (row.area_id !== body.area_id)
                 error("Choose the request’s owning sample workspace.", 404);
-            if (action === "request.triage") {
+            if(action === "request.classify"){coordinate();if(!["submitted","triaged"].includes(row.status)||row.task_id)error("Only an incoming ticket can be classified.",409);for(const key of ["request_type","priority"])if(body[key]!==undefined)row.data[key]=body[key];
+            } else if (action === "request.triage") {
                 coordinate();
                 if (row.status !== "submitted")
                     error(
@@ -1188,6 +1265,7 @@
                 state.tasks.push({
                     id,
                     title: row.title,
+                    description:row.data.description||"",priority:row.data.priority||"normal",updated_at:now(),
                     version: 1,
                     assignee_id: String(body.assignee_id),
                     completed_at: null,
@@ -4266,16 +4344,16 @@
                         error("Sample usage accepts read-only GET only.", 405);
                     return clone(sampleUsage(query));
                 }
+                const mutating = body !== undefined || (options.method && !["GET", "HEAD"].includes(options.method.toUpperCase()));
+                if (readOnlyExecutive() && mutating)
+                    error("The Executive sample perspective is read-only. Nothing was changed.", 403);
                 if (
-                    executive() &&
-                    (body !== undefined ||
-                        (options.method &&
-                            !["GET", "HEAD"].includes(
-                                options.method.toUpperCase(),
-                            )))
+                    demoManager() &&
+                    !((path==='/enterprise/commands'&&['job.create','project.create','project.update','project.archive','task.create','task.update','task.delete','request.create','request.classify','request.triage','request.assign','request.progress','request.complete','request.plan'].includes(body?.action))||path==='/enterprise/preferences'||/^\/enterprise\/discussion\/(project|request|task)\/[^/]+(?:\/(open|comments))?$/.test(path)||/^\/team\/tasks\/[^/]+\/files$/.test(path)||/^\/team\/file-uploads\/[^/]+\/(chunks\/\d+|complete|cancel)$/.test(path)||/^\/enterprise\/files\/[^/]+\/caption$/.test(path)) &&
+                    mutating
                 )
                     error(
-                        "This executive demonstration is read-only. Switch to the department manager sample to operate a workflow. No real administrator access is granted.",
+                        "This action is outside the demo manager’s permitted work controls. No real administrator access is granted.",
                         403,
                     );
                 if (
@@ -4342,7 +4420,7 @@
             snapshot: () => clone(state),
             setPersona(value) {
                 if (
-                    !["manager", "worker", "requester", "executive"].includes(
+                    !["manager", "worker", "requester", "executive", ...(boot.defaultPersona === "demo_manager" ? ["demo_manager"] : [])].includes(
                         value,
                     )
                 )
@@ -4374,8 +4452,12 @@
                     /* Browser storage can be unavailable without blocking reset. */
                 }
                 state = seed();
-                if (boot.defaultPersona === "executive")
-                    state.persona = "executive";
+                if (["executive", "demo_manager"].includes(boot.defaultPersona))
+                    state.persona = boot.defaultPersona;
+                if (boot.defaultPersona === "demo_manager") {
+                    state.sample_migrations ??= {};
+                    state.sample_migrations["blaine-demo-manager-v1"] = { applied_at: now() };
+                }
                 save();
             },
             initialScope: () => ({

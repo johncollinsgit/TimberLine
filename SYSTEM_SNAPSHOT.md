@@ -1,3 +1,51 @@
+## Enterprise work controls and scoped views (October 23; source candidate)
+
+Native work management reuses current graph permissions, department checks,
+versions, transaction locks and exact retry receipts. It creates assigned jobs,
+routes incoming tickets and edits permitted projects/tasks without replacing
+their comments, files or history. Multi-project tasks and incomplete or ambiguous
+links require native review. The fictional Blaine role and browser demo records
+remain separate from real accounts and operational database records.
+
+Roll Call shows permitted projects, people and contractors. A shared Center/Side
+dialog retains unsent drafts and active uploads; private quarantine remains.
+Campus map markers use explicit current saved building links on the official
+plan. Work due-date months stay separate from Eastern resource bookings. Layout
+and intake preferences belong in Settings. See
+[jobs and ticket queue](docs/operations/enterprise-job-workspace.md),
+[Roll Call](docs/operations/enterprise-roll-call.md),
+[work details](docs/operations/enterprise-work-detail-placement.md),
+[map and calendar](docs/operations/enterprise-campus-map-calendar.md) and
+[request classification](docs/operations/enterprise-request-classification.md).
+
+## Private proposal planning (October 23; source candidate)
+
+Financial supports private session comparisons using exact saved quoted scope,
+dated reference rates and editable illustrative departmental volumes. University
+or department management and payment preferences remain explicit; unknown costs
+remain pending. Scenarios change no proposal, agreement, budget or provider state.
+See [the planning contract](docs/operations/proposal-financial-planning.md).
+
+## Private proposal PDF download (source candidate, October 23)
+
+A top-of-reader download generates a PDF from the exact saved draft or immutable
+publication. It reuses current owner/recipient authority and private no-store
+responses; changing tabs does not omit PDF sections. Rendering uses a pinned
+local library with remote resources, scripts and PHP disabled, bounded input and
+private per-request temporary storage. It activates no provider or agreement.
+See [the proposal contract](docs/architecture/reusable-proposals.md).
+
+## Proposal section panels and college graphic (October 23; source candidate)
+
+Generic proposal previews, client/reviewer pages and selection summaries use
+independent native section controls with one visible panel. Switching preserves
+unsent form values within the document; print reveals every panel. The exact
+Lees-McRae client password gate and Overview reuse the approved inline 2.8-second
+college graphic, with static reduced-motion/print rendering. The gate receives
+only a branding boolean; proposal content stays locked. No media, script, CSP, publication,
+provider, stored commercial text or campus-build boundary changes. See the
+[proposal contract](docs/architecture/reusable-proposals.md#proposal-section-panels).
+
 ## Reviewed proposal commercial snapshot (October 23; source candidate)
 
 Proposal previews render the financial, implementation, support, usage and renewal

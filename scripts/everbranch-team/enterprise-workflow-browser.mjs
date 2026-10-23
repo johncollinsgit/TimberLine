@@ -72,8 +72,10 @@ export async function checkWorkflowWorkspace(page, evidence) {
         });
     }
     await page
-        .getByRole("button", { name: "Operations & projects", exact: true })
+        .getByRole("button", { name: "Projects", exact: true })
         .click();
+    await page.locator('#work-status').selectOption('all');
+    await page.locator('[data-view="list"]').click();
     await page
         .getByRole("button", { name: "Synthetic repair project", exact: true })
         .click();

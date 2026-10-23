@@ -180,7 +180,7 @@ try {
         .waitFor();
     await page.locator('#close-work-detail').click();
     await page
-        .getByRole("button", { name: "Operations & projects", exact: true })
+        .getByRole("button", { name: "Projects", exact: true })
         .click();
     await page
         .getByRole("button", {
@@ -471,6 +471,8 @@ try {
         /1 open conflicts/,
     );
     await page.getByRole("button", { name: "Roll Call", exact: true }).click();
+    if (!await page.locator("#roll-meeting-tools").evaluate(node => node.open))
+        await page.locator("#roll-meeting-tools > summary").click();
     await page.locator("#roll-meeting-form").waitFor({ state: "visible" });
     await page.locator("#roll-meeting-title").fill("Reviewer browser meeting");
     await page

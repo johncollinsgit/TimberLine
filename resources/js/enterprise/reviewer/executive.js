@@ -69,6 +69,7 @@
         });
         return {
             supported: true,
+            demoManager: input.demoManager === true,
             asOf:
                 text(input.asOf, 100) || "Not supplied — freshness unverified",
             scope:
@@ -214,28 +215,8 @@
             const hero = node("header", "eed-hero"),
                 intro = node("div"),
                 identity = node("aside", "eed-meta");
-            intro.append(
-                node(
-                    "span",
-                    "eed-kicker",
-                    "Executive demonstration · browser simulation",
-                ),
-                node("h2", "", "One connected view. Clear next steps."),
-                node(
-                    "p",
-                    "",
-                    "See the configured workspace network, current ownership and supporting records from this demonstration. Open a card to inspect the work behind it.",
-                ),
-            );
-            identity.append(
-                node("span", "eed-tag", "Demo admin persona"),
-                node("strong", "", "Blaine J. Hansen · COO"),
-                node(
-                    "p",
-                    "",
-                    "Illustrative perspective only. No real account, administrator grant or institutional authority has been created.",
-                ),
-            );
+            intro.append(node("strong", "", "Campus overview"));
+            identity.append(node("span", "eed-tag", "Demo"),node("strong", "", data.demoManager ? "Blaine · demo manager" : "Executive · read-only"),node("small", "", "Demo role · no real account or grants"));
             hero.append(intro, identity);
             root.append(hero);
             root.append(

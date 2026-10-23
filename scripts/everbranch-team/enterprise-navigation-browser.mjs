@@ -59,13 +59,17 @@ export async function checkShellNavigation(page) {
             title: "Synthetic retained navigation project",
         })
     ).id;
+    const saveBuilding=async number=>page.evaluate(async({area,number,tenant})=>{
+        const response=await fetch('/enterprise/resources/commands?tenant='+tenant,{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json','X-CSRF-TOKEN':document.querySelector('meta[name=csrf-token]').content},body:JSON.stringify({action:'location.save',area_id:area,id:crypto.randomUUID(),request_id:crypto.randomUUID(),expected_version:0,title:'Synthetic source-map reference',catalog_map_number:number,level:'facility'})});const result=await response.json();if(!response.ok)throw new Error(JSON.stringify(result));return result;
+    },{area,number,tenant});
+    const includedBuilding=await saveBuilding('52'),excludedBuilding=await saveBuilding('2');
     const included = (
         await command({
             action: "request.create",
             area_id: area,
             title: "Synthetic filtered map inspection",
-            latitude: 35,
-            longitude: -82,
+            location_id: includedBuilding.id,
+            location_version: includedBuilding.version,
         })
     ).id;
     const excluded = (
@@ -73,8 +77,8 @@ export async function checkShellNavigation(page) {
             action: "request.create",
             area_id: area,
             title: "Synthetic separate map task",
-            latitude: 36,
-            longitude: -83,
+            location_id: excludedBuilding.id,
+            location_version: excludedBuilding.version,
         })
     ).id;
     await verifyFilteredRequestMap(page, {
@@ -97,6 +101,6 @@ export async function checkShellNavigation(page) {
         false,
     );
     console.log(
-        "PASS real HTTP shell navigation: same filtered authorized rows on map/list, selected marker, Back/Forward workspace/view/selection, retained unsent composer and reload. Coordinates are isolated synthetic fixtures, not campus placements.",
+        "PASS real HTTP shell navigation: same filtered authorized rows on map/list, selected marker, Back/Forward workspace/view/selection, retained unsent composer and reload. Explicit saved-building references use printed source-map positions, not GPS.",
     );
 }

@@ -14,7 +14,7 @@ The form captures choices/version when opened. Background refresh cannot silentl
 
 ## Truthful Buildings results
 
-The frozen Buildings workflow counts only explicit current authorized IDs in its bounded request result, sorts open work before completed work and then by actual task priority, and shows priority unset when no canonical task supplies one. Free-text name matches remain visibly separate and never contribute counts or priority summaries. Empty private results say **No linked tickets in this result**; no building-wide zero is inferred. The list covers at most 100 readable requests from a 1000-record scan; more work may exist.
+The frozen Buildings workflow counts only explicit current authorized IDs in its bounded request result, sorts open work before completed work and then by current canonical task priority or saved intake priority before assignment. Legacy unset values remain unrecorded; see [department classification](enterprise-request-classification.md). Free-text name matches remain visibly separate and never contribute counts or priority summaries. Empty private results say **No linked tickets in this result**; no building-wide zero is inferred. The list covers at most 100 readable requests from a 1000-record scan; more work may exist.
 
 Legacy label/optional-coordinate intake stays available when no building is selected, including when Resources is disabled. Existing text-only requests are not retrofitted. The public fictional sample keeps text-only intake and explicitly disables native selection; it does not simulate persistence or ACL acceptance. The 68-entry official catalog, saved workspace locations, and map source remain distinct.
 

@@ -1,0 +1,32 @@
+{
+  "verified_on": "2026-10-23",
+  "purpose": "Illustrative proposal planning arithmetic; no LMC rate acceptance, provider readiness or activation",
+  "sources": [
+    {
+      "url": "https://developers.openai.com/api/docs/pricing",
+      "facts": {
+        "unit": "USD per million text tokens, Standard tier, uncached input",
+        "gpt-6-luna": {"input": 0.10, "output": 0.50},
+        "gpt-6.1-sol": {"input": 2, "output": 10},
+        "gpt-6-astra": {"input": 10, "output": 50},
+        "gpt-live-1_voice_session_minute": 0.05
+      },
+      "exclusions": ["Voice backend model and tools billed separately", "Cache writes, tools, regional uplifts and other tiers not assumed"],
+      "notes": "No actual LMC model/voice architecture selected. Input includes history and retrieval."
+    },
+    {
+      "url": "https://www.twilio.com/en-us/sms/pricing/us",
+      "facts": {"unit": "USD per outbound US long-code SMS segment", "base": 0.0083, "carrier_low": 0.0035, "carrier_high": 0.005, "number_monthly": 1.15},
+      "exclusions": ["Registration/A2P", "Inbound messages", "Taxes", "MMS", "Failures", "Optional extra services"],
+      "notes": "Segments differ from messages. Encoding, length and destination affect price. Unpriced extras remain pending."
+    },
+    {
+      "url": "https://aws.amazon.com/ses/pricing/",
+      "facts": {"unit": "USD, a la carte outbound", "per_1000_emails": 0.10, "per_gb_attachment_data": 0.12},
+      "exclusions": ["Dedicated IPs", "Optional deliverability/validation", "Tenant add-ons", "Data transfer and taxes"],
+      "notes": "Illustrative baseline only. Prior source history reports SES denial. No account readiness verified. Actual selected provider can differ."
+    }
+  ],
+  "volume_profiles": "Light/Moderate/Busy are editable illustrative assumptions, not measured LMC usage or empirical departmental typicals. Usage is expected to vary by department.",
+  "commercial_rules": ["Zero Evergrove markup", "No approved $150 fee or allowance", "Prepaid vs pay-as-you-go separate from university vs departmental management", "Pooling never discounts usage math", "Unpriced extras explicitly pending"]
+}

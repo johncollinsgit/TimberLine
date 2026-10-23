@@ -1,3 +1,4 @@
+import {createProjectThroughWizard} from './enterprise-job-wizard-browser.mjs';
 import assert from 'node:assert/strict';
 import {resolve} from 'node:path';
 
@@ -19,9 +20,7 @@ export async function checkPrivateWorkspaceTour(page,evidence) {
     const recoveryArea=(await api('/enterprise/commands',{action:'workspace.create',id:crypto.randomUUID(),request_id:crypto.randomUUID(),title:'Synthetic private recovery workspace',visibility:'department_only'})).id;
     await api('/enterprise/commands',{action:'project.create',id:crypto.randomUUID(),request_id:crypto.randomUUID(),area_id:area,title:'Synthetic unrelated first project'});
     await page.goto(new URL(`/?tenant=${tenant}&area_id=${area}&section=projects`,page.url()).href);
-    await page.locator('#create-project').click();
-    await page.locator('#create-form [name=title]').fill('Synthetic private tour project');
-    await page.locator('#create-form').getByRole('button',{name:'Save',exact:true}).click();
+    await createProjectThroughWizard(page,'Synthetic private tour project');
     await page.locator('#request-list').getByRole('button',{name:'Synthetic private tour project',exact:true}).click();
     const original=(await api('/enterprise/data?area_id='+area));
     const project=original.projects.find(row=>row.name==='Synthetic private tour project');assert.ok(project);
@@ -84,7 +83,7 @@ export async function checkPrivateWorkspaceTour(page,evidence) {
     for(const [index,section]of[[0,'home'],[1,'requests'],[3,'projects'],[4,'people'],[5,'roll_call']]){
         await open();await scene(index);await root.locator('[data-tour-screen]').click();
         await page.waitForFunction(section=>new URL(location.href).searchParams.get('section')===section,section);
-        if(index===1){assert.equal(new URL(page.url()).searchParams.get('selected'),null,'Explore scans the authorized request table');await page.locator(`#request-list [data-open="${request.id}"]`).waitFor();assert.equal(await page.locator('#work-drawer').evaluate(el=>el.open),false);}
+        if(index===1){assert.equal(new URL(page.url()).searchParams.get('selected'),null,'Explore scans the authorized request table');await page.locator('#work-status').selectOption('active');await page.locator(`#request-list [data-open="${request.id}"]`).waitFor();assert.equal(await page.locator('#work-drawer').evaluate(el=>el.open),false);}
     }
     assert.deepEqual(writes,[],'Tour playback, replay and actual-screen exploration must not mutate or call paid services');
     page.off('request',recordWrite);

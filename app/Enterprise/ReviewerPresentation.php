@@ -24,7 +24,7 @@ class ReviewerPresentation
             app('livewire')->flushState();
         }
         $scope = ['area_id' => '10000000-0000-4000-8000-000000000001', 'project_id' => '20000000-0000-4000-8000-000000000001'];
-        $presentation = ['runtime' => 'sample', 'defaultPersona' => 'executive', 'identity' => ['tenantSlug' => 'fictional-campus', 'viewer' => 'sample', 'workspace' => 'sample-campus',
+        $presentation = ['runtime' => 'sample', 'defaultPersona' => 'demo_manager', 'identity' => ['tenantSlug' => 'fictional-campus', 'viewer' => 'sample', 'workspace' => 'sample-campus',
             'name' => 'Lees-McRae campus demonstration', 'userName' => 'Fictional reviewer perspective'],
             'routes' => ['data' => '/enterprise/data?tenant=fictional-campus', 'commands' => '/enterprise/commands?tenant=fictional-campus',
                 'history' => '/enterprise/requests', 'enterprise' => '/enterprise', 'team' => '/team', 'workflows' => '/enterprise/workflows',

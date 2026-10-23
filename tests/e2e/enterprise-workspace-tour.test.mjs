@@ -263,7 +263,7 @@ function loadFixture() {
         transport,
         urls: { data: "/enterprise/data?tenant=synthetic" },
         navigation: new URLSearchParams("section=projects"),
-        homeGeneration: 0,
+        homeGeneration: 0,projectCatalog:null,projectCatalogGeneration:0,workMapBuilding:"",queuedPlan:null,loadProjectCatalog(){},
         homeArea: "a1",
         $: (id) => {
             if (!nodes.has(id))
@@ -465,7 +465,7 @@ test("request and project scene navigation scans tables without opening a native
         assert.equal(tour.open(index,id).available,true);
         assert.equal(actions.at(-1).detail.section,section);
         assert.equal(actions.at(-1).detail.selected,null);
-        assert.match(tour.describe(index===2?3:index,{}).text,/Scan or sort.*Close or Escape/);
+        assert.match(tour.describe(index===2?3:index,{}).text,/(?:Incoming tickets|Filter Projects).*Close or Escape/);
     }
     snapshot.data.can_submit=true;
     tour.update(snapshot);
@@ -529,4 +529,12 @@ test("conversation finale distinguishes approved text, unavailable setup and det
     snapshot.data.features.conversation_ui=false; snapshot.data.features.read_only_assistant=true; tour.update(snapshot);
     assert.equal(tour.describe(6,{}).target,"read-only-assistant");
     assert.match(tour.describe(6,{}).text,/use no AI model/);
+});
+
+
+test('Requests guidance follows only the supported department classification contract',()=>{
+ const {tour,snapshot}=fixture();snapshot.data.can_submit=true;snapshot.data.request_fields={version:1};tour.update(snapshot);
+ const current=tour.describe(1,{});assert.match(current.detail,/choose a type and intake priority.*before assignment/);
+ assert.match(current.cards[2][1],/intake until assignment, then from the linked task/);
+ delete snapshot.data.request_fields;tour.update(snapshot);assert.doesNotMatch(tour.describe(1,{}).detail,/choose a type/);
 });

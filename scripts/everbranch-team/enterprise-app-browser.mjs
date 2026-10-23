@@ -1,3 +1,4 @@
+import {openProjectWizard} from './enterprise-job-wizard-browser.mjs';
 import assert from 'node:assert/strict';
 import {resolve} from 'node:path';
 
@@ -26,11 +27,10 @@ export async function checkEnterpriseApp(page,evidence,packet,tenant) {
     const coreBodies=[];
     await page.locator('[data-section=projects]').click();
     await page.route('**/enterprise/commands?*',async route=>{coreBodies.push(route.request().postDataJSON());if(coreBodies.length===1){await route.fetch();return route.abort();}return route.continue();});
-    await page.locator('#create-project').click();
-    await page.locator('#create-form [name=title]').fill('Synthetic update safety project');
-    await page.locator('#create-form button[type=submit]').click();
-    await page.locator('#retry').waitFor({state:'visible'});
-    await page.locator('#cancel-create').click();
+    await openProjectWizard(page,'Synthetic update safety project');
+    await page.locator('#job-save').click();
+    await page.locator('#job-retry').waitFor({state:'visible'});
+    await page.locator('#job-wizard-close').click();
     await page.waitForFunction(()=>EverbranchTransport.pendingWrites===0&&EverbranchTransport.refreshBlockers===1);
     await page.locator('#enterprise-install-open').click();await page.locator('#enterprise-update-confirm').check();
     assert.equal(await page.locator('#enterprise-update-reload').isDisabled(),true,'A settled uncertain core command must still block refresh');
@@ -38,10 +38,10 @@ export async function checkEnterpriseApp(page,evidence,packet,tenant) {
     await page.waitForFunction(()=>EverbranchTransport.pendingWrites===0&&EverbranchTransport.refreshBlockers===0);
     assert.deepEqual(coreBodies[1],coreBodies[0]);await page.unroute('**/enterprise/commands?*');
     await page.route('**/enterprise/commands?*',route=>route.fulfill({status:422,contentType:'application/json',body:JSON.stringify({message:'Synthetic definitive validation rejection'})}));
-    await page.locator('#create-project').click();await page.locator('#create-form [name=title]').fill('Rejected synthetic project');await page.locator('#create-form button[type=submit]').click();
+    await openProjectWizard(page,'Rejected synthetic project');await page.locator('#job-save').click();
     await page.locator('#status').filter({hasText:'The server rejected this action'}).waitFor();
     assert.equal(await page.evaluate(()=>EverbranchTransport.refreshBlockers),0,'A first-attempt definitive rejection must permit correction');
-    assert.equal(await page.locator('#retry').isHidden(),true);await page.locator('#cancel-create').click();await page.unroute('**/enterprise/commands?*');
+    assert.equal(await page.locator('#retry').isHidden(),true);await page.locator('#job-wizard-close').click();await page.unroute('**/enterprise/commands?*');
     const planningBodies=[];
     await page.locator('[data-section=contractors]').click();
     await page.locator('#planning-form [name=title]').fill('Synthetic update safety contractor');
