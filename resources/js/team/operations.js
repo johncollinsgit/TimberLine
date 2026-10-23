@@ -89,6 +89,13 @@ export function installOperations(nativeRoot) {
   document.querySelector('.teams-sidebar')?.addEventListener('click', event => { if (event.target.closest('[data-team-mode],#teams-create,#teams-project-list button,#teams-favorite-list button')) native(); });
   let personalTicket = 0;
   window.TeamOperations = {
+    settingsAreas: () => identityLost ? [] : areas.map(item => ({ id: item.id, name: item.name })),
+    openSettingsArea: async (areaId, settingsView) => {
+      if (identityLost) throw new Error('Verify the original account before opening area settings.');
+      const target = areas.find(item => item.id === areaId);
+      if (!target || !['connections', 'automations'].includes(settingsView) || (settingsView === 'automations' && !admin)) throw new Error('These area settings are not available to this account.');
+      await openArea(target, settingsView);
+    },
     open: async (areaId, recordId) => { const target = areas.find(a => a.id === areaId); if (!target) throw new Error('This area is no longer accessible.'); await openArea(target); await details({ id: recordId, title: 'Work details' }); },
     renderPersonal: async (context, workPage = 1) => {
       const node = $('personal'), mode = document.getElementById('tw-mode').value, q = document.getElementById('tw-search').value.trim(), ticket = ++personalTicket;
@@ -337,7 +344,7 @@ export function installOperations(nativeRoot) {
   function updateDraftNotice() { $('draft').hidden = !drafts.size && !emailDrafts.size; const ids = [...new Set([...drafts.keys(), ...[...emailDrafts.values()].map(d => d.area)])]; $('draft').querySelector('span').textContent = 'Drafts retained in this page: ' + ids.map(id => areas.find(a => a.id === id)?.name || 'Area').join(', '); }
   function keepDraft() { if (draft?.dirty) { draft.values = Object.fromEntries(new FormData($('form'))); const audience = $('form').querySelector('[name=audience_ids]'); if (audience?.multiple) { draft.data.audience_ids = [...audience.selectedOptions].map(o => o.value); delete draft.values.audience_ids; } drafts.set(draft.area, draft); } updateDraftNotice(); }
   $('new').onclick = () => edit();
-  document.addEventListener('keydown', event => { if ($('panel').hidden || $('detail').open || $('editor').open || event.target.closest('input,textarea,select,[contenteditable]')) return; if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); event.stopImmediatePropagation(); ($('search').closest('label').hidden ? $('groups').querySelector('button') : $('search'))?.focus(); } else if (event.key.toLowerCase() === 'n' && !event.ctrlKey && !event.metaKey && !event.altKey && !$('new').hidden) { event.preventDefault(); event.stopImmediatePropagation(); edit(); } }, true);
+  document.addEventListener('keydown', event => { if ($('panel').hidden || $('detail').open || $('editor').open || event.target.closest('dialog,input,textarea,select,[contenteditable]')) return; if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); event.stopImmediatePropagation(); ($('search').closest('label').hidden ? $('groups').querySelector('button') : $('search'))?.focus(); } else if (event.key.toLowerCase() === 'n' && !event.ctrlKey && !event.metaKey && !event.altKey && !$('new').hidden) { event.preventDefault(); event.stopImmediatePropagation(); edit(); } }, true);
   $('editor-close').onclick = () => { keepDraft(); $('editor').close(); returnFocus?.focus(); };
   $('editor').addEventListener('cancel', keepDraft);
   $('resume').onclick = async () => { if (drafts.has(area?.id)) edit(); else { const retained = [...emailDrafts.values()].find(d => d.area === area?.id); if (retained) { const record = await api('/operations/records/' + retained.recordId); await compose(record, 'gmail.send'); } else $('notice').textContent = 'Return to the area where you started this draft to resume it.'; } };

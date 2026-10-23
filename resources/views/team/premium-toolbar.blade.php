@@ -5,6 +5,7 @@
         @unless($standalone)<a href="{{ route('team.app', ['tenant' => $tenant->slug]) }}" class="team-app-entry" data-team-surface-link>Open {{ $teamAppName }}</a>@endunless
     </div>
     <div class="actions teams-heading-actions">
+        @unless($standalone)<button type="button" data-team-settings aria-haspopup="dialog">Teams settings</button>@endunless
         <label class="teams-search-wrap" data-team-search-icon><span class="sr-only">Search accessible work</span><input id="tw-search" type="search" placeholder="Search work…" aria-keyshortcuts="Control+k Meta+k"></label>
         <button id="tw-status-resume" type="button" hidden>Resume status draft</button><button id="tw-templates">Templates</button><button id="tw-new-project">New project</button><button id="tw-new-task" class="primary">+ Create task</button>
     </div>
