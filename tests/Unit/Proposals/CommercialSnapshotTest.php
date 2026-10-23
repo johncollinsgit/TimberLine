@@ -42,7 +42,7 @@ final class CommercialSnapshotTest extends TestCase
     private function stored(): array
     {
         $stored = ['client' => ['id' => 'synthetic-client'], 'items' => [['id' => 'synthetic-item', 'revision' => 1, 'terms_months' => [12], 'charges' => [['amount_cents' => 100000]]]],
-            'client_details' => $this->fixture()['client_details'], 'unresolved' => $this->fixture()['unresolved'], 'usage_plan' => 'unconfirmed', 'template' => null, 'scope_notes' => 'Synthetic agreed scope.'];
+            'client_details' => $this->fixture()['client_details'], 'unresolved' => $this->fixture()['unresolved'], 'usage_plan' => 'unconfirmed', 'template' => null, 'scope_notes' => 'Synthetic agreed scope.', 'journey' => [['gate' => 'Stored reviewed discovery gate.']], 'approach_key' => 'evergrove_department_journey'];
         $stored['commercial_snapshot'] = ['schema_version' => 1, 'source_reference' => 'Synthetic reviewed PDF v9', 'source_copy_sha256' => str_repeat('a', 64),
             'catalog_origins' => ['synthetic-item' => ['revision' => 1, 'payload_sha256' => str_repeat('b', 64), 'terms_months' => []]],
             'item_overrides' => ['synthetic-item' => ['terms_months' => [12]]]];
@@ -78,13 +78,15 @@ final class CommercialSnapshotTest extends TestCase
     public function test_ordinary_save_retains_reviewed_snapshot_instead_of_rebuilding_from_current_catalog(): void
     {
         $stored = $this->stored();
-        $proposed = [...$stored, 'title' => 'Updated noncommercial title.', 'client_details' => [], 'unresolved' => ['Generated stale terms.']];
+        $proposed = [...$stored, 'title' => 'Updated noncommercial title.', 'client_details' => [], 'unresolved' => ['Generated stale terms.'], 'journey' => [['gate' => 'Generated stale discovery gate.']]];
         $proposed['items'][0] = [...$proposed['items'][0], 'revision' => 2, 'terms_months' => [36], 'charges' => [['amount_cents' => 999999]]];
         $result = CommercialSnapshot::preserve($stored, $proposed);
         $this->assertSame('Updated noncommercial title.', $result['title']);
         $this->assertSame($stored['items'], $result['items']);
         $this->assertSame($stored['client_details'], $result['client_details']);
         $this->assertSame($stored['unresolved'], $result['unresolved']);
+        $this->assertSame($stored['journey'], $result['journey']);
+        $this->assertSame($stored['approach_key'], $result['approach_key']);
         $this->assertSame($stored['commercial_snapshot'], $result['commercial_snapshot']);
         $this->assertSame($stored['commercial_snapshot']['protected_sha256'], CommercialSnapshot::hash($result));
         $this->assertSame($proposed, CommercialSnapshot::preserve(['client_details' => []], $proposed));
@@ -94,7 +96,7 @@ final class CommercialSnapshotTest extends TestCase
     {
         $stored = $this->stored();
         $cases = [];
-        foreach (['client' => ['id' => 'other-client'], 'items' => [], 'scope_notes' => 'Different scope.', 'usage_plan' => 'workspace_allowance', 'template' => ['id' => 'different-template']] as $key => $value) {
+        foreach (['client' => ['id' => 'other-client'], 'items' => [], 'scope_notes' => 'Different scope.', 'usage_plan' => 'workspace_allowance', 'template' => ['id' => 'different-template'], 'approach_key' => null] as $key => $value) {
             $cases[] = [$stored, [...$stored, $key => $value]];
         }
         $drift = $stored;
@@ -109,6 +111,10 @@ final class CommercialSnapshotTest extends TestCase
         $originDrift = $stored;
         $originDrift['commercial_snapshot']['catalog_origins']['synthetic-item']['payload_sha256'] = str_repeat('c', 64);
         $cases[] = [$originDrift, $stored];
+        foreach (['journey' => [['gate' => 'Changed stored gate.']], 'approach_key' => null] as $key => $value) {
+            $this->assertNotSame(CommercialSnapshot::hash($stored), CommercialSnapshot::hash([...$stored, $key => $value]));
+            $cases[] = [[...$stored, $key => $value], $stored];
+        }
         foreach ($cases as [$before, $after]) {
             try {
                 CommercialSnapshot::preserve($before, $after);

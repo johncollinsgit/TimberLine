@@ -149,15 +149,17 @@ exact copy digest, native catalog origins and explicit draft-only term overrides
 The native catalog id/revision remains an origin, not a claim that its unchanged
 payload contains the new draft terms. Catalog rows stay untouched. The marker's
 protected digest covers client, complete items/prices, client details, unresolved
-items, usage method, template, contractual scope notes and the provenance marker
+items, usage method, template, contractual scope notes, complete saved journey,
+approach key and the provenance marker
 itself (excluding its own digest), with recursively sorted object keys and stable
 list order. It is integrity evidence, not a signature, grant or billing authority.
 
 Under the existing revision lock, ordinary Save preserves that protected
-commercial snapshot for the same client, service ID set, scope notes, usage method
-and template. Later catalog prices or terms cannot silently replace it. Title,
-introduction, reviewer names and journey retain existing editing behavior. Scope,
-client, services, usage method or template changes require a separately reviewed
+commercial snapshot for the same client, service ID set, scope notes, usage method,
+template and approach key. The exact stored journey is retained rather than
+regenerated from current source. Later catalog prices or terms cannot silently replace it. Title,
+introduction and reviewer names retain existing editing behavior. Scope,
+client, services, usage method, template or approach-key changes require a separately reviewed
 commercial revision; incomplete/drifted markers refuse Save and new publication.
 Existing drafts without the new sections/marker retain the original behavior.
 Never use the generator to reconcile an already saved target. Rollback to old Save
@@ -171,7 +173,7 @@ actual online section titles only. None of this sends, signs, charges or enables
 provider. Future readiness-notice billing still requires per-workspace evidence
 and human review; staged totals are not inferred per-workspace invoice allocations.
 A data-only reconciliation needs its own exact target/catalog/version pins,
-13-path diff, rollback/replay review and approval; this source supplies no runtime
+14-path diff, rollback/replay review and approval; this source supplies no runtime
 write, publication, credential or CSP activation permission.
 
 ## Verification and release gates

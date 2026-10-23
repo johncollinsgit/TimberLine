@@ -329,6 +329,10 @@ test('reviewed PDF commercial snapshot survives normal owner saves and catalog d
         $item['terms_months'] = [12];
     }
     unset($item);
+    $originalJourney = $payload['journey'];
+    expect($originalJourney[0]['gate'])->toBe('Agree the discovery sessions and the initial department focus. No fixed onsite frequency or hours are assumed.');
+    $payload['journey'][0]['gate'] = 'Agree the discovery sessions and the initial department focus.';
+    expect(array_slice($payload['journey'], 1))->toBe(array_slice($originalJourney, 1));
     $payload['client_details'] = $copy['client_details'];
     $payload['unresolved'] = $copy['unresolved'];
     $payload['commercial_snapshot'] = ['schema_version' => 1, 'source_reference' => 'Synthetic reviewed PDF v9', 'source_copy_sha256' => hash_file('sha256', base_path('tests/Fixtures/proposals/lees-mcrae-v9-commercial.json')),
@@ -342,6 +346,7 @@ test('reviewed PDF commercial snapshot survives normal owner saves and catalog d
     $this->actingAs($this->owner)->put($draftPath, $input)->assertRedirect();
     $this->draft->refresh();
     expect($this->draft->revision)->toBe(3)->and($this->draft->payload['items'])->toBe($payload['items'])
+        ->and($this->draft->payload['journey'])->toBe($payload['journey'])->and(array_slice($this->draft->payload['journey'], 1))->toBe(array_slice($originalJourney, 1))
         ->and($this->draft->payload['client_details'])->toBe($payload['client_details'])->and($this->draft->payload['commercial_snapshot'])->toBe($payload['commercial_snapshot']);
     $asset = $this->service->asset($this->tenant, $payload['items'][0]['id'], 'catalog');
     $changed = $asset->payload;
@@ -352,11 +357,12 @@ test('reviewed PDF commercial snapshot survives normal owner saves and catalog d
     $this->put($draftPath, [...$input, 'revision' => 3])->assertRedirect();
     $this->draft->refresh();
     expect($this->draft->revision)->toBe(4)->and($this->draft->payload['items'])->toBe($payload['items'])
+        ->and($this->draft->payload['journey'])->toBe($payload['journey'])->and($this->draft->payload['approach_key'])->toBe('evergrove_department_journey')
         ->and($asset->fresh()->getRawOriginal('payload'))->toBe($catalogRaw);
     $this->get($draftPath.'/preview')->assertOk()->assertSee('Contract term and renewal')->assertSee('12-month term')->assertSee('60 days')->assertSee('90 days')
         ->assertSee('No routine subscription-pause entitlement')->assertSee('What setup includes')->assertSee('Staged fees')->assertSee('Support requests are submitted through the ticketing system.')
-        ->assertDontSee('phased billing remains to be agreed')->assertDontSee('Contract duration: to be agreed.');
-    foreach ([['catalog_ids' => [$payload['items'][0]['id']]], ['usage_plan' => 'workspace_allowance'], ['scope_notes' => 'Changed contractual scope.']] as $change) {
+        ->assertDontSee('phased billing remains to be agreed')->assertDontSee('Contract duration: to be agreed.')->assertSee('Agree the discovery sessions and the initial department focus.')->assertDontSee('No fixed onsite frequency or hours are assumed.');
+    foreach ([['catalog_ids' => [$payload['items'][0]['id']]], ['usage_plan' => 'workspace_allowance'], ['scope_notes' => 'Changed contractual scope.'], ['approach_key' => null]] as $change) {
         $this->put($draftPath, [...$input, 'revision' => 4, ...$change])->assertStatus(409);
         expect($this->draft->fresh()->revision)->toBe(4)->and($this->draft->fresh()->payload)->toBe($this->draft->payload);
     }
@@ -369,7 +375,7 @@ test('reviewed PDF commercial snapshot survives normal owner saves and catalog d
         ->and(fn () => $this->service->selection($newVersion->payload, [['id' => $payload['items'][0]['id']]]))->toThrow(\Illuminate\Validation\ValidationException::class);
     $oldUrl = 'https://evergrove.test/service-proposals/'.$oldToken;
     $this->post($oldUrl.'/unlock', ['password' => 'Test proposal password']);
-    $this->get($oldUrl)->assertOk()->assertSee('Contract duration: to be agreed.')->assertDontSee('Contract term and renewal');
+    $this->get($oldUrl)->assertOk()->assertSee('Contract duration: to be agreed.')->assertDontSee('Contract term and renewal')->assertSee('No fixed onsite frequency or hours are assumed.');
     expect($oldVersion->fresh()->content_hash)->toBe($oldHash)->and($oldVersion->fresh()->getRawOriginal('payload'))->toBe($oldRaw)
         ->and($oldVersion->fresh()->payload['items'][0]['terms_months'])->toBe([])->and(Version::count())->toBe(2)->and(Review::count())->toBe(0)
         ->and(DB::table('tenant_billing_orders')->count())->toBe(0);

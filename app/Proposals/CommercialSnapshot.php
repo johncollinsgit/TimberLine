@@ -7,7 +7,7 @@ use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 /** Keeps a separately reviewed draft snapshot through ordinary owner saves. No catalog writes. */
 class CommercialSnapshot
 {
-    private const PROTECTED = ['client', 'items', 'client_details', 'unresolved', 'usage_plan', 'template', 'scope_notes'];
+    private const PROTECTED = ['client', 'items', 'client_details', 'unresolved', 'usage_plan', 'template', 'scope_notes', 'journey', 'approach_key'];
 
     public static function hash(array $payload): string
     {
@@ -39,7 +39,8 @@ class CommercialSnapshot
         if (($stored['client']['id'] ?? null) !== ($proposed['client']['id'] ?? null) || $oldIds !== $newIds
             || ($stored['template']['id'] ?? null) !== ($proposed['template']['id'] ?? null)
             || ($stored['usage_plan'] ?? null) !== ($proposed['usage_plan'] ?? null)
-            || ($stored['scope_notes'] ?? null) !== ($proposed['scope_notes'] ?? null)) {
+            || ($stored['scope_notes'] ?? null) !== ($proposed['scope_notes'] ?? null)
+            || ($stored['approach_key'] ?? null) !== ($proposed['approach_key'] ?? null)) {
             throw new ConflictHttpException($refusal);
         }
         // Catalog IDs/revisions in the stored items remain explicit origins; the marker records draft-only overrides.
