@@ -10,6 +10,10 @@ class ResponsePolicy
     public function handle(Request $request, Closure $next)
     {
         abort_unless(config('service_proposals.enabled'), 404);
+        // Standalone proposal documents must not inherit another response's Livewire assets.
+        if (app()->bound('livewire')) {
+            app('livewire')->flushState();
+        }
         $response = $next($request);
         $response->headers->set('Cache-Control', 'private, no-store');
         $response->headers->set('Referrer-Policy', 'no-referrer');

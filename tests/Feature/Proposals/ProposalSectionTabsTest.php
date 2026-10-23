@@ -7,6 +7,7 @@ use App\Proposals\ProposalService;
 use App\Proposals\Review;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 
 beforeEach(function (): void {
@@ -82,6 +83,7 @@ test('private password gate shows only the exact college graphic without exposin
     $this->tabDraft->update(['payload' => $payload]);
     ['version' => $version, 'token' => $token] = proposalTabsPublish($this, 'reviewer');
     $url = 'https://evergrove.test/service-proposals/'.$token;
+    app('livewire')->forceAssetInjection();
     $response = $this->get($url)->assertOk();
     expect($response->headers->get('Cache-Control'))->toContain('no-store', 'private');
     $xpath = proposalTabsDom($response->getContent());
@@ -112,6 +114,7 @@ test('private password gate shows only the exact college graphic without exposin
 
 test('owner preview renders native section controls with the exact approved graphic only for the college', function (): void {
     $path = 'https://evergrove.test/owner-workspaces/'.$this->tabTenant->slug.'/proposals/'.$this->tabDraft->id.'/preview';
+    app('livewire')->forceAssetInjection();
     $response = $this->actingAs($this->tabOwner)->get($path)->assertOk();
     $xpath = proposalTabsDom($response->getContent());
     expect($xpath->query('//fieldset[contains(@class,"proposal-section-tabs")]')->length)->toBe(1)
@@ -127,6 +130,22 @@ test('owner preview renders native section controls with the exact approved grap
     expect(proposalTabsDom($this->get($path)->assertOk()->getContent())->query('//div[@role="img"][@aria-label="Lees-McRae College"]')->length)->toBe(0);
     Http::assertNothingSent();
     Mail::assertNothingSent();
+});
+
+test('proposal documents clear retained Livewire assets without disabling a later Livewire page', function (): void {
+    Route::get('/fixture-proposal-livewire-next', fn () => response('<html><head></head><body>Fictional next page</body></html>'));
+    try {
+        app('livewire')->forceAssetInjection();
+        $preview = $this->actingAs($this->tabOwner)->get('https://evergrove.test/owner-workspaces/'.$this->tabTenant->slug.'/proposals/'.$this->tabDraft->id.'/preview')->assertOk();
+        expect(proposalTabsDom($preview->getContent())->query('//script | //video | //iframe')->length)->toBe(0)
+            ->and($preview->headers->get('Content-Security-Policy'))->toContain("default-src 'none'", "form-action 'self'");
+        app('livewire')->forceAssetInjection();
+        $next = $this->get('https://evergrove.test/fixture-proposal-livewire-next')->assertOk();
+        expect(proposalTabsDom($next->getContent())->query('//script[@src][@data-update-uri]')->length)->toBe(1);
+        $next->assertSee('Livewire Styles', false);
+    } finally {
+        app('livewire')->flushState();
+    }
 });
 
 test('client panels retain every exact stored commercial paragraph and original native form identities', function (): void {
