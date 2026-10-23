@@ -33,9 +33,12 @@ try{
       page.on('pageerror',e=>errors.push(e.message));
       await page.addInitScript(()=>{Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>{throw new Error('Microphone permission denied. You can type instead.');}}});});
       await page.route('**/trajectory/spaces/*/gerald?*',async route=>{const response=await route.fetch(),body=await response.json();body.ai={...body.ai,ready:true,reason:null,audio_approved:true,budget_cents:500,credit_available_micros:5000000};await route.fulfill({json:body});});
+      let combinedAnswer=null;
       await page.route('**/trajectory/spaces/*/gerald/messages',async route=>{
         const input=route.request().postDataJSON(),space=route.request().url().match(/spaces\/(\d+)/)[1];
-        const d=await (await page.request.get(url+`/trajectory/spaces/${space}/dashboard?range=year`)).json(),p=d.debt_progress;
+        const d=await (await page.request.get(url+`/trajectory/spaces/${space}/dashboard?range=year`)).json();
+        const p=input.business_id?(await (await page.request.get(url+`/trajectory/spaces/${space}/combined?business_id=${input.business_id}`)).json()).debt_progress:d.debt_progress;
+        if(input.business_id)combinedAnswer=p;
         const money=v=>v===null?'not yet available':'$'+(v/100).toFixed(2),focus=d.transactions.filter(t=>input.focus_ids?.includes(t.id));
         await route.fulfill({json:{conversation_id:77,reply:'Very good. The income gap is '+money(p.income_gap_cents)+'. The paperwork has, regrettably, done its sums.',facts:{expected_income:money(p.expected_monthly_cents),income_needed:money(p.required_monthly_cents),income_gap:money(p.income_gap_cents),debt_payment:money(p.payment_monthly_cents)},category_options:focus.map(t=>({id:t.id,categories:['groceries','materials'],reason:'Was this for household groceries or business materials?'})),focus_transactions:focus.map(t=>({...t,space_id:Number(space)})),links:[],provisional:p.provisional}});
       });
@@ -51,6 +54,8 @@ try{
       await page.getByRole('tab',{name:'Both',exact:true}).click();await page.getByRole('heading',{name:'Personal + business',exact:true}).waitFor();assert.equal(await page.getByRole('progressbar').count(),3);
       await page.locator('[data-tab="bud"]').click();await page.getByRole('button',{name:'Ask Gerald',exact:true}).waitFor();
       await page.locator('#tr-gerald-question').fill('What income do we need?');await page.getByRole('button',{name:'Ask Gerald',exact:true}).click();await page.getByText(/The paperwork has, regrettably/).waitFor();
+      assert.ok(combinedAnswer,'Combined conversation must send its selected business scope');
+      assert.ok((await page.locator('#tr-gerald-thread').innerText()).includes('$'+(combinedAnswer.payment_monthly_cents/100).toFixed(2)),'Gerald must display the combined debt payment');
       await page.getByRole('button',{name:'Start voice conversation',exact:true}).click();await page.locator('#tr-feedback').filter({hasText:/Microphone permission denied|Microphone recording is unavailable/}).waitFor();
       await page.screenshot({path:`output/trajectory/gerald/${name}-gerald.png`});
       await page.getByRole('tab',{name:'Personal',exact:true}).click();await page.locator('#tr-content[aria-busy="false"]').waitFor();await page.locator('[data-tab="transactions"]').click();await page.getByRole('button',{name:'Discuss with Gerald',exact:true}).first().click();

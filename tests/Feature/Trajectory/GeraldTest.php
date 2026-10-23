@@ -69,6 +69,26 @@ test('Gerald never substitutes invented currency for server calculations and off
     $this->postJson($this->url.'/messages', ['question' => 'Foreign records?', 'request_id' => (string) Str::uuid(), 'focus_ids' => [99999]])->assertNotFound();
 });
 
+test('combined Gerald figures agree with the dashboard and a removed business link revokes the conversation', function () {
+    $tenant = Tenant::create(['slug' => 'gerald-company', 'name' => 'Gerald Company']);
+    \App\Models\TenantAccessProfile::create(['tenant_id' => $tenant->id, 'plan_key' => 'base', 'operating_mode' => 'direct']);
+    $this->owner->tenants()->attach($tenant->id, ['role' => 'owner', 'membership_active' => true]);
+    [, $business] = app(PilotService::class)->prepare($this->owner, $tenant, true);
+    app()->forgetInstance(\App\Services\Tenancy\TenantModuleAccessResolver::class);
+    $business->update(['settings' => [...$business->settings, 'flexible_monthly_cents' => 200000, 'income_expectations' => ['income' => 250000]]]);
+    $this->space->update(['settings' => [...$this->space->fresh()->settings, 'flexible_monthly_cents' => 300000, 'income_expectations' => ['income' => 350000]]]);
+    ($this->fakeReply)(['reply' => 'Together you need {{income_needed}} with a gap of {{income_gap}}.', 'plan_change' => null]);
+    $this->actingAs($this->owner);
+    $plan = $this->getJson("/trajectory/spaces/{$this->space->id}/combined?business_id={$business->id}")->assertOk()->json('debt_progress');
+    $answer = $this->postJson($this->url.'/messages', ['question' => 'What do we need together?', 'request_id' => (string) Str::uuid(), 'business_id' => $business->id])->assertOk();
+    foreach (['income_needed' => 'required_monthly_cents', 'income_gap' => 'income_gap_cents', 'debt_payment' => 'payment_monthly_cents', 'expected_income' => 'expected_monthly_cents'] as $fact => $field) {
+        expect($answer->json('facts.'.$fact))->toBe('$'.number_format($plan[$field] / 100, 2));
+    }
+    \Illuminate\Support\Facades\DB::table('trajectory_links')->where('household_id', $this->space->id)->where('business_id', $business->id)->delete();
+    $this->postJson($this->url.'/messages', ['question' => 'Still together?', 'request_id' => (string) Str::uuid(), 'conversation_id' => $answer->json('conversation_id'), 'business_id' => $business->id])->assertForbidden();
+    Http::assertSentCount(1);
+});
+
 test('plan changes require a fresh single-use exact confirmation and preserve an audited save', function () {
     $service = app(GeraldService::class);
     $proposal = $service->preview($this->owner, $this->space, ['kind' => 'budget', 'values' => ['flexible_monthly_cents' => 250000]]);
