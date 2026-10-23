@@ -443,3 +443,127 @@ section uses the same complete scoped ledger as summary/category totals, lists
 the ten largest negative spending records and every positive net spending
 category, and shows refund offsets explicitly. Transfers and debt principal are
 excluded consistently; repayments do not count card purchases twice.
+
+
+## Debt plans and Gerald (2026-10-22 source candidate)
+
+The overview and Income & scenarios show Personal, the selected Business, and
+Combined thermometers when both spaces are authorized and explicitly linked.
+Combined summarizes separate repayment budgets. Confirmed owner-only income
+sources backed by matched transaction pairs are eliminated from combined expected
+income; matching owner-pay schedules are removed only when they are actually
+included in business fixed costs. Mixed/unmatched owner sources remain provisional.
+
+Start a payoff plan to freeze its selected balances and observation dates. Cards,
+non-mortgage loans and medical provider balances are selected by default; mortgages
+remain optional and their payments stay in ongoing costs when excluded. New debt
+accounts remain visible in the selection inventory. Missing excluded payments
+also make the income target incomplete. Plan versions reject stale edits. The
+saved deadline remains fixed as time passes; changing the horizon chooses a new
+deadline from today. Observed balance increases reverse progress. No transaction
+or planned payment fabricates an observed balance.
+
+The chosen avalanche/snowball method uses one shared monthly payment budget per
+space. The target payment and extra-payment floor are compared, linked debt-goal
+contributions are included once, and final payments are capped. The dashboard,
+comparison charts and Gerald share the resulting required debt payment, extra
+above minimums, total usable income and income gap. Daily cash timing retains its
+separate assumptions; this is not a lender payoff quote or an inferred gross-sales
+or tax calculation.
+
+### Private finance AI and voice
+
+Gerald reuses current AI access grants, selected model/rate approval, the existing
+shared service-credit account, reservation locking, request limit and customer cap.
+Every provider request is reserved before dispatch and settles at twice verified
+provider cost. Household owners configure their private household AI account
+through finance access without receiving generic tenant membership. Combined
+conversation usage belongs to the household AI account. Business authority remains
+with existing finance/AI administrators. No subscription, credit purchase, module
+grant, account membership or bank allowlist is created by these interfaces.
+
+`TRAJECTORY_GERALD_ENABLED=false` disables new Gerald provider activity independently
+of ordinary Trajectory access. Enabling a space's AI allowance does not approve
+voice: the finance owner must explicitly approve the separate dated audio card.
+Rates expire on November 20, 2026, and must be reviewed before updating. Text and
+audio use the same credit and spending cap, including background reviews.
+
+Natural voice uses bounded canonical mono PCM recordings (24 kHz, 16-bit, at most
+30 seconds), `gpt-transcribe`, the selected text model and
+`gpt-realtime-2.1-mini` with `cedar`. The server owns the Realtime connection; no
+provider token is sent to a browser. Spoken wording is compared with the finalized
+answer before playback. A mismatch preserves the written answer and withholds
+audio. Stop, hiding, navigation and scope changes invalidate late client callbacks.
+Stopping does not cancel provider work already accepted. Text remains available.
+The runtime requires Composer's declared `ext-intl` and `phrity/websocket` dependency.
+
+Gerald can discuss categories and prepare budget/debt setting changes. The exact
+readback is bound to the user, finance scope, source/settings fingerprint and a
+two-minute single-use proposal. On-screen approval or a separate recorded
+“Gerald, save this plan” confirmation saves those settings. The recording receipt
+must belong to that proposal and cannot be reused. Transaction corrections still
+require an on-screen review, except for the owner's separately enabled automatic
+categorization preference. This narrowly scoped Trajectory behavior does not alter
+other assistants' voice approval policies. No payments or bank mutations are tools.
+
+Conversations, request results, plan proposals and audit findings use encrypted
+internal Trajectory record kinds. Generic dashboards, editing and archive routes
+exclude these records; conversations and proposal access remain actor-scoped.
+Raw microphone recordings are not retained. Generated audio results are accessible
+for two minutes; ordinary private conversation/results expire after thirty days.
+The existing daily `trajectory:refresh` prunes expired private records, including
+while the Branch is disabled. Financial classification audit history remains.
+
+Audio rates checked against the official model pages:
+[Transcription](https://developers.openai.com/api/docs/models/gpt-transcribe),
+[Realtime Mini](https://developers.openai.com/api/docs/models/gpt-realtime-2.1-mini).
+Provider transcription duration and separate audio/text/cached usage determine cost;
+client duration or token reports never establish a charge. Unknown outcomes retain
+reservations and are not automatically retried. Operators use the existing
+`ai-branch:reconcile-usage` preview/apply process. Audio requires verified
+`--verified-provider-micros` or `--no-charge` evidence, never a text model rate card.
+
+### Full-history review and automatic batches
+
+Review my finances queues bounded `ReviewFinances` jobs over all available posted,
+allocated history rather than the dashboard's 250-item queue. It checkpoints
+transaction versions and reuses unchanged checks across reviews. Findings paginate
+and show source changes. Provider allowance or format problems pause the review;
+Resume keeps completed checks and request identities. Unknown provider outcomes
+require usage reconciliation before resuming that request. The worker has one
+attempt so an ambiguous provider dispatch is not repeated automatically.
+
+Automatic categorization and review-after-sync are explicit owner preferences,
+initially off. Automatic batches require at least three consistent reviewed merchant
+examples, independent model agreement and current source/support versions. Broad
+retailers, possible duplicates, money movements, medical-linked rows and reviewed
+choices cannot be automatically changed. Source or support changes reject the batch.
+Corrections use the existing ledger audit and versioned undo; undo now also covers
+bulk classifications. Review-after-sync uses the preference approver's current
+access and the same AI cap. A review failure does not invalidate a successful bank
+sync. Recurring/debt payment overlaps remain review questions, not silent repairs.
+
+The existing Accounts/Plaid flow handles bank and credit-card sign-in. Business
+connections retain Transactions-only consent; household liability metadata remains
+a review suggestion. Existing original-source identities, explicit account mapping,
+OAuth return binding and exact bank pilot allowlist remain unchanged. Real bank/
+mobile/provider acceptance is required before expanding that allowlist.
+
+Acceptance commands:
+
+```sh
+php vendor/bin/pest tests/Feature/Trajectory tests/Feature/AiBranch/StandardAiVoiceTest.php --compact
+npm run build
+node tests/browser/trajectory-gerald.smoke.mjs
+php -d memory_limit=1G vendor/bin/pest --parallel --compact
+php scripts/ci/lint-migrations.php --base=BASE_SHA
+```
+
+The browser smoke creates its own local fictional SQLite database, exercises real
+plan/classification routes in Chromium and WebKit, and explicitly scripts AI replies
+and microphone denial. PHP fixtures cover metering, British voice instructions,
+spoken-word verification, confirmations and revocation. These checks do not prove
+real-provider voice quality, hardware microphone behavior or institution acceptance.
+No database migration is added. Use the protected test/build and migration-safety
+release process; verify `/ready` before calling this live. Rollback Gerald with its
+kill switch, or disable Trajectory through its existing gate, preserving records.

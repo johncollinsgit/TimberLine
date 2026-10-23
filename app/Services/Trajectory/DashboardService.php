@@ -37,7 +37,7 @@ class DashboardService
             ->where('face_punched', true)->whereIn('flow', ['expense', 'medical_payment', 'medical_membership'])
             ->where('amount_cents', '<', 0)->sortBy('amount_cents')->values();
         $accounts = Account::where('space_id', $space->id)->get();
-        $records = Record::where('space_id', $space->id)->where('active', true)->whereNotIn('kind', ['sms'])->get();
+        $records = Record::where('space_id', $space->id)->where('active', true)->whereNotIn('kind', ['sms', ...InternalRecords::KINDS])->get();
         $plans = fn ($kind) => $records->where('kind', $kind)->map(fn ($r) => [...$r->data, 'id' => $r->id, 'name' => $r->name])->values()->all();
         $schedules = array_values(array_filter($plans('recurring'), fn ($r) => $r['confirmed']));
         foreach ($schedules as &$schedule) {
@@ -275,7 +275,7 @@ class DashboardService
             'review_transactions' => $entries->where('reviewed', false)->reverse()->take(250)->values()->all(),
             'review_suggestions' => app(ReviewSuggestionService::class)->forEntries($entries),
             'anomalies' => app(AnomalyService::class)->detect($space, $entries),
-            'planning' => $planning,
+            'planning' => $planning, 'debt_progress' => $planning['debt_plan'],
             'income_runway' => $incomeRunway,
             'tax_review' => app(TaxReviewService::class)->review($space, $selected, $records),
             'income_sources' => $incomeSources,

@@ -12,6 +12,19 @@ Route::middleware(['auth', 'verified', 'throttle:120,1'])->prefix('trajectory')-
     Route::post('/businesses', [Planning::class, 'addBusiness']);
     Route::post('/invites/accept', [Trajectory::class, 'acceptInvite'])->name('trajectory.acceptInvite');
     Route::prefix('/spaces/{space}')->whereNumber('space')->group(function (): void {
+        Route::prefix('/gerald')->controller(\App\Http\Controllers\Trajectory\GeraldController::class)->group(function (): void {
+            Route::get('/', 'state');
+            Route::put('/settings', 'settings');
+            Route::put('/preferences', 'preferences');
+            Route::post('/messages', 'ask')->middleware('throttle:15,1');
+            Route::post('/transcription', 'transcribe')->middleware('throttle:10,1');
+            Route::post('/speech', 'speak')->middleware('throttle:10,1');
+            Route::post('/proposals/{proposal}/confirm', 'confirm');
+            Route::post('/audits', 'startAudit')->middleware('throttle:5,1');
+            Route::post('/audits/{audit}/resume', 'resumeAudit')->middleware('throttle:5,1');
+            Route::post('/findings/apply', 'applyAudit');
+        });
+        Route::put('/debt-plan', [\App\Http\Controllers\Trajectory\DebtPlanController::class, 'save']);
         Route::patch('/workspace', [Planning::class, 'settings']);
         Route::post('/accounts/{account}/assign', [Planning::class, 'assign']);
         Route::post('/transactions/{transaction}/anomaly', [Planning::class, 'anomaly']);

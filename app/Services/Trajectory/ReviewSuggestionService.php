@@ -10,7 +10,7 @@ class ReviewSuggestionService
      * Build review-only bulk suggestions from an exact prior decision or an
      * unambiguous provider phrase. Suggestions never create a merchant rule.
      */
-    public function forEntries(Collection $entries): array
+    public function forEntries(Collection $entries, int $limit = 8): array
     {
         $candidates = $entries->filter(fn (array $entry): bool => $entry['editable'] && ! $entry['reviewed'] && $entry['amount_cents'] < 0 && $this->eligible($entry));
         $reviewed = $entries->filter(fn (array $entry): bool => $entry['editable'] && $entry['reviewed'] && $entry['amount_cents'] < 0 && $this->eligible($entry));
@@ -23,7 +23,7 @@ class ReviewSuggestionService
             $past = $reviewed->filter(fn (array $entry): bool => ClassificationService::merchant($entry['merchant']) === $merchant);
             $classifications = $past->map(fn (array $entry): string => implode(':', [$entry['category'], $entry['flow'], (int) $entry['face_punched'], (int) $entry['bullshit_spending']]))->unique()->values();
             if ($past->isNotEmpty() && $classifications->count() === 1) {
-                $suggestions[] = $this->suggestion($rows, $past->first(), 'past_decision', 'Matches '.$past->count().' of your reviewed '.($past->count() === 1 ? 'purchase' : 'purchases').'.');
+                $suggestions[] = $this->suggestion($rows, $past->first(), 'past_decision', 'Matches '.$past->count().' of your reviewed '.($past->count() === 1 ? 'purchase' : 'purchases').'.', $past->count(), $past->map(fn ($r) => ['id' => $r['id'], 'version' => $r['version']])->values()->all());
 
                 continue;
             }
@@ -34,7 +34,7 @@ class ReviewSuggestionService
 
         usort($suggestions, fn (array $left, array $right): int => $right['count'] <=> $left['count'] ?: $right['amount_cents'] <=> $left['amount_cents']);
 
-        return array_slice($suggestions, 0, 8);
+        return array_slice($suggestions, 0, $limit);
     }
 
     private function eligible(array $entry): bool
@@ -45,7 +45,7 @@ class ReviewSuggestionService
             && ! ClassificationService::isAmbiguousMerchant($entry['merchant']);
     }
 
-    private function suggestion(Collection $rows, array $classification, string $kind, string $evidence): array
+    private function suggestion(Collection $rows, array $classification, string $kind, string $evidence, int $supportCount = 0, array $supportTransactions = []): array
     {
         $rows = $rows->take(100)->values();
         $first = $rows->first();
@@ -59,7 +59,7 @@ class ReviewSuggestionService
             'bullshit_spending' => (bool) $classification['bullshit_spending'],
             'count' => $rows->count(),
             'amount_cents' => abs((int) $rows->sum('amount_cents')),
-            'evidence' => $evidence,
+            'evidence' => $evidence, 'support_count' => $supportCount, 'support_transactions' => $supportTransactions,
             'transactions' => $rows->take(100)->map(fn (array $entry): array => [
                 'id' => $entry['id'], 'version' => $entry['version'], 'date' => $entry['date'], 'merchant' => $entry['merchant'], 'amount_cents' => $entry['amount_cents'],
             ])->values()->all(),

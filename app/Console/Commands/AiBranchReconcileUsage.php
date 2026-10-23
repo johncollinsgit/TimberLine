@@ -20,6 +20,7 @@ class AiBranchReconcileUsage extends Command
         {--input-tokens= : Verified provider input tokens}
         {--output-tokens= : Verified provider output tokens}
         {--cached-input-tokens=0 : Verified cached input tokens}
+        {--verified-provider-micros= : Verified bounded Gerald audio cost, in microdollars}
         {--no-charge : Provider evidence confirms no charge}
         {--apply : Apply the displayed settlement and clear the pending marker}';
 
@@ -39,13 +40,20 @@ class AiBranchReconcileUsage extends Command
         $in = filter_var($this->option('input-tokens'), FILTER_VALIDATE_INT);
         $out = filter_var($this->option('output-tokens'), FILTER_VALIDATE_INT);
         $cached = filter_var($this->option('cached-input-tokens'), FILTER_VALIDATE_INT);
+        $audio = (bool) data_get($event->metadata, 'audio', false);
+        $audioCost = filter_var($this->option('verified-provider-micros'), FILTER_VALIDATE_INT);
+        if ($audio && ! $this->option('no-charge') && ($audioCost === false || $audioCost < 0)) {
+            $this->error('Gerald audio requires verified provider microdollars or confirmed no-charge evidence; text token pricing cannot settle audio.');
+
+            return self::FAILURE;
+        }
         if (strlen($evidence) < 5 || strlen($evidence) > 240 || (! $this->option('no-charge')
-            && ($in === false || $out === false || $cached === false || $cached < 0 || $cached > $in || $in < 0 || $out < 0 || $in > ($settings['max_input'] ?? 0) || $out > ($settings['max_output'] ?? 0)))) {
+            && ! $audio && ($in === false || $out === false || $cached === false || $cached < 0 || $cached > $in || $in < 0 || $out < 0 || $in > ($settings['max_input'] ?? 0) || $out > ($settings['max_output'] ?? 0)))) {
             $this->error('Supply a short evidence reference and valid token counts, or verified no-charge evidence.');
 
             return self::FAILURE;
         }
-        $cost = $this->option('no-charge') ? 0 : app(AiBranchProvider::class)->cost($in, $out, $settings, $cached);
+        $cost = $this->option('no-charge') ? 0 : ($audio ? $audioCost : app(AiBranchProvider::class)->cost($in, $out, $settings, $cached));
         if ($cost > $event->provider_cost_micros) {
             $this->error('Verified cost exceeds the reservation. Keep the request blocked and investigate model pricing.');
 

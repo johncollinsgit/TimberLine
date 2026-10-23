@@ -1,3 +1,11 @@
+## 2026-10-22 — Trajectory debt plans and Gerald
+
+- Add three observed debt thermometers, fixed payoff deadlines, selected debts and a four-part monthly funding summary.
+- Add Gerald's private typed/voice budget conversation, category alternatives, exact plan previews and separate confirmations.
+- Add paginated full-history review findings, opt-in automatic categorization, grouped approval and undo.
+- Name credit-card sign-in on the existing Plaid Accounts surface; preserve provider readiness and account mapping.
+- Verify Chromium and WebKit at desktop/mobile widths with fictional finances, scripted AI responses and denied microphones.
+
 ## 2026-10-20 — Markets & Makers management candidate
 
 - Replace wrapped management tabs with grouped persistent navigation and a mobile drawer.

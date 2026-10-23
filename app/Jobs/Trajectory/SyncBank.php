@@ -34,5 +34,19 @@ class SyncBank implements ShouldQueue
             $connection->update(['status' => 'needs_attention']);
             throw new \RuntimeException('Trajectory bank synchronization requires retry or reconnection.');
         }
+        $spaceIds = \App\Models\Trajectory\Account::where('connection_id', $connection->id)->pluck('space_id')->unique();
+        foreach (\App\Models\Trajectory\Space::whereIn('id', $spaceIds)->get() as $space) {
+            $preferences = $space->settings['gerald_review'] ?? [];
+            if (! ($preferences['after_sync'] ?? false)) {
+                continue;
+            }
+            try {
+                $user = \App\Models\User::findOrFail($preferences['actor_id']);
+                app(\App\Services\Trajectory\FinanceAuditService::class)->start($user, $space);
+            } catch (\Throwable) {
+                // Bank sync succeeded. Review authorization/allowance is independent.
+            }
+        }
+
     }
 }

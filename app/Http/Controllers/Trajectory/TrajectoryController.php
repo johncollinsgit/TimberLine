@@ -117,8 +117,8 @@ class TrajectoryController extends Controller
             $tx = Transaction::whereKey($transaction->id)->lockForUpdate()->firstOrFail();
             app(\App\Services\Trajectory\MedicalSharingService::class)->assertUnbound($tx);
             abort_unless($tx->version === (int) $request->input('version'), 409);
-            $event = Event::where('space_id', $space->id)->where('record_id', $tx->id)->whereIn('action', ['classify', 'undo_classify'])->latest('id')->first();
-            abort_unless($event && $event->action === 'classify' && ($event->after['version'] ?? null) === $tx->version, 409, 'Only the latest classification can be undone.');
+            $event = Event::where('space_id', $space->id)->where('record_id', $tx->id)->whereIn('action', ['classify', 'bulk_classify', 'undo_classify'])->latest('id')->first();
+            abort_unless($event && in_array($event->action, ['classify', 'bulk_classify'], true) && ($event->after['version'] ?? null) === $tx->version, 409, 'Only the latest classification can be undone.');
             if (! empty($event->after['created_rule_id'])) {
                 Record::where('space_id', $space->id)->where('kind', 'rule')->whereKey($event->after['created_rule_id'])->update(['active' => false]);
             }
@@ -148,7 +148,7 @@ class TrajectoryController extends Controller
     public function archiveRecord(Request $request, Space $space, Record $record, FinanceAccess $access)
     {
         $access->authorize($request->user(), $space);
-        abort_unless($record->space_id === $space->id, 404);
+        abort_unless($record->space_id === $space->id && ! in_array($record->kind, \App\Services\Trajectory\InternalRecords::KINDS, true), 404);
         $data = $request->validate(['version' => 'required|integer']);
         DB::transaction(function () use ($record, $space, $request, $data): void {
             Space::whereKey($space->id)->lockForUpdate()->firstOrFail();
@@ -165,7 +165,7 @@ class TrajectoryController extends Controller
     public function sellMetal(Request $request, Space $space, Record $record, FinanceAccess $access, MetalsService $metals)
     {
         $access->authorize($request->user(), $space);
-        abort_unless($record->space_id === $space->id, 404);
+        abort_unless($record->space_id === $space->id && ! in_array($record->kind, \App\Services\Trajectory\InternalRecords::KINDS, true), 404);
         $data = $request->validate(['quantity' => 'required|numeric|gt:0', 'proceeds_cents' => 'required|integer|min:0', 'version' => 'required|integer', 'transaction_id' => 'nullable|integer']);
         $metals->sell($request->user(), $record, (string) $data['quantity'], $data['proceeds_cents'], $data['version'], $data['transaction_id'] ?? null);
 

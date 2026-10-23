@@ -1,0 +1,81 @@
+import {createGeraldVoice,recordMicrophone} from './gerald-voice.js';
+
+export function geraldUI({getData,getScope,esc,precise,panel,btn,dialog,field,api,minor,load,navigate,notice}){
+  let state=null,mounted=0,poll=null,voice=null,playing=null,focusIds=[],page=1;
+  const chats=new Map();
+  const key=()=>JSON.stringify(getScope());
+  const chat=()=>{if(!chats.has(key()))chats.set(key(),{messages:[],conversationId:null,proposal:null});return chats.get(key());};
+  const endpoint=path=>`/trajectory/spaces/${getScope().spaceId}/gerald${path}`;
+  const scopeBody=()=>({...(getScope().businessId?{business_id:getScope().businessId}:{}),range:getData().range.key,...(getData().range.key==='custom'?{from:getData().range.start,through:getData().range.end}:{})});
+  const view=()=>panel('Gerald, at your service',`<p class="tr-subtle">Your weary, witty British budget butler. Discuss the numbers, consider other categories, and give your debt a departure date.</p><div id="tr-gerald"><p>Preparing your private finance context…</p></div>`);
+  const facts=values=>`<div class="tr-gerald-facts">${[['expected_income','Expected income'],['income_needed','Income needed'],['debt_payment','Debt payment'],['income_gap','Income gap']].map(([key,label])=>`<span>${label}<strong>${esc(values[key])}</strong></span>`).join('')}</div>`;
+  function answers(){return chat().messages.map((message,index)=>`<article class="tr-bud-answer"><strong>${esc(message.question)}</strong><p class="tr-gerald-reply">${esc(message.answer.reply)}</p>${facts(message.answer.facts)}${message.answer.provisional?'<p class="tr-subtle">Provisional: some balances, terms, or history need review.</p>':''}${message.answer.category_options?.map(option=>`<div class="tr-gerald-category"><p>${esc(option.reason)}</p><div class="tr-actions">${option.categories.map(category=>btn(`Review ${category.replaceAll('_',' ')}`,'gerald-category',`data-message="${index}" data-id="${option.id}" data-category="${esc(category)}"`)).join('')}</div></div>`).join('')||''}${message.answer.proposal?`<div class="tr-gerald-proposal"><h3>Proposed plan change</h3><p>${esc(message.answer.proposal.readback)}</p>${btn('Confirm this plan change','gerald-confirm',`data-id="${message.answer.proposal.id}"`)}</div>`:''}<div class="tr-actions">${(message.answer.links||[]).map(link=>btn(link.label,'plan-nav',`data-view="${esc(link.tab)}"`)).join('')}</div></article>`).join('');}
+  function draw(){
+    const box=document.querySelector('#tr-gerald');if(!box||!state)return;
+    const ai=state.ai,audit=state.audit;
+    const pending=state.findings.filter(f=>f.status==='pending'&&!f.stale&&f.kind==='category'&&!f.requires_purpose&&f.category);
+    const groups=Object.groupBy?Object.groupBy(pending,f=>f.category):pending.reduce((out,f)=>{(out[f.category]??=[]).push(f);return out;},{});
+    box.innerHTML=`<div class="tr-labels"><span class="tr-pill">${ai.ready?'AI ready':esc(ai.reason||'AI setup needed')}</span>${ai.can_configure?btn('AI model, voice & spending cap','gerald-settings'):''}</div><p class="tr-subtle">${esc(ai.model)} · Shared service credit ${precise(Math.floor(ai.credit_available_micros/10000))} · Monthly cap ${precise(ai.budget_cents)}. AI-generated voice; British delivery. ${getScope().businessId?'Combined conversations use your household AI account.':''}</p><div class="tr-actions tr-block">${['What income do we need each month?','Explain our debt payoff plan','What could we change in the budget?'].map(q=>btn(q,'gerald-prompt',`data-question="${esc(q)}" ${ai.ready?'':'disabled'}`)).join('')}</div><label class="tr-field full">Your question<textarea id="tr-gerald-question" rows="3" maxlength="2000" placeholder="Gerald, could this purchase belong in another category?"></textarea></label><p class="tr-subtle">${focusIds.length?`Discussing ${focusIds.length} selected transaction${focusIds.length===1?'':'s'}.`:'Select Discuss with Gerald beside a transaction to examine its purpose and other categories.'}</p><div class="tr-actions">${btn('Ask Gerald','gerald-ask',ai.ready?'':'disabled')}${btn('Start voice conversation','gerald-voice',ai.ready&&ai.audio_approved?'':'disabled')}${btn('Stop voice','gerald-stop')}${btn('New conversation','gerald-new')}</div><p id="tr-gerald-voice-state" class="tr-subtle" role="status">${ai.audio_approved?'Microphone starts only when you choose Start.':'The finance owner can enable voice by approving audio rates above.'}</p><p id="tr-gerald-transcript" class="tr-subtle"></p><div id="tr-gerald-thread" role="log" aria-live="polite">${answers()}</div><hr class="tr-block"><div class="tr-labels"><h3>Review my finances</h3><div class="tr-actions">${btn('Start full-history review','gerald-audit',ai.ready?'':'disabled')}${ai.can_configure?btn('Automatic categorization','gerald-preferences'):''}</div></div><p class="tr-subtle">${getScope().businessId?'This queue is for Personal. Select Business to run its own review. ':''}All available history is checked in resumable batches. Clear matches can be categorized automatically when enabled; uncertain purposes remain for discussion. Automatic categorization: ${state.preferences.auto_categorize?'on':'off'}.</p>${audit?`<p role="status">${esc(audit.status)} · ${audit.scanned} / ${audit.total} scanned · ${audit.reused} unchanged checks reused · ${audit.automatic_count} automatically categorized${audit.reason?' · '+esc(audit.reason):''}</p>${audit.status==='paused'?btn('Resume review','gerald-resume',`data-id="${audit.id}"`):''}`:''}${(audit?.issues||[]).map(issue=>`<p class="tr-subtle">${esc(issue.message)}</p>`).join('')}${Object.entries(groups).map(([category,items])=>btn(`Review batch: ${category.replaceAll('_',' ')} (${items.length})`,'gerald-batch',`data-category="${esc(category)}"`)).join(' ')}<div class="tr-gerald-findings">${state.findings.map(f=>`<article class="tr-row"><div><strong>${esc(f.transaction.merchant)} · ${precise(f.transaction.amount_cents)}</strong><p class="tr-subtle">${esc(f.transaction.date)} · ${esc(f.status)}${f.stale?' · Source changed; review again':''}</p><p>${esc(f.reason)}</p>${f.category?`<p class="tr-subtle">Suggested: ${esc(f.category.replaceAll('_',' '))}</p>`:''}</div><div class="tr-small-actions">${btn('Discuss categories','gerald-discuss',`data-id="${f.transaction_id}"`)}${['automatic','applied'].includes(f.status)&&!f.stale?btn('Undo','gerald-undo',`data-id="${f.transaction_id}" data-version="${f.applied_version}"`):''}</div></article>`).join('')||'<p class="tr-empty">Start a review to find supported corrections and questions.</p>'}</div><div class="tr-actions">${page>1?btn('Previous findings','gerald-page',`data-page="${page-1}"`):''}${state.has_more?btn('More findings','gerald-page',`data-page="${page+1}"`):''}</div>`;
+    if(['queued','running'].includes(audit?.status)){
+      clearTimeout(poll);const version=mounted;poll=setTimeout(()=>{if(mounted===version&&!voice?.isActive())void refresh();},5000);
+    }
+  }
+  async function refresh(){const version=mounted,scope=key();try{const result=await api(endpoint(`?page=${page}`));if(version!==mounted||scope!==key()||!document.querySelector('#tr-gerald'))return;state=result;draw();}catch(e){if(version===mounted)notice(e.message);}}
+  function stop(){voice?.stop();playing?.pause();playing=null;}
+  function unmount(){mounted++;clearTimeout(poll);stop();}
+  async function mount(){mounted++;state=null;await refresh();}
+  async function ask(question){
+    const current=chat(),scope=key(),requestId=crypto.randomUUID();
+    const answer=await api(endpoint('/messages'),'POST',{question,request_id:requestId,...(current.conversationId?{conversation_id:current.conversationId}:{}),focus_ids:focusIds,...scopeBody()});
+    if(scope!==key())throw new Error('The finance view changed. Start a conversation in the current view.');
+    current.conversationId=answer.conversation_id;current.proposal=answer.proposal||null;current.messages.push({question,answer,requestId});
+    const thread=document.querySelector('#tr-gerald-thread');if(thread){thread.innerHTML=answers();thread.lastElementChild?.scrollIntoView({block:'nearest'});}
+    const input=document.querySelector('#tr-gerald-question');if(input)input.value='';
+    return {...answer,messageRequestId:requestId};
+  }
+  async function confirm(id,receipt=null){const result=await api(endpoint(`/proposals/${id}/confirm`),'POST',receipt?{transcription_receipt:receipt}:{confirmed:true});chat().proposal=null;notice(result.reply);await load();}
+  async function speak(answer,signal){
+    const response=await api(endpoint('/speech'),'POST',{request_id:crypto.randomUUID(),conversation_id:answer.conversation_id,message_request_id:answer.messageRequestId,...scopeBody(),...(answer.proposal?{proposal_id:answer.proposal.id}:{})});
+    if(signal.aborted)return;
+    if(!response.verified||!response.audio)throw new Error(response.message||'The spoken answer could not be verified. Continue by typing.');
+    const bytes=Uint8Array.from(atob(response.audio),c=>c.charCodeAt(0)),url=URL.createObjectURL(new Blob([bytes],{type:'audio/wav'}));
+    await new Promise((resolve,reject)=>{const audio=new Audio(url);playing=audio;const cleanup=()=>{URL.revokeObjectURL(url);if(playing===audio)playing=null;};audio.onended=()=>{cleanup();resolve();};audio.onerror=()=>{cleanup();reject(new Error('Audio playback stopped. Your written answer remains available.'));};signal.addEventListener('abort',()=>{audio.pause();cleanup();resolve();},{once:true});audio.play().catch(error=>{cleanup();reject(error);});});
+  }
+  function startVoice(){
+    stop();voice=createGeraldVoice({record:recordMicrophone,
+      transcribe:async(audio,proposalId)=>{const form=new FormData();form.set('audio',audio,'gerald.wav');form.set('request_id',crypto.randomUUID());if(proposalId)form.set('proposal_id',proposalId);return api(endpoint('/transcription'),'POST',form);},
+      ask,speak,confirm,getProposal:()=>chat().proposal,
+      onState:value=>{const node=document.querySelector('#tr-gerald-voice-state');if(node)node.textContent=value==='idle'?'Microphone stopped.':value.replaceAll('_',' ')+'…';},
+      onTranscript:text=>{const node=document.querySelector('#tr-gerald-transcript');if(node)node.textContent='You said: '+text;},onError:message=>notice(message)});voice.start();
+  }
+  async function handle(action,target){
+    if(!action.startsWith('gerald-'))return false;
+    if(action==='gerald-stop'){stop();return true;}
+    if(action==='gerald-discuss'){
+      focusIds=[Number(target.dataset.id)];navigate('bud');await Promise.resolve();const node=document.querySelector('#tr-gerald-question');if(node)node.value='What category fits this purchase, and what other categories could make sense?';return true;
+    }
+    if(action==='gerald-new'){stop();chats.delete(key());focusIds=[];draw();return true;}
+    if(action==='gerald-ask'||action==='gerald-prompt'){const question=target.dataset.question||document.querySelector('#tr-gerald-question')?.value.trim();if(!question)return true;target.disabled=true;try{await ask(question);}finally{target.disabled=false;}return true;}
+    if(action==='gerald-voice'){startVoice();return true;}
+    if(action==='gerald-confirm'){const p=chat().messages.flatMap(m=>m.answer.proposal?[m.answer.proposal]:[]).find(p=>p.id===Number(target.dataset.id));if(!p)return true;dialog('Confirm Gerald’s plan change',`<p>${esc(p.readback)}</p>`,async()=>{await confirm(p.id);},'Confirm this exact change');return true;}
+    if(action==='gerald-settings'){
+      const ai=state.ai;stop();dialog('Gerald’s AI and voice allowance',`<p class="tr-subtle">Use the existing AI access terms. Model and audio usage cost twice verified provider cost and share your service credit and monthly cap. Approving this form changes no subscription and purchases no credit.</p>${field('model','AI model','text',ai.model,Object.entries(ai.models).map(([value,m])=>({value,label:m.label})))}${Object.values(ai.models).map(m=>`<p class="tr-subtle">${esc(m.label)}: input $${m.input_rate*2/1000000}, cached input $${m.cached_input_rate*2/1000000}, output $${m.output_rate*2/1000000} per million tokens.</p>`).join('')}${field('cap','Monthly customer spending cap ($)','number',ai.budget_cents/100)}${field('enabled','Enable AI usage','checkbox',ai.enabled)}${field('audio','Approve natural British voice usage','checkbox',ai.audio_approved)}<p class="tr-subtle">Audio customer rates: transcription $${ai.audio_rates.transcription_micros_per_minute*2/1000000}/minute; speech text input $${ai.audio_rates.speech_text_input_per_million*2/1000000}, text output $${ai.audio_rates.speech_text_output_per_million*2/1000000}, audio output $${ai.audio_rates.speech_audio_output_per_million*2/1000000} per million tokens. Rates expire ${esc(ai.audio_rates.valid_until)}.</p>`,async v=>{await api(endpoint('/settings'),'PUT',{model:v.get('model'),budget_cents:minor(v.get('cap')),enabled:v.get('enabled')==='on',audio_approved:v.get('audio')==='on',confirmed:true});await refresh();},'Approve model, rates and cap');return true;
+    }
+    if(action==='gerald-preferences'){stop();dialog('Automatic transaction categorization',`<p>Gerald can automatically categorize unreviewed purchases when clear existing evidence and the model agree. Broad retailers, transfers, duplicates and reviewed choices remain for individual review. Every automatic change has undo.</p>${field('auto','Automatically categorize supported matches','checkbox',state.preferences.auto_categorize)}${field('sync','Review new or changed history after bank sync','checkbox',state.preferences.after_sync)}<p class="tr-subtle">Background reviews use the same AI credit and spending cap. Turning this off stops future automatic changes.</p>`,async v=>{await api(endpoint('/preferences'),'PUT',{auto_categorize:v.get('auto')==='on',after_sync:v.get('sync')==='on',confirmed:true});await refresh();},'Save review preferences');return true;}
+    if(action==='gerald-audit'||action==='gerald-resume'){stop();target.disabled=true;try{await api(endpoint(action==='gerald-audit'?'/audits':`/audits/${target.dataset.id}/resume`),'POST',{});page=1;await refresh();}finally{target.disabled=false;}return true;}
+    if(action==='gerald-page'){page=Number(target.dataset.page);await refresh();return true;}
+    if(action==='gerald-batch'){
+      const rows=state.findings.filter(f=>f.status==='pending'&&!f.stale&&f.kind==='category'&&!f.requires_purpose&&f.category===target.dataset.category);
+      dialog('Review category batch',`<p>Apply ${esc(target.dataset.category.replaceAll('_',' '))} to these ${rows.length} purchases?</p>${rows.map(f=>`<div class="tr-row"><span>${esc(f.transaction.date)} · ${esc(f.transaction.merchant)}</span><strong>${precise(f.transaction.amount_cents)}</strong></div>`).join('')}<p class="tr-subtle">Changed sources are rejected. No future merchant rule is created.</p>`,async()=>{await api(endpoint('/findings/apply'),'POST',{finding_ids:rows.map(f=>f.id),category:target.dataset.category,confirmed:true});await load();},'Apply this category batch');return true;
+    }
+    if(action==='gerald-undo'){await api(`/trajectory/spaces/${getScope().spaceId}/transactions/${target.dataset.id}/undo`,'POST',{version:Number(target.dataset.version)});await load();return true;}
+    if(action==='gerald-category'){
+      const message=chat().messages[Number(target.dataset.message)],tx=message?.answer.focus_transactions?.find(r=>r.id===Number(target.dataset.id));
+      if(!tx?.editable)throw new Error('Use the originating finance space to review this purchase.');
+      dialog('Review another category',`<p>${esc(tx.merchant)} · ${precise(tx.amount_cents)}</p><p>Change ${esc(tx.category)} to <strong>${esc(target.dataset.category)}</strong>?</p>`,async()=>{await api(`/trajectory/spaces/${tx.space_id}/transactions/${tx.id}`,'PATCH',{version:tx.version,category:target.dataset.category,flow:tx.flow,face_punched:tx.face_punched,bullshit_spending:tx.bullshit_spending});await load();},'Apply this category');return true;
+    }
+    return true;
+  }
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();});globalThis.addEventListener?.('pagehide',stop);
+  return {view,mount,unmount,handle,stop};
+}

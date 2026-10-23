@@ -9,6 +9,9 @@ class DebtStrategyService
         if ($missing) {
             return ['status' => 'setup_required', 'missing' => $missing, 'strategies' => [], 'target_months' => $targetMonths, 'extra_monthly_cents' => $extra];
         }
+        if (! $debts) {
+            return ['status' => 'estimated', 'missing' => [], 'minimum_monthly_cents' => 0, 'extra_monthly_cents' => 0, 'target_months' => $targetMonths, 'strategies' => array_map(fn ($method) => [...$this->simulate([], 0, $method), 'method' => $method, 'target_payment_cents' => 0, 'extra_to_target_cents' => 0], ['avalanche', 'snowball']), 'assumption' => 'No outstanding selected debts.'];
+        }
         $base = array_sum(array_column($debts, 'minimum_cents'));
         $strategies = [];
         foreach (['avalanche', 'snowball'] as $method) {
