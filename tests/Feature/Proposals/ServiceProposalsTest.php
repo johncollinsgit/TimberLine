@@ -234,7 +234,7 @@ test('Lees-McRae support travel usage and sequential activation stay explicit an
         ->and($details['usage'])->toContain('without markup')
         ->and($details['travel'])->toContain('all-in quote approved in advance')
         ->and($details['activation'])->toContain('COO approval', 'only after explicit acceptance')
-        ->and($details['rollout'])->toContain('sequentially', 'Billing start, phased billing and rollout duration remain to be agreed')
+        ->and($details['rollout'])->toContain('sequentially', 'Phased billing amounts and rollout duration remain to be agreed', 'Subscription billing commencement is governed independently for each workspace')
         ->and($this->draft->payload['reviewer_names'])->toBe(['Ross', 'Sarah', 'Paul'])
         ->and(config('marketing.messaging.platform.buyer_rates_micros.sms'))->toBe(50000);
 });
@@ -284,4 +284,33 @@ test('explicit owner publication requires review and retries return the same pri
     expect(Version::count())->toBe(1);
     $this->owner->tenants()->updateExistingPivot($this->tenant->id, ['membership_active' => false]);
     $this->post($this->ownerPath.'/'.$this->draft->id.'/publish', $data)->assertForbidden();
+});
+
+test('implementation clause belongs to saved draft content and never rewrites an older publication', function (): void {
+    $legacy = $this->draft->payload;
+    unset($legacy['client_details']['implementation_timeline_heading'], $legacy['client_details']['implementation_timeline']);
+    $legacy['client_details']['activation'] = 'Legacy published copy: staff access and billing follow explicit acceptance.';
+    $legacy['client_details']['rollout'] = 'Legacy published sequential rollout. Billing start, phased billing and rollout duration remain to be agreed.';
+    $this->draft->update(['payload' => $legacy]);
+    ['version' => $version, 'token' => $token] = proposalPublish($this);
+    $beforePayload = $version->payload;
+    $beforeHash = $version->content_hash;
+
+    $revised = $this->draft->payload;
+    $revised['client_details'] = \App\Proposals\LeesMcRaeDetails::content();
+    $this->draft->update(['payload' => $revised, 'revision' => 2]);
+    $this->actingAs($this->owner)->get($this->ownerPath.'/'.$this->draft->id.'/preview')->assertOk()
+        ->assertSee(\App\Proposals\LeesMcRaeDetails::IMPLEMENTATION_TIMELINE_HEADING)
+        ->assertSee(\App\Proposals\LeesMcRaeDetails::IMPLEMENTATION_TIMELINE);
+
+    $url = 'https://evergrove.test/service-proposals/'.$token;
+    $this->post($url.'/unlock', ['password' => 'Test proposal password'])->assertRedirect();
+    $this->get($url)->assertOk()->assertSee($legacy['client_details']['activation'])
+        ->assertDontSee('<h2>'.\App\Proposals\LeesMcRaeDetails::IMPLEMENTATION_TIMELINE_HEADING.'</h2>', false);
+    expect($version->fresh()->payload)->toBe($beforePayload)
+        ->and($version->fresh()->content_hash)->toBe($beforeHash)
+        ->and(Version::count())->toBe(1)
+        ->and(DB::table('tenant_billing_orders')->count())->toBe(0);
+    Http::assertNothingSent();
+    Mail::assertNothingSent();
 });

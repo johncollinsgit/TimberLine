@@ -18,6 +18,7 @@
 <section class="card"><h2>Details to work through together</h2>@foreach($payload['unresolved'] as $unknown)<p>{{ $unknown }}</p>@endforeach<p>Usage approach under discussion: {{ ['unconfirmed'=>'not yet selected','separately_billed'=>'separately billed usage','workspace_allowance'=>'monthly allowance per workspace','pooled_bundle_allowance'=>'monthly allowance pooled across the bundle'][$payload['usage_plan'] ?? 'unconfirmed'] }}. Prices, allowances and any additional consumption require approval.</p><p>Final agreement review, signing and payment are separate later steps.</p></section>
 @if($payload['template'])<details class="card"><summary>Draft master language · unreviewed / not attorney approved</summary><p class="body-copy">{{ $payload['template']['text'] }}</p></details>@endif
 @if(!empty($payload['client_details']))@include('service-proposals.client-details', ['details' => $payload['client_details']])@endif
+@if(!empty($payload['client_details']))@include('service-proposals.implementation-timeline', ['details' => $payload['client_details']])@endif
 @if(!empty($payload['client_details']))@include('service-proposals.usage-estimator')@endif
 @if(!$preview && !empty($payload['reviewer_names']))@include('service-proposals.comments')@endif
 @if($version)<p class="hash">Published content reference {{ $version->content_hash }}</p>@endif

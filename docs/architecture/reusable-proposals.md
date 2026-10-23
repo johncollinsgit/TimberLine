@@ -85,8 +85,13 @@ regular Evergrove workspace as a shortcut. No workspace was provisioned here.
 Explicit Enterprise-lane owner action prepares a non-binding client-specific
 draft: one workspace $3,000 setup + $1,000/month; three-workspace bundle $7,000
 setup + $2,500/month **TOTAL when fully active**. No global prices are replaced.
-Billing start, phased billing, duration, renewals, discounts, usage amounts and
-allowances remain unfinalized. There is no approved $150 fee/cap.
+Billing commencement follows the stored workspace-specific implementation,
+client-dependency and operational-readiness provision when that provision is
+present in the reviewed draft/version. Phased billing amounts, renewals,
+discounts, usage amounts and allowances remain to be agreed. There is no
+approved $150 fee/cap. Existing saved 12-month/no-pause terms must be read and
+preserved; the current catalog/draft generator is not authority to overwrite
+more recent agreed saved copy.
 
 The Evergrove Difference explains hands-on onsite discovery, tool/process review,
 co-design/scope, implementation/pilot, training/launch and reviewed improvement.
@@ -109,6 +114,22 @@ that interval. Fixed routine travel is included; overnight travel needs an all-i
 preapproved quote. Plan department-head setup then COO activation-plan approval;
 staff access and billing require explicit acceptance. These are proposal content,
 not live grants or activation code.
+
+The implementation/billing-commencement clause is draft content, not a billing
+executor. It covers a mutually agreed schedule and College participation, written
+per-workspace operational-readiness notice, substantially completed deliverables,
+institutional delay outside Evergrove's reasonable control, no outstanding material
+Evergrove defect preventing intended use, and a 30-calendar-day period. Evergrove
+delays do not accelerate billing; departments need not activate together. A future
+charge needs workspace-specific notice/date/evidence, defect resolution, reviewed
+amounts and human review. No Stripe, automatic charge, invoice or sending action
+follows from preparing or displaying this clause.
+
+The renderer displays this provision only from the stored payload fields. Older
+published snapshots without those fields do not acquire new terms from current
+source. A saved-draft correction must pin the exact tenant/draft/revision/hash,
+preserve all other saved commercial fields, and never rebuild it through the
+current generator. Publication and the version's access settings remain separate.
 
 All draft legal language is explicitly **unreviewed / not attorney approved**.
 Approved clause libraries, final agreement generation/signature execution,
