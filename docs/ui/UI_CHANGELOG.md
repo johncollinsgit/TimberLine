@@ -1,3 +1,35 @@
+## 2026-10-23 — Stored proposal commercial sections (source candidate)
+
+Show saved financial, implementation, support, usage and renewal sections with
+semantic fee tables, visible keyboard focus and narrow-screen table geometry.
+Save and reload retain reviewed terms and prices; changed contractual scope
+requires a new commercial review. Older publications retain their original copy.
+Runtime draft reconciliation, publication and hosted acceptance remain separate.
+
+## 2026-10-23 — Explicit typed private memory candidate
+
+- Ask offers inspect/edit/delete for account-and-department memory, initially off
+  for each conversation. Only typed formatting choices and explicitly previewed
+  current source observations can be saved; no arbitrary fact/secret field exists.
+- Each entry shows confirmation provenance and expiry. Changed or inaccessible
+  sources withhold observations; no additional retrieval authority is granted.
+- Save/delete confirmation, exact uncertain retries, late-response fences and
+  current scope checks mirror the existing Ask lifecycle. The matching tour
+  describes opt-in and current-source limits. Voice remains separate.
+- Source-only, default off; local fixture evidence uses fake HTTP and sample data.
+
+## 2026-10-23 — Private saved assistants in Ask (separate disabled candidate)
+
+Let an authorized user explicitly save, inspect, edit and delete a private assistant's purpose, instructions and fixed currently permitted read checks in the existing Ask pane. Configuration never grants roles, adds provider tools, chooses a model/account or captures chat automatically. Profile selection is frozen during a short conversation; edits/deletion invalidate its stale context. Exact retries retain UUID/version, confirmations identify the configuration action, and role/department resets clear form content. Browser drafts are not persisted. The same tour points to the reader selector and distinguishes saved configuration from queued persistent memory. Native controls and responsive editor targets retain the existing accessibility palette and sizing. Local fake-provider evidence is separate from live model/voice acceptance.
+
+## 2026-10-23 — Text conversation in the existing Ask pane (separate disabled candidate)
+
+Add separately gated setup/availability, explicit bounded Send to OpenAI, current source/calculation links and short-session recovery to the existing Ask log/composer. Browser storage retains opaque receipt IDs only. Stop/navigation fence late replies without cancelling cost exposure; read-only checks never resend a turn. Explicit clear preserves metering, with an honest local-only receipt fallback when server content cannot resolve. Text uses the available panel width, native 44px controls and the approved system-palette disclosure. The same tour distinguishes approved text, unavailable setup, deterministic checks and queued voice. Local fictional desktop/iPad/mobile/reflow and forced-palette browser evidence is separate from live provider acceptance. No provider, send, voice, account, permission or infrastructure is activated.
+
+## 2026-10-23 — Read-only COO record checks (separate source candidate)
+
+The private Ask pane can offer explicit current-work, saved-building and recorded-cost checks behind a new default-off flag. Building counts use authorized saved IDs only. Owner/admin cost comparisons retain integer inputs, currencies and estimate/recorded-cost basis; they do not claim approved budgets or staffing capacity. Source records and calculation inputs are clickable. Scope changes and denied access clear evidence; matching tour copy targets the new controls. No paid model, voice, memory, send or work-write capability is activated. Local fictional desktop/iPad/mobile/reflow checks are separate from deployed acceptance. Exact source citations now open a current authorized read-only record page independently of bounded workspace lists. Product, status and tour copy explicitly say deterministic and no AI model. The new native selectors reuse the approved system-palette SVG disclosure, with a light default, painted forced-color light/dark arrows and distinct disabled system colors; native semantics and 44px targets remain intact.
+
 ## 2026-10-23 — Compact Enterprise header, explicit building links and approved logo (source candidate)
 
 - Replace the large demo banner with a compact workspace identity, discreet sample-data label, expandable help and Tour controls. Proposal uses only the existing authorized published-review context.

@@ -1,3 +1,72 @@
+## Reviewed proposal commercial snapshot (October 23; source candidate)
+
+Proposal previews render the financial, implementation, support, usage and renewal
+sections from their saved payload. A reviewed draft can retain explicit catalog
+origins with draft-only term overrides; ordinary Save preserves its commercial
+snapshot and rejects scope changes until a new commercial review. Existing
+published versions keep their stored text and prices. See the
+[proposal contract](docs/architecture/reusable-proposals.md). Applying the exact
+saved-draft revision, publication and hosted acceptance remain separate operations;
+this source changes no catalog, billing, provider or permission state.
+
+## Typed private memory candidate (October 23; disabled, not live-verified)
+
+The existing Ask pane has separately gated explicit typed formatting preferences
+and bounded source observations, with encrypted per-account/department storage,
+provenance, versioned confirmation/edit/delete and 1/7/30-day retention. No free-text
+facts or automatic chat capture are accepted. Every observation is rechecked
+against current canonical source/access and can reach a model only after explicit
+opt-in and only when that source already belongs to the selected check. Expiry
+withholds values immediately; activation additionally requires approved bounded
+cleanup. No paid route, credential, provider connection or schedule is activated.
+See [the memory contract](docs/operations/enterprise-assistant-memory.md).
+
+## Saved assistant configuration candidate (October 23; disabled, not live-verified)
+
+A separate default-off flag adds private purpose/instructions/fixed read-check
+configuration to the existing Ask pane. Current actor/department/object policies
+remain authoritative; profile selection never changes provider/model authority.
+Versioned confirmed saves/deletes use encrypted storage and content-free audit.
+Profile edits and access loss invalidate short-session reuse. Persistent scoped
+preference/fact memory and two-way voice are separate milestones. See
+[the saved assistant contract](docs/operations/enterprise-saved-assistants.md).
+
+## Text conversation UI candidate (October 23; disabled, not live-verified)
+
+A separate default-off UI gate exposes setup/availability in the existing Ask pane,
+not a second chat product. Explicit approved sends use the bounded backend;
+read-only recovery checks current scope/source stamps without redispatch. Browser
+storage holds receipt IDs only. Stop/navigation fence late replies, and explicit
+clear preserves all spend evidence. Matching tour guidance distinguishes generated
+text, deterministic record checks and queued voice. Local managed-runtime browser
+acceptance uses fake provider HTTP and fictional records only. See
+[the text UI contract](docs/operations/enterprise-conversation.md#text-ui-milestone-separate-from-connection-activation).
+
+## Text conversation backend candidate (October 23; disabled, not live-verified)
+
+The separate Conversation route can send a bounded, current authorized evidence
+snapshot to an exactly approved OpenAI Responses connection. It uses the existing
+single campus TrialBudget lifetime $5 ledger, with full model-context reservation,
+durable single dispatch, verified bounded usage settlement and uncertainty holds.
+All other Enterprise billable routes stay server-off while this trial is enabled;
+retail provider routes are unchanged. Current record checks remain explicitly
+deterministic. The separately gated text UI reuses the existing Ask pane and
+read-only recovery. Saved configuration is separately gated; long-term memory,
+audio input/output, sending and business-record tools remain unavailable. Its local
+HTTP provider responses are simulated; actual provider acceptance is still gated.
+See [the conversation connection and acceptance contract](docs/operations/enterprise-conversation.md).
+
+## Read-only COO record assistant (October 23; separate source candidate)
+
+`ENTERPRISE_READ_ONLY_ASSISTANT_ENABLED` defaults off. When explicitly enabled,
+the private Ask pane can check current briefings, saved-building request links,
+and owner/admin-only recorded costs versus estimates through a dedicated
+zero-provider endpoint. Its integer subtotals are bounded checked-record
+comparisons, not approved budgets or staffing capacity. Each input has a current
+server-generated source link; no memory, sends or work mutations are added.
+See [the read-only assistant contract](docs/operations/enterprise-read-only-assistant.md).
+This candidate is separate from the current Enterprise deployment freeze.
+
 ## Enterprise usability follow-up (October 23; source candidate)
 
 The shared Enterprise renderer now uses full-width project/request tables and

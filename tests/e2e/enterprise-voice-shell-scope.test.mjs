@@ -7,13 +7,14 @@ const source=await readFile(new URL('../../resources/views/enterprise/voice-scri
 const start=source.indexOf('  function renderVoice(){');
 const end=source.indexOf("  window.addEventListener('everbranch:voice-jobs-ready'",start);
 assert.ok(start>=0&&end>start,'Exercise the actual private shell adapter');
-function fixture({mode='private',generation=true,drafts=true}={}){
+function fixture({mode='private',generation=true,drafts=true,conversation=false}={}){
     const calls=[],effects=[],mounts=[],nodes=new Map();let context;
     const mount=(host,options)=>{mounts.push(options);return {dispose(){effects.push('dispose');}};};
     const module={mount};
     context=vm.createContext({
         section:'ask',area:'area-old',workspace:'tenant-old',viewer:'viewer-old',tenantSlug:'old',
-        data:{viewer_id:'viewer-old',features:{ask:true,voice_jobs:true,voice_generation:generation,voice_drafts:drafts}},
+        data:{viewer_id:'viewer-old',features:{ask:true,voice_jobs:true,voice_generation:generation,voice_drafts:drafts,conversation_ui:conversation}},
+        conversationMode:()=>context.transport.mode==='private'&&context.data.features.conversation_ui===true,
         voiceScope:null,voiceSession:null,askBusy:false,nextBase:'/enterprise',
         transport:{mode,request:(url,body,options)=>{calls.push({url,body,options});return Promise.resolve({});}},
         window:{EverbranchVoiceJobs:module},EverbranchVoiceJobs:module,
@@ -51,4 +52,10 @@ test('retired adapter callbacks cannot clear or append the next workspace conver
 test('changing generation readiness retires the previously mounted session',()=>{
     const {context,mounts,effects}=fixture();context.data.features.voice_generation=false;context.renderVoice();
     assert.equal(mounts.length,2);assert.equal(mounts[1].generate,undefined);assert.equal(effects.filter(value=>value==='dispose').length,1);
+});
+test('private text conversation keeps legacy voice unmounted and retires its old callbacks without a request',()=>{
+    const initial=fixture({conversation:true});assert.equal(initial.mounts.length,0);assert.equal(initial.context.$('ask-voice-pane').hidden,true);assert.equal(initial.calls.length,0);
+    const {context,mounts,effects,calls}=fixture(),old=mounts[0];context.data.features.conversation_ui=true;context.renderVoice();
+    assert.equal(mounts.length,1);assert.equal(effects.filter(value=>value==='dispose').length,1);assert.equal(context.$('ask-voice-pane').hidden,true);
+    const before=effects.slice();old.onReply({});old.onTranscript('Retired voice transcript');old.onError('Retired voice error');assert.deepEqual(effects,before);assert.equal(calls.length,0);
 });

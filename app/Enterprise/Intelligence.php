@@ -28,6 +28,9 @@ class Intelligence
 
     private function settings(): ?array
     {
+        if (config('enterprise.conversation.enabled')) {
+            return null; // Only the independently approved common-ledger conversation path may spend.
+        }
         $config = (array) config('enterprise.intelligence', []);
         $settings = ['model' => $config['model'] ?? '', 'input_rate' => $config['input_rate_microusd_per_million'] ?? 0,
             'output_rate' => $config['output_rate_microusd_per_million'] ?? 0, 'max_input' => $config['max_input'] ?? 12000,

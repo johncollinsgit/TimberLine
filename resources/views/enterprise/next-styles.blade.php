@@ -10,3 +10,40 @@
 
 #ask-voice-controls>section{width:100%;min-width:0}#ask-voice-controls pre{overflow-wrap:anywhere;font:14px/1.7 inherit}#ask-voice-controls input,#ask-voice-controls button{min-height:44px}#ask-voice-controls [aria-label="Exact draft recipient"]{display:block;width:100%;margin:12px 0}
 @media(max-width:650px){#ask-voice-controls input{font-size:16px}}
+
+#read-only-assistant{margin-bottom:22px}#read-only-answer a{display:inline-block;min-height:44px;padding:10px 0;overflow-wrap:anywhere}#read-only-answer{overflow-wrap:anywhere}#read-only-answer summary{min-height:44px;cursor:pointer}#read-only-form{max-width:650px}
+/* Use the approved Enterprise system-palette disclosure at WebKit's usable target size. */
+#read-only-form select:not([multiple]),#conversation-controls select:not([multiple]){
+  -webkit-appearance:none;appearance:none;min-height:44px;height:44px;color-scheme:light;
+  padding:10px 36px 10px 11px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' style='color-scheme:light%20dark'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='CanvasText' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;background-size:12px 8px;
+}
+@media(forced-colors:active){
+  #read-only-form select:not([multiple]),#conversation-controls select:not([multiple]){color-scheme:light dark;background-color:Canvas;color:CanvasText;border-color:ButtonText;background-image:none}
+  #read-only-form select:disabled:not([multiple]),#conversation-controls select:disabled:not([multiple]){color:GrayText;border-color:GrayText}
+  /* Paint with the document's actual system palette; an external SVG can resolve CanvasText differently. */
+  #read-only-form label:has(>select:not([multiple])),#conversation-controls label:has(>select:not([multiple])){position:relative;color-scheme:light dark}
+  #read-only-form label:has(>select:not([multiple]))::after,#conversation-controls label:has(>select:not([multiple]))::after{content:"";position:absolute;right:16px;bottom:18px;width:8px;height:8px;border-right:2px solid CanvasText;border-bottom:2px solid CanvasText;transform:rotate(45deg);pointer-events:none}
+  #read-only-form label:has(>select:disabled:not([multiple]))::after,#conversation-controls label:has(>select:disabled:not([multiple]))::after{border-color:GrayText}
+}
+
+/* The text conversation shares Ask's existing log/composer and never starts audio. */
+.ask-grid:has(#generated-ask-panel[data-conversation="true"]){grid-template-columns:minmax(0,1fr)}
+#conversation-controls{margin-bottom:18px}#conversation-controls h3{font:24px Georgia,serif;margin:0}
+#conversation-controls button,#conversation-controls summary{min-height:44px}#conversation-controls summary{cursor:pointer;padding:10px 0}
+#conversation-controls select{min-height:44px}#conversation-controls .field-pair>*{min-width:0}
+#generated-ask-panel[data-conversation="true"] .chat-log:empty{display:none}
+#generated-ask-panel[data-conversation="true"] .ask-composer{margin-top:16px}
+#generated-ask-panel[data-conversation="true"] textarea[readonly]{background:#f3f3ed}
+#conversation-clear-confirm{border:1px solid var(--line);border-radius:8px;padding:14px}
+.conversation-answer a{overflow-wrap:anywhere;min-height:44px;display:inline-flex;align-items:center}
+@media(max-width:650px){#conversation-controls .field-pair{display:grid;grid-template-columns:1fr}#conversation-controls select{font-size:16px}}
+
+#saved-assistants{border:1px solid var(--line);border-radius:8px;padding:16px}#saved-assistants h4{font:20px Georgia,serif;margin:0}
+#saved-assistants fieldset{border:1px solid var(--line);padding:12px}#saved-assistants fieldset label,#saved-assistants .saved-assistant-confirm{display:flex;align-items:center;gap:10px;min-height:44px}
+#saved-assistants input[type=checkbox]{min-height:24px;height:24px;width:24px;flex:0 0 24px}#saved-assistant-delete-confirm{border-top:1px solid var(--line);padding-top:14px}
+
+#private-memory{border:1px solid var(--line);border-radius:8px;padding:16px}#private-memory h4{font:20px Georgia,serif;margin:0}#private-memory h5{font:17px Georgia,serif;margin:0}
+#private-memory .memory-check{display:flex;align-items:center;gap:10px;min-height:44px}#private-memory input[type=checkbox]{min-height:24px;height:24px;width:24px;flex:0 0 24px}
+#memory-form,#memory-delete-confirm{border-top:1px solid var(--line);padding-top:14px;margin-top:14px}#memory-list a{min-height:44px;display:inline-flex;align-items:center;overflow-wrap:anywhere}

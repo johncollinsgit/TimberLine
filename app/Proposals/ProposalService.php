@@ -116,6 +116,7 @@ class ProposalService
             if ($id) {
                 $draft = Draft::query()->where('tenant_id', $tenant->id)->lockForUpdate()->findOrFail($id);
                 abort_unless((int) ($input['revision'] ?? 0) === (int) $draft->revision, 409, 'This draft changed. Reload before saving.');
+                $payload = CommercialSnapshot::preserve($draft->payload, $payload);
                 $draft->fill(['client_id' => $client->id, 'payload' => $payload, 'revision' => $draft->revision + 1])->save();
 
                 return $draft;
@@ -143,6 +144,7 @@ class ProposalService
                 return ['version' => $existing, 'token' => $existing->access_result['token']];
             }
             abort_unless($draft->revision === $revision, 409, 'Review the current draft before publishing.');
+            CommercialSnapshot::verify($draft->payload);
             $token = Str::random(64);
             $payload = [...$draft->payload, 'draft_revision' => $revision, 'audience' => $audience];
             if (($campus = app(CampusReviewManifest::class)->forPublication($tenant, $payload)) !== null) {

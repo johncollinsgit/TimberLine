@@ -38,10 +38,17 @@ on:
       - 'tests/Feature/LeesMcRaeCampusDemoTest.php'
       - 'tests/e2e/enterprise-*'
       - 'tests/browser/enterprise-voice-jobs.smoke.mjs'
+      - 'tests/browser/enterprise-read-only-assistant.smoke.mjs'
+      - 'tests/browser/enterprise-conversation.smoke.mjs'
       - 'tests/Support/enterprise-https-router.php'
       - 'tests/Support/enterprise-browser-voice-provider.php'
+      - 'tests/Support/enterprise-conversation-browser-fixture.php'
+      - 'tests/Support/enterprise-conversation-browser-router.php'
       - 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php'
       - 'tests/Integration/EnterpriseTrialBudgetMySqlConcurrencyTest.php'
+      - 'tests/Integration/EnterpriseConversationMySqlConcurrencyTest.php'
+      - 'tests/Integration/EnterpriseMemoryMySqlConcurrencyTest.php'
+      - 'tests/Support/EnterpriseConversationFixture.php'
       - 'tests/Integration/EnterpriseClientProvisioningMySqlTest.php'
       - 'tests/Integration/migration-recovery-manifest.php'
       - 'phpunit.enterprise.xml'
@@ -102,7 +109,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Check private transport and isolated sample contracts
-        run: node --test tests/e2e/enterprise-transport.test.mjs tests/e2e/enterprise-reviewer-sample.test.mjs tests/e2e/enterprise-workspace-tour.test.mjs tests/e2e/enterprise-procedures-ui.test.mjs tests/e2e/enterprise-resource-presentation.test.mjs tests/e2e/enterprise-resource-history-time.test.mjs tests/e2e/enterprise-buildings-map-state.test.mjs tests/e2e/enterprise-request-building.test.mjs tests/e2e/enterprise-tour-position.test.mjs tests/e2e/enterprise-work-table-drawer.test.mjs tests/e2e/enterprise-shell-navigation.test.mjs tests/e2e/enterprise-preference-lifecycle.test.mjs tests/e2e/enterprise-theme.test.mjs tests/e2e/enterprise-executive.test.mjs tests/e2e/enterprise-role-preview.test.mjs tests/js/enterprise-sample-voice.test.mjs tests/js/enterprise-usage.test.mjs tests/e2e/ai-voice-conversation.test.mjs tests/e2e/enterprise-voice-jobs.test.mjs
+        run: node --test tests/e2e/enterprise-transport.test.mjs tests/e2e/enterprise-reviewer-sample.test.mjs tests/e2e/enterprise-workspace-tour.test.mjs tests/e2e/enterprise-procedures-ui.test.mjs tests/e2e/enterprise-resource-presentation.test.mjs tests/e2e/enterprise-resource-history-time.test.mjs tests/e2e/enterprise-buildings-map-state.test.mjs tests/e2e/enterprise-request-building.test.mjs tests/e2e/enterprise-read-only-assistant.test.mjs tests/e2e/enterprise-conversation.test.mjs tests/e2e/enterprise-saved-assistants.test.mjs tests/e2e/enterprise-private-memory.test.mjs tests/e2e/enterprise-tour-position.test.mjs tests/e2e/enterprise-work-table-drawer.test.mjs tests/e2e/enterprise-shell-navigation.test.mjs tests/e2e/enterprise-preference-lifecycle.test.mjs tests/e2e/enterprise-theme.test.mjs tests/e2e/enterprise-executive.test.mjs tests/e2e/enterprise-role-preview.test.mjs tests/js/enterprise-sample-voice.test.mjs tests/js/enterprise-usage.test.mjs tests/e2e/ai-voice-conversation.test.mjs tests/e2e/enterprise-voice-jobs.test.mjs
       - name: Check voice lifecycle and scoped job lookup without providers
         run: |
           node --test tests/e2e/enterprise-voice-shell-scope.test.mjs
@@ -121,6 +128,16 @@ jobs:
       - name: Install browser dependencies
         timeout-minutes: 45
         run: npx playwright install --with-deps chromium webkit
+      - name: Check read-only assistant controls without a provider
+        env:
+          ENTERPRISE_EVIDENCE: test-results/enterprise/read-only-assistant
+        run: node tests/browser/enterprise-read-only-assistant.smoke.mjs
+      - name: Check conversation UI with isolated runtime and fake HTTP only
+        env:
+          ENTERPRISE_TEST_PHP: php
+          EVERBRANCH_PLAYWRIGHT_MODULE: node_modules/playwright/index.mjs
+          ENTERPRISE_EVIDENCE: test-results/enterprise/conversation
+        run: node tests/browser/enterprise-conversation.smoke.mjs
       - name: Check persistent Enterprise UI in Chromium and WebKit
         env:
           ENTERPRISE_TEST_PHP: php

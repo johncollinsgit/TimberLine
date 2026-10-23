@@ -489,3 +489,44 @@ test("active guide hides external controls for a native drawer and adds one acce
     context.active=false;context.workDrawer.open=true;context.sync();assert.equal(notes.length,0);
     assert.equal(context.paints,4);assert.equal(context.refreshes,4);
 });
+
+test('read-only assistant tour describes only current permitted record checks and financial access', () => {
+    const {tour: controller} = fixture();
+    controller.update({transport:{mode:'private'}, area:'a', data:{areas:[{id:'a',name:'Synthetic Operations'}], projects:[],requests:[],features:{read_only_assistant:true,read_only_costs:false,resources:true}}});
+    const scene = controller.describe(6, {});
+    assert.equal(scene.target, 'read-only-assistant');
+    assert.match(scene.text, /deterministic record checks use no AI model/);
+    assert.match(scene.cards[2][1], /unavailable for your current role/);
+    assert.equal(controller.links(6)[0].available, true);
+    controller.update(null);
+    assert.equal(controller.links(6)[0].available, false);
+});
+
+
+test("conversation finale distinguishes approved text, unavailable setup and deterministic record checks", () => {
+    const {tour,snapshot}=fixture();
+    snapshot.data.features.conversation_ui=true;
+    snapshot.data.conversation={ready:false};
+    tour.update(snapshot);
+    assert.equal(tour.describe(6,{}).target,"conversation-controls");
+    assert.match(tour.describe(6,{}).text,/unavailable until setup is approved/);
+    assert.doesNotMatch(JSON.stringify(tour.describe(6,{})),/microphone permission|generative AI is ready/);
+    snapshot.data.conversation.ready=true; tour.update(snapshot);
+    assert.equal(tour.describe(6,{}).target,"ask-form");
+    assert.match(tour.describe(6,{}).text,/Send to OpenAI/);
+    assert.match(JSON.stringify(tour.describe(6,{}).cards),/nothing is sent again automatically/);
+    snapshot.data.features.saved_assistants=true; snapshot.data.saved_assistants={can_manage:false}; tour.update(snapshot);
+    assert.equal(tour.describe(6,{}).cards[3][0],"Inspect your saved assistants");
+    assert.ok(tour.describe(6,{}).targets.includes("saved-assistant-choice"));
+    snapshot.data.saved_assistants.can_manage=true; tour.update(snapshot);
+    assert.equal(tour.describe(6,{}).cards[3][0],"Make a private assistant");
+    assert.match(tour.describe(6,{}).cards[3][1],/memory uses a separate explicit choice/);
+    assert.ok(!tour.describe(6,{}).targets.includes("memory-use"));
+    snapshot.data.features.private_memory=true; tour.update(snapshot);
+    assert.ok(tour.describe(6,{}).targets.includes("memory-use"));
+    assert.ok(tour.describe(6,{}).targets.includes("memory-manager"));
+    assert.match(JSON.stringify(tour.describe(6,{}).cards),/changed sources or permissions withhold old observations/);
+    snapshot.data.features.conversation_ui=false; snapshot.data.features.read_only_assistant=true; tour.update(snapshot);
+    assert.equal(tour.describe(6,{}).target,"read-only-assistant");
+    assert.match(tour.describe(6,{}).text,/use no AI model/);
+});

@@ -65,12 +65,20 @@ class EnterpriseController
             ? app(Resources::class)->requestBuildings($tenant, $request->user(), $area->id)
             : ['items' => [], 'has_more' => false, 'coverage' => 'Saved building selection is unavailable. Location text remains available.'];
 
-        return response()->json(['workspace' => ['id' => $tenant->id, 'name' => $tenant->name], 'viewer_id' => (string) $request->user()->id, 'selected_area_id' => $selected,
+        return response()->json(['sample_data' => (bool) config('enterprise.sample_data'), 'workspace' => ['id' => $tenant->id, 'name' => $tenant->name], 'viewer_id' => (string) $request->user()->id, 'selected_area_id' => $selected,
             'buildings' => $buildings,
+            'conversation' => app(\App\Enterprise\Conversation\Readiness::class)->inspect($tenant, $request->user(), $selected),
+            'saved_assistants' => $selected && config('enterprise.conversation.saved_assistants_enabled') ? app(\App\Enterprise\Conversation\SavedAssistants::class)->listing($tenant, $request->user(), $selected) : null,
+            'private_memory' => $selected && \App\Enterprise\Conversation\PrivateMemory::enabled() ? app(\App\Enterprise\Conversation\PrivateMemory::class)->listing($tenant, $request->user(), $selected) : null,
             'areas' => $areas->map(fn ($a) => ['id' => $a->id, 'name' => $a->name, 'visibility' => $a->profile === 'enterprise_shared' ? 'shared' : 'department_only'])->values(),
             'requests' => array_slice($items, 0, 100), 'projects' => $projects, 'coverage' => 'up_to_100_visible_requests_scan_1000', 'has_more' => count($items) > 100,
             'scan_partial' => $scanned === 1000,
             'features' => ['collaboration' => (bool) config('enterprise.collaboration_enabled'), 'planning' => (bool) config('enterprise.planning_enabled'),
+                'read_only_assistant' => (bool) config('enterprise.read_only_assistant_enabled'),
+                'conversation_ui' => (bool) config('enterprise.conversation.ui_enabled'),
+                'saved_assistants' => (bool) config('enterprise.conversation.saved_assistants_enabled'),
+                'private_memory' => \App\Enterprise\Conversation\PrivateMemory::enabled(),
+                'read_only_costs' => (bool) config('enterprise.read_only_assistant_enabled') && (bool) config('enterprise.planning_enabled') && Planning::financial($actor),
                 'ask' => (bool) config('enterprise.ask_enabled'), 'voice_jobs' => (bool) config('enterprise.voice_jobs_enabled'),
                 'ai_usage' => (bool) config('enterprise.operations_enabled') && Planning::financial($actor),
                 'voice_generation' => (bool) config('enterprise.voice_generation_enabled'), 'voice_drafts' => (bool) config('enterprise.voice_drafts_enabled'), 'email_drafts' => (bool) config('enterprise.email_drafts_enabled'),

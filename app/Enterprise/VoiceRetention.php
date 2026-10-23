@@ -21,13 +21,13 @@ class VoiceRetention
                     return 0;
                 }
                 $data = $row->data;
-                if (in_array($row->kind, ['ent_voice_session', 'ent_voice_preview'], true)) {
+                if (in_array($row->kind, ['ent_voice_session', 'ent_voice_preview', 'ent_conversation_session'], true)) {
                     $data = array_intersect_key($data, array_flip(['user_id', 'expires_at', 'session_id', 'input_hash']));
                     $row->status = 'expired';
                 } elseif ($row->kind === 'ent_ai_usage' && ($data['purpose'] ?? null) === 'voice_answer') {
                     unset($data['value']);
                 } else {
-                    throw new \LogicException('Only private voice content may have voice expiry metadata.');
+                    throw new \LogicException('Only approved short private conversation/voice content may have expiry metadata.');
                 }
                 $row->data = $data + ['content_expired' => true];
                 $row->voice_expires_at = null;

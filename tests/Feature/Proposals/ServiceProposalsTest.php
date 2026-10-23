@@ -234,7 +234,7 @@ test('Lees-McRae support travel usage and sequential activation stay explicit an
         ->and($details['usage'])->toContain('without markup')
         ->and($details['travel'])->toContain('all-in quote approved in advance')
         ->and($details['activation'])->toContain('COO approval', 'only after explicit acceptance')
-        ->and($details['rollout'])->toContain('sequentially', 'Billing start, phased billing and rollout duration remain to be agreed')
+        ->and($details['rollout'])->toContain('sequentially', 'Phased billing amounts and rollout duration remain to be agreed', 'Subscription billing commencement is governed independently for each workspace')
         ->and($this->draft->payload['reviewer_names'])->toBe(['Ross', 'Sarah', 'Paul'])
         ->and(config('marketing.messaging.platform.buyer_rates_micros.sms'))->toBe(50000);
 });
@@ -284,4 +284,129 @@ test('explicit owner publication requires review and retries return the same pri
     expect(Version::count())->toBe(1);
     $this->owner->tenants()->updateExistingPivot($this->tenant->id, ['membership_active' => false]);
     $this->post($this->ownerPath.'/'.$this->draft->id.'/publish', $data)->assertForbidden();
+});
+
+test('implementation clause belongs to saved draft content and never rewrites an older publication', function (): void {
+    $legacy = $this->draft->payload;
+    unset($legacy['client_details']['implementation_timeline_heading'], $legacy['client_details']['implementation_timeline']);
+    $legacy['client_details']['activation'] = 'Legacy published copy: staff access and billing follow explicit acceptance.';
+    $legacy['client_details']['rollout'] = 'Legacy published sequential rollout. Billing start, phased billing and rollout duration remain to be agreed.';
+    $this->draft->update(['payload' => $legacy]);
+    ['version' => $version, 'token' => $token] = proposalPublish($this);
+    $beforePayload = $version->payload;
+    $beforeHash = $version->content_hash;
+
+    $revised = $this->draft->payload;
+    $revised['client_details'] = \App\Proposals\LeesMcRaeDetails::content();
+    $this->draft->update(['payload' => $revised, 'revision' => 2]);
+    $this->actingAs($this->owner)->get($this->ownerPath.'/'.$this->draft->id.'/preview')->assertOk()
+        ->assertSee(\App\Proposals\LeesMcRaeDetails::IMPLEMENTATION_TIMELINE_HEADING)
+        ->assertSee(\App\Proposals\LeesMcRaeDetails::IMPLEMENTATION_TIMELINE);
+
+    $url = 'https://evergrove.test/service-proposals/'.$token;
+    $this->post($url.'/unlock', ['password' => 'Test proposal password'])->assertRedirect();
+    $this->get($url)->assertOk()->assertSee($legacy['client_details']['activation'])
+        ->assertDontSee('<h2>'.\App\Proposals\LeesMcRaeDetails::IMPLEMENTATION_TIMELINE_HEADING.'</h2>', false);
+    expect($version->fresh()->payload)->toBe($beforePayload)
+        ->and($version->fresh()->content_hash)->toBe($beforeHash)
+        ->and(Version::count())->toBe(1)
+        ->and(DB::table('tenant_billing_orders')->count())->toBe(0);
+    Http::assertNothingSent();
+    Mail::assertNothingSent();
+});
+
+test('reviewed PDF commercial snapshot survives normal owner saves and catalog drift while old versions remain exact', function (): void {
+    $copy = json_decode(file_get_contents(base_path('tests/Fixtures/proposals/lees-mcrae-v9-commercial.json')), true, flags: JSON_THROW_ON_ERROR);
+    ['version' => $oldVersion, 'token' => $oldToken] = proposalPublish($this);
+    $oldRaw = $oldVersion->getRawOriginal('payload');
+    $oldHash = $oldVersion->content_hash;
+    $payload = $this->draft->payload;
+    $origins = $overrides = [];
+    foreach ($payload['items'] as &$item) {
+        $asset = $this->service->asset($this->tenant, $item['id'], 'catalog');
+        $origins[$item['id']] = ['revision' => $asset->revision, 'payload_sha256' => hash('sha256', json_encode($asset->payload, JSON_THROW_ON_ERROR)), 'terms_months' => $asset->payload['terms_months']];
+        $overrides[$item['id']] = ['terms_months' => [12]];
+        $item['terms_months'] = [12];
+    }
+    unset($item);
+    $originalJourney = $payload['journey'];
+    expect($originalJourney[0]['gate'])->toBe('Agree the discovery sessions and the initial department focus. No fixed onsite frequency or hours are assumed.');
+    $payload['journey'][0]['gate'] = 'Agree the discovery sessions and the initial department focus.';
+    expect(array_slice($payload['journey'], 1))->toBe(array_slice($originalJourney, 1));
+    $payload['client_details'] = $copy['client_details'];
+    $payload['unresolved'] = $copy['unresolved'];
+    $payload['commercial_snapshot'] = ['schema_version' => 1, 'source_reference' => 'Synthetic reviewed PDF v9', 'source_copy_sha256' => hash_file('sha256', base_path('tests/Fixtures/proposals/lees-mcrae-v9-commercial.json')),
+        'catalog_origins' => $origins, 'item_overrides' => $overrides];
+    $payload['commercial_snapshot']['protected_sha256'] = \App\Proposals\CommercialSnapshot::hash($payload);
+    // Test-only reconciliation in disposable SQLite; production has a separate reviewed, currently nonexecutable plan.
+    $this->draft->fill(['payload' => $payload, 'revision' => 2])->save();
+    $draftPath = $this->ownerPath.'/'.$this->draft->id;
+    $input = ['revision' => 2, 'client_id' => $this->draft->client_id, 'title' => 'Reviewed commercial terms retained', 'intro' => $payload['intro'], 'scope_notes' => $payload['scope_notes'],
+        'catalog_ids' => array_column($payload['items'], 'id'), 'usage_plan' => 'unconfirmed', 'approach_key' => 'evergrove_department_journey', 'reviewer_names_text' => 'Ross, Sarah, Paul'];
+    $this->actingAs($this->owner)->put($draftPath, $input)->assertRedirect();
+    $this->draft->refresh();
+    expect($this->draft->revision)->toBe(3)->and($this->draft->payload['items'])->toBe($payload['items'])
+        ->and($this->draft->payload['journey'])->toBe($payload['journey'])->and(array_slice($this->draft->payload['journey'], 1))->toBe(array_slice($originalJourney, 1))
+        ->and($this->draft->payload['client_details'])->toBe($payload['client_details'])->and($this->draft->payload['commercial_snapshot'])->toBe($payload['commercial_snapshot']);
+    $asset = $this->service->asset($this->tenant, $payload['items'][0]['id'], 'catalog');
+    $changed = $asset->payload;
+    $changed['charges'][1]['amount_cents'] = 999999;
+    $changed['terms_months'] = [36];
+    $asset->fill(['payload' => $changed, 'revision' => 2])->save();
+    $catalogRaw = $asset->getRawOriginal('payload');
+    $this->put($draftPath, [...$input, 'revision' => 3])->assertRedirect();
+    $this->draft->refresh();
+    expect($this->draft->revision)->toBe(4)->and($this->draft->payload['items'])->toBe($payload['items'])
+        ->and($this->draft->payload['journey'])->toBe($payload['journey'])->and($this->draft->payload['approach_key'])->toBe('evergrove_department_journey')
+        ->and($asset->fresh()->getRawOriginal('payload'))->toBe($catalogRaw);
+    $this->get($draftPath.'/preview')->assertOk()->assertSee('Contract term and renewal')->assertSee('12-month term')->assertSee('60 days')->assertSee('90 days')
+        ->assertSee('No routine subscription-pause entitlement')->assertSee('What setup includes')->assertSee('Staged fees')->assertSee('Support requests are submitted through the ticketing system.')
+        ->assertDontSee('phased billing remains to be agreed')->assertDontSee('Contract duration: to be agreed.')->assertSee('Agree the discovery sessions and the initial department focus.')->assertDontSee('No fixed onsite frequency or hours are assumed.')
+        ->assertSee($copy['client_details']['rollout'])->assertDontSee('Billing start and rollout duration are not finalized.');
+    foreach ([['catalog_ids' => [$payload['items'][0]['id']]], ['usage_plan' => 'workspace_allowance'], ['scope_notes' => 'Changed contractual scope.'], ['approach_key' => null]] as $change) {
+        $this->put($draftPath, [...$input, 'revision' => 4, ...$change])->assertStatus(409);
+        expect($this->draft->fresh()->revision)->toBe(4)->and($this->draft->fresh()->payload)->toBe($this->draft->payload);
+    }
+    ['version' => $newVersion, 'token' => $newToken] = $this->service->publish($this->tenant, $this->owner->id, $this->draft->id, 4, 'Test proposal password', 7, Str::uuid()->toString());
+    $newUrl = 'https://evergrove.test/service-proposals/'.$newToken;
+    $this->post($newUrl.'/unlock', ['password' => 'Test proposal password']);
+    $this->get($newUrl)->assertOk()->assertSee('value="12"', false)->assertSee('Contract term and renewal')
+        ->assertSee($copy['client_details']['rollout'])->assertDontSee('Billing start and rollout duration are not finalized.');
+    $selectionResponse = $this->post($newUrl.'/selection', ['version_hash' => $newVersion->content_hash,
+        'request_key' => session('service_proposal_request.'.$newVersion->id), 'selected' => [$payload['items'][0]['id']], 'terms' => [$payload['items'][0]['id'] => 12]])
+        ->assertOk()->assertSee('Review your selected scope.')->assertSee('1 year(s)')->assertSee('3,000.00')->assertSee('1,000.00')
+        ->assertSee($copy['client_details']['rollout'])->assertDontSee('Billing start and rollout duration are not finalized.')
+        ->assertSee('12-month term')->assertSee('60 days')->assertSee('90 days')->assertSee('No routine subscription-pause entitlement')
+        ->assertSee('Support requests are submitted through the ticketing system.')->assertSee('No unlimited AI, voice, text or email commitment.');
+    foreach ($copy['client_details']['commercial_sections'] as $section) {
+        $selectionResponse->assertSee($section['heading']);
+        foreach ($section['paragraphs'] ?? [] as $paragraph) {
+            $selectionResponse->assertSee($paragraph);
+        }
+    }
+    expect(Review::count())->toBe(0);
+    $selection = $this->service->selection($newVersion->payload, [['id' => $payload['items'][0]['id'], 'term_months' => 12]]);
+    expect($selection['totals_cents'])->toBe(['month' => 100000, 'one_time' => 300000])->and($selection['services'][0]['term_months'])->toBe(12)
+        ->and(fn () => $this->service->selection($newVersion->payload, [['id' => $payload['items'][0]['id']]]))->toThrow(\Illuminate\Validation\ValidationException::class);
+    $oldUrl = 'https://evergrove.test/service-proposals/'.$oldToken;
+    $this->post($oldUrl.'/unlock', ['password' => 'Test proposal password']);
+    $this->get($oldUrl)->assertOk()->assertSee('Contract duration: to be agreed.')->assertDontSee('Contract term and renewal')->assertSee('No fixed onsite frequency or hours are assumed.')
+        ->assertSee('<p class="muted">If selected, the three-workspace bundle reserves three department scopes; it does not activate all three at once. Billing start and rollout duration are not finalized.</p>', false);
+    $oldSelection = $this->post($oldUrl.'/selection', ['version_hash' => $oldVersion->content_hash,
+        'request_key' => session('service_proposal_request.'.$oldVersion->id), 'selected' => [$oldVersion->payload['items'][0]['id']]])
+        ->assertOk()->assertSee('Billing start and rollout duration are not finalized.')->assertSee('Working together, with clear boundaries.')
+        ->assertDontSee('Contract term and renewal')->assertDontSee('<h2>Implementation Timeline, Client Dependencies, and Billing Commencement</h2>', false);
+    foreach (['rollout', 'activation', 'support', 'travel', 'usage'] as $key) {
+        $oldSelection->assertSee($oldVersion->payload['client_details'][$key]);
+    }
+    expect($oldVersion->fresh()->content_hash)->toBe($oldHash)->and($oldVersion->fresh()->getRawOriginal('payload'))->toBe($oldRaw)
+        ->and($oldVersion->fresh()->payload['items'][0]['terms_months'])->toBe([])->and(Version::count())->toBe(2)->and(Review::count())->toBe(0)
+        ->and(DB::table('tenant_billing_orders')->count())->toBe(0);
+    $corrupted = $this->draft->payload;
+    $corrupted['commercial_snapshot']['catalog_origins'][$payload['items'][0]['id']]['payload_sha256'] = str_repeat('c', 64);
+    $this->draft->fill(['payload' => $corrupted])->save();
+    expect(fn () => $this->service->publish($this->tenant, $this->owner->id, $this->draft->id, 4, 'Test proposal password', 7, Str::uuid()->toString()))->toThrow(\Symfony\Component\HttpKernel\Exception\ConflictHttpException::class)
+        ->and(Version::count())->toBe(2)->and($this->draft->fresh()->revision)->toBe(4);
+    Http::assertNothingSent();
+    Mail::assertNothingSent();
 });
