@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {resolve} from 'node:path';
+import {closeWorkDetail} from './enterprise-work-detail-browser.mjs';
 
 /** Disposable authenticated fixture only: real HTTP persistence, zero provider calls. */
 export async function checkMappedOperationsWorkflow(page, evidence) {
@@ -57,8 +58,10 @@ export async function checkMappedOperationsWorkflow(page, evidence) {
     });
     await page.getByRole('checkbox',{name:'Retain the original navigation action',exact:true}).click();
     await within(started);
+    await closeWorkDetail(page);
     await page.locator(`#request-list [data-open="${project}"]`).click();
     await page.locator('#detail').getByRole('heading',{name:'Synthetic mapped repair project',exact:true}).waitFor();
+    await closeWorkDetail(page);
     await page.locator(`#request-list [data-open="${navigationProject}"]`).click();
     await page.locator(`#project-operations [data-ops-task="${navigationTask}"]`).waitFor();
     releaseNavigation();await within(ended);

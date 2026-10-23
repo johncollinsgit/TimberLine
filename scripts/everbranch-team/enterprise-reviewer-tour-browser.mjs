@@ -38,6 +38,11 @@ const markup = (
         image.toString("base64"),
     )
     .replace(/\{\{--[\s\S]*?--\}\}/g, "")
+    .replace(/@php[\s\S]*?@endphp/g, "")
+    .replace("{{ ($enterpriseWorkspaceTour ?? false) ? ($enterprisePresentation['identity']['name'] ?? 'Current workspace') : 'Lees-McRae' }}", "Lees-McRae")
+    .replace(/@if\(\$tourProposalHref\)[\s\S]*?@else([\s\S]*?)@endif/g, "$1")
+    .replace(/\{\{ \$enterprisePresentation\['identity'\]\['name'\] \?\? 'Current workspace' \}\}/g, "Fictional reviewer campus")
+    .replace(/\{\{ \(\$enterprisePriorityOnly \?\? false\) \? 'true' : 'false' \}\}/g, "false")
     // This standalone fixture selects the public branch of the shared Blade
     // markup. Actual private/public Blade rendering is covered by PHP tests.
     .replace(
@@ -48,6 +53,7 @@ const markup = (
         /\{\{ \(\$enterpriseWorkspaceTour \?\? false\) \? '[^']*' : '([^']*)' \}\}/g,
         "$1",
     );
+assert.ok(!/@(?:php|if|else|endif)|\{\{/.test(markup), "Standalone public fixture must resolve every Blade control and expression");
 assert.ok(
     !markup.includes("file_get_contents"),
     "Fixture must render the actual embedded brand asset",
@@ -83,7 +89,7 @@ try {
         );
     });
     const launcher = page.getByRole("button", {
-        name: "Show me Lees-McRae",
+        name: "Tour",
         exact: true,
     });
     for (const [label, width, height] of [
@@ -103,7 +109,7 @@ try {
         );
         await page
             .getByRole("heading", {
-                name: "One campus. A clear picture.",
+                name: "Find campus work",
                 exact: true,
             })
             .waitFor();
@@ -116,7 +122,7 @@ try {
         await page.keyboard.press("ArrowRight");
         await page
             .getByRole("heading", {
-                name: "A request starts the story.",
+                name: "Review a request",
                 exact: true,
             })
             .waitFor();
@@ -195,7 +201,7 @@ try {
             .click();
         await page
             .getByRole("heading", {
-                name: "One campus. A clear picture.",
+                name: "Find campus work",
                 exact: true,
             })
             .waitFor();

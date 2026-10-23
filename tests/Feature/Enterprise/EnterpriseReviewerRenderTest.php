@@ -24,7 +24,7 @@ test('the actual Enterprise shell renders an explicit sample presentation withou
     DB::enableQueryLog();
     DB::flushQueryLog();
     $html = view('enterprise.app', ['presentation' => reviewerRenderPresentation(), 'enterpriseRole' => 'sample perspective'])->render();
-    expect($html)->toContain('Fictional reviewer campus', 'EverbranchSampleTransport', 'SAMPLE DATA', 'Show me Lees-McRae', 'Email preview · not sent');
+    expect($html)->toContain('Fictional reviewer campus', 'EverbranchSampleTransport', 'SAMPLE DATA', 'Demo · Sample data', 'Email preview · not sent');
     expect($html)->not->toContain('id="enterprise-logout"');
     expect(DB::getQueryLog())->toBe([]);
     DB::disableQueryLog();
@@ -56,12 +56,12 @@ test('private workspace tour requires both server flags and never includes sampl
         $html = view('enterprise.app', ['presentation' => $presentation, 'enterpriseRole' => 'current member'])->render();
         expect($html)->not->toContain('EverbranchSampleTransport =', 'id="reviewer-perspective"', 'id="reviewer-reset-open"', 'sample-request-audio');
         if ($enabled && $sampleData) {
-            expect($html)->toContain('SERVER-BACKED DEMONSTRATION WORKSPACE', 'EverbranchWorkspaceTour.mount', 'CURRENT WORKSPACE', 'Email preview unavailable in this navigation tour');
+            expect($html)->toContain('Demo · Sample data', 'EverbranchWorkspaceTour.mount', 'DEMO · SAMPLE DATA', 'Email preview unavailable in this navigation tour');
             $document = new DOMDocument;
             @$document->loadHTML($html);
             expect((new DOMXPath($document))->query('//*[@data-tour-email-cta]')->length)->toBe(0);
             $xpath = new DOMXPath($document);
-            expect($xpath->query('//*[@data-tour-open]')->item(0)->textContent)->toBe('Explore this workspace');
+            expect($xpath->query('//*[@data-tour-open]')->item(0)->textContent)->toBe('Tour');
             expect($xpath->query('//*[contains(@class,"ert-word")]/small')->item(0)->textContent)->toContain($presentation['identity']['name'])->not->toContain('Lees-McRae');
             expect($html)->not->toContain('class="ert-email-paper"');
         } else {

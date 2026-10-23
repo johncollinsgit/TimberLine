@@ -782,7 +782,9 @@ test("Ask finale describes actual typed lookup and unsent previews without start
     assert.match(finale.text, /Who is assigned\?/);
     assert.match(finale.detail, /deterministic record lookup, not generative AI/);
     assert.match(finale.detail, /Draft \/ not sent/);
-    assert.equal(priorities.length, 7, "The established priorities workflow remains unchanged");
+    assert.equal(priorities.length, 8, "The Buildings walkthrough extends existing priorities");
+    assert.equal(priorities.at(-1).id, "buildings", "Preserve the saved indices of existing priority steps");
+    assert.equal(priorities.at(-1).target, "res-query");
     const clock = new StoryClock();
     for (let replay = 0; replay < 5; replay++) {clock.seek(6); clock.playing = true; clock.tick(30000); clock.restart();}
     assert.deepEqual(effects, []);

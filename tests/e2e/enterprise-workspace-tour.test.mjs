@@ -112,10 +112,7 @@ test("private tour requires both trusted gates and identity, and never installs 
 });
 test("scene traceability uses current authorized records and exact native workflow route", () => {
     const { tour, actions } = fixture();
-    assert.equal(
-        tour.describe(0, { text: "Exact original opening" }).text,
-        "Exact original opening",
-    );
+    assert.match(tour.describe(0, {}).text, /Open the campus overview.*Use Buildings/);
     assert.match(
         tour.describe(2, {}).role,
         /Authorized reviewer.*Authorized department/,
@@ -148,7 +145,7 @@ test("scene traceability uses current authorized records and exact native workfl
     assert.equal(url.searchParams.get("project_id"), "p2");
     tour.open(3, "projects");
     assert.equal(actions[1].type, "enterprise:navigate");
-    assert.equal(actions[1].detail.selected, "p2");
+    assert.equal(actions[1].detail.selected, null);
     assert.equal(
         actions[1].detail.area,
         undefined,
@@ -280,6 +277,10 @@ function loadFixture() {
             return nodes.get(id);
         },
         stashComposer() {},
+        closeWorkDetail(options) {
+            assert.equal(options.clearSelection, false);
+            assert.equal(options.restoreFocus, false);
+        },
         resetNext() {},
         message: (text, error) => messages.push({ text, error }),
         render() {
@@ -417,7 +418,7 @@ test("new manager procedures are described only when enabled and their destinati
     assert.equal(actions.length,0);
 });
 
-test("priorities navigate only current authorized features and preserve the selected project", () => {
+test("priorities navigate only current authorized features and clear table selection for scanning", () => {
     const {tour,snapshot,actions}=fixture();
     snapshot.data.features={reports:true,certificates:true,finance:true,resources:true,roll_call:true};
     snapshot.data.can_review=true;
@@ -425,14 +426,14 @@ test("priorities navigate only current authorized features and preserve the sele
     tour.update(snapshot);
     assert.match(tour.describe(2,{}).cards[2][1],/Finance keeps payment execution/);
     assert.equal(tour.links(2).find(row=>row.id==='finance').available,true);
-    for (const [id,section] of [["visibility","projects"],["crews","roll_call"],["schedules","calendar"],["reports","roll_call"],["certificates","people"],["invoices","finance"],["funds","finance"]]) {
+    for (const [id,section] of [["visibility","projects"],["buildings","buildings"],["crews","roll_call"],["schedules","calendar"],["reports","roll_call"],["certificates","people"],["invoices","finance"],["funds","finance"]]) {
         const item={id,section};
         assert.equal(tour.priorityStatus(item).available,true,id);
         assert.match(tour.priorityStatus(item).status,/Persistent feature/);
         assert.equal(tour.openPriority(item).available,true);
         assert.equal(actions.at(-1).detail.section,section);
     }
-    assert.equal(actions[0].detail.selected,"p2");
+    assert.equal(actions[0].detail.selected,null);
     assert.ok(actions.every(action=>action.type==="enterprise:navigate"));
 });
 
@@ -444,7 +445,7 @@ test("priority role loss, disabled features and pending scopes never substitute 
     tour.update(snapshot);
     assert.match(tour.describe(2,{}).cards[2][1],/unavailable in the current workspace/);
     assert.equal(tour.links(2).find(row=>row.id==='finance').available,false);
-    for (const id of ["reports","certificates","invoices","funds","unknown"]) {
+    for (const id of ["reports","certificates","invoices","funds","buildings","unknown"]) {
         assert.equal(tour.priorityStatus({id}).available,false);
         assert.equal(tour.openPriority({id,section:"finance"}).available,false);
     }
@@ -456,4 +457,35 @@ test("priority role loss, disabled features and pending scopes never substitute 
     tour.update(null);
     assert.equal(tour.openPriority({id:"visibility",section:"projects"}).available,false);
     assert.equal(actions.length,0);
+});
+
+test("request and project scene navigation scans tables without opening a native modal", () => {
+    const {tour,actions,snapshot}=fixture();
+    for (const [index,id,section] of [[1,"requests","requests"],[2,"projects","projects"],[3,"projects","projects"]]) {
+        assert.equal(tour.open(index,id).available,true);
+        assert.equal(actions.at(-1).detail.section,section);
+        assert.equal(actions.at(-1).detail.selected,null);
+        assert.match(tour.describe(index===2?3:index,{}).text,/Scan or sort.*Close or Escape/);
+    }
+    snapshot.data.can_submit=true;
+    tour.update(snapshot);
+    assert.match(tour.describe(1,{}).detail,/choose an available saved building.*typed location label alone stays unlinked/);
+    snapshot.data.features.resources=false;
+    tour.update(snapshot);
+    assert.doesNotMatch(tour.describe(1,{}).detail,/choose an available saved building/);
+});
+
+const presentationSource=await readFile(new URL("../../resources/js/enterprise/reviewer/tour.js",import.meta.url),"utf8");
+test("active guide hides external controls for a native drawer and adds one accessible return cue",()=>{
+    const start=presentationSource.indexOf("        function syncDrawer()"),end=presentationSource.indexOf("        const drawerObserver",start);
+    assert.ok(start>=0&&end>start);
+    const notes=[],feedback={prepend:node=>notes.unshift(node)},context={active:true,drawerNote:null,workDrawer:{open:true},clears:0,paints:0,refreshes:0,
+        document:{createElement:()=>({remove(){notes.splice(notes.indexOf(this),1);}}),getElementById:id=>id==="work-drawer-feedback"?feedback:null},
+        clearSpotlight(){context.clears++;},paintBar(){context.paints++;},refresh(){context.refreshes++;}};
+    vm.createContext(context);vm.runInContext(presentationSource.slice(start,end)+"\nglobalThis.sync=syncDrawer;",context);
+    context.sync();assert.equal(notes.length,1);assert.match(notes[0].textContent,/Close or press Escape.*list and tour/);
+    context.sync();assert.equal(notes.length,1);assert.equal(context.clears,2);
+    context.workDrawer.open=false;context.sync();assert.equal(notes.length,0);assert.equal(context.drawerNote,null);
+    context.active=false;context.workDrawer.open=true;context.sync();assert.equal(notes.length,0);
+    assert.equal(context.paints,4);assert.equal(context.refreshes,4);
 });

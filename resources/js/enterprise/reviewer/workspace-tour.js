@@ -27,6 +27,7 @@
         const ready = () => Boolean(context && area());
         function priorityStatus(item) {
             const permitted = {
+                buildings: feature("resources"),
                 visibility: Boolean(project()),
                 crews: feature("roll_call"),
                 schedules: feature("resources"),
@@ -55,7 +56,7 @@
                 add("overview", "Campus overview", "home", feature("briefing"));
                 add(
                     "buildings",
-                    "Buildings",
+                    "Buildings → tickets → priority",
                     "buildings",
                     feature("resources"),
                 );
@@ -156,7 +157,7 @@
                     ],
                     [
                         "Procedure spine",
-                        "Open the request/project for current owner, next action, location and closure evidence.",
+                        "Open a row for the details and actions available to your account.",
                     ],
                 ];
             if (index === 2)
@@ -236,22 +237,24 @@
                     ["Optional Talk · draft previews", "Talk requires your own button press and microphone permission when supported. Email/text previews stay Draft / not sent; no delivery is established."],
                 ];
             const copy = [
-                base.text,
-                "Open the current authorized request or your own service-request portal. Published updates and internal work remain separate. This tour does not create a student request.",
-                "Open the complete workflow workspace for the currently selected authorized project, or the first project in the current result. Drafts, activation review and run history use the existing server-backed interface.",
-                "Open current project work and Roll Call to inspect recorded ownership, checkpoints and resumption. The tour does not infer an emergency or claim an interruption that the records do not show.",
-                "Open the current people, contractor, asset and calendar screens when enabled. Contacts, custody and reservations remain governed by existing permissions.",
-                "Open current Roll Call and meeting notes. Any later task changes still require their own exact preview and confirmation; a downloaded PDF is a dated snapshot.",
+                "Open the campus overview to find current work. Use Buildings when you want to start with a location.",
+                "Scan or sort Requests, then open a row for details. Close or Escape returns to the same list.",
+                "Open the workflow workspace for your selected project. Review the form, assignment and approval before making changes.",
+                "Scan or sort Projects, then open a row for details. Close or Escape returns to the same list.",
+                "Open People & contractors to review available contacts. Use Assets to check recorded equipment holders and locations.",
+                "Open Roll Call to review priorities and record a decision. Confirm the owner and date before changing a task.",
                 feature("ask") && feature("voice_jobs")
-                    ? "Open the current authorized Ask Everbranch screen. Enter a job lookup yourself, inspect the returned record and try a location or assignee follow-up. Typed lookup remains available without starting the microphone. The tour never submits a prompt, begins Talk or dispatches a message."
-                    : "This finale is unavailable because Ask Everbranch job lookup and optional Talk are not both enabled for the current workspace. No sample record, alternate account or automatic provider operation will be substituted.",
+                    ? "Open Ask Everbranch and enter a job question. Inspect the source record before acting on the answer."
+                    : "Ask Everbranch job lookup is unavailable in this workspace. Continue with the request or project screens.",
             ];
             return {
                 text: copy[index],
                 role: `Signed in: ${boot.identity.userName || "current user"} · Current workspace: ${workspace?.name || "unavailable"}`,
                 cards: records,
                 detail: ready()
-                    ? "These links use the current permission-filtered result. Data may have changed since it loaded; destination routes recheck access. Unavailable links never substitute sample records."
+                    ? index === 1 && context.data.can_submit && feature("resources")
+                        ? "In New request, choose an available saved building to link the ticket. A typed location label alone stays unlinked."
+                        : "Opening a screen changes no records. Use only the actions available to your account."
                     : "Waiting for the current authorized workspace. No sample record or alternate account will be substituted.",
             };
         }
@@ -271,7 +274,7 @@
                 if (!priorityStatus(item).available) return {available: false, message: "That feature is unavailable in the current authorized workspace."};
                 globalThis.document.dispatchEvent(new CustomEvent("enterprise:navigate", {detail: {
                     section: item.section,
-                    ...(item.id === "visibility" ? {selected: project().id} : {}),
+                    ...(["projects", "requests"].includes(item.section) ? {selected: null} : {}),
                 }}));
                 return {available: true};
             },
@@ -314,7 +317,7 @@
                     }).toString();
                     context.transport.navigate(target.href);
                 } else {
-                    const selected =
+                    const selected = ["projects", "requests"].includes(link.section) ? null :
                         link.selected ||
                         (link.section === context.section
                             ? context.selected
@@ -323,7 +326,7 @@
                         new CustomEvent("enterprise:navigate", {
                             detail: {
                                 section: link.section,
-                                ...(selected ? { selected } : {}),
+                                ...(selected !== undefined ? { selected } : {}),
                             },
                         }),
                     );
@@ -384,6 +387,7 @@
             emailPreview: false,
             hideTrial: true,
             describeScene: (index, base) => navigation.describe(index, base),
+            screenLabel(index) {const label=navigation.links(index).find(row=>row.available)?.label;return label?(/^Open /.test(label)?label:"Open "+label):"Screen unavailable";},
             onScene: paintLinks,
             canNavigate: (index) =>
                 navigation.links(index).some((row) => row.available),

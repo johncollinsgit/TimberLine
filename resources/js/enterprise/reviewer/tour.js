@@ -2,33 +2,34 @@
 (() => {
     "use strict";
     const opening =
-        "Everbranch Enterprise is your campus operating system. It's designed to help the campus operate efficiently through automating tasks and tracking all the moving parts of campus life. It is your single source of truth for campus management.";
+        "Everbranch Enterprise is your campus operating system. Open a record to see who owns the next step.";
     // Attributed Gemini Quick Notes identify these needs; Andrew has not yet
     // validated this proposed solution map. No record or provider action lives here.
     const priorities = Object.freeze([
-        {id: "visibility", title: "Shared visibility", outcome: "Bring paper assignments and separate spreadsheets into one permission-controlled view of ownership, status and updates across relevant teams.", procedure: "One accountable owner, a clear next action and a checked handoff.", section: "projects", scene: 1, target: "request-list", selector: "[data-open]", icon: "M4 5h16v14H4z M8 9h8 M8 13h4"},
-        {id: "crews", title: "Shared Roll Call tickets", outcome: "Keep printed technician handouts connected to shared assigned work, with owners, status and retained checkpoints.", procedure: "Review the daily queue; explicitly resume interrupted work and print a dated one-page summary when useful.", section: "roll_call", scene: 3, target: "roll-scope", icon: "M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6 M3 20v-3a5 5 0 0 1 10 0v3 M16 6h5 M18.5 3.5v5 M16 15h5 M16 19h5"},
-        {id: "schedules", title: "Fewer scheduling surprises", outcome: "Check work windows against recorded classroom, athletics and equipment commitments.", procedure: "A coordinator records the conflict and confirms the resolution.", section: "calendar", scene: 4, target: "res-query", icon: "M4 5h16v15H4z M4 10h16 M8 3v4 M16 3v4 M8 14h3 M8 17h6"},
-        {id: "reports", title: "Reporting with a clear source", outcome: "Export authorized project activity for a selected quarter or date window with source references.", procedure: "Agree the report fields, reconcile the facts and retain the reviewed export.", section: "roll_call", scene: 5, target: "quarterly-preview", icon: "M6 3h9l4 4v14H6z M14 3v5h5 M9 17v-3 M12 17v-6 M15 17v-4"},
-        {id: "certificates", title: "Contractor renewal oversight", outcome: "See accepted certificate expiry, pending replacements and records needing attention.", procedure: "Name a renewal contact; review replacement evidence before changing the accepted record.", section: "people", scene: 4, target: "certificate-new", icon: "M12 3l8 3v6c0 5-8 9-8 9s-8-4-8-9V6z M8 12l3 3 5-6"},
-        {id: "invoices", title: "Clear invoice handoffs", outcome: "Keep the invoice reference, current approver and next action together as the packet moves through review.", procedure: "Record the decision and handoff; Finance keeps payment execution.", section: "finance", scene: 2, target: "finance-list", selector: "[data-finance-record]", icon: "M6 3h12v18l-3-2-3 2-3-2-3 2z M9 8h6 M9 12h6 M9 16h3"},
-        {id: "funds", title: "Traceable fund references", outcome: "Keep the approved budget code and restriction reference beside the project approval packet.", procedure: "Use Finance-approved references and reconcile to the authoritative ledger.", section: "finance", scene: 2, target: "finance-list", selector: "[data-finance-record]", icon: "M3 8l9-5 9 5 M4 9h16 M6 10v8 M12 10v8 M18 10v8 M3 21h18 M4 18h16"},
+        {id: "visibility", title: "Review project work", outcome: "Scan the project table and open a row for its current details.", procedure: "Scan or sort the table. Open a row for details; Close or Escape returns to the same list and tour controls.", section: "projects", scene: 1, target: "request-list", selector: "[data-open]", icon: "M4 5h16v14H4z M8 9h8 M8 13h4"},
+        {id: "crews", title: "Review daily work", outcome: "Open Roll Call to see assigned and interrupted work.", procedure: "Review the queue, then open a ticket for its next step.", section: "roll_call", scene: 3, target: "roll-scope", icon: "M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6 M3 20v-3a5 5 0 0 1 10 0v3 M16 6h5 M18.5 3.5v5 M16 15h5 M16 19h5"},
+        {id: "schedules", title: "Check a work window", outcome: "Open the calendar to compare recorded bookings and conflicts.", procedure: "Review a conflict before recording a resolution.", section: "calendar", scene: 4, target: "res-query", icon: "M4 5h16v15H4z M4 10h16 M8 3v4 M16 3v4 M8 14h3 M8 17h6"},
+        {id: "reports", title: "Review a report", outcome: "Choose a quarter or date range to inspect available activity.", procedure: "Check the source records before saving an export.", section: "roll_call", scene: 5, target: "quarterly-preview", icon: "M6 3h9l4 4v14H6z M14 3v5h5 M9 17v-3 M12 17v-6 M15 17v-4"},
+        {id: "certificates", title: "Check certificate dates", outcome: "Open the certificate register to review expiry and pending replacements.", procedure: "Review replacement evidence before accepting a new record.", section: "people", scene: 4, target: "certificate-new", icon: "M12 3l8 3v6c0 5-8 9-8 9s-8-4-8-9V6z M8 12l3 3 5-6"},
+        {id: "invoices", title: "Review an invoice handoff", outcome: "Open a packet to see its current reviewer and next step.", procedure: "Record the decision; Finance handles payment separately.", section: "finance", scene: 2, target: "finance-list", selector: "[data-finance-record]", icon: "M6 3h12v18l-3-2-3 2-3-2-3 2z M9 8h6 M9 12h6 M9 16h3"},
+        {id: "funds", title: "Check a fund reference", outcome: "Open the packet to see its budget code and restriction reference.", procedure: "Confirm the reference with Finance before recording approval.", section: "finance", scene: 2, target: "finance-list", selector: "[data-finance-record]", icon: "M3 8l9-5 9 5 M4 9h16 M6 10v8 M12 10v8 M18 10v8 M3 21h18 M4 18h16"},
+        {id: "buildings", title: "Find building work", outcome: "Search buildings, choose a building, then inspect a ticket beside it.", procedure: "Use Back on smaller screens. Expand the source map when needed.", section: "buildings", scene: 0, target: "res-query", icon: "M3 21h18 M5 21V5h14v16 M9 9h2 M13 9h2 M9 13h2 M13 13h2 M10 21v-4h4v4"},
     ].map(Object.freeze));
     const executivePriorities = Object.freeze([
-        Object.freeze({id:'executive',title:'Executive oversight',outcome:'Inspect configured workspaces, evidence-based work queues and proposed software rollout costs in one view.',procedure:'Open a supporting record; distinguish simulated workspace stages and uncommitted software costs from campus job budgets.',section:'home',scene:0,target:'executive-network',icon:'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z'}),
+        Object.freeze({id:'executive',title:'Review the sample campus',outcome:'See sample workspaces and open a supporting record.',procedure:'Choose a workspace or metric to inspect its source. Workspace stages and proposed software costs are illustrative.',section:'home',scene:0,target:'executive-network',icon:'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z'}),
         ...priorities,
     ]);
     const scenes = Object.freeze(
         [
             {
-                title: "One campus. A clear picture.",
+                title: "Find campus work",
                 id: "campus-overview",
                 pageId: "enterprise-overview",
                 section: "home",
                 duration: 25000,
                 role: "Workers · Security · Administration",
                 text: opening,
-                detail: "Search connects authorized work, locations and accountable departments. The official location directory keeps uncertain placements visibly unverified.",
+                detail: "Open Buildings to search by location, or use the overview to find a request. Location text and map references remain unverified.",
                 cards: [
                     ["Search campus work", "Bryan Gym · sample event setup"],
                     [
@@ -42,14 +43,14 @@
                 ],
             },
             {
-                title: "A request starts the story.",
+                title: "Review a request",
                 id: "request-intake",
                 pageId: "enterprise-requests",
                 section: "requests",
                 duration: 25000,
                 role: "Student requester · IT · Events · Maintenance",
-                text: "A student reports that event audio needs attention. The request stays traceable as the department triages it, assigns a worker and shares public progress.",
-                detail: "Requester updates show the next step. Internal notes, student details and restricted attachments stay with the people permitted to see them.",
+                text: "Scan or sort Requests, then open a row for details. Close or Escape returns to the same list.",
+                detail: "Sample intake keeps location text in this tab. In the signed-in workspace, choose an available saved building in New request to establish a link.",
                 cards: [
                     ["Sample request R-101", "Event audio needs a check"],
                     ["Accountable owner", "Operations coordinator"],
@@ -57,14 +58,14 @@
                 ],
             },
             {
-                title: "Design the work, then review it.",
+                title: "Review a workflow",
                 id: "workflow-design",
                 pageId: "enterprise-workflows",
                 section: "workflows",
                 duration: 25000,
                 role: "Department manager · IT · assigned worker",
-                text: "Open the complete workflow workspace. Connect a form, condition, assignment and approval; preview the draft before activating it.",
-                detail: "The same canvas, form and run-history presentation supports the sample experience. Sample execution is explicitly separate from the permission-controlled server engine.",
+                text: "Open the workflow workspace to inspect its form, assignment and approval. Preview a draft before making it active.",
+                detail: "Sample runs stay in this browser. The signed-in workspace uses its own records and permissions.",
                 cards: [
                     ["Form → Condition", "Capture issue and urgency"],
                     ["Assignment → Approval", "Named worker and manager"],
@@ -72,14 +73,14 @@
                 ],
             },
             {
-                title: "Emergencies interrupt work. They do not erase it.",
+                title: "Resume interrupted work",
                 id: "interruption-resume",
                 pageId: "enterprise-roll-call",
                 section: "roll_call",
                 duration: 25000,
                 role: "Security · workers · Events · department managers",
-                text: "An urgent water issue needs the worker now. The original audio check becomes Interrupted, retaining its owner, progress, notes and last checkpoint.",
-                detail: "The resumption queue keeps it in Roll Call until someone explicitly resumes, reassigns, reschedules or closes it with a reason. Managers review schedule impacts.",
+                text: "Open Roll Call to find interrupted work and its saved checkpoint. Resume it explicitly when the urgent work is handled.",
+                detail: "Resuming, reassigning or closing work needs an explicit action. A tour step changes no task.",
                 cards: [
                     ["Emergency", "Water issue needs immediate attention"],
                     ["Interrupted: R-101", "Audio check · checkpoint retained"],
@@ -90,14 +91,14 @@
                 ],
             },
             {
-                title: "Partners and equipment stay connected.",
+                title: "Find shared equipment",
                 id: "partners-equipment",
                 pageId: "enterprise-assets",
                 section: "assets",
                 duration: 25000,
                 role: "Contractor · Operations · Athletics",
-                text: "A contractor acknowledges a limited update link and provides an ETA and evidence. Staff locate the PA system through its custody record for the gym event.",
-                detail: "An update link permits only its reviewed actions. Asset history shows holder, last recorded location, expected return and condition; it is not a live tracker.",
+                text: "Open an asset to see its holder, last recorded location and expected return. Check its history before arranging a handoff.",
+                detail: "Custody records are not live tracking. Contractor links permit only their reviewed actions.",
                 cards: [
                     ["Contractor handoff", "Acknowledgment → ETA → evidence"],
                     [
@@ -108,14 +109,14 @@
                 ],
             },
             {
-                title: "Bring the right work into the meeting.",
+                title: "Prepare a meeting",
                 id: "meeting-roll-call",
                 pageId: "enterprise-roll-call",
                 section: "roll_call",
                 duration: 25000,
                 role: "Administration · department managers · campus teams",
-                text: "Roll Call brings together emergencies, interrupted work, overdue commitments and conflicts. Leaders record decisions and confirm commitments before changing tasks.",
-                detail: "The fresh one-page meeting PDF includes scope, timestamp and source links. Completion and contractor quality are separate measures. A saved PDF remains a dated snapshot.",
+                text: "Open Roll Call to review priorities and record decisions. Confirm owners and dates before changing tasks.",
+                detail: "A downloaded PDF is a dated snapshot. Completion approval and contractor quality are separate reviews.",
                 cards: [
                     [
                         "Completion",
@@ -134,14 +135,14 @@
             {
                 id: "ask-everbranch-finale",
                 pageId: "enterprise-ask",
-                title: "Finish with Ask Everbranch.",
+                title: "Ask about a job",
                 section: "ask",
                 duration: 30000,
                 target: "ask-voice-controls",
                 targets: Object.freeze(["ask-voice-controls", "ask-job-detail", "ask-message-preview-actions"]),
                 role: "Staff · current authorized job context",
-                text: 'Open Ask Everbranch and type “Show event audio job”. Inspect the matching fictional job, then ask “Where is it?” or “Who is assigned?” without losing the job context.',
-                detail: 'This demonstration uses deterministic record lookup, not generative AI. Talk is optional and starts only after your own button press and microphone permission, when supported. Email and text previews remain Draft / not sent. Opening or replaying this scene starts no microphone, model call or delivery.',
+                text: "Type “Show event audio job” to inspect a matching sample job. Ask “Where is it?” or “Who is assigned?” to follow the same job.",
+                detail: "This demonstration uses deterministic record lookup, not generative AI. Talk requires your button press and microphone permission; previews remain Draft / not sent.",
                 cards: [
                     ["Find the same job", 'Type “Show event audio job”, then inspect the authorized job detail and source record.'],
                     ["Follow up in context", 'Ask “Where is it?” or “Who is assigned?” against that same visible job. Unknown or inaccessible data stays unavailable.'],
@@ -194,6 +195,8 @@
         const get = (name) => root.querySelector(`[data-priorities-${name}]`),
             dialog = get("dialog");
         if (!dialog) return null;
+        const workDrawer = document.getElementById("work-drawer");
+        let drawerNote = null;
         const key = actions.priorityStorageKey || "everbranch-priorities-sample-v1";
         let selected = 0, active = false, visible = true, returnFocus = null, anchor = null, timer = null, reveal = false;
         function restore() {
@@ -219,7 +222,9 @@
             get("tip").hidden = true;
             anchor = null;
         }
-        function position() {
+        function position(event) {
+            if (event?.type === "resize") { reveal = true; return spotlight(); }
+            if (event?.type === "scroll" && get("tip").contains(event.target)) return;
             if (!active || !visible || dialog.open || !anchor || !anchor.isConnected) return clearSpotlight();
             const rect = anchor.getBoundingClientRect(),
                 barBottom = get("bar").getBoundingClientRect().bottom + 10;
@@ -230,15 +235,32 @@
             Object.assign(get("highlight").style, {top: `${top}px`, left: `${left}px`, width: `${width}px`, height: `${height}px`});
             get("highlight").hidden = false;
             const tip = get("tip");
+            const tipScroll = tip.scrollTop;
+            tip.style.maxHeight = "";
             tip.hidden = false;
             const tipHeight = tip.getBoundingClientRect().height,
                 below = top + height + 12,
-                tipTop = below + tipHeight < innerHeight - 12 ? below : Math.max(barBottom, top - tipHeight - 12);
-            Object.assign(tip.style, {top: `${Math.min(innerHeight - tipHeight - 10, tipTop)}px`, left: `${Math.max(12, Math.min(innerWidth - tip.getBoundingClientRect().width - 12, left))}px`});
+                belowRoom = Math.max(0, innerHeight - 12 - below),
+                aboveRoom = Math.max(0, top - 12 - barBottom),
+                useBelow = belowRoom >= tipHeight || (aboveRoom < tipHeight && belowRoom >= aboveRoom),
+                available = useBelow ? belowRoom : aboveRoom;
+            if (available < 78) {
+                if (tip.contains(document.activeElement)) {
+                    get("toggle").focus({preventScroll: true});
+                    get("toggle").scrollIntoView({block: "nearest", inline: "nearest"});
+                }
+                tip.hidden = true;
+                get("status").textContent = "The tour hint needs more height. Hide the tour to explore this screen, or enlarge the window.";
+                return;
+            }
+            const visibleHeight = Math.min(tipHeight, available),
+                tipTop = useBelow ? below : top - 12 - visibleHeight;
+            Object.assign(tip.style, {top: `${tipTop}px`, maxHeight: `${visibleHeight}px`, overflowY: "auto", left: `${Math.max(12, Math.min(innerWidth - tip.getBoundingClientRect().width - 12, left))}px`});
+            tip.scrollTop = tipScroll;
         }
         function spotlight() {
             clearSpotlight();
-            if (!active || !visible || dialog.open) return;
+            if (!active || !visible || dialog.open || workDrawer?.open) return;
             const item = priorities[selected], container = document.getElementById(item.target), target = item.selector ? container?.querySelector(item.selector) : container;
             if (!target || target.closest("[hidden]") || !target.getClientRects().length) {
                 get("status").textContent = "This feature is not visible on the current page. Choose Priorities to open an available screen, or hide the tour and keep working.";
@@ -247,7 +269,8 @@
             anchor = target;
             get("status").textContent = "";
             if (reveal) {
-                target.scrollIntoView({block: "center", behavior: "instant"});
+                target.scrollIntoView({block: "start", behavior: "instant"});
+                globalThis.scrollBy({top: target.getBoundingClientRect().top - get("bar").getBoundingClientRect().bottom - 32, behavior: "instant"});
                 reveal = false;
             }
             get("tip-title").textContent = item.title;
@@ -255,11 +278,11 @@
             position();
         }
         function paintBar() {
-            get("bar").hidden = !active;
+            get("bar").hidden = !active || workDrawer?.open === true;
             document.body.classList.toggle("erp-tour-active", active);
             get("current").textContent = priorities[selected].title;
             get("progress").textContent = `Priority ${selected + 1} of ${priorities.length} · ${visible ? "Guided exploration" : "Explore freely; your step is saved"}`;
-            get("toggle").textContent = visible ? "Hide tour" : "Show tour";
+            get("toggle").textContent = visible ? "Hide tour" : "Resume tour";
             get("toggle").setAttribute("aria-pressed", String(visible));
             get("continue").textContent = selected === priorities.length - 1 ? "Review priorities" : "Continue";
             save();
@@ -330,14 +353,30 @@
             else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
         };
         const refresh = () => { if (dialog.open) paintCards(); clearTimeout(timer); timer = setTimeout(spotlight, 180); };
-        const pageShow = () => { restore(); paintBar(); refresh(); };
+        function syncDrawer() {
+            if (workDrawer?.open && active) {
+                clearSpotlight();
+                if (!drawerNote) {
+                    drawerNote = document.createElement("p");
+                    drawerNote.className = "ert-tour-drawer-note";
+                    drawerNote.textContent = "Close or press Escape to return to the list and tour.";
+                    document.getElementById("work-drawer-feedback")?.prepend(drawerNote);
+                }
+            } else {
+                drawerNote?.remove(); drawerNote = null;
+            }
+            paintBar(); refresh();
+        }
+        const drawerObserver = workDrawer && globalThis.MutationObserver ? new MutationObserver(syncDrawer) : null;
+        drawerObserver?.observe(workDrawer, {attributes: true, attributeFilter: ["open"]});
+        const pageShow = () => { restore(); paintBar(); syncDrawer(); };
         root.addEventListener("click", click); dialog.addEventListener("cancel", cancel); dialog.addEventListener("keydown", trap);
         globalThis.addEventListener("resize", position); document.addEventListener("scroll", position, true);
         globalThis.addEventListener("pageshow", pageShow);
         document.addEventListener("enterprise:render", refresh); document.addEventListener("enterprise:tour-context", refresh);
         paintBar();
         return Object.freeze({open, close, refresh, get selected() {return selected;}, destroy() {
-            active = false; clearTimeout(timer); clearSpotlight(); if (dialog.open) dialog.close(); paintBar();
+            active = false; clearTimeout(timer); clearSpotlight(); drawerObserver?.disconnect(); drawerNote?.remove(); if (dialog.open) dialog.close(); paintBar();
             root.removeEventListener("click", click); dialog.removeEventListener("cancel", cancel); dialog.removeEventListener("keydown", trap);
             globalThis.removeEventListener("resize", position); document.removeEventListener("scroll", position, true);
             globalThis.removeEventListener("pageshow", pageShow);
@@ -404,7 +443,7 @@
             get("screen").disabled =
                 actions.canNavigate?.(clock.index) === false;
             get("screen").dataset.screen = scene.section;
-            get("screen").textContent = scene.section === "ask" ? "Open Ask Everbranch" : "Explore this screen";
+            get("screen").textContent = actions.screenLabel?.(clock.index) || ({home:"Open campus overview",requests:"Open requests",workflows:"Open workflow workspace",roll_call:"Open Roll Call",assets:"Open assets",ask:"Open Ask Everbranch"})[scene.section] || "Open this screen";
             get("screen").dataset.feature = scene.target || scene.section;
             get("progress").max = clock.duration;
             get("progress").value = clock.elapsed;
@@ -426,6 +465,7 @@
                 ),
             );
             if (previousIndex !== clock.index) {
+                const extra=root.querySelector("[data-tour-details]");if(extra)extra.open=false;
                 const holder = get("cards");
                 holder.replaceChildren(
                     ...scene.cards.map(([title, body], index) => {

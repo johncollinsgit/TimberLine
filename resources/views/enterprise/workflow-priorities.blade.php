@@ -34,7 +34,7 @@
             const values = new URLSearchParams(target.search || target.hash.slice(1));
             values.set('section', item.section);
             values.set('area_id', boot.scope.area_id);
-            if (item.id === 'visibility') values.set('selected', boot.scope.project_id);
+            if (['projects','requests'].includes(item.section)) values.delete('selected');
             if (sample) { target.search=''; target.hash=values.toString(); }
             else { target.hash=''; target.search=values.toString(); }
             if (sample) adapter.navigate(target.href); else location.assign(target.href);

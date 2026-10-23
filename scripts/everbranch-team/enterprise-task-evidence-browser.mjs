@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {resolve} from 'node:path';
+import {closeWorkDetail} from './enterprise-work-detail-browser.mjs';
 
 /** Synthetic authenticated fixtures only; no access grants, providers or college data. */
 export async function checkTaskEvidenceWorkflow(page,evidence) {
@@ -21,7 +22,9 @@ export async function checkTaskEvidenceWorkflow(page,evidence) {
     const go=async(section,selected)=>{await page.goto(new URL(`/?tenant=${tenant}&area_id=${source.id}&section=${section}&selected=${selected}`,page.url()).href);await page.locator('#request-operations,#project-operations').first().waitFor();};
     await go('requests',request.id);
     const update=page.locator('#request-public-update-form');await update.locator('[name=message]').fill('Synthetic public progress <img src=x onerror=alert(1)>');await update.locator('[name=confirmed_public]').check();
+    await closeWorkDetail(page);
     await page.locator('[data-section=projects]').click();await page.locator('[data-section=requests]').click();
+    await page.locator(`#request-list [data-open="${request.id}"]`).click();
     assert.equal(await update.locator('[name=message]').inputValue(),'Synthetic public progress <img src=x onerror=alert(1)>');
     let droppedPublic=false;const publicBodies=[];
     await page.route('**/enterprise/requester/*/updates?*',async route=>{publicBodies.push(route.request().postDataJSON());if(!droppedPublic){droppedPublic=true;await route.fetch();return route.abort();}return route.continue();});
@@ -41,7 +44,9 @@ export async function checkTaskEvidenceWorkflow(page,evidence) {
     assert.equal(target.pending_handoffs.length,1);assert.equal(target.items.length,0,'Proposal must not create a destination task before explicit acceptance');
     assert.equal(target.pending_handoffs[0].next_action,'Synthetic shared action only; no internal notes copied.');
     await go('projects',project.id);const card=page.locator(`[data-ops-task="${task.id}"]`);await card.getByText('Configure ownership & checklist',{exact:true}).click();await card.locator('[name=next_action]').fill('Unsent retained synthetic configuration');
-    await page.locator('[data-section=requests]').click();await page.locator('[data-section=projects]').click();await card.getByText('Configure ownership & checklist',{exact:true}).click();assert.equal(await card.locator('[name=next_action]').inputValue(),'Unsent retained synthetic configuration');
+    await closeWorkDetail(page);
+    await page.locator('[data-section=requests]').click();await page.locator('[data-section=projects]').click();
+    await page.locator(`#request-list [data-open="${project.id}"]`).click();await card.getByText('Configure ownership & checklist',{exact:true}).click();assert.equal(await card.locator('[name=next_action]').inputValue(),'Unsent retained synthetic configuration');
     await page.locator('#discussion-body').fill('Unsent project-only note');
     await card.getByRole('button',{name:'Notes & evidence for '+task.title,exact:true}).click();await page.getByRole('heading',{name:'Task notes & evidence',exact:true}).waitFor();
     assert.equal(await page.locator('#discussion').count(),1,'Only one discussion target may be mounted');assert.equal(await page.locator('#discussion-body').inputValue(),'','Project draft must not leak into task discussion');

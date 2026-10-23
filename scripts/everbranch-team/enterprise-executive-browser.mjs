@@ -63,9 +63,9 @@ export async function checkExecutiveDemo(page, evidence) {
     await page.locator("#executive-pricing-nav").click();
     await page.locator("#executive-software").waitFor({ state: "visible" });
     await page
-        .getByRole("button", { name: "Campus priorities", exact: true })
+        .getByRole("button", { name: "Priorities", exact: true })
         .click();
-    assert.equal(await page.locator("[data-priority-card]").count(), 8);
+    assert.equal(await page.locator("[data-priority-card]").count(), 9);
     await page.locator("[data-priority-open=executive]").click();
     await page.waitForFunction(
         () => !document.querySelector("[data-priorities-highlight]").hidden,
@@ -74,7 +74,7 @@ export async function checkExecutiveDemo(page, evidence) {
     await page.reload();
     await page
         .locator("[data-priorities-toggle]")
-        .getByText("Show tour", { exact: true })
+        .getByText("Resume tour", { exact: true })
         .waitFor();
     await page.locator("#home-nav").click();
     await page.locator("[data-priorities-end]").click();

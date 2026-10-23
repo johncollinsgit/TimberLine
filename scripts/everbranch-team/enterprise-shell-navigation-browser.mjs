@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import {closeWorkDetail} from "./enterprise-work-detail-browser.mjs";
 
 // Invoked by an existing isolated browser harness. This module never starts a
 // server, seeds college data, installs an adapter or makes a provider request.
@@ -72,6 +73,7 @@ export async function verifyFilteredRequestMap(
     await page.locator(`#map-markers [data-map="${includedId}"]`).click();
     assert.equal((await nav(page)).selected, includedId);
     assert.equal((await nav(page)).section, "requests");
+    await closeWorkDetail(page);
     await page.locator("#search").fill("");
 }
 
@@ -99,60 +101,64 @@ export async function verifyShellNavigationHistory(
             ),
         { areaId, projectId },
     );
-    await page.locator("#search").fill("");
     await page.locator("#discussion-body").waitFor();
     const original = await page.locator("#discussion-body").inputValue();
     const retained =
         "Synthetic unsent note retained through navigation history.";
     await page.locator("#discussion-body").fill(retained);
+    await closeWorkDetail(page);
+    await page.locator("#search").fill("");
     await page.locator('[data-view="list"]').click();
     await page.locator('[data-view="calendar"]').click();
+    await page.locator(`#request-list [data-open="${projectId}"]`).click();
     assert.equal((await nav(page)).view, "calendar");
-    await page.locator(`#areas [data-area="${otherAreaId}"]`).click();
-    await page.waitForFunction(
-        (id) =>
-            new URLSearchParams(
-                location.pathname.startsWith("/platform/demos/")
-                    ? location.hash.slice(1)
-                    : location.search,
-            ).get("area_id") === id,
-        otherAreaId,
-    );
-    await page.goBack();
-    await page.locator(`#request-list [data-open="${projectId}"]`).waitFor();
-    await page.locator("#discussion-body").waitFor();
-    assert.equal((await nav(page)).area_id, areaId);
     assert.equal((await nav(page)).selected, projectId);
-    assert.equal(
-        await page
-            .locator('[data-view="calendar"]')
-            .getAttribute("aria-pressed"),
-        "true",
-    );
     assert.equal(await page.locator("#discussion-body").inputValue(), retained);
+    // Browser history may dismiss/reopen a native modal. Outside page controls
+    // are used only after Close, which intentionally clears current selection.
     await page.goBack();
-    await page.locator("#discussion-body").waitFor();
+    await page.waitForFunction(() => !document.getElementById('work-drawer').open);
+    assert.equal((await nav(page)).view, "calendar");
+    assert.equal((await nav(page)).selected, undefined);
+    await page.goBack();
+    await page.locator('[data-view="list"][aria-pressed="true"]').waitFor();
     assert.equal(
         await page.locator('[data-view="list"]').getAttribute("aria-pressed"),
         "true",
     );
     await page.goForward();
-    await page.locator("#discussion-body").waitFor();
+    await page.locator('[data-view="calendar"][aria-pressed="true"]').waitFor();
     assert.equal(
-        await page
-            .locator('[data-view="calendar"]')
-            .getAttribute("aria-pressed"),
+        await page.locator('[data-view="calendar"]').getAttribute("aria-pressed"),
         "true",
     );
+    await page.goForward();
+    await page.locator("#discussion-body").waitFor();
+    assert.equal((await nav(page)).selected, projectId);
     assert.equal(await page.locator("#discussion-body").inputValue(), retained);
     await page.reload();
     await page.locator("#discussion-body").waitFor();
     assert.equal(
-        await page
-            .locator('[data-view="calendar"]')
-            .getAttribute("aria-pressed"),
+        await page.locator('[data-view="calendar"]').getAttribute("aria-pressed"),
         "true",
     );
+    assert.equal((await nav(page)).selected, projectId);
+    assert.equal(await page.locator("#discussion-body").inputValue(), retained);
+    await closeWorkDetail(page);
+    await page.locator(`#areas [data-area="${otherAreaId}"]`).click();
+    await page.waitForFunction(
+        (id) => new URLSearchParams(
+            location.pathname.startsWith("/platform/demos/")
+                ? location.hash.slice(1) : location.search,
+        ).get("area_id") === id,
+        otherAreaId,
+    );
+    await page.goBack();
+    await page.locator(`#request-list [data-open="${projectId}"]`).click();
+    await page.locator("#discussion-body").waitFor();
+    assert.equal((await nav(page)).area_id, areaId);
+    assert.equal((await nav(page)).view, "calendar");
+    assert.equal((await nav(page)).selected, projectId);
     assert.equal(await page.locator("#discussion-body").inputValue(), retained);
     assert.deepEqual(
         await tourState(page),

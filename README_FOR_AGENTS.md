@@ -1,3 +1,29 @@
+## Enterprise work-table and building-link follow-up (October 23; source candidate)
+
+Projects and requests use the available work canvas, with sortable fields from
+the current authorized projection and a dismissible detail drawer. Close/Escape
+preserve list search, sorting, scroll and unsent discussion/progress drafts.
+Buildings retains its separate building/ticket/detail navigation and secondary
+map. Request intake can explicitly select a current, authorized saved building;
+free-text location labels never establish that relationship. See
+[building links](docs/operations/enterprise-request-building-links.md),
+[Buildings navigation](docs/operations/enterprise-buildings-workspace.md),
+[tour placement](docs/operations/enterprise-tour-position.md) and the
+[UI changelog](docs/ui/UI_CHANGELOG.md).
+
+Completion without a replacement note preserves saved progress. Resource
+history emits explicit UTC instants while retaining immutable revision bytes.
+These source changes grant no access, enable no provider and create no billing
+effect. Hosted acceptance remains separate from local fixtures: verify the
+exact approved merged release, real persistence, isolation and reviewer flows.
+
+The compact header uses the current workspace identity and existing authorized
+published-review context for Proposal. The approved Rooted Peak horizontal logo
+retains its exact SVG/PNG artwork and proportions. Guided table navigation clears
+selection; opening a native detail drawer temporarily hides outside guide
+controls until Close/Escape. See
+[the header/tour contract](docs/operations/enterprise-workspace-header-tour.md).
+
 ## Unified Enterprise and proposal review candidate (October 22; not released)
 
 Proposal PR475 is now included in the isolated current-main Enterprise candidate.

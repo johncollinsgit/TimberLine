@@ -32,12 +32,12 @@
 <body>
 @includeIf('enterprise.runtime-designation')
 <a class="ent-skip" href="#enterprise-main">Skip to workspace</a><div class="shell">
-<aside class="sidebar" aria-label="Everbranch Enterprise"><div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 20c1-9 7-14 13-17 2 9-2 16-9 15M5 22l9-12"/></svg></span><div><strong>Everbranch</strong><small>Enterprise · Teams</small></div></div>
-<p class="workspace-label">Organization workspace</p><nav aria-label="Workspace sections"><button class="nav-item" data-section="home" id="home-nav" hidden>Campus overview</button><button class="nav-item active" data-section="requests">Requests</button><button class="nav-item" data-section="projects">Operations &amp; projects</button><button class="nav-item" data-section="contractors">Contractors</button><button class="nav-item" data-section="ask" id="ask-nav" hidden>Ask Everbranch</button>@includeIf('enterprise.operations-nav')<button class="nav-item" data-section="usage" id="usage-nav" hidden>AI &amp; voice usage</button></nav>
+<aside class="sidebar" aria-label="Everbranch Enterprise"><div class="brand enterprise-brand"><picture><source type="image/svg+xml" srcset="data:image/svg+xml;base64,{{ base64_encode(file_get_contents(resource_path('images/enterprise/Everbranch-Rooted-Peak-Aligned.svg'))) }}"><img class="enterprise-brand-image" src="data:image/png;base64,{{ base64_encode(file_get_contents(resource_path('images/enterprise/Everbranch-Rooted-Peak-Aligned.png'))) }}" width="2800" height="747" alt="Everbranch Enterprise by Evergrove Software"></picture></div>
+<p class="workspace-label">Work</p><nav aria-label="Workspace sections"><button class="nav-item" data-section="home" id="home-nav" hidden>Campus overview</button><button class="nav-item active" data-section="requests">Requests</button><button class="nav-item" data-section="projects">Operations &amp; projects</button><button class="nav-item" data-section="contractors">Contractors</button><button class="nav-item" data-section="ask" id="ask-nav" hidden>Ask Everbranch</button>@includeIf('enterprise.operations-nav')<button class="nav-item" data-section="usage" id="usage-nav" hidden>AI &amp; voice usage</button></nav>
 <p class="workspace-label">Your workspaces</p><div id="areas"></div><div class="sidebar-bottom"><strong>{{ $enterprisePresentation["identity"]["name"] }}</strong><br>{{ $enterprisePresentation["identity"]["userName"] }}<br>Connected work. Clear ownership.@unless($enterpriseSample)<form id="enterprise-logout" method="post" action="{{ $enterprisePresentation['routes']['logout'] }}"><input type="hidden" name="_token" value="{{ $enterprisePresentation['csrf'] ?? '' }}"><button class="nav-item" type="submit">Sign out</button></form>@endunless</div></aside>
 <main class="main" id="enterprise-main"><header class="topbar"><div class="breadcrumb">{{ $enterprisePresentation["identity"]["name"] }} <span>/</span> <strong id="breadcrumb">Requests</strong></div><span class="badge" id="visibility">Loading workspace</span></header>
 <div class="content"><div class="eyebrow">Everbranch Enterprise</div><div class="page-heading"><div><h1 id="heading">Turn requests into owned work.</h1><p class="subtle">One place for intake, assignment and visible progress.</p></div><div class="actions"><button class="button" id="create-workspace" hidden>New workspace</button><button class="button primary" id="create-request" hidden>New request</button><button class="button primary" id="create-project" hidden>New project</button></div></div>
-<p id="status" role="status" aria-live="polite"></p><button class="button" id="retry" hidden>Retry the same action</button>
+<div id="work-feedback-home"><p id="status" role="status" aria-live="polite"></p><button class="button" id="retry" hidden>Retry the same action</button></div>
 @include('enterprise.home')
 @includeIf('enterprise.executive-demo')
 @include('enterprise.next-panels')
@@ -49,10 +49,11 @@
 <div id="enterprise-usage-tools" class="actions" hidden><button class="button" type="button" id="usage-all" hidden>All authorized departments</button><button class="button" type="button" id="usage-refresh">Refresh usage records</button></div>
 <div id="work"><div class="toolbar"><div class="actions" role="group" aria-label="Work view"><button class="button" data-view="list" aria-pressed="true">List</button><button class="button" data-view="calendar" aria-pressed="false">Calendar</button><button class="button" data-view="map" aria-pressed="false">Map</button></div><label>Find work <input id="search" type="search" placeholder="Search visible work"></label><button class="button" id="map-toggle">View Map</button></div>
 <section class="panel map-panel" id="map" hidden><div class="map-head"><div><div class="eyebrow">Workspace locations</div><h2>See where the work happens.</h2></div><span class="caption">Select a marker for request details</span></div><div id="map-holder"><svg class="location-map" viewBox="0 0 1000 330" preserveAspectRatio="none" aria-hidden="true"><defs><pattern id="grid" width="100" height="66" patternUnits="userSpaceOnUse"><path d="M100 0H0V66" fill="none" stroke="#d9e2ce"/></pattern></defs><rect width="1000" height="330" fill="url(#grid)"/></svg><div id="map-markers"></div><p class="caption">Saved longitude/latitude positions on a coordinate grid. No campus basemap, GPS feed or external map provider is connected.</p></div><p class="caption" id="map-empty"></p></section>
-<div class="detail-layout"><section id="request-list" aria-label="Visible workspace work"></section><aside class="panel" id="detail" aria-label="Selected work details"><h2>Choose a request</h2><p class="subtle">Select a row or map marker to see its details and permitted actions.</p></aside></div><p class="caption" id="coverage"></p></div>
+<section id="request-list" aria-label="Visible workspace work"></section><p class="caption" id="coverage"></p></div>
+<dialog class="work-drawer" id="work-drawer" aria-labelledby="work-detail-title"><header class="work-drawer-head"><h2 id="work-detail-title">Work details</h2><button class="button" id="close-work-detail" type="button" autofocus>Close</button></header><div id="work-drawer-feedback"></div><div id="detail" aria-label="Selected work details"></div></dialog>
 </div></main></div>
 @if($enterpriseSample)@includeIf('enterprise.reviewer-tour')@elseif(config('enterprise.runtime') === true && config('enterprise.tour_enabled', false) && config('enterprise.sample_data', false))@include('enterprise.workspace-tour')@endif
-<dialog id="create-dialog"><form id="create-form" class="stack"><h2 id="dialog-title">New request</h2><label>Title<input name="title" maxlength="100" required></label><label id="visibility-field" hidden>Visibility<select name="visibility"><option value="department_only">Department only</option><option value="shared">Shared across organization</option></select></label><div id="request-fields" class="stack"><label>Work description<textarea name="description" maxlength="5000" rows="4"></textarea></label><label>Due date<input name="due_on" type="date"></label><label>Location label<input name="location" maxlength="200"></label><div class="field-pair"><label>Latitude (optional)<input name="latitude" type="number" min="-90" max="90" step="any"></label><label>Longitude (optional)<input name="longitude" type="number" min="-180" max="180" step="any"></label></div></div><p class="caption" id="create-context"></p><div class="actions"><button class="button primary" type="submit">Save</button><button class="button" type="button" id="cancel-create">Cancel</button></div></form></dialog>
+<dialog id="create-dialog"><form id="create-form" class="stack"><h2 id="dialog-title">New request</h2><label>Title<input name="title" maxlength="100" required></label><label id="visibility-field" hidden>Visibility<select name="visibility"><option value="department_only">Department only</option><option value="shared">Shared across organization</option></select></label><div id="request-fields" class="stack"><label>Work description<textarea name="description" maxlength="5000" rows="4"></textarea></label><label>Due date<input name="due_on" type="date"></label><label>Saved building (optional)<select name="location_id" id="request-building" aria-label="Saved building (optional)"><option value="">No saved building link</option></select></label><p class="caption" id="request-building-coverage"></p><label>Location label<input name="location" maxlength="200"></label><div class="field-pair"><label>Latitude (optional)<input name="latitude" type="number" min="-90" max="90" step="any"></label><label>Longitude (optional)<input name="longitude" type="number" min="-180" max="180" step="any"></label></div></div><p class="caption" id="create-context"></p><div class="actions"><button class="button primary" type="submit">Save</button><button class="button" type="button" id="cancel-create">Cancel</button></div></form></dialog>
 <script>{!! file_get_contents(resource_path('js/enterprise/transport.js')) !!}</script>
 <script>{!! file_get_contents(resource_path('js/enterprise/usage.js')) !!}</script>
 @if($enterpriseSample)
@@ -98,6 +99,8 @@
     createAction = '',
     draft = null,
     busy = false;
+  const workSortState = new Map(), workFeedbackHome = new Map();
+  let workDetailReturn = null;
   let navigationPushPending = false, navigationSearchBatch = false,
     navigationViewOverride = navigation.has('view') ? {view, map} : null;
   $('search').value = (navigation.get('q') || '').slice(0, 200);
@@ -108,6 +111,7 @@
   const api = (url, body, options) => transport.request(url, body, options);
   let workspaceLoadGeneration = 0, workspaceLoaded = false;
   function clearWorkspaceContext(failed = false) {
+    closeWorkDetail({clearSelection:false, restoreFocus:false});
     stashComposer();
     data = {areas: [], requests: [], projects: [], members: []};
     document.dispatchEvent(new CustomEvent('enterprise:workspace-state', {detail: {loaded: false, area: null}}));
@@ -154,6 +158,7 @@
     message('Saving…');
     try {
       const result = await api(urls.commands, body);
+      if(body.note!==undefined && body.id)writeDraft('work-action:'+body.area_id+':requests:'+body.id,{});
       pending = null;
       pendingUncertain = false;
       globalThis.EverbranchTransport.setRefreshBlocker('workspace-command', false);
@@ -175,6 +180,100 @@
       busy = false;
     }
   }
+  function workColumns() {
+    const source = section === 'projects' ? data.projects : data.requests;
+    return [
+      ['title', section === 'projects' ? 'Project' : 'Request / task'],
+      ...(source.some(r => r.task && 'priority' in r.task) ? [['priority','Priority']] : []),
+      ['status','Status'],
+      ...(source.some(r => r.task && 'assignee_id' in r.task) ? [['assignee','Assignee']] : []),
+      ...(source.some(r => r.data?.location) ? [['location','Building / location']] : []),
+      ...(source.some(r => r.due_on || r.task?.due_on) ? [['due','Due']] : []),
+    ];
+  }
+  function workValue(row, key) {
+    if(key==='title')return row.title || row.name || '';
+    if(key==='status')return row.status || (row.archived ? 'Archived' : 'Active');
+    if(key==='priority')return ['urgent','high','normal','low'].includes(row.task?.priority) ? row.task.priority : null;
+    if(key==='assignee')return row.task?.assignee_id ? (data.members.find(m => String(m.id)===String(row.task.assignee_id))?.name || 'Assigned member · name unavailable') : null;
+    if(key==='location')return row.data?.location || null;
+    if(key==='due')return row.due_on || row.task?.due_on || null;
+    return null;
+  }
+  function workSort() {
+    const stored=workSortState.get(area+':'+section);
+    return stored && workColumns().some(([key])=>key===stored.key) ? stored : {key:'title',direction:'asc'};
+  }
+  function sortedWork(work) {
+    const sort=workSort(), priority={urgent:0,high:1,normal:2,low:3};
+    return [...work].sort((a,b)=>{
+      const av=workValue(a,sort.key),bv=workValue(b,sort.key);
+      if(av===null || bv===null)return av===bv ? 0 : av===null ? 1 : -1;
+      const order=sort.key==='priority' ? priority[av]-priority[bv] : String(av).localeCompare(String(bv),undefined,{numeric:true,sensitivity:'base'});
+      return order*(sort.direction==='asc'?1:-1) || String(workValue(a,'title')).localeCompare(String(workValue(b,'title')));
+    });
+  }
+  function workCell(row,key) {
+    const value=workValue(row,key);
+    if(key==='title')return `<button class="link" data-open="${esc(row.id)}" aria-haspopup="dialog" aria-controls="work-drawer" aria-expanded="${row.id===selected}">${esc(value)}</button>`;
+    if(key==='status')return `<span class="badge">${esc(String(value).replaceAll('_',' '))}</span>`;
+    if(key==='priority')return value ? `<span class="work-priority" data-priority="${esc(value)}">${esc(value)}</span>` : 'Not recorded';
+    if(key==='assignee' && !value)return row.task ? 'Unassigned' : row.data?.task_id ? 'Task unavailable' : 'No linked task';
+    return esc(value || (key==='due'?'Unscheduled':'Not recorded'));
+  }
+  function syncWorkSelection() {
+    $('request-list').querySelectorAll('[data-work-row]').forEach(row=>row.dataset.selected=String(row.dataset.workRow===selected));
+    $('request-list').querySelectorAll('[data-open]').forEach(button=>button.setAttribute('aria-expanded',String(button.dataset.open===selected)));
+  }
+  function openWorkRow(id, trigger) {
+    rememberSelection();beginNavigation();
+    const table=$('work-table-scroll');
+    workDetailReturn={trigger,id,top:scrollY,left:scrollX,tableTop:table?.scrollTop||0,tableLeft:table?.scrollLeft||0};
+    selected=id;detail();syncWorkSelection();
+  }
+  function moveWorkFeedback(intoDrawer) {
+    for(const id of ['status','retry','operations-retry']){
+      const node=$(id);if(!node?.parentNode)continue;
+      if(intoDrawer){
+        if(!workFeedbackHome.has(id))workFeedbackHome.set(id,{parent:node.parentNode,next:node.nextSibling});
+        $('work-drawer-feedback').append(node);
+      }else{
+        const home=workFeedbackHome.get(id);if(!home)continue;
+        const parent=home.parent.isConnected?home.parent:$('work-feedback-home');
+        if(home.next?.parentNode===parent)parent.insertBefore(node,home.next);else parent.append(node);
+        workFeedbackHome.delete(id);
+      }
+    }
+  }
+  function showWorkDetail() {
+    const drawer=$('work-drawer');
+    $('work-detail-title').textContent=section==='projects'?'Project details':'Request details';
+    if(!drawer.open){
+      const table=$('work-table-scroll');
+      workDetailReturn ||= {trigger:document.activeElement,id:selected,top:scrollY,left:scrollX,tableTop:table?.scrollTop||0,tableLeft:table?.scrollLeft||0};
+      moveWorkFeedback(true);document.documentElement.classList.add('work-detail-open');drawer.showModal();
+    }
+  }
+  function closeWorkDetail({clearSelection=true,restoreFocus=true}={}) {
+    const drawer=$('work-drawer'),wasOpen=drawer.open,back=workDetailReturn;
+    stashComposer();discussionGeneration++;activeDiscussionKey=null;
+    moveWorkFeedback(false);if(wasOpen)drawer.close();
+    $('detail').replaceChildren();
+    document.documentElement.classList.remove('work-detail-open');workDetailReturn=null;
+    if(clearSelection){selected=null;rememberSelection();rememberUrl();syncWorkSelection();
+      document.dispatchEvent(new CustomEvent('enterprise:tour-context',{detail:{data,area,section,selected,transport}}));}
+    if(wasOpen&&restoreFocus){
+      const table=$('work-table-scroll');if(table&&back){table.scrollTop=back.tableTop;table.scrollLeft=back.tableLeft;}
+      const target=back?.trigger?.isConnected?back.trigger:[...$('request-list').querySelectorAll('[data-open]')].find(button=>button.dataset.open===back?.id)||$('search');target.focus({preventScroll:true});
+      if(back)scrollTo({top:back.top,left:back.left,behavior:'instant'});
+    }
+  }
+  $('close-work-detail').onclick=()=>closeWorkDetail();
+  $('work-drawer').addEventListener('cancel',event=>{event.preventDefault();closeWorkDetail();});
+  $('work-drawer').addEventListener('click',event=>{
+    if(event.target!==$('work-drawer'))return;const bounds=event.target.getBoundingClientRect();
+    if(event.clientX<bounds.left||event.clientX>bounds.right||event.clientY<bounds.top||event.clientY>bounds.bottom)closeWorkDetail();
+  });
   function rows() {
     const query = $('search').value.trim().toLowerCase();
     return (section === 'projects' ? data.projects : data.requests).filter(r => (r.title || r.name).toLowerCase().includes(query)).filter(r => {
@@ -185,6 +284,7 @@
     });
   }
   function render({preserveDetail=false}={}) {
+    if(!['requests','projects'].includes(section))closeWorkDetail({clearSelection:false,restoreFocus:false});
     if(transport.mode==='sample')$('enterprise-main').dataset.demoPage='enterprise-'+section;
     if(transport.mode==='sample')document.dispatchEvent(new CustomEvent('enterprise:section-rendered',{detail:{section}}));
     // An explicit unsaved URL/history view takes precedence over an async saved default.
@@ -213,18 +313,32 @@
     $('map').hidden = !map;
     $('map-toggle').textContent = map ? 'Hide Map' : 'View Map';
     document.querySelectorAll('[data-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === view)));
-    const work = rows();
+    const work = sortedWork(rows());
     if (view === 'calendar') {
       const days = [...new Set(work.map(r => r.due_on || 'Unscheduled'))].sort();
       $('request-list').innerHTML = `<div class="panel">${days.map(day => `<section class="calendar-day"><h3>${esc(day)}</h3>${work.filter(r => (r.due_on || 'Unscheduled') === day).map(r => `<button class="button request-row" data-open="${esc(r.id)}">${esc(r.title || r.name)}</button>`).join('')}</section>`).join('') || '<p class="empty">No scheduled work in this workspace.</p>'}</div>`;
     } else {
-      $('request-list').innerHTML = `<div class="table-wrap"><table><thead><tr><th>Work</th><th>Status</th><th>Due</th></tr></thead><tbody>${work.map(r => `<tr><td><button class="link" data-open="${esc(r.id)}">${esc(r.title || r.name)}</button></td><td><span class="badge">${esc(r.status || (r.archived ? 'Archived' : 'Active'))}</span></td><td>${esc(r.due_on || 'Unscheduled')}</td></tr>`).join('')}</tbody></table>${work.length ? '' : '<p class="empty">No work yet. Create a request to begin.</p>'}</div>`;
+      const columns=workColumns(),sort=workSort();
+      $('request-list').innerHTML = `<div class="table-wrap work-table-scroll" id="work-table-scroll" role="region" tabindex="0" aria-label="Work table; scroll for more columns"><table class="work-table"><caption>${section==='projects'?'Projects':'Requests and linked tasks'} · ${work.length} in this view</caption><thead><tr>${columns.map(([key,label])=>`<th scope="col" aria-sort="${sort.key===key?(sort.direction==='asc'?'ascending':'descending'):'none'}"><button type="button" data-work-sort="${key}" aria-label="Sort by ${label}">${label}<span aria-hidden="true">${sort.key===key?(sort.direction==='asc'?' ↑':' ↓'):' ↕'}</span></button></th>`).join('')}</tr></thead><tbody>${work.map(r=>`<tr data-work-row="${esc(r.id)}" data-selected="${r.id===selected}">${columns.map(([key])=>`<td data-column="${key}">${workCell(r,key)}</td>`).join('')}</tr>`).join('')}</tbody></table>${work.length ? '' : '<p class="empty">No matching work. Clear search or choose another workspace.</p>'}</div>`;
+      const scrollRegion=$('work-table-scroll');
+      scrollRegion.onkeydown=event=>{
+        if(event.target!==scrollRegion||event.altKey||event.ctrlKey||event.metaKey)return;
+        const delta={ArrowLeft:[-80,0],ArrowRight:[80,0],ArrowUp:[0,-64],ArrowDown:[0,64]}[event.key];
+        if(delta){event.preventDefault();scrollRegion.scrollBy({left:delta[0],top:delta[1],behavior:'instant'});}
+      };
+      $('request-list').querySelectorAll('[data-work-sort]').forEach(button=>button.onclick=()=>{
+        const key=button.dataset.workSort,current=workSort();
+        workSortState.set(area+':'+section,{key,direction:current.key===key&&current.direction==='asc'?'desc':'asc'});
+        render({preserveDetail:true});
+        [...$('request-list').querySelectorAll('[data-work-sort]')].find(b=>b.dataset.workSort===key)?.focus({preventScroll:true});
+      });
+      $('request-list').querySelectorAll('[data-work-row]').forEach(row=>row.onclick=event=>{
+        if(event.target.closest('button,a,input,select,textarea'))return;
+        openWorkRow(row.dataset.workRow,row.querySelector('[data-open]'));
+      });
     }
     $('request-list').querySelectorAll('[data-open]').forEach(b => b.onclick = () => {
-      rememberSelection();
-      beginNavigation();
-      selected = b.dataset.open;
-      detail();
+      openWorkRow(b.dataset.open,b);
     });
     const located = work.filter(r => r.data?.latitude != null && r.data?.longitude != null && Number.isFinite(Number(r.data.latitude)) && Number.isFinite(Number(r.data.longitude)));
     const lats = located.map(r => Number(r.data.latitude)),
@@ -235,13 +349,10 @@
       maxY = Math.max(...lats);
     $('map-markers').innerHTML = located.map((r, i) => `<button class="map-pin" style="left:${maxX === minX ? 50 : 10 + 80 * (Number(r.data.longitude) - minX) / (maxX - minX)}%;top:${maxY === minY ? 50 : 10 + 80 * (maxY - Number(r.data.latitude)) / (maxY - minY)}%" data-map="${esc(r.id)}" aria-label="Open ${esc(r.title || r.name)}">${i + 1}</button>`).join('');
     $('map-markers').querySelectorAll('[data-map]').forEach(b => b.onclick = () => {
-      rememberSelection();
-      beginNavigation();
-      selected = b.dataset.map;
-      render();
+      openWorkRow(b.dataset.map,b);
     });
     $('map-empty').textContent = located.length ? '' : 'No saved coordinates match the current view and filters.';
-    $('coverage').textContent = 'Showing up to 100 currently visible requests in this workspace.' + (data.has_more ? ' More visible requests exist.' : '') + (data.scan_partial ? ' The scan limit was reached; results are partial.' : '');
+    $('coverage').textContent = section==='projects'?'Showing readable projects returned for this workspace.':'Showing up to 100 currently visible requests. Priority and assignee come from their linked task. Saved building links are explicit; other location labels are entered text.' + (data.has_more ? ' More visible requests exist.' : '') + (data.scan_partial ? ' The scan limit was reached; results are partial.' : '');
     if(!preserveDetail)detail();
     document.dispatchEvent(new CustomEvent('enterprise:render', {detail: {data, area, section, selected, transport}}));
     document.dispatchEvent(new CustomEvent('enterprise:workspace-state', {detail: {area, section, features: data.features || {}, loaded: workspaceLoaded, viewer_id: data.viewer_id}}));
@@ -252,12 +363,14 @@
     activeDiscussionKey = null;
     rememberUrl();
     document.dispatchEvent(new CustomEvent('enterprise:tour-context', {detail: {data, area, section, selected, transport}}));
-    if (['home', 'ask', 'contractors'].includes(section)) return;
+    if (!['projects','requests'].includes(section)) return;
     const r = (section === 'projects' ? data.projects : data.requests).find(r => r.id === selected);
     if (!r) {
-      $('detail').innerHTML = '<h2>Choose work</h2><p class="subtle">Select a row or map marker for details.</p>';
+      closeWorkDetail({clearSelection:false,restoreFocus:false});
+      $('detail').replaceChildren();
       return;
     }
+    showWorkDetail();
     if (section === 'projects') {
       $('detail').innerHTML = `<h2>${esc(r.name)}</h2><span class="badge">${esc($('visibility').textContent)}</span><p class="work-detail">${esc(r.description)}</p><p class="caption">Project version ${r.version}. Requests can be assigned into this project during triage.</p>`;
       if (data.features?.workflow) { const launch = document.createElement('a'); launch.className = 'button primary'; launch.textContent = 'Open workflow workspace'; launch.href = transport.href(urls.workflowWorkspace + '?tenant=' + encodeURIComponent(tenantSlug) + '&area_id=' + encodeURIComponent(area) + '&project_id=' + encodeURIComponent(r.id)); $('detail').append(launch); }
@@ -283,18 +396,24 @@
       }
       command(body);
     });
+    const actionNote=$('action-note'),actionDraftKey='work-action:'+area+':'+section+':'+r.id;
+    if(actionNote){actionNote.value=readDraft(actionDraftKey).body||'';actionNote.oninput=()=>writeDraft(actionDraftKey,{body:actionNote.value});}
     $('show-history').onclick = async () => {
+      const scope={area,section,selected,generation:discussionGeneration};
+      const current=()=>area===scope.area&&section===scope.section&&selected===scope.selected&&discussionGeneration===scope.generation&&$('work-drawer').open;
       try {
         const result = await api(urls.history + '/' + encodeURIComponent(r.id) + '/history?tenant=' + encodeURIComponent(tenantSlug));
+        if(!current())return;
         $('history').innerHTML = result.items.map(x => `<p class="caption">Version ${x.version} · ${esc(x.event.action)}<br>${esc(x.at)} · actor ${esc(x.actor_id)}</p>`).join('');
       } catch (e) {
-        message(e.message, true);
+        if(current())message(e.message, true);
       }
     };
     mountDiscussion('request', r.id);
     if (data.features?.operations) mountRequestOperations(r);
   }
   @include('enterprise.home-script')
+  let requestBuildingChoices=[];
   function create(action) {
     if (pending) return message('Retry the retained action before starting another.', true);
     createAction = action;
@@ -303,12 +422,23 @@
       request_id: crypto.randomUUID()
     };
     $('create-form').reset();
+    const choices=requestBuildingChoices=transport.mode==='private'?(data.buildings?.items||[]).map(row=>({...row})):[];
+    $('request-building').innerHTML='<option value="">No saved building link</option>'+choices.map(row=>`<option value="${esc(row.id)}">${esc(row.title)}</option>`).join('');
+    $('request-building').disabled=action!=='request.create'||!choices.length;
+    $('request-building-coverage').textContent=transport.mode==='sample'?'Fictional sample: requests keep location text in this tab. Saved building links use the signed-in workspace.':(data.buildings?.coverage||'No current saved buildings are available.')+(data.buildings?.has_more?' More buildings are outside this result.':'')+' Choose a building to link this request; a typed label alone stays unverified.';
+    syncRequestBuilding();
     $('dialog-title').textContent = action === 'workspace.create' ? 'New workspace' : action === 'project.create' ? 'New project' : 'New request';
     $('visibility-field').hidden = action !== 'workspace.create';
     $('request-fields').hidden = action !== 'request.create';
     $('create-context').textContent = action === 'workspace.create' ? 'Creating a workspace adds no users or access grants. Department access must already be authorized.' : 'Saved within the selected workspace and its visibility boundary.';
     $('create-dialog').showModal();
   }
+  function syncRequestBuilding(){
+    const form=$('create-form'),building=requestBuildingChoices.find(row=>row.id===$('request-building').value);
+    form.elements.location.readOnly=!!building;if(building)form.elements.location.value=building.title;
+    for(const key of ['latitude','longitude']){form.elements[key].readOnly=!!building;if(building)form.elements[key].value='';}
+  }
+  $('request-building').onchange=syncRequestBuilding;
   $('create-form').onsubmit = e => {
     e.preventDefault();
     if (pending) return;
@@ -322,6 +452,9 @@
     if (createAction === 'request.create') {
       body.expected_version = 0;
       for (const key of ['description', 'location', 'due_on', 'latitude', 'longitude']) if (fields.get(key) !== '') body[key] = fields.get(key);
+      const building=requestBuildingChoices.find(row=>row.id===fields.get('location_id'));
+      if(fields.get('location_id')&&!building)return message('That building is unavailable. Close the form and refresh before saving.',true);
+      if(building){body.location_id=building.id;body.location_version=building.version;delete body.latitude;delete body.longitude;}
     }
     command(body);
   };
@@ -341,7 +474,11 @@
     let target;
     try {
       // Retain the sample adapter's canonical same-origin destination validation.
-      target = new URL(baseTransport.href(String(value)), location.href);
+      const requested = new URL(String(value), location.href);
+      if(transport.mode==='sample' && selected===null){
+        const state=new URLSearchParams(requested.hash.slice(1));state.delete('selected');requested.hash=state.toString();
+      }
+      target = new URL(baseTransport.href(String(requested)), location.href);
     } catch { return; }
     if (target.origin !== location.origin || target.pathname !== location.pathname || target.username || target.password) return;
     const parameters = new URLSearchParams(transport.mode === 'sample' ? target.hash.slice(1) : target.search);
