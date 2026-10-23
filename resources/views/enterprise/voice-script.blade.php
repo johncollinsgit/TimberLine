@@ -41,7 +41,7 @@
     while($('chat-log').children.length>20)$('chat-log').firstElementChild.remove();
   }
   function renderVoice(){
-    const enabled=!conversationMode()&&section==='ask'&&!!data.features?.voice_jobs&&!!data.features?.ask&&!!area;
+    const enabled=transport.mode!=='sample'&&!conversationMode()&&section==='ask'&&!!data.features?.voice_jobs&&!!data.features?.ask&&!!area;
     $('ask-voice-pane').hidden=!enabled;
     const stamp=enabled?JSON.stringify([transport.mode,workspace,data.viewer_id||data.viewer||viewer,area,section,!!data.features?.voice_generation,!!data.features?.voice_drafts]):null;
     if(stamp!==voiceScope){resetVoice();voiceScope=stamp;}
@@ -69,6 +69,7 @@
   window.addEventListener('everbranch:voice-jobs-ready',()=>{if(section==='ask')renderVoice();});
   const originalAskSubmit=$('ask-form').onsubmit;
   $('ask-form').onsubmit=async event=>{
+    if(transport.mode==='sample'){event.preventDefault();return;}
     if(conversationMode()||!data.features?.voice_jobs)return originalAskSubmit(event);
     event.preventDefault();renderVoice();if(!voiceSession){message('The reviewed job lookup assets are unavailable. No model request was made. Reload before continuing.',true);return;}if(askBusy)return;
     const question=$('ask-question').value.trim();if(!question)return;askBusy=true;$('ask-submit').disabled=true;chatMessage(question,'question');

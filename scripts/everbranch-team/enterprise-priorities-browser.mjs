@@ -126,8 +126,10 @@ try {
     assert.equal(response.status(), 200);
     assert.equal(response.headers()["x-reviewer-fixture-sql"], "0");
     assert.equal(response.headers()["set-cookie"], undefined);
+    // Exercise the separate read-only Executive option; Blaine's editable default has its own browser scenario.
+    await Promise.all([page.waitForEvent('load'),page.locator('#reviewer-perspective').selectOption('executive')]);
     await checkExecutiveDemo(page,evidence);
-    await page.locator('#reviewer-perspective').selectOption('manager');
+    await Promise.all([page.waitForEvent('load'),page.locator('#reviewer-perspective').selectOption('manager')]);
     await page.waitForFunction(()=>document.getElementById('reviewer-perspective')?.value==='manager');
     await page.emulateMedia({ reducedMotion: "reduce" });
     const opener = page.getByRole("button", {name: "Priorities", exact:true});
@@ -173,7 +175,7 @@ try {
     await page.locator(`#request-list [data-open="${chosenProject}"]`).click();
     assert.equal(await page.locator('#discussion-body').inputValue(),'Synthetic unsent project note retained while exploring priorities.');
     await page.locator('#close-work-detail').click();
-    for (const [id,target] of [['buildings','#res-query'],['crews','#roll-scope'],['schedules','#res-query'],['reports','#quarterly-preview'],['certificates','#certificate-new'],['invoices','#finance-list [data-finance-record]'],['funds','#finance-list [data-finance-record]']]) {
+    for (const [id,target] of [['buildings','#res-query'],['crews','#roll-projects-search'],['schedules','#res-query'],['reports','#quarterly-preview'],['certificates','#certificate-new'],['invoices','#finance-list [data-finance-record]'],['funds','#finance-list [data-finance-record]']]) {
         await page.locator('[data-priorities-overview]').click();
         await page.locator(`[data-priority-open="${id}"]`).click();
         await page.locator(target).first().waitFor();

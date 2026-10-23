@@ -24,6 +24,7 @@ export async function checkTaskEvidenceWorkflow(page,evidence) {
     const update=page.locator('#request-public-update-form');await update.locator('[name=message]').fill('Synthetic public progress <img src=x onerror=alert(1)>');await update.locator('[name=confirmed_public]').check();
     await closeWorkDetail(page);
     await page.locator('[data-section=projects]').click();await page.locator('[data-section=requests]').click();
+    await page.locator('#work-status').selectOption('active');
     await page.locator(`#request-list [data-open="${request.id}"]`).click();
     assert.equal(await update.locator('[name=message]').inputValue(),'Synthetic public progress <img src=x onerror=alert(1)>');
     let droppedPublic=false;const publicBodies=[];

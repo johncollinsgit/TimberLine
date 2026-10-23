@@ -290,3 +290,75 @@ test("disabled or absent Operations and a missing area never issue a preference 
     assert.equal(f.requests.length, 0);
     assert.equal(f.writes.length, 0);
 });
+
+// Execute the actual catalog and lifecycle callbacks: departing requests may reject
+// before pagehide, while a replacement document is still being loaded.
+const shell = await readFile(new URL("../../resources/views/enterprise/app.blade.php", import.meta.url), "utf8");
+const catalogSource = shell.slice(shell.indexOf("  async function loadProjectCatalog(){"), shell.indexOf("  function renderWorkFilters(){"));
+const lifecycleSource = shell.slice(shell.indexOf("  globalThis.addEventListener('popstate'"), shell.indexOf("  $('search').oninput"));
+
+function catalogFixture() {
+    const events = new Map(), requests = [], renders = [], pending = { request_id: "retained-exact-write", body: "Unsent draft" };
+    const result = id => ({ selected_area_id: id, projects: [{ id: "project-" + id }], requests: [], members: [] });
+    let held = true;
+    const context = vm.createContext({
+        workspaceLoadGeneration: 1, projectCatalogGeneration: 0, projectCatalog: null,
+        data: { ...result("a0"), areas: Array.from({ length: 6 }, (_, i) => ({ id: "a" + i, name: "Department " + i })) },
+        section: "projects", urls: { data: "/data?tenant=fixture" }, pending,
+        addEventListener: (name, handler) => events.set(name, handler),
+        api(url) {
+            const id = new URL(url, "https://fixture.invalid").searchParams.get("area_id"), request = { id };
+            requests.push(request);
+            if (!held) return Promise.resolve(result(id));
+            return new Promise((resolve, reject) => { request.resolve = () => resolve(result(id)); request.reject = reject; });
+        },
+        render: options => renders.push(copy(options)),
+        clearWorkspaceContext: () => { context.projectCatalog = null; context.projectCatalogGeneration++; },
+        restoreNavigation: () => { context.workspaceLoadGeneration++; context.restored = context.loadProjectCatalog(); },
+    });
+    vm.runInContext(catalogSource + lifecycleSource, context);
+    return { context, events, requests, renders, pending, load: () => context.loadProjectCatalog(), release: () => { held = false; } };
+}
+
+test("beforeunload stops the old catalog batch before any replacement-document read or render", async () => {
+    const f = catalogFixture(), original = copy(f.pending), pending = f.load();
+    assert.equal(f.requests.length, 2, "The first batch reuses the authorized current department");
+    f.events.get("beforeunload")?.({ defaultPrevented: false });
+    f.release();
+    for (const request of f.requests) request.reject(new Error("Departing request canceled"));
+    await pending;
+    assert.equal(f.requests.length, 2, "A canceled old batch must not launch the next three reads during provisional navigation");
+    assert.equal(f.context.projectCatalog, null);
+    assert.equal(f.renders.length, 0);
+    assert.deepEqual(f.pending, original, "Read invalidation cannot clear, rewrite or retry a pending write/draft");
+});
+
+test("Stay on a canceled navigation preserves data and permits a deliberate fresh catalog load", async () => {
+    const f = catalogFixture(), original = copy(f.pending), data = f.context.data, old = f.load();
+    f.events.get("beforeunload")?.({ defaultPrevented: true, returnValue: "" });
+    f.release();
+    for (const request of f.requests) request.reject(new Error("Interrupted obsolete read"));
+    await old;
+    assert.equal(f.context.data, data, "No pagehide or destructive context clear occurred on Stay");
+    await f.load();
+    assert.equal(f.context.projectCatalog.items.length, 6);
+    assert.equal(f.context.projectCatalog.failed.length, 0);
+    assert.equal(f.renders.length, 1);
+    assert.deepEqual(f.pending, original);
+});
+
+test("a persisted pageshow uses the existing fresh-load path rather than reviving the old catalog", async () => {
+    const f = catalogFixture(), old = f.load();
+    f.events.get("beforeunload")?.({});
+    f.events.get("pagehide")({});
+    f.release();
+    for (const request of f.requests) request.reject(new Error("Former document read"));
+    await old;
+    f.events.get("pageshow")({ persisted: false });
+    assert.equal(f.context.restored, undefined);
+    f.events.get("pageshow")({ persisted: true });
+    await f.context.restored;
+    assert.equal(f.context.projectCatalog.items.length, 6);
+    assert.equal(f.context.projectCatalog.failed.length, 0);
+    assert.equal(f.renders.length, 1);
+});

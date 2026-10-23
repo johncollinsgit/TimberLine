@@ -2,6 +2,7 @@
 <style>.enterprise-sample{padding-top:48px}.reviewer-ribbon{position:fixed;inset:0 0 auto;min-height:48px;background:#eae5d2;color:#4b583f;border-bottom:1px solid #d2ceba;z-index:50;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 20px;font-size:10px}.reviewer-ribbon strong{letter-spacing:.08em}.reviewer-ribbon label{display:flex;align-items:center;gap:8px}.reviewer-ribbon select{padding:6px;font-size:11px;min-height:34px}.reviewer-ribbon button{min-height:34px;padding:6px 10px;background:transparent;border:1px solid #b7bea7;border-radius:4px;color:inherit}.reviewer-reset{border:1px solid #d6dece;border-radius:9px;max-width:calc(100vw - 24px);padding:25px;color:#233d32}.reviewer-reset::backdrop{background:#142a24b8}.reviewer-reset h2{font:25px Georgia,serif}.reviewer-reset p{font-size:13px;line-height:1.8}.reviewer-reset .actions{display:flex;gap:10px;flex-wrap:wrap}.reviewer-reset button{min-height:44px;padding:10px 16px;border:1px solid #cbd6bf;border-radius:5px;background:white;color:#244d3d}.reviewer-reset button:last-child{background:#244d3d;color:white}.reviewer-ribbon *:focus-visible,.reviewer-reset *:focus-visible{outline:3px solid #b18b2c;outline-offset:3px}@media(max-width:650px){.enterprise-sample{padding-top:82px}.reviewer-ribbon{min-height:82px;padding:8px 12px;flex-wrap:wrap;gap:5px}.reviewer-ribbon .reviewer-boundary{width:100%;font-size:9px}.reviewer-ribbon label{font-size:9px}.reviewer-ribbon select{max-width:145px}.reviewer-ribbon .reviewer-title{font-size:9px}}</style>
 <div class="reviewer-ribbon" role="region" aria-label="Fictional sample controls"><span class="reviewer-title"><strong>SAMPLE DATA</strong> · Everbranch demonstration</span><span class="reviewer-boundary">{{ !empty($campusReviewContext) ? 'Fictional campus work stays in this tab. Review names and page comments are saved to the server; no messages or AI charges.' : 'This tab only. No real campus data, server writes, messages or AI charges.' }}</span><label>Sample perspective<select id="reviewer-perspective" aria-label="Sample perspective"><option value="manager">Department manager</option><option value="worker">Assigned worker</option><option value="requester">Student requester</option></select></label><button type="button" id="reviewer-reset-open">Reset sample</button></div>
 <dialog class="reviewer-reset" id="reviewer-reset-dialog" aria-labelledby="reviewer-reset-title"><h2 id="reviewer-reset-title">Reset this tab's fictional sample?</h2><p>This clears your sample edits, notes, workflow runs and upload metadata. It does not affect Enterprise records, another tab's data, credentials or trial spending.</p><div class="actions"><button type="button" id="reviewer-reset-cancel">Keep my sample</button><button type="button" id="reviewer-reset-confirm">Reset this tab's sample</button></div></dialog>
+<script>{!! file_get_contents(resource_path('js/enterprise/reviewer/job-sample.js')) !!}</script>
 <script>{!! file_get_contents(resource_path('js/enterprise/reviewer/sample-adapter.js')) !!}</script>
 <script>{!! file_get_contents(resource_path('js/enterprise/reviewer/tour.js')) !!}</script>
 <script>
@@ -13,17 +14,17 @@
         const root = document.querySelector('[data-reviewer-tour-root]:not([data-priority-only="true"])');
         if (root && document.querySelector('.content')) document.querySelector('.content').prepend(root);
         const dispatch = detail => document.dispatchEvent(new CustomEvent('enterprise:navigate', {detail}));
-        const executive = adapter.snapshot().persona === 'executive';
+        const executive = ['executive','demo_manager'].includes(adapter.snapshot().persona);
         EverbranchReviewerTour.mount(root, {
             ...(executive ? {priorityItems:EverbranchReviewerTour.executivePriorities} : {}),
             priorityStorageKey:'everbranch-priorities-sample:'+boot.identity.workspace+':'+adapter.snapshot().persona,
             priorityStatus(item) {
-                const manager = ['manager','executive'].includes(adapter.snapshot().persona);
+                const manager = ['manager','executive','demo_manager'].includes(adapter.snapshot().persona);
                 const restricted = ['reports','certificates','invoices','funds'].includes(item.id);
                 return {available: !restricted || manager, status: restricted && !manager ? 'Unavailable in this sample perspective' : 'Browser simulation · server feature implemented, not hosted'};
             },
             onPriority(item) {
-                if (['reports','certificates','invoices','funds'].includes(item.id) && !['manager','executive'].includes(adapter.snapshot().persona)) return {available:false,message:'Unavailable in this sample perspective'};
+                if (['reports','certificates','invoices','funds'].includes(item.id) && !['manager','executive','demo_manager'].includes(adapter.snapshot().persona)) return {available:false,message:'Unavailable in this sample perspective'};
                 dispatch({section:item.section, area:EverbranchSampleTransport.ids.area, ...(['projects','requests'].includes(item.section)?{selected:null}:{})});
                 return {available:true};
             },
@@ -35,13 +36,14 @@
             ...(boot.routes.trial ? {onTryIt() { adapter.navigate(boot.routes.trial); }} : {}),
         });
         const chooser = document.getElementById('reviewer-perspective');
-        const executiveOption=document.createElement('option');executiveOption.value='executive';executiveOption.textContent='Blaine · COO demo admin';chooser.prepend(executiveOption);
+        const executiveOption=document.createElement('option');executiveOption.value='executive';executiveOption.textContent='Executive · read-only';chooser.prepend(executiveOption);
+        if(boot.defaultPersona==='demo_manager'){const managerOption=document.createElement('option');managerOption.value='demo_manager';managerOption.textContent='Blaine · demo manager';chooser.prepend(managerOption);}
         chooser.value = adapter.snapshot().persona;
         chooser.onchange = () => {
             adapter.setPersona(chooser.value);
             // Preserve the selected workflow/run and retained draft across perspectives.
             if(document.getElementById('enterprise-workflow')){location.reload();return;}
-            const next=adapter.href(boot.routes.back+'#section='+(chooser.value==='executive'?'home':chooser.value==='requester'?'requester':'requests')+'&area_id='+EverbranchSampleTransport.ids.area);
+            const next=adapter.href(boot.routes.back+'#section='+(['executive','demo_manager'].includes(chooser.value)?'home':chooser.value==='requester'?'requester':'requests')+'&area_id='+EverbranchSampleTransport.ids.area);
             if(new URL(next,location.href).pathname===location.pathname){history.pushState(null,'',next);location.reload();}else adapter.navigate(next);
         };
         if(executive&&!document.getElementById('enterprise-workflow')){

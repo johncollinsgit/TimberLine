@@ -26,6 +26,14 @@ test('the actual Enterprise shell renders an explicit sample presentation withou
     $html = view('enterprise.app', ['presentation' => reviewerRenderPresentation(), 'enterpriseRole' => 'sample perspective'])->render();
     expect($html)->toContain('Fictional reviewer campus', 'EverbranchSampleTransport', 'SAMPLE DATA', 'Demo · Sample data', 'Email preview · not sent');
     expect($html)->not->toContain('id="enterprise-logout"');
+    $document = new DOMDocument;
+    @$document->loadHTML($html);
+    $xpath = new DOMXPath($document);
+    expect($xpath->query('//*[@id="reviewer-ai-coming-soon"]')->length)->toBe(1);
+    expect(array_map(fn ($node) => $node->textContent, iterator_to_array($xpath->query('//*[@id="reviewer-ai-coming-soon"]//h3'))))->toBe(['Chats', 'Assistants', 'Voice']);
+    expect($xpath->query('//*[@id="reviewer-ai-coming-soon"]//button | //*[@id="reviewer-ai-coming-soon"]//input | //*[@id="reviewer-ai-coming-soon"]//textarea')->length)->toBe(0);
+    expect($xpath->query('//*[@id="native-ask-workspace" and @hidden and @inert]')->length)->toBe(1);
+
     expect(DB::getQueryLog())->toBe([]);
     DB::disableQueryLog();
     Http::assertNothingSent();
@@ -55,6 +63,14 @@ test('private workspace tour requires both server flags and never includes sampl
         config(['enterprise.tour_enabled' => $enabled, 'enterprise.sample_data' => $sampleData]);
         $html = view('enterprise.app', ['presentation' => $presentation, 'enterpriseRole' => 'current member'])->render();
         expect($html)->not->toContain('EverbranchSampleTransport =', 'id="reviewer-perspective"', 'id="reviewer-reset-open"', 'sample-request-audio');
+        $nativeDocument = new DOMDocument;
+        @$nativeDocument->loadHTML($html);
+        $nativeXpath = new DOMXPath($nativeDocument);
+        expect($nativeXpath->query('//*[@id="reviewer-ai-coming-soon"]')->length)->toBe(0);
+        expect($nativeXpath->query('//*[@id="native-ask-workspace" and not(@hidden) and not(@inert)]')->length)->toBe(1);
+        expect($nativeXpath->query('//*[@id="ask-form"]')->length)->toBe(1);
+        expect($nativeXpath->query('//*[@id="ask-question"]')->length)->toBe(1);
+
         if ($enabled && $sampleData) {
             expect($html)->toContain('Demo · Sample data', 'EverbranchWorkspaceTour.mount', 'DEMO · SAMPLE DATA', 'Email preview unavailable in this navigation tour');
             $document = new DOMDocument;

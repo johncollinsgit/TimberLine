@@ -2,6 +2,7 @@
 
 namespace App\Proposals;
 
+use App\Enterprise\MountUrls;
 use Illuminate\Http\Request;
 
 class OwnerController
@@ -85,17 +86,44 @@ class OwnerController
         $tenant = $this->access->owner($request);
         $draft = $this->proposals->draft($tenant, $draftId);
 
-        return response()->view('service-proposals.recipient', ['payload' => $draft->payload, 'preview' => true, 'version' => null, 'token' => null])->header('Cache-Control', 'private, no-store');
+        $financial = ! empty($draft->payload['client_details']) ? app(FinancialPlanning::class)->view($request, $draft->payload,
+            'owner:'.$tenant->id.':'.$request->user()->id.':'.$draft->id.':'.$draft->revision,
+            route('service-proposals.owner.financial', [$workspace, $draft->id])) : null;
+
+        return response()->view('service-proposals.recipient', ['payload' => $draft->payload, 'draft' => $draft, 'preview' => true, 'version' => null, 'token' => null, 'financial' => $financial])->header('Cache-Control', 'private, no-store');
+    }
+
+    public function financial(Request $request, string $workspace, string $draftId)
+    {
+        $tenant = $this->access->owner($request);
+        $draft = $this->proposals->draft($tenant, $draftId);
+        abort_unless(! empty($draft->payload['client_details']), 403);
+        $planning = app(FinancialPlanning::class);
+        $redirect = redirect()->to(route('service-proposals.owner.preview', [$workspace, $draftId, 'section' => 'scope']).'#usage-estimator');
+        try {
+            $planning->apply($request, $draft->payload, 'owner:'.$tenant->id.':'.$request->user()->id.':'.$draft->id.':'.$draft->revision);
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            return $redirect->withErrors(['financial' => $exception->validator->errors()->all()])->withInput($planning->feedback($request));
+        }
+
+        return $redirect;
     }
 
     public function publish(Request $request, string $workspace, string $draftId)
     {
         $tenant = $this->access->owner($request, true);
         $data = $request->validate(['revision' => ['required', 'integer'], 'password' => ['required', 'string', 'min:12', 'max:128'], 'days' => ['required', 'integer', 'min:1', 'max:30'], 'publish_key' => ['required', 'uuid'], 'confirm' => ['accepted'], 'audience' => ['required', 'in:client,reviewer']]);
+        // Use trusted runtime configuration, never the owner URL or request Host.
+        // Refuse a broken recipient handoff before creating an immutable version.
+        $recipientBase = MountUrls::url('/service-proposals');
+        abort_unless($recipientBase !== null
+            && in_array(strtolower(parse_url($recipientBase, PHP_URL_HOST)), config('service_proposals.recipient_hosts', []), true),
+            503, 'Configure a canonical HTTPS recipient host and mount before publishing.');
+
         $result = $this->proposals->publish($tenant, $request->user()->id, $draftId, (int) $data['revision'], $data['password'], (int) $data['days'], $data['publish_key'], $data['audience']);
 
         // Flash only the one-time token, never the recipient password.
-        return redirect()->route('service-proposals.owner.edit', [$workspace, $draftId])->with('private_proposal_path', route('service-proposals.recipient.show', $result['token'], false));
+        return redirect()->route('service-proposals.owner.edit', [$workspace, $draftId])->with('private_proposal_path', $recipientBase.'/'.$result['token']);
     }
 
     public function revoke(Request $request, string $workspace, string $versionId)

@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -11,6 +12,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import "./workspace.css";
+import enterpriseLogo from "../../images/enterprise/Everbranch-Rooted-Peak-Aligned.svg?raw";
 import "./transport.js";
 
 type Field = {
@@ -442,6 +444,7 @@ function Workspace({ boot }: { boot: any }) {
         );
     }
     async function propose() {
+        if (transport.mode === 'sample') return;
         if (dirty || pending.current) {
             setNotice(
                 "Save or discard the current draft before requesting a replacement proposal.",
@@ -548,10 +551,7 @@ function Workspace({ boot }: { boot: any }) {
         <div className="ew-shell">
             <aside className="ew-sidebar">
                 <a className="ew-brand" href={transport.href(boot.back)}>
-                    <span aria-hidden="true">♧</span>
-                    <span>
-                        Everbranch<small>Enterprise · Workflows</small>
-                    </span>
+                    <img src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(enterpriseLogo)}`} alt="Everbranch Enterprise by Evergrove Software" width="574.781" height="153.328" />
                 </a>
                 <p className="ew-eyebrow">OPERATING WORKSPACE</p>
                 <nav aria-label="Workflow workspace">
@@ -724,6 +724,7 @@ function Workspace({ boot }: { boot: any }) {
                                         Use {t.name}
                                     </button>
                                 ))}
+                                {transport.mode === 'sample' ? <p className="ew-subtle">Workflow AI · Coming soon</p> : <>
                                 <label>
                                     Describe the workflow
                                     <textarea
@@ -741,6 +742,7 @@ function Workspace({ boot }: { boot: any }) {
                                 >
                                     Ask Everbranch for a draft
                                 </button>
+                                </>}
                             </>
                         )}
                     </section>
@@ -1904,7 +1906,7 @@ function Workspace({ boot }: { boot: any }) {
                                     {record?.workflow.version || "not saved"} ·{" "}
                                     {status}
                                 </p>
-                                {canDesign && (
+                                {canDesign && (transport.mode === 'sample' ? <p className="ew-subtle">Workflow AI · Coming soon</p> :
                                     <section className="ew-ai-draft">
                                         <h3>
                                             Ask Everbranch to propose a draft

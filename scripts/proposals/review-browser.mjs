@@ -80,6 +80,8 @@ try {
     const url=origin+'/service-proposals/'+version.token;
     await page.goto(url);await page.getByLabel('Proposal password').fill(seed.password);
     await page.getByRole('button',{name:'Open proposal',exact:true}).click();
+    await page.locator('label[data-proposal-section-label="overview"]').click();
+    assert.equal(await page.locator('.proposal-section-panel:visible').count(),1);
     await page.getByRole('link',{name:'Open campus review',exact:true}).click();
     await open(page);await setName(page,name);
     return {context,page,url,version};
@@ -159,6 +161,8 @@ try {
   await sarah.page.locator('#review-body').fill('Only this exact Sarah publication draft');
   await sarah.page.goto(origin+'/service-proposals/'+seed.versions.expired.token);
   await sarah.page.getByLabel('Proposal password').fill(seed.password);await sarah.page.getByRole('button',{name:'Open proposal',exact:true}).click();
+  await sarah.page.locator('label[data-proposal-section-label="overview"]').click();
+  assert.equal(await sarah.page.locator('.proposal-section-panel:visible').count(),1);
   await sarah.page.getByRole('link',{name:'Open campus review',exact:true}).click();await open(sarah.page);await setName(sarah.page,'Sarah');
   const twinBoot=await sarah.page.evaluate(()=>globalThis.EverbranchCampusReviewBoot);
   assert.equal(twinBoot.version_hash,sarahBoot.version_hash);assert.notEqual(twinBoot.version_id,sarahBoot.version_id);

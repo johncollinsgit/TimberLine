@@ -1,8 +1,35 @@
 # Enterprise source verification
 
+The primary PHP 8.4 and isolated Enterprise workflows verify the known Ubuntu
+`mirror+file:/etc/apt/apt-mirrors.txt` indirection before PHP setup and remove only
+its exact Azure entry. Official HTTPS archive/security entries, source fields,
+keyring references and unrelated repositories remain unchanged. Unsupported
+formats fail before modification. This changes the observed slow download path;
+it does not cache OS packages or guarantee speed. Preserve every test, browser
+engine, timeout and loopback-only MySQL safeguard, and verify the actual source
+and result on a fresh runner before declaring the correction accepted.
+
 `.github/workflows/enterprise-runtime-ci.yml` preserves the isolated schema,
 MySQL 8.4 recovery, runtime composition, Enterprise build, and existing private
 Chromium/WebKit checks. It also runs these focused reviewer-operations gates:
+
+The fictional reviewer sample currently exposes only Coming soon cards for
+Chats, Assistants and Voice. Its browser assertions require inactive chat,
+microphone and generated-draft controls while preserving manual workspace work.
+Native signed-in voice/record-check fixtures keep their separate positive gates.
+
+Departing native pages invalidate their existing workspace and project-catalog
+read generations at `beforeunload`, before a replacement document commits. This
+stops obsolete batches from starting more reads during provisional navigation.
+Cancelling navigation preserves data, pending writes and exact retry receipts;
+a deliberate fresh load still works. Keep strict browser-error assertions and
+the existing request pacing. Do not suppress access-control errors to pass CI.
+
+The dedicated PHPUnit process uses the same `1G` test memory ceiling as the
+primary `phpunit.xml`. This accommodates the complete combined suite, including
+local PDF rendering; it does not change a production PHP limit. Fresh isolated
+12-page owner/recipient PDF checks also pass at 128M. Do not replace the full
+suite with those focused checks or bypass its MySQL gates.
 
 | Gate | Entry point | Boundary exercised |
 | --- | --- | --- |
@@ -14,6 +41,8 @@ Chromium/WebKit checks. It also runs these focused reviewer-operations gates:
 | Reviewer tour | `node scripts/everbranch-team/enterprise-reviewer-tour-browser.mjs` | Tracked tour markup, accessible controls, responsive sample email and viewport behavior. |
 | Full shared reviewer renderer | `node scripts/everbranch-team/enterprise-reviewer-browser.mjs` | Actual isolated HTTP kernel/controller/CSP plus the shared Enterprise and ReactFlow renderers; synthetic work, roles, resources, requests and meetings. |
 | Native operations | `node scripts/everbranch-team/enterprise-browser-smoke.mjs` with `ENTERPRISE_TEST_OPERATIONS=1 ENTERPRISE_OPERATIONS_SCENARIO=all` | Persistent mapped workflow tasks, interruption/retry behavior, Roll Call meeting preview/confirmation/PDF, Resources conflicts and the signed-in tour opening current authorized records without replay writes. |
+| Native job editing | `node scripts/everbranch-team/enterprise-browser-smoke.mjs` with `ENTERPRISE_TEST_OPERATIONS=1 ENTERPRISE_OPERATIONS_SCENARIO=jobs` | Real authorized job creation, exact uncertain retry, task editing/removal, queue assignment and reload in a disposable runtime. Runs separately to preserve existing request limits. |
+| Blaine browser demonstration | `node scripts/everbranch-team/enterprise-job-sample-browser.mjs` | Additive fictional jobs/people/contractors, New ticket, queue assignment, Roll Call, map/months, Settings and shared detail controls; operational SQL is forbidden. |
 | Priority overview and guided exploration | `node scripts/everbranch-team/enterprise-priorities-browser.mjs` | Actual shared popup, icons, source/status labels, current priority, keyboard/focus/dismissal, persistent top controls and actual-screen spotlight. |
 | Public procedural screens | `node scripts/everbranch-team/enterprise-public-procedures-browser.mjs` | Same report/certificate/Finance interfaces using only explicit fictional sample transport; no SQL, cookies, operational API or provider calls. |
 | Persistent Finance packet | `enterprise-finance-browser.mjs` inside authenticated `all` or bounded `finance` scenario | Retained unsent form, exact interrupted save/reload/replay, single record, assigned review/reopen/history and inert hostile text. No payment is executed or inferred. |
@@ -33,8 +62,10 @@ and checks retained drafts, current identity, authorized links and zero tour POS
 It also creates a long fictional workspace list and verifies an actual sidebar
 click after returning from the full-screen builder. The desktop sticky rail
 scrolls independently; tablet/phone retain document-flow navigation. The combined
-two-engine scenario has a 25-minute ceiling because it preserves real server
-throttles rather than disabling them for the larger synthetic action sequence.
+two-engine scenario has a 45-minute ceiling because it preserves real server
+throttles rather than disabling them for the larger synthetic action sequence. Measured
+partial runs already exceed 23 minutes combined before the final navigation,
+role and voice checks; the bound preserves both complete engine runs.
 
 Both reviewer browser scripts and the native operations harness run sequentially
 in Chromium and WebKit. Browser steps share the already installed Playwright

@@ -1,3 +1,46 @@
+# Project-first Roll Call (October 23 source follow-up)
+
+Roll Call now begins with **Projects & people**: search, workspace/department,
+in-house person, contractor, status and location filters, plus name/department/
+person/recent-update sorting. Create project and Incoming tickets reuse the same
+shared authorized wizard/queue. Projects open the existing native dialog, centered
+and enlarged, with current task assignments, saved locations, project notes and
+private file attachments. Close/Escape returns to the originating Roll Call context
+through the shared shell integration; filters stay local to this view. Layout
+preferences belong only in Settings.
+
+The browser checks each currently returned allowed area through the existing
+`data`, `operations` and `planning` read endpoints. There is no institution-wide
+grant or new route. Contractor membership requires an explicit current planning
+schedule joined by contractor and project IDs; contacts are not login accounts.
+Unknown owners and assignments remain unrecorded. The view shows bounded visible
+tasks, never an authoritative staffing, presence or total-work claim. Locations
+are saved work locations, not live tracking. Refresh clears former names/rows
+before new access checks; denied areas and late responses are not redisplayed.
+Successful shared work saves invalidate this view through `enterprise:work-saved`.
+
+Priorities and private meeting tools remain available in a secondary disclosure.
+The disclosure reopens for a retained pending save/confirmation or selected saved
+meeting so safe replay remains reachable after reload. Read-only viewers no
+longer request a leader-only meeting listing before displaying readable priorities.
+
+The project detail helper requires the shared shell integration: include
+`enterprise.project-detail-script`, set the dialog's `data-entity-type=project`,
+and call `renderProjectDetail(project)` in the existing project branch. It reuses
+`renderProjectWorkControls`, `mountDiscussion` and `mountProjectOperations`; it
+adds no command transport, grants, upload bypass or provider activation. The
+shared layout packet owns DTO enrichment, demo-only Blaine controls, additive
+20-job/10-worker/5-contractor fictional data and the return-to-Roll-Call lifecycle.
+Those must be composed and reviewed together before release.
+
+Local evidence: six Node checks cover explicit relations, combined filters,
+nonmutation, denied-scope clearing and delayed-response fences. Actual isolated
+HTTP scenarios in Chromium and WebKit cover project note/file reload persistence,
+quarantine download refusal, centered project dialog, current meeting scopes,
+exact save/confirmation retries, no duplicate native tasks, one-page PDF and
+phone/tablet/desktop reflow. Fictional local HTTP evidence does not establish
+hosted release, a real Blaine identity, physical-device or provider acceptance.
+
 # Enterprise Roll Call and meeting snapshots
 
 Source candidate. `ENTERPRISE_ROLL_CALL_ENABLED` defaults off and is independent

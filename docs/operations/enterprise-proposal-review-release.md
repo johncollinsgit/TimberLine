@@ -63,6 +63,14 @@ route. Do not call it a persistent operational workspace or use public sample
 roles as authorization. The separate approved client runtime supplies that
 operational acceptance path.
 
+Chats, Assistants and Voice are compact Coming soon placeholders in this
+fictional demonstration. Chat submission, microphone controls, generated
+workflow drafts, Home AI summaries and AI usage navigation are unavailable.
+No existing chat history is fabricated. Native signed-in record-backed Ask
+retains its current authorization and independent feature gates. The Financial
+cart still compares illustrative usage costs; it executes no AI or sending.
+Live reviewer AI is a separate later release and acceptance milestone.
+
 ## Release evidence and gates
 
 1. Preserve current-main Fleet and unrelated source; inspect all merge conflicts

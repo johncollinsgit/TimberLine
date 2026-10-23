@@ -135,10 +135,14 @@ test('mutually exclusive bundles unknown services and duplicate selections canno
 test('recipient password gate hides client prices and requires the exact configured host', function (): void {
     ['version' => $version, 'token' => $token] = proposalPublish($this);
     $url = 'https://evergrove.test/service-proposals/'.$token;
-    $this->get($url)->assertOk()->assertSee('A private proposal.')->assertDontSee('Lees-McRae')->assertDontSee('3,000');
+    $this->get($url)->assertOk()->assertSee('A private proposal.')
+        ->assertSee('aria-label="Lees-McRae College"', false)
+        ->assertDontSee(e($version->payload['title']), false)->assertDontSee(e($version->payload['intro']), false)->assertDontSee('3,000');
     $this->post($url.'/request-agreement', [])->assertForbidden();
     $this->post($url.'/unlock', ['password' => 'incorrect'])->assertSessionHasErrors();
-    $this->get($url)->assertDontSee('Lees-McRae');
+    $this->get($url)->assertSee('A private proposal.')
+        ->assertSee('aria-label="Lees-McRae College"', false)
+        ->assertDontSee(e($version->payload['title']), false)->assertDontSee(e($version->payload['intro']), false)->assertDontSee('3,000');
     $this->post($url.'/unlock', ['password' => 'Test proposal password'])->assertRedirect();
     $response = $this->get($url)->assertOk()->assertSee('A proposal for Lees-McRae College')->assertDontSee('tour controls');
     expect($response->headers->get('Cache-Control'))->toContain('no-store', 'private');
@@ -276,6 +280,7 @@ test('AI and voice intake create only scoped drafts and reject invented commerci
 });
 
 test('explicit owner publication requires review and retries return the same private link', function (): void {
+    config(['app.url' => 'https://evergrove.test']);
     $data = ['revision' => 1, 'password' => 'Test proposal password', 'days' => 7, 'audience' => 'client', 'publish_key' => Str::uuid()->toString(), 'confirm' => 1];
     $this->actingAs($this->owner)->get($this->ownerPath.'/'.$this->draft->id.'/edit')->assertOk()->assertSee('name="publish_key"', false);
     $this->post($this->ownerPath.'/'.$this->draft->id.'/publish', $data)->assertRedirect()->assertSessionHas('private_proposal_path');
@@ -410,3 +415,55 @@ test('reviewed PDF commercial snapshot survives normal owner saves and catalog d
     Http::assertNothingSent();
     Mail::assertNothingSent();
 });
+
+test('publication hands off a canonical one-time recipient link rather than the owner namespace', function (): void {
+    config(['app.url' => 'https://evergrove.test', 'enterprise_runtime.base_path' => '']);
+    $data = ['revision' => 1, 'password' => 'Synthetic private password', 'days' => 7, 'audience' => 'reviewer', 'publish_key' => Str::uuid()->toString(), 'confirm' => 1];
+    $this->actingAs($this->owner)->post('https://untrusted.example.invalid'.$this->ownerPath.'/'.$this->draft->id.'/publish', $data)->assertNotFound();
+    expect(Version::count())->toBe(0);
+    $this->post('https://evergrove.test'.$this->ownerPath.'/'.$this->draft->id.'/publish', $data)->assertRedirect();
+    $url = session('private_proposal_path');
+    $edit = 'https://evergrove.test'.$this->ownerPath.'/'.$this->draft->id.'/edit';
+    $response = $this->get($edit)->assertOk();
+    if (getenv('PROPOSAL_HANDOFF_CAPTURE') === '1') {
+        @mkdir(base_path('.tmp/recipient-handoff'), 0777, true);
+        file_put_contents(base_path('.tmp/recipient-handoff/generic.html'), $response->getContent());
+        file_put_contents(base_path('.tmp/recipient-handoff/generic-headers.json'), json_encode($response->headers->all(), JSON_THROW_ON_ERROR));
+    }
+    expect($url)->toMatch('~^https://evergrove\.test/service-proposals/[A-Za-z0-9]{64}$~D');
+    $token = basename($url);
+    $version = Version::sole();
+    $ciphertext = DB::table('service_proposal_versions')->where('id', $version->id)->value('payload');
+    $response->assertSee('Open private proposal')->assertDontSee($data['password']);
+    $dom = new DOMDocument;
+    @$dom->loadHTML($response->getContent());
+    $xpath = new DOMXPath($dom);
+    $link = $xpath->query('//a[normalize-space(.)="Open private proposal"]')->item(0);
+    expect($link->getAttribute('href'))->toBe($url)->and($link->getAttribute('rel'))->toBe('noopener noreferrer')->and($link->getAttribute('referrerpolicy'))->toBe('no-referrer');
+    $field = $xpath->query('//input[@id="private-recipient-url"]')->item(0);
+    expect($field->getAttribute('value'))->toBe($url)->and($field->hasAttribute('readonly'))->toBeTrue()->and($field->hasAttribute('name'))->toBeFalse();
+    expect($response->headers->get('Cache-Control'))->toContain('no-store')->and($response->headers->get('Referrer-Policy'))->toBe('no-referrer');
+    $this->get($url)->assertOk()->assertSee('A private proposal.')
+        ->assertSee('aria-label="Lees-McRae College"', false)
+        ->assertDontSee(e($version->payload['title']), false)->assertDontSee(e($version->payload['intro']), false);
+    $this->get($edit)->assertOk()->assertDontSee('Open private proposal')->assertDontSee($token);
+    $this->get('https://evergrove.test'.$this->ownerPath)->assertOk()->assertDontSee($token);
+    $this->get('https://untrusted.example.invalid/service-proposals/'.$token)->assertNotFound();
+    expect(Version::count())->toBe(1)->and($version->fresh()->content_hash)->toBe($version->content_hash)
+        ->and(DB::table('service_proposal_versions')->where('id', $version->id)->value('payload'))->toBe($ciphertext);
+    Http::assertNothingSent();
+    Mail::assertNothingSent();
+});
+
+test('invalid or non-allowlisted canonical handoff configuration fails before publication', function (string $origin, string $prefix): void {
+    config(['app.url' => $origin, 'enterprise_runtime.base_path' => $prefix]);
+    $data = ['revision' => 1, 'password' => 'Synthetic private password', 'days' => 7, 'audience' => 'client', 'publish_key' => Str::uuid()->toString(), 'confirm' => 1];
+    $draftBefore = $this->draft->getRawOriginal('payload');
+    $this->actingAs($this->owner)->post($this->ownerPath.'/'.$this->draft->id.'/publish', $data)->assertStatus(503)->assertSessionMissing('private_proposal_path');
+    expect(Version::count())->toBe(0)->and($this->draft->fresh()->revision)->toBe(1)->and($this->draft->fresh()->getRawOriginal('payload'))->toBe($draftBefore);
+    Http::assertNothingSent();
+    Mail::assertNothingSent();
+})->with([
+    ['http://evergrove.test', ''], ['https://not-allowed.example.invalid', ''],
+    ['https://user:password@evergrove.test', ''], ['https://evergrove.test', '/owner/../other'],
+]);

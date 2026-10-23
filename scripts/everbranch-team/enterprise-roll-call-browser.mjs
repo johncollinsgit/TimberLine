@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile,writeFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
+import {checkWorkPlacement} from './enterprise-work-placement-browser.mjs';
 
 /** Real isolated Enterprise HTTP and browser persistence. No provider, college or production records. */
 export async function checkRollCallWorkspace(page, evidence) {
@@ -21,8 +22,31 @@ export async function checkRollCallWorkspace(page, evidence) {
     request=await command({action:'request.triage',id:request.id,area_id:area,expected_version:request.version,note:'Synthetic triage'});
     await command({action:'request.assign',id:request.id,area_id:area,expected_version:request.version,project_id:project,assignee_id:owner});
     await page.goto(new URL(`/?tenant=${tenant}&area_id=${area}&section=roll_call&scope=project&project_id=${project}`,page.url()).href);
+    await page.locator('#roll-projects-heading').waitFor();
+    await page.waitForFunction(()=>document.getElementById('roll-projects-body').textContent.includes('Synthetic Roll Call project'));
+    assert.equal(await page.locator('#roll-meeting-tools').getAttribute('open'),null,'Meeting paragraphs must not dominate the project browser');
+    await page.getByRole('button',{name:'Synthetic Roll Call project',exact:true}).click();
+    await page.locator('#work-drawer[open][data-entity-type="project"]').waitFor();
+    await checkWorkPlacement(page,evidence,{area,requestId:request.id});
+    await page.goto(new URL(`/?tenant=${tenant}&area_id=${area}&section=projects&selected=${project}`,page.url()).href);
+    await page.locator('#work-drawer[open][data-entity-type="project"]').waitFor();
+    await page.getByLabel('Add a note',{exact:true}).fill('Synthetic project update from the Roll Call project browser.');
+    await page.getByRole('button',{name:'Post note',exact:true}).click();
+    await page.waitForFunction(()=>document.querySelector('#discussion-feed')?.textContent.includes('Synthetic project update from the Roll Call project browser.'));
+    await page.locator('#discussion-files-picker').setInputFiles({name:'roll-call-project-synthetic.txt',mimeType:'text/plain',buffer:Buffer.from('Synthetic project evidence only.')});
+    await page.waitForFunction(()=>document.querySelector('#discussion-files')?.textContent.includes('roll-call-project-synthetic.txt'));
+    assert.match(await page.locator('#discussion-files').innerText(),/quarantined/);
+    await page.reload();
+    await page.waitForFunction(()=>document.querySelector('#discussion-feed')?.textContent.includes('Synthetic project update from the Roll Call project browser.'));
+    assert.match(await page.locator('#discussion-files').innerText(),/roll-call-project-synthetic.txt/);
+    assert.equal(await page.locator('#discussion-files').getByRole('link',{name:'Download',exact:true}).count(),0,'Quarantine must not be bypassed in the larger dialog');
+    const dialog=await page.locator('#work-drawer').boundingBox(),viewport=page.viewportSize();
+    assert.ok(Math.abs(dialog.x+dialog.width/2-viewport.width/2)<2,'Project dialog must be centered');
+    await page.getByRole('button',{name:'Close',exact:true}).click();
+    await page.locator('[data-section="roll_call"]').click();
+    await page.waitForFunction(()=>document.getElementById('roll-projects-body').textContent.includes('Synthetic Roll Call project'));
+    await page.getByText('Priorities & meeting notes',{exact:true}).click();
     await page.getByLabel('Meeting title',{exact:true}).waitFor();
-    assert.match(await page.locator('#roll-call-panel').innerText(),/Roll Call tickets handed to technicians on paper/);
     const assignedResponse=page.waitForResponse(response=>{const url=new URL(response.url());return url.pathname==='/enterprise/roll-call'&&url.searchParams.get('type')==='team'&&url.searchParams.get('team_user_id')===owner;});
     await page.getByRole('button',{name:'My assigned daily work',exact:true}).click();
     assert.equal((await assignedResponse).status(),200);

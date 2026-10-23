@@ -194,7 +194,7 @@ try {
     for (let count = 0; count < 3; count++) {
         await launcher.click();
         await page
-            .getByRole("button", { name: "07 Ask Everbranch", exact: false })
+            .getByRole("button", { name: "07 AI tools", exact: false })
             .click();
         await page
             .getByRole("button", { name: "Restart", exact: true })
@@ -227,6 +227,32 @@ try {
         [["sample", "sample-request-audio"]],
         "Preview CTA is isolated sample navigation only",
     );
+    // Complete playback through the visible controls. Play at the end must restart,
+    // not silently remain stopped; virtual time changes no DOM or product state.
+    const replayPage = await browser.newPage();
+    await replayPage.clock.install();
+    await replayPage.setContent('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">' + markup);
+    await replayPage.addScriptTag({content:source});
+    await replayPage.evaluate(() => EverbranchReviewerTour.mount(document.querySelector('[data-reviewer-tour-root]')));
+    await replayPage.locator('[data-tour-open]').click();
+    await replayPage.locator('[data-tour-scene="6"]').click();
+    await replayPage.locator('[data-tour-play]').click();
+    const remaining = await replayPage.locator('[data-tour-progress]').evaluate(node => node.max-node.value);
+    await replayPage.clock.runFor(remaining + 100);
+    assert.equal(await replayPage.locator('[data-tour-progress]').evaluate(node => node.value),180000);
+    assert.equal(await replayPage.locator('[data-tour-play]').getAttribute('aria-pressed'),'false');
+    await replayPage.locator('[data-tour-play]').click();
+    assert.equal(await replayPage.locator('[data-tour-play]').getAttribute('aria-pressed'),'true');
+    assert.equal(await replayPage.locator('[data-tour-progress]').evaluate(node => node.value)<1000,true);
+    assert.match(await replayPage.locator('[data-tour-count]').innerText(),/1 of 7/);
+    await replayPage.locator('[data-tour-play]').click();
+    await replayPage.locator('[data-tour-scene="3"]').click();
+    assert.match(await replayPage.locator('[data-tour-count]').innerText(),/4 of 7/);
+    await replayPage.locator('[data-tour-back]').click();
+    assert.match(await replayPage.locator('[data-tour-count]').innerText(),/3 of 7/);
+    await replayPage.locator('[data-tour-close]').click();
+    assert.equal(await replayPage.locator('[data-tour-dialog]').evaluate(node=>node.open),false);
+    await replayPage.close();
     assert.deepEqual(external, []);
     assert.deepEqual(errors, []);
     console.log(

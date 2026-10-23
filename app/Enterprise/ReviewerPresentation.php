@@ -24,7 +24,7 @@ class ReviewerPresentation
             app('livewire')->flushState();
         }
         $scope = ['area_id' => '10000000-0000-4000-8000-000000000001', 'project_id' => '20000000-0000-4000-8000-000000000001'];
-        $presentation = ['runtime' => 'sample', 'defaultPersona' => 'executive', 'identity' => ['tenantSlug' => 'fictional-campus', 'viewer' => 'sample', 'workspace' => 'sample-campus',
+        $presentation = ['runtime' => 'sample', 'defaultPersona' => 'demo_manager', 'identity' => ['tenantSlug' => 'fictional-campus', 'viewer' => 'sample', 'workspace' => 'sample-campus',
             'name' => 'Lees-McRae campus demonstration', 'userName' => 'Fictional reviewer perspective'],
             'routes' => ['data' => '/enterprise/data?tenant=fictional-campus', 'commands' => '/enterprise/commands?tenant=fictional-campus',
                 'history' => '/enterprise/requests', 'enterprise' => '/enterprise', 'team' => '/team', 'workflows' => '/enterprise/workflows',
@@ -44,7 +44,7 @@ class ReviewerPresentation
             'can_design' => false, 'can_run' => false, 'items' => [], 'templates' => []];
         $html = view($workflow ? 'enterprise.workspace' : 'enterprise.app', ['presentation' => $presentation, 'enterpriseRole' => 'sample perspective',
             'scope' => $scope, 'bootstrap' => $bootstrap, 'inlineAssets' => $workflow ? $this->assets() : null,
-            'voiceAssets' => $workflow ? null : $this->voiceAssets(), 'campusReviewContext' => $review ? $campusReviewContext : null])->render();
+            'voiceAssets' => null, 'campusReviewContext' => $review ? $campusReviewContext : null])->render();
         if ($review) {
             $overlay = view('enterprise.campus-review-assets', ['campusReviewContext' => $campusReviewContext, 'campusReviewLayout' => $workflow ? 'canvas' : 'shell'])->render();
             $html = str_replace('</body>', $overlay.'</body>', $html);

@@ -35,18 +35,21 @@
     $('planning-list').replaceChildren(); planningData = null;
   }
   function renderNext() {
-    if(typeof renderVoice==='function')renderVoice();
-    renderReadOnlyAssistant();
+    const aiComingSoon=transport.mode==='sample';
+    if(aiComingSoon&&section==='usage')section='ask';
+    if(!aiComingSoon&&typeof renderVoice==='function')renderVoice();
+    if(!aiComingSoon)renderReadOnlyAssistant();
     $('generated-ask-panel').hidden = !data.features?.ask && !data.features?.conversation_ui;
     $('ask-model-caption').hidden = !data.features?.ask && !data.features?.conversation_ui;
-    renderConversation();
+    if(!aiComingSoon)renderConversation();
     $('email-context-panel').hidden = !data.features?.email_drafts;
-    $('ask-nav').hidden = !data.features?.ask && !data.features?.read_only_assistant && !data.features?.conversation_ui;
-    if (section === 'ask' && !data.features?.ask && !data.features?.read_only_assistant && !data.features?.conversation_ui) section = 'requests';
+    $('ask-nav').textContent=aiComingSoon?'AI tools': 'Ask Everbranch';
+    $('ask-nav').hidden = !aiComingSoon && !data.features?.ask && !data.features?.read_only_assistant && !data.features?.conversation_ui;
+    if (section === 'ask' && !aiComingSoon && !data.features?.ask && !data.features?.read_only_assistant && !data.features?.conversation_ui) section = 'requests';
     $('ask').hidden = section !== 'ask';
     $('work').hidden = ['ask', 'contractors'].includes(section);
     document.querySelectorAll('[data-section]').forEach(b => b.classList.toggle('active', b.dataset.section === section));
-    if (section === 'ask') { $('heading').textContent = 'Ask with the right context.'; $('breadcrumb').textContent = 'Ask Everbranch'; if(!conversationMode()&&!$('ask-question').value) $('ask-question').value=readDraft('ask:'+area).pending?.question||''; loadMailboxes(); }
+    if (section === 'ask') { $('heading').textContent=aiComingSoon?'AI tools · Coming soon':'Ask with the right context.'; $('breadcrumb').textContent=aiComingSoon?'AI tools':'Ask Everbranch'; if(!aiComingSoon){if(!conversationMode()&&!$('ask-question').value) $('ask-question').value=readDraft('ask:'+area).pending?.question||''; loadMailboxes();} }
     if (section === 'contractors') loadPlanning();
     rememberUrl();
   }
@@ -65,11 +68,12 @@
       const result = await api(`${nextBase}/discussion/${kind}/${id}${nextQuery()}`);
       if (!current()) return;
       const draft = readDraft(key);
-      host.innerHTML = `<h3>Notes & files</h3><div class="discussion-feed" id="discussion-feed">${result.comments.map(c => `<article class="discussion-note"><p class="caption">${esc(c.created_at)} · ${esc(data.members.find(m => m.id === c.author_id)?.name || 'Workspace member')}</p><div>${esc(c.body)}</div></article>`).join('') || '<p class="caption">No notes yet.</p>'}</div><div id="discussion-files">${result.files.map(f => `<div class="file-row"><span>${esc(f.filename)} · ${esc(f.status)}</span>${f.downloadable ? `<a class="button" href="${esc(transport.href(teamBase + '/files/' + encodeURIComponent(f.id) + '/download' + nextQuery()))}">Download</a>` : f.can_manage && ['uploading','quarantined'].includes(f.status) ? `<button class="button" data-cancel-upload="${esc(f.id)}">Cancel upload</button>` : ''}</div>`).join('')}</div><p class="caption">${esc(result.coverage)}</p>${result.can_write ? `<form class="discussion-composer stack" id="discussion-form"><label>Add a note<textarea id="discussion-body" maxlength="5000" placeholder="Write a project update…">${esc(draft.body || '')}</textarea></label><label>Attach photos, PDF or text<input class="file-picker" id="discussion-files-picker" type="file" multiple accept="image/jpeg,image/png,application/pdf,text/plain,.jpg,.jpeg,.png,.pdf,.txt"></label><p class="file-notice">Up to 10 MB per file. Files attach independently to this discussion and stay unavailable for download until verified clean. After interruption, select the same file to resume. No public links are created.</p><p id="upload-status" role="status" aria-live="polite"></p><button class="button primary" id="note-submit" type="submit">${draft.pending ? 'Retry the same note' : 'Post note'}</button></form>` : '<p class="caption">Discussion is read only. Requests need an assigned task before notes or files can be added.</p>'}`;
+      host.innerHTML = `<h3>Notes & files</h3><div class="discussion-feed" id="discussion-feed">${result.comments.map(c => `<article class="discussion-note"><p class="caption">${esc(c.created_at)} · ${esc(data.members.find(m => m.id === c.author_id)?.name || 'Workspace member')}</p><div>${esc(c.body)}</div></article>`).join('') || '<p class="caption">No notes yet.</p>'}</div><h3 class="discussion-files-heading">Files &amp; photos</h3><div id="discussion-files">${result.files.map(f => `<div class="file-row"><span>${esc(f.filename)} · ${esc(f.status)}</span>${f.downloadable ? `<a class="button" href="${esc(transport.href(teamBase + '/files/' + encodeURIComponent(f.id) + '/download' + nextQuery()))}">Download</a>` : f.can_manage && ['uploading','quarantined'].includes(f.status) ? `<button class="button" data-cancel-upload="${esc(f.id)}">Cancel upload</button>` : ''}</div>`).join('')}</div>${result.can_write ? `<form class="discussion-composer stack" id="discussion-form"><label>Add a note<textarea id="discussion-body" maxlength="5000" placeholder="Write a project update…">${esc(draft.body || '')}</textarea></label><div class="discussion-upload-tools"><label class="button">Attach files<input class="file-picker" id="discussion-files-picker" type="file" multiple accept="image/jpeg,image/png,application/pdf,text/plain,.jpg,.jpeg,.png,.pdf,.txt" aria-label="Attach photos, PDF or text"></label><label class="button">Add photo<input id="discussion-photo-picker" type="file" multiple accept="image/jpeg,image/png,.jpg,.jpeg,.png" capture="environment" aria-label="Add photo"></label></div><details class="discussion-access-help"><summary>File handling &amp; access</summary><p>JPEG, PNG, PDF or text · 10 MB per file. Files attach to this discussion and remain private while awaiting a clean scan. To resume an interrupted upload, select the same file.</p><p>${esc(result.coverage)}</p></details><p id="upload-status" role="status" aria-live="polite"></p><button class="button primary" id="note-submit" type="submit">${draft.pending ? 'Retry the same note' : 'Post note'}</button></form>` : '<p class="caption">Discussion is read only. Requests need an assigned task before notes or files can be added.</p>'}`;
       if ($('discussion-body')) {
         $('discussion-body').oninput = stashComposer;
         $('discussion-form').onsubmit = e => {e.preventDefault(); postNote(target);};
         $('discussion-files-picker').onchange = e => uploadFiles(target, [...e.target.files]);
+        $('discussion-photo-picker').onchange = e => uploadFiles(target, [...e.target.files]);
       }
       host.querySelector('h3').textContent=heading;
       if(kind==='task'){const caption=document.createElement('p');caption.className='caption';caption.textContent='Internal evidence for this canonical task. Existing task and department permissions apply; requester updates are published separately.';host.querySelector('h3').after(caption);}
@@ -210,6 +214,7 @@
   };
   function chatMessage(text, className) { const node = document.createElement('div'); node.className = 'chat-turn ' + (className || ''); node.textContent = text; $('chat-log').append(node); return node; }
   $('ask-form').onsubmit = async e => {
+    if(transport.mode==='sample'){e.preventDefault();return;}
     if(conversationMode())return conversationSend(e);
     e.preventDefault(); if (askBusy || !area) return; const question = $('ask-question').value.trim(); if (!question) return;
     askPending = readDraft('ask:' + area).pending || null;

@@ -92,9 +92,13 @@ selection open permission-controlled details. Hide Map/View Map remain explicit.
 Contractor navigation exposes the separately gated planning groundwork below.
 No college name, real department, incident, personnel or campus dataset is seeded.
 
-Map markers use authorized saved latitude/longitude on a coordinate grid. There
-is no imported college basemap, GPS, live provider, building inventory or survey
-claim. The API returns at most 100 visible requests while scanning at most 1000;
+The campus work map reuses the official source plan and printed map-number
+positions only for current explicit saved-building links. Typed names and GPS
+pairs do not establish campus placement. Requests, Projects and resource bookings
+have distinct month-calendar views with shared controls. See
+[map/calendar presentation](enterprise-campus-map-calendar.md). No live tracking,
+map provider or surveyed location claim is added. The API returns at most 100
+visible requests while scanning at most 1000;
 permission filtering precedes visible counts and more-results indicators. The UI
 labels bounds and incomplete scans. Large workspaces need cursor pagination in
 a subsequent increment. Calendar dates remain literal date-only deadlines.

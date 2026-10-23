@@ -1,3 +1,5 @@
+import {checkJobManagement} from './enterprise-jobs-browser.mjs';
+import {createProjectThroughWizard} from './enterprise-job-wizard-browser.mjs';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdir, writeFile, readFile, unlink } from 'node:fs/promises';
@@ -10,6 +12,7 @@ import { checkWorkflowWorkspace } from './enterprise-workflow-browser.mjs';
 import { checkMappedOperationsWorkflow } from './enterprise-operations-workflow-browser.mjs';
 import { checkRollCallWorkspace } from './enterprise-roll-call-browser.mjs';
 import { checkResourceWorkspace } from './enterprise-resources-browser.mjs';
+import { checkWorkViews } from './enterprise-work-views-browser.mjs';
 import { checkTaskEvidenceWorkflow } from './enterprise-task-evidence-browser.mjs';
 import { checkPrivateWorkspaceTour } from './enterprise-private-tour-browser.mjs';
 import { checkProceduresWorkspace } from './enterprise-procedures-browser.mjs';
@@ -21,7 +24,7 @@ import {checkVoiceGeneration} from './enterprise-voice-generation-browser.mjs';
 import {closeWorkDetail} from './enterprise-work-detail-browser.mjs';
 const operationsMode = process.env.ENTERPRISE_TEST_OPERATIONS === '1';
 const operationsScenario = process.env.ENTERPRISE_OPERATIONS_SCENARIO || 'all';
-assert.ok(['all', 'mapped', 'roll-call', 'resources', 'task-evidence', 'tour', 'procedures', 'finance', 'roles', 'navigation', 'voice', 'voice-generation'].includes(operationsScenario), 'Unsupported Operations browser scenario');
+assert.ok(['all', 'jobs', 'mapped', 'roll-call', 'resources', 'work-views', 'task-evidence', 'tour', 'procedures', 'finance', 'roles', 'navigation', 'voice', 'voice-generation'].includes(operationsScenario), 'Unsupported Operations browser scenario');
 const voiceGenerationMode = operationsMode && operationsScenario === 'voice-generation';
 const proceduresMode = operationsMode && ['all', 'procedures', 'roles'].includes(operationsScenario);
 const independentProcedures = proceduresMode && process.env.ENTERPRISE_PROCEDURES_INDEPENDENT === '1';
@@ -172,8 +175,10 @@ try {
     name: 'Synthetic Enterprise'
   }).click();
   if (operationsMode) {
+    if(operationsScenario==='jobs')await checkJobManagement(page,evidence);
     if (['all', 'mapped'].includes(operationsScenario)) await checkMappedOperationsWorkflow(page,evidence);
     if (['all', 'roll-call'].includes(operationsScenario)) await checkRollCallWorkspace(page,evidence);
+    if (['all', 'work-views'].includes(operationsScenario)) await checkWorkViews(page,evidence);
     if (['all', 'resources'].includes(operationsScenario)) await checkResourceWorkspace(page,evidence);
     if (['all', 'task-evidence'].includes(operationsScenario)) await checkTaskEvidenceWorkflow(page,evidence);
     if (['all', 'tour'].includes(operationsScenario)) await checkPrivateWorkspaceTour(page,evidence);
@@ -199,38 +204,29 @@ try {
     hasText: 'Department only'
   }).waitFor();
   await page.getByRole('button', {
-    name: 'Operations & projects',
+    name: 'Projects',
     exact: true
   }).click();
-  await page.getByRole('button', {
-    name: 'New project',
-    exact: true
-  }).click();
-  await page.getByLabel('Title', {
-    exact: true
-  }).fill('Synthetic repair project');
-  await page.getByRole('button', {
-    name: 'Save',
-    exact: true
-  }).click();
+  await createProjectThroughWizard(page,'Synthetic repair project');
   await page.getByRole('button', {
     name: 'Synthetic repair project',
     exact: true
   }).waitFor();
+  const fixtureProjectId=await page.getByRole('button',{name:'Synthetic repair project',exact:true}).getAttribute('data-open');
   await page.getByRole('button', {
     name: 'Requests',
     exact: true
   }).click();
   await page.getByRole('button', {
-    name: 'New request',
+    name: 'New ticket',
     exact: true
   }).click();
   await page.getByLabel('Title', {
     exact: true
   }).fill('Synthetic inspection');
   await page.getByLabel('Work description').fill('Disposable UI fixture; no college incident.');
-  await page.getByLabel('Due date').fill('2026-11-01');
-  await page.getByLabel('Location label').fill('Fixture coordinate');
+  await page.getByLabel('Due date',{exact:true}).fill('2026-11-01');
+  await page.getByLabel('Location label',{exact:true}).fill('Fixture coordinate');
   await page.getByLabel('Latitude (optional)', {
     exact: true
   }).fill('35');
@@ -258,6 +254,7 @@ try {
     exact: true
   }).waitFor();
   await closeWorkDetail(page);
+  await page.locator('#work-status').selectOption('active');
   await page.getByRole('button', {
     name: 'Map',
     exact: true
@@ -283,8 +280,8 @@ try {
     name: 'Calendar',
     exact: true
   }).click();
-  await page.getByRole('button', {
-    name: 'Synthetic inspection',
+  await page.locator('#request-list').getByRole('button', {
+    name: 'Open Synthetic inspection',
     exact: true
   }).click();
   await page.getByRole('button', {
@@ -304,8 +301,9 @@ try {
   await page.reload();
   await page.locator('#work-drawer[open]').waitFor();
   await closeWorkDetail(page);
-  await page.getByRole('button', {
-    name: 'Synthetic inspection',
+  await page.locator('#work-status').selectOption('completed');
+  await page.locator('#request-list').getByRole('button', {
+    name: 'Open Synthetic inspection',
     exact: true
   }).click();
   await page.locator('#detail .badge').filter({
@@ -335,14 +333,16 @@ try {
   await page.getByLabel('End date (inclusive)', {exact:true}).fill('2026-11-05');
   await page.getByRole('button', {name:'Save record',exact:true}).click();
   await page.locator('#planning-list').getByText('Synthetic date block', {exact:true}).waitFor();
-  await page.getByRole('button', {name:'Operations & projects',exact:true}).click();
-  await page.getByRole('button', {name:'Synthetic repair project',exact:true}).click();
+  await page.getByRole('button', {name:'Projects',exact:true}).click();
+  await page.locator('#work-status').selectOption('all');
+  await page.locator(`#request-list [data-open="${fixtureProjectId}"]`).first().click();
   const draftNote = 'Synthetic unsent project draft <img src=x onerror="window.__enterpriseInjection=1">';
   await page.getByLabel('Add a note').fill(draftNote);
   await closeWorkDetail(page);
   await page.getByRole('button', {name:'Requests',exact:true}).click();
-  await page.getByRole('button', {name:'Operations & projects',exact:true}).click();
-  await page.getByRole('button', {name:'Synthetic repair project',exact:true}).click();
+  await page.getByRole('button', {name:'Projects',exact:true}).click();
+  await page.locator('#work-status').selectOption('all');
+  await page.locator(`#request-list [data-open="${fixtureProjectId}"]`).first().click();
   await page.waitForFunction(value => document.getElementById('discussion-body')?.value === value, draftNote);
   await page.reload();
   await page.waitForFunction(value => document.getElementById('discussion-body')?.value === value, draftNote);

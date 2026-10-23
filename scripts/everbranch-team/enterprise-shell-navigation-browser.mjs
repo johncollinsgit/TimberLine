@@ -53,24 +53,23 @@ export async function verifyFilteredRequestMap(
         0,
     );
     assert.equal(
-        await page.locator(`#map-markers [data-map="${includedId}"]`).count(),
+        await page.locator('#map-markers [data-map-building="52"]').count(),
         1,
     );
     assert.equal(
-        await page.locator(`#map-markers [data-map="${excludedId}"]`).count(),
+        await page.locator('#map-markers [data-map-building="2"]').count(),
         0,
     );
     const listIds = await page
         .locator("#request-list [data-open]")
         .evaluateAll((rows) => rows.map((row) => row.dataset.open));
-    const markerIds = await page
-        .locator("#map-markers [data-map]")
-        .evaluateAll((rows) => rows.map((row) => row.dataset.map));
-    assert.ok(
-        markerIds.every((id) => listIds.includes(id)),
-        "Pins must remain a subset of the same filtered authorized rows",
-    );
-    await page.locator(`#map-markers [data-map="${includedId}"]`).click();
+    const mappedIds = await page
+        .locator('#campus-map-tickets [data-open]')
+        .evaluateAll(rows=>rows.map(row=>row.dataset.open));
+    assert.ok(mappedIds.length && mappedIds.every(id=>listIds.includes(id)),
+        'Mapped jobs must remain a subset of the same filtered authorized rows');
+    await page.locator('#map-markers [data-map-building="52"]').click();
+    await page.locator(`#campus-map-tickets [data-open="${includedId}"]`).click();
     assert.equal((await nav(page)).selected, includedId);
     assert.equal((await nav(page)).section, "requests");
     await closeWorkDetail(page);

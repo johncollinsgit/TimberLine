@@ -7,7 +7,7 @@
     // validated this proposed solution map. No record or provider action lives here.
     const priorities = Object.freeze([
         {id: "visibility", title: "Review project work", outcome: "Scan the project table and open a row for its current details.", procedure: "Scan or sort the table. Open a row for details; Close or Escape returns to the same list and tour controls.", section: "projects", scene: 1, target: "request-list", selector: "[data-open]", icon: "M4 5h16v14H4z M8 9h8 M8 13h4"},
-        {id: "crews", title: "Review daily work", outcome: "Open Roll Call to see assigned and interrupted work.", procedure: "Review the queue, then open a ticket for its next step.", section: "roll_call", scene: 3, target: "roll-scope", icon: "M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6 M3 20v-3a5 5 0 0 1 10 0v3 M16 6h5 M18.5 3.5v5 M16 15h5 M16 19h5"},
+        {id: "crews", title: "Review daily work", outcome: "Open Roll Call to see projects, assigned people and contractor links.", procedure: "Filter projects by department or person, then open a project for notes and files.", section: "roll_call", scene: 3, target: "roll-projects-search", icon: "M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6 M3 20v-3a5 5 0 0 1 10 0v3 M16 6h5 M18.5 3.5v5 M16 15h5 M16 19h5"},
         {id: "schedules", title: "Check a work window", outcome: "Open the calendar to compare recorded bookings and conflicts.", procedure: "Review a conflict before recording a resolution.", section: "calendar", scene: 4, target: "res-query", icon: "M4 5h16v15H4z M4 10h16 M8 3v4 M16 3v4 M8 14h3 M8 17h6"},
         {id: "reports", title: "Review a report", outcome: "Choose a quarter or date range to inspect available activity.", procedure: "Check the source records before saving an export.", section: "roll_call", scene: 5, target: "quarterly-preview", icon: "M6 3h9l4 4v14H6z M14 3v5h5 M9 17v-3 M12 17v-6 M15 17v-4"},
         {id: "certificates", title: "Check certificate dates", outcome: "Open the certificate register to review expiry and pending replacements.", procedure: "Review replacement evidence before accepting a new record.", section: "people", scene: 4, target: "certificate-new", icon: "M12 3l8 3v6c0 5-8 9-8 9s-8-4-8-9V6z M8 12l3 3 5-6"},
@@ -135,18 +135,18 @@
             {
                 id: "ask-everbranch-finale",
                 pageId: "enterprise-ask",
-                title: "Ask about a job",
+                title: "AI tools · Coming soon",
                 section: "ask",
                 duration: 30000,
-                target: "ask-voice-controls",
-                targets: Object.freeze(["ask-voice-controls", "ask-job-detail", "ask-message-preview-actions"]),
-                role: "Staff · current authorized job context",
-                text: "Type “Show event audio job” to inspect a matching sample job. Ask “Where is it?” or “Who is assigned?” to follow the same job.",
-                detail: "This demonstration uses deterministic record lookup, not generative AI. Talk requires your button press and microphone permission; previews remain Draft / not sent.",
+                target: "reviewer-ai-coming-soon",
+                targets: Object.freeze(["reviewer-ai-coming-soon"]),
+                role: "Future workspace tools",
+                text: "Chats, assistants and voice are coming soon. Open AI tools to see what is planned, then continue exploring campus work.",
+                detail: "This demo does not start a chat, use your microphone or call an AI provider.",
                 cards: [
-                    ["Find the same job", 'Type “Show event audio job”, then inspect the authorized job detail and source record.'],
-                    ["Follow up in context", 'Ask “Where is it?” or “Who is assigned?” against that same visible job. Unknown or inaccessible data stays unavailable.'],
-                    ["Talk, then review drafts", 'Use Talk deliberately when supported, or keep typing. Review email/text previews in Ask Everbranch: Draft / not sent.'],
+                    ["Chats", "Coming soon · workspace conversations."],
+                    ["Assistants", "Coming soon · focused help for recurring work."],
+                    ["Voice", "Coming soon · hands-free conversation."],
                 ],
             },
         ].map((scene) => Object.freeze(scene)),
@@ -417,7 +417,7 @@
             text("title", scene.title);
             text("text", scene.text);
             text("detail", scene.detail);
-            text("play", clock.playing ? "Pause tour" : "Play tour");
+            text("play", clock.playing ? "Pause tour" : clock.elapsed >= clock.duration ? "Replay tour" : "Play tour");
             get("play").setAttribute("aria-pressed", String(clock.playing));
             get("back").disabled = clock.index === 0;
             text(
@@ -426,24 +426,17 @@
                     ? "Replay from start"
                     : "Next scene",
             );
-            get("try").hidden =
-                actions.hideTrial === true || clock.index !== scenes.length - 1;
-            get("try").disabled = typeof actions.onTryIt !== "function";
-            get("try").textContent =
-                typeof actions.onTryIt === "function"
-                    ? "Try it out"
-                    : "Controlled trial connection pending";
-            get("trial-status").hidden =
-                actions.hideTrial === true ||
-                clock.index !== scenes.length - 1 ||
-                typeof actions.onTryIt === "function";
+            get("try").hidden = true;
+            get("try").disabled = true;
+            get("try").textContent = "Coming soon";
+            get("trial-status").hidden = true;
             get("email-open").hidden =
                 actions.emailPreview === false ||
                 ![1, 4, 5].includes(clock.index);
             get("screen").disabled =
                 actions.canNavigate?.(clock.index) === false;
             get("screen").dataset.screen = scene.section;
-            get("screen").textContent = actions.screenLabel?.(clock.index) || ({home:"Open campus overview",requests:"Open requests",workflows:"Open workflow workspace",roll_call:"Open Roll Call",assets:"Open assets",ask:"Open Ask Everbranch"})[scene.section] || "Open this screen";
+            get("screen").textContent = actions.screenLabel?.(clock.index) || ({home:"Open campus overview",requests:"Open requests",workflows:"Open workflow workspace",roll_call:"Open Roll Call",assets:"Open assets",ask:"Open AI tools"})[scene.section] || "Open this screen";
             get("screen").dataset.feature = scene.target || scene.section;
             get("progress").max = clock.duration;
             get("progress").value = clock.elapsed;
@@ -503,6 +496,10 @@
             frame = requestAnimationFrame(loop);
         }
         function setPlaying(playing) {
+            if (playing && clock.elapsed >= clock.duration) {
+                clock.restart();
+                previousIndex = -1;
+            }
             clock.playing =
                 playing &&
                 dialog.open &&

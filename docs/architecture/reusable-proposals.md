@@ -47,6 +47,18 @@ That action is outside this task's permitted operations. Do not bind the
 Lees-McRae client tenant, an existing similarly named HighLevel location or the
 regular Evergrove workspace as a shortcut. No workspace was provisioned here.
 
+## One-time recipient handoff
+
+Owner publication composes the full recipient URL from the existing canonical
+HTTPS origin and trusted mount (`MountUrls`), and checks that its host is already
+recipient-allowlisted before creating a version. Fix missing or mismatched
+canonical configuration rather than assembling a URL under an owner-workspace
+path. The one-time publication notice provides **Open private proposal** and a
+readonly full URL for native select/copy; share its password separately. It adds
+no script, clipboard permission, manager recovery link or durable token exposure.
+The existing idempotent publication retry, password gate and immutable snapshot
+behavior are unchanged.
+
 ## Source capabilities
 
 - `/owner-workspaces/{workspace}/proposals`: list/create/edit, catalog, clients,
@@ -176,6 +188,32 @@ A data-only reconciliation needs its own exact target/catalog/version pins,
 14-path diff, rollback/replay review and approval; this source supplies no runtime
 write, publication, credential or CSP activation permission.
 
+## Proposal presentation and vetted images (source follow-on)
+
+The generic recipient reader uses a wider canvas, a responsive ordered phase grid
+and a single upper-right mountain/tree corner on a cream reading surface. The
+Evergrove company mark belongs to the proposal; the separate Enterprise platform
+identity, views, tours and reviewed campus fingerprint stay unchanged. All prices,
+terms, selections, named comments, publication and password behavior remain in the
+existing immutable proposal engine.
+
+Public artwork must contain only the intended art pixels. Do not publish the full
+business-card/editor screenshot inside a visually clipped downloadable asset.
+The corner reuses the approved clean landscape PNG bytes and the reviewed curved
+clip; it includes no leaves, footer band, other-corner artwork, scripts or remote
+references. Preserve the supplied scene rather than redrawing it. Passive CSS
+chevrons keep native selects and their labels, focus, keyboard and disabled
+behavior without requiring an SVG/data-image permission.
+
+The existing generic CSP has no image permission. The proposed image allowance is
+limited to the current request origin and the exact vetted public asset paths in
+`App\Proposals\ResponsePolicy`; it does not permit general self/data sources or
+external hosts. Its existing default/script/network/frame/form/base restrictions
+and the separately supplied trusted campus nonce policy remain unchanged. This
+policy expansion requires specific security confirmation after concrete review,
+and the independent release/hosted acceptance gates, before activation. Source
+preparation and local HTTP evidence do not establish deployment or publication.
+
 ## Verification and release gates
 
 Run local proposal tests with the repository PHP environment; optional
@@ -198,3 +236,30 @@ claim SQLite establishes MySQL recovery.
 Keep a draft PR and independent code/visual review. No merge/deploy or production
 flag/configuration changes. Live workspace bindings, recipient hosts, legal
 approval, signing and payment/provider evidence are separate gates.
+
+
+### Proposal section panels
+
+Owner previews, password-protected client/reviewer pages, and saved selection summaries share native radio-backed section controls. Each component has its own DOM-only namespace so multiple agreement requests in the owner manager remain independent. Clicking a section reveals one content panel; native arrow keys select sections and focus remains visible. Retained controls keep their unsent values while switching sections within that document. A reload or server submission still follows the existing form/session rules; this is not new draft storage. The optional initial `section` query is matched against that surface's fixed section keys. Validation and existing saved-result redirects return to the relevant section. Printing reveals all panels.
+
+The Lees-McRae password gate and Overview reuse the approved existing inline college crest/wordmark motion only for the exact stored client reference `lees-mcrae-college`. The gate receives a branding boolean after the current host/version checks; proposal content stays locked. Its original 2.8-second CSS reveal is static for reduced motion and print. The preview movie, original login form, optional login configuration and authentication hook are excluded. This presentation adds no media/frame/script/image-policy allowance, provider activation or publication permission.
+
+## Private PDF copies
+
+`GET .../{draftId}/pdf` resolves the current scoped owner draft; recipient
+`GET /service-proposals/{token}/pdf` requires the same exact host, live version
+and unexpired password grant as the interactive reader, rechecked after rendering.
+The header download is an actual PDF attachment, independent of the active tab.
+It includes all saved terms, offered prices, journey, unresolved decisions and
+master language; it excludes comments, identities, private tokens and temporary
+planning scenarios. Owner previews export saved content, never unsaved edits.
+Copies already downloaded remain readable after link expiry or revocation.
+
+Dompdf 3.1.6 is lock-pinned; existing dependency versions are retained. Only
+server-encoded fixed branding uses data URIs. Remote URLs, PHP, JavaScript and
+non-data protocols are disabled. Input is bounded; temporary files and font
+caches use a unique private runtime-storage directory removed on success or
+ordinary exceptions. Abrupt process termination is not claimed to run cleanup.
+PDF requests are throttled, no output is retained, and responses are private
+no-store attachments with a safe filename. No CSP expansion or provider call
+is required. `ProposalPdfTest` runs in the existing normal proposal CI glob.

@@ -1,3 +1,69 @@
+## CI Ubuntu package mirrors (October 23; source candidate)
+
+The primary PHP 8.4 and isolated Enterprise jobs verify the runner's known Ubuntu
+mirror-file format before PHP setup, then remove only its Azure mirror entry.
+Official HTTPS archive/security entries and signed source fields remain intact.
+Unsupported formats fail visibly. All tests, browser engines, time limits and
+loopback-only MySQL safeguards remain required. This does not cache OS packages
+or guarantee download speed. See [Enterprise CI](docs/operations/enterprise-ci.md).
+
+## Reviewer AI tools deferred (October 23; source candidate)
+
+Keep the fictional reviewer demonstration's Chats, Assistants and Voice as
+Coming soon placeholders. Do not expose chat, microphone, generated workflow
+drafting, Home AI summaries or AI usage controls there. Preserve native signed-in
+record-backed Ask and its independently gated capabilities. Future reviewer AI
+must be released and accepted separately; do not hold the proposal/PDF/workspace
+review package for provider work. See
+[the release contract](docs/operations/enterprise-proposal-review-release.md).
+
+## Enterprise work controls and scoped views (October 23; source candidate)
+
+Keep work controls tied to the current authorized native graph, department,
+record versions and exact retry receipts. Multi-project tasks and incomplete or
+ambiguous request links require native review; never offer an edit the adapter
+cannot safely perform. Project archive and task removal retain history. The
+fictional Blaine role and additive browser demo records grant no real access.
+
+Work details use one Center/Side dialog without replacing drafts or active uploads;
+existing quarantine remains authoritative. Roll Call shows permitted projects,
+people and contractors. Map placement uses current saved building identity,
+version and official source provenance. Work due-date months and Eastern resource
+reservation months remain separate. Keep layout/intake preferences in Settings.
+See [jobs and ticket queue](docs/operations/enterprise-job-workspace.md),
+[Roll Call](docs/operations/enterprise-roll-call.md),
+[work details](docs/operations/enterprise-work-detail-placement.md),
+[map and calendar](docs/operations/enterprise-campus-map-calendar.md) and
+[request classification](docs/operations/enterprise-request-classification.md).
+
+## Private proposal planning (October 23; source candidate)
+
+Financial scenarios are bounded private browser-session planning, separate from
+saved contractual selections and shared comments. Preserve exact saved scope and
+prices, dated reference rates, editable illustrative departmental volumes and
+explicit pending preferences/unpriced costs. Planning never activates a provider,
+approves a budget or changes a published proposal. See
+[the planning contract](docs/operations/proposal-financial-planning.md).
+
+## Private proposal PDF download (source candidate, October 23)
+
+A top-of-reader download generates a PDF from the exact saved draft or immutable
+publication. It reuses current owner/recipient authority and private no-store
+responses; changing tabs does not omit PDF sections. Rendering uses a pinned
+local library with remote resources, scripts and PHP disabled, bounded input and
+private per-request temporary storage. It activates no provider or agreement.
+See [the proposal contract](docs/architecture/reusable-proposals.md).
+
+## Proposal section panels and college graphic (October 23; source candidate)
+
+Keep section controls as native radios with unique component IDs/groups; owner
+managers can render multiple saved summaries. Do not add stale ARIA tab state or
+navigation that discards unsent forms. Print must reveal all section copy. The
+approved Lees-McRae graphic is inline and exact-client-only on the password gate
+and Overview. Pass only the branding boolean to the locked gate; do not import its
+login hook/configuration, preview movie or external media. See the
+[proposal contract](docs/architecture/reusable-proposals.md#proposal-section-panels).
+
 ## Reviewed proposal commercial snapshot (October 23; source candidate)
 
 Render commercial sections from the exact stored proposal, never current copy

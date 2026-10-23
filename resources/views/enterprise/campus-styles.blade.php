@@ -129,3 +129,14 @@ html.work-detail-open{overflow:hidden}
   }
 }
 </style>
+
+<style>
+.work-context-heading{display:flex;justify-content:space-between;align-items:center;gap:16px;margin:0 0 18px}.work-context-heading h1{font:650 24px/1.25 var(--font-sans,Inter,system-ui,sans-serif);margin:0;letter-spacing:-.25px}.work-context-heading .actions{margin:0;justify-content:flex-end}
+#workspace-settings-dialog{width:min(800px,calc(100% - 32px));max-height:calc(100dvh - 40px);padding:24px;border:1px solid var(--line);border-radius:12px;color:var(--ink);overflow:auto}#workspace-settings-dialog::backdrop{background:#203d3259}.workspace-settings-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}.workspace-settings-head h2{font-size:22px;margin:0}#workspace-settings-dialog #workspace-preferences{margin:0;border:0;padding:0}
+@media(max-width:650px){.work-context-heading{align-items:flex-start;flex-direction:column}.work-context-heading h1{font-size:22px}.work-context-heading .actions{justify-content:flex-start}#workspace-settings-dialog{padding:18px}}
+</style>
+<style>
+#work>#work-filters{grid-column:1/-1}.work-filters{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin-bottom:16px}.work-filters label{flex:1 1 180px;max-width:340px}.work-filters select{width:100%}#job-wizard{width:min(720px,calc(100vw - 24px));max-height:calc(100dvh - 32px);overflow:auto;border:1px solid var(--line);border-radius:14px;padding:24px}#job-wizard::backdrop{background:#172b2780}.job-wizard-header{display:flex;gap:16px;align-items:start;justify-content:space-between}.job-wizard-header h2{margin:0}#job-review{display:grid;grid-template-columns:minmax(110px,1fr) 2fr;gap:12px}#job-review dt{font-weight:700}#job-review dd{margin:0;overflow-wrap:anywhere}#job-confirm-field{display:flex;align-items:start;gap:10px}#job-confirm{width:20px;min-width:20px;height:20px}.project-task-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line);padding:10px 0}.project-task-controls span{flex:1 1 180px}#job-wizard :focus-visible{outline:3px solid #315b43;outline-offset:3px}@media(max-width:650px){#job-wizard{padding:18px}#job-review{grid-template-columns:1fr;gap:6px}#job-review dd{margin-bottom:10px}.work-filters label{max-width:none;flex-basis:100%}}
+</style>
+
+<style>.eed-hero{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;padding:8px 0;background:none;border:0;gap:12px}.eed-meta{display:flex;align-items:center;gap:10px;padding:0;border:0;background:none}.briefing-hero{padding:14px;margin-bottom:14px}.briefing-hero h2{font:600 18px/1.4 system-ui,sans-serif;margin:6px 0}</style>

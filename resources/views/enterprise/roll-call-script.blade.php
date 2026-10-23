@@ -1,3 +1,63 @@
+  {!! file_get_contents(resource_path('js/enterprise/roll-call-projects.js')) !!}
+  let rollProjectRows = [], rollProjectEpoch = 0, rollProjectSource = null, rollProjectLoading = false;
+  let rollProjectCoverage = '';
+  const rollProjectFilterIds = {area:'roll-projects-area',person:'roll-projects-person',contractor:'roll-projects-contractor',status:'roll-projects-status',location:'roll-projects-location'};
+  const rollProjectFilters = () => ({query:$('roll-projects-search').value,...Object.fromEntries(Object.entries(rollProjectFilterIds).map(([key,id])=>[key,$(id).value]))});
+  function rollPaintProjectOptions(retained = {}) {
+    const options = {
+      area:EverbranchRollProjects.unique(rollProjectRows.map(row=>({id:row.areaId,name:row.areaName}))),
+      person:EverbranchRollProjects.unique(rollProjectRows.flatMap(row=>[row.owner,...row.people])),
+      contractor:EverbranchRollProjects.unique(rollProjectRows.flatMap(row=>row.contractors)),
+      status:[...new Set(rollProjectRows.map(row=>row.status))].map(name=>({id:name,name})),
+      location:[...new Set(rollProjectRows.flatMap(row=>row.locations))].map(name=>({id:name,name}))
+    };
+    for(const [key,id] of Object.entries(rollProjectFilterIds)) {
+      const select=$(id),previous=select.value||retained[key]||'',placeholder=select.options[0].textContent;
+      select.innerHTML=`<option value="">${esc(placeholder)}</option>`+options[key].sort((a,b)=>a.name.localeCompare(b.name)).map(row=>`<option value="${esc(row.id)}">${esc(row.name)}</option>`).join('');
+      select.value=options[key].some(row=>String(row.id)===previous)?previous:'';
+    }
+  }
+  function rollPaintProjects() {
+    const sort=$('roll-projects-sort').value;
+    const rows=EverbranchRollProjects.filter(rollProjectRows,rollProjectFilters()).sort((a,b)=>sort==='updated'?String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')):sort==='workspace'?a.areaName.localeCompare(b.areaName)||a.name.localeCompare(b.name):sort==='person'?String(a.people[0]?.name||'\uffff').localeCompare(String(b.people[0]?.name||'\uffff'))||a.name.localeCompare(b.name):a.name.localeCompare(b.name));
+    const chips=people=>people.map(person=>`<span class="roll-member-chip">${esc(person.name)}</span>`).join('');
+    const date=value=>{if(!value)return 'Not recorded';const parsed=new Date(value);return Number.isFinite(parsed.valueOf())?parsed.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):'Not recorded';};
+    $('roll-projects-body').innerHTML=rows.map(row=>`<tr><td><button type="button" class="roll-open-project" data-roll-project-id="${esc(row.id)}" data-roll-project-area="${esc(row.areaId)}">${esc(row.name)}</button><p class="caption">${esc(row.areaName)}</p></td><td>${row.owner?`<p class="caption">Owner: ${esc(row.owner.name)}</p>`:'<p class="caption">Owner not recorded</p>'}<div class="roll-member-chips">${chips(row.people)||'<span class="caption">No recorded assignments</span>'}</div></td><td><div class="roll-member-chips">${chips(row.contractors)||'<span class="caption">None recorded</span>'}</div></td><td><span class="badge">${esc(row.status)}</span><p class="caption">${row.tasks.length?`${row.completed} of ${row.tasks.length} visible tasks complete`:row.work.length?`${row.work.length} visible work items`:'No visible task detail'}</p></td><td>${row.locations.map(esc).join('<br>')||'<span class="caption">Not recorded</span>'}</td><td>${esc(date(row.updatedAt))}</td></tr>`).join('')||'<tr><td colspan="6" class="roll-project-empty">No permitted projects match these filters. Try Clear filters.</td></tr>';
+    $('roll-projects-body').querySelectorAll('[data-roll-project-id]').forEach(button=>button.onclick=()=>document.dispatchEvent(new CustomEvent('enterprise:navigate',{detail:{section:'projects',area:button.dataset.rollProjectArea,selected:button.dataset.rollProjectId,returnSection:'roll_call'}})));
+    $('roll-projects-status-message').textContent=rollProjectLoading?'Checking permitted projects…':`${rows.length} of ${rollProjectRows.length} readable projects${transport.mode==='sample'?' · Demo data saved in this browser':''}`;
+    $('roll-projects-coverage').textContent=rollProjectCoverage;
+  }
+  async function rollLoadProjects() {
+    const epoch=++rollProjectEpoch,source=data,retained=rollProjectFilters();
+    rollProjectSource=source;rollProjectLoading=true;rollProjectRows=[];rollProjectCoverage='Checking current workspace access.';rollPaintProjectOptions();rollPaintProjects();
+    const allowed=(source.areas||[]).slice(0,100),results=[],failed=[];let detailMissing=0;
+    const current=()=>epoch===rollProjectEpoch&&section==='roll_call'&&data===source;
+    for(let index=0;index<allowed.length;index+=4) {
+      const batch=await Promise.allSettled(allowed.slice(index,index+4).map(async workspaceArea=>{
+        const detail=await api(urls.data+(urls.data.includes('?')?'&':'?')+'area_id='+encodeURIComponent(workspaceArea.id));
+        if(String(detail.selected_area_id)!==String(workspaceArea.id))throw new Error('Workspace context changed.');
+        const [operations,planning]=await Promise.allSettled([
+          detail.features?.operations?api(rollEndpoint('/operations',{area_id:workspaceArea.id})):Promise.resolve(null),
+          detail.features?.planning?api(rollEndpoint('/planning',{area_id:workspaceArea.id})):Promise.resolve(null)
+        ]);
+        return {areaId:workspaceArea.id,areaName:workspaceArea.name,data:detail,operations:operations.status==='fulfilled'?operations.value:null,planning:planning.status==='fulfilled'?planning.value:null,detailMissing:operations.status==='rejected'||planning.status==='rejected'};
+      }));
+      if(!current())return;
+      batch.forEach((result,offset)=>{if(result.status==='fulfilled'){results.push(result.value);if(result.value.detailMissing)detailMissing++;}else failed.push(allowed[index+offset].id);});
+    }
+    if(!current())return;
+    rollProjectRows=EverbranchRollProjects.projectRows(results).sort((a,b)=>a.name.localeCompare(b.name));rollProjectLoading=false;
+    rollProjectCoverage=`Only currently readable projects from ${results.length} permitted workspace${results.length===1?'':'s'} checked. ${failed.length?`${failed.length} workspace checks were unavailable; their former rows are not retained. `:''}${detailMissing?`${detailMissing} workspace checks have unavailable task or contractor detail. `:''}${(source.areas||[]).length>100?'The first 100 permitted workspaces were checked; coverage is partial. ':''}Task and contractor projections are bounded; missing assignments stay unrecorded. Contractor contacts do not gain an account. Locations are saved work locations, not live tracking.${transport.mode==='sample'?' Fictional browser sample only; no college records or live tracking.':''}`;
+    rollPaintProjectOptions(retained);rollPaintProjects();
+  }
+  $('roll-projects-search').addEventListener('input',rollPaintProjects);
+  $('roll-projects-sort').addEventListener('change',rollPaintProjects);
+  $('roll-project-create').onclick=()=>document.dispatchEvent(new CustomEvent('enterprise:create-project',{detail:{area}}));
+  Object.values(rollProjectFilterIds).forEach(id=>$(id).addEventListener('change',rollPaintProjects));
+  $('roll-projects-clear').onclick=()=>{$('roll-projects-search').value='';Object.values(rollProjectFilterIds).forEach(id=>$(id).value='');rollPaintProjects();};
+  $('roll-projects-refresh').onclick=()=>{if(section==='roll_call')rollLoadProjects();};
+  $('roll-project-incoming').onclick=()=>document.dispatchEvent(new CustomEvent('enterprise:navigate',{detail:{section:'requests',area,selected:null}}));
+  document.addEventListener('enterprise:work-saved',()=>{rollProjectSource=null;if(section==='roll_call')rollLoadProjects();});
   const rollNavigation = () => new URLSearchParams(transport.mode === 'sample' ? location.hash.slice(1) : location.search);
   const rollPrefix = `everbranch-enterprise-draft:${transport.mode === 'sample' ? 'sample:' : ''}${workspace}:${viewer}:meeting:`;
   let rollGeneration = 0, rollContext = null, rollSnapshot = null, rollModel = null, rollTasks = [], rollSaved = [], rollPreview = null;
@@ -122,10 +182,12 @@
     const token=rollToken(); rollNotice('Checking current permissions and records.');
     $('roll-meeting-form').hidden=true;$('roll-meeting-form').reset();for(const kind of ['decisions','blockers','commitments'])$(`roll-${kind}`).replaceChildren();$('roll-preview-panel').hidden=true;$('roll-priorities').replaceChildren();
     try {
-      const query=rollScopeInput(), [snapshot,saved,tasks]=await Promise.all([
-        api(rollEndpoint('/roll-call',query)),api(rollEndpoint('/meetings',query)),
+      const query=rollScopeInput(), [snapshot,tasks]=await Promise.all([
+        api(rollEndpoint('/roll-call',query)),
         data.features?.operations?api(rollEndpoint('/operations',{area_id:area})):Promise.resolve({items:[]})
       ]);
+      if(!rollCurrent(token)) return;
+      const saved=snapshot.can_lead?await api(rollEndpoint('/meetings',query)):{items:[]};
       if(!rollCurrent(token)) return;
       rollSnapshot=snapshot;rollSaved=saved.items || [];rollTasks=tasks.items || [];rollPaintPriorities();
       const retained=rollRead(rollContext,rollSelectedMeeting);
@@ -142,6 +204,7 @@
         rollModel=null;rollDraftBlocked=true;$('roll-editor-message').textContent='Your retained draft references records that are unavailable in this scope. It remains in this browser but is not displayed. Choose its original authorized scope or start a new meeting.';
       } else {rollModel=current || rollNewModel();rollPreview=null;rollPendingSave=null;rollPendingConfirm=null;rollDirty=!current;rollDefinitive=false;}
       if(rollModel?.version) rollSelectedMeeting=rollModel.id;
+      if(rollSelectedMeeting||rollPendingSave||rollPendingConfirm)$('roll-meeting-tools').open=true;
       rollPaintEditor();rollRememberUrl();rollNotice(`${snapshot.total_visible ?? snapshot.items.length} priorities in the checked scope. ${transport.mode==='sample'?'All actions here are isolated browser sample execution.':''}`);
     } catch(error) {
       if(!rollCurrent(token)) return;
@@ -196,9 +259,11 @@
   }
   function renderRollCall() {
     const active=section==='roll_call'&&data.features?.roll_call===true;$('roll-call-panel').hidden=!active;
-    if(!active){rollCapture();rollStore();if(rollContext){rollGeneration++;rollContext=null;}return;}
-    $('work').hidden=true;$('heading').textContent='Make the next move clear.';$('breadcrumb').textContent='Roll Call';
-    $('roll-work-mode').textContent=data.can_coordinate?'Dispatch review: check current handlers, unresolved work and exact task changes before confirmation.':'Technician view: open your assigned work, job details and permitted status, note or photo actions. Manager decisions remain separately authorized.';
+    if(!active){rollCapture();rollStore();rollProjectEpoch++;rollProjectSource=null;if(rollContext){rollGeneration++;rollContext=null;}return;}
+    $('work').hidden=true;$('heading').textContent='Projects & people';$('breadcrumb').textContent='Roll Call';
+    $('roll-project-create').hidden=!data.can_coordinate&&!data.can_manage;
+    if(rollProjectSource!==data)rollLoadProjects();
+    $('roll-work-mode').textContent='Check priorities, then keep private meeting notes. Task changes require review and confirmation.';
     $('roll-my-work').hidden=!rollOwners().some(row=>String(row.id)===String(data.viewer_id||viewer));
     if(!['campus','workspace','project','team'].includes(rollScope))rollScope='workspace';
     if(!rollProjects().some(row=>row.id===rollProject))rollProject=rollProjects()[0]?.id || '';
@@ -249,7 +314,7 @@
   window.addEventListener('pagehide',()=>{rollCapture();rollStore();});
   window.visualViewport?.addEventListener('resize',()=>{if(document.activeElement?.closest('#roll-call-panel'))document.activeElement.scrollIntoView({block:'nearest'});});
   document.addEventListener('enterprise:reset',()=>{
-    rollCapture();rollStore();rollGeneration++;rollContext=null;rollModel=null;rollSnapshot=null;rollTasks=[];rollSaved=[];rollPreview=null;rollPendingSave=null;rollPendingConfirm=null;rollBusy=false;
+    rollCapture();rollStore();rollProjectEpoch++;rollProjectSource=null;rollProjectRows=[];rollProjectLoading=false;rollProjectCoverage='Current access must be checked again.';rollPaintProjectOptions();rollPaintProjects();rollGeneration++;rollContext=null;rollModel=null;rollSnapshot=null;rollTasks=[];rollSaved=[];rollPreview=null;rollPendingSave=null;rollPendingConfirm=null;rollBusy=false;
     $('roll-meeting-form').reset();$('roll-meeting-form').hidden=true;$('roll-preview-panel').hidden=true;
     for(const id of ['roll-priorities','roll-meetings','roll-decisions','roll-blockers','roll-commitments','roll-preview-actions'])$(id).replaceChildren();
     $('roll-new').hidden=true;rollNotice('Current access must be checked again before Roll Call or retained meeting notes can be displayed.',true);
