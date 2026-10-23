@@ -12,6 +12,10 @@
 .proposal-section-control:checked+.proposal-section-label{background:#1c4c3f;border-color:#1c4c3f;color:#fff}
 .proposal-section-control:focus+.proposal-section-label{outline:3px solid #a0bb89;outline-offset:3px}
 .proposal-section-controls{position:relative;display:flex;flex-wrap:wrap;gap:8px;padding:10px 0;background:#f5f4ed;border-bottom:1px solid #d8ded3}
+.proposal-menu-toggle,.proposal-menu-close{display:none}
+.proposal-section-controls[popover]{inset:auto;margin:0;width:auto;max-height:none;overflow:visible;border:0;border-bottom:1px solid #d8ded3;color:inherit}
+@media(max-width:800px){.proposal-menu-ready>.proposal-menu-toggle{display:inline-flex;gap:10px;min-height:46px}.proposal-menu-ready>.proposal-section-controls[popover]{display:none}.proposal-menu-ready>.proposal-section-controls[popover]:popover-open{display:flex;flex-direction:column;gap:8px;position:fixed;inset:16px 12px auto;width:calc(100vw - 24px);max-height:calc(100dvh - 32px);overflow:auto;overscroll-behavior:contain;padding:16px;border:1px solid #afc0b3;border-radius:12px;background:#f7f5ee;box-shadow:0 14px 48px #173b3333}.proposal-section-controls::backdrop{background:#173b3340}.proposal-menu-ready>.proposal-section-controls>.proposal-menu-close{display:inline-flex;position:sticky;top:0;z-index:1;align-self:flex-end;min-height:46px;margin-bottom:8px}.proposal-section-controls>.proposal-section-label{width:100%;justify-content:flex-start;margin:0;min-height:46px;padding:12px 14px}}
+@media print{.proposal-menu-toggle,.proposal-menu-close{display:none!important}}
 .proposal-section-panels{margin-top:16px;min-width:0}.proposal-section-panel{display:none}.proposal-print-section,.proposal-print-copy{display:none}
 .proposal-section-tabs:has(>.proposal-section-controls>[data-proposal-section="overview"]:checked)>.proposal-section-panels>[data-proposal-panel="overview"]{display:block}
 .proposal-section-tabs:has(>.proposal-section-controls>[data-proposal-section="approach"]:checked)>.proposal-section-panels>[data-proposal-panel="approach"]{display:block}

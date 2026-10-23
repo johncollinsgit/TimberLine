@@ -42,4 +42,5 @@
 <div id="enterprise-workflow" data-bootstrap="{{ json_encode($workflowBoot, JSON_THROW_ON_ERROR) }}"></div><noscript>This workflow workspace requires JavaScript. Return to <a href="{{ $enterprisePresentation['routes']['back'] }}">Enterprise Projects</a>.</noscript>
 @if($enterpriseSample)<script type="module">{!! $inlineAssets['js'] ?? '' !!}</script>@endif
 @include('enterprise.app-install')
+@include('enterprise.mobile-navigation')
 </body></html>

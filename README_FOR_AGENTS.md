@@ -1,3 +1,19 @@
+## Campus review presentation follow-up (October 23; source candidate)
+
+Keep mobile menus accessible and scoped to narrow screens, preserve desktop
+controls and unsent proposal/reviewer context. Permit only the exact-hash
+authorized local menu controller in generic proposals; do not add general script
+origins, unsafe inline execution or network authority. The ticket-routing summary
+must use current authorized data without changing its version or permission checks.
+
+The fictional contractor repair targets canonical `plans`, including tabs that
+already applied the earlier job upgrade. Use the separate once-only repair;
+preserve canonical edits, retained orphan records and later deletions rather
+than resetting or replaying the twenty-job seed. No native database is involved.
+Do not silently deploy over an active presentation: the changed campus manifest
+requires a fresh immutable review edition. See
+[the follow-up release notes](docs/operations/enterprise-review-presentation-followup.md).
+
 ## CI Ubuntu package mirrors (October 23; source candidate)
 
 The primary PHP 8.4 and isolated Enterprise jobs verify the runner's known Ubuntu

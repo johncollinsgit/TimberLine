@@ -1,3 +1,18 @@
+## Campus review presentation follow-up (October 23; source candidate)
+
+The follow-up prepares mobile navigation menus and a visible ticket-routing
+summary while retaining desktop controls and existing proposal access. A small
+fixed local menu controller requires its exact CSP hash; other scripts and
+network authority remain blocked. It also repairs the fictional contractor fixture
+into the adapter's canonical planning collection through a separate once-only,
+edit-preserving browser-state
+upgrade. It changes no native database, provider, account or grant.
+
+These source changes are not live while the existing review is presented.
+Campus publications bind to the exact source manifest; deploying the follow-up
+requires a coordinated fresh immutable review edition, without rebinding old
+comments. See [the follow-up release notes](docs/operations/enterprise-review-presentation-followup.md).
+
 ## CI Ubuntu package mirrors (October 23; source candidate)
 
 Both browser CI jobs remove the exact Azure entry from the runner's validated
