@@ -1,3 +1,12 @@
+## Private reviewer AI (October 23; future source candidate, default off)
+
+Only the exact unlocked, approved private owner-runtime edition may expose
+reviewer Chats. Keep native/public paths, Assistants, Voice and sending separate.
+Use the one existing lifetime campaign ledger, exact sharing preview, once-only
+dispatch and receipt-owned recovery; never initialize or reset spend on demand.
+Coordinate a fresh immutable edition and verified cleanup before activation.
+See [the reviewer AI contract](docs/operations/proposal-reviewer-ai.md).
+
 ## Campus review presentation follow-up (October 23; source candidate)
 
 Keep mobile menus accessible and scoped to narrow screens, preserve desktop

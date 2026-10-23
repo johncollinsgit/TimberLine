@@ -13,6 +13,15 @@ and result on a fresh runner before declaring the correction accepted.
 MySQL 8.4 recovery, runtime composition, Enterprise build, and existing private
 Chromium/WebKit checks. It also runs these focused reviewer-operations gates:
 
+The future private reviewer AI gates run two explicit provider-free commands: the
+closed-snapshot/receipt client Node tests, then seven reviewer budget, connection,
+HTTP, integration, orchestration, receipt and retention PHP files with
+`phpunit.team.xml`. They use fictional data, fake HTTP and disposable owner
+SQLite runtimes; they do not initialize a real campaign, activate a key or prove
+provider acceptance. Changes to the retention command, reviewer boundary,
+separate route file and reviewer fixtures/tests trigger the same workflow. These
+focused checks supplement the existing MySQL concurrency and browser gates.
+
 The fictional reviewer sample currently exposes only Coming soon cards for
 Chats, Assistants and Voice. Its browser assertions require inactive chat,
 microphone and generated-draft controls while preserving manual workspace work.
@@ -34,6 +43,8 @@ suite with those focused checks or bypass its MySQL gates.
 | Gate | Entry point | Boundary exercised |
 | --- | --- | --- |
 | Transport and sample contracts | `node --test tests/e2e/enterprise-transport.test.mjs tests/e2e/enterprise-reviewer-sample.test.mjs tests/e2e/enterprise-workspace-tour.test.mjs` | Private identity/CSRF and replay contracts; isolated synthetic transport, roles and sample work. |
+| Private reviewer AI snapshot and recovery | `node --test tests/e2e/proposal-reviewer-ai-client.test.mjs tests/e2e/proposal-reviewer-ai-snapshot.test.mjs` | Closed fictional projection, persona/revision/source fences, explicit Send, receipt-only recovery and settled/storage error handling; no provider or network. |
+| Private reviewer AI admission and retention | Seven explicit `tests/Feature/Enterprise/ReviewerAi*Test.php` files in the workflow, using `phpunit.team.xml` | Pinned existing ledger, approval/expiry, mounted access and CSRF, once-only dispatch/recovery and bounded erasure with fake HTTP; no native identity grants or live campaign setup. |
 | Voice controls and authorized job lookup | `npm run test:ai-voice` and `php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseVoiceJobsTest.php --compact --display-warnings` | Fake speech lifecycle, bounded sessions, cancellation, ambiguity and current tenant/department/task authorization; no provider dispatch. |
 | Voice browser component | `VOICE_WEBKIT=1 node tests/browser/enterprise-voice-jobs.smoke.mjs` | Chromium/WebKit component controls and returned detail/location projection with fake speech and synthetic replies; no acoustic or live model claim. |
 | Shared view rendering and public route boundary | `php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseReviewerRenderTest.php tests/Feature/EnterpriseReviewerPublicTest.php tests/Feature/LeesMcRaeCampusDemoTest.php --compact` | Actual shared Blade/workflow views render explicit sample presentation without account authority or operational SQL; public controller host, query, session and response boundaries remain covered. |

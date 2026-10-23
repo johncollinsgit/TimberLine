@@ -39,6 +39,9 @@ class ReviewerPresentation
             $presentation['navigation']['section'] = $campusReviewContext['page'];
             $presentation['routes']['back'] = $workflow ? ($campusReviewContext['urls']['pages']['projects'] ?? $campusReviewContext['urls']['current']) : $campusReviewContext['urls']['current'];
             $presentation['routes']['workflowWorkspace'] = $campusReviewContext['urls']['pages']['workflows'] ?? $campusReviewContext['urls']['current'];
+            if (($campusReviewContext['reviewer_ai']['enabled'] ?? false) === true) {
+                $presentation['reviewerAi'] = $campusReviewContext['reviewer_ai'];
+            }
         }
         $bootstrap = ['project' => ['id' => $scope['project_id'], 'name' => 'Campus event readiness - sample'], 'members' => [],
             'can_design' => false, 'can_run' => false, 'items' => [], 'templates' => []];

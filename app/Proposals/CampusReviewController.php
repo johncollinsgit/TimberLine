@@ -30,6 +30,21 @@ class CampusReviewController
         }
         $version = $this->version($request, $token, $page);
         $context = $this->context($request, $version, $token, $page);
+        if (config('service_proposals.reviewer_ai.ui_enabled') === true && config('service_proposals.reviewer_ai.enabled') === true) {
+            try {
+                $scope = app(ReviewerAiAccess::class)->scope($request, $token, startBrowser: true);
+                app(ReviewerAiConnection::class)->settings($scope);
+                $context['reviewer_ai'] = ['enabled' => true, 'endpoints' => []];
+                foreach (['preview', 'confirm', 'status', 'cancel'] as $action) {
+                    $context['reviewer_ai']['endpoints'][$action] = route('service-proposals.recipient.ai.'.$action, $token);
+                }
+            } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $error) {
+                // Optional AI admission never changes the proposal or native workspace grant.
+                if (! in_array($error->getStatusCode(), [403, 404, 409, 410, 503], true)) {
+                    throw $error;
+                }
+            }
+        }
         $request->attributes->set('service_proposal_campus_review', true);
 
         return app(ReviewerPresentation::class)->respond($request, $page === 'workflows', $context);

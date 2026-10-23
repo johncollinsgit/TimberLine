@@ -49,7 +49,7 @@
     $('ask').hidden = section !== 'ask';
     $('work').hidden = ['ask', 'contractors'].includes(section);
     document.querySelectorAll('[data-section]').forEach(b => b.classList.toggle('active', b.dataset.section === section));
-    if (section === 'ask') { $('heading').textContent=aiComingSoon?'AI tools · Coming soon':'Ask with the right context.'; $('breadcrumb').textContent=aiComingSoon?'AI tools':'Ask Everbranch'; if(!aiComingSoon){if(!conversationMode()&&!$('ask-question').value) $('ask-question').value=readDraft('ask:'+area).pending?.question||''; loadMailboxes();} }
+    if (section === 'ask') { $('heading').textContent=aiComingSoon?(presentation.reviewerAi?.enabled?'AI tools':'AI tools · Coming soon'):'Ask with the right context.'; $('breadcrumb').textContent=aiComingSoon?'AI tools':'Ask Everbranch'; if(!aiComingSoon){if(!conversationMode()&&!$('ask-question').value) $('ask-question').value=readDraft('ask:'+area).pending?.question||''; loadMailboxes();} }
     if (section === 'contractors') loadPlanning();
     rememberUrl();
   }

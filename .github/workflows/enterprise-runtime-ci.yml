@@ -6,11 +6,13 @@ on:
       - 'apps/enterprise/**'
       - 'app/Enterprise/**'
       - 'app/Proposals/**'
+      - 'app/Console/Commands/PruneProposalReviewerAi.php'
       - 'bootstrap/providers.php'
       - 'app/Foundation/Enterprise*.php'
       - 'app/Providers/Enterprise*.php'
       - 'app/Http/Middleware/EnsureEnterpriseRuntime.php'
       - 'app/Http/Middleware/EnterpriseCsrfToken.php'
+      - 'app/Http/Middleware/ReviewerAiBoundary.php'
       - 'app/Http/Middleware/EnsureEnterpriseTrialMount.php'
       - 'app/Http/Middleware/EnsureEnterprisePrefixMount.php'
       - 'app/Http/Middleware/EnsureEnterpriseClientSilo.php'
@@ -23,6 +25,7 @@ on:
       - 'config/service_proposals.php'
       - 'routes/enterprise.php'
       - 'routes/service-proposals.php'
+      - 'routes/service-proposals-reviewer-ai.php'
       - 'routes/campus-demo.php'
       - 'resources/data/enterprise/**'
       - 'resources/views/enterprise/**'
@@ -36,9 +39,11 @@ on:
       - 'tests/Feature/Enterprise/**'
       - 'tests/Feature/Proposals/**'
       - 'tests/Support/proposal-review-browser*.php'
+      - 'tests/Support/ReviewerAi*.php'
       - 'tests/Support/proposal-financial-browser-inspect.php'
       - 'tests/Feature/LeesMcRaeCampusDemoTest.php'
       - 'tests/e2e/enterprise-*'
+      - 'tests/e2e/proposal-reviewer-ai-*'
       - 'tests/browser/enterprise-voice-jobs.smoke.mjs'
       - 'tests/browser/enterprise-read-only-assistant.smoke.mjs'
       - 'tests/browser/enterprise-conversation.smoke.mjs'
@@ -151,6 +156,10 @@ jobs:
       - run: npm ci
       - name: Check private transport and isolated sample contracts
         run: node --test tests/e2e/enterprise-transport.test.mjs tests/e2e/enterprise-reviewer-sample.test.mjs tests/e2e/enterprise-job-sample-upgrade.test.mjs tests/e2e/enterprise-job-sample-commands.test.mjs tests/e2e/enterprise-work-scope-map.test.mjs tests/e2e/enterprise-workspace-tour.test.mjs tests/e2e/enterprise-procedures-ui.test.mjs tests/e2e/enterprise-resource-presentation.test.mjs tests/e2e/enterprise-resource-history-time.test.mjs tests/e2e/enterprise-buildings-map-state.test.mjs tests/e2e/enterprise-request-building.test.mjs tests/e2e/enterprise-read-only-assistant.test.mjs tests/e2e/enterprise-conversation.test.mjs tests/e2e/enterprise-saved-assistants.test.mjs tests/e2e/enterprise-private-memory.test.mjs tests/e2e/enterprise-tour-position.test.mjs tests/e2e/enterprise-work-table-drawer.test.mjs tests/e2e/enterprise-detail-placement.test.mjs tests/e2e/enterprise-project-detail-generation.test.mjs tests/e2e/enterprise-work-views.test.mjs tests/e2e/enterprise-roll-call-projects.test.mjs tests/e2e/enterprise-shell-navigation.test.mjs tests/e2e/enterprise-preference-lifecycle.test.mjs tests/e2e/enterprise-theme.test.mjs tests/e2e/enterprise-executive.test.mjs tests/e2e/enterprise-role-preview.test.mjs tests/js/enterprise-sample-voice.test.mjs tests/js/enterprise-usage.test.mjs tests/e2e/ai-voice-conversation.test.mjs tests/e2e/enterprise-voice-jobs.test.mjs tests/e2e/enterprise-request-classification-draft.test.mjs
+      - name: Check private reviewer AI snapshot and receipt recovery without a provider
+        run: node --test tests/e2e/proposal-reviewer-ai-client.test.mjs tests/e2e/proposal-reviewer-ai-snapshot.test.mjs
+      - name: Check private reviewer AI ledger and mounted boundaries without a provider
+        run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/ReviewerAiBudgetTest.php tests/Feature/Enterprise/ReviewerAiConnectionTest.php tests/Feature/Enterprise/ReviewerAiHttpTest.php tests/Feature/Enterprise/ReviewerAiIntegrationTest.php tests/Feature/Enterprise/ReviewerAiOrchestrationTest.php tests/Feature/Enterprise/ReviewerAiReceiptTest.php tests/Feature/Enterprise/ReviewerAiRetentionCommandTest.php --compact --display-warnings
       - name: Check voice lifecycle and scoped job lookup without providers
         run: |
           node --test tests/e2e/enterprise-voice-shell-scope.test.mjs

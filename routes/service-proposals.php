@@ -24,6 +24,8 @@ Route::middleware(['auth', 'verified', \App\Proposals\ResponsePolicy::class])->p
     Route::post('/versions/{versionId}/revoke', [OwnerController::class, 'revoke'])->name('revoke');
 });
 
+require __DIR__.'/service-proposals-reviewer-ai.php';
+
 Route::middleware([\App\Proposals\ResponsePolicy::class, 'throttle:service-proposals-public'])->prefix('service-proposals/{token}')->name('service-proposals.recipient.')->group(function (): void {
     Route::get('/', [RecipientController::class, 'show'])->name('show');
     Route::get('/pdf', [PdfController::class, 'recipient'])->middleware('throttle:6,1')->name('pdf');

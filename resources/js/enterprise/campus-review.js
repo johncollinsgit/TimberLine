@@ -108,7 +108,7 @@
   for(const holder of document.querySelectorAll('.erp-proposal')){const link=document.createElement('a');link.href=safeUrl(urls.proposal);link.className='ert-button primary';link.textContent='Open proposal';holder.replaceChildren(link);}
   const toolbar=document.createElement('div');toolbar.className='campus-review-tools';const proposal=document.createElement('a');proposal.className='button primary';proposal.href=safeUrl(urls.proposal);proposal.textContent='Open proposal';toolbar.append(proposal);if(open)toolbar.append(open);const header=boot.layout==='canvas'?null:document.querySelector('.topbar');if(header)header.append(toolbar);else{toolbar.classList.add('campus-review-standalone');document.body.prepend(toolbar);}
   document.body.classList.add('has-campus-review');
-  const ribbon=document.querySelector('.reviewer-boundary');if(ribbon)ribbon.textContent='Fictional campus work stays in this tab. Review names and page comments are saved on the server; no messages or AI charges.';
+  const ribbon=document.querySelector('.reviewer-boundary');if(ribbon)ribbon.textContent=boot.reviewer_ai?.enabled===true?'Sample work stays in this tab. Confirmed AI shares selected fields; review comments are saved.':'Fictional campus work stays in this tab. Review names and page comments are saved on the server; no messages or AI charges.';
   globalThis.addEventListener('pagehide',()=>{saveDraft();generation++;loading?.abort();});
   render();
 })();

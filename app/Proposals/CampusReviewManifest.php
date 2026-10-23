@@ -35,9 +35,21 @@ class CampusReviewManifest
             'app/Proposals/CampusReviewManifest.php', 'resources/views/service-proposals/campus-review.blade.php',
             'resources/data/enterprise/lees-mcrae-locations.json', 'resources/data/enterprise/official-campus-plan.png',
             'resources/data/enterprise/campus-map-points.json',
-            'resources/images/enterprise/Everbranch-Rooted-Peak-Aligned.svg', 'resources/images/enterprise/Everbranch-Rooted-Peak-Aligned.png'];
+            'resources/images/enterprise/Everbranch-Rooted-Peak-Aligned.svg', 'resources/images/enterprise/Everbranch-Rooted-Peak-Aligned.png',
+            'app/Proposals/Access.php', 'app/Proposals/Version.php', 'app/Proposals/CampusReviewController.php',
+            'app/Enterprise/RecordStore.php', 'app/Enterprise/MountUrls.php', 'app/Enterprise/Provisioning/ClientSilo.php',
+            'app/Enterprise/Provisioning/RuntimePaths.php', 'app/Enterprise/Trial/TrialBudget.php', 'app/Enterprise/Trial/TrialStore.php',
+            'app/Enterprise/Conversation/Connection.php', 'app/Models/TeamOperationRecord.php', 'app/Models/TeamArea.php', 'app/Models/Tenant.php',
+            'app/Http/Middleware/ReviewerAiBoundary.php', 'app/Console/Commands/PruneProposalReviewerAi.php',
+            'app/Http/Middleware/EnterpriseCsrfToken.php', 'app/Http/Middleware/EnsureEnterpriseRuntime.php',
+            'app/Http/Middleware/EnsureEnterprisePrefixMount.php', 'app/Http/Middleware/EnsureEnterpriseClientSilo.php',
+            'app/Providers/EnterpriseServiceProvider.php', 'apps/enterprise/bootstrap/app.php',
+            'config/service_proposals.php', 'config/enterprise.php', 'apps/enterprise/config/service_proposals.php',
+            'apps/enterprise/config/enterprise_runtime.php', 'apps/enterprise/config/enterprise_client.php',
+            'apps/enterprise/config/enterprise.php', 'apps/enterprise/config/session.php', 'apps/enterprise/config/database.php',
+            'routes/service-proposals.php', 'routes/service-proposals-reviewer-ai.php', 'composer.lock'];
         foreach (['resources/views/enterprise/*.blade.php', 'resources/js/enterprise/*.js', 'resources/js/enterprise/*.tsx',
-            'resources/js/enterprise/*.css', 'resources/js/enterprise/reviewer/*.js'] as $pattern) {
+            'resources/js/enterprise/*.css', 'resources/js/enterprise/reviewer/*.js', 'app/Proposals/ReviewerAi*.php'] as $pattern) {
             foreach (glob(base_path($pattern)) ?: [] as $file) {
                 $paths[] = str_replace('\\', '/', substr($file, strlen(base_path()) + 1));
             }

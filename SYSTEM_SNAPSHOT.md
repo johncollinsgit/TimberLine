@@ -1,3 +1,12 @@
+## Private reviewer AI (October 23; future source candidate, default off)
+
+The source candidate adds explicitly confirmed questions over a closed fictional
+browser snapshot to one approved private proposal edition. It uses a pinned
+owner-local lifetime ledger, durable once-only dispatch and content-free recovery,
+with bounded encrypted-content cleanup. Public/native paths and other paid
+features stay separate. This is not hosted or provider acceptance; current
+shared publications remain unchanged. See [the contract](docs/operations/proposal-reviewer-ai.md).
+
 ## Campus review presentation follow-up (October 23; source candidate)
 
 The follow-up prepares mobile navigation menus and a visible ticket-routing

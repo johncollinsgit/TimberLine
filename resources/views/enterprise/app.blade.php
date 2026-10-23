@@ -68,6 +68,7 @@
 @if($enterpriseSample)
 @includeIf('enterprise.reviewer-adapter')
 @endif
+@include('enterprise.proposal-ai-assets')
 <script>
 (() => {
   'use strict';
@@ -92,6 +93,7 @@
       '"': '&quot;',
       "'": '&#39;'
     })[c]);
+  let proposalAiUi = null;
   let data = {
       areas: [],
       requests: [],
@@ -143,6 +145,7 @@
     resetNext();
   }
   async function load() {
+    proposalAiUi?.invalidate();
     const generation = ++workspaceLoadGeneration, requestedArea = area;
     clearWorkspaceContext();
     message('Checking current workspace permissions.');
@@ -397,7 +400,7 @@
     $('breadcrumb').textContent = section === 'projects' ? 'Projects' : section === 'contractors' ? 'Contractors' : 'Incoming tickets';
     renderNext();
     renderHome();
-    const contextLabels={home:data.demo_persona==='executive'?'Campus overview':'Campus overview',projects:'Projects',requests:'Incoming tickets',contractors:'Contractors',ask:transport.mode==='sample'?'AI tools · Coming soon':'Ask Everbranch',roll_call:'Roll Call',buildings:'Buildings',calendar:'Calendar',people:'People & contractors',assets:'Assets',workflows:'Workflows',requester:'My service requests',finance:'Invoice & fund packets',usage:'AI & voice usage'};
+    const contextLabels={home:data.demo_persona==='executive'?'Campus overview':'Campus overview',projects:'Projects',requests:'Incoming tickets',contractors:'Contractors',ask:transport.mode==='sample'?(presentation.reviewerAi?.enabled?'AI tools':'AI tools · Coming soon'):'Ask Everbranch',roll_call:'Roll Call',buildings:'Buildings',calendar:'Calendar',people:'People & contractors',assets:'Assets',workflows:'Workflows',requester:'My service requests',finance:'Invoice & fund packets',usage:'AI & voice usage'};
     $('heading').textContent=contextLabels[section]||'Workspace';
     $('map').hidden = !map;
     $('request-list').hidden=view==='map';
@@ -571,6 +574,7 @@
   $('retry').onclick = () => pending && command(pending);
   // Workspace history stores navigation only. Record drafts keep their existing scoped storage.
   function beginNavigation(kind = 'change') {
+    proposalAiUi?.invalidate();
     navigationPushPending = kind !== 'search' || !navigationSearchBatch;
     navigationSearchBatch = kind === 'search';
   }
@@ -679,6 +683,7 @@
     rememberUrl();
     if (next.area !== undefined) {resetNext(); load();} else render();
   });
+  @include('enterprise.proposal-ai-script')
   load();
 })();
 </script>
