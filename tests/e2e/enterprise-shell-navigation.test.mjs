@@ -44,7 +44,7 @@ const handlers = between(
 const dispatch = between(
     shell,
     "  document.addEventListener('enterprise:navigate'",
-    "  load();\n})();",
+    "  @include('enterprise.proposal-ai-script')",
 );
 const composerSource = between(
     next,
@@ -97,6 +97,7 @@ function fixture(mode = "private") {
         Blob,
         TextEncoder,
         console,
+        proposalAiUi: null,
         location: url,
         navigation: new URLSearchParams(
             mode === "sample" ? url.hash.slice(1) : url.search,

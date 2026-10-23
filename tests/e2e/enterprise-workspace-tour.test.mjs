@@ -265,6 +265,7 @@ function loadFixture() {
         navigation: new URLSearchParams("section=projects"),
         homeGeneration: 0,projectCatalog:null,projectCatalogGeneration:0,workMapBuilding:"",queuedPlan:null,loadProjectCatalog(){},
         homeArea: "a1",
+        proposalAiUi: null,
         $: (id) => {
             if (!nodes.has(id))
                 nodes.set(id, {
