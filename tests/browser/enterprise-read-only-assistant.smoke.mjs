@@ -59,7 +59,47 @@ for (const [engine, launcher] of Object.entries({chromium,webkit})) {
             records.push({engine,name,geometry,checks:'keyboard submit, ID-only request, reset/late response, cost math label, source URL, tour, financial-role loss'});
             await context.close();
         }
+        const page = await browser.newPage({viewport:{width:1440,height:1000}});
+        await page.setContent(html);
+        await page.evaluate(()=>{document.getElementById('read-only-assistant').hidden=false;document.getElementById('read-only-building-field').hidden=false;});
+        for (const [name,forcedColors,colorScheme] of [['normal-light','none','light'],['normal-dark','none','dark'],['forced-light','active','light'],['forced-dark','active','dark']]) {
+            await page.emulateMedia({forcedColors,colorScheme});
+            const controls=[];
+            for (const id of ['read-only-intent','read-only-building']) {
+                const control=page.locator('#'+id);
+                const paint=await control.evaluate(async node=>{
+                    const s=getComputedStyle(node),source=s.backgroundImage;
+                    if (!source.startsWith('url(')) throw new Error('A painted SVG disclosure is required');
+                    const image=new Image();image.src=source.slice(5,-2);await image.decode();
+                    const canvas=document.createElement('canvas');canvas.width=12;canvas.height=8;const ctx=canvas.getContext('2d');ctx.drawImage(image,0,0);
+                    const pixels=ctx.getImageData(0,0,12,8).data;let arrow=[0,0,0,0];
+                    for(let i=0;i<pixels.length;i+=4) if(pixels[i+3]>arrow[3]) arrow=[...pixels.slice(i,i+4)];
+                    const before={color:s.color,border:s.borderColor};node.disabled=true;
+                    const disabled={color:getComputedStyle(node).color,border:getComputedStyle(node).borderColor};node.disabled=false;
+                    return{height:node.getBoundingClientRect().height,scheme:s.colorScheme,background:s.backgroundColor,arrow,before,disabled,forced:matchMedia('(forced-colors:active)').matches};
+                });
+                assert.ok(paint.height>=44);assert.ok(paint.arrow[3]>200);
+                if(forcedColors==='none') assert.equal(paint.scheme,'light','Normal dark preference retains the approved light control palette');
+                if(paint.forced){assert.notEqual(paint.before.color,paint.disabled.color);assert.notEqual(paint.before.border,paint.disabled.border);}
+                const path=resolve(evidence,engine+'-'+name+'-'+id+'.png');const png=await control.screenshot({path});
+                const raster=await page.evaluate(async imageSource=>{
+                    const image=new Image();image.src=imageSource;await image.decode();
+                    const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;const ctx=canvas.getContext('2d');ctx.drawImage(image,0,0);
+                    const pixel=(x,y)=>[...ctx.getImageData(x,y,1,1).data].slice(0,3);
+                    const bg=pixel(image.width-8,Math.floor(image.height/2));
+                    const lum=rgb=>rgb.map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4}).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
+                    const ratio=rgb=>(Math.max(lum(bg),lum(rgb))+.05)/(Math.min(lum(bg),lum(rgb))+.05);
+                    let caret=bg;
+                    for(let x=image.width-24;x<image.width-12;x++)for(let y=Math.floor(image.height/2)-4;y<Math.floor(image.height/2)+4;y++){const p=pixel(x,y);if(ratio(p)>ratio(caret))caret=p;}
+                    return{backgroundPixel:bg,caretPixel:caret,contrast:ratio(caret),measurement:'Actual CSS-painted selector screenshot; not standalone decoded SVG'};
+                },'data:image/png;base64,'+png.toString('base64'));
+                assert.ok(raster.contrast>=3,JSON.stringify({engine,name,id,paint,raster}));
+                controls.push({id,path,...paint,...raster});
+            }
+            records.push({engine,name,controls,checks:'Actual native selector SVG paint, light default, normal/forced light/dark contrast, disabled GrayText, 44px target'});
+        }
+        await page.close();
     } finally {await browser.close();}
 }
 await writeFile(resolve(evidence,'verification.json'),JSON.stringify({fixture:'Fictional local UI with actual product partials; read API stubbed; no live provider or production acceptance.',records},null,2));
-console.log(`PASS ${records.length} actual-markup Chromium/WebKit viewport cases. Fictional local API only.`);
+console.log(`PASS ${records.length} actual-markup Chromium/WebKit viewport/palette cases. Fictional local API only.`);

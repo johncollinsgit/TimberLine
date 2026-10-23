@@ -12,5 +12,19 @@
 @media(max-width:650px){#ask-voice-controls input{font-size:16px}}
 
 #read-only-assistant{margin-bottom:22px}#read-only-answer a{display:inline-block;min-height:44px;padding:10px 0;overflow-wrap:anywhere}#read-only-answer{overflow-wrap:anywhere}#read-only-answer summary{min-height:44px;cursor:pointer}#read-only-form{max-width:650px}
-/* WebKit's native menulist ignores min-height; retain a visible disclosure at a usable size. */
-#read-only-form select{appearance:none;min-height:44px;height:44px;padding-right:32px;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 17px) 19px,calc(100% - 12px) 19px;background-size:5px 5px;background-repeat:no-repeat}
+/* Use the approved Enterprise system-palette disclosure at WebKit's usable target size. */
+#read-only-form select:not([multiple]){
+  -webkit-appearance:none;appearance:none;min-height:44px;height:44px;color-scheme:light;
+  padding:10px 36px 10px 11px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' style='color-scheme:light%20dark'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='CanvasText' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 12px center;background-size:12px 8px;
+}
+@media(forced-colors:active){
+  #read-only-form select:not([multiple]){color-scheme:light dark;background-color:Canvas;color:CanvasText;border-color:ButtonText}
+  #read-only-form select:disabled:not([multiple]){color:GrayText;border-color:GrayText}
+}
+@media(forced-colors:active) and (prefers-color-scheme:dark){
+  #read-only-form select:not([multiple]){
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' style='color-scheme:dark'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='CanvasText' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  }
+}
