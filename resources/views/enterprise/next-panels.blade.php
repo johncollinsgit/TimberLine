@@ -13,8 +13,9 @@
 </section>
 <section id="ask" class="next-panel" hidden>
   <h2>Ask Everbranch</h2><p class="subtle">Signed in as {{ $enterprisePresentation['identity']['userName'] }} · {{ $enterpriseRole ?? 'current authorized role' }}. Answers use your selected workspace and current permissions.</p>
-  <p class="caption">Answers use server-checked records and links. Approved model access can prioritize those sources. Chat cannot send email or perform work changes.</p>
-  <div class="ask-grid"><div class="panel"><div id="chat-log" class="chat-log" role="log" aria-live="polite"><p class="caption">Ask about visible requests, project status or recorded plans. Each turn checks current access. Chat is per page; old answers are not reused as evidence.</p></div>
+  <p class="caption" id="ask-model-caption">Answers use server-checked records and links. Approved model access can prioritize those sources. Chat cannot send email or perform work changes.</p>
+  @include('enterprise.read-only-assistant')
+  <div class="ask-grid"><div class="panel" id="generated-ask-panel"><div id="chat-log" class="chat-log" role="log" aria-live="polite"><p class="caption">Ask about visible requests, project status or recorded plans. Each turn checks current access. Chat is per page; old answers are not reused as evidence.</p></div>
   <form id="ask-form" class="stack ask-composer"><label>Message Ask Everbranch<textarea id="ask-question" maxlength="1500" required placeholder="What is planned in this workspace?"></textarea></label><button class="button primary" type="submit" id="ask-submit">Ask</button></form></div>
   @include('enterprise.voice-pane')
   <div class="panel stack" id="email-context-panel" @if($enterpriseSample) hidden @endif><h3>Email in your context</h3><p class="caption" id="mailbox-status">No delivery transport connected. No mailbox messages are read or sent.</p>

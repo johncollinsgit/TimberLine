@@ -1,3 +1,15 @@
+## Read-only COO assistant candidate (October 23)
+
+The dedicated private read-only assistant uses existing current WorkspaceAccess,
+Briefing, Resources, RequestWorkflow, Operations, Planning and WorkGraph reads.
+Keep its rollout independent from paid Ask/voice/email flags. Costs remain
+owner/admin-only; estimates are not approved budgets, saved building IDs are
+required for building counts, and no staffing capacity is inferred. Every answer
+is ephemeral and current-scope checked. Do not enable paid providers through this
+feature: shared aggregate $5 reservation/reconciliation and specific provider
+approval are separate prerequisites. See
+[the source/acceptance contract](docs/operations/enterprise-read-only-assistant.md).
+
 ## Enterprise work-table and building-link follow-up (October 23; source candidate)
 
 Projects and requests use the available work canvas, with sortable fields from

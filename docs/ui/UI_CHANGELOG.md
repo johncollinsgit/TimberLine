@@ -1,3 +1,7 @@
+## 2026-10-23 — Read-only COO record checks (separate source candidate)
+
+The private Ask pane can offer explicit current-work, saved-building and recorded-cost checks behind a new default-off flag. Building counts use authorized saved IDs only. Owner/admin cost comparisons retain integer inputs, currencies and estimate/recorded-cost basis; they do not claim approved budgets or staffing capacity. Source records and calculation inputs are clickable. Scope changes and denied access clear evidence; matching tour copy targets the new controls. No paid model, voice, memory, send or work-write capability is activated. Local fictional desktop/iPad/mobile/reflow checks are separate from deployed acceptance.
+
 ## 2026-10-23 — Compact Enterprise header, explicit building links and approved logo (source candidate)
 
 - Replace the large demo banner with a compact workspace identity, discreet sample-data label, expandable help and Tour controls. Proposal uses only the existing authorized published-review context.

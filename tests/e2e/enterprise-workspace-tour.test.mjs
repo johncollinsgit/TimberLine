@@ -489,3 +489,15 @@ test("active guide hides external controls for a native drawer and adds one acce
     context.active=false;context.workDrawer.open=true;context.sync();assert.equal(notes.length,0);
     assert.equal(context.paints,4);assert.equal(context.refreshes,4);
 });
+
+test('read-only assistant tour describes only current permitted record checks and financial access', () => {
+    const {tour: controller} = fixture();
+    controller.update({transport:{mode:'private'}, area:'a', data:{areas:[{id:'a',name:'Synthetic Operations'}], projects:[],requests:[],features:{read_only_assistant:true,read_only_costs:false,resources:true}}});
+    const scene = controller.describe(6, {});
+    assert.equal(scene.target, 'read-only-assistant');
+    assert.match(scene.text, /no changes or paid AI calls/);
+    assert.match(scene.cards[2][1], /unavailable for your current role/);
+    assert.equal(controller.links(6)[0].available, true);
+    controller.update(null);
+    assert.equal(controller.links(6)[0].available, false);
+});

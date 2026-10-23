@@ -38,6 +38,7 @@ on:
       - 'tests/Feature/LeesMcRaeCampusDemoTest.php'
       - 'tests/e2e/enterprise-*'
       - 'tests/browser/enterprise-voice-jobs.smoke.mjs'
+      - 'tests/browser/enterprise-read-only-assistant.smoke.mjs'
       - 'tests/Support/enterprise-https-router.php'
       - 'tests/Support/enterprise-browser-voice-provider.php'
       - 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php'
@@ -102,12 +103,16 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Check private transport and isolated sample contracts
-        run: node --test tests/e2e/enterprise-transport.test.mjs tests/e2e/enterprise-reviewer-sample.test.mjs tests/e2e/enterprise-workspace-tour.test.mjs tests/e2e/enterprise-procedures-ui.test.mjs tests/e2e/enterprise-resource-presentation.test.mjs tests/e2e/enterprise-resource-history-time.test.mjs tests/e2e/enterprise-buildings-map-state.test.mjs tests/e2e/enterprise-request-building.test.mjs tests/e2e/enterprise-tour-position.test.mjs tests/e2e/enterprise-work-table-drawer.test.mjs tests/e2e/enterprise-shell-navigation.test.mjs tests/e2e/enterprise-preference-lifecycle.test.mjs tests/e2e/enterprise-theme.test.mjs tests/e2e/enterprise-executive.test.mjs tests/e2e/enterprise-role-preview.test.mjs tests/js/enterprise-sample-voice.test.mjs tests/js/enterprise-usage.test.mjs tests/e2e/ai-voice-conversation.test.mjs tests/e2e/enterprise-voice-jobs.test.mjs
+        run: node --test tests/e2e/enterprise-transport.test.mjs tests/e2e/enterprise-reviewer-sample.test.mjs tests/e2e/enterprise-workspace-tour.test.mjs tests/e2e/enterprise-procedures-ui.test.mjs tests/e2e/enterprise-resource-presentation.test.mjs tests/e2e/enterprise-resource-history-time.test.mjs tests/e2e/enterprise-buildings-map-state.test.mjs tests/e2e/enterprise-request-building.test.mjs tests/e2e/enterprise-read-only-assistant.test.mjs tests/e2e/enterprise-tour-position.test.mjs tests/e2e/enterprise-work-table-drawer.test.mjs tests/e2e/enterprise-shell-navigation.test.mjs tests/e2e/enterprise-preference-lifecycle.test.mjs tests/e2e/enterprise-theme.test.mjs tests/e2e/enterprise-executive.test.mjs tests/e2e/enterprise-role-preview.test.mjs tests/js/enterprise-sample-voice.test.mjs tests/js/enterprise-usage.test.mjs tests/e2e/ai-voice-conversation.test.mjs tests/e2e/enterprise-voice-jobs.test.mjs
       - name: Check voice lifecycle and scoped job lookup without providers
         run: |
           node --test tests/e2e/enterprise-voice-shell-scope.test.mjs
           php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseVoiceJobsTest.php tests/Feature/Enterprise/EnterpriseVoiceAssistantTest.php --compact --display-warnings
       - run: npm run build:enterprise
+      - name: Check read-only assistant controls without a provider
+        env:
+          ENTERPRISE_EVIDENCE: test-results/enterprise/read-only-assistant
+        run: node tests/browser/enterprise-read-only-assistant.smoke.mjs
       - name: Check shared reviewer rendering without account or route authority
         run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseReviewerRenderTest.php tests/Feature/Enterprise/EnterpriseResourcePresentationTest.php tests/Feature/Enterprise/EnterpriseReviewerTrialEntryTest.php tests/Feature/EnterpriseReviewerPublicTest.php tests/Feature/LeesMcRaeCampusDemoTest.php --compact --display-warnings
       - name: Check immutable proposal and version-bound campus review policies

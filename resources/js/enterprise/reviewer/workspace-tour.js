@@ -123,7 +123,7 @@
                 add("projects", "Projects", "projects", Boolean(p), p?.id);
             }
             if (index === 6) {
-                add("ask", "Open Ask Everbranch and optional Talk", "ask", feature("ask") && feature("voice_jobs"));
+                add("ask", feature("read_only_assistant") ? "Check current records" : "Open Ask Everbranch and optional Talk", "ask", feature("read_only_assistant") || (feature("ask") && feature("voice_jobs")));
             }
             return items;
         }
@@ -236,6 +236,12 @@
                         : 'Ask "Where is it?" or "Who is assigned?" against the chosen job. Deterministic record lookup is not generative AI; unavailable facts are not invented.'],
                     ["Optional Talk · draft previews", "Talk requires your own button press and microphone permission when supported. Email/text previews stay Draft / not sent; no delivery is established."],
                 ];
+            if (index === 6 && feature("read_only_assistant"))
+                records = [
+                    ["Choose a check", "Open Ask Everbranch, choose an overview or saved building, then check current records."],
+                    ["Inspect the evidence", "Open a source to see the saved record. Building counts use explicit links; checked results may be incomplete."],
+                    ["Recorded costs", feature("read_only_costs") ? "Compare checked estimates with recorded costs by project and currency. An estimate is not an approved budget." : "Financial records are unavailable for your current role. No additional access is granted."],
+                ];
             const copy = [
                 "Open the campus overview to find current work. Use Buildings when you want to start with a location.",
                 "Scan or sort Requests, then open a row for details. Close or Escape returns to the same list.",
@@ -243,12 +249,15 @@
                 "Scan or sort Projects, then open a row for details. Close or Escape returns to the same list.",
                 "Open People & contractors to review available contacts. Use Assets to check recorded equipment holders and locations.",
                 "Open Roll Call to review priorities and record a decision. Confirm the owner and date before changing a task.",
-                feature("ask") && feature("voice_jobs")
+                feature("read_only_assistant")
+                    ? "Choose a record check, then inspect its sources. This read-only assistant makes no changes or paid AI calls."
+                    : feature("ask") && feature("voice_jobs")
                     ? "Open Ask Everbranch and enter a job question. Inspect the source record before acting on the answer."
                     : "Ask Everbranch job lookup is unavailable in this workspace. Continue with the request or project screens.",
             ];
             return {
                 text: copy[index],
+                ...(index === 6 && feature("read_only_assistant") ? {title: "Check current records", target: "read-only-assistant", targets: ["read-only-intent", "read-only-answer"]} : {}),
                 role: `Signed in: ${boot.identity.userName || "current user"} · Current workspace: ${workspace?.name || "unavailable"}`,
                 cards: records,
                 detail: ready()

@@ -1,3 +1,14 @@
+## Read-only COO record assistant (October 23; separate source candidate)
+
+`ENTERPRISE_READ_ONLY_ASSISTANT_ENABLED` defaults off. When explicitly enabled,
+the private Ask pane can check current briefings, saved-building request links,
+and owner/admin-only recorded costs versus estimates through a dedicated
+zero-provider endpoint. Its integer subtotals are bounded checked-record
+comparisons, not approved budgets or staffing capacity. Each input has a current
+server-generated source link; no memory, sends or work mutations are added.
+See [the read-only assistant contract](docs/operations/enterprise-read-only-assistant.md).
+This candidate is separate from the current Enterprise deployment freeze.
+
 ## Enterprise usability follow-up (October 23; source candidate)
 
 The shared Enterprise renderer now uses full-width project/request tables and

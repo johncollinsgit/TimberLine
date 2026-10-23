@@ -8,6 +8,7 @@ return [
     'writes_enabled' => (bool) env('ENTERPRISE_WRITES_ENABLED', false),
     'collaboration_enabled' => (bool) env('ENTERPRISE_COLLABORATION_ENABLED', false),
     'planning_enabled' => (bool) env('ENTERPRISE_PLANNING_ENABLED', false),
+    'read_only_assistant_enabled' => (bool) env('ENTERPRISE_READ_ONLY_ASSISTANT_ENABLED', false),
     'ask_enabled' => (bool) env('ENTERPRISE_ASK_ENABLED', false),
     'voice_jobs_enabled' => (bool) env('ENTERPRISE_VOICE_JOBS_ENABLED', false),
     'voice_generation_enabled' => (bool) env('ENTERPRISE_VOICE_GENERATION_ENABLED', false),

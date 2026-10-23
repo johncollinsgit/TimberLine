@@ -1,3 +1,4 @@
+  @include('enterprise.read-only-assistant-script')
   const nextBase = urls.enterprise, teamBase = urls.team;
   const draftPrefix = `everbranch-enterprise-draft:${transport.mode === 'sample' ? 'sample:' : ''}${workspace}:${viewer}:`;
   const selectionMemory = new Map(), noteBusy = new Set(), planningReceipts = new Map(), planningUncertain = new Set();
@@ -19,6 +20,7 @@
     transport.replace(url);
   }
   function resetNext() {
+    resetReadOnlyAssistant();
     if(typeof resetVoice==='function')resetVoice();
     if (typeof resetOperations === 'function') resetOperations();
     discussionGeneration++; activeDiscussionKey = null;
@@ -30,8 +32,12 @@
   }
   function renderNext() {
     if(typeof renderVoice==='function')renderVoice();
-    $('ask-nav').hidden = !data.features?.ask;
-    if (section === 'ask' && !data.features?.ask) section = 'requests';
+    renderReadOnlyAssistant();
+    $('generated-ask-panel').hidden = !data.features?.ask;
+    $('ask-model-caption').hidden = !data.features?.ask;
+    $('email-context-panel').hidden = !data.features?.email_drafts;
+    $('ask-nav').hidden = !data.features?.ask && !data.features?.read_only_assistant;
+    if (section === 'ask' && !data.features?.ask && !data.features?.read_only_assistant) section = 'requests';
     $('ask').hidden = section !== 'ask';
     $('work').hidden = ['ask', 'contractors'].includes(section);
     document.querySelectorAll('[data-section]').forEach(b => b.classList.toggle('active', b.dataset.section === section));

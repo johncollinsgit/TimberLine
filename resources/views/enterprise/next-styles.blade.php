@@ -10,3 +10,7 @@
 
 #ask-voice-controls>section{width:100%;min-width:0}#ask-voice-controls pre{overflow-wrap:anywhere;font:14px/1.7 inherit}#ask-voice-controls input,#ask-voice-controls button{min-height:44px}#ask-voice-controls [aria-label="Exact draft recipient"]{display:block;width:100%;margin:12px 0}
 @media(max-width:650px){#ask-voice-controls input{font-size:16px}}
+
+#read-only-assistant{margin-bottom:22px}#read-only-answer a{display:inline-block;min-height:44px;padding:10px 0;overflow-wrap:anywhere}#read-only-answer{overflow-wrap:anywhere}#read-only-answer summary{min-height:44px;cursor:pointer}#read-only-form{max-width:650px}
+/* WebKit's native menulist ignores min-height; retain a visible disclosure at a usable size. */
+#read-only-form select{appearance:none;min-height:44px;height:44px;padding-right:32px;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 17px) 19px,calc(100% - 12px) 19px;background-size:5px 5px;background-repeat:no-repeat}

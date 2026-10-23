@@ -109,6 +109,7 @@ Route::middleware(['auth', 'verified', ResolveWorkspace::class, \App\Http\Middle
     Route::get('/enterprise/requests/{id}/history', [EnterpriseController::class, 'history'])->whereUuid('id')->name('enterprise.history');
     Route::get('/enterprise/planning', [\App\Enterprise\PlanningController::class, 'index'])->name('enterprise.planning');
     Route::post('/enterprise/planning', [\App\Enterprise\PlanningController::class, 'save'])->name('enterprise.planning.save');
+    Route::post('/enterprise/read-only-assistant', \App\Enterprise\ReadOnlyAssistantController::class)->middleware('throttle:20,1,enterprise-read-only-assistant:')->name('enterprise.read_only_assistant');
     Route::post('/enterprise/ask', [\App\Enterprise\AskController::class, 'ask'])->middleware('throttle:20,1,enterprise-ask:')->name('enterprise.ask');
     Route::get('/enterprise/mailboxes', [\App\Enterprise\EmailController::class, 'mailboxes'])->name('enterprise.mailboxes');
     Route::get('/enterprise/gmail', [\App\Enterprise\GmailController::class, 'status'])->name('enterprise.gmail.status');
