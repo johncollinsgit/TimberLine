@@ -69,12 +69,17 @@ function proposalTabsCapture(string $name, $response): void
     file_put_contents(base_path('.tmp/proposal-tabs/'.$name.'-headers.json'), json_encode($response->headers->all(), JSON_THROW_ON_ERROR));
 }
 
-test('private password gate shows only the exact college graphic without exposing the saved proposal', function (bool $college): void {
+test('private password gate shows only the exact college graphic without exposing the saved proposal', function (bool $college, bool $debug): void {
+    config(['app.debug' => $debug]);
+    $privateIntro = 'private-intro-'.Str::uuid();
+    $privateItem = 'private-service-'.Str::uuid();
+    $payload = $this->tabDraft->payload;
+    $payload['intro'] .= "\n".$privateIntro;
+    $payload['items'][0]['description'] .= "\n".$privateItem;
     if (! $college) {
-        $payload = $this->tabDraft->payload;
         $payload['client']['reference'] = 'another-client';
-        $this->tabDraft->update(['payload' => $payload]);
     }
+    $this->tabDraft->update(['payload' => $payload]);
     ['version' => $version, 'token' => $token] = proposalTabsPublish($this, 'reviewer');
     $url = 'https://evergrove.test/service-proposals/'.$token;
     $response = $this->get($url)->assertOk();
@@ -91,12 +96,19 @@ test('private password gate shows only the exact college graphic without exposin
         $response->assertSee('lmc-login-settle 2800ms', false)->assertSee('prefers-reduced-motion:no-preference', false);
         proposalTabsCapture('password-gate', $response);
     }
-    $this->get(str_replace('evergrove.test', 'foreign.test', $url))->assertNotFound()->assertDontSee('lmc-login__mark', false);
+    $foreign = $this->get(str_replace('evergrove.test', 'foreign.test', $url))->assertNotFound();
     $version->update(['revoked_at' => now()]);
-    $this->get($url)->assertGone()->assertDontSee('lmc-login__mark', false);
+    $revoked = $this->get($url)->assertGone();
+    foreach ([$foreign, $revoked] as $rejected) {
+        // Debug pages quote test source; assert rendered elements rather than source substrings.
+        $rejectedDom = proposalTabsDom($rejected->getContent());
+        expect($rejectedDom->query('//*[contains(concat(" ", normalize-space(@class), " "), " lmc-login__mark ")] | //*[@role="img"][@aria-label="Lees-McRae College"]')->length)->toBe(0)
+            ->and($rejectedDom->query('//input[@type="password"] | //input[@data-proposal-section] | //input[@name="reviewer_name"] | //input[@name="scenario[name]"]')->length)->toBe(0);
+        $rejected->assertDontSee($privateIntro, false)->assertDontSee($privateItem, false);
+    }
     Http::assertNothingSent();
     Mail::assertNothingSent();
-})->with([true, false]);
+})->with(['college non-debug' => [true, false], 'other non-debug' => [false, false], 'college debug' => [true, true], 'other debug' => [false, true]]);
 
 test('owner preview renders native section controls with the exact approved graphic only for the college', function (): void {
     $path = 'https://evergrove.test/owner-workspaces/'.$this->tabTenant->slug.'/proposals/'.$this->tabDraft->id.'/preview';
