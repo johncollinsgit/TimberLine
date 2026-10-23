@@ -1,3 +1,24 @@
+## Unified Enterprise and proposal review candidate (October 22; not released)
+
+The isolated source candidate now imports proposal PR475 into current-main
+Enterprise. Real server-persisted review names/comments bind to an immutable
+proposal version and exact fictional campus build/page; they never grant campus
+membership. Dedicated client and owner runtimes preserve singleton database,
+key/storage/session boundaries. Hosted provisioning and operational acceptance
+have not run; client and owner destinations require independent release gates.
+See [the unified review runbook](docs/operations/enterprise-proposal-review-release.md)
+for source, generated MySQL baseline, browser, protected release and hosted
+acceptance gates. Provider activation remains separate.
+
+## Earlier Enterprise integration rehearsal
+
+The isolated release candidate combines current main `084bbb1` with reviewed
+Enterprise source `904ebe7`. Fleet application files match main; Enterprise
+application files match their reviewed source. Package scripts retain both the
+broader Fleet tests and Enterprise builds. No Enterprise rollout, credentials,
+permissions or live provisioning follow from this merge rehearsal. See
+[integration and release gates](docs/operations/enterprise-release-integration.md).
+
 ## Synthetic Fleet Calendar presentation (2026-10-22; source candidate)
 
 The isolated browser demo adds three synthetic Calendar examples linked by job
@@ -27,6 +48,127 @@ adds a seven-step tour, overdue/upcoming/completed maintenance and illustrative
 truck budgets. No provider activation, policy approval, billing, permissions or
 vehicle limit is changed by this source update. Verify the protected release and
 `/ready` before reporting it live.
+
+## Enterprise private generated conversation (source candidate, October 22)
+
+The same Ask pane now optionally connects the reviewed disabled voice generation
+adapter: bounded encrypted server history, current source revalidation, pinned
+scope cancellation, explicit generated/simulated/record-backed labels and exact
+human-recipient message previews without a send executor. The existing usage
+ledger identifies Voice answer separately. Actual-shell acceptance fakes only
+the provider and speech devices, preserving authentication and reservations.
+The controlled shared trial still refuses generation; credentials, hosted
+presenter access, shared spend approval and hardware acceptance remain pending.
+Read [the concrete approval packet](docs/operations/enterprise-runtime-approval-packet.md).
+
+## Enterprise voice finale and admin usage (source candidate, October 22)
+
+The existing Ask pane now integrates explicit Talk, record-backed current-job
+lookup, source/detail navigation and preview-only messages. The final tour scene
+opens that pane without starting capture or sending. Private usage aggregates the
+existing authorized ledger; public department figures are explicitly fictional.
+No live generative AI, messages, hosted client or hardware acceptance is implied.
+Read [the boundary and checks](docs/operations/enterprise-voice-finale-and-usage.md).
+Department-head/COO launch gates remain a reviewed design proposal in
+[the activation plan](docs/architecture/enterprise-department-activation-design.md),
+with no live permission or billing changes.
+## Enterprise executive and visibility previews (source candidate, October 22)
+
+The same public sample now defaults fresh tabs to a clearly labeled read-only
+COO demonstration overview, with configured simulated workspace stages,
+record-derived drilldowns and separate uncommitted software rollout figures.
+No real account, campus metric or billing is established. The private People
+screen has a current-owner/admin read-only existing-member projection, intersecting
+both actors' fresh department and native private-record ACLs without impersonation.
+Map/search filters now agree and Back/Forward retains scoped navigation/drafts.
+Shared contrast and sample-only sourced college colors preserve Everbranch branding.
+Read [the preview boundaries](docs/operations/enterprise-executive-and-member-preview.md).
+Hosted acceptance, access grants and backup/recovery remain separately gated.
+
+## Enterprise priorities and procedural handoffs (source candidate, October 22)
+
+The existing campus renderer now has a source-backed priorities overview and
+guided exploration of actual screens, with persistent compact top controls,
+Hide/Show, current-step highlights and an unavailable Open proposal control
+while the separate proposal workspace is in planning. Public examples are
+explicit browser simulations; private screens recheck current permissions.
+Reporting and certificate renewal reuse the existing tested panels. A separate
+default-off Finance packet register adds encrypted invoice/fund/source references,
+assigned review, explicit handoff, review invalidation and manual external-process
+evidence for existing owner/admin roles. It executes no payment and validates no
+fund balance, donor policy or institutional approval sequence. Read
+[priorities and acceptance](docs/operations/enterprise-priorities-demo.md) and
+[Finance packets](docs/operations/enterprise-finance-packets.md). No hosted client,
+provider connection, access grant, recovery activation or deployment follows
+from this source candidate.
+
+The default-off installable web-app foundation supplies canonical per-mount
+manifest/start/scope and existing Everbranch icons, accessible install help and
+manual update checks. Active saves/uploads block refresh; an explicit review is
+required before reload, retaining existing draft/receipt and unsaved-work guards.
+No service worker, offline sync, GPS, push or device installation is included.
+Read [the web-app boundary](docs/operations/enterprise-web-app.md).
+
+## Enterprise integrations under a trusted application prefix (source candidate, October 22)
+
+Gmail callbacks and controlled-trial pages/links now derive their origin and
+prefix from validated server configuration. OAuth and trial authority include
+the mount context; moving a pending operation to another mount fails closed.
+The source supports `/enterprise-campus` without enabling any provider or
+changing the separate trial-only mount. See
+[the mount runbook](docs/operations/enterprise-same-origin-trial-mount.md).
+The public tour receives a trial destination only from an explicitly approved,
+default-empty same-origin configuration; publishing a link never enables a
+provider or resolves operational records during public rendering.
+Actual hosting, Google consent, service credentials, recipients and live sends
+remain separately gated. Tests use fake providers; no operational connection,
+paid call or recovery capability is established by this candidate.
+
+## Reusable Enterprise client setup and procedural records (source candidate, October 22)
+
+The isolated runtime now has candidate trusted per-client runtime roots and
+validated, exact-hash plan/apply/status provisioning for tenant structure,
+departments, branding, approved location catalogs and inert workflow defaults.
+Provisioning creates no identity, membership, entitlement, provider or billing
+grant. See [client provisioning](docs/operations/enterprise-client-provisioning.md).
+Hosting and initial verified owner access still require the explicit actions in
+[the persistent-workspace proposal](docs/operations/enterprise-persistent-workspace-approval.md).
+No operational backup or restorability is established; recovery remains plan-first.
+
+Default-off manager features add a restricted contractor certificate metadata
+register with reviewed replacements and a derived internal reminder queue, plus
+quarter/date-window CSV/JSON exports of authorized current facts and recorded
+events. No external alerts, insurance coverage policy, fiscal-quarter template
+or automatic report submission is inferred. Read
+[certificate procedures](docs/operations/enterprise-contractor-certificates.md) and
+[period exports](docs/operations/enterprise-period-reports.md).
+
+## Enterprise campus operations candidate (2026-10-22; draft, disabled)
+
+The separate Enterprise app/database runtime now has candidate canonical task
+ownership, interruption/resumption, explicit handoffs, manager-verified checklist
+completion, resources/custody/reservation conflicts, requester-only public updates,
+permission-filtered search and workspace preferences, Roll Call/meeting decisions
+and regenerated one-page PDFs. Shared renderer adapters let an isolated public
+sample use the same shell/workflow UI without employee resolution or provider IO.
+A six-scene public tour previews email in-app and never sends. A separately
+gated, signed-in demonstration tour opens the current authorized server-backed
+screens without installing the sample adapter or mutating records. Read the
+[requirement traceability](docs/architecture/enterprise-requirement-traceability.md)
+for attributed Gemini Quick Notes, owner proposals, procedural recommendations
+and remaining quarterly-report, insurance-expiry and Finance/AP gaps.
+The controlled server-held
+synthetic trial is separate, default-off, with a shared $5 lifetime reservation
+ledger, exact confirmations, expiring links and quarantined private uploads.
+No provider credentials/grants, real recipients, paid calls or deployment are
+established by this source. All new rollout flags default off. Read
+[the milestone boundaries](docs/architecture/enterprise-reviewer-milestones.md),
+[CI acceptance gates](docs/operations/enterprise-ci.md),
+[reviewer presentation](docs/operations/enterprise-reviewer-presentation.md),
+[Roll Call](docs/operations/enterprise-roll-call.md) and
+[controlled trial](docs/operations/enterprise-reviewer-trial.md) before activation.
+The protected dependency stack is PR458 → PR459 → PR461 → this candidate;
+PR460 is unrelated Fleet work. Release requires reviewed GitHub gates and Forge.
 
 ## Fictional browser POS demonstration (2026-10-21; source candidate)
 
@@ -3013,3 +3155,56 @@ and DKIM are verified. Approved simulator resources are being configured.
 Platform SMTP remains SendGrid; actual AWS delivery/application event acceptance,
 runtime credentials, production access and a separate platform retry/event
 contract remain required before completion.
+
+## Enterprise isolated application (source candidate, 2026-10-21)
+
+`apps/enterprise` composes a separate runtime, database/install path, configuration
+and private storage over canonical tenant/membership and Teams components.
+Default-disabled workspace/request triage/assignment/progress/completion reuses
+native work and audit tables with shared graph-level department fences. No retail
+deployment, production grants, billing or providers are activated. See
+`docs/operations/everbranch-enterprise.md` for boundaries, checks and launch gaps.
+
+October 22 source increment adds separately default-off larger project details,
+private resumable attachments/notes, contractor/date/cost planning, record-backed
+Ask Everbranch chat and a fake-tested own-mailbox preview/confirmation contract.
+No production model/mailbox binding, provider credentials, sends or grants exist.
+See `docs/architecture/enterprise-next-slice.md`; tablet checks are browser viewport
+simulation, not physical iPad acceptance.
+## Enterprise operating workflow source candidate (October 22)
+
+`/projects/workspace` in the separate Enterprise runtime provides a full-screen
+React Flow workspace, bounded screen/form design, digest-reviewed activation and
+persisted human runs with current authorization. Home/PDF use authorized as-of
+facts with explicit coverage. Enterprise's own Vite artifact, encrypted AI usage
+reservations and empty native-shaped mailbox DDL preserve the independent
+application/database boundary. No credentials, grants, provider calls, sends or
+deployment are created. See `docs/architecture/enterprise-workflow-workspace.md`;
+real provider/scanner and physical iPad acceptance remain separate gates.
+
+The October 22 Gmail increment adds per-user send-only OAuth code with a dedicated
+callback, encrypted token refresh/revocation, exact sender-specific confirmation
+and durable no-retry dispatch. It creates no grants or Google credentials and
+defaults off. John is the intended first mailbox; the approved $1 total synthetic
+AI test budget does not approve credential installation, OAuth consent or real
+messages. The later reviewer trial specifies a service sender without reviewer
+mailbox access and supersedes that allowance with a $5 shared lifetime cap across
+all trial providers; no recipients or credential grants are approved. See
+`docs/operations/enterprise-gmail.md` and `docs/operations/enterprise-integrations.md`.
+## Ask Everbranch job voice prototype (2026-10-22; default-off source)
+
+See `docs/operations/enterprise-voice-jobs.md`. A scoped read-only operational
+job lookup reuses canonical Enterprise task/request access and the existing
+browser capture/playback loop. Optional Talk controls expose bounded sessions,
+explicit interrupt and typed fallback. No tour/header/fixture integration, paid
+provider call, communication send or production activation is included. Shell
+integration and physical iPad/iPhone speech acceptance remain pending; fake
+browser speech is not live AI or acoustic evidence.
+## Reusable service proposals (October 22; draft source, disabled)
+
+`App\Proposals` adds tenant-scoped catalogs/clients/draft templates, owner drafts
+and previews, immutable private password publications, scoped review comments
+and non-binding exact-selection agreement requests. The regular and Enterprise
+owner-lane binding registry and recipient hosts ship empty. No real workspace
+is provisioned or bound; no signature/payment/provider activation is included.
+See [the architecture and acceptance gates](docs/architecture/reusable-proposals.md).

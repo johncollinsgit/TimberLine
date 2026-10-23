@@ -1,0 +1,193 @@
+name: Enterprise isolated runtime
+
+on:
+  pull_request:
+    paths:
+      - 'apps/enterprise/**'
+      - 'app/Enterprise/**'
+      - 'app/Proposals/**'
+      - 'bootstrap/providers.php'
+      - 'app/Foundation/Enterprise*.php'
+      - 'app/Providers/Enterprise*.php'
+      - 'app/Http/Middleware/EnsureEnterpriseRuntime.php'
+      - 'app/Http/Middleware/EnterpriseCsrfToken.php'
+      - 'app/Http/Middleware/EnsureEnterpriseTrialMount.php'
+      - 'app/Http/Middleware/EnsureEnterprisePrefixMount.php'
+      - 'app/Http/Middleware/EnsureEnterpriseClientSilo.php'
+      - 'app/Http/Controllers/LeesMcRaeCampusDemoController.php'
+      - 'app/Services/Team/**'
+      - 'app/Services/AiBranch/ResponsesTransport.php'
+      - 'app/Services/AiBranch/AiBranchProvider.php'
+      - 'app/Policies/Team*.php'
+      - 'config/enterprise.php'
+      - 'config/service_proposals.php'
+      - 'routes/enterprise.php'
+      - 'routes/service-proposals.php'
+      - 'routes/campus-demo.php'
+      - 'resources/data/enterprise/**'
+      - 'resources/views/enterprise/**'
+      - 'resources/views/service-proposals/**'
+      - 'resources/js/enterprise/**'
+      - 'resources/js/ai-voice-conversation.js'
+      - 'vite.enterprise.config.js'
+      - 'scripts/everbranch-team/enterprise-*'
+      - 'scripts/proposals/review-browser.mjs'
+      - 'tests/Feature/Enterprise/**'
+      - 'tests/Feature/Proposals/**'
+      - 'tests/Support/proposal-review-browser*.php'
+      - 'tests/Feature/LeesMcRaeCampusDemoTest.php'
+      - 'tests/e2e/enterprise-*'
+      - 'tests/browser/enterprise-voice-jobs.smoke.mjs'
+      - 'tests/Support/enterprise-https-router.php'
+      - 'tests/Support/enterprise-browser-voice-provider.php'
+      - 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php'
+      - 'tests/Integration/EnterpriseTrialBudgetMySqlConcurrencyTest.php'
+      - 'tests/Integration/EnterpriseClientProvisioningMySqlTest.php'
+      - 'tests/Integration/migration-recovery-manifest.php'
+      - 'phpunit.enterprise.xml'
+      - 'phpunit.team.xml'
+      - '.github/workflows/enterprise-runtime-ci.yml'
+      - '.github/workflows/tests.yml'
+      - '.github/workflows/lint.yml'
+      - 'composer.lock'
+      - 'package-lock.json'
+      - 'package.json'
+      - 'database/migrations/**'
+      - 'docs/operations/enterprise-ci.md'
+      - 'docs/operations/enterprise-voice-*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  enterprise-runtime:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: everbranch_enterprise_ci
+          MYSQL_ROOT_PASSWORD: enterprise-ci-fixture
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -penterprise-ci-fixture"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      ENTERPRISE_DISPOSABLE_MYSQL: '1'
+      ENTERPRISE_DB_DRIVER: mysql
+      ENTERPRISE_DB_HOST: 127.0.0.1
+      ENTERPRISE_DB_PORT: '3306'
+      ENTERPRISE_DB_DATABASE: everbranch_enterprise_ci
+      ENTERPRISE_DB_USERNAME: root
+      ENTERPRISE_DB_PASSWORD: enterprise-ci-fixture
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql, pdo_sqlite, mbstring, fileinfo, gd, zip
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist --no-scripts
+      - name: Prepare empty isolated test environment files
+        run: php -r 'foreach ([".env", "apps/enterprise/.env"] as $path) { if (!is_file($path)) { file_put_contents($path, ""); } }'
+      - run: php apps/enterprise/scripts/lint-schema.php
+      - run: php vendor/bin/phpunit -c phpunit.enterprise.xml --display-warnings
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Check private transport and isolated sample contracts
+        run: node --test tests/e2e/enterprise-transport.test.mjs tests/e2e/enterprise-reviewer-sample.test.mjs tests/e2e/enterprise-workspace-tour.test.mjs tests/e2e/enterprise-procedures-ui.test.mjs tests/e2e/enterprise-resource-presentation.test.mjs tests/e2e/enterprise-shell-navigation.test.mjs tests/e2e/enterprise-preference-lifecycle.test.mjs tests/e2e/enterprise-theme.test.mjs tests/e2e/enterprise-executive.test.mjs tests/e2e/enterprise-role-preview.test.mjs tests/js/enterprise-sample-voice.test.mjs tests/js/enterprise-usage.test.mjs tests/e2e/ai-voice-conversation.test.mjs tests/e2e/enterprise-voice-jobs.test.mjs
+      - name: Check voice lifecycle and scoped job lookup without providers
+        run: |
+          node --test tests/e2e/enterprise-voice-shell-scope.test.mjs
+          php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseVoiceJobsTest.php tests/Feature/Enterprise/EnterpriseVoiceAssistantTest.php --compact --display-warnings
+      - run: npm run build:enterprise
+      - name: Check shared reviewer rendering without account or route authority
+        run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseReviewerRenderTest.php tests/Feature/Enterprise/EnterpriseResourcePresentationTest.php tests/Feature/Enterprise/EnterpriseReviewerTrialEntryTest.php tests/Feature/EnterpriseReviewerPublicTest.php tests/Feature/LeesMcRaeCampusDemoTest.php --compact --display-warnings
+      - name: Check immutable proposal and version-bound campus review policies
+        run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Proposals --compact --display-warnings
+      - name: Check permission-filtered period reports and certificate register
+        run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseContractorCertificatesTest.php tests/Feature/Enterprise/EnterpriseReportExportTest.php tests/Feature/Enterprise/EnterpriseFinancePacketsTest.php tests/Feature/Enterprise/EnterpriseOperationsTest.php --compact --display-warnings
+      - name: Check read-only voice and usage ledger policies without providers
+        run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseVoiceJobsTest.php tests/Feature/Enterprise/EnterpriseUsageOverviewTest.php --compact --display-warnings
+      - name: Check controlled trial pages in the dedicated runtime without providers
+        run: php vendor/bin/pest -c phpunit.enterprise.xml tests/Feature/Enterprise/EnterpriseTrialPagesTest.php --compact --display-warnings
+      - name: Install browser dependencies
+        timeout-minutes: 45
+        run: npx playwright install --with-deps chromium webkit
+      - name: Check persistent Enterprise UI in Chromium and WebKit
+        env:
+          ENTERPRISE_TEST_PHP: php
+          EVERBRANCH_PLAYWRIGHT_MODULE: node_modules/playwright/index.mjs
+        run: |
+          ENTERPRISE_BROWSER_ENGINE=chromium ENTERPRISE_EVIDENCE=test-results/enterprise/chromium node scripts/everbranch-team/enterprise-browser-smoke.mjs
+          ENTERPRISE_BROWSER_ENGINE=webkit ENTERPRISE_EVIDENCE=test-results/enterprise/webkit node scripts/everbranch-team/enterprise-browser-smoke.mjs
+      - name: Check job voice controls with fake speech in Chromium and WebKit
+        env:
+          VOICE_WEBKIT: '1'
+          VOICE_EVIDENCE_DIR: test-results/enterprise/voice-jobs
+        run: node tests/browser/enterprise-voice-jobs.smoke.mjs
+      - name: Check persisted proposal and campus page review in Chromium and WebKit
+        timeout-minutes: 20
+        env:
+          ENTERPRISE_TEST_PHP: php
+          EVERBRANCH_PLAYWRIGHT_MODULE: node_modules/playwright/index.mjs
+        run: |
+          for engine in chromium webkit; do
+            PROPOSAL_BROWSER_ENGINE="$engine" PROPOSAL_BROWSER_EVIDENCE="test-results/enterprise/proposal-review/$engine" node scripts/proposals/review-browser.mjs
+          done
+      - name: Check reviewer tour and shared renderer in Chromium and WebKit
+        timeout-minutes: 15
+        env:
+          ENTERPRISE_TEST_PHP: php
+          EVERBRANCH_PLAYWRIGHT_MODULE: node_modules/playwright/index.mjs
+        run: |
+          for engine in chromium webkit; do
+            ENTERPRISE_BROWSER_ENGINE="$engine" ENTERPRISE_EVIDENCE="test-results/enterprise/reviewer-tour/$engine" node scripts/everbranch-team/enterprise-reviewer-tour-browser.mjs
+            ENTERPRISE_BROWSER_ENGINE="$engine" ENTERPRISE_EVIDENCE="test-results/enterprise/reviewer-shared/$engine" node scripts/everbranch-team/enterprise-reviewer-browser.mjs
+          done
+      - name: Check native Operations Roll Call and Resources in Chromium and WebKit
+        timeout-minutes: 25
+        env:
+          ENTERPRISE_TEST_PHP: php
+          EVERBRANCH_PLAYWRIGHT_MODULE: node_modules/playwright/index.mjs
+          ENTERPRISE_TEST_OPERATIONS: '1'
+          ENTERPRISE_OPERATIONS_SCENARIO: all
+        run: |
+          for engine in chromium webkit; do
+            ENTERPRISE_BROWSER_ENGINE="$engine" ENTERPRISE_EVIDENCE="test-results/enterprise/operations/$engine" node scripts/everbranch-team/enterprise-browser-smoke.mjs
+          done
+      - name: Check priorities walkthrough and public procedural screens
+        timeout-minutes: 15
+        env:
+          ENTERPRISE_TEST_PHP: php
+          EVERBRANCH_PLAYWRIGHT_MODULE: node_modules/playwright/index.mjs
+        run: |
+          for engine in chromium webkit; do
+            ENTERPRISE_BROWSER_ENGINE="$engine" ENTERPRISE_EVIDENCE="test-results/enterprise/priorities/$engine" node scripts/everbranch-team/enterprise-priorities-browser.mjs
+            ENTERPRISE_BROWSER_ENGINE="$engine" ENTERPRISE_EVIDENCE="test-results/enterprise/public-procedures/$engine" node scripts/everbranch-team/enterprise-public-procedures-browser.mjs
+          done
+      - name: Check generated voice in actual private shell with provider-only fake
+        timeout-minutes: 10
+        env:
+          ENTERPRISE_TEST_PHP: php
+          EVERBRANCH_PLAYWRIGHT_MODULE: node_modules/playwright/index.mjs
+          ENTERPRISE_TEST_OPERATIONS: '1'
+          ENTERPRISE_OPERATIONS_SCENARIO: voice-generation
+        run: |
+          for engine in chromium webkit; do
+            ENTERPRISE_BROWSER_ENGINE="$engine" ENTERPRISE_EVIDENCE="test-results/enterprise/voice-generation/$engine" node scripts/everbranch-team/enterprise-browser-smoke.mjs
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: enterprise-ui-${{ github.run_id }}
+          path: test-results/enterprise
+          if-no-files-found: ignore
+          retention-days: 7

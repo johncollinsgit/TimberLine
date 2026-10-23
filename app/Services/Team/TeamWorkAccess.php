@@ -28,6 +28,7 @@ class TeamWorkAccess
         return ['tenant_id' => (string) $tenant->id, 'user_id' => (string) $user->id, 'role' => $roles[(string) $user->id],
             'active' => true, 'verified' => true, 'entitled' => true, 'active_roles' => $roles,
             'verified_user_ids' => $members->whereNotNull('email_verified_at')->map(fn ($member) => (string) $member->id)->values()->all(),
-            'active_user_ids' => array_map('strval', array_keys(array_filter($roles))), 'accessible_field_job_ids' => []];
+            'active_user_ids' => array_map('strval', array_keys(array_filter($roles))), 'accessible_field_job_ids' => [],
+            ...app(\App\Enterprise\WorkspaceAccess::class)->graphContext($tenant)];
     }
 }

@@ -7,6 +7,15 @@ on:
       - main
       - master
       - workos
+      - codex/everbranch-enterprise-intake
+      - codex/enterprise-collaboration-ask
+      - codex/enterprise-workflow-briefing
+      - codex/enterprise-reviewer-operations
+      - codex/enterprise-client-provisioning
+      - codex/enterprise-prefixed-integrations
+      - codex/enterprise-painpoint-demo
+      - codex/enterprise-executive-visibility
+      - codex/enterprise-voice-finale
   workflow_dispatch:
 
 concurrency:
@@ -77,6 +86,7 @@ jobs:
         run: npm run build
 
       - name: Install browsers for Fleet embedding checks
+        timeout-minutes: 45
         run: npx playwright install --with-deps chromium webkit
 
       - name: Verify Fleet embedding and allowance in Chromium and WebKit
@@ -188,7 +198,7 @@ jobs:
         env:
           TEAM_WORK_DISPOSABLE_MYSQL: '1'
           SES_PLATFORM_DISPOSABLE_MYSQL: '1'
-        run: php ./vendor/bin/pest tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php tests/Integration/HighLevelFleetMySqlMigrationRecoveryTest.php tests/Integration/TenantMailMySqlMigrationRecoveryTest.php tests/Integration/FleetOperationsMySqlMigrationRecoveryTest.php tests/Integration/SoccerMySqlMigrationRecoveryTest.php tests/Integration/SoccerAllocationConcurrencyTest.php tests/Integration/MarketingDeskMySqlRecoveryTest.php tests/Integration/ReviewedSchemaDriftRecoveryTest.php tests/Integration/AiBranchMySqlMigrationRecoveryTest.php tests/Integration/TeamWorkMySqlMigrationRecoveryTest.php tests/Integration/MarketplaceMySqlRecoveryTest.php tests/Integration/PlatformMailMySqlRecoveryTest.php --compact
+        run: php ./vendor/bin/pest tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php tests/Integration/HighLevelFleetMySqlMigrationRecoveryTest.php tests/Integration/TenantMailMySqlMigrationRecoveryTest.php tests/Integration/FleetOperationsMySqlMigrationRecoveryTest.php tests/Integration/SoccerMySqlMigrationRecoveryTest.php tests/Integration/SoccerAllocationConcurrencyTest.php tests/Integration/MarketingDeskMySqlRecoveryTest.php tests/Integration/ReviewedSchemaDriftRecoveryTest.php tests/Integration/AiBranchMySqlMigrationRecoveryTest.php tests/Integration/TeamWorkMySqlMigrationRecoveryTest.php tests/Integration/MarketplaceMySqlRecoveryTest.php tests/Integration/PlatformMailMySqlRecoveryTest.php tests/Integration/ServiceProposalMySqlRecoveryTest.php --compact
 
       - name: Verify POS simulation partial-DDL recovery
         env:
