@@ -133,7 +133,7 @@ try {
     await page.getByText("Fictional sample controls", { exact: false }).count();
     await page.locator("#briefing-body .briefing-hero").waitFor();
     await page
-        .getByRole("button", { name: "Show me Lees-McRae", exact: true })
+        .getByRole("button", { name: "Tour", exact: true })
         .click();
     await page
         .getByRole("button", { name: "07 Ask Everbranch", exact: false })
@@ -156,7 +156,7 @@ try {
     await page.locator('#ask-voice-controls').getByRole('button',{name:'Talk',exact:true}).waitFor();
     assert.equal(await page.evaluate(()=>shellCaptures.length),capturesBeforeFinale,'Tour navigation never starts a microphone');
     assert.equal(await page.locator('#enterprise-main').getAttribute('data-demo-page'),'enterprise-ask');
-    await page.getByRole('button',{name:'Show me Lees-McRae',exact:true}).click();
+    await page.getByRole('button',{name:'Tour',exact:true}).click();
     await page.getByRole("button", { name: "Restart", exact: true }).click();
     await page.keyboard.press("ArrowRight");
     await page
@@ -174,6 +174,7 @@ try {
             exact: true,
         })
         .waitFor();
+    await page.locator('#close-work-detail').click();
     await page
         .getByRole("button", { name: "Operations & projects", exact: true })
         .click();
@@ -331,6 +332,7 @@ try {
         0,
         "Caption became executable markup",
     );
+    if(await page.locator('#work-drawer').evaluate(el=>el.open))await page.locator('#close-work-detail').click();
     await page
         .getByLabel("Sample perspective", { exact: true })
         .selectOption("requester");
@@ -382,6 +384,7 @@ try {
             exact: true,
         })
         .click();
+    if(await page.locator('#work-drawer').evaluate(el=>el.open))await page.locator('#close-work-detail').click();
     await page
         .getByLabel("Sample perspective", { exact: true })
         .selectOption("requester");
@@ -418,6 +421,7 @@ try {
         .locator("#res-list")
         .getByRole("button", { name: /Bryan Gym/ })
         .click();
+    await page.locator('[data-building-details]').click();
     await page
         .locator("#res-detail")
         .getByRole("heading", { name: "Bryan Gym", exact: true })

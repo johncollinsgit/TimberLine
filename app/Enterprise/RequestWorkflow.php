@@ -97,12 +97,15 @@ class RequestWorkflow
         if ($action === 'request.create') {
             abort_if(TeamOperationRecord::query()->where('id', $input['id'])->exists(), 409);
             abort_unless($input['expected_version'] === 0, 409);
+            $building = empty($input['location_id']) ? null : app(Resources::class)->requestBuilding(
+                $tenant, $user, $area->id, $input['location_id'], (int) ($input['location_version'] ?? 0));
             $record = new TeamOperationRecord(['id' => $input['id'], 'tenant_id' => $tenant->id, 'area_id' => $area->id,
                 'kind' => 'enterprise_request', 'source_key' => hash('sha256', 'enterprise:'.$input['id']), 'visibility' => 'area',
                 'title' => $input['title'], 'status' => 'submitted', 'version' => 0,
                 'starts_on' => $input['due_on'] ?? null,
-                'data' => ['description' => $input['description'] ?? '', 'location' => $input['location'] ?? '',
-                    'latitude' => $input['latitude'] ?? null, 'longitude' => $input['longitude'] ?? null, 'created_by' => (string) $user->id]]);
+                'data' => ['description' => $input['description'] ?? '', 'location' => $building?->title ?? $input['location'] ?? '',
+                    'latitude' => $building ? null : ($input['latitude'] ?? null), 'longitude' => $building ? null : ($input['longitude'] ?? null), 'created_by' => (string) $user->id]
+                    + ($building ? ['location_id' => $building->id, 'location_version' => $building->version] : [])]);
         } else {
             $record = $this->request($tenant, $area, $input['id']);
             abort_unless($record->version === $input['expected_version'], 409, 'This request changed. Refresh before saving.');
@@ -148,7 +151,10 @@ class RequestWorkflow
             } else {
                 $record->status = 'in_progress';
             }
-            $data['progress_note'] = $input['note'] ?? '';
+            // Completion without a replacement note must retain saved progress.
+            if ($action === 'request.progress' || trim($input['note'] ?? '') !== '') {
+                $data['progress_note'] = $input['note'] ?? '';
+            }
         }
         $record->data = $data;
         $record->version++;

@@ -1,3 +1,33 @@
+## 2026-10-23 — Compact Enterprise header, explicit building links and approved logo (source candidate)
+
+- Replace the large demo banner with a compact workspace identity, discreet sample-data label, expandable help and Tour controls. Proposal uses only the existing authorized published-review context.
+- Match tour destinations to the full-width tables. Hide outside guide controls while the native detail drawer is open; Close/Escape returns to the same list and guide step.
+- Use the exact approved Rooted Peak horizontal SVG with its unchanged PNG fallback and proportions in the existing sidebar. Bind both asset files into the immutable reviewer source fingerprint.
+- Let request intake select an active saved building in the current workspace. Validate its identity/version on the server; typed location text remains unlinked. Serialize resource history as explicit UTC without rewriting stored audit evidence.
+- Keep existing tenant/record permissions, provider gates and release checks. Local responsive browser checks do not establish physical-device or hosted acceptance.
+
+## 2026-10-23 — Full-width Enterprise work tables and dismissible details (source candidate)
+
+Projects and Requests use the full work canvas. Sort headers for fields present in the current authorized projection; request priority and assignee come from its linked task, and explicit saved building links stay distinct from unverified typed location labels. A row or title opens the existing work actions and discussion in a native modal drawer. Close or Escape returns focus and the original search, sort and scroll. Workspace reload clears private detail synchronously. Buildings keeps its separate master/ticket/detail hierarchy. The desktop Work rail adds quiet outline icons, a divider and aligned full-row targets using Everbranch colors and existing destinations. The same status and exact-retry controls stay reachable inside the modal and return to their original positions on Close. No authority, operational record, provider or payment behavior changes. Shared public/private renderer preview and focused interaction checks are in the separate work-table review packet; production acceptance remains gated by the approved release procedure.
+
+## 2026-10-23 — Enterprise Buildings workflow and readable tours
+
+- Keep building search, priority-ranked authorized tickets and selected details adjacent on desktop; use explicit Back navigation on smaller screens and keep the synchronized map secondary.
+- Count explicit saved building links only. Show unverified text matches separately and clear detached map context whenever workspace access resets or disappears.
+- Shorten tour headings and explanations, move extra detail into expandable help and keep destinations aligned with the actual screen controls.
+- Preserve saved progress when completing a request without a replacement note; checklist completion and current coordinator approval remain required.
+
+## 2026-10-23 — Enterprise desktop navigation readability
+
+- Increase desktop navigation labels to 16px and workspace links to 15px, with a 280px rail and larger targets.
+- Keep existing touch/tablet navigation, selected-state contrast, focus indicators and scroll reachability; keep the narrow desktop rail vertical during zoom reflow. Page content is not zoomed.
+
+## 2026-10-22 — Enterprise campus spacing
+
+- Separate the campus search label from the field so the visible keyboard focus ring stays clear of the label; align the adjacent action with the field.
+- Use the available operational canvas beside the navigation rail while retaining responsive padding and bounded sign-in/organization-selection pages.
+- Preserve labels, focus styling, access controls, record behavior and provider gates.
+
 ## 2026-10-20 — Markets & Makers management candidate
 
 - Replace wrapped management tabs with grouped persistent navigation and a mobile drawer.

@@ -4,6 +4,7 @@ import {resolve} from 'node:path';
 /** Authenticated server-backed tour acceptance. All records belong to the disposable fixture. */
 export async function checkPrivateWorkspaceTour(page,evidence) {
     const tenant='synthetic-enterprise';
+    const closeDetail=async()=>{if(await page.locator('#work-drawer').evaluate(el=>el.open))await page.locator('#close-work-detail').click();};
     const api=async(path,body)=>{
         const response=await page.evaluate(async({path,body,tenant})=>{
             const url=new URL(path,location.origin);url.searchParams.set('tenant',tenant);
@@ -24,6 +25,7 @@ export async function checkPrivateWorkspaceTour(page,evidence) {
     await page.locator('#request-list').getByRole('button',{name:'Synthetic private tour project',exact:true}).click();
     const original=(await api('/enterprise/data?area_id='+area));
     const project=original.projects.find(row=>row.name==='Synthetic private tour project');assert.ok(project);
+    await closeDetail();
     await page.locator('[data-section=requests]').click();
     await page.locator('#create-request').click();
     await page.locator('#create-form [name=title]').fill('Synthetic private tour request');
@@ -47,9 +49,10 @@ export async function checkPrivateWorkspaceTour(page,evidence) {
     assert.equal(await page.locator('#reviewer-perspective').count(),0,'Private runtime must not mount the public persona adapter');
     assert.equal(await page.evaluate(()=>typeof globalThis.EverbranchSampleTransport),'undefined','Private tour must not use browser-backed sample transport');
 
+    await closeDetail();
     await page.emulateMedia({reducedMotion:'reduce'});
     const root=page.locator('[data-workspace-tour="private"]');
-    await root.getByText('SERVER-BACKED DEMONSTRATION WORKSPACE',{exact:true}).waitFor();
+    await root.getByText('Demo · Sample data',{exact:true}).waitFor();
     assert.equal(await root.locator('[data-tour-email-open]').isVisible(),false);
     assert.equal(await root.locator('[data-tour-try]').isVisible(),false);
     await page.locator('[data-section=projects]').click();
@@ -58,14 +61,15 @@ export async function checkPrivateWorkspaceTour(page,evidence) {
     const writes=[];
     const recordWrite=req=>{if(!['GET','HEAD','OPTIONS'].includes(req.method()))writes.push({method:req.method(),url:req.url()});};
     page.on('request',recordWrite);
-    const open=async()=>{await root.locator('[data-tour-open]').click();await root.locator('[data-tour-dialog]').waitFor({state:'visible'});};
-    const scene=async index=>{await root.locator(`[data-tour-scene="${index}"]`).click();await page.waitForFunction(index=>document.querySelector('[data-workspace-tour="private"]').dataset.tourScene===String(index),index);};
+    const open=async()=>{await closeDetail();await root.locator('[data-tour-open]').click();await root.locator('[data-tour-dialog]').waitFor({state:'visible'});};
+    const scene=async index=>{await root.locator(`button[data-tour-scene="${index}"]`).click();await page.waitForFunction(index=>document.querySelector('[data-workspace-tour="private"]').dataset.tourScene===String(index),index);};
     const expectedLinks=[['overview','buildings','calendar'],['requests','requester'],['workflow','projects'],['projects','roll-call'],['people','assets','calendar'],['roll-call','projects']];
     await open();
     assert.match(await root.locator('[data-tour-role]').innerText(),/Signed in: Fixture Owner/i);
     assert.match(await root.locator('[data-tour-role]').innerText(),/Synthetic private tour workspace/i);
+    await root.locator('[data-tour-details] summary').click();
     assert.match(await root.locator('[data-tour-cards]').innerText(),/Synthetic private tour request/);
-    assert.match(await root.locator('[data-tour-cards]').innerText(),/Synthetic private tour project/);
+    assert.ok((await root.locator('[data-tour-cards]').innerText()).includes(original.projects[0].name),'No selected row: tour describes a current authorized project');
     await root.locator('[data-tour-play]').click();
     await root.locator('[data-tour-play]').click();
     for(let index=0;index<6;index++){
@@ -74,12 +78,13 @@ export async function checkPrivateWorkspaceTour(page,evidence) {
     }
     await root.locator('[data-tour-restart]').click();
     await root.locator('[data-tour-close]').click();
-    assert.equal(new URL(page.url()).searchParams.get('selected'),project.id);
+    assert.equal(new URL(page.url()).searchParams.get('selected'),null,'Close returns to the table');
+    await page.locator(`#request-list [data-open="${project.id}"]`).click();
     assert.equal(await page.locator('#discussion-body').inputValue(),'Synthetic unsent project draft retained through the private tour.');
     for(const [index,section]of[[0,'home'],[1,'requests'],[3,'projects'],[4,'people'],[5,'roll_call']]){
         await open();await scene(index);await root.locator('[data-tour-screen]').click();
         await page.waitForFunction(section=>new URL(location.href).searchParams.get('section')===section,section);
-        if(index===1)assert.equal(new URL(page.url()).searchParams.get('selected'),request.id,'Explore opens the actual authorized request');
+        if(index===1){assert.equal(new URL(page.url()).searchParams.get('selected'),null,'Explore scans the authorized request table');await page.locator(`#request-list [data-open="${request.id}"]`).waitFor();assert.equal(await page.locator('#work-drawer').evaluate(el=>el.open),false);}
     }
     assert.deepEqual(writes,[],'Tour playback, replay and actual-screen exploration must not mutate or call paid services');
     page.off('request',recordWrite);
@@ -95,10 +100,19 @@ export async function checkPrivateWorkspaceTour(page,evidence) {
         await page.screenshot({path:resolve(evidence,`enterprise-private-tour-${label}.png`),fullPage:true});
         await root.locator('[data-tour-close]').click();
     }
-    await page.setViewportSize({width:1440,height:1000});await open();await scene(2);
+    await page.setViewportSize({width:1440,height:1000});
+    await closeDetail();await page.locator(`#request-list [data-open="${project.id}"]`).click();
+    await page.getByRole('link',{name:'Open workflow workspace',exact:true}).click();
+    await page.waitForURL(url=>url.pathname==='/projects/workspace');
+    assert.equal(new URL(page.url()).searchParams.get('project_id'),project.id,'The explicit selected-row workflow link retains the exact project');
+    await page.getByRole('link',{name:/Back to Projects$/}).click();
+    await page.locator('#discussion-body').waitFor();
+    assert.equal(await page.locator('#discussion-body').inputValue(),'Synthetic unsent project draft retained through the private tour.');
+    const tourProject=original.projects[0];
+    await open();await scene(2);
     await root.locator('[data-workspace-tour-link="workflow"]').click();
     await page.waitForURL(url=>url.pathname==='/projects/workspace');
-    assert.equal(new URL(page.url()).searchParams.get('project_id'),project.id,'Workflow tour link must use the currently selected project, not the first project');
+    assert.equal(new URL(page.url()).searchParams.get('project_id'),tourProject.id,'With no selected row, the tour uses a current authorized project');
     assert.equal(new URL(page.url()).searchParams.get('area_id'),area);
     await page.getByRole('button',{name:'Use Illustrative maintenance workflow',exact:true}).click();
     await page.getByRole('button',{name:/Settings$/}).click();
@@ -126,17 +140,19 @@ export async function checkPrivateWorkspaceTour(page,evidence) {
     await page.unroute('**/enterprise/workflows?*');
     await page.getByRole('heading',{name:'Synthetic privately guided workflow',exact:true}).waitFor();
     assert.equal(saveBodies.length,1,'Reload after a confirmed save cannot submit another write');
-    const workflows=await api(`/enterprise/workflows?area_id=${area}&project_id=${project.id}`);
+    const workflows=await api(`/enterprise/workflows?area_id=${area}&project_id=${tourProject.id}`);
     const workflow=workflows.items.find(row=>row.name==='Synthetic privately guided workflow');assert.ok(workflow,'Tour-opened workflow must persist through the real server engine');
     assert.equal(workflows.items.filter(row=>row.name===workflow.name).length,1);assert.equal(workflow.version,1);
     await page.waitForURL(url=>url.searchParams.get('workflow')===workflow.id);
     await page.getByRole('button',{name:'Save draft',exact:true}).waitFor({state:'visible'});
     await page.reload();await page.getByRole('heading',{name:'Synthetic privately guided workflow',exact:true}).waitFor();
-    const saved=await api(`/enterprise/workflows/${workflow.id}/data`);assert.equal(saved.workflow.name,workflow.name);assert.equal(saved.workflow.project_id,project.id);
+    const saved=await api(`/enterprise/workflows/${workflow.id}/data`);assert.equal(saved.workflow.name,workflow.name);assert.equal(saved.workflow.project_id,tourProject.id);
     await page.getByRole('link',{name:/Back to Projects$/}).click();
     await page.locator('#discussion-body').waitFor();
-    assert.equal(new URL(page.url()).searchParams.get('selected'),project.id);
+    assert.equal(new URL(page.url()).searchParams.get('selected'),tourProject.id);
+    await closeDetail();await page.locator(`#request-list [data-open="${project.id}"]`).click();
     assert.equal(await page.locator('#discussion-body').inputValue(),'Synthetic unsent project draft retained through the private tour.');
+    await closeDetail();
     await page.route('**/enterprise/data?*',async route=>{
         if(new URL(route.request().url()).searchParams.get('area_id')===area)
             return route.fulfill({status:403,json:{message:'Synthetic current workspace access refused'}});
@@ -148,9 +164,10 @@ export async function checkPrivateWorkspaceTour(page,evidence) {
     await page.locator(`#areas [data-area="${area}"]`).click();
     await page.locator('#status').getByText('Synthetic current workspace access refused',{exact:true}).waitFor();
     await open();await scene(2);
+    await root.locator('[data-tour-details] summary').click();
     assert.match(await root.locator('[data-tour-detail]').innerText(),/Waiting for the current authorized workspace/);
     assert.equal(await root.locator('[data-workspace-tour-link]:enabled').count(),0,'A denied current data read must disable all scene destinations');
-    assert.equal((await root.innerText()).includes('Synthetic private tour project'),false,'Denied tour context must remove its previous project');
+    for(const prior of original.projects)assert.equal((await root.textContent()).includes(prior.name),false,'Denied tour context must remove every previous project');
     await root.locator('[data-tour-close]').click();await page.unroute('**/enterprise/data?*');
     await page.reload();
     await page.locator(`#request-list [data-open="${project.id}"]`).waitFor();
@@ -179,7 +196,7 @@ export async function checkPrivateWorkspaceTour(page,evidence) {
     await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve(null)))));
     assert.equal(new URL(page.url()).searchParams.get('area_id'),recoveryArea,'A delayed old scope response must not replace the current area');
     assert.match(await root.locator('[data-tour-role]').innerText(),/Synthetic private recovery workspace/i);
-    assert.equal((await root.innerText()).includes('Synthetic private tour project'),false);
+    for(const prior of original.projects)assert.equal((await root.textContent()).includes(prior.name),false);
     assert.equal(await root.locator('[data-workspace-tour-link="workflow"]').isEnabled(),false,'The empty current area cannot inherit the old project workflow');
     await root.locator('[data-tour-close]').click();await page.unroute('**/enterprise/data?*');
     await page.locator(`#areas [data-area="${area}"]`).click();

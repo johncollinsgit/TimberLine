@@ -9,3 +9,102 @@
 .selected-job-row{background:#eef2e8}.job-stock-photo img{display:block}.job-story .caption{line-height:1.7}
 .sidebar :focus-visible{outline-color:var(--focus-on-dark)}
 </style>
+
+{{-- Use the operational canvas beside the rail; keep auth and selection pages bounded. --}}
+<style>
+#enterprise-main > .content{max-width:none}
+</style>
+
+{{-- Larger desktop navigation keeps touch/tablet layouts on their existing rules. --}}
+<style>
+@media (min-width:1001px) and (hover:hover) and (pointer:fine){
+  .shell{grid-template-columns:280px minmax(0,1fr)}
+  .sidebar .nav-item{font-size:16px;line-height:1.4;min-height:48px;gap:10px}
+  .sidebar .nav-item small{font-size:12px}
+  .sidebar .nav-item svg,.sidebar .sidebar-project svg{width:20px;height:20px}
+  .sidebar .sidebar-project{font-size:15px;line-height:1.4;min-height:44px;padding:10px 12px}
+  .sidebar .workspace-label{font-size:11px;letter-spacing:.13em}
+  .sidebar-bottom{font-size:12px}
+  .sidebar-bottom strong{font-size:14px}
+}
+</style>
+
+<style>
+/* Keep a zoomed desktop rail vertical instead of clipping its navigation into a row. */
+@media (min-width:651px) and (max-width:1000px) and (hover:hover) and (pointer:fine){
+  .sidebar nav{display:block;overflow:visible}
+  .sidebar .nav-item{width:100%;font-size:12px;flex-shrink:1}
+}
+</style>
+
+{{-- The work table owns the canvas; native modal details open only on selection. --}}
+<style>
+#enterprise-main #work{display:block}
+#enterprise-main #request-list{width:100%;min-width:0}
+.work-table-scroll{max-height:min(70dvh,760px);max-width:100%;overscroll-behavior:contain}
+.work-table{min-width:560px;font-size:14px}
+.work-table caption{text-align:left;padding:14px 18px;font-size:13px;color:var(--muted);background:#fff}
+.work-table th{position:sticky;top:0;z-index:1;padding:0 12px;font-size:12px}
+.work-table th button{font:inherit;font-weight:600;color:var(--ink);border:0;background:transparent;min-height:44px;padding:10px 6px;white-space:nowrap;cursor:pointer}
+.work-table td{padding:12px 18px;font-size:13px;vertical-align:middle}
+.work-table td[data-column="title"]{width:40%;min-width:220px}
+.work-table td[data-column="title"] button{font:inherit;font-weight:500;min-height:44px;line-height:1.5;overflow-wrap:anywhere}
+.work-table td:not([data-column="title"]){min-width:115px}
+.work-table td[data-column="location"]{min-width:160px}
+.work-table .badge{font-size:12px;white-space:normal}
+.work-table tbody tr{cursor:pointer}
+.work-table tbody tr:hover,.work-table tbody tr[data-selected="true"]{background:#f0f5ed}
+.work-priority{text-transform:capitalize;font-size:12px}
+.work-priority[data-priority="urgent"]{font-weight:650;color:#8b493c}
+.work-priority[data-priority="high"]{font-weight:600;color:#80591f}
+html.work-detail-open{overflow:hidden}
+#work-drawer{position:fixed;inset:0 0 0 auto;margin:0;width:min(720px,100%);max-width:100%;height:100dvh;max-height:100dvh;padding:0;border:0;border-left:1px solid var(--line);border-radius:0;box-shadow:-12px 0 40px #17352220;color:var(--ink)}
+#work-drawer[open]{display:flex;flex-direction:column}
+#work-drawer::backdrop{background:#203d3259;backdrop-filter:none}
+.work-drawer-head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 24px;border-bottom:1px solid var(--line);background:#fff;flex-shrink:0}
+#work-drawer-feedback{padding:0 24px}
+#work-drawer-feedback #status:empty{display:none}
+#work-drawer-feedback .button{margin:12px 0}
+#work-detail-title{font:600 15px/1.4 var(--font-sans,Inter,system-ui,sans-serif);margin:0}
+#work-drawer #detail{padding:24px;min-height:0;overflow:auto;overscroll-behavior:contain;flex:1;border:0;border-radius:0}
+#work-drawer #detail h2{font:600 22px/1.35 var(--font-sans,Inter,system-ui,sans-serif);overflow-wrap:anywhere;margin:0 0 14px}
+#work-drawer #detail h3{font-size:14px}
+#work-drawer #detail .work-detail{font-size:14px;line-height:1.7}
+@media(max-width:650px){
+ .work-table{min-width:650px}
+ #work-drawer{width:100%;border:0}
+ .work-drawer-head{padding:14px 18px}
+ #work-drawer #detail{padding:20px 18px}
+}
+</style>
+
+{{-- Quiet outline navigation follows the supported Work sections; no new destinations. --}}
+<style>
+@media(min-width:1001px) and (hover:hover) and (pointer:fine){
+ .sidebar nav{padding-bottom:16px;border-bottom:1px solid #ffffff2e}
+ .sidebar .nav-item[data-section]{border-radius:8px}
+ .sidebar .nav-item[data-section]::before{content:"";width:20px;height:20px;flex:0 0 20px;background:currentColor;mask:var(--sidebar-icon) center/contain no-repeat;-webkit-mask:var(--sidebar-icon) center/contain no-repeat}
+ .sidebar [data-section="home"]{--sidebar-icon:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%2010%2012%203l9%207M5%209v12h14V9%22%2F%3E%3C%2Fsvg%3E")}
+ .sidebar [data-section="requests"]{--sidebar-icon:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M8%204H5v17h14V4h-3M8%203h8v4H8zM8%2012h8M8%2016h6%22%2F%3E%3C%2Fsvg%3E")}
+ .sidebar [data-section="projects"]{--sidebar-icon:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%206h7l2%203h9v12H3zM3%206V3h8l2%203%22%2F%3E%3C%2Fsvg%3E")}
+ .sidebar [data-section="contractors"]{--sidebar-icon:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%208h18v13H3zM8%208V4h8v4M3%2013h18M10%2012v3h4v-3%22%2F%3E%3C%2Fsvg%3E")}
+ .sidebar [data-section="ask"]{--sidebar-icon:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%204h18v13H9l-6%204zM7%208h10M7%2012h6%22%2F%3E%3C%2Fsvg%3E")}
+ .sidebar [data-section="roll_call"]{--sidebar-icon:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M4%205h16v16H4zM8%203v4M16%203v4M8%2013l3%203%205-6%22%2F%3E%3C%2Fsvg%3E")}
+ .sidebar [data-section="buildings"]{--sidebar-icon:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M4%2021V3h16v18M9%2021v-5h6v5M8%207h1M15%207h1M8%2011h1M15%2011h1%22%2F%3E%3C%2Fsvg%3E")}
+ .sidebar [data-section="calendar"]{--sidebar-icon:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%206h18v15H3zM7%203v6M17%203v6M3%2011h18%22%2F%3E%3C%2Fsvg%3E")}
+ .sidebar [data-section="people"]{--sidebar-icon:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M9%2011a4%204%200%201%200%200-8%204%204%200%200%200%200%208M2%2021v-3c0-4%2014-4%2014%200v3M17%204c5%200%205%207%200%207M19%2015c3%200%203%203%203%206%22%2F%3E%3C%2Fsvg%3E")}
+ .sidebar [data-section="assets"]{--sidebar-icon:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%208h18v13H3zM8%208V4h8v4M3%2013h18M8%2011v4M16%2011v4%22%2F%3E%3C%2Fsvg%3E")}
+ .sidebar [data-section="workflows"]{--sidebar-icon:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%203h6v6H3zM15%2015h6v6h-6zM3%2015h6v6H3zM6%209v6M9%206h9v9%22%2F%3E%3C%2Fsvg%3E")}
+ .sidebar [data-section="requester"]{--sidebar-icon:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M4%203h16v18H4zM8%208h8M8%2012h8M8%2016h5%22%2F%3E%3C%2Fsvg%3E")}
+ .sidebar [data-section="finance"]{--sidebar-icon:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M5%203h10l4%204v14H5zM15%203v5h4M8%2012h8M8%2016h6%22%2F%3E%3C%2Fsvg%3E")}
+ .sidebar [data-section="usage"]{--sidebar-icon:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%203v18h18M7%2016v-5M12%2016V7M17%2016v-8%22%2F%3E%3C%2Fsvg%3E")}
+}
+</style>
+
+{{-- Approved Enterprise lockup: original vector and raster bytes, unchanged proportions. --}}
+<style>
+.sidebar .enterprise-brand{display:block;padding:0 0 20px}
+.enterprise-brand picture{display:block;background:#fff;border-radius:6px;overflow:hidden;line-height:0}
+.enterprise-brand-image{display:block;width:100%;height:auto;object-fit:contain}
+@media(max-width:650px){.sidebar .enterprise-brand{max-width:244px;padding-bottom:12px}}
+</style>

@@ -397,3 +397,20 @@ test("tour navigation preserves selection in the same scope and uses stored sele
     );
     assert.equal(c.area, "b");
 });
+
+for (const mode of ["private", "sample"]) {
+    test(`${mode}: clearing detail selection removes it from the canonical URL while retaining the list view and search`, () => {
+        const f = fixture(mode);
+        f.context.selected = null;
+        f.context.view = "list";
+        f.input.value = "Fictional search";
+        f.context.rememberUrl();
+        const url = new URL(f.history.at(-1).url);
+        const state = new URLSearchParams(mode === "sample" ? url.hash.slice(1) : url.search);
+        assert.equal(state.get("selected"), null);
+        assert.equal(state.get("section"), "requests");
+        assert.equal(state.get("view"), "list");
+        assert.equal(state.get("q"), "Fictional search");
+        assert.equal(url.origin, "https://workspace.example");
+    });
+}

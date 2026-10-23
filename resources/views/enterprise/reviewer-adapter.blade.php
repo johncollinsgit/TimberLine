@@ -24,12 +24,12 @@
             },
             onPriority(item) {
                 if (['reports','certificates','invoices','funds'].includes(item.id) && !['manager','executive'].includes(adapter.snapshot().persona)) return {available:false,message:'Unavailable in this sample perspective'};
-                dispatch({section:item.section, area:EverbranchSampleTransport.ids.area});
+                dispatch({section:item.section, area:EverbranchSampleTransport.ids.area, ...(['projects','requests'].includes(item.section)?{selected:null}:{})});
                 return {available:true};
             },
             onNavigate(section) {
                 if (section === 'workflows') return adapter.navigate(boot.routes.workflowWorkspace + '#area_id=' + EverbranchSampleTransport.ids.area + '&project_id=' + EverbranchSampleTransport.ids.project);
-                dispatch({section, area: EverbranchSampleTransport.ids.area});
+                dispatch({section, area: EverbranchSampleTransport.ids.area, ...(['projects','requests'].includes(section)?{selected:null}:{})});
             },
             onSampleRequest() { dispatch({section:'requests', area:EverbranchSampleTransport.ids.area, selected:EverbranchSampleTransport.ids.request}); },
             ...(boot.routes.trial ? {onTryIt() { adapter.navigate(boot.routes.trial); }} : {}),

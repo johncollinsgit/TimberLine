@@ -61,7 +61,12 @@ class EnterpriseController
             ->filter(fn ($user) => in_array($actor['active_roles'][(string) $user->id] ?? '', ['owner', 'admin', 'member'], true)
                 && WorkspaceAccess::permits(array_replace($actor, ['user_id' => (string) $user->id, 'role' => $actor['active_roles'][(string) $user->id]]), $area->id, true)) : collect();
 
+        $buildings = $area && config('enterprise.resources_enabled')
+            ? app(Resources::class)->requestBuildings($tenant, $request->user(), $area->id)
+            : ['items' => [], 'has_more' => false, 'coverage' => 'Saved building selection is unavailable. Location text remains available.'];
+
         return response()->json(['workspace' => ['id' => $tenant->id, 'name' => $tenant->name], 'viewer_id' => (string) $request->user()->id, 'selected_area_id' => $selected,
+            'buildings' => $buildings,
             'areas' => $areas->map(fn ($a) => ['id' => $a->id, 'name' => $a->name, 'visibility' => $a->profile === 'enterprise_shared' ? 'shared' : 'department_only'])->values(),
             'requests' => array_slice($items, 0, 100), 'projects' => $projects, 'coverage' => 'up_to_100_visible_requests_scan_1000', 'has_more' => count($items) > 100,
             'scan_partial' => $scanned === 1000,
@@ -102,6 +107,8 @@ class EnterpriseController
             'visibility' => ['required_if:action,workspace.create', 'in:shared,department_only'],
             'expected_version' => ['required_unless:action,workspace.create,project.create', 'integer', 'min:0'],
             'description' => ['nullable', 'string', 'max:5000'], 'location' => ['nullable', 'string', 'max:200'],
+            'location_id' => ['nullable', 'required_with:location_version', 'uuid', 'prohibited_unless:action,request.create', 'prohibits:latitude,longitude'],
+            'location_version' => ['nullable', 'required_with:location_id', 'integer', 'min:1', 'prohibited_unless:action,request.create'],
             'latitude' => ['nullable', 'required_with:longitude', 'numeric', 'between:-90,90'],
             'longitude' => ['nullable', 'required_with:latitude', 'numeric', 'between:-180,180'],
             'due_on' => ['nullable', 'date_format:Y-m-d'], 'note' => ['nullable', 'string', 'max:2000'],
@@ -109,6 +116,9 @@ class EnterpriseController
         ]);
         if (isset($input['expected_version'])) {
             $input['expected_version'] = (int) $input['expected_version'];
+        }
+        if (isset($input['location_version'])) {
+            $input['location_version'] = (int) $input['location_version'];
         }
         try {
             $result = $this->workflow->execute($request->attributes->get('current_tenant'), $request->user(), $input);

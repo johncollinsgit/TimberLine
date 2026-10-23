@@ -110,12 +110,48 @@ class Resources
             'can_coordinate' => WorkspaceAccess::permits($actor, $areaId, true, true)];
     }
 
+    /** Minimal current choices for request intake; catalog names alone never create a link. */
+    public function requestBuildings(Tenant $tenant, User $user, string $areaId): array
+    {
+        $actor = $this->actor($tenant, $user);
+        $this->access->area($tenant, $actor, $areaId);
+        $items = [];
+        $scanned = 0;
+        foreach (TeamOperationRecord::query()->where(['tenant_id' => $tenant->id, 'area_id' => $areaId,
+            'kind' => self::KINDS['location'], 'status' => 'active'])->orderBy('title')->orderBy('id')->limit(1000)->cursor() as $row) {
+            $scanned++;
+            if (($row->data['level'] ?? null) !== 'facility') {
+                continue;
+            }
+            $items[] = ['id' => $row->id, 'title' => $row->title, 'version' => $row->version];
+            if (count($items) > 200) {
+                break;
+            }
+        }
+
+        return ['items' => array_slice($items, 0, 200), 'has_more' => count($items) > 200 || $scanned === 1000,
+            'coverage' => 'Up to 200 active saved buildings from a 1000-location scan of this workspace.'];
+    }
+
+    /** Called inside intake's tenant lock, shared with resource mutations. */
+    public function requestBuilding(Tenant $tenant, User $user, string $areaId, string $id, int $version): TeamOperationRecord
+    {
+        abort_unless($version > 0, 422, 'Choose a current saved building.');
+        $actor = $this->actor($tenant, $user);
+        $this->access->area($tenant, $actor, $areaId);
+        $row = $this->linked($tenant, $actor, $areaId, $id, 'location');
+        abort_unless($row->status === 'active' && ($row->data['level'] ?? null) === 'facility', 409, 'This building is unavailable. Refresh before saving.');
+        abort_unless($row->version === $version, 409, 'This building changed. Refresh before saving.');
+
+        return $row;
+    }
+
     public function history(Tenant $tenant, User $user, string $id): array
     {
         $this->show($tenant, $user, $id);
         $rows = DB::table('team_operation_revisions')->where(['tenant_id' => $tenant->id, 'record_id' => $id])->orderByDesc('version')->limit(100)->get();
 
-        return ['items' => $rows->map(fn ($row) => ['version' => $row->version, 'actor_id' => $row->user_id, 'at' => $row->created_at,
+        return ['items' => $rows->map(fn ($row) => ['version' => $row->version, 'actor_id' => $row->user_id, 'at' => CarbonImmutable::parse($row->created_at, 'UTC')->toIso8601String(),
             'event' => json_decode(Crypt::decryptString($row->payload), true, 64, JSON_THROW_ON_ERROR)])->all(), 'coverage' => 'Latest 100 immutable resource revisions; current workspace permission required.'];
     }
 

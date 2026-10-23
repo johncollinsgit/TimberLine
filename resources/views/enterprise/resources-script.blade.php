@@ -2,7 +2,7 @@
   const resourceCatalog = @json($campusResourceCatalog);
   const resourceSections = ['buildings', 'assets', 'calendar'];
   const resourceDraftPrefix = `everbranch-resource:${transport.mode}:${workspace}:${viewer}:`;
-  let resourceGeneration=0, resourceContext='', resourceResult=null, resourceItems=[], resourceDirectory='catalog', resourceSelection='', resourceForm=null, resourceBusy=false;
+  let resourceGeneration=0, resourceContext='', resourceResult=null, resourceItems=[], resourceDirectory='catalog', resourceSelection='', resourceForm=null, resourceBusy=false, resourceTicketSelection='';
   const resourceEndpoint=(path='',query={})=>`${nextBase}/resources${path}?${new URLSearchParams({tenant:tenantSlug,...query})}`;
   const resourceActive=()=>resourceSections.includes(section);
   const resourceCurrent=token=>token.generation===resourceGeneration&&token.context===resourceContext&&resourceActive();
@@ -25,15 +25,85 @@
     try {const resolved=transport.href(value);const url=new URL(resolved,location.href);return url.origin===location.origin&&['http:','https:'].includes(url.protocol)?url.href:null;}catch{return null;}
   }
   function resourceRemember() {selected=resourceSelection||null;selectionMemory.set(area+':'+section,selected);rememberUrl();}
-  function resourceSelect(id) {resourceSelection=id;resourceRemember();resourceRenderList();resourceRenderDetail();}
+  function resourceSelect(id) {resourceSelection=id;resourceTicketSelection='';resourceRemember();resourceRenderList();resourceRenderDetail();buildingStep('tickets');}
   function resourceSearch() {return $('res-query').value.trim().toLocaleLowerCase();}
   function resourceMatches(row) {return [row.title,row.name,row.map_number,...Object.values(row.data||row)].filter(value=>typeof value==='string').join(' ').toLocaleLowerCase().includes(resourceSearch());}
+  const buildingPriority = row => ['urgent','high','normal','low'].includes(row.task?.priority) ? row.task.priority : null;
+  function resourceClearMap() {
+    const plan=$('res-plan');if(plan){plan.hidden=true;plan.open=false;}
+    if($('res-plan-selection'))$('res-plan-selection').textContent='Choose a building to keep its map reference here.';
+  }
+  const buildingOpen = row => !['completed','closed','cancelled','rejected'].includes(row.status);
+  const buildingText = value => String(value||'').trim().toLocaleLowerCase();
+  function buildingContext(id=resourceSelection) {
+    if(id.startsWith('catalog:')) {
+      const source=resourceCatalog.entries.find(row=>row.map_number===id.slice(8));
+      if(!source)return null;
+      const saved=resourceItems.filter(row=>row.kind==='location'&&resourceMapNumber(row)===String(source.map_number));
+      return {name:source.name,mapNumber:String(source.map_number),ids:saved.map(row=>row.id),names:[source.name,...saved.map(row=>row.title)]};
+    }
+    const row=resourceItems.find(row=>row.id===id&&row.kind==='location');
+    return row?{name:row.title,mapNumber:resourceMapNumber(row),ids:[row.id],names:[row.title]}:null;
+  }
+  function buildingTickets(id=resourceSelection) {
+    const building=buildingContext(id);
+    if(!building||!resourceResult)return [];
+    const linked=row=>[row.location_id,row.resource_id,row.data?.location_id,row.data?.resource_id].some(value=>value&&building.ids.includes(value));
+    const named=row=>building.names.some(name=>buildingText(name)&&buildingText(name)===buildingText(row.data?.location));
+    // Text is a useful lead, never a verified resource relationship. Do not fuzzy-match it.
+    return (data.requests||[]).filter(row=>row.area_id===area&&(linked(row)||named(row))).map(row=>({row,linked:linked(row)})).sort((a,b)=>
+      Number(buildingOpen(b.row))-Number(buildingOpen(a.row)) ||
+      (['urgent','high','normal','low',null].indexOf(buildingPriority(a.row))-['urgent','high','normal','low',null].indexOf(buildingPriority(b.row))) ||
+      String(a.row.task?.due_on||a.row.due_on||'9999').localeCompare(String(b.row.task?.due_on||b.row.due_on||'9999')) || String(a.row.title).localeCompare(String(b.row.title)));
+  }
+  function buildingCounts(id) {
+    if(!resourceResult)return '<small>Ticket result not confirmed</small>';
+    const linked=buildingTickets(id).filter(ticket=>ticket.linked);
+    const summary=(items,kind)=>`${items.filter(ticket=>buildingOpen(ticket.row)).length} open ${kind} · ${items.filter(ticket=>buildingOpen(ticket.row)&&buildingPriority(ticket.row)==='urgent').length} urgent ${kind}`;
+    return `<small class="building-count">${linked.length?esc(summary(linked,'linked')):(transport.mode==='sample'?'Ticket links not established':'No linked tickets in this result')}</small>`;
+  }
+  function buildingAssignee(row) {
+    if(!row.task)return 'Not assigned';
+    if(!row.task.assignee_id)return 'Unassigned';
+    return data.members.find(member=>String(member.id)===String(row.task.assignee_id))?.name||'Assigned member · name unavailable';
+  }
+  function buildingStep(step,focus=true) {
+    if(section!=='buildings')return;
+    $('res-columns').dataset.buildingStep=step;
+    if(focus&&matchMedia('(max-width:1100px)').matches) {
+      const target=step==='buildings'?$('res-query'):step==='tickets'?$('res-ticket-heading'):$('res-detail-heading');
+      target?.focus({preventScroll:true});const panel=step==='buildings'?$('res-master-heading').parentElement:step==='tickets'?$('res-tickets'):$('res-detail');panel?.scrollIntoView({block:'start'});
+    }
+  }
+  function buildingRenderTickets() {
+    const host=$('res-tickets'),building=buildingContext();
+    host.hidden=section!=='buildings';
+    if(section!=='buildings')return;
+    const tickets=buildingTickets(),linked=tickets.filter(ticket=>ticket.linked),mentions=tickets.filter(ticket=>!ticket.linked);
+    const card=({row,linked})=>`<button type="button" class="building-ticket" data-building-ticket="${esc(row.id)}" aria-pressed="${resourceTicketSelection===row.id}"><span class="building-priority" data-priority="${esc(buildingPriority(row)||'unset')}">${esc(buildingPriority(row)||'Priority not set')}</span><strong>${esc(row.title)}</strong><small>Status: ${esc(String(row.status).replaceAll('_',' '))}</small><small>Assignee: ${esc(buildingAssignee(row))}</small><small>Due: ${esc(row.task?.due_on||row.due_on||'Unscheduled')}</small><small>${linked?'Explicit building link':'Location text match · unverified'}</small></button>`;
+    host.innerHTML=`<button class="button building-back" type="button" data-building-back="buildings">← Buildings</button><span class="eyebrow">2. Tickets</span><h2 id="res-ticket-heading" tabindex="-1">${building?esc(building.name):'Choose a building'}</h2><p class="caption">Linked tickets: open first, highest priority first.</p>${building?buildingCounts(resourceSelection):''}<div class="building-ticket-list" data-building-linked>${!resourceResult?'<p class="caption">Checking access.</p>':!building?'<p class="caption">Search buildings, then choose a location.</p>':linked.map(card).join('')||`<p class="caption building-linkage">${transport.mode==='sample'?'Ticket links are not established in this sample.':'No linked tickets in this result. When creating a request, choose its saved building to establish a link.'} Possible text matches appear separately and do not count as linked work.</p>`}</div>${mentions.length?`<section data-building-mentions><h3>Possible location matches</h3><p class="caption building-linkage">These tickets name this building in their location text. They are unverified and excluded from linked-ticket counts.</p><div class="building-ticket-list">${mentions.map(card).join('')}</div></section>`:''}<p class="caption">${transport.mode==='sample'?'Fictional sample records only.':'Up to 100 readable requests from a 1,000-record scan.'}${data.has_more?' More requests are omitted.':''}${data.scan_partial?' The source scan is incomplete.':''} Other work may exist.</p>`;
+    if(building&&resourceResult){const controls=document.createElement('div');controls.className='actions';controls.innerHTML='<button type="button" class="button" data-building-details>Building details</button>'+($('res-plan')?'<button type="button" class="button" data-building-map>View source map</button>':'');host.insertBefore(controls,host.querySelector('.building-ticket-list'));controls.querySelector('[data-building-details]').onclick=()=>{resourceTicketSelection='';resourceRenderDetail();buildingStep('detail');};controls.querySelector('[data-building-map]')?.addEventListener('click',()=>{$('res-plan').open=true;$('res-plan').scrollIntoView({block:'start'});$('res-plan').querySelector('summary').focus();});}
+    host.querySelector('[data-building-back]').onclick=()=>buildingStep('buildings');
+    host.querySelectorAll('[data-building-ticket]').forEach(button=>button.onclick=()=>{resourceTicketSelection=button.dataset.buildingTicket;buildingRenderTickets();resourceRenderDetail();buildingStep('detail');});
+    if(resourceResult&&data.features?.resources){if($('res-plan'))$('res-plan').hidden=false;if($('res-plan-selection'))$('res-plan-selection').textContent=building?`${building.name}${building.mapNumber?' · official map #'+building.mapNumber:' · no official map reference recorded'}. The plan is a source image; no position is inferred.`:'Choose a building to keep its map reference here.';}else resourceClearMap();
+  }
+  function buildingRenderDetail() {
+    if(section!=='buildings'||!resourceTicketSelection)return false;
+    const ticket=buildingTickets().find(ticket=>ticket.row.id===resourceTicketSelection);
+    if(!ticket){resourceTicketSelection='';return false;}
+    const {row,linked}=ticket;
+    $('res-detail').innerHTML=`<button class="button building-back" type="button" data-building-back="tickets">← Tickets</button><span class="eyebrow">3. Ticket details</span><h2 id="res-detail-heading" tabindex="-1">${esc(row.title)}</h2><dl class="resource-facts">${resourceFact('Priority',buildingPriority(row)||'Not set')}${resourceFact('Status',String(row.status).replaceAll('_',' '))}${resourceFact('Assignee',buildingAssignee(row))}${resourceFact('Due',row.task?.due_on||row.due_on||'Unscheduled')}${resourceFact('Location text',row.data?.location||'Not provided')}</dl><p class="caption building-linkage">${linked?'This request has an explicit reference to the selected saved building.':'The location text matches this building name. The relationship is unverified; no saved building link is established.'}</p><h3>Description</h3><p class="work-detail">${esc(row.data?.description||'No description recorded.')}</p><h3>Latest progress</h3><p class="work-detail">${esc(row.data?.progress_note||row.data?.triage_note||'No update yet.')}</p><div class="actions"><button type="button" class="button primary" data-building-open-request>Open request &amp; available actions</button><button type="button" class="button" data-building-location>Building details</button></div><p class="caption">Actions recheck current request and workspace permissions. This panel changes no work.</p>`;
+    $('res-detail').querySelector('[data-building-back]').onclick=()=>buildingStep('tickets');
+    $('res-detail').querySelector('[data-building-location]').onclick=()=>{resourceTicketSelection='';buildingRenderTickets();resourceRenderDetail();};
+    $('res-detail').querySelector('[data-building-open-request]').onclick=()=>document.dispatchEvent(new CustomEvent('enterprise:navigate',{detail:{section:'requests',selected:row.id}}));
+    return true;
+  }
   function resourceRenderList() {
     if(!resourceActive())return;
     const catalog=section==='buildings'&&resourceDirectory==='catalog';
     const rows=catalog?resourceCatalog.entries.filter(resourceMatches):resourceItems.filter(row=>(section==='buildings'?row.kind==='location':section==='assets'?row.kind==='asset':['reservation','conflict'].includes(row.kind))&&resourceMatches(row));
     $('res-show-catalog').setAttribute('aria-pressed',String(catalog));$('res-show-saved').setAttribute('aria-pressed',String(!catalog));
-    const card=row=>{const id=catalog?'catalog:'+row.map_number:row.id;return `<button class="resource-card" type="button" aria-pressed="${id===resourceSelection}" data-res-open="${esc(id)}"><span class="resource-number">${esc(catalog?row.map_number:row.kind==='conflict'?'!':row.kind==='asset'?'A':resourceMapNumber(row)||'•')}</span><span><strong>${esc(row.name||row.title)}</strong><small>${esc(catalog?[row.aliases,row.official_function_details].filter(Boolean).join(' · ')||'Catalog directory':`${row.kind} · ${row.status} · version ${row.version}`)}</small>${!catalog&&row.kind==='reservation'?`<small>${esc(resourceStamp(resourceDatum(row).starts_at))}</small>`:''}</span></button>`;};
+    const card=row=>{const id=catalog?'catalog:'+row.map_number:row.id;return `<button class="resource-card" type="button" aria-pressed="${id===resourceSelection}" data-res-open="${esc(id)}"><span class="resource-number">${esc(catalog?row.map_number:row.kind==='conflict'?'!':row.kind==='asset'?'A':resourceMapNumber(row)||'•')}</span><span><strong>${esc(row.name||row.title)}</strong><small>${esc(catalog?[row.aliases,row.official_function_details].filter(Boolean).join(' · ')||'Catalog directory':`${row.kind} · ${row.status} · version ${row.version}`)}</small>${section==='buildings'?buildingCounts(id):''}${!catalog&&row.kind==='reservation'?`<small>${esc(resourceStamp(resourceDatum(row).starts_at))}</small>`:''}</span></button>`;};
     if(section==='calendar') {
       const conflicts=rows.filter(row=>row.kind==='conflict'),bookings=rows.filter(row=>row.kind==='reservation').sort((a,b)=>String(a.data.starts_at).localeCompare(String(b.data.starts_at)));
       const day=value=>value&&Number.isFinite(Date.parse(value))?new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',dateStyle:'full'}).format(new Date(value)):'Unscheduled';
@@ -42,6 +112,7 @@
     if(!rows.length)$('res-list').innerHTML='<p class="resource-empty">No matching records in the current authorized result.</p>';
     $('res-list').querySelectorAll('[data-res-open]').forEach(button=>button.onclick=()=>resourceSelect(button.dataset.resOpen));
     $('res-counts').innerHTML=`<span><strong>${rows.length}</strong> ${catalog?'catalog matches':'matching returned records'}</span>${!catalog?`<span><strong>${resourceItems.filter(row=>row.kind==='conflict'&&row.status==='open').length}</strong> open conflicts in this result</span><span><strong>${resourceItems.filter(row=>row.kind==='asset'&&row.status==='checked_out').length}</strong> checked out in this result</span>`:''}`;
+    buildingRenderTickets();
     $('res-coverage').textContent=catalog?`All ${resourceCatalog.entries.length} catalog entries available to this workspace. Directory entries do not create operational records.`:resourceResult?.coverage||'Current workspace records have not been confirmed.';
   }
   function resourceRelated(row) {
@@ -50,12 +121,12 @@
     return `<h3>Explicitly linked work in the loaded authorized result</h3>${requests.length||projects.length?`<ul class="resource-related">${requests.map(record=>`<li><button class="link" data-res-work="requests" data-id="${esc(record.id)}">${esc(record.title)}</button></li>`).join('')}${projects.map(record=>`<li><button class="link" data-res-work="projects" data-id="${esc(record.id)}">${esc(record.name||record.title)}</button></li>`).join('')}</ul>`:'<p class="caption">No explicit resource links in the loaded requests or projects. A typed location name does not establish a verified link.</p>'}`;
   }
   function resourceRenderDetail() {
-    const target=$('res-detail');if(!resourceActive())return;
+    const target=$('res-detail');if(!resourceActive())return;if(buildingRenderDetail())return;
     if(resourceSelection.startsWith('catalog:')) {
       const source=resourceCatalog.entries.find(row=>row.map_number===resourceSelection.slice(8));if(!source){target.innerHTML='<h2>Choose a location</h2>';return;}
       const saved=resourceItems.filter(row=>row.kind==='location'&&resourceMapNumber(row)===source.map_number);
       target.innerHTML=`<span class="badge">Catalog reference ${esc(source.map_number)}</span><h2>${esc(source.name)}</h2><dl class="resource-facts">${resourceFact('Alias',source.aliases||'None listed')}${resourceFact('Recorded function',source.official_function_details||'Not specified in this source')}${resourceFact('Related spaces',source.related_spaces||'Not specified')}${source.historic_commons?resourceFact('Historic commons',source.historic_commons==='True'?'Marked in the source':'Not marked'):''}${resourceFact('Coordinates / ownership','Unverified; no placement or ownership inferred')}</dl>${resourceProvenance(source)}<h3>Saved references in this workspace</h3>${saved.map(row=>resourceButton('open','Open '+row.title,`data-id="${esc(row.id)}"`)).join('')||'<p class="caption">No saved reference in the returned result.</p>'}${resourceResult?.can_coordinate?`<div class="actions">${resourceButton('catalog.create','Add verified workspace reference')}</div>`:''}`;
-      resourceWireDetail(null);return;
+      buildingDetailNavigation();resourceWireDetail(null);return;
     }
     const row=resourceItems.find(item=>item.id===resourceSelection);
     if(!row){target.innerHTML='<h2>Choose a record</h2><p class="subtle">Select a location, asset, reservation or conflict. Detail access is checked again when refreshed.</p>';return;}
@@ -66,8 +137,9 @@
     if(row.kind==='conflict'){facts+=resourceFact('Resource',resourceName(d.resource_id))+resourceFact('Reason',d.reason)+resourceFact('Overlap starts',resourceStamp(d.starts_at))+resourceFact('Overlap ends',resourceStamp(d.ends_at))+resourceFact('Resolution reason',d.resolution_note||'Unresolved');actions+=(d.reservation_ids||[]).map(id=>resourceItems.some(item=>item.id===id)?resourceButton('open','Review '+resourceName(id),`data-id="${esc(id)}"`):'').join('');if(row.can_coordinate&&row.status==='open')actions+=resourceButton('conflict.resolve','Record resolution');}
     const url=resourceSafeLink(row.qr_url||row.url);
     target.innerHTML=`<span class="badge">${esc(row.kind)}</span><h2>${esc(row.title)}</h2><dl class="resource-facts">${facts}</dl><div class="actions">${actions}</div>${row.kind==='conflict'&&row.status==='open'?'<p class="resource-warning">Review both reservations. Explicitly cancel a booking before recording a resolution reason. No activity is moved automatically.</p>':''}${url?`<h3>First-party record link</h3><a class="resource-link" href="${esc(url)}">Open this record</a><p class="caption resource-link">${esc(url)}</p><p class="caption">Readable link fallback; no QR image is generated.</p>`:''}${resourceRelated(row)}<h3>Custody and revision history</h3><div id="res-history" class="resource-history"><p class="caption">Checking current authorized history.</p></div>`;
-    resourceWireDetail(row);resourceLoadHistory(row);
+    buildingDetailNavigation();resourceWireDetail(row);resourceLoadHistory(row);
   }
+  function buildingDetailNavigation(){if(section!=='buildings')return;const button=document.createElement('button');button.type='button';button.className='button building-back';button.textContent='← Tickets';button.onclick=()=>buildingStep('tickets');$('res-detail').prepend(button);const heading=$('res-detail').querySelector('h2');if(heading){heading.id='res-detail-heading';heading.tabIndex=-1;}}
   function resourceWireDetail(row) {
     $('res-detail').querySelectorAll('[data-res-action]').forEach(button=>button.onclick=()=>{const action=button.dataset.resAction;if(action==='open')resourceSelect(button.dataset.id);else resourceOpen(action,row);});
     $('res-detail').querySelectorAll('[data-res-work]').forEach(button=>button.onclick=()=>document.dispatchEvent(new CustomEvent('enterprise:navigate',{detail:{section:button.dataset.resWork,selected:button.dataset.id}})));
@@ -77,18 +149,20 @@
     try {const result=await api(resourceEndpoint('/'+encodeURIComponent(id)+'/history'));if(!resourceCurrent(token)||resourceSelection!==id)return;const container=$('res-history');if(!container)return;container.innerHTML=(result.items||[]).map(revision=>`<article><strong>Version ${esc(revision.version)} · ${esc(revision.event?.action||revision.event?.event||'Resource revision')}</strong><p class="caption">${esc(resourceStamp(revision.at))} · actor ID ${esc(revision.actor_id)}</p><pre class="work-detail">${esc(JSON.stringify(revision.event,null,2))}</pre></article>`).join('')||'<p class="caption">No revisions returned.</p>';const coverage=document.createElement('p');coverage.className='caption';coverage.textContent=result.coverage||'Latest authorized revisions.';container.append(coverage);}catch(error){if(resourceCurrent(token)&&resourceSelection===id&&$('res-history'))$('res-history').textContent=error.message;}
   }
   async function resourceLoad() {
-    const token=resourceToken();resourceResult=null;resourceItems=[];resourceRenderList();resourceRenderDetail();$('res-new').hidden=true;resourceNotice('Checking current workspace permissions and saved resources.');
+    const token=resourceToken();resourceClearMap();resourceResult=null;resourceItems=[];resourceRenderList();resourceRenderDetail();$('res-new').hidden=true;resourceNotice('Checking current workspace permissions and saved resources.');
     if(!area){resourceNotice('Choose an authorized workspace to load operational resources.');return;}
     try {const result=await api(resourceEndpoint('',{area_id:area}));if(!resourceCurrent(token))return;resourceResult=result;resourceItems=(result.items||[]).filter(row=>row.area_id===area);const requested=resourceSelection&&!resourceSelection.startsWith('catalog:')&&!resourceItems.some(row=>row.id===resourceSelection)?resourceSelection:null;if(requested){try{const extra=await api(resourceEndpoint('/'+encodeURIComponent(requested)));if(!resourceCurrent(token))return;if(extra.area_id===area)resourceItems.push(extra);}catch{if(resourceCurrent(token))resourceSelection='';}}if(!resourceCurrent(token))return;resourceNotice(transport.mode==='sample'?'Fictional isolated reviewer records. Real organizations and access are unchanged.':'Current workspace resource permissions confirmed.');$('res-new').hidden=!result.can_coordinate;$('res-new').textContent=section==='buildings'?'Add location':section==='assets'?'Add asset':'New reservation';resourceRenderList();resourceRenderDetail();}catch(error){if(!resourceCurrent(token))return;resourceItems=[];resourceResult=null;resourceNotice(error.message,true);resourceRenderList();resourceRenderDetail();}
   }
   function resourceEnter() {
-    const active=resourceActive();$('resource-workspace').hidden=!active;
+    resourceClearMap();const active=resourceActive();$('resource-workspace').hidden=!active;
     if(!active){if(resourceContext){resourceStoreDraft();resourceGeneration++;resourceContext='';resourceItems=[];resourceResult=null;if($('res-dialog').open)$('res-dialog').close();}return;}
     for(const id of ['work','campus-home','ask','contractors','roll-workspace','operations-workspace'])if($(id))$(id).hidden=true;
-    $('res-building-tools').hidden=section!=='buildings';$('heading').textContent=section==='buildings'?'Places, with a clear source.':section==='assets'?'Know where shared equipment stands.':'Reserve time. Resolve conflicts deliberately.';$('breadcrumb').textContent=section==='buildings'?'Buildings & locations':section==='assets'?'Assets & custody':'Resource calendar';
-    if(!data.features?.resources){resourceStoreDraft();resourceGeneration++;resourceContext='';resourceItems=[];resourceResult=null;resourceForm=null;if($('res-dialog').open)$('res-dialog').close();$('res-building-tools').hidden=true;$('res-new').hidden=true;$('res-list').replaceChildren();$('res-detail').innerHTML='<h2>Resources are unavailable</h2><p class="caption">This feature is not enabled for the current application.</p>';$('res-counts').replaceChildren();$('res-coverage').textContent='';resourceNotice('The resource rollout flag is disabled for this application.');return;}
-    const context=area+':'+section;resourceSelection=selected||'';
-    if(context!==resourceContext){resourceStoreDraft();if($('res-dialog').open)$('res-dialog').close();resourceForm=null;resourceContext=context;$('res-query').value='';}
+    $('res-columns').dataset.buildings=String(section==='buildings');$('res-master-heading').hidden=section!=='buildings';$('res-building-steps').hidden=section!=='buildings';$('res-tickets').hidden=section!=='buildings';$('res-search-text').textContent=section==='buildings'?'Search buildings':'Find a location, asset or reservation';$('res-query').placeholder=section==='buildings'?'Building name, map number or alias':'Name, map number, alias or function';$('res-search-label').classList.toggle('building-search',section==='buildings');if(section==='buildings')$('res-building-search').append($('res-search-label'));else $('resource-workspace').querySelector('.resource-toolbar').prepend($('res-search-label'));
+    $('res-building-tools').hidden=section!=='buildings';$('heading').textContent=section==='buildings'?'Buildings. Tickets. Clear priorities.':section==='assets'?'Know where shared equipment stands.':'Reserve time. Resolve conflicts deliberately.';$('breadcrumb').textContent=section==='buildings'?'Buildings & locations':section==='assets'?'Assets & custody':'Resource calendar';
+    if(!data.features?.resources){resourceStoreDraft();resourceGeneration++;resourceContext='';resourceItems=[];resourceResult=null;resourceForm=null;if($('res-dialog').open)$('res-dialog').close();$('res-building-tools').hidden=true;$('res-new').hidden=true;$('res-list').replaceChildren();$('res-detail').innerHTML='<h2>Resources are unavailable</h2><p class="caption">This feature is not enabled for the current application.</p>';$('res-counts').replaceChildren();$('res-tickets').replaceChildren();resourceTicketSelection='';$('res-coverage').textContent='';resourceNotice('The resource rollout flag is disabled for this application.');return;}
+    if($('res-plan'))$('resource-workspace').append($('res-plan'));
+    const context=area+':'+section;resourceSelection=selected||'';if(resourceSelection&&!resourceSelection.startsWith('catalog:'))resourceDirectory='saved';
+    if(context!==resourceContext){resourceStoreDraft();if($('res-dialog').open)$('res-dialog').close();resourceForm=null;resourceContext=context;resourceTicketSelection='';buildingStep('buildings',false);$('res-query').value='';}
     resourceGeneration++;resourceLoad();
   }
   function resourceLocal(value) {
@@ -140,3 +214,5 @@
   if($('res-plan-top'))$('res-plan-top').onclick=()=>$('res-plan-viewport')?.scrollTo({top:0,behavior:'smooth'});
   if($('res-plan-bottom'))$('res-plan-bottom').onclick=()=>$('res-plan-viewport')?.scrollTo({top:$('res-plan-viewport').scrollHeight,behavior:'smooth'});
   document.addEventListener('enterprise:render',resourceEnter);
+
+  document.addEventListener('enterprise:reset',()=>{resourceClearMap();resourceStoreDraft();resourceGeneration++;resourceContext='';resourceResult=null;resourceItems=[];resourceSelection='';resourceTicketSelection='';resourceForm=null;if($('res-dialog').open)$('res-dialog').close();$('resource-workspace').hidden=true;$('res-new').hidden=true;$('res-list').replaceChildren();$('res-detail').replaceChildren();$('res-counts').replaceChildren();$('res-tickets').replaceChildren();});

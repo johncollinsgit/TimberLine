@@ -33,7 +33,8 @@ class CampusReviewManifest
     {
         $paths = ['app/Enterprise/ReviewerPresentation.php', 'app/Enterprise/LocationCatalog.php',
             'app/Proposals/CampusReviewManifest.php', 'resources/views/service-proposals/campus-review.blade.php',
-            'resources/data/enterprise/lees-mcrae-locations.json', 'resources/data/enterprise/official-campus-plan.png'];
+            'resources/data/enterprise/lees-mcrae-locations.json', 'resources/data/enterprise/official-campus-plan.png',
+            'resources/images/enterprise/Everbranch-Rooted-Peak-Aligned.svg', 'resources/images/enterprise/Everbranch-Rooted-Peak-Aligned.png'];
         foreach (['resources/views/enterprise/*.blade.php', 'resources/js/enterprise/*.js', 'resources/js/enterprise/*.tsx',
             'resources/js/enterprise/*.css', 'resources/js/enterprise/reviewer/*.js'] as $pattern) {
             foreach (glob(base_path($pattern)) ?: [] as $file) {

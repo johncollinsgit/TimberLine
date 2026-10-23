@@ -22,9 +22,10 @@ export async function checkResourceWorkspace(page,evidence) {
     await page.locator('#res-query').fill('Financial Aid');
     assert.equal(await page.locator('#res-list [data-res-open]').count(),1);
     await page.locator('#res-list [data-res-open]').click();
-    await page.getByRole('heading',{name:'Cannon Welcome Center',exact:true}).waitFor();
+    await page.locator('#res-detail').getByRole('heading',{name:'Cannon Welcome Center',exact:true}).waitFor();
     assert.match(await page.locator('#res-detail').innerText(),/Cannon Student Center/);
     assert.equal(await page.locator('#res-plan-image').evaluate(image=>image.src.startsWith('data:image/png;base64,')),true);
+    await page.locator('#res-plan summary').click();
     await page.locator('#res-zoom-in').click();assert.equal(await page.locator('#res-zoom').inputValue(),'125');
     await page.locator('#res-plan-bottom').click();
     await page.screenshot({path:resolve(evidence,'resources-official-directory.png'),fullPage:true});

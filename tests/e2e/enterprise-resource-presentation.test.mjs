@@ -12,11 +12,43 @@ const source = await readFile(
 );
 function fixture(entries, { plan = false, ...metadata } = {}) {
     const nodes = new Map();
+    const element = () => {
+        const selected = new Map();
+        return {
+            value: "",
+            textContent: "",
+            innerHTML: "",
+            style: {},
+            dataset: {},
+            children: [],
+            setAttribute() {},
+            addEventListener() {},
+            querySelector(selector) {
+                // Only model selectors exercised by this catalog fixture.
+                const markup = {
+                    "[data-building-back]": /data-building-back=/,
+                    h2: /<h2[ >]/,
+                }[selector];
+                assert.ok(markup, `Unsupported fixture selector: ${selector}`);
+                if (!markup.test(this.innerHTML)) return null;
+                if (!selected.has(selector)) selected.set(selector, element());
+                return selected.get(selector);
+            },
+            querySelectorAll() {
+                return [];
+            },
+            prepend(child) {
+                this.children.unshift(child);
+            },
+            scrollTo() {},
+        };
+    };
     const get = (id) => {
         if (
             !plan &&
             [
                 "res-plan",
+                "res-plan-selection",
                 "res-zoom",
                 "res-zoom-value",
                 "res-plan-image",
@@ -29,19 +61,7 @@ function fixture(entries, { plan = false, ...metadata } = {}) {
             ].includes(id)
         )
             return null;
-        if (!nodes.has(id))
-            nodes.set(id, {
-                value: "",
-                textContent: "",
-                innerHTML: "",
-                style: {},
-                setAttribute() {},
-                addEventListener() {},
-                querySelectorAll() {
-                    return [];
-                },
-                scrollTo() {},
-            });
+        if (!nodes.has(id)) nodes.set(id, element());
         return nodes.get(id);
     };
     const script = source
@@ -65,7 +85,14 @@ function fixture(entries, { plan = false, ...metadata } = {}) {
         data: {},
         URL,
         URLSearchParams,
-        document: { addEventListener() {} },
+        document: {
+            addEventListener() {},
+            createElement(tag) {
+                assert.equal(tag, "button");
+                return element();
+            },
+        },
+        matchMedia: () => ({ matches: false }),
         location: {
             href: "https://workspace.example/enterprise",
             origin: "https://workspace.example",
@@ -97,6 +124,15 @@ test("a generic catalog starts without plan DOM and uses actual count and select
         f.get("res-detail").innerHTML,
         /Lees|page 2|campus parking/,
     );
+    assert.equal(f.get("res-plan"), null);
+    const back = f.get("res-detail").children[0];
+    assert.equal(back.type, "button");
+    assert.equal(back.textContent, "← Tickets");
+    back.onclick();
+    assert.equal(f.get("res-columns").dataset.buildingStep, "tickets");
+    const heading = f.get("res-detail").querySelector("h2");
+    assert.equal(heading.id, "res-detail-heading");
+    assert.equal(heading.tabIndex, -1);
 });
 test("catalog-level provenance is a fallback and unsafe source URLs are never clickable", () => {
     const f = fixture(

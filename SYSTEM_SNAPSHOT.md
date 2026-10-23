@@ -1,3 +1,27 @@
+## Enterprise usability follow-up (October 23; source candidate)
+
+The shared Enterprise renderer now uses full-width project/request tables and
+native dismissible detail drawers, with scoped sorting and retained drafts.
+Buildings keeps adjacent authorized tickets and details with a secondary map.
+Explicit saved-building request links require current same-workspace facility
+identity/version checks; typed labels remain unverified text. Concise tours and
+responsive placement use the actual controls. See the
+[UI changelog](docs/ui/UI_CHANGELOG.md) and
+[building-link contract](docs/operations/enterprise-request-building-links.md).
+
+Blank completion notes retain prior progress; resource revision timestamps are
+serialized as UTC without rewriting stored audit evidence. Runtime grants,
+private reviewer publication and actual hosted/device acceptance remain their
+own verified operations. No COO dashboard, role projection, paid provider,
+message delivery or payment activation follows from this source candidate.
+
+The compact header uses the current workspace identity and existing authorized
+published-review context for Proposal. The approved Rooted Peak horizontal logo
+retains its exact SVG/PNG artwork and proportions. Guided table navigation clears
+selection; opening a native detail drawer temporarily hides outside guide
+controls until Close/Escape. See
+[the header/tour contract](docs/operations/enterprise-workspace-header-tour.md).
+
 ## Unified Enterprise and proposal review candidate (October 22; not released)
 
 The isolated source candidate now imports proposal PR475 into current-main

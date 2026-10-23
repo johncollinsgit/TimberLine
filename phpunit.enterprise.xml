@@ -7,6 +7,9 @@
             <file>tests/Feature/Enterprise/EnterpriseVoiceRuntimeTest.php</file>
             <file>tests/Feature/Enterprise/EnterpriseAppManifestTest.php</file>
             <file>tests/Feature/Enterprise/EnterpriseSchemaTest.php</file>
+            <file>tests/Feature/Enterprise/EnterpriseRequestCompletionTest.php</file>
+            <file>tests/Feature/Enterprise/EnterpriseResourceHistoryTimestampTest.php</file>
+            <file>tests/Feature/Enterprise/EnterpriseRequestBuildingTest.php</file>
             <file>tests/Feature/Enterprise/EnterpriseProposalRuntimeTest.php</file>
             <file>tests/Feature/Enterprise/EnterprisePrefixMountTest.php</file>
             <file>tests/Feature/Enterprise/EnterpriseClientProvisioningTest.php</file>
