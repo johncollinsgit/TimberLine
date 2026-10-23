@@ -444,6 +444,7 @@ function Workspace({ boot }: { boot: any }) {
         );
     }
     async function propose() {
+        if (transport.mode === 'sample') return;
         if (dirty || pending.current) {
             setNotice(
                 "Save or discard the current draft before requesting a replacement proposal.",
@@ -723,6 +724,7 @@ function Workspace({ boot }: { boot: any }) {
                                         Use {t.name}
                                     </button>
                                 ))}
+                                {transport.mode === 'sample' ? <p className="ew-subtle">Workflow AI · Coming soon</p> : <>
                                 <label>
                                     Describe the workflow
                                     <textarea
@@ -740,6 +742,7 @@ function Workspace({ boot }: { boot: any }) {
                                 >
                                     Ask Everbranch for a draft
                                 </button>
+                                </>}
                             </>
                         )}
                     </section>
@@ -1903,7 +1906,7 @@ function Workspace({ boot }: { boot: any }) {
                                     {record?.workflow.version || "not saved"} ·{" "}
                                     {status}
                                 </p>
-                                {canDesign && (
+                                {canDesign && (transport.mode === 'sample' ? <p className="ew-subtle">Workflow AI · Coming soon</p> :
                                     <section className="ew-ai-draft">
                                         <h3>
                                             Ask Everbranch to propose a draft

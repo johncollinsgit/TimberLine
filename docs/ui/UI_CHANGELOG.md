@@ -1,3 +1,12 @@
+## 2026-10-23 — Reviewer AI Coming soon placeholders (source candidate)
+
+Show compact Chats, Assistants and Voice cards in the fictional reviewer demo.
+Keep chat, microphone, generated workflow drafting, Home AI summaries and AI
+usage controls unavailable, with matching tour guidance. Do not invent existing
+chats. Preserve native signed-in record checks and manual work controls. This
+proposal/PDF/workspace release activates no provider; live reviewer AI follows
+as a separate release and acceptance milestone.
+
 ## 2026-10-23 — Jobs, incoming tickets and project details (source candidate)
 
 Show projects and incoming tickets in compact searchable rows with department,

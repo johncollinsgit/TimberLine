@@ -396,7 +396,7 @@
     $('breadcrumb').textContent = section === 'projects' ? 'Projects' : section === 'contractors' ? 'Contractors' : 'Incoming tickets';
     renderNext();
     renderHome();
-    const contextLabels={home:data.demo_persona==='executive'?'Campus overview':'Campus overview',projects:'Projects',requests:'Incoming tickets',contractors:'Contractors',ask:'Ask Everbranch',roll_call:'Roll Call',buildings:'Buildings',calendar:'Calendar',people:'People & contractors',assets:'Assets',workflows:'Workflows',requester:'My service requests',finance:'Invoice & fund packets',usage:'AI & voice usage'};
+    const contextLabels={home:data.demo_persona==='executive'?'Campus overview':'Campus overview',projects:'Projects',requests:'Incoming tickets',contractors:'Contractors',ask:transport.mode==='sample'?'AI tools · Coming soon':'Ask Everbranch',roll_call:'Roll Call',buildings:'Buildings',calendar:'Calendar',people:'People & contractors',assets:'Assets',workflows:'Workflows',requester:'My service requests',finance:'Invoice & fund packets',usage:'AI & voice usage'};
     $('heading').textContent=contextLabels[section]||'Workspace';
     $('map').hidden = !map;
     $('request-list').hidden=view==='map';

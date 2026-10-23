@@ -538,3 +538,21 @@ test('Requests guidance follows only the supported department classification con
  assert.match(current.cards[2][1],/intake until assignment, then from the linked task/);
  delete snapshot.data.request_fields;tour.update(snapshot);assert.doesNotMatch(tour.describe(1,{}).detail,/choose a type/);
 });
+
+
+test("native record-backed finale overrides the shared sample Coming soon target", async () => {
+    const {tour,snapshot,context} = fixture();
+    const reviewerSource = await readFile(new URL('../../resources/js/enterprise/reviewer/tour.js',import.meta.url),'utf8');
+    vm.runInContext(reviewerSource,context);
+    snapshot.data.features.ask=true;
+    snapshot.data.features.voice_jobs=true;
+    tour.update(snapshot);
+    const base=context.EverbranchReviewerTour.scenes[6];
+    assert.equal(base.target,'reviewer-ai-coming-soon','The public sample keeps Coming soon');
+    const merged={...base,...tour.describe(6,base)};
+    assert.equal(merged.title,'Ask about a job');
+    assert.equal(merged.target,'ask-voice-controls');
+    assert.deepEqual(Array.from(merged.targets),['ask-voice-controls','ask-job-detail','ask-message-preview-actions']);
+    assert.match(merged.text,/enter a job question/);
+    assert.doesNotMatch(JSON.stringify(merged),/reviewer-ai-coming-soon|Coming soon/);
+});

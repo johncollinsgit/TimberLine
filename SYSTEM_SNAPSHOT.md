@@ -1,3 +1,13 @@
+## Reviewer AI tools deferred (October 23; source candidate)
+
+The fictional reviewer demonstration shows compact Coming soon placeholders for
+Chats, Assistants and Voice. Its chat, microphone, generated workflow drafting,
+Home AI summary and AI usage controls are unavailable. The native signed-in
+workspace keeps its existing record-backed Ask and separately gated capabilities.
+The proposal/PDF/workspace review release activates no provider; future reviewer
+AI remains a separate source and acceptance milestone. See
+[the release contract](docs/operations/enterprise-proposal-review-release.md).
+
 ## Enterprise work controls and scoped views (October 23; source candidate)
 
 Native work management reuses current graph permissions, department checks,

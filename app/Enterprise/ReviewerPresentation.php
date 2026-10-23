@@ -44,7 +44,7 @@ class ReviewerPresentation
             'can_design' => false, 'can_run' => false, 'items' => [], 'templates' => []];
         $html = view($workflow ? 'enterprise.workspace' : 'enterprise.app', ['presentation' => $presentation, 'enterpriseRole' => 'sample perspective',
             'scope' => $scope, 'bootstrap' => $bootstrap, 'inlineAssets' => $workflow ? $this->assets() : null,
-            'voiceAssets' => $workflow ? null : $this->voiceAssets(), 'campusReviewContext' => $review ? $campusReviewContext : null])->render();
+            'voiceAssets' => null, 'campusReviewContext' => $review ? $campusReviewContext : null])->render();
         if ($review) {
             $overlay = view('enterprise.campus-review-assets', ['campusReviewContext' => $campusReviewContext, 'campusReviewLayout' => $workflow ? 'canvas' : 'shell'])->render();
             $html = str_replace('</body>', $overlay.'</body>', $html);

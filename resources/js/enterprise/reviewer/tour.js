@@ -135,18 +135,18 @@
             {
                 id: "ask-everbranch-finale",
                 pageId: "enterprise-ask",
-                title: "Ask about a job",
+                title: "AI tools · Coming soon",
                 section: "ask",
                 duration: 30000,
-                target: "ask-voice-controls",
-                targets: Object.freeze(["ask-voice-controls", "ask-job-detail", "ask-message-preview-actions"]),
-                role: "Staff · current authorized job context",
-                text: "Type “Show event audio job” to inspect a matching sample job. Ask “Where is it?” or “Who is assigned?” to follow the same job.",
-                detail: "This demonstration uses deterministic record lookup, not generative AI. Talk requires your button press and microphone permission; previews remain Draft / not sent.",
+                target: "reviewer-ai-coming-soon",
+                targets: Object.freeze(["reviewer-ai-coming-soon"]),
+                role: "Future workspace tools",
+                text: "Chats, assistants and voice are coming soon. Open AI tools to see what is planned, then continue exploring campus work.",
+                detail: "This demo does not start a chat, use your microphone or call an AI provider.",
                 cards: [
-                    ["Find the same job", 'Type “Show event audio job”, then inspect the authorized job detail and source record.'],
-                    ["Follow up in context", 'Ask “Where is it?” or “Who is assigned?” against that same visible job. Unknown or inaccessible data stays unavailable.'],
-                    ["Talk, then review drafts", 'Use Talk deliberately when supported, or keep typing. Review email/text previews in Ask Everbranch: Draft / not sent.'],
+                    ["Chats", "Coming soon · workspace conversations."],
+                    ["Assistants", "Coming soon · focused help for recurring work."],
+                    ["Voice", "Coming soon · hands-free conversation."],
                 ],
             },
         ].map((scene) => Object.freeze(scene)),
@@ -426,24 +426,17 @@
                     ? "Replay from start"
                     : "Next scene",
             );
-            get("try").hidden =
-                actions.hideTrial === true || clock.index !== scenes.length - 1;
-            get("try").disabled = typeof actions.onTryIt !== "function";
-            get("try").textContent =
-                typeof actions.onTryIt === "function"
-                    ? "Try it out"
-                    : "Controlled trial connection pending";
-            get("trial-status").hidden =
-                actions.hideTrial === true ||
-                clock.index !== scenes.length - 1 ||
-                typeof actions.onTryIt === "function";
+            get("try").hidden = true;
+            get("try").disabled = true;
+            get("try").textContent = "Coming soon";
+            get("trial-status").hidden = true;
             get("email-open").hidden =
                 actions.emailPreview === false ||
                 ![1, 4, 5].includes(clock.index);
             get("screen").disabled =
                 actions.canNavigate?.(clock.index) === false;
             get("screen").dataset.screen = scene.section;
-            get("screen").textContent = actions.screenLabel?.(clock.index) || ({home:"Open campus overview",requests:"Open requests",workflows:"Open workflow workspace",roll_call:"Open Roll Call",assets:"Open assets",ask:"Open Ask Everbranch"})[scene.section] || "Open this screen";
+            get("screen").textContent = actions.screenLabel?.(clock.index) || ({home:"Open campus overview",requests:"Open requests",workflows:"Open workflow workspace",roll_call:"Open Roll Call",assets:"Open assets",ask:"Open AI tools"})[scene.section] || "Open this screen";
             get("screen").dataset.feature = scene.target || scene.section;
             get("progress").max = clock.duration;
             get("progress").value = clock.elapsed;

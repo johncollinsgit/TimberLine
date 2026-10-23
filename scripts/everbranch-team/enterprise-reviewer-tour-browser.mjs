@@ -194,7 +194,7 @@ try {
     for (let count = 0; count < 3; count++) {
         await launcher.click();
         await page
-            .getByRole("button", { name: "07 Ask Everbranch", exact: false })
+            .getByRole("button", { name: "07 AI tools", exact: false })
             .click();
         await page
             .getByRole("button", { name: "Restart", exact: true })

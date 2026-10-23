@@ -765,7 +765,7 @@ test("tour clock follows cumulative scene durations and preserves the three-minu
     assert.throws(() => new StoryClock([{duration: 0}]), /positive finite/);
 });
 
-test("Ask finale describes actual typed lookup and unsent previews without starting a microphone or provider", () => {
+test("AI finale names coming-soon tools without starting a chat microphone or provider", () => {
     const effects = [];
     const context = vm.createContext({
         fetch() {effects.push("fetch"); throw new Error("No automatic calls");},
@@ -776,12 +776,10 @@ test("Ask finale describes actual typed lookup and unsent previews without start
     assert.equal(finale.id, "ask-everbranch-finale");
     assert.equal(finale.pageId, "enterprise-ask");
     assert.equal(finale.section, "ask");
-    assert.deepEqual(Array.from(finale.targets), ["ask-voice-controls", "ask-job-detail", "ask-message-preview-actions"]);
-    assert.match(finale.text, /Show event audio job/);
-    assert.match(finale.text, /Where is it\?/);
-    assert.match(finale.text, /Who is assigned\?/);
-    assert.match(finale.detail, /deterministic record lookup, not generative AI/);
-    assert.match(finale.detail, /Draft \/ not sent/);
+    assert.deepEqual(Array.from(finale.targets), ["reviewer-ai-coming-soon"]);
+    assert.match(finale.title, /Coming soon/);
+    assert.match(finale.text, /Chats, assistants and voice are coming soon/);
+    assert.match(finale.detail, /does not start a chat, use your microphone or call an AI provider/);
     assert.equal(priorities.length, 8, "The Buildings walkthrough extends existing priorities");
     assert.equal(priorities.at(-1).id, "buildings", "Preserve the saved indices of existing priority steps");
     assert.equal(priorities.at(-1).target, "res-query");

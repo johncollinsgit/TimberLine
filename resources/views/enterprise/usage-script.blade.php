@@ -11,7 +11,7 @@
   $('usage-all').onclick=()=>readUsage();$('usage-refresh').onclick=()=>readUsage(usageDepartment);
   document.addEventListener('enterprise:workspace-state',event=>{if(!event.detail?.loaded){clearUsage();resetVoice();}});
   document.addEventListener('enterprise:render',()=>{
-    const enabled=!!data.features?.ai_usage; $('usage-nav').hidden=!enabled;
+    const enabled=transport.mode!=='sample'&&!!data.features?.ai_usage; $('usage-nav').hidden=!enabled;
     if(section!=='usage'||!enabled){clearUsage();return;}
     for(const id of ['work','campus-home','executive-demo','ask','contractors'])if($(id))$(id).hidden=true;
     $('create-request').hidden=true;$('create-project').hidden=true;$('heading').textContent='Understand workspace usage.';$('breadcrumb').textContent='AI & voice usage';

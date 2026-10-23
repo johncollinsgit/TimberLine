@@ -3,6 +3,36 @@ import {resolve} from 'node:path';
 
 /** Real shell/transport records; speech devices alone are simulated. Never calls a provider. */
 export async function checkVoiceShell(page,evidence,{sample=false}={}) {
+  if(sample){
+    await page.addInitScript(()=>{window.shellCaptures=[];window.shellSpeeches=[];window.SpeechRecognition=class{constructor(){shellCaptures.push(this)}start(){throw new Error('Coming-soon UI must not capture speech')}};});
+    await page.evaluate(()=>{window.shellCaptures=[];window.shellSpeeches=[];});
+    await page.locator('#ask-nav').click();
+    await page.locator('#reviewer-ai-coming-soon').waitFor({state:'visible'});
+    assert.deepEqual(await page.locator('#reviewer-ai-coming-soon h3').allTextContents(),['Chats','Assistants','Voice']);
+    assert.equal(await page.locator('#reviewer-ai-coming-soon .badge').count(),3);
+    assert.equal(await page.locator('#native-ask-workspace').getAttribute('inert'),'');
+    assert.equal(await page.locator('#native-ask-workspace').isHidden(),true);
+    for(const selector of ['#ask-submit','#ask-question','#conversation-send','#saved-assistant-new','#ask-voice-controls','#usage-nav']){
+      assert.equal(await page.locator(selector).isVisible(),false,`Coming-soon sample keeps ${selector} inactive`);
+    }
+    await page.evaluate(()=>{document.getElementById('ask-question').value='Fictional retained input';document.getElementById('ask-form').dispatchEvent(new Event('submit',{cancelable:true,bubbles:true}));});
+    assert.equal(await page.locator('#chat-log .chat-turn').count(),0,'Retained or scripted input cannot start a sample chat');
+    assert.equal(await page.evaluate(()=>shellCaptures.length),0);
+    assert.equal(await page.locator('#briefing-ai').isHidden(),true);
+    for(const [label,width,height] of [['desktop',1440,1000],['phone',390,844],['ipad-portrait',820,1180],['ipad-landscape',1180,820]]){
+      await page.setViewportSize({width,height});
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),true,`Coming-soon overflow at ${label}`);
+      await page.screenshot({path:resolve(evidence,`ai-coming-soon-${label}.png`),fullPage:true});
+    }
+    const retained=new URL(page.url());retained.hash='section=usage&area_id=10000000-0000-4000-8000-000000000001';
+    await page.goto(retained.href);await page.locator('#reviewer-ai-coming-soon').waitFor({state:'visible'});
+    assert.equal(new URLSearchParams(new URL(page.url()).hash.slice(1)).get('section'),'ask','Retained sample usage links open the Coming soon cards');
+    assert.equal(await page.locator('#enterprise-usage-overview').isVisible(),false);
+    await page.reload();await page.locator('#reviewer-ai-coming-soon').waitFor({state:'visible'});
+    assert.equal(await page.locator('#chat-log .chat-turn').count(),0,'Reload creates no invented conversation history');
+    await page.setViewportSize({width:1440,height:1000});
+    return;
+  }
   const tenant='synthetic-enterprise';
   const api=async(path,body)=>page.evaluate(async({path,body,tenant})=>{
     const url=new URL(path,location.origin);url.searchParams.set('tenant',tenant);

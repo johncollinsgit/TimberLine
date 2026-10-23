@@ -12,6 +12,17 @@
   </form></div>
 </section>
 <section id="ask" class="next-panel" hidden>
+  @if($enterpriseSample)
+  <div id="reviewer-ai-coming-soon" aria-labelledby="reviewer-ai-heading">
+    <h2 id="reviewer-ai-heading">AI tools</h2><p class="subtle">Coming soon. Continue exploring projects, tickets and team updates in this demo.</p>
+    <div class="planning-grid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr))">
+      <article class="panel"><h3>Chats</h3><p class="badge">Coming soon</p><p>Ask about your workspace in a conversation.</p></article>
+      <article class="panel"><h3>Assistants</h3><p class="badge">Coming soon</p><p>Keep a focused assistant for recurring work.</p></article>
+      <article class="panel"><h3>Voice</h3><p class="badge">Coming soon</p><p>Talk with Everbranch about your work.</p></article>
+    </div>
+  </div>
+  @endif
+  <div id="native-ask-workspace" @if($enterpriseSample) hidden inert @endif>
   <h2>Ask Everbranch</h2><p class="subtle">Signed in as {{ $enterprisePresentation['identity']['userName'] }} · {{ $enterpriseRole ?? 'current authorized role' }}. Answers use your selected workspace and current permissions.</p>
   <p class="caption" id="ask-model-caption">Answers use server-checked records and links. Approved model access can prioritize those sources. Chat cannot send email or perform work changes.</p>
   @include('enterprise.read-only-assistant')
@@ -25,4 +36,5 @@
   <form id="email-form" class="stack" hidden><label>Your authorized sender<select id="email-mailbox"></select></label><label>Exact recipient<input id="email-to" type="email" maxlength="254" required></label><label>Subject<input id="email-subject" maxlength="200" required></label><label>Message body<textarea id="email-body" maxlength="10000" rows="6" required></textarea></label><button class="button" type="submit">Preview exact draft</button></form>
   <div id="email-preview" hidden></div><button class="button primary" id="email-confirm" hidden>Confirm this exact email</button>
   <p class="caption">Sending requires your own explicitly authorized mailbox, the exact recipient/subject/body preview and a separate confirmation. Connecting Gmail does not send a message. Disconnecting revokes this application's Google access and may require reconnecting your other departments using the same Google account. Provider acceptance is distinct from delivery.</p></div></div>
+  </div>
 </section>

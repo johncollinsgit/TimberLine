@@ -140,24 +140,14 @@ try {
         .getByRole("button", { name: "Tour", exact: true })
         .click();
     await page
-        .getByRole("button", { name: "07 Ask Everbranch", exact: false })
+        .getByRole("button", { name: "07 AI tools", exact: false })
         .click();
-    assert.equal(
-        await page
-            .getByRole("button", {
-                name: "Controlled trial connection pending",
-                exact: true,
-            })
-            .isDisabled(),
-        true,
-    );
-    await page
-        .locator("[data-tour-trial-status]")
-        .waitFor({ state: "visible" });
+    assert.equal(await page.locator('[data-tour-try]').isHidden(),true);
+    assert.equal(await page.locator('[data-tour-trial-status]').isHidden(),true);
     const capturesBeforeFinale=await page.evaluate(()=>shellCaptures.length);
     await page.screenshot({path:resolve(evidence,'ask-finale-desktop.png'),fullPage:true});
-    await page.getByRole('button',{name:'Open Ask Everbranch',exact:true}).click();
-    await page.locator('#ask-voice-controls').getByRole('button',{name:'Talk',exact:true}).waitFor();
+    await page.getByRole('button',{name:'Open AI tools',exact:true}).click();
+    await page.locator('#reviewer-ai-coming-soon').waitFor({state:'visible'});
     assert.equal(await page.evaluate(()=>shellCaptures.length),capturesBeforeFinale,'Tour navigation never starts a microphone');
     assert.equal(await page.locator('#enterprise-main').getAttribute('data-demo-page'),'enterprise-ask');
     await page.getByRole('button',{name:'Tour',exact:true}).click();
@@ -208,6 +198,10 @@ try {
     await page.getByRole("button", { name: "Save draft", exact: true }).click();
     await page.getByText("SAMPLE DATA", { exact: false }).first().waitFor();
     await page.getByRole("button", { name: /Settings$/ }).click();
+    await page.getByText('Workflow AI · Coming soon',{exact:true}).waitFor();
+    assert.equal(await page.getByRole('button',{name:'Propose a new workflow draft',exact:true}).count(),0);
+    assert.equal(await page.getByRole('button',{name:'Ask Everbranch for a draft',exact:true}).count(),0);
+
     await page
         .getByRole("button", { name: "Review activation preview", exact: true })
         .click();

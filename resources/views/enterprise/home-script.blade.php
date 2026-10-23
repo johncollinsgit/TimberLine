@@ -1,6 +1,7 @@
   let homeGeneration = 0, homeArea = null, briefingBusy = false, briefingPending = null, executiveView = null;
   document.addEventListener('enterprise:workspace-state',event=>{if(!event.detail?.loaded){executiveView?.destroy();executiveView=null;if($('executive-demo'))$('executive-demo').hidden=true;}});
   function renderHome() {
+    $('briefing-ai').hidden=transport.mode==='sample';
     const executiveRoot = $('executive-demo');
     if (transport.mode === 'sample' && ['executive','demo_manager'].includes(data.demo_persona) && section === 'home' && executiveRoot) {
       homeGeneration++;homeArea=null;
@@ -25,6 +26,7 @@
     rememberUrl();
   }
   async function loadBriefing(withAI) {
+    if(withAI&&transport.mode==='sample')return;
     if (briefingBusy) return;
     const chosenArea=area, token=++homeGeneration;
     briefingBusy=true;$('briefing-refresh').disabled=true;$('briefing-ai').disabled=true;

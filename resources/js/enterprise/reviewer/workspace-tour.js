@@ -273,7 +273,7 @@
             ];
             return {
                 text: copy[index],
-                ...(index === 6 && feature("conversation_ui") ? {title: context?.data?.conversation?.ready === true ? "Ask about current work" : "Check conversation availability", target: context?.data?.conversation?.ready === true ? "ask-form" : "conversation-controls", targets: ["conversation-status", ...(feature("saved_assistants") ? ["saved-assistant-choice"] : []), ...(feature("private_memory") ? ["memory-use", "memory-manager"] : [])]} : index === 6 && feature("read_only_assistant") ? {title: "Check current records", target: "read-only-assistant", targets: ["read-only-intent", "read-only-answer"]} : {}),
+                ...(index === 6 && feature("conversation_ui") ? {title: context?.data?.conversation?.ready === true ? "Ask about current work" : "Check conversation availability", target: context?.data?.conversation?.ready === true ? "ask-form" : "conversation-controls", targets: ["conversation-status", ...(feature("saved_assistants") ? ["saved-assistant-choice"] : []), ...(feature("private_memory") ? ["memory-use", "memory-manager"] : [])]} : index === 6 && feature("read_only_assistant") ? {title: "Check current records", target: "read-only-assistant", targets: ["read-only-intent", "read-only-answer"]} : index === 6 ? {title: "Ask about a job", target: "ask-voice-controls", targets: ["ask-voice-controls", "ask-job-detail", "ask-message-preview-actions"]} : {}),
                 role: `Signed in: ${boot.identity.userName || "current user"} · Current workspace: ${workspace?.name || "unavailable"}`,
                 cards: records,
                 detail: ready()

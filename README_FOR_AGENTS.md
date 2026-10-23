@@ -1,3 +1,13 @@
+## Reviewer AI tools deferred (October 23; source candidate)
+
+Keep the fictional reviewer demonstration's Chats, Assistants and Voice as
+Coming soon placeholders. Do not expose chat, microphone, generated workflow
+drafting, Home AI summaries or AI usage controls there. Preserve native signed-in
+record-backed Ask and its independently gated capabilities. Future reviewer AI
+must be released and accepted separately; do not hold the proposal/PDF/workspace
+review package for provider work. See
+[the release contract](docs/operations/enterprise-proposal-review-release.md).
+
 ## Enterprise work controls and scoped views (October 23; source candidate)
 
 Keep work controls tied to the current authorized native graph, department,

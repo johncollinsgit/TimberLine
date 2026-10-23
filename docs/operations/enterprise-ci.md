@@ -4,6 +4,11 @@
 MySQL 8.4 recovery, runtime composition, Enterprise build, and existing private
 Chromium/WebKit checks. It also runs these focused reviewer-operations gates:
 
+The fictional reviewer sample currently exposes only Coming soon cards for
+Chats, Assistants and Voice. Its browser assertions require inactive chat,
+microphone and generated-draft controls while preserving manual workspace work.
+Native signed-in voice/record-check fixtures keep their separate positive gates.
+
 The dedicated PHPUnit process uses the same `1G` test memory ceiling as the
 primary `phpunit.xml`. This accommodates the complete combined suite, including
 local PDF rendering; it does not change a production PHP limit. Fresh isolated

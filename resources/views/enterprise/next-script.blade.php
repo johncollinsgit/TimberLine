@@ -35,18 +35,21 @@
     $('planning-list').replaceChildren(); planningData = null;
   }
   function renderNext() {
-    if(typeof renderVoice==='function')renderVoice();
-    renderReadOnlyAssistant();
+    const aiComingSoon=transport.mode==='sample';
+    if(aiComingSoon&&section==='usage')section='ask';
+    if(!aiComingSoon&&typeof renderVoice==='function')renderVoice();
+    if(!aiComingSoon)renderReadOnlyAssistant();
     $('generated-ask-panel').hidden = !data.features?.ask && !data.features?.conversation_ui;
     $('ask-model-caption').hidden = !data.features?.ask && !data.features?.conversation_ui;
-    renderConversation();
+    if(!aiComingSoon)renderConversation();
     $('email-context-panel').hidden = !data.features?.email_drafts;
-    $('ask-nav').hidden = !data.features?.ask && !data.features?.read_only_assistant && !data.features?.conversation_ui;
-    if (section === 'ask' && !data.features?.ask && !data.features?.read_only_assistant && !data.features?.conversation_ui) section = 'requests';
+    $('ask-nav').textContent=aiComingSoon?'AI tools': 'Ask Everbranch';
+    $('ask-nav').hidden = !aiComingSoon && !data.features?.ask && !data.features?.read_only_assistant && !data.features?.conversation_ui;
+    if (section === 'ask' && !aiComingSoon && !data.features?.ask && !data.features?.read_only_assistant && !data.features?.conversation_ui) section = 'requests';
     $('ask').hidden = section !== 'ask';
     $('work').hidden = ['ask', 'contractors'].includes(section);
     document.querySelectorAll('[data-section]').forEach(b => b.classList.toggle('active', b.dataset.section === section));
-    if (section === 'ask') { $('heading').textContent = 'Ask with the right context.'; $('breadcrumb').textContent = 'Ask Everbranch'; if(!conversationMode()&&!$('ask-question').value) $('ask-question').value=readDraft('ask:'+area).pending?.question||''; loadMailboxes(); }
+    if (section === 'ask') { $('heading').textContent=aiComingSoon?'AI tools · Coming soon':'Ask with the right context.'; $('breadcrumb').textContent=aiComingSoon?'AI tools':'Ask Everbranch'; if(!aiComingSoon){if(!conversationMode()&&!$('ask-question').value) $('ask-question').value=readDraft('ask:'+area).pending?.question||''; loadMailboxes();} }
     if (section === 'contractors') loadPlanning();
     rememberUrl();
   }
@@ -211,6 +214,7 @@
   };
   function chatMessage(text, className) { const node = document.createElement('div'); node.className = 'chat-turn ' + (className || ''); node.textContent = text; $('chat-log').append(node); return node; }
   $('ask-form').onsubmit = async e => {
+    if(transport.mode==='sample'){e.preventDefault();return;}
     if(conversationMode())return conversationSend(e);
     e.preventDefault(); if (askBusy || !area) return; const question = $('ask-question').value.trim(); if (!question) return;
     askPending = readDraft('ask:' + area).pending || null;
