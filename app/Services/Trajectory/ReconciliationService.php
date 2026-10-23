@@ -92,13 +92,63 @@ class ReconciliationService
             }
         }
 
-        $personalSummary = app(DashboardService::class)->build($house)['summary'];
-        $businessSummary = app(DashboardService::class)->build($business)['summary'];
+        $personalData = app(DashboardService::class)->build($house);
+        $personalSummary = $personalData['summary'];
+        $businessData = app(DashboardService::class)->build($business);
+        $businessSummary = $businessData['summary'];
+        $debtProgress = app(DebtPlanService::class)->combine($personalData['debt_progress'], $businessData['debt_progress']);
+        $incomeRows = collect(app(LedgerService::class)->entries($house))->where('date', '>=', now($house->timezone)->subDays(90)->toDateString())->where('date', '<', now($house->timezone)->toDateString());
+        $companyRows = collect(app(LedgerService::class)->entries($business))->keyBy('id');
+        $matchedIncomeIds = [];
+        $matchedOut = [];
+        foreach ($incomeRows->whereIn('flow', ['owner_wages', 'owner_distribution'])->where('amount_cents', '>', 0) as $row) {
+            $event = Event::where('space_id', $house->id)->where('action', 'reconcile')->where('record_id', $row['id'])->latest('id')->first();
+            $other = $companyRows->get($event?->after['paired_transaction_id'] ?? 0);
+            if ($other && in_array($other['flow'], ['owner_wages', 'owner_distribution'], true) && $other['amount_cents'] === -$row['amount_cents']) {
+                $matchedIncomeIds[] = $row['id'];
+                $matchedOut[] = $other;
+            }
+        }
+        $eliminatedIncome = 0;
+        $unresolvedIncome = false;
+        foreach ($personalData['planning']['sources'] as $source) {
+            $sourceRows = $incomeRows->whereIn('id', $source['ids']);
+            if ($sourceRows->whereIn('flow', ['owner_wages', 'owner_distribution'])->isEmpty()) {
+                continue;
+            }
+            if ($sourceRows->count() > 0 && $sourceRows->every(fn ($r) => in_array($r['id'], $matchedIncomeIds, true))) {
+                $eliminatedIncome += $source['expected_monthly_cents'];
+            } else {
+                $unresolvedIncome = true;
+            }
+        }
+        $eliminatedCosts = 0;
+        $includedFixed = array_column($businessData['planning']['fixed_records'], 'record_id');
+        foreach ($businessData['records'] as $record) {
+            if ($record->kind !== 'recurring' || ! in_array($record->id, $includedFixed, true)) {
+                continue;
+            }
+            $d = $record->data;
+            if (collect($matchedOut)->contains(fn ($r) => $r['account_id'] === ($d['account_id'] ?? null) && ClassificationService::merchant($r['merchant']) === ClassificationService::merchant($d['merchant']) && $r['amount_cents'] === $d['amount_cents'])) {
+                $eliminatedCosts += app(PlanningService::class)->monthly(abs($d['amount_cents']), $d['cadence']);
+            }
+        }
+        $debtProgress['expected_monthly_cents'] = max(0, $debtProgress['expected_monthly_cents'] - $eliminatedIncome);
+        $debtProgress['required_monthly_cents'] = $debtProgress['required_monthly_cents'] === null ? null : max(0, $debtProgress['required_monthly_cents'] - $eliminatedCosts);
+        $debtProgress['income_gap_cents'] = $debtProgress['required_monthly_cents'] === null ? null : max(0, $debtProgress['required_monthly_cents'] - $debtProgress['expected_monthly_cents']);
+        $debtProgress['eliminated_monthly_owner_income_cents'] = $eliminatedIncome;
+        $debtProgress['eliminated_monthly_owner_costs_cents'] = $eliminatedCosts;
+        $debtProgress['income_target_provisional'] = $unresolvedIncome;
+        $debtProgress['provisional'] = $debtProgress['provisional'] || $unresolvedIncome;
+        $debtProgress['income_target_note'] = $unresolvedIncome
+            ? 'Some owner income is unmatched or shares a source category with external income. Combined funding remains provisional until those sources are separated and matched.'
+            : 'Matched owner-only income sources and included matching owner-pay schedules are removed. Personal and Business keep separate payoff budgets.';
+
         $equity = \App\Models\Trajectory\Record::where('space_id', $house->id)->where('kind', 'asset')->where('active', true)->get()->filter(fn ($r) => ($r->data['asset_type'] ?? null) === 'business_equity');
         $excludedEquity = (int) $equity->filter(fn ($r) => ($r->data['linked_business_space_id'] ?? null) === $business->id)->sum(fn ($r) => $r->data['value_cents']);
         $ambiguous = $equity->contains(fn ($r) => empty($r->data['linked_business_space_id']));
         $combinedWorth = $ambiguous ? null : $personalSummary['net_worth_cents'] + $businessSummary['net_worth_cents'] - $excludedEquity;
 
-        return ['net_worth_cents' => $combinedWorth, 'excluded_business_equity_cents' => $excludedEquity, 'net_worth_complete' => ! $ambiguous && $personalSummary['net_worth_complete'] && $businessSummary['net_worth_complete'], 'net_worth_setup' => $ambiguous ? 'Link every business-equity valuation to its business before combining net worth.' : null, 'household' => $house->name, 'business' => $business->name, 'owner_income_cents' => (int) $ownerIn->sum('amount_cents'), 'company_owner_outflow_cents' => -(int) $companyOut->sum('amount_cents'), 'eliminated_transfers_cents' => $matched, 'unmatched_owner_income_cents' => (int) $ownerIn->sum('amount_cents') - $matched, 'household_spending_cents' => -(int) $personal->whereIn('flow', ['expense', 'refund', 'medical_payment', 'medical_membership'])->sum('amount_cents'), 'external_income_cents' => (int) $personal->merge($company)->where('flow', 'income')->sum('amount_cents') + (int) $ownerIn->sum('amount_cents') - $matched, 'external_spending_cents' => -(int) $personal->merge($company)->whereIn('flow', ['expense', 'refund', 'medical_payment', 'medical_membership'])->sum('amount_cents') - (int) $companyOut->sum('amount_cents') - $matched];
+        return ['debt_progress' => $debtProgress, 'debt_thermometers' => ['personal' => $personalData['debt_progress'], 'business' => $businessData['debt_progress'], 'combined' => $debtProgress], 'net_worth_cents' => $combinedWorth, 'excluded_business_equity_cents' => $excludedEquity, 'net_worth_complete' => ! $ambiguous && $personalSummary['net_worth_complete'] && $businessSummary['net_worth_complete'], 'net_worth_setup' => $ambiguous ? 'Link every business-equity valuation to its business before combining net worth.' : null, 'household' => $house->name, 'business' => $business->name, 'owner_income_cents' => (int) $ownerIn->sum('amount_cents'), 'company_owner_outflow_cents' => -(int) $companyOut->sum('amount_cents'), 'eliminated_transfers_cents' => $matched, 'unmatched_owner_income_cents' => (int) $ownerIn->sum('amount_cents') - $matched, 'household_spending_cents' => -(int) $personal->whereIn('flow', ['expense', 'refund', 'medical_payment', 'medical_membership'])->sum('amount_cents'), 'external_income_cents' => (int) $personal->merge($company)->where('flow', 'income')->sum('amount_cents') + (int) $ownerIn->sum('amount_cents') - $matched, 'external_spending_cents' => -(int) $personal->merge($company)->whereIn('flow', ['expense', 'refund', 'medical_payment', 'medical_membership'])->sum('amount_cents') - (int) $companyOut->sum('amount_cents') - $matched];
     }
 }

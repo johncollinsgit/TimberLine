@@ -2,6 +2,8 @@
 
 return [
     'enabled' => (bool) env('TRAJECTORY_ENABLED', false),
+    'gerald_enabled' => (bool) env('TRAJECTORY_GERALD_ENABLED', true),
+    'audio_rates' => ['version' => 'openai-gerald-audio-2026-10-22', 'valid_until' => '2026-11-20T00:00:00Z', 'transcription_micros_per_minute' => 4500, 'speech_text_input_per_million' => 600000, 'speech_cached_text_input_per_million' => 60000, 'speech_text_output_per_million' => 2400000, 'speech_audio_output_per_million' => 20000000],
     'sms_enabled' => (bool) env('TRAJECTORY_SMS_ENABLED', false),
     'checkout_enabled' => false,
     'plans' => ['personal', 'business', 'both'],

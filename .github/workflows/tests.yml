@@ -95,6 +95,9 @@ jobs:
       - name: Verify conversational voice, memory and stop controls with fictional fixtures
         run: node tests/browser/ai-voice-conversation.smoke.mjs
 
+      - name: Verify Trajectory debt plans and Gerald with isolated fictional finances
+        run: node tests/browser/trajectory-gerald.smoke.mjs
+
       - name: Verify workspace branch settings in Chromium and WebKit
         run: |
           BRANCH_SETTINGS_FIXTURES=1 php vendor/bin/pest --compact tests/Feature/Everbranch/BranchSettingsTest.php

@@ -1,3 +1,16 @@
+## Trajectory debt plans and Gerald (2026-10-22; source candidate)
+
+Trajectory adds observed Personal, selected Business and Combined debt thermometers,
+versioned payoff plans with fixed deadlines, and one consistent monthly funding target.
+Gerald is a private finance assistant with a weary, witty British persona, optional
+natural speech and separately confirmed plan settings. Opt-in full-history reviews
+can auto-categorize batches only when three consistent reviewed examples and the
+model agree; uncertain purposes and reviewed choices remain human decisions.
+Existing AI grants, model terms, shared credit/caps and bank-link gates remain in
+force. No provider, subscription, bank pilot or production rollout is activated by
+this source change. See `docs/operations/trajectory-runbook.md` for rates, recovery,
+privacy, acceptance and the dedicated Gerald rollback switch.
+
 ## Unified Enterprise and proposal review candidate (October 22; not released)
 
 The isolated source candidate now imports proposal PR475 into current-main

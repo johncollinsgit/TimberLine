@@ -38,6 +38,9 @@ class WorkspaceService
             }
             $name = $data['name'] ?? $space->name;
             unset($data['name']);
+            if (isset($space->settings['debt_plan']) && (isset($data['debt_extra_cents']) || isset($data['debt_target_months']))) {
+                $data['debt_plan'] = [...$space->settings['debt_plan'], 'extra_monthly_cents' => $data['debt_extra_cents'] ?? $space->settings['debt_plan']['extra_monthly_cents'], 'target_months' => $data['debt_target_months'] ?? $space->settings['debt_plan']['target_months'], 'target_on' => isset($data['debt_target_months']) && $data['debt_target_months'] !== $space->settings['debt_plan']['target_months'] ? now($space->timezone)->addMonthsNoOverflow($data['debt_target_months'])->toDateString() : ($space->settings['debt_plan']['target_on'] ?? now($space->timezone)->addMonthsNoOverflow($space->settings['debt_plan']['target_months'])->toDateString()), 'version' => $space->settings['debt_plan']['version'] + 1];
+            }
             $space->update(['name' => $name, 'settings' => [...($space->settings ?? []), ...$data]]);
             Event::create(['space_id' => $space->id, 'actor_id' => $user->id, 'action' => 'workspace_settings', 'before' => $before, 'after' => $space->only(['name', 'settings'])]);
         });

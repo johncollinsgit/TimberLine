@@ -18,6 +18,16 @@ class RefreshTrajectory extends Command
 
     public function handle(DashboardService $dashboard, SmsService $sms): int
     {
+        if (! \Illuminate\Support\Facades\Schema::hasTable('trajectory_records')) {
+            return self::SUCCESS;
+        }
+        Record::whereIn('kind', ['gerald_conversation', 'gerald_request', 'gerald_proposal'])->chunkById(200, function ($records): void {
+            foreach ($records as $record) {
+                if (($record->data['expires_at'] ?? PHP_INT_MAX) <= now()->timestamp) {
+                    $record->delete();
+                }
+            }
+        });
         if (! config('trajectory.enabled')) {
             return self::SUCCESS;
         }
