@@ -109,10 +109,6 @@ jobs:
           node --test tests/e2e/enterprise-voice-shell-scope.test.mjs
           php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseVoiceJobsTest.php tests/Feature/Enterprise/EnterpriseVoiceAssistantTest.php --compact --display-warnings
       - run: npm run build:enterprise
-      - name: Check read-only assistant controls without a provider
-        env:
-          ENTERPRISE_EVIDENCE: test-results/enterprise/read-only-assistant
-        run: node tests/browser/enterprise-read-only-assistant.smoke.mjs
       - name: Check shared reviewer rendering without account or route authority
         run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseReviewerRenderTest.php tests/Feature/Enterprise/EnterpriseResourcePresentationTest.php tests/Feature/Enterprise/EnterpriseReviewerTrialEntryTest.php tests/Feature/EnterpriseReviewerPublicTest.php tests/Feature/LeesMcRaeCampusDemoTest.php --compact --display-warnings
       - name: Check immutable proposal and version-bound campus review policies
@@ -126,6 +122,10 @@ jobs:
       - name: Install browser dependencies
         timeout-minutes: 45
         run: npx playwright install --with-deps chromium webkit
+      - name: Check read-only assistant controls without a provider
+        env:
+          ENTERPRISE_EVIDENCE: test-results/enterprise/read-only-assistant
+        run: node tests/browser/enterprise-read-only-assistant.smoke.mjs
       - name: Check persistent Enterprise UI in Chromium and WebKit
         env:
           ENTERPRISE_TEST_PHP: php
