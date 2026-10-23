@@ -20,13 +20,12 @@
   background-repeat:no-repeat;background-position:right 12px center;background-size:12px 8px;
 }
 @media(forced-colors:active){
-  #read-only-form select:not([multiple]),#conversation-controls select:not([multiple]){color-scheme:light dark;background-color:Canvas;color:CanvasText;border-color:ButtonText}
+  #read-only-form select:not([multiple]),#conversation-controls select:not([multiple]){color-scheme:light dark;background-color:Canvas;color:CanvasText;border-color:ButtonText;background-image:none}
   #read-only-form select:disabled:not([multiple]),#conversation-controls select:disabled:not([multiple]){color:GrayText;border-color:GrayText}
-}
-@media(forced-colors:active) and (prefers-color-scheme:dark){
-  #read-only-form select:not([multiple]),#conversation-controls select:not([multiple]){
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' style='color-scheme:dark'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='CanvasText' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  }
+  /* Paint with the document's actual system palette; an external SVG can resolve CanvasText differently. */
+  #read-only-form label:has(>select:not([multiple])),#conversation-controls label:has(>select:not([multiple])){position:relative;color-scheme:light dark}
+  #read-only-form label:has(>select:not([multiple]))::after,#conversation-controls label:has(>select:not([multiple]))::after{content:"";position:absolute;right:16px;bottom:18px;width:8px;height:8px;border-right:2px solid CanvasText;border-bottom:2px solid CanvasText;transform:rotate(45deg);pointer-events:none}
+  #read-only-form label:has(>select:disabled:not([multiple]))::after,#conversation-controls label:has(>select:disabled:not([multiple]))::after{border-color:GrayText}
 }
 
 /* The text conversation shares Ask's existing log/composer and never starts audio. */

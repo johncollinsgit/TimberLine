@@ -69,18 +69,22 @@ for (const [engine, launcher] of Object.entries({chromium,webkit})) {
                 const control=page.locator('#'+id);
                 const paint=await control.evaluate(async node=>{
                     const s=getComputedStyle(node),source=s.backgroundImage;
-                    if (!source.startsWith('url(')) throw new Error('A painted SVG disclosure is required');
-                    const image=new Image();image.src=source.slice(5,-2);await image.decode();
-                    const canvas=document.createElement('canvas');canvas.width=12;canvas.height=8;const ctx=canvas.getContext('2d');ctx.drawImage(image,0,0);
-                    const pixels=ctx.getImageData(0,0,12,8).data;let arrow=[0,0,0,0];
-                    for(let i=0;i<pixels.length;i+=4) if(pixels[i+3]>arrow[3]) arrow=[...pixels.slice(i,i+4)];
-                    const before={color:s.color,border:s.borderColor};node.disabled=true;
-                    const disabled={color:getComputedStyle(node).color,border:getComputedStyle(node).borderColor};node.disabled=false;
-                    return{height:node.getBoundingClientRect().height,scheme:s.colorScheme,background:s.backgroundColor,arrow,before,disabled,forced:matchMedia('(forced-colors:active)').matches};
+                    const forced=matchMedia('(forced-colors:active)').matches;let arrow=null;
+                    if(!forced){
+                        if (!source.startsWith('url(')) throw new Error('A painted SVG disclosure is required outside forced colors');
+                        const image=new Image();image.src=source.slice(5,-2);await image.decode();
+                        const canvas=document.createElement('canvas');canvas.width=12;canvas.height=8;const ctx=canvas.getContext('2d');ctx.drawImage(image,0,0);
+                        const pixels=ctx.getImageData(0,0,12,8).data;arrow=[0,0,0,0];
+                        for(let i=0;i<pixels.length;i+=4) if(pixels[i+3]>arrow[3]) arrow=[...pixels.slice(i,i+4)];
+                    }
+                    const caret=()=>{const p=getComputedStyle(node.parentElement,'::after');return{content:p.content,color:p.borderBottomColor,width:p.width,height:p.height,pointerEvents:p.pointerEvents}};
+                    const before={color:s.color,border:s.borderColor,caret:caret()};node.disabled=true;
+                    const disabled={color:getComputedStyle(node).color,border:getComputedStyle(node).borderColor,caret:caret()};node.disabled=false;
+                    return{height:node.getBoundingClientRect().height,scheme:s.colorScheme,background:s.backgroundColor,image:source,arrow,before,disabled,forced};
                 });
-                assert.ok(paint.height>=44);assert.ok(paint.arrow[3]>200);
+                assert.ok(paint.height>=44);if(!paint.forced)assert.ok(paint.arrow[3]>200);
                 if(forcedColors==='none') assert.equal(paint.scheme,'light','Normal dark preference retains the approved light control palette');
-                if(paint.forced){assert.notEqual(paint.before.color,paint.disabled.color);assert.notEqual(paint.before.border,paint.disabled.border);}
+                if(paint.forced){assert.equal(paint.image,'none');assert.equal(paint.before.caret.content,'""');assert.equal(paint.before.caret.pointerEvents,'none');assert.notEqual(paint.before.caret.color,paint.disabled.caret.color);assert.notEqual(paint.before.color,paint.disabled.color);assert.notEqual(paint.before.border,paint.disabled.border);}
                 const path=resolve(evidence,engine+'-'+name+'-'+id+'.png');const png=await control.screenshot({path});
                 const raster=await page.evaluate(async imageSource=>{
                     const image=new Image();image.src=imageSource;await image.decode();
@@ -96,7 +100,7 @@ for (const [engine, launcher] of Object.entries({chromium,webkit})) {
                 assert.ok(raster.contrast>=3,JSON.stringify({engine,name,id,paint,raster}));
                 controls.push({id,path,...paint,...raster});
             }
-            records.push({engine,name,controls,checks:'Actual native selector SVG paint, light default, normal/forced light/dark contrast, disabled GrayText, 44px target'});
+            records.push({engine,name,controls,checks:'Actual native selector paint, SVG in normal palette and CSS caret in forced colors, light default, normal/forced light/dark contrast, disabled GrayText, 44px target'});
         }
         await page.close();
     } finally {await browser.close();}
