@@ -169,7 +169,7 @@ class Assistant
             $result = ['mode' => 'openai_generated', 'provider_dispatch' => true, 'provider_simulated' => app()->environment('testing'), 'provider_calls_live_verified' => false,
                 'reply' => $value['answer'], 'scope' => ['tenant_id' => (string) $tenant->id, 'user_id' => (string) $user->id, 'area_id' => $area],
                 'session_id' => $sessionId, 'request_id' => $requestId, 'sample_data' => true, 'as_of' => now()->toIso8601String(),
-                'sources' => array_values(array_filter($current['sources'], fn ($source) => in_array($source['ref'], $value['refs'], true))),
+                'sources' => $current['sources'], 'cited_refs' => $value['refs'],
                 'calculations' => $current['calculations'], 'usage' => ['receipt_id' => $reservation['id'], 'held_or_charged_ceiling_microusd' => $response['maximum_actual_microusd'], 'provider_invoice_reconciled' => false],
                 'notice' => 'OpenAI-generated text; check the linked current sources. Calculations are server computed. No work changed, message sent, saved assistant or persistent preference memory. This conversation expires after ten minutes.'];
             $row->data = array_replace($data, ['history' => array_slice([...$data['history'], ['role' => 'user', 'text' => $data['pending_payload']['question']],

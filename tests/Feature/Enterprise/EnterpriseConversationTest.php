@@ -297,6 +297,9 @@ final class EnterpriseConversationTest extends EnterpriseConversationFixture
         });
         $result = $this->turn(['intent' => 'costs'])->assertOk()->json();
         $this->assertCount(2, $result['calculations']);
+        $this->assertCount(3, $result['sources'], 'Every selected calculation input retains an inspectable current source, even when the model cites one.');
+        $this->assertCount(1, $result['cited_refs']);
+        $this->assertEqualsCanonicalizing(array_column($result['sources'], 'ref'), array_merge(...array_column($result['calculations'], 'input_refs')));
         $this->assertStringContainsString('/enterprise-campus/enterprise/assistant-sources/cost/', $result['sources'][0]['url']);
         $this->assertStringNotContainsString('approved budget variance', json_encode($result));
         Http::assertSentCount(1);
