@@ -28,6 +28,9 @@ class RecordActivity
             if ($kind === null) {
                 return $response;
             }
+            if ($request->isMethod('POST') && $request->attributes->get('service_proposal_activity_completed') !== $kind) {
+                return $response;
+            }
             $version = app(Access::class)->recipient($request, $request->route('token'));
             $unlocked = app(Access::class)->unlocked($request, $version);
             if ($kind !== 'proposal_view' && ! $unlocked) {
@@ -36,7 +39,7 @@ class RecordActivity
             $page = null;
             if ($kind === 'proposal_view') {
                 $kind = $unlocked ? 'proposal_view' : 'link_opened';
-                $section = $request->query('section', 'overview');
+                $section = $request->attributes->get('service_proposal_activity_section', $request->query('section', 'overview'));
                 $page = is_string($section) && in_array($section, Activity::SECTIONS, true) ? $section : 'overview';
             } elseif ($kind === 'campus_page') {
                 $page = $request->route('page', 'home');

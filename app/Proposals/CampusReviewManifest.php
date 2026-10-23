@@ -32,8 +32,9 @@ class CampusReviewManifest
     protected function sourceHash(): string
     {
         $paths = ['app/Proposals/Activity.php', 'app/Proposals/ActivityController.php', 'app/Proposals/RecordActivity.php',
-            'app/Proposals/RateLimits.php', 'app/Proposals/ResponsePolicy.php', 'app/Proposals/CampusReviewController.php', 'routes/service-proposals.php',
+            'app/Proposals/RateLimits.php', 'app/Proposals/ResponsePolicy.php', 'app/Proposals/RecipientController.php', 'app/Proposals/CampusReviewController.php', 'routes/service-proposals.php',
             'resources/js/service-proposals/activity.js', 'resources/views/service-proposals/activity-bridge.blade.php',
+            'resources/views/service-proposals/section-tabs.blade.php',
             'app/Enterprise/ReviewerPresentation.php', 'app/Enterprise/LocationCatalog.php',
             'app/Proposals/CampusReviewManifest.php', 'resources/views/service-proposals/campus-review.blade.php',
             'resources/data/enterprise/lees-mcrae-locations.json', 'resources/data/enterprise/official-campus-plan.png',

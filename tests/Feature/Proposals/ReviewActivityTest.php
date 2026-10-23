@@ -50,6 +50,8 @@ test('opens failed passwords and actual unlocks remain distinct and encrypted', 
     $events = app(Activity::class)->read($this->version)['events'];
     expect(array_column($events, 'event'))->toBe(['link_opened']);
     $this->post($this->url.'/unlock', ['password' => 'Synthetic review password'])->assertRedirect();
+    $this->post($this->url.'/unlock', ['password' => 'wrong while an older grant is still valid'])->assertRedirect();
+    $this->post($this->url.'/reviewer-name', ['reviewer_name' => 'not-an-allowed-name'])->assertRedirect();
     $this->post($this->url.'/reviewer-name', ['reviewer_name' => 'Ross'])->assertRedirect();
     $response = $this->get($this->url)->assertOk()->assertSee('data-review-activity', false);
     $events = app(Activity::class)->read($this->version)['events'];
@@ -146,4 +148,15 @@ test('background activity and foreground proposal actions share the framework se
             ->and($route->locksFor())->toBe(10)
             ->and($route->waitsFor())->toBe(10);
     }
+});
+
+test('rejected comment forms are not saved actions and the actual rendered error section is recorded', function (): void {
+    $this->post($this->url.'/unlock', ['password' => 'Synthetic review password']);
+    $this->post($this->url.'/reviewer-name', ['reviewer_name' => 'Ross']);
+    $this->post($this->url.'/comments', ['page' => 'overview', 'body' => '', 'comment_key' => (string) Str::uuid()])->assertRedirect();
+    $this->get($this->url)->assertOk();
+    $events = collect(app(Activity::class)->read($this->version)['events']);
+    expect($events->where('event', 'comment_saved'))->toHaveCount(0)
+        ->and($events->last()['event'])->toBe('proposal_view')
+        ->and($events->last()['page'])->toBe('review');
 });

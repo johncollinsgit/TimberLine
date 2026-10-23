@@ -61,6 +61,7 @@ class CampusReviewController
         $version = $this->version($request, $token, $page);
         $data = $this->input($request, ['reviewer_name' => ['required', 'string', Rule::in($version->payload['reviewer_names'] ?? [])]], $version);
         $request->session()->put('service_proposal_name.'.$version->id, $data['reviewer_name']);
+        $request->attributes->set('service_proposal_activity_completed', 'name_selected');
 
         return $this->saved($request, $version, $token, $page);
     }
@@ -76,6 +77,7 @@ class CampusReviewController
             'expected_reviewer_name' => ['required', 'string', Rule::in($version->payload['reviewer_names'] ?? [])]], $version);
         abort_unless($data['expected_reviewer_name'] === $name, 409, 'The review display name changed. Review the retained comment before retrying.');
         $this->proposals->commentCampus($version, $name, $page, $data['body'], $data['comment_key'], $data);
+        $request->attributes->set('service_proposal_activity_completed', 'comment_saved');
 
         return $this->saved($request, $version, $token, $page);
     }

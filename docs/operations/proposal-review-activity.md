@@ -55,3 +55,9 @@ a ten-second lease and wait bound.
 
 The HTTPS activity check also overlaps reports and name saves against real PHP
 workers on macOS/Linux, verifying the current name after each concurrent batch.
+
+Server action events are emitted only after the controller confirms a successful
+unlock, name save or comment save. Rejected passwords/forms are not logged as
+successful actions, even if an earlier password grant is still valid. Initial
+proposal-section events use the section actually rendered, including validation
+error redirects.
