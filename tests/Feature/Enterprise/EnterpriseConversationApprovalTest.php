@@ -15,7 +15,8 @@ final class EnterpriseConversationApprovalTest extends EnterpriseConversationFix
     public static function invalidAbsoluteExpiries(): array
     {
         return [['+1 hour'], ['tomorrow'], ['2027-02-31T04:00:00Z'], ['2027-13-01T04:00:00+00:00'],
-            ['2027-01-01T24:00:00Z'], ['2027-01-01T04:00:60Z'], ['2027-01-01'], ['2027-01-01T04:00:00Z trailing']];
+            ['2027-01-01T24:00:00Z'], ['2027-01-01T04:00:60Z'], ['2027-01-01'], ['2027-01-01T04:00:00Z trailing'], ['2027-01-01T04:00:00+99:99'],
+            ['2027-01-01T04:00:00+12:99'], ['2027-01-01T04:00:00-00:00']];
     }
 
     #[DataProvider('invalidAbsoluteExpiries')]
@@ -43,6 +44,9 @@ final class EnterpriseConversationApprovalTest extends EnterpriseConversationFix
         $this->approve(['valid_until' => now()->addHour()->format('Y-m-d\TH:i:s.uP')]);
         $this->turn()->assertOk();
         Http::assertSentCount(2);
+        $this->approve(['valid_until' => now()->addHour()->setTimezone('Asia/Kolkata')->format('Y-m-d\TH:i:sP')]);
+        $this->turn()->assertOk();
+        Http::assertSentCount(3);
     }
 
     public function test_missing_replaced_or_changed_approved_ledger_never_initializes_a_campaign(): void

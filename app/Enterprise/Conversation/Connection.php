@@ -85,7 +85,7 @@ class Connection
         $valid = false;
         try {
             $text = $config['valid_until'];
-            if (preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/D', $text)) {
+            if (preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-](?:(?:0\d|1[0-3]):[0-5]\d|14:00))$/D', $text) && ! str_ends_with($text, '-00:00')) {
                 $expiry = \DateTimeImmutable::createFromFormat(str_contains($text, '.') ? '!Y-m-d\TH:i:s.uP' : '!Y-m-d\TH:i:sP', $text);
                 $errors = \DateTimeImmutable::getLastErrors();
                 $valid = $expiry && ($errors === false || $errors['warning_count'] === 0 && $errors['error_count'] === 0)
