@@ -28,9 +28,20 @@ function fixture({mode='private',generation=true,drafts=true,conversation=false}
     context.renderVoice();return {context,calls,effects,mounts};
 }
 test('generation and draft callbacks require private feature configuration',()=>{
-    const enabled=fixture();assert.equal(typeof enabled.mounts[0].generate,'function');assert.equal(typeof enabled.mounts[0].cancelSession,'function');assert.equal(typeof enabled.mounts[0].preparePreview,'function');
-    for(const settings of [{mode:'sample'},{generation:false}]){const value=fixture(settings).mounts[0];assert.equal(value.generate,undefined);assert.equal(value.cancelSession,undefined);assert.equal(value.preparePreview,undefined);}
-    assert.equal(fixture({drafts:false}).mounts[0].preparePreview,undefined);
+    const enabled=fixture();assert.equal(enabled.mounts.length,1);assert.equal(typeof enabled.mounts[0].generate,'function');assert.equal(typeof enabled.mounts[0].cancelSession,'function');assert.equal(typeof enabled.mounts[0].preparePreview,'function');
+    const disabled=fixture({generation:false});assert.equal(disabled.mounts.length,1,'Native record lookup remains available without generation');
+    const value=disabled.mounts[0];assert.equal(typeof value.lookup,'function');assert.equal(value.generate,undefined);assert.equal(value.cancelSession,undefined);assert.equal(value.preparePreview,undefined);
+    const noDrafts=fixture({drafts:false});assert.equal(noDrafts.mounts.length,1);assert.equal(typeof noDrafts.mounts[0].generate,'function');assert.equal(typeof noDrafts.mounts[0].cancelSession,'function');assert.equal(noDrafts.mounts[0].preparePreview,undefined);
+});
+test('reviewer coming-soon mode never mounts voice or performs IO even with synthetic feature flags present',()=>{
+    const {context,mounts,calls,effects}=fixture({mode:'sample',generation:true,drafts:true});
+    assert.equal(mounts.length,0);assert.equal(context.voiceSession,null);assert.equal(context.voiceScope,null);
+    assert.equal(context.$('ask-voice-pane').hidden,true);assert.deepEqual(calls,[]);assert.deepEqual(effects,[]);
+});
+test('entering reviewer coming-soon mode retires native voice and its callbacks without IO',()=>{
+    const {context,mounts,effects,calls}=fixture(),old=mounts[0];context.transport.mode='sample';context.renderVoice();
+    assert.equal(mounts.length,1);assert.equal(effects.filter(value=>value==='dispose').length,1);assert.equal(context.voiceSession,null);assert.equal(context.$('ask-voice-pane').hidden,true);
+    const before=effects.slice();old.onReply({});old.onTranscript('Retired native text');old.onError('Retired native error');assert.deepEqual(effects,before);assert.deepEqual(calls,[]);
 });
 test('old session cancellation and transport remain bound to the original tenant endpoint',async()=>{
     const {context,mounts,calls}=fixture(),old=mounts[0];
