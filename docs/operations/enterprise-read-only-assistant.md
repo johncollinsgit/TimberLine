@@ -27,7 +27,10 @@ interpret a question. No assistant, conversation or preference memory is stored.
 Results identify sample data when configured, include an as-of time, fixed bounded
 coverage, current server-generated source links and all cost calculation inputs.
 The same tenant, department, native project/task and financial policies apply to
-source reads and clicks. Fresh actor/scope checks and a second identical bounded canonical read reject a
+source reads and clicks. Citations open a dedicated authenticated exact-record
+source page, independently of the bounded workspace list. A cost omitted by newer
+contractor rows, an old request outside the 100-row list, or a building omitted by
+other resources still resolves by current canonical policy. No list cap is enlarged. Fresh actor/scope checks and a second identical bounded canonical read reject a
 role change, object-grant revocation or changed source calculation during retrieval.
 The per-pass bounds are identical; the result is still a checked sample, not a total. No browser-selected role, tool, amount, URL or actor can grant
 access. The role-preview surface cannot enable these tools for another actor.
@@ -109,7 +112,7 @@ the resulting exact reviewed build rather than bypass stale-version rejection.
 
 Tour copy before: “Ask Where is it? or Who is assigned? against the chosen job.”
 With the read-only feature, after: “Choose a record check, then inspect its sources.
-This read-only assistant makes no changes or paid AI calls.” The target changes to
+These deterministic record checks use no AI model and make no changes.” The target changes to
 `#read-only-assistant`; financial copy reflects actual access. Existing Talk copy
 remains only for the separately enabled job-lookup feature.
 

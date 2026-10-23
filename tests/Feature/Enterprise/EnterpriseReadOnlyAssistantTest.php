@@ -356,6 +356,87 @@ final class EnterpriseReadOnlyAssistantTest extends TestCase
         $this->check('costs')->assertConflict()->assertJsonMissingPath('comparisons');
     }
 
+    public function test_cost_citation_opens_exact_canonical_source_even_when_newer_other_kinds_fill_planning_list(): void
+    {
+        $this->owner();
+        config(['enterprise.sample_data' => true]);
+        $cost = $this->cost($this->project(), 50, 'recorded_cost');
+        for ($index = 0; $index < 201; $index++) {
+            TeamOperationRecord::query()->create(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenant->id,
+                'area_id' => $this->area, 'kind' => 'ent_contractor', 'source_key' => Str::random(64),
+                'title' => 'Synthetic later contractor '.$index, 'status' => 'active', 'visibility' => 'area',
+                'version' => 1, 'data' => [], 'created_at' => now()->addDay(), 'updated_at' => now()->addDay()]);
+        }
+        $listing = $this->getJson(route('enterprise.planning', ['tenant' => $this->tenant->slug, 'area_id' => $this->area]))->assertOk()->json();
+        $this->assertCount(200, $listing['items']);
+        $this->assertNotContains($cost['id'], array_column($listing['items'], 'id'));
+        $source = $this->check('costs')->assertOk()->assertJsonCount(1, 'sources')->json('sources.0');
+        $response = $this->get($source['url'])->assertOk()->assertHeader('Cache-Control', 'no-store, private')
+            ->assertSee('cost:'.$cost['id'])->assertSee('Amount in minor units')->assertSee('<dd>50</dd>', false)
+            ->assertSee('<dd>USD</dd>', false)->assertSee('<dd>recorded_cost</dd>', false);
+        $this->assertStringContainsString('/assistant-sources/cost/'.$cost['id'], $source['url']);
+        if (getenv('ENTERPRISE_ASSISTANT_SOURCE_EVIDENCE')) {
+            file_put_contents(getenv('ENTERPRISE_ASSISTANT_SOURCE_EVIDENCE'), $response->getContent());
+        }
+        $this->tenant->users()->updateExistingPivot($this->coordinator->id, ['role' => 'member']);
+        $this->getJson($source['url'])->assertNotFound();
+    }
+
+    public function test_request_and_building_citations_do_not_depend_on_their_bounded_workspace_lists(): void
+    {
+        $building = $this->building();
+        $request = $this->command($this->linkedInput($building))->assertOk()->json();
+        $original = TeamOperationRecord::query()->findOrFail($request['id']);
+        $original->forceFill(['created_at' => now()->subYear(), 'updated_at' => now()->addYear()])->save();
+        for ($index = 0; $index < 201; $index++) {
+            $asset = TeamOperationRecord::query()->findOrFail($building['id'])->replicate();
+            $asset->forceFill(['id' => (string) Str::uuid(), 'kind' => 'ent_resource_asset', 'title' => 'AAA synthetic asset '.$index,
+                'source_key' => Str::random(64), 'data' => ['level' => 'asset']])->save();
+            if ($index > 100) {
+                continue;
+            }
+            $row = $original->replicate();
+            $row->forceFill(['id' => (string) Str::uuid(), 'title' => 'Synthetic newer request '.$index,
+                'source_key' => Str::random(64), 'created_at' => now(), 'updated_at' => now()])->save();
+        }
+        $listing = $this->projection();
+        $this->assertCount(100, $listing['requests']);
+        $this->assertNotContains($request['id'], array_column($listing['requests'], 'id'));
+        $resources = $this->getJson(route('enterprise.resources', ['tenant' => $this->tenant->slug, 'area_id' => $this->area]))->assertOk()->json();
+        $this->assertNotContains($building['id'], array_column($resources['items'], 'id'));
+        $answer = $this->check('building', ['building_id' => $building['id']])->assertOk()->json();
+        foreach (['building:'.$building['id'], 'request:'.$request['id']] as $ref) {
+            $source = collect($answer['sources'])->firstWhere('ref', $ref);
+            $this->assertNotNull($source);
+            $this->get($source['url'])->assertOk()->assertSee($ref)->assertSee($source['title']);
+        }
+        $this->assertSame(100, $answer['building']['counts']['linked_requests']);
+    }
+
+    public function test_exact_source_rechecks_tenant_area_kind_native_acl_and_feature_without_writes(): void
+    {
+        $this->owner();
+        $project = $this->project();
+        $cost = $this->cost($project, 75, 'estimate');
+        $source = $this->check('costs')->assertOk()->json('sources.0.url');
+        $otherArea = (string) Str::uuid();
+        TeamArea::query()->create(['id' => $otherArea, 'tenant_id' => $this->tenant->id, 'slug' => 'exact-other',
+            'name' => 'Other authorized area', 'profile' => 'enterprise_department', 'settings' => []]);
+        $this->getJson(str_replace('area_id='.$this->area, 'area_id='.$otherArea, $source))->assertNotFound();
+        $this->getJson(str_replace('/cost/', '/request/', $source))->assertNotFound();
+        $payload = json_decode(DB::table('team_projects')->where('id', $project)->value('payload'), true);
+        $payload['privacy'] = 'private';
+        DB::table('team_projects')->where('id', $project)->update(['payload' => json_encode($payload), 'privacy' => 'private']);
+        DB::table('team_project_members')->where('project_id', $project)->delete();
+        $this->getJson($source)->assertNotFound();
+        config(['enterprise.read_only_assistant_enabled' => false]);
+        $this->getJson($source)->assertNotFound();
+        config(['enterprise.read_only_assistant_enabled' => true]);
+        $this->tenant->users()->updateExistingPivot($this->coordinator->id, ['membership_active' => false]);
+        $this->getJson($source)->assertForbidden();
+        $this->assertSame(1, TeamOperationRecord::query()->where('kind', 'ent_cost')->count());
+    }
+
     public function test_access_change_during_retrieval_discards_financial_answer(): void
     {
         $this->owner();

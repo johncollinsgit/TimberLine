@@ -50,7 +50,7 @@ for (const [engine, launcher] of Object.entries({chromium,webkit})) {
             const geometry=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,width:innerWidth,controls:[...document.querySelectorAll('#read-only-form button,#read-only-form select')].filter(node=>node.checkVisibility()).map(node=>({height:node.getBoundingClientRect().height,width:node.getBoundingClientRect().width}))}));
             assert.ok(geometry.scroll<=geometry.width+1,'No horizontal overflow');
             assert.ok(geometry.controls.every(control=>control.height>=44),engine+' '+name+' controls remain touch reachable '+JSON.stringify(geometry));
-            const tour=await page.evaluate(()=>fixture.tour());assert.equal(tour.target,'read-only-assistant');assert.match(tour.text,/no changes or paid AI calls/);
+            const tour=await page.evaluate(()=>fixture.tour());assert.equal(tour.target,'read-only-assistant');assert.match(tour.text,/deterministic record checks use no AI model/);
             await page.screenshot({path:resolve(evidence,engine+'-'+name+'.png'),fullPage:true});
             await page.evaluate(()=>fixture.roleLoss());
             assert.equal(await page.locator('#read-only-answer').textContent(),'');

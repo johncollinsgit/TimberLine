@@ -1,5 +1,5 @@
 <section class="panel stack" id="read-only-assistant" aria-labelledby="read-only-assistant-title" hidden>
-  <h3 id="read-only-assistant-title">Read-only COO assistant</h3>
+  <h3 id="read-only-assistant-title">Read-only COO record checks</h3>
   <p>Check saved work, linked building requests or recorded costs. Each answer includes the records it used.</p>
   <p class="caption" id="read-only-label"></p>
   <form id="read-only-form" class="stack">
@@ -10,5 +10,5 @@
   </form>
   <p id="read-only-status" role="status" aria-live="polite"></p>
   <div id="read-only-answer" class="stack"></div>
-  <p class="caption">No approved budget or staffing capacity is inferred. This assistant does not generate AI text, remember conversations, change work or send messages.</p>
+  <p class="caption">No approved budget or staffing capacity is inferred. These deterministic checks use no AI model, remember no conversations, and make no changes or sends.</p>
 </section>

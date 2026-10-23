@@ -53,6 +53,11 @@ class ReadOnlyAssistant
     private function overview(Tenant $tenant, User $user, string $areaId): array
     {
         $briefing = $this->briefing->build($tenant, $user, $areaId);
+        foreach ($briefing['sources'] as &$source) {
+            [$kind, $id] = explode(':', $source['ref'], 2);
+            $source['url'] = $this->url($tenant, $areaId, $kind === 'request' ? 'requests' : 'projects', $id);
+        }
+        unset($source);
 
         return ['reply' => $briefing['summary']['text'], 'sources' => $briefing['sources'], 'partial' => true,
             'coverage' => $briefing['coverage'], 'comparisons' => [], 'jobs' => [], 'building' => null];
@@ -60,7 +65,12 @@ class ReadOnlyAssistant
 
     private function url(Tenant $tenant, string $areaId, string $section, string $id, array $extra = []): string
     {
-        return route('enterprise.index', ['tenant' => $tenant->slug, 'area_id' => $areaId, 'section' => $section, 'selected' => $id] + $extra);
+        $kind = match ($section) {
+            'requests' => 'request', 'contractors' => 'cost', 'buildings' => 'building', default => isset($extra['task']) ? 'task' : 'project',
+        };
+
+        return route('enterprise.assistant_source', ['tenant' => $tenant->slug, 'area_id' => $areaId, 'kind' => $kind,
+            'id' => $extra['task'] ?? $id, 'section' => $section, 'selected' => $id] + $extra);
     }
 
     private function building(Tenant $tenant, User $user, array $actor, string $areaId, ?string $id): array
@@ -69,7 +79,7 @@ class ReadOnlyAssistant
         $building = $this->resources->show($tenant, $user, $id);
         abort_unless($building['area_id'] === $areaId && $building['kind'] === 'location'
             && $building['status'] === 'active' && ($building['data']['level'] ?? null) === 'facility', 404);
-        $sources = [['ref' => 'building:'.$id, 'title' => $building['title'], 'url' => $building['url'],
+        $sources = [['ref' => 'building:'.$id, 'title' => $building['title'], 'url' => $this->url($tenant, $areaId, 'buildings', $id),
             'facts' => ['status' => 'active', 'version' => $building['version']]]];
         $counts = ['linked_requests' => 0, 'open_requests' => 0, 'urgent_open_requests' => 0, 'unknown_priority_open_requests' => 0];
         $jobs = [];

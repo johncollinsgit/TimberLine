@@ -250,7 +250,7 @@
                 "Open People & contractors to review available contacts. Use Assets to check recorded equipment holders and locations.",
                 "Open Roll Call to review priorities and record a decision. Confirm the owner and date before changing a task.",
                 feature("read_only_assistant")
-                    ? "Choose a record check, then inspect its sources. This read-only assistant makes no changes or paid AI calls."
+                    ? "Choose a record check, then inspect its sources. These deterministic record checks use no AI model and make no changes."
                     : feature("ask") && feature("voice_jobs")
                     ? "Open Ask Everbranch and enter a job question. Inspect the source record before acting on the answer."
                     : "Ask Everbranch job lookup is unavailable in this workspace. Continue with the request or project screens.",

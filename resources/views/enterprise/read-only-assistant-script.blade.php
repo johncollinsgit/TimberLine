@@ -16,7 +16,7 @@
   function renderReadOnlyAssistant() {
     const enabled = data.features?.read_only_assistant === true && transport.mode === 'private';
     $('read-only-assistant').hidden = !enabled;
-    $('read-only-label').textContent = data.sample_data === true || presentation.sample_data === true ? 'Sample data · current saved records · no paid AI' : 'Current saved records · no paid AI';
+    $('read-only-label').textContent = data.sample_data === true || presentation.sample_data === true ? 'Sample data · current saved records · deterministic · no AI model' : 'Current saved records · deterministic · no AI model';
     $('read-only-cost-option').hidden = !data.features?.read_only_costs;
     $('read-only-cost-option').disabled = !data.features?.read_only_costs;
     $('read-only-intent').querySelector('[value="overview"]').disabled = !data.features?.briefing;
@@ -89,7 +89,7 @@
       if (result.provider_dispatch !== false || result.mode !== 'deterministic_records'
         || result.scope?.user_id !== String(viewer) || result.scope?.tenant_id !== String(workspace) || result.scope?.area_id !== requestedArea)
         throw new Error('This answer does not match your current signed-in workspace. Check current records again.');
-      showReadOnlyAnswer(result); $('read-only-status').textContent = 'Current record check complete. Open a source to inspect it.';
+      showReadOnlyAnswer(result); $('read-only-status').textContent = 'Deterministic record check complete. Open a source to inspect it.';
     } catch (error) { if (current()) { $('read-only-answer').replaceChildren(); $('read-only-status').textContent = error.message; } }
     finally { if (current()) $('read-only-submit').disabled = false; }
   };
