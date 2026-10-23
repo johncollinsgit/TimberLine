@@ -7343,14 +7343,14 @@ CREATE TABLE `pos_payment_attempts` (
   `pos_register_id` bigint unsigned NOT NULL,
   `website_order_id` bigint unsigned NOT NULL,
   `user_id` bigint unsigned DEFAULT NULL,
-  `request_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `request_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `snapshot` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
-  `status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `provider_id` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `request_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `request_hash` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `snapshot` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider_id` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `provider_requested_at` timestamp NULL DEFAULT NULL,
   `stock_committed_at` timestamp NULL DEFAULT NULL,
-  `last_error` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `last_error` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -7374,15 +7374,15 @@ CREATE TABLE `pos_refunds` (
   `tenant_id` bigint unsigned NOT NULL,
   `pos_payment_attempt_id` bigint unsigned NOT NULL,
   `user_id` bigint unsigned DEFAULT NULL,
-  `request_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `request_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `snapshot` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `request_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `request_hash` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `snapshot` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `amount_cents` int unsigned NOT NULL,
-  `reason` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
-  `status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `provider_id` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `reason` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider_id` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `provider_requested_at` timestamp NULL DEFAULT NULL,
-  `last_error` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `last_error` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -7403,14 +7403,14 @@ CREATE TABLE `pos_registers` (
   `tenant_id` bigint unsigned NOT NULL,
   `tenant_site_id` bigint unsigned NOT NULL,
   `website_fulfillment_location_id` bigint unsigned NOT NULL,
-  `name` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `reader_id` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `merchant_id` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `currency` varchar(3) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'usd',
+  `name` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `reader_id` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `merchant_id` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `currency` varchar(3) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'usd',
   `active` tinyint(1) NOT NULL DEFAULT '0',
   `cashier_user_ids` json DEFAULT NULL,
   `tax_rate_bps` int unsigned NOT NULL,
-  `tax_basis` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tax_basis` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tax_confirmed_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -7430,10 +7430,10 @@ DROP TABLE IF EXISTS `pos_simulator_objects`;
 CREATE TABLE `pos_simulator_objects` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `tenant_id` bigint unsigned NOT NULL,
-  `object_key` varchar(160) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `kind` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `request_hash` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `object_key` varchar(160) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `kind` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `request_hash` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -7970,6 +7970,109 @@ CREATE TABLE `service_inquiries` (
   PRIMARY KEY (`id`),
   KEY `service_inquiries_status_created_idx` (`status`,`created_at`),
   KEY `service_inquiries_email_idx` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `service_proposal_assets`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `service_proposal_assets` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_by` bigint unsigned DEFAULT NULL,
+  `kind` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `revision` int unsigned NOT NULL DEFAULT '1',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `sp_a_tenant_id_uq` (`tenant_id`,`id`),
+  CONSTRAINT `sp_a_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `service_proposal_comments`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `service_proposal_comments` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_by` bigint unsigned DEFAULT NULL,
+  `version_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `request_key` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `sp_c_tenant_id_uq` (`tenant_id`,`id`),
+  UNIQUE KEY `sp_c_request_uq` (`tenant_id`,`version_id`,`request_key`),
+  CONSTRAINT `sp_c_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
+  CONSTRAINT `sp_c_version_fk` FOREIGN KEY (`tenant_id`, `version_id`) REFERENCES `service_proposal_versions` (`tenant_id`, `id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `service_proposal_drafts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `service_proposal_drafts` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_by` bigint unsigned DEFAULT NULL,
+  `client_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `revision` int unsigned NOT NULL DEFAULT '1',
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `sp_d_tenant_id_uq` (`tenant_id`,`id`),
+  KEY `sp_d_client_fk` (`tenant_id`,`client_id`),
+  CONSTRAINT `sp_d_client_fk` FOREIGN KEY (`tenant_id`, `client_id`) REFERENCES `service_proposal_assets` (`tenant_id`, `id`) ON DELETE RESTRICT,
+  CONSTRAINT `sp_d_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `service_proposal_reviews`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `service_proposal_reviews` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_by` bigint unsigned DEFAULT NULL,
+  `version_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `selection_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `request_key` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `sp_r_tenant_id_uq` (`tenant_id`,`id`),
+  UNIQUE KEY `sp_r_request_uq` (`tenant_id`,`version_id`,`request_key`),
+  CONSTRAINT `sp_r_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT,
+  CONSTRAINT `sp_r_version_fk` FOREIGN KEY (`tenant_id`, `version_id`) REFERENCES `service_proposal_versions` (`tenant_id`, `id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `service_proposal_versions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `service_proposal_versions` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_by` bigint unsigned DEFAULT NULL,
+  `draft_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `number` int unsigned NOT NULL,
+  `content_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `token_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `password_hash` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `publish_key` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `access_result` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `expires_at` timestamp NOT NULL,
+  `revoked_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `sp_v_tenant_id_uq` (`tenant_id`,`id`),
+  UNIQUE KEY `sp_v_number_uq` (`tenant_id`,`draft_id`,`number`),
+  UNIQUE KEY `sp_v_token_uq` (`token_hash`),
+  UNIQUE KEY `sp_v_publish_uq` (`tenant_id`,`draft_id`,`publish_key`),
+  CONSTRAINT `sp_v_draft_fk` FOREIGN KEY (`tenant_id`, `draft_id`) REFERENCES `service_proposal_drafts` (`tenant_id`, `id`) ON DELETE RESTRICT,
+  CONSTRAINT `sp_v_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `sessions`;
@@ -9620,9 +9723,13 @@ CREATE TABLE `team_operation_records` (
   `data` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
+  `voice_expires_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `tor_source` (`tenant_id`,`area_id`,`kind`,`source_key`),
-  KEY `tor_feed` (`tenant_id`,`area_id`,`kind`,`starts_on`)
+  KEY `tor_feed` (`tenant_id`,`area_id`,`kind`,`starts_on`),
+  KEY `tor_voice_expiry` (`voice_expires_at`),
+  KEY `tor_voice_sessions` (`tenant_id`,`kind`,`assigned_user_id`,`voice_expires_at`),
+  KEY `tor_voice_previews` (`tenant_id`,`kind`,`connection_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `team_operation_revisions`;
@@ -13130,3 +13237,5 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (306,'2026_10_20_13
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (307,'2026_10_20_140000_add_marketplace_markets_and_reporting',31);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (308,'2026_10_20_200000_create_platform_email_deliveries',32);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (309,'2026_10_21_160000_create_pos_simulation_tables',33);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (310,'2026_10_22_190000_add_private_voice_retention',34);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (311,'2026_10_22_150000_create_service_proposal_tables',35);

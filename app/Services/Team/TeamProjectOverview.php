@@ -47,6 +47,9 @@ final class TeamProjectOverview
         $completed = 0;
         $selected = [];
         foreach ($state['tasks'] as $task) {
+            if (isset($task['enterprise_discussion_project'])) {
+                continue;
+            }
             if (! isset($task['memberships'][$projectId]) || ! $this->graph->can($state, $actor, 'task', $task['id'])) {
                 continue;
             }

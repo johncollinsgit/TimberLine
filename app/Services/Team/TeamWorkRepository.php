@@ -51,7 +51,7 @@ class TeamWorkRepository
             $before = $this->state($tenantId);
             $result = app(WorkGraph::class)->execute($before, $actor, $command, now()->toIso8601String());
             $this->save($tenantId, $before, $result['state']);
-            if (! $result['replayed']) {
+            if (! $result['replayed'] && ! config('enterprise.runtime')) {
                 $this->notifications($tenantId, $actor, $command, $before, $result['state']);
             }
             unset($result['state']);

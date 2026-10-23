@@ -14,3 +14,6 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 Route::get('/platform/demos/lees-mcrae', LeesMcRaeCampusDemoController::class)
     ->withoutMiddleware([StartSession::class, ShareErrorsFromSession::class, ValidateCsrfToken::class, VerifyCsrfToken::class, EvaluateSchedulerHeartbeat::class])
     ->name('platform.lees-mcrae-campus-demo');
+Route::get('/platform/demos/lees-mcrae/workflows', [LeesMcRaeCampusDemoController::class, 'workflow'])
+    ->withoutMiddleware([StartSession::class, ShareErrorsFromSession::class, ValidateCsrfToken::class, VerifyCsrfToken::class, EvaluateSchedulerHeartbeat::class])
+    ->name('platform.lees-mcrae-campus-workflows');

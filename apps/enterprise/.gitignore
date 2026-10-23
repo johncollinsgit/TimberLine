@@ -1,0 +1,9 @@
+.env*
+!.env.example
+/bootstrap/cache/*
+!/bootstrap/cache/.gitignore
+/storage/**
+!/storage/**/
+!/storage/**/.gitignore
+/public/build
+/public/hot

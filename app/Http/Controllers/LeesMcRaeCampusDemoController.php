@@ -10,6 +10,9 @@ class LeesMcRaeCampusDemoController extends Controller
 {
     public function __invoke(Request $request): Response
     {
+        if (config('enterprise.reviewer_demo_enabled')) {
+            return app(\App\Enterprise\ReviewerPresentation::class)->respond($request);
+        }
         $host = strtolower($request->getHost());
         $canonical = strtolower((string) config('tenancy.domains.canonical.landlord_host'));
         $localPreview = app()->environment(['local', 'testing']) && in_array($host, ['localhost', '127.0.0.1'], true);
@@ -34,5 +37,10 @@ class LeesMcRaeCampusDemoController extends Controller
             // attributes. Scripts and stylesheet elements still require nonce.
             'Content-Security-Policy' => "default-src 'none'; script-src 'nonce-{$nonce}'; style-src 'nonce-{$nonce}'; style-src-attr 'unsafe-inline'; img-src data: blob:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'; worker-src 'none'; frame-src 'none'; font-src 'none'; manifest-src 'none'",
         ]);
+    }
+
+    public function workflow(Request $request): Response
+    {
+        return app(\App\Enterprise\ReviewerPresentation::class)->respond($request, true);
     }
 }
