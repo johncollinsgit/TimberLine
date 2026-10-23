@@ -126,7 +126,11 @@ try {
     assert.equal(response.status(), 200);
     assert.equal(response.headers()["x-reviewer-fixture-sql"], "0");
     assert.equal(response.headers()["set-cookie"], undefined);
-    await page.locator('#reviewer-perspective').selectOption('manager');
+    // Changing sample perspective reloads the document; finish it before voice navigation.
+    await Promise.all([
+        page.waitForEvent('load'),
+        page.locator('#reviewer-perspective').selectOption('manager'),
+    ]);
     await page.waitForFunction(()=>document.getElementById('reviewer-perspective')?.value==='manager');
     await checkVoiceShell(page,evidence,{sample:true});
     await page.locator('#home-nav').click();
