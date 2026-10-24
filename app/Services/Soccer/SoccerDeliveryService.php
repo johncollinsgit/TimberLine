@@ -13,16 +13,27 @@ class SoccerDeliveryService
         $ids = $this->store->query('deliveries', $tenant)->whereIn('status', ['pending', 'failed'])->where('attempts', '<', 5)->where(fn ($q) => $q->whereNull('retry_at')->orWhere('retry_at', '<=', now()))->orderBy('created_at')->limit(50)->pluck('id');
         foreach ($ids as $id) {
             $candidate = $this->store->row('deliveries', $tenant, $id);
-            $channel = $this->store->decrypt($candidate->payload)['channel'] ?? 'sms';
+            $candidatePayload = $this->store->decrypt($candidate->payload);
+            $channel = $candidatePayload['channel'] ?? 'sms';
+            $isSms = in_array($channel, ['sms', 'admin_sms'], true);
+            if ($channel === 'admin_sms' && (! config('soccer.admin_sms_enabled') || ! in_array($candidatePayload['phone'] ?? null, app(SoccerEvents::class)->adminSmsRecipients($tenant), true) || empty($candidatePayload['sender_key']) || $candidatePayload['sender_key'] !== config('soccer.admin_sms_sender_key'))) {
+                $this->store->query('deliveries', $tenant)->where('id', $id)->whereIn('status', ['pending', 'failed'])->update(['status' => 'suppressed', 'error' => 'admin_sms_recipient_removed', 'updated_at' => now()]);
+
+                continue;
+            }
             if ($channel === 'groupme' && ! config('soccer.groupme_notifications_enabled')) {
                 $this->store->query('deliveries', $tenant)->where('id', $id)->whereIn('status', ['pending', 'failed'])->update(['status' => 'suppressed', 'error' => 'groupme_notifications_disabled', 'updated_at' => now()]);
 
                 continue;
             }
             if ($channel === 'sms' && (! config('soccer.sms_enabled') || ! $this->withinSendingHours() || config('soccer.notification_mode') !== 'sms')) {
+
                 continue;
             }
-            if (! in_array($channel, ['sms', 'admin_email'], true) && config('soccer.notification_mode') !== 'email') {
+            if ($channel === 'admin_sms' && (! config('marketing.sms.enabled') || ! config('marketing.twilio.enabled') || config('marketing.sms.dry_run') || ! $this->withinSendingHours())) {
+                continue;
+            }
+            if (! in_array($channel, ['sms', 'admin_sms', 'admin_email'], true) && config('soccer.notification_mode') !== 'email') {
                 continue;
             }
             $claimed = $this->store->query('deliveries', $tenant)->where('id', $id)->whereIn('status', ['pending', 'failed'])->update(['status' => 'sending', 'updated_at' => now()]);
@@ -40,12 +51,12 @@ class SoccerDeliveryService
                     continue;
                 }
             }
-            if ($channel !== 'sms') {
+            if (! $isSms) {
                 $this->deliverNotification($tenant, $d, $event, $p, $channel);
 
                 continue;
             }
-            if ($p['phone'] !== config('soccer.sms_recipient') && $event->family_id) {
+            if ($channel === 'sms' && $p['phone'] !== config('soccer.sms_recipient') && $event->family_id) {
                 $family = $this->store->row('families', $tenant, $event->family_id);
                 if (! $family->sms_consent_at || app(\App\Support\Marketing\MarketingIdentityNormalizer::class)->toE164($this->store->decrypt($family->profile)['phone'] ?? '') !== $p['phone']) {
                     $this->store->query('deliveries', $tenant)->where('id', $id)->update(['status' => 'suppressed', 'error' => 'consent_withdrawn', 'updated_at' => now()]);
@@ -56,8 +67,12 @@ class SoccerDeliveryService
             $svc = app(\App\Services\Marketing\MessagingConversationService::class);
             $c = $svc->findOrCreateSmsConversation($tenant, null, null, $p['phone'], ['source_type' => 'soccer_waitlist', 'source_context' => ['event_id' => $d->event_id]]);
             try {
-                $result = app(\App\Services\Marketing\Messaging\TenantMessagingGateway::class)->sendSms($tenant, $p['phone'], $p['body'], ['idempotency_key' => 'soccer:'.$id.':'.($d->attempts + 1), 'source_type' => 'soccer_waitlist']);
-                $success = (bool) ($result['success'] ?? false);
+                // Owner-authorized Everbranch system alerts use the explicit platform
+                // sender. Parent texts still require Wren's isolated tenant sender.
+                $result = $channel === 'admin_sms'
+                    ? app(\App\Services\Marketing\TwilioProviderClient::class)->sendSms($p['phone'], $p['body'], ['sender_key' => $p['sender_key']])
+                    : app(\App\Services\Marketing\Messaging\TenantMessagingGateway::class)->sendSms($tenant, $p['phone'], $p['body'], ['idempotency_key' => 'soccer:'.$id.':'.($d->attempts + 1), 'source_type' => 'soccer_waitlist']);
+                $success = (bool) ($result['success'] ?? false) && ($channel !== 'admin_sms' || ! ($result['dry_run'] ?? false));
                 $providerId = $result['provider_message_id'] ?? data_get($result, 'payload.sid');
                 $error = $result['error_code'] ?? ($success ? null : 'provider_failed');
             } catch (\Throwable $e) {

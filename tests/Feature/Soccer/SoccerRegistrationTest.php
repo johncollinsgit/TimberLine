@@ -240,6 +240,29 @@ it('expires offers without changing original priority or immediately reoffering'
     $r = $this->store->query('registrations', $this->t->id)->first();
     expect($r->status)->toBe('waitlisted')->and((bool) $r->auto_eligible)->toBeFalse()->and($r->queued_at)->toBe($before);
 });
+it('lets new families use available seats after an earlier unpaid offer expires', function () {
+    soccerCap($this, ['green-bears' => ['public' => 1, 'reserved' => 0]]);
+    [$expired, $expiredInput] = soccerFamily($this, ['2023-01-01']);
+    $this->svc->register($this->t->id, $expired, $expiredInput);
+    $this->travel(49)->hours();
+    $this->svc->tick($this->t->id, $this->season);
+    [$later, $laterInput] = soccerFamily($this, ['2023-01-02']);
+    $quote = $this->svc->quote($this->t->id, $later, $laterInput);
+    expect($quote['children'][0]['status'])->toBe('available')->and($quote['due_today_cents'])->toBe(3000);
+    expect($this->svc->register($this->t->id, $later, $laterInput)['placed'])->toHaveCount(1);
+    expect($this->store->query('registrations', $this->t->id)->where('family_id', $expired)->value('auto_eligible'))->toBe(0);
+});
+it('promotes eligible waiting families past expired unpaid offers', function () {
+    soccerCap($this, ['green-bears' => ['public' => 1, 'reserved' => 0]]);
+    [$expired, $expiredInput] = soccerFamily($this, ['2023-01-01']);
+    $this->svc->register($this->t->id, $expired, $expiredInput);
+    [$waiting, $waitingInput] = soccerFamily($this, ['2023-01-02']);
+    expect($this->svc->register($this->t->id, $waiting, $waitingInput)['waitlisted'])->toHaveCount(1);
+    $this->travel(49)->hours();
+    $this->svc->tick($this->t->id, $this->season);
+    expect($this->store->query('registrations', $this->t->id)->where('family_id', $waiting)->value('status'))->toBe('offered');
+    expect($this->store->query('registrations', $this->t->id)->where('family_id', $expired)->value('status'))->toBe('waitlisted');
+});
 it('deduplicates reminders and Sarah alerts', function () {
     [$f,$in] = soccerFamily($this, ['2023-01-01']);
     $this->svc->register($this->t->id, $f, $in);

@@ -26,6 +26,18 @@ class SoccerEvents
                 }
             }
         }
+        if ($season && $family && ! empty($data['registration_ids']) && $action === 'family_registration_submitted' && config('soccer.admin_sms_enabled')) {
+            $registrations = $this->store->query('registrations', $tenant)->where('season_id', $season)
+                ->where('family_id', $family)->whereIn('id', $data['registration_ids'])->get();
+            $body = 'Everbranch: Wren Soccer signup. '.$registrations->count().' player(s): '
+                .$registrations->where('status', 'registered')->count().' registered, '
+                .$registrations->where('status', 'offered')->count().' awaiting payment, '
+                .$registrations->where('status', 'waitlisted')->count().' waitlisted. Review: '
+                .config('app.url').'/soccer?tenant=wren-family-soccer';
+            foreach ($this->adminSmsRecipients($tenant) as $phone) {
+                $this->queueNotification($tenant, $id, 'admin_sms:'.$phone, ['channel' => 'admin_sms', 'phone' => $phone, 'body' => $body, 'sender_key' => config('soccer.admin_sms_sender_key')]);
+            }
+        }
         $emailMode = config('soccer.notification_mode') === 'email';
         if ($emailMode && $waitlist && $family && ! $familyText) {
             $familyText = 'Wren Soccer: your family registration has an update. Sign in to review each child’s placement and any next steps: '.config('soccer.origin').'/spring';
@@ -55,6 +67,16 @@ class SoccerEvents
         }
 
         return $id;
+    }
+
+    public function adminSmsRecipients(int $tenant): array
+    {
+        if (! \App\Models\Tenant::query()->whereKey($tenant)->where('slug', config('soccer.tenant_slug'))->exists()) {
+            return [];
+        }
+        $normalizer = app(\App\Support\Marketing\MarketingIdentityNormalizer::class);
+
+        return collect(config('soccer.admin_sms_recipients', []))->map(fn ($phone) => $normalizer->toE164($phone))->filter()->unique()->values()->all();
     }
 
     private function queueNotification(int $tenant, string $event, string $recipient, array $payload): void

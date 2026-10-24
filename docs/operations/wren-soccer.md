@@ -59,6 +59,36 @@ Mail acceptance is recorded in durable deliveries; ambiguous SMTP outcomes remai
 uncertain for operator review. Do not replay older registrations or create a live
 test registration just to exercise organizer notifications.
 
+## Optional organizer signup texts (2026-10-23)
+
+The owner requested the existing Everbranch SMS setup for organizer alerts to
+John and Sarah. This is a platform system-notification lane, independently gated
+from Wren's parent-texting account and parent notification mode. Set
+`WREN_SOCCER_ADMIN_SMS_ENABLED=true`, `WREN_SOCCER_ADMIN_SMS_RECIPIENTS` to the
+owner-approved comma-separated numbers, and `WREN_SOCCER_ADMIN_SMS_SENDER_KEY`
+to an explicitly verified existing platform sender. All three are default-off
+or empty. Verify the provider's actual sender identity and approved use before
+activation; a configured label alone is not provider evidence. Never change
+Wren's tenant messaging account, legacy tenant allowlist or parent notification
+mode to enable organizer alerts.
+
+A submitted registration, including waitlist-only or waived submissions, queues
+one encrypted `admin_sms` delivery per normalized organizer number. The short
+Everbranch-branded body gives current placement/payment/waitlist counts and an
+authenticated dashboard link without children’s names or medical details. Event
+replays do not enqueue duplicate alerts. Delivery rechecks the Wren tenant,
+recipient allowlist, feature flag and sender key. Removed recipients or changed
+sender keys suppress queued alerts. Routine texts observe 08:00–19:59 Eastern.
+Live SMS/Twilio configuration is required; dry-run results never count as proof.
+Unknown sends remain uncertain for provider reconciliation rather than replay.
+Parent emails and Wren's isolated parent-SMS requirements are unchanged.
+
+Expired unpaid offers remain inactive with their original history and queue
+sequence. Only active eligible waiting entries block new public allocation and
+head-of-team promotion. Existing eligible sibling queue fairness and atomic
+family placement remain in force. This does not mark any invoice paid, reactivate
+an expired offer or change a reported Venmo payment into a verified receipt.
+
 ## Required account setup before opening
 
 ### Email registration while SMS is pending, 2026-10-19

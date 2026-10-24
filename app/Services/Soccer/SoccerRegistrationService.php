@@ -60,7 +60,7 @@ class SoccerRegistrationService
             ->sortByDesc(fn ($child) => (bool) $child['needs_jersey'])->take($remainingWaivers)->pluck('player_id')->all();
         $capacity = $this->capacities($season);
         $queueByTeam = $this->store->query('registrations', $tenant)->where('season_id', $season->id)
-            ->where('status', 'waitlisted')->pluck('team_key')->flip();
+            ->where('status', 'waitlisted')->where('auto_eligible', true)->pluck('team_key')->flip();
         $pending = [];
         foreach ($selected as $child) {
             if (! in_array($child['player_id'], $newIds, true)) {
@@ -177,7 +177,7 @@ class SoccerRegistrationService
                     ? $datedReleases->first(fn ($row) => $this->store->decrypt($row->answers)['child1Birthday'] === $p->birthday)
                     : $releases->first();
                 abort_unless($release, 422, 'Review and sign this season’s release with the current birthday for every selected player.');
-                $hasQueue = $this->store->query('registrations', $tenant)->where('season_id', $season->id)->where('team_key', $team)->where('status', 'waitlisted')->exists();
+                $hasQueue = $this->store->query('registrations', $tenant)->where('season_id', $season->id)->where('team_key', $team)->where('status', 'waitlisted')->where('auto_eligible', true)->exists();
                 $seat = ! $hasQueue && $capacity[$team]['public_free'] > 0 ? 'public' : null;
                 if ($seat) {
                     $capacity[$team]['public_free']--;
@@ -288,6 +288,8 @@ class SoccerRegistrationService
             do {
                 $changed = false;
                 $capacity = $this->capacities($s);
+                // An expired unpaid offer is inactive until an organizer reactivates it.
+                // Preserve its history without letting it block families ready to enroll.
                 $queue = $this->store->query('registrations', $tenant)->where('season_id', $s->id)->where('status', 'waitlisted')->orderBy('queue_sequence')->orderBy('id')->get();
                 foreach ($queue->groupBy('family_id') as $family => $waiting) {
                     if ($waiting->contains(fn ($r) => ! $r->auto_eligible)) {
@@ -295,7 +297,7 @@ class SoccerRegistrationService
                     }
                     $head = true;
                     foreach ($waiting->groupBy('team_key') as $team => $children) {
-                        $first = $queue->where('team_key', $team)->take($children->count());
+                        $first = $queue->where('auto_eligible', true)->where('team_key', $team)->take($children->count());
                         if ($first->contains(fn ($r) => $r->family_id !== $family)) {
                             $head = false;
                             break;
