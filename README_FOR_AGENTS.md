@@ -182,6 +182,21 @@ selection; opening a native detail drawer temporarily hides outside guide
 controls until Close/Escape. See
 [the header/tour contract](docs/operations/enterprise-workspace-header-tour.md).
 
+## Wren saved-application recovery (October 23; source candidate)
+
+Wren's public family portal is card-only. Expired unpaid checkout reservations
+become `payment_pending`, preserve their saved registration/release/pricing, and
+release capacity only after original provider checkout reconciliation. A signed,
+own-family `resume` action rechecks eligibility, prior receipts, current capacity,
+queue order and sibling reserves under the season lock, reusing a current invoice
+or issuing a fresh short reservation without duplicate players or releases.
+Actual capacity waitlists remain separate. Pending applications do not block the
+queue. Daily email reminders are default-off behind
+`WREN_SOCCER_PAYMENT_REMINDERS_ENABLED` and must only activate after verified old
+receipts are recorded. Delivery rechecks payment, capacity and season state.
+Verified expired Venmo invoices may restore available places through the reviewed
+reconciliation command, without duplicating receipts. See the Wren runbook.
+
 ## Unified Enterprise and proposal review candidate (October 22; not released)
 
 Proposal PR475 is now included in the isolated current-main Enterprise candidate.

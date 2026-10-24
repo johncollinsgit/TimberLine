@@ -14,6 +14,8 @@ class SoccerPaymentService
 
     private function stripe()
     {
+        abort_unless(filled(config('services.stripe.secret')), 423, 'Card payment verification is not configured. Contact Sarah before paying again.');
+
         return Http::asForm()->withBasicAuth(config('services.stripe.secret'), '')->timeout(20);
     }
 
@@ -35,10 +37,13 @@ class SoccerPaymentService
                     return $old->json('url');
                 }
             }
+            $checkoutExpires = now()->addMinutes(31);
             $key = 'wren-checkout-'.$id.'-'.($i->checkout_id ?? 'first');
-            $response = $this->stripe()->withHeaders(['Idempotency-Key' => $key])->post('https://api.stripe.com/v1/checkout/sessions', ['mode' => 'payment', 'payment_method_types' => ['card'], 'success_url' => config('soccer.origin').'/spring?payment=received', 'cancel_url' => config('soccer.origin').'/spring', 'metadata' => ['soccer_invoice_id' => $id, 'tenant_id' => (string) $tenant], 'payment_intent_data' => ['metadata' => ['soccer_invoice_id' => $id], 'on_behalf_of' => $ready['account']->provider_account_id, 'transfer_data' => ['destination' => $ready['account']->provider_account_id]], 'line_items' => [['price_data' => ['currency' => 'usd', 'product_data' => ['name' => 'Wren Family Soccer registration'], 'unit_amount' => $i->amount_cents], 'quantity' => 1]]]);
+            $response = $this->stripe()->withHeaders(['Idempotency-Key' => $key])->post('https://api.stripe.com/v1/checkout/sessions', ['mode' => 'payment', 'expires_at' => $checkoutExpires->timestamp, 'payment_method_types' => ['card'], 'success_url' => config('soccer.origin').'/spring?payment=received', 'cancel_url' => config('soccer.origin').'/spring', 'metadata' => ['soccer_invoice_id' => $id, 'tenant_id' => (string) $tenant], 'payment_intent_data' => ['metadata' => ['soccer_invoice_id' => $id], 'on_behalf_of' => $ready['account']->provider_account_id, 'transfer_data' => ['destination' => $ready['account']->provider_account_id]], 'line_items' => [['price_data' => ['currency' => 'usd', 'product_data' => ['name' => 'Wren Family Soccer registration'], 'unit_amount' => $i->amount_cents], 'quantity' => 1]]]);
             abort_unless($response->successful() && $response->json('id') && $response->json('url'), 502, 'Checkout could not be started.');
-            $this->store->query('invoices', $tenant)->where('id', $id)->update(['checkout_id' => $response->json('id'), 'provider' => 'stripe', 'updated_at' => now()]);
+            $this->store->query('invoices', $tenant)->where('id', $id)->update(['checkout_id' => $response->json('id'), 'provider' => 'stripe', 'expires_at' => $checkoutExpires, 'updated_at' => now()]);
+
+            $this->store->query('registrations', $tenant)->where('offer_group', $i->offer_group)->where('status', 'offered')->update(['offer_expires_at' => $checkoutExpires, 'updated_at' => now()]);
 
             return $response->json('url');
         }, 3);
@@ -76,6 +81,54 @@ class SoccerPaymentService
             ], $actor);
 
             return $this->store->row('invoices', $tenant, $id)->provider === 'venmo' && $this->store->row('invoices', $tenant, $id)->status === 'paid' ? 'paid' : 'review';
+        }, 3);
+    }
+
+    /** Restore available places against one already recorded, organizer-verified transfer. */
+    public function restoreVenmoPlaces(int $tenant, string $id, int $amount, string $reference, string $reason, int $actor): string
+    {
+        $this->assertOrganizer($tenant, $actor);
+        abort_unless(trim($reference) !== '' && trim($reason) !== '', 422);
+
+        return DB::transaction(function () use ($tenant, $id, $amount, $reference, $reason, $actor) {
+            $invoice = $this->lockedInvoice($tenant, $id);
+            $receipts = $this->store->query('payments', $tenant)->where('invoice_id', $id)->get();
+            $receipt = $receipts->first();
+            if (! in_array($invoice->status, ['expired', 'paid'], true) || $receipts->count() !== 1 || $receipt->provider !== 'venmo'
+                || $receipt->provider_key !== 'reference:'.hash('sha256', trim($reference))
+                || (int) $receipt->amount_cents !== $amount || (int) $invoice->amount_cents !== $amount
+                || (int) $invoice->refunded_cents !== 0 || $this->store->query('refunds', $tenant)->where('invoice_id', $id)->exists()) {
+                return 'review';
+            }
+            if ($invoice->status === 'paid') {
+                return $invoice->provider === 'venmo' ? 'paid' : 'review';
+            }
+            app(SoccerPayPalService::class)->assertNoInFlightPayment($tenant, $id);
+            if ($this->retireStripeCheckout($tenant, $id)) {
+                return 'review';
+            }
+            $season = $this->store->row('seasons', $tenant, $invoice->season_id);
+            $all = $this->store->query('registrations', $tenant)->where('family_id', $invoice->family_id)->where('season_id', $season->id)
+                ->whereIn('id', json_decode($invoice->registration_ids, true))->get();
+            $rows = $all->where('payment_status', 'unpaid');
+            if ($all->count() !== count(json_decode($invoice->registration_ids, true)) || $rows->isEmpty()
+                || ! $all->every(fn ($r) => $r->offer_group === $invoice->offer_group && (in_array($r->status, ['payment_pending', 'waitlisted'], true) || $r->status === 'registered' && $r->waived))) {
+                return 'review';
+            }
+            $allocation = app(SoccerRecoveryService::class)->allocation($season, $invoice->family_id, $rows);
+            if (count(array_filter($allocation)) !== $rows->count()) {
+                return 'review';
+            }
+            foreach ($rows as $row) {
+                $this->store->query('registrations', $tenant)->where('id', $row->id)->update(['status' => 'registered', 'seat_kind' => $allocation[$row->id],
+                    'payment_status' => 'paid', 'offer_expires_at' => null, 'updated_at' => now()]);
+            }
+            $this->store->query('invoices', $tenant)->where('id', $id)->update(['status' => 'paid', 'provider' => 'venmo', 'paid_at' => now(), 'updated_at' => now()]);
+            $this->events->record($tenant, $season->id, $invoice->family_id, 'payment_confirmed', ['invoice_id' => $id, 'payment_id' => $receipt->id,
+                'registration_ids' => $all->pluck('id')->all(), 'reason' => trim($reason), 'summary' => 'Verified existing Venmo receipt reconciled; available places restored.'],
+                $actor, key: 'venmo-restored:'.$id, familyText: 'Wren Soccer: your previous payment has been matched and your children’s places are confirmed. No further payment is needed. View your family dashboard: '.config('soccer.origin').'/spring');
+
+            return 'paid';
         }, 3);
     }
 

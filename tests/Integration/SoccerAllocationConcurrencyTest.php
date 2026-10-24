@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\DB;
 use Symfony\Component\Process\Process;
 
 uses(Tests\TestCase::class);
-it('serializes concurrent family requests against the final public seat on MySQL', function () {
+it('serializes concurrent family requests against the final public seat on MySQL', function (string $operation) {
     if (DB::connection()->getDriverName() !== 'mysql') {
         $this->markTestSkipped('Requires disposable MySQL.');
     }
@@ -23,10 +23,13 @@ it('serializes concurrent family requests against the final public seat on MySQL
         foreach ([1, 2] as $n) {
             $family = $store->insert('families', $tenant, ['email' => 'concurrent'.$n.'@example.com', 'profile' => $store->encrypt(['parentName' => 'Fictional Parent', 'phone' => '+12025550100', 'emergencyContact' => 'Fictional Contact', 'emergencyPhone' => '+12025550101'])]);
             $player = $store->insert('players', $tenant, ['family_id' => $family, 'name' => 'Fictional player', 'birthday' => '2023-01-01', 'profile' => $store->encrypt([])]);
-            $store->insert('releases', $tenant, ['family_id' => $family, 'player_id' => $player, 'season_key' => 'spring-2027', 'source_key' => 'fixture-'.$n, 'form_version' => 'test', 'answers' => $store->encrypt([]), 'sha256' => str_repeat('a', 64), 'signed_at' => now()]);
-            $requests[] = ['tenant' => $tenant, 'family' => $family, 'input' => ['season_id' => $season, 'volunteer' => false, 'children' => [['player_id' => $player, 'needs_jersey' => false]]], 'barrier' => $dir.'/go'];
+            $release = $store->insert('releases', $tenant, ['family_id' => $family, 'player_id' => $player, 'season_key' => 'spring-2027', 'source_key' => 'fixture-'.$n, 'form_version' => 'test', 'answers' => $store->encrypt([]), 'sha256' => str_repeat('a', 64), 'signed_at' => now()]);
+            if ($operation === 'resume') {
+                $store->insert('registrations', $tenant, ['season_id' => $season, 'family_id' => $family, 'player_id' => $player, 'release_id' => $release, 'team_key' => 'green-bears', 'status' => 'payment_pending', 'auto_eligible' => false, 'amount_cents' => 3000, 'payment_status' => 'unpaid', 'needs_jersey' => false, 'queue_sequence' => $n, 'queued_at' => now()]);
+            }
+            $requests[] = ['operation' => $operation, 'tenant' => $tenant, 'family' => $family, 'input' => ['season_id' => $season, 'volunteer' => false, 'children' => [['player_id' => $player, 'needs_jersey' => false]]], 'barrier' => $dir.'/go'];
         }
-        $code = 'require "vendor/autoload.php"; $app=require "bootstrap/app.php"; $app->make(Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap(); $d=json_decode(stream_get_contents(STDIN),true); for($n=0;!file_exists($d["barrier"])&&$n<500;$n++){usleep(10000);} echo json_encode(app(App\\Services\\Soccer\\SoccerRegistrationService::class)->register($d["tenant"],$d["family"],$d["input"]));';
+        $code = 'require "vendor/autoload.php"; $app=require "bootstrap/app.php"; $app->make(Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap(); $d=json_decode(stream_get_contents(STDIN),true); for($n=0;!file_exists($d["barrier"])&&$n<500;$n++){usleep(10000);} echo json_encode($d["operation"] === "resume" ? app(App\\Services\\Soccer\\SoccerRecoveryService::class)->resume($d["tenant"],$d["input"]["season_id"],$d["family"]) : app(App\\Services\\Soccer\\SoccerRegistrationService::class)->register($d["tenant"],$d["family"],$d["input"]));';
         $cfg = config('database.connections.mysql');
         $environment = ['APP_ENV' => 'testing', 'APP_KEY' => config('app.key'), 'DB_CONNECTION' => 'mysql', 'DB_HOST' => $cfg['host'], 'DB_PORT' => (string) $cfg['port'], 'DB_DATABASE' => $cfg['database'], 'DB_USERNAME' => $cfg['username'], 'DB_PASSWORD' => $cfg['password'], 'LOG_CHANNEL' => 'null'];
         foreach ($requests as $request) {
@@ -51,4 +54,4 @@ it('serializes concurrent family requests against the final public seat on MySQL
             unlink($dir.'/go');
         }rmdir($dir);
     }
-});
+})->with(['register', 'resume']);

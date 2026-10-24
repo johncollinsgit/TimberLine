@@ -85,6 +85,13 @@ class SoccerPortalController extends Controller
         if ($action === 'profile' && $r->isMethod('get')) {
             return response()->json($this->families->profile($tenant, $f));
         }
+        if ($action === 'resume') {
+            abort_unless($r->isMethod('post'), 405);
+            $d = $r->validate(['season_id' => 'required|uuid']);
+            $result = app(\App\Services\Soccer\SoccerRecoveryService::class)->resume($tenant, $d['season_id'], $f->id);
+
+            return response()->json(['recovery' => $result, ...$this->families->profile($tenant, $this->store->row('families', $tenant, $f->id))]);
+        }
         if ($action === 'quote') {
             $d = $r->validate(['season_id' => 'required|uuid', 'volunteer' => 'required|boolean',
                 'children' => 'required|array|min:1|max:12', 'children.*.player_id' => 'required|uuid',
