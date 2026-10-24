@@ -75,12 +75,17 @@ Missing is not zero; schema, authorship, edition provenance and all-tabs complet
 remain unverified. Root verified29 JavaScript cases and21 distinct native/source/
 asset cases across retained results and targeted setup/fixture corrections. All
 assertions and the256 source cap remain; the positive fixture is170 entries plus
-fixed dependencies (251), while257-entry/oversize refusal is unchanged. Both
+fixed dependencies, while257-entry/oversize refusal is unchanged. Both
 engines passed6 synthetic real-login/download cases before the server-only module
 pin correction; executed JS is byte-identical and final native guard regressions
 pass. Do not claim those engines ran final PHP or physical devices. No real data
 was captured. Host config/activation and current-edit conversion/reconciliation
 remain separate. See [local export](docs/operations/reviewer-legacy-capture-screen.md).
+The Enterprise-only capture metadata parser/overlay now has a closed default-off
+ENV seam; root config remains literal disabled. Focused root parser/config and
+current source-bound checks pass13/388 on localPHP8.5. No host values, flags or
+config cache were installed; actual capture permission/fresh checks remain
+independent. See [capture configuration](docs/operations/reviewer-legacy-capture-configuration.md).
 
 ## Enterprise CI performance candidate (October 23, 2026)
 

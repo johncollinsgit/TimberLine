@@ -26,6 +26,7 @@ return [
         'attachments' => ['enabled' => false, 'write_enabled' => false, 'policies' => []],
         'image_access' => ['enabled' => false, 'scan_enabled' => false, 'policies' => [], 'scanners' => []],
         'downloads' => ['enabled' => false, 'scan_enabled' => false, 'policies' => [], 'scanners' => []]],
+    // Ordinary runtime never reads capture ENV. Only the separately bound Enterprise overlay can admit metadata.
     // No browser capture until one exact existing browser-only edition is explicitly approved.
     'legacy_capture' => ['enabled' => false, 'approvals' => []],
     'campus_review' => [

@@ -71,4 +71,13 @@ if ($workspaceApproval !== null && $preparation !== null && $preparation !== []
         env('SERVICE_PROPOSALS_REVIEWER_WORKSPACE_OWNER_PREPARATION_ENABLED', false) === true;
 }
 
+// Nonsecret restrictive capture metadata only. No installation, grant or browser read occurs at configuration time.
+$config['legacy_capture'] = \App\Proposals\ReviewerLegacyCaptureConfiguration::configuration(
+    env('SERVICE_PROPOSALS_LEGACY_CAPTURE_ENABLED', false),
+    env('SERVICE_PROPOSALS_LEGACY_CAPTURE_APPROVALS_JSON', ''),
+    ['purpose' => $config['runtime_purpose'], 'owner_workspaces' => $config['owner_workspaces'],
+        'owner_client_id' => $config['owner_client_id'], 'owner_silo_id' => $config['owner_silo_id'],
+        'runtime_client_id' => env('ENTERPRISE_CLIENT_ID', ''), 'runtime_silo_id' => env('ENTERPRISE_SILO_ID', ''),
+        'runtime_storage_id' => env('ENTERPRISE_CLIENT_STORAGE_ID', '')]);
+
 return $config;

@@ -21,7 +21,7 @@ absolute expiry no later than Version expiry. Any present review_workspace key
 closes access, even null/malformed. Do not create a legacy registration, account,
 password grant, anchor or new edition merely to enable capture. Map activation
 and a real capture remain separately held for root review/explicit approval.
-No activation seam, ENV metadata parser or secure host-configuration procedure is implemented or accepted by this packet. Test config() overrides only create synthetic local acceptance conditions; they are not real runtime setup. A separately reviewed operator/host-config procedure and exact approval are required before any activation or actual capture.
+The initial screen packet supplied literal disabled configuration. A separately reviewed [Enterprise-only metadata seam](reviewer-legacy-capture-configuration.md) now supplies source support for a future closed ENV/config-cache procedure. It installs no actual values or flags. Test config() overrides only create synthetic local acceptance conditions; they are not real runtime setup. A separately reviewed operator/host-config procedure and exact Version approval are still required before activation or actual capture.
 
 Source hooks are deliberately separate: config default-off, exact route include
 before the common session-lock loop, exact outer boundary, narrow ResponsePolicy

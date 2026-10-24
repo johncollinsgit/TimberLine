@@ -93,6 +93,8 @@ test('splitting does not change all feature flags, pacing or native MySQL gates'
   const workflow = readFileSync('.github/workflows/enterprise-runtime-ci.yml','utf8');
   assert.ok(workflow.includes('    - routes/service-proposals-reviewer-preparation.php\n'));
   assert.ok(workflow.includes('    - tests/Unit/Proposals/ReviewerWorkspacePreparationConfigurationTest.php\n'));
+  assert.ok(workflow.includes('    - tests/Unit/Proposals/ReviewerLegacyCaptureConfigurationTest.php\n'));
+  assert.match(workflow, /run: php -d memory_limit=1G vendor\/bin\/pest [^\n]*tests\/Unit\/Proposals\/ReviewerLegacyCaptureConfigurationTest\.php/);
   assert.match(workflow, /run: php -d memory_limit=1G vendor\/bin\/pest [^\n]*tests\/Unit\/Proposals\/ReviewerWorkspacePreparationConfigurationTest\.php/);
   assert.match(workflow, /image: mysql:8\.4/);
   assert.match(workflow, /ENTERPRISE_DISPOSABLE_MYSQL: '1'/);
