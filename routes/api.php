@@ -1,5 +1,8 @@
 <?php
 
+\Illuminate\Support\Facades\Route::post('/pos/square/webhook', \App\Http\Controllers\PosSquareWebhookController::class)
+    ->middleware('throttle:300,1')->name('pos.square.webhook');
+
 \Illuminate\Support\Facades\Route::post('/team/operations/push/{connection}', \App\Http\Controllers\TeamOperationsPushController::class)->whereUuid('connection')->middleware('throttle:120,1')->name('team.operations.push');
 
 use App\Http\Controllers\AiAssistantController;
@@ -70,6 +73,7 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
         Route::prefix('/workspaces/{tenant}')
             ->middleware('mobile.tenant')
             ->group(function (): void {
+                require __DIR__.'/payments-mobile.php';
                 Route::get('/bootstrap', [EverbranchMobileController::class, 'bootstrap'])->middleware('abilities:mobile:read')->name('workspace.bootstrap');
                 Route::patch('/branding', [EverbranchMobileController::class, 'updateBranding'])->middleware(['abilities:mobile:write', 'throttle:20,1'])->name('workspace.branding.update');
                 Route::get('/support-tickets', [EverbranchMobileController::class, 'supportTickets'])->middleware('abilities:mobile:read')->name('workspace.support.index');

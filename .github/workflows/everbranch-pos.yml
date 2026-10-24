@@ -1,0 +1,63 @@
+name: Everbranch POS iPhone
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'native/everbranch-pos-ios/**'
+      - 'app/Services/Pos/**'
+      - 'app/Http/Controllers/Mobile/PosController.php'
+      - 'routes/pos-mobile.php'
+      - 'routes/pos-staff.php'
+      - 'app/Http/Controllers/PosHandoffController.php'
+      - 'resources/js/pos-staff-register.js'
+      - '.github/workflows/everbranch-pos.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: everbranch-pos-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  native:
+    name: Square SDK and native recovery
+    runs-on: macos-15
+    timeout-minutes: 25
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify native recovery contracts
+        run: swift test --package-path native/everbranch-pos-ios --scratch-path "$RUNNER_TEMP/pos-swift"
+      - name: Verify deterministic project
+        run: |
+          python3 native/everbranch-pos-ios/scripts/generate-project.py
+          git diff --exit-code -- native/everbranch-pos-ios/EverbranchPOS.xcodeproj
+      - name: Build unsigned device target with the pinned Square SDK
+        run: >-
+          xcodebuild -project native/everbranch-pos-ios/EverbranchPOS.xcodeproj
+          -scheme EverbranchPOS -configuration Release -destination 'generic/platform=iOS'
+          -derivedDataPath "$RUNNER_TEMP/pos-device" CODE_SIGNING_ALLOWED=NO build
+      - name: Boot isolated iPhone simulator
+        id: simulator
+        timeout-minutes: 5
+        run: |
+          pos_simulator_id=$(xcrun simctl create 'Everbranch POS CI' com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro com.apple.CoreSimulator.SimRuntime.iOS-26-2)
+          echo "device_id=$pos_simulator_id" >> "$GITHUB_OUTPUT"
+          xcrun simctl bootstatus "$pos_simulator_id" -b
+      - name: Run sandbox launch test
+        timeout-minutes: 10
+        run: >-
+          xcodebuild test -project native/everbranch-pos-ios/EverbranchPOS.xcodeproj
+          -scheme EverbranchPOS
+          -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.device_id }}'
+          -parallel-testing-enabled NO
+          -resultBundlePath "$RUNNER_TEMP/pos-ui.xcresult"
+          -derivedDataPath "$RUNNER_TEMP/pos-simulator" CODE_SIGNING_ALLOWED=NO
+      - name: Retain sandbox launch diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: everbranch-pos-ui-results-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/pos-ui.xcresult
+          if-no-files-found: warn
+          retention-days: 3

@@ -39,6 +39,7 @@ return (new ApplicationBuilder($app))
     ->withProviders([EnterpriseServiceProvider::class], withBootstrapProviders: false)
     ->withRouting(web: $root.'/routes/enterprise.php')
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->alias(['abilities' => \Laravel\Sanctum\Http\Middleware\CheckAbilities::class]);
         $middleware->append(EnsureEnterpriseRuntime::class);
         $middleware->append(\App\Http\Middleware\EnsureEnterprisePrefixMount::class);
         $middleware->append(\App\Http\Middleware\EnsureEnterpriseTrialMount::class);
