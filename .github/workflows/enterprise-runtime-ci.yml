@@ -97,6 +97,8 @@ name: Enterprise isolated runtime
     - tests/Support/reviewer-workspace-mysql-worker.php
     - tests/Integration/ReviewerWorkspaceInitializationMySqlConcurrencyTest.php
     - tests/Support/reviewer-workspace-initialization-mysql-worker.php
+    - tests/Integration/ReviewerWorkspacePreparationMySqlConcurrencyTest.php
+    - tests/Support/reviewer-workspace-preparation-mysql-worker.php
     - tests/Integration/migration-recovery-manifest.php
     - phpunit.enterprise.xml
     - phpunit.team.xml

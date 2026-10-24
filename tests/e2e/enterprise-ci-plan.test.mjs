@@ -84,8 +84,9 @@ test('splitting does not change all feature flags, pacing or native MySQL gates'
   assert.match(harness, /\['all', 'procedures', 'roles'\]\.includes\(operationsScenario\)/);
   assert.match(harness, /\['all', 'finance'\]\.includes\(operationsScenario\)/);
   const suite = readFileSync('phpunit.enterprise.xml','utf8');
-  for (const name of ['EnterpriseClientProvisioningMySqlTest','EnterpriseConversationMySqlConcurrencyTest','EnterpriseMemoryMySqlConcurrencyTest','EnterpriseMySqlMigrationRecoveryTest','EnterpriseTrialBudgetMySqlConcurrencyTest','ReviewerWorkspaceMySqlConcurrencyTest','ReviewerWorkspaceInitializationMySqlConcurrencyTest']) assert.ok(suite.includes(name));
+  for (const name of ['EnterpriseClientProvisioningMySqlTest','EnterpriseConversationMySqlConcurrencyTest','EnterpriseMemoryMySqlConcurrencyTest','EnterpriseMySqlMigrationRecoveryTest','EnterpriseTrialBudgetMySqlConcurrencyTest','ReviewerWorkspaceMySqlConcurrencyTest','ReviewerWorkspaceInitializationMySqlConcurrencyTest','ReviewerWorkspacePreparationMySqlConcurrencyTest']) assert.ok(suite.includes(name));
   assert.match(suite, /ReviewerWorkspaceMySqlConcurrencyTest\.php<\/file>\s*<file>tests\/Integration\/ReviewerWorkspaceInitializationMySqlConcurrencyTest\.php<\/file>/);
+  assert.match(suite, /ReviewerWorkspaceInitializationMySqlConcurrencyTest\.php<\/file>\s*<file>tests\/Integration\/ReviewerWorkspacePreparationMySqlConcurrencyTest\.php<\/file>/);
   const workflow = readFileSync('.github/workflows/enterprise-runtime-ci.yml','utf8');
   assert.ok(workflow.includes('    - routes/service-proposals-reviewer-preparation.php\n'));
   assert.ok(workflow.includes('    - tests/Unit/Proposals/ReviewerWorkspacePreparationConfigurationTest.php\n'));

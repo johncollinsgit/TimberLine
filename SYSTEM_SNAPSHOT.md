@@ -63,6 +63,9 @@ independent authority cases separately pass44 assertions. Actual MySQL lifecycle
 targetPHP8.4, current-edit capture/reconciliation, host/runtime approval and normal
 exact-head CI remain separate requirements. No actual publication or activation
 occurred. See [draft preparation](docs/operations/proposal-reviewer-workspace-preparation.md).
+The new preparation/publication MySQL lifecycle gate is registered after the
+workspace/initializer gates. Only its local refusal guard has run; actual
+independent native sessions, row waits and concurrency remain NOT RUN until CI.
 
 ## Enterprise CI performance candidate (October 23, 2026)
 

@@ -43,3 +43,22 @@ Each prepared draft admits one publication intent. The original publication key/
 Focused local tests use synthetic accounts, real mounted kernel/HTML CSRF, actual private ClientSilo marker, SQLite and denied provider transport. They are not targetPHP8.4, MySQL locking/concurrency, actual operator/browser capture, hosted publication or runtime acceptance. Current-row locks are implemented; independent real MySQL process proof and normal exact-head CI remain mandatory for a production candidate. No runtime settings or existing edition were changed here.
 
 Before a real transition: capture/reconcile current edits; review seed/import proof and actual legacy content-hash compatibility packet; freeze/review release and policies; observe current owner/silo/anchor; approve the exact future publication/runtime packet; prepare via actual owner, separately publish with a new password; separately initialize using the original reviewed initializer intent; verify cross-session edits/comments/access and install/observe authorized bounded cleanup. AI/key/scheduler activation are separate held phases. This library cannot substitute for those prerequisites.
+
+## Required real MySQL lifecycle gate
+
+`ReviewerWorkspacePreparationMySqlConcurrencyTest` and its closed worker are
+registered after the existing workspace/initializer gates. The unchanged strict
+loopback/testing/disposable-CI guard runs before autoload or any DB connection.
+Two separately established native synthetic owner sessions receive their own
+signed previews for the same preparation intent; real HTTP session blocking is
+never bypassed. Actual MySQL parent-row wait evidence is required for current
+User/membership/source drift, one clone/publication and exact original recovery.
+Queued pre-attempt status absence is checked before holding the shared User lock;
+it is not an authoritative claim that delayed apply did not occur.
+
+Only the local refusal guard passed1 test/15 assertions, with an explicit skipped
+actual database case. Actual native session/lock/current-read/concurrency and
+owned-cleanup acceptance are NOT RUN until normal exact-head MySQL8.4 CI succeeds
+without skips. No service starts/provisions, generic worker, real user data or
+provider calls are included. Existing four workspace/initializer files and guard
+are unchanged; fixture cleanup may remove only its owned synthetic rows/runtime.
