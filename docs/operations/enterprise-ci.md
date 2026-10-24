@@ -22,7 +22,8 @@ artifact or permission to copy CI files into Forge.
 After preparation, the native job retains the original MySQL 8.4 service,
 loopback-only disposable database guard and complete PHP commands, including all
 original five real MySQL recovery/concurrency/provisioning classes, plus the
-publication-bound shared-workspace concurrency gate. In parallel, twenty-three
+publication-bound shared-workspace concurrency gate and its separately registered
+owner-initialization gate. In parallel, twenty-three
 browser entries use independent GitHub-hosted runners/filesystems:
 
 | Entries | Existing checks retained |
@@ -114,7 +115,12 @@ The immutable-proposal native gate also covers the default-off actual-owner
 initializer and its strict configuration assembly. Those mounted tests exercise
 preview/apply/status, fresh owner authority and original-receipt recovery; they
 do not claim actual current-browser capture, a new hosted publication or MySQL
-concurrency from SQLite.
+concurrency from SQLite. The separate initializer MySQL gate reuses the unchanged
+loopback worker safeguards and runs after the workspace gate cleanup. It observes
+actual independent-connection waits on the parent-held User/membership/tenant rows,
+competing same-intent initialization, unsettled status and later-edit preservation.
+Its local refusal check passes; actual concurrency is NOT RUN until the normal
+MySQL 8.4 CI job executes the registered test. A skipped local test is not acceptance.
 
 The dedicated PHPUnit process uses the same `1G` test memory ceiling as the
 primary `phpunit.xml`. This accommodates the complete combined suite, including

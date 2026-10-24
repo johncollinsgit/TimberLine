@@ -42,3 +42,18 @@ Status body is exactly `{version_id,request_id,approval_sha256}`. It resolves th
 New focused tests exercise actual isolated mounted owner HTTP, native publication/CSRF/encrypted workspace storage, signed session-bound previews, exact replay after later user edits, receipt recovery after TTL/write-gate changes, foreign/stale/legacy/source/anchor/payload refusals, inactive/unverified cached User and membership denial, fixed private debug/method/CSRF failures, and in-transaction late membership rollback. The late mutation is an explicit local SQLite event seam, not another-process concurrency proof. Independent configuration subprocesses prove literal flags and exact metadata cannot activate AI/workspace writes or legacy admission. All ordinary native/customer/old Version/budget records remain unchanged in positive initialization checks. Source tests use only synthetic data, empty ENV and private dependencies; stray provider HTTP refuses.
 
 Target PHP8.4, actual MySQL row-lock/current-read/concurrent apply versus revocation, exact final-candidate CI/independent review, secure host/config authority, current-data capture/preservation, actual publication transition, retention installation and hosted owner/recipient acceptance remain unproven here. No application CLI, runtime initializer or production action is authorized by this packet. Root remains sole integration/release writer.
+
+## Required real MySQL gate
+
+`ReviewerWorkspaceInitializationMySqlConcurrencyTest` is registered immediately
+after the existing workspace MySQL gate, with its own closed initializer worker
+and the unchanged existing loopback-only bootstrap guard. It requires clean owned
+CI state, actual independent connections and observed waits on the parent-held
+User/membership/tenant rows. Same-intent concurrent apply, unsettled status, current
+revocation refusal and later-edit/no-reset checks preserve the original feedback,
+anchor, native authority and budget. Cleanup removes only the exact synthetic
+fixture; it never clears foreign rows to make a test pass.
+
+Only the local refusal guard and syntax/style checks have run. Actual MySQL 8.4
+concurrency remains NOT RUN until normal exact-head CI; PHP 8.5/SQLite mounted
+checks do not substitute for it. No server is started or provisioned by this test.
