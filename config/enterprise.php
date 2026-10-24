@@ -3,6 +3,7 @@
 $reviewers = json_decode((string) env('ENTERPRISE_TRIAL_REVIEWERS_JSON', '{}'), true);
 
 return [
+    'pos_enabled' => (bool) env('ENTERPRISE_POS_ENABLED', false),
     'runtime' => false, // Set only by the dedicated Enterprise bootstrap/provider.
     'enabled' => (bool) env('ENTERPRISE_ENABLED', false),
     'writes_enabled' => (bool) env('ENTERPRISE_WRITES_ENABLED', false),

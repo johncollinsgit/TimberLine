@@ -5,5 +5,6 @@ return [
     App\Providers\FortifyServiceProvider::class,
     App\Providers\PlatformMailServiceProvider::class,
     App\Providers\EvergrovePaymentsServiceProvider::class,
+    App\Providers\PosServiceProvider::class,
     App\Proposals\ProposalServiceProvider::class,
 ];

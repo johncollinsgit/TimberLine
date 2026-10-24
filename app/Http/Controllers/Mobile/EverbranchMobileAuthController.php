@@ -110,7 +110,10 @@ class EverbranchMobileAuthController extends Controller
         $payments = MobileAuthorizationClients::isPayments($validated['client_id']);
         abort_if($payments && ! $user->hasVerifiedEmail(), 403);
 
-        return $this->tokenResponse($user, $validated['device_name'] ?? $authorization->device_name ?? 'Everbranch mobile', $payments);
+        $abilities = $validated['client_id'] === MobileAuthorizationClients::POS_CLIENT
+            ? ['mobile:read', 'mobile:write', 'payments:read', 'payments:write', 'pos:client'] : null;
+
+        return $this->tokenResponse($user, $validated['device_name'] ?? $authorization->device_name ?? 'Everbranch mobile', $payments, $abilities);
     }
 
     public function refresh(Request $request): JsonResponse
@@ -128,10 +131,12 @@ class EverbranchMobileAuthController extends Controller
             ? array_values(array_intersect(['mobile:read', 'mobile:write'], $oldToken->abilities ?? []))
             : null;
         if ($payments) {
-            MobileAuthorizationClients::assertAllowed(MobileAuthorizationClients::PAYMENTS_CLIENT, MobileAuthorizationClients::PAYMENTS_REDIRECT);
+            $pos = in_array('pos:client', $oldToken->abilities, true);
+            MobileAuthorizationClients::assertAllowed($pos ? MobileAuthorizationClients::POS_CLIENT : MobileAuthorizationClients::PAYMENTS_CLIENT,
+                $pos ? MobileAuthorizationClients::POS_REDIRECT : MobileAuthorizationClients::PAYMENTS_REDIRECT);
             abort_unless($user->hasVerifiedEmail(), 403);
             $preservedAbilities = array_values(array_intersect(
-                ['mobile:read', 'mobile:write', 'payments:read', 'payments:write'], $oldToken->abilities ?? [],
+                ['mobile:read', 'mobile:write', 'payments:read', 'payments:write', 'pos:client'], $oldToken->abilities ?? [],
             ));
         }
         $response = $this->tokenResponse($user, $name !== '' ? $name : 'Everbranch mobile', $payments, $preservedAbilities);

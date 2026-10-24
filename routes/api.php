@@ -1,5 +1,8 @@
 <?php
 
+\Illuminate\Support\Facades\Route::post('/pos/square/webhook', \App\Http\Controllers\PosSquareWebhookController::class)
+    ->middleware('throttle:300,1')->name('pos.square.webhook');
+
 \Illuminate\Support\Facades\Route::post('/team/operations/push/{connection}', \App\Http\Controllers\TeamOperationsPushController::class)->whereUuid('connection')->middleware('throttle:120,1')->name('team.operations.push');
 
 use App\Http\Controllers\AiAssistantController;

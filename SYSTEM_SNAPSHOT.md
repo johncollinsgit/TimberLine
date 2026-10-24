@@ -1,3 +1,17 @@
+## Native Square POS pilot (2026-10-24; source candidate, disabled)
+
+A dedicated `native/everbranch-pos-ios` target embeds Square Mobile Payments SDK
+2.7.0. Independent `pos` access, runtime/tenant-bound MySQL payments, stock holds,
+original-account refunds, receipts and durable commerce recovery support the
+intended Alpha Printing and Modern Forestry cohort. Alpha issued quote claims
+serialize online/counter collection; Modern Forestry uses a dedicated live
+Shopify POS adapter and one correlated pending order. Enterprise composes only
+explicit POS schema/routes in its independent runtime and adds assigned-location
+stock/reporting controls. All collection/signing/provider/merchant gates remain
+off until reviewed. No merchant activation, physical acceptance or deployment is
+implied. Collection is online-only; offline capture/queued charging is a future
+release item. See [the live POS runbook](docs/operations/everbranch-pos-live.md).
+
 ## Evergrove Payments durable server contracts (2026-10-22; disabled source candidate)
 
 The follow-up adds an encrypted MySQL journal, migration recovery/concurrency,

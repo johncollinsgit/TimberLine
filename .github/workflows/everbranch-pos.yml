@@ -1,0 +1,40 @@
+name: Everbranch POS iPhone
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'native/everbranch-pos-ios/**'
+      - 'app/Services/Pos/**'
+      - 'app/Http/Controllers/Mobile/PosController.php'
+      - 'routes/pos-mobile.php'
+      - '.github/workflows/everbranch-pos.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: everbranch-pos-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  native:
+    name: Square SDK and native recovery
+    runs-on: macos-15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v6
+      - name: Verify native recovery contracts
+        run: swift test --package-path native/everbranch-pos-ios --scratch-path "$RUNNER_TEMP/pos-swift"
+      - name: Verify deterministic project
+        run: |
+          python3 native/everbranch-pos-ios/scripts/generate-project.py
+          git diff --exit-code -- native/everbranch-pos-ios/EverbranchPOS.xcodeproj
+      - name: Build unsigned device target with the pinned Square SDK
+        run: >-
+          xcodebuild -project native/everbranch-pos-ios/EverbranchPOS.xcodeproj
+          -scheme EverbranchPOS -configuration Release -destination 'generic/platform=iOS'
+          -derivedDataPath "$RUNNER_TEMP/pos-device" CODE_SIGNING_ALLOWED=NO build
+      - name: Run sandbox launch test
+        run: >-
+          xcodebuild test -project native/everbranch-pos-ios/EverbranchPOS.xcodeproj
+          -scheme EverbranchPOS -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+          -derivedDataPath "$RUNNER_TEMP/pos-simulator" CODE_SIGNING_ALLOWED=NO

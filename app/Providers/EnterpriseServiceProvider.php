@@ -22,6 +22,11 @@ final class EnterpriseServiceProvider extends ServiceProvider
     {
         $this->app->scoped(TenantContext::class);
         $this->app['config']->set('enterprise.runtime', true);
+        if (config('enterprise.pos_enabled') === true) {
+            $this->app->register(\Laravel\Sanctum\SanctumServiceProvider::class);
+            $this->app->register(EvergrovePaymentsServiceProvider::class);
+            $this->app->register(PosServiceProvider::class);
+        }
         $this->app->bind(\App\Enterprise\AskModel::class, \App\Enterprise\IntelligenceAskModel::class);
         $this->app->bind(\App\Enterprise\VoiceCompletionProvider::class, \App\Enterprise\ResponsesVoiceProvider::class);
         $this->app->bind(\App\Enterprise\VoiceCostReservation::class, \App\Enterprise\IntelligenceVoiceReservation::class);

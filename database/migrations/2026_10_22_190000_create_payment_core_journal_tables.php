@@ -83,10 +83,7 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('payment_core_events');
-        Schema::dropIfExists('payment_core_operations');
-        Schema::dropIfExists('payment_core_bindings');
-        Schema::dropIfExists('payment_core_admissions');
+        // Unreleased foundation: retain original payment and refund evidence on code rollback.
     }
 
     private function indexes(): array
