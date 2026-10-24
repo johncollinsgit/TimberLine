@@ -1,5 +1,6 @@
 /** Actual isolated managed runtime + authenticated browser + HTTP-faked OpenAI. Never a paid/live test. */
 import assert from 'node:assert/strict';
+import {openEnterpriseAction} from '../../scripts/everbranch-team/enterprise-mobile-navigation-browser.mjs';
 import {spawn,spawnSync} from 'node:child_process';
 import {mkdtemp,readFile,writeFile,rm,mkdir} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
@@ -84,7 +85,7 @@ for(const [engine,launcher] of Object.entries({chromium,webkit})){
       const tour=await page.evaluate(async({fixture})=>{const data=await(await fetch('/enterprise-campus/enterprise/data?tenant='+fixture.tenant+'&area_id='+fixture.area)).json();const tour=EverbranchWorkspaceTour.create({runtime:'private',enabled:true,sample_data:true,identity:{viewer:fixture.user_id,workspace:fixture.tenant_id}});tour.update({transport:{mode:'private'},area:fixture.area,data});return tour.describe(6,{});},{fixture});assert.equal(tour.target,'ask-form');assert.match(tour.text,/Send to OpenAI/);assert.match(JSON.stringify(tour.cards),/Stop waiting/);assert.match(JSON.stringify(tour.cards),/Choose what to remember/);assert.ok(tour.targets.includes('memory-use'));
       // Real shared tour modal uses the new text copy/target and only opens the screen.
       const beforeTour=(await calls()).length;
-      await page.locator('[data-tour-open]').click();await page.locator('button[data-tour-scene="6"]').click();
+      await openEnterpriseAction(page,'Tour',page.locator('[data-tour-open]'));await page.locator('button[data-tour-scene="6"]').click();
       assert.match(await page.locator('[data-tour-title]').textContent(),/Ask about current work/);
       assert.match(await page.locator('[data-tour-text]').textContent(),/Send to OpenAI/);
       assert.match(await page.locator('button[data-tour-scene="6"]').textContent(),/Ask Everbranch · text/);

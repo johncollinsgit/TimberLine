@@ -39,6 +39,8 @@ return (new ApplicationBuilder($app))
     ->withProviders([EnterpriseServiceProvider::class], withBootstrapProviders: false)
     ->withRouting(web: $root.'/routes/enterprise.php')
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->prepend(\App\Http\Middleware\ReviewerAiBoundary::class);
+        $middleware->prepend(\App\Http\Middleware\ReviewerLegacyCaptureBoundary::class);
         $middleware->append(EnsureEnterpriseRuntime::class);
         $middleware->append(\App\Http\Middleware\EnsureEnterprisePrefixMount::class);
         $middleware->append(\App\Http\Middleware\EnsureEnterpriseTrialMount::class);

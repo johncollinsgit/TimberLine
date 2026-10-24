@@ -17,7 +17,7 @@ const shell = await readFile(
 const loadStart = shell.indexOf(
     "  const api = (url, body, options) => transport.request(url, body, options);",
 );
-const loadEnd = shell.indexOf("  async function command(body)", loadStart);
+const loadEnd = shell.indexOf("  async function command(body,", loadStart);
 assert.ok(
     loadStart >= 0 && loadEnd > loadStart,
     "Test must execute the actual shell load/reset wiring",
@@ -265,6 +265,7 @@ function loadFixture() {
         navigation: new URLSearchParams("section=projects"),
         homeGeneration: 0,projectCatalog:null,projectCatalogGeneration:0,workMapBuilding:"",queuedPlan:null,loadProjectCatalog(){},
         homeArea: "a1",
+        proposalAiUi: null,
         $: (id) => {
             if (!nodes.has(id))
                 nodes.set(id, {

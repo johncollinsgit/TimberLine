@@ -62,6 +62,15 @@ function proposalTabsDom(string $html): DOMXPath
 
 function proposalTabsCapture(string $name, $response): void
 {
+    $document = proposalTabsDom($response->getContent());
+    if ($document->query('//fieldset[contains(@class,"proposal-section-tabs")]')->length > 0) {
+        $scripts = $document->query('//script');
+        expect($scripts->length)->toBe(1)
+            ->and($scripts->item(0)->hasAttribute('data-proposal-navigation'))->toBeTrue()
+            ->and($scripts->item(0)->hasAttribute('src'))->toBeFalse()
+            ->and($scripts->item(0)->textContent)->toBe(file_get_contents(resource_path('js/service-proposals/mobile-navigation.js')))
+            ->and($response->headers->get('Content-Security-Policy'))->toContain("script-src 'sha256-".base64_encode(hash_file('sha256', resource_path('js/service-proposals/mobile-navigation.js'), true))."'", "script-src-attr 'none'");
+    }
     if (getenv('PROPOSAL_TABS_CAPTURE') !== '1') {
         return;
     }
@@ -122,7 +131,7 @@ test('owner preview renders native section controls with the exact approved grap
         ->and($xpath->query('//input[@data-proposal-section="overview"][@checked]')->length)->toBe(1)
         ->and($xpath->query('//input[@data-proposal-section][@aria-selected]')->length)->toBe(0)
         ->and($xpath->query('//div[@role="img"][@aria-label="Lees-McRae College"]')->length)->toBe(1)
-        ->and($xpath->query('//script | //video | //iframe')->length)->toBe(0);
+        ->and($xpath->query('//script[not(@data-proposal-navigation)] | //video | //iframe')->length)->toBe(0);
     proposalTabsCapture('owner-preview', $response);
     $payload = $this->tabDraft->payload;
     $payload['client']['reference'] = 'another-client';
@@ -137,8 +146,9 @@ test('proposal documents clear retained Livewire assets without disabling a late
     try {
         app('livewire')->forceAssetInjection();
         $preview = $this->actingAs($this->tabOwner)->get('https://evergrove.test/owner-workspaces/'.$this->tabTenant->slug.'/proposals/'.$this->tabDraft->id.'/preview')->assertOk();
-        expect(proposalTabsDom($preview->getContent())->query('//script | //video | //iframe')->length)->toBe(0)
+        expect(proposalTabsDom($preview->getContent())->query('//script[not(@data-proposal-navigation)] | //video | //iframe')->length)->toBe(0)
             ->and($preview->headers->get('Content-Security-Policy'))->toContain("default-src 'none'", "form-action 'self'");
+        proposalTabsCapture('owner-preview', $preview);
         app('livewire')->forceAssetInjection();
         $next = $this->get('https://evergrove.test/fixture-proposal-livewire-next')->assertOk();
         expect(proposalTabsDom($next->getContent())->query('//script[@src][@data-update-uri]')->length)->toBe(1);

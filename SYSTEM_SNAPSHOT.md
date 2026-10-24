@@ -1,3 +1,93 @@
+## Shared private fictional workspace (October 24; source integration)
+
+A future immutable review edition can opt into an encrypted, server-held fictional
+workspace in the proposal-owner silo. Independent unlocked sessions see committed
+jobs and tickets after reload. One fixed transport supplies project/queue/Roll Call,
+scoped people/contractors, exact building links, official map markers and month
+views; forms retain opening versions and once-only unknown-edit receipts.
+Shared AI reads current server facts and rejects browser snapshot substitution.
+Short follow-ups and explicit voice controls use the same text service; no native
+employee identity or persistent AI memory is inferred.
+
+Source integration now includes target-free publication admission for separately
+approved file/image descriptors, current-record file controls in the same centered
+or side detail, and private exact-byte JPEG/PNG metadata/thumbnail/full-image
+reads. Ready images require an actual approved scanner plus authentic matching
+engine/definition evidence; local tests use fakes only. Separate default-off PDF-original download source is integrated: exact-target
+private octet-stream attachments require their own immutable policy and clean
+scanner evidence. No inline PDF or public fallback is offered. Shared scan leases
+protect originals during image/PDF scans; rejected PDF hashes remain rejected
+within the exact workspace. No actual scanner or hosted download is activated.
+
+Local mounted Chromium/WebKit checks cover the core and full official fictional
+fixture; separate mounted shared-AI checks use only a fake provider. Real MySQL,
+final exact-head CI/review, legacy-edition compatibility, current-edit preservation,
+cleanup and hosted/provider/mobile acceptance remain separate gates. Default-off
+shared comments passed actual local Chromium/WebKit persistence/access checks,
+including the centered phone-width composer. The combined native source suite
+passes290 tests/4982 assertions plus278 JavaScript contracts; this is local
+PHP8.5/SQLite, not targetPHP8.4 or MySQL concurrency acceptance. Real-HTTP local
+image/file checks passed8 scenarios in each browser engine with fake scanner
+evidence only. Local PDF download checks pass9 cases per engine, including390x844 viewports;
+Chromium uses retained pre-NFC evidence plus verified predicate equivalence,
+WebKit the full corrected script. Exact-head CI still requires both engines.
+Authenticated real-owner maintenance has bounded preview/explicit apply routes
+with fresh account/membership checks inside erasure; no schedule, runtime values
+or operational retention acceptance is installed. Resource/manual-workflow parity
+remains design-only. All independent runtime/provider/scanner gates remain off.
+All runtime/provider gates remain off; the current published review is unchanged.
+See [shared workspace](docs/operations/proposal-reviewer-workspace.md) and
+[reviewer AI](docs/operations/proposal-reviewer-ai.md).
+
+The default-off owner initializer adds authenticated preview/apply/status for
+one already-published future exact Version and reviewed current-edit import pins.
+Original-intent recovery preserves later shared edits. It does not capture
+browser work, assemble a publication, provision identities or enable a provider.
+No runtime initialization or new publication occurred in this source milestone.
+See [owner initialization](docs/operations/proposal-reviewer-workspace-initialization.md).
+Focused root integration passes 27 tests/545 assertions, including the retained
+independent adversarial cases and current source/asset closure. This is local
+PHP 8.5/SQLite evidence; target PHP 8.4/MySQL and exact-head CI remain required.
+
+A separate default-off real-owner draft-preparation flow now creates one new
+encrypted read-only draft from exact reviewed commercial/source/import pins. It
+adds trusted workspace/comment descriptors before immutable publication hashing;
+the private preparation marker is excluded from recipient content. Normal Publish
+remains a separate actual owner action with recipient password and original request
+key. New publication refuses expired descriptors or a requested lifetime shorter
+than their fixed expiry. Exact original receipt recovery cannot create another
+Version, renew expiry or reset work. The original draft, publication, grants and
+comments remain unchanged. Focused root integration passes29 tests/559 assertions
+on PHP8.5/SQLite, including current source/asset closure. Three retained
+independent authority cases separately pass44 assertions. Actual MySQL lifecycle,
+targetPHP8.4, current-edit capture/reconciliation, host/runtime approval and normal
+exact-head CI remain separate requirements. No actual publication or activation
+occurred. See [draft preparation](docs/operations/proposal-reviewer-workspace-preparation.md).
+The new preparation/publication MySQL lifecycle gate is registered after the
+workspace/initializer gates. Only its local refusal guard has run; actual
+independent native sessions, row waits and concurrency remain NOT RUN until CI.
+
+A separate default-off real-owner local export now preserves one tab's exact
+legacy fictional storage text/UTF8/base64/hash without uploading or importing it.
+Actual owner login, fresh membership/Version checks and a short same-origin CSRF
+authorization precede the explicit fixed-key read. The complete approved module
+snapshot is reused for rendering/CSP; display names cannot supply authority.
+Missing is not zero; schema, authorship, edition provenance and all-tabs completeness
+remain unverified. Root verified29 JavaScript cases and21 distinct native/source/
+asset cases across retained results and targeted setup/fixture corrections. All
+assertions and the256 source cap remain; the positive fixture is170 entries plus
+fixed dependencies, while257-entry/oversize refusal is unchanged. Both
+engines passed6 synthetic real-login/download cases before the server-only module
+pin correction; executed JS is byte-identical and final native guard regressions
+pass. Do not claim those engines ran final PHP or physical devices. No real data
+was captured. Host config/activation and current-edit conversion/reconciliation
+remain separate. See [local export](docs/operations/reviewer-legacy-capture-screen.md).
+The Enterprise-only capture metadata parser/overlay now has a closed default-off
+ENV seam; root config remains literal disabled. Focused root parser/config and
+current source-bound checks pass13/388 on localPHP8.5. No host values, flags or
+config cache were installed; actual capture permission/fresh checks remain
+independent. See [capture configuration](docs/operations/reviewer-legacy-capture-configuration.md).
+
 ## Enterprise CI performance candidate (October 23, 2026)
 
 The isolated Enterprise workflow keeps the `enterprise-runtime` required result
@@ -8,6 +98,7 @@ with unchanged `all` flags and pacing; both engines and all existing guards rema
 This changes source verification only. Production GitHub-to-Forge authority,
 atomic activation and rollback remain unchanged. Actual candidate CI timings are
 required before acceptance; see [Enterprise CI](docs/operations/enterprise-ci.md).
+
 
 ## Private review activity (October 23, 2026)
 
@@ -31,6 +122,30 @@ Tracking starts at release; previous visits cannot be reconstructed. Browser
 blocking, expired access or a full/unavailable journal can leave gaps. Campus
 source changes require a fresh immutable publication and review link. See
 [review activity](docs/operations/proposal-review-activity.md).
+
+## Private reviewer AI (October 23; future source candidate, default off)
+
+The source candidate adds explicitly confirmed questions over a closed fictional
+browser snapshot to one approved private proposal edition. It uses a pinned
+owner-local lifetime ledger, durable once-only dispatch and content-free recovery,
+with bounded encrypted-content cleanup. Public/native paths and other paid
+features stay separate. This is not hosted or provider acceptance; current
+shared publications remain unchanged. See [the contract](docs/operations/proposal-reviewer-ai.md).
+
+## Campus review presentation follow-up (October 23; source candidate)
+
+The follow-up prepares mobile navigation menus and a visible ticket-routing
+summary while retaining desktop controls and existing proposal access. A small
+fixed local menu controller requires its exact CSP hash; other scripts and
+network authority remain blocked. It also repairs the fictional contractor fixture
+into the adapter's canonical planning collection through a separate once-only,
+edit-preserving browser-state
+upgrade. It changes no native database, provider, account or grant.
+
+These source changes are not live while the existing review is presented.
+Campus publications bind to the exact source manifest; deploying the follow-up
+requires a coordinated fresh immutable review edition, without rebinding old
+comments. See [the follow-up release notes](docs/operations/enterprise-review-presentation-followup.md).
 
 ## CI Ubuntu package mirrors (October 23; source candidate)
 
@@ -3417,3 +3532,137 @@ and non-binding exact-selection agreement requests. The regular and Enterprise
 owner-lane binding registry and recipient hosts ship empty. No real workspace
 is provisioned or bound; no signature/payment/provider activation is included.
 See [the architecture and acceptance gates](docs/architecture/reusable-proposals.md).
+
+## Grounded follow-up, reviewer voice and private photos (source only)
+
+Native record-backed answers use current saved building/project/task/member and
+Planning permissions. Conversation sends only selected evidence and deterministic
+integer currency/basis cost comparisons; full evidence changes invalidate history.
+The private reviewer remains a separate closed fictional projection, without a
+native User or real-campus grant. Its shared server-workspace seam is a separate
+required acceptance step; browser snapshots are not authoritative hosted records.
+
+Private reviewer follow-ups include at most two accepted same-session/evidence
+receipts, displayed before each Send. They inherit the earliest ten-minute content
+expiry; the final pre-provider read rechecks it. Speech uses that exact text client,
+explicit per-turn sharing, Stop/Interrupt and typed fallback. Legitimately unlocked
+computers/phones can independently use it; session receipt fences are not a device
+allowlist. Persistent memory and server transcription remain out.
+
+Private photos expose only clean-ready, currently authorized discussion-bound
+JPEG/PNG bytes, preserving quarantine and unchanged attachment downloads. Nested
+viewers retain ticket drafts, placement, focus and scroll; hidden tabs retire bytes
+without false access denial, while real permission loss clears controls. Fictional
+sample uploads remain quarantined metadata, not fabricated ready thumbnails.
+
+All new behavior stays default-off/source-only until normal CI, explicit immutable
+edition/access/comment transition and approved hosted acceptance. Simulated speech,
+intercepted endpoints and phone viewports do not prove physical microphone/mobile,
+real provider calls or live private-image/scanner readiness. See the reviewer AI
+and attachment-gallery runbooks. Keep SES transactional source in its separate
+packet; no provider/key/scanner/mail/global routing activation follows from this.
+
+
+### 2026-10-24 scheduled cleanup source checkpoint
+
+The default-off `proposals:prune-scheduled-workspace` source provides at most one
+finite graph page and one comments page under a stable context MySQL advisory
+lock. Exact fixed-file/config pins, current real-owner/context/Version checks,
+per-kind predecessor lineage, two bounded durable cursors and conservative partial
+outcomes retain the existing manual HTTP erasure behavior. See
+`docs/operations/proposal-reviewer-workspace-scheduled-cleanup.md`.
+
+The assembled local PHP8.5/SQLite/pure/refusal checks pass31 cases/865 assertions,
+with one explicitly skipped actual-MySQL scheduled mutation case. CI-plan3 and
+workflow lint pass. These focused checks include current capture configuration
+and source-closure integration; prior broad/browser suites were not repeated.
+Actual MySQL8.4/PHP8.4 exact-head CI, query/locking behavior and hosted cleanup
+remain unverified. No runtime policy/delegation/ENV/cache/job was installed.
+Recurring operation needs its own concrete finite-scope human approval and
+observed installation; this source checkpoint never supplies that authority.
+
+
+### 2026-10-24 CI fixture repair checkpoint
+
+The first normal 97dce88e CI run exposed extracted JavaScript fixtures missing
+current production declarations/teardown helpers, three PHP test-formatting
+failures, a child configuration test missing Composer autoload, and parallel
+source-fingerprint interference. The repair changes tests and documentation only.
+Original cases and assertions remain. Five added JavaScript cases check actual
+native/shared delegation, lifecycle fences and production privacy cleanup helpers;
+the exact existing 31-file prepare command passes 230/230 locally, with no skips.
+
+The unchanged locked Pint passes its three corrected tests. Required unused-import
+removal and braces accompany whitespace; independent name-resolved whole-AST
+proof preserves all 10 test methods, 81 assertion sites, control flow and comments.
+The configuration child now loads the same Composer autoloader as its neighboring
+fixtures; both original tests pass. No application/configuration behavior changes.
+
+Two source-mutating suites now use a bounded private nonsecret source snapshot.
+Real source/module drift still produces the original denials; separate readers
+retain unchanged original bytes. Runtime ENV, storage, credentials and sessions
+are never copied. Four synchronized two-process checks demonstrate the old race
+and its isolation. Root's combined full-class cohort passes 106 tests and 1,623
+assertions in four parallel processes on local PHP 8.5/SQLite. This targeted result
+does not establish that every original CI failure had the same cause.
+
+Application source, dependencies, formatter rules, workflows, all 23 browser lanes,
+parallelism and strict source/access guards remain unchanged. The original general
+MySQL recovery job passed; Enterprise-specific MySQL gates were skipped after
+prepare failed and remain unverified. Final new-head normal PHP 8.4/MySQL/browser
+CI is required. No runtime, publication, provider or deployment action occurred.
+
+
+### 2026-10-24 fresh formatter and asynchronous test follow-up
+
+Normal 5816 CI passed the 230-case JavaScript transport step, then exposed two
+comment-UI waits exhausting 200 `setImmediate` turns in roughly 8–10 ms. The
+test-only wait now uses a five-second monotonic deadline and an awaited 1 ms
+timer. Every original test body/assertion is unchanged. A controlled 50 ms delay
+around genuine WebCrypto reproduces the two CI failures with the old helper;
+both pass after correction. All 307 cases of the affected command pass locally
+on Node 26.3.1; missing transitions and predicate errors still fail. This does
+not substitute for final exact-head Node 22/PHP 8.4/MySQL/browser CI.
+
+The locked formatter's first pass left five comma spaces unfixed; its own cache
+masked them. Fresh-cache checking reproduces the failure on local PHP 8.5 too.
+The earlier local PASS did not establish fresh final-byte idempotence; that cache
+assurance is superseded. Exactly five spaces correct the two tests, preserving
+all non-whitespace tokens/comments and the full resolved AST. A new explicit
+cache passes both files and another new cache passes the exact 321-file workflow
+selection. No formatter rule, test case, application source, dependency, workflow,
+parallelism, runtime or provider gate changed. New-head CI remains required.
+
+
+### 2026-10-24 native MySQL and standalone tour fixture correction
+
+Normal 4a0 CI passed quality, both general jobs (5,321 PHP tests / 48,248
+assertions, eight skips) and 20 of 23 browser lanes. Enterprise MySQL exposed a
+new unreleased collaboration receipt kind of 26 ASCII characters against the
+unchanged released VARCHAR(24). Its sole product correction uses the unique
+23-character ent_proposal_ws_cmt_cmd namespace. All store methods, encryption,
+source/context/request/digest checks and once-only behavior are unchanged. No
+schema/data migration, truncation, old-name fallback or live rename is authorized.
+The collaboration class and both names are absent deployed main9a4 source; this
+is source provenance, not a live database inventory.
+
+Native test fixtures now order team_work_locks by its actual tenant_id primary
+key, compare receipt objects with exact closed keys/types/values independently
+of MySQL JSON key placement, and balance only their own Laravel handler layers.
+All 200 original assertion sites, workers and refusal guards remain. Handler
+observations use PHP8.4-compatible balanced set/restore operations. Native get_*
+handler functions arrived in8.5, but the locked autoloader supplied their Symfony
+polyfill on8.4; no actual8.4 failure from those names was observed. Real native
+MySQL acceptance still requires the final normal CI gate, never local skips.
+
+The standalone public tour fixture resolves exactly three known nested AI-false
+expressions, each required once. Its unresolved-Blade/embedded-asset guards and
+all existing browser cases remain unchanged; full standalone Chromium and WebKit
+checks pass. Product templates and tour JavaScript are unchanged. Five focused
+renderer cases and two native units are added to existing CI commands; every
+original command, matrix lane and guard remains required.
+
+The old native-WebKit wizard gate failed on hidden Next after a click. Two exact
+local unchanged runs passed; an assumed catalog race was not reproduced. No
+speculative product/test workaround is added. The repaired-head WebKit gate must
+pass. No runtime, provider, publication, merge or deployment action occurred.

@@ -1,3 +1,4 @@
+import {clickEnterpriseNavigation} from './enterprise-mobile-navigation-browser.mjs';
 import assert from 'node:assert/strict';
 import {writeFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
@@ -28,8 +29,8 @@ export async function checkFinanceWorkspace(page, evidence) {
     const owner=await page.locator('#finance-owner option').evaluateAll(items=>items.find(i=>i.value)?.value);
     assert.ok(owner);await page.locator('#finance-owner').selectOption(owner);
     // Ordinary navigation/reload preserves the unsent packet without submitting it.
-    await page.locator('[data-section="requests"]').click();
-    await page.locator('[data-section="finance"]').click();
+    await clickEnterpriseNavigation(page,page.locator('[data-section="requests"]'));
+    await clickEnterpriseNavigation(page,page.locator('[data-section="finance"]'));
     await page.locator('#finance-form').waitFor({state:'visible'});
     assert.equal(await page.locator('#finance-title').inputValue(),title);
     await page.reload();await page.locator('#finance-form').waitFor({state:'visible'});

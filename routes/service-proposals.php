@@ -25,6 +25,16 @@ Route::middleware(['auth', 'verified', \App\Proposals\ResponsePolicy::class])->p
     Route::post('/versions/{versionId}/revoke', [OwnerController::class, 'revoke'])->name('revoke');
 });
 
+require __DIR__.'/service-proposals-reviewer-ai.php';
+require __DIR__.'/service-proposals-reviewer-workspace.php';
+require __DIR__.'/service-proposals-reviewer-collaboration.php';
+require __DIR__.'/service-proposals-reviewer-files.php';
+require __DIR__.'/service-proposals-reviewer-images.php';
+require __DIR__.'/service-proposals-reviewer-downloads.php';
+require __DIR__.'/service-proposals-reviewer-maintenance.php';
+require __DIR__.'/service-proposals-reviewer-initialization.php';
+require __DIR__.'/service-proposals-reviewer-preparation.php';
+
 Route::post('service-proposals/{token}/activity', [\App\Proposals\ActivityController::class, 'capture'])
     ->middleware([\App\Proposals\ResponsePolicy::class, 'throttle:service-proposals-activity'])->name('service-proposals.recipient.activity');
 
@@ -43,6 +53,8 @@ Route::middleware([\App\Proposals\ResponsePolicy::class, \App\Proposals\RecordAc
     Route::post('/usage-estimate', [RecipientController::class, 'estimate'])->name('estimate');
     Route::post('/request-agreement', [RecipientController::class, 'requestAgreement'])->name('request');
 });
+
+require __DIR__.'/service-proposals-legacy-capture.php';
 
 // Activity and foreground name/comment requests share one session. Lock before
 // loading it so a late report cannot overwrite a newer name, grant or cart.

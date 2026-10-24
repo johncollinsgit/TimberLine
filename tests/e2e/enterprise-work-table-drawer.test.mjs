@@ -7,6 +7,14 @@ const begin=source.indexOf('  const requestTypeLabels='),end=source.indexOf('  f
 assert.ok(begin>=0&&end>begin,'Tests must use actual shared work-table and drawer handlers');
 const handlers=source.slice(begin,end);
 const plain=value=>JSON.parse(JSON.stringify(value));
+const next=await readFile(new URL('../../resources/views/enterprise/next-script.blade.php',import.meta.url),'utf8');
+const sharedFiles=await readFile(new URL('../../resources/views/enterprise/shared-files-bridge.blade.php',import.meta.url),'utf8');
+const sharedComments=await readFile(new URL('../../resources/views/enterprise/shared-comments-bridge.blade.php',import.meta.url),'utf8');
+function region(text,start,end){const a=text.indexOf(start),b=text.indexOf(end,a);assert.ok(a>=0&&b>a,'Actual privacy cleanup source must be available');return text.slice(a,b);}
+const galleryCleanup=region(next,'  let attachmentGallery = null;','  @include(');
+const filesCleanup=region(sharedFiles,'  let sharedFilesUi =','  const sharedFileUuid =')+region(sharedFiles,'  function clearSharedFiles()','  function sharedFilesTarget()');
+const discussionCleanup=region(sharedComments,'  let sharedDiscussionUi =','  async function readSharedReviewName()');
+
 function fixture(){
  const nodes=new Map(),events=new Map(),classes=new Set(),calls=[];
  const node=id=>{if(!nodes.has(id))nodes.set(id,{id,value:'',open:false,scrollTop:25,scrollLeft:60,children:[],dataset:{},isConnected:true,querySelectorAll(){return[];},setAttribute(){},replaceChildren(){this.children=[];this.textContent='';},addEventListener(name,fn){events.set(id+':'+name,fn);},focus(options){calls.push({focus:id,options});},showModal(){this.open=true;},close(){this.open=false;}});return nodes.get(id);};
@@ -15,6 +23,13 @@ function fixture(){
  document:{activeElement:node('opener'),documentElement:{classList:{add:x=>classes.add(x),remove:x=>classes.delete(x)}},dispatchEvent:e=>calls.push({event:e.type,detail:e.detail})},
  CustomEvent:class{constructor(type,{detail}){this.type=type;this.detail=detail;}},stashComposer(){calls.push({stash:true});},rememberSelection(){calls.push({remember:true});},rememberUrl(){calls.push({url:true});},beginNavigation(){calls.push({begin:true});},scrollTo:value=>calls.push({scroll:value}),detail(){vm.runInContext('showWorkDetail()',context);},
  });
+ // Use the real teardown functions; spies model mounted UI objects and assert delegation/state retirement.
+ context.fixtureGallery={destroy(){calls.push({galleryDestroyed:true});}};
+ context.fixtureFilesUi={destroy(){calls.push({filesDestroyed:true});}};
+ context.fixtureFilesScope={host:{remove(){calls.push({filesHostRemoved:true});}}};
+ context.fixtureDiscussion={invalidate(options){calls.push({discussionInvalidated:plain(options)});}};
+ vm.runInContext(galleryCleanup+filesCleanup+discussionCleanup,context);
+ vm.runInContext('attachmentGallery=fixtureGallery; sharedFilesUi=fixtureFilesUi; sharedFilesScope=fixtureFilesScope; sharedFilesName={name:"Fictional reader"}; sharedDiscussionUi=fixtureDiscussion;',context);
  vm.runInContext(handlers,context);
  return{context,node,nodes,calls,events,classes,run:code=>vm.runInContext(code,context)};
 }
@@ -45,6 +60,10 @@ test('actual Close and Escape handlers clear private detail without replacing li
  assert.equal(prevented,true);assert.equal(f.node('work-drawer').open,false);assert.equal(f.node('detail').textContent,'');assert.equal(f.context.selected,null);assert.equal(f.context.activeDiscussionKey,null);assert.ok(f.context.discussionGeneration>generation);
  assert.equal(f.node('request-list'),list);assert.equal(f.node('search').value,'Fictional');assert.equal(f.run('workSort().direction'),'desc');assert.equal(table.scrollTop,25);assert.equal(table.scrollLeft,60);
  assert.ok(f.calls.some(c=>c.focus===opener.id&&c.options.preventScroll));assert.ok(f.calls.some(c=>c.scroll?.top===450));assert.ok(f.calls.some(c=>c.event==='enterprise:tour-context'&&c.detail.selected===null));assert.ok(!f.classes.has('work-detail-open'));
+ assert.equal(f.calls.filter(c=>c.galleryDestroyed).length,1);assert.equal(f.calls.filter(c=>c.filesDestroyed).length,1);assert.equal(f.calls.filter(c=>c.filesHostRemoved).length,1);
+ assert.deepEqual(plain(f.run('[attachmentGallery,sharedFilesUi,sharedFilesScope,sharedFilesName]')),[null,null,null,null]);
+ assert.deepEqual(plain(f.run('[sharedFilesSerial,sharedFilesNameSerial,sharedDiscussionEpoch]')),[1,1,1]);
+ assert.deepEqual(f.calls.find(c=>c.discussionInvalidated).discussionInvalidated,{stash:true});
 });
 test('the actual request audit handler ignores a delayed result after Close or a different row',async()=>{
  const f=fixture();f.context.section='requests';f.context.selected='r';f.context.data.requests=[{id:'r',title:'Fictional request',status:'submitted',data:{description:'Fixture only'},version:1}];
@@ -65,4 +84,12 @@ test('intake priority sorts unassigned work; current task DTO wins and legacy om
  assert.equal(f.run('workCell(data.requests[0],"priority")'),'Not recorded');
  assert.equal(f.run('requestTypeLabel({request_type:"constructor"})'),null);
  f.context.data.requests[2].priority=null;assert.equal(f.run('requestPriority(data.requests[2])'),null);
+});
+
+test('actual repeated detail cleanup retires each mounted gallery/file object once and advances stale-read fences',()=>{
+ const f=fixture();f.run('clearAttachmentGallery();clearAttachmentGallery();invalidateSharedDiscussion();');
+ assert.equal(f.calls.filter(c=>c.galleryDestroyed).length,1);assert.equal(f.calls.filter(c=>c.filesDestroyed).length,1);assert.equal(f.calls.filter(c=>c.filesHostRemoved).length,1);
+ assert.deepEqual(plain(f.run('[attachmentGallery,sharedFilesUi,sharedFilesScope,sharedFilesName]')),[null,null,null,null]);
+ assert.deepEqual(plain(f.run('[sharedFilesSerial,sharedFilesNameSerial,sharedDiscussionEpoch]')),[2,2,1]);
+ assert.deepEqual(f.calls.find(c=>c.discussionInvalidated).discussionInvalidated,{stash:true});
 });

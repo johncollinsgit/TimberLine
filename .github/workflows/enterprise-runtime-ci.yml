@@ -5,11 +5,15 @@ name: Enterprise isolated runtime
     - apps/enterprise/**
     - app/Enterprise/**
     - app/Proposals/**
+    - app/Console/Commands/PruneProposalReviewerAi.php
+    - app/Console/Commands/PruneScheduledProposalWorkspace.php
     - bootstrap/providers.php
     - app/Foundation/Enterprise*.php
     - app/Providers/Enterprise*.php
     - app/Http/Middleware/EnsureEnterpriseRuntime.php
     - app/Http/Middleware/EnterpriseCsrfToken.php
+    - app/Http/Middleware/ReviewerAiBoundary.php
+    - app/Http/Middleware/ReviewerLegacyCaptureBoundary.php
     - app/Http/Middleware/EnsureEnterpriseTrialMount.php
     - app/Http/Middleware/EnsureEnterprisePrefixMount.php
     - app/Http/Middleware/EnsureEnterpriseClientSilo.php
@@ -20,10 +24,22 @@ name: Enterprise isolated runtime
     - app/Policies/Team*.php
     - config/enterprise.php
     - config/service_proposals.php
+    - config/team_work.php
     - routes/enterprise.php
     - routes/service-proposals.php
+    - routes/service-proposals-reviewer-ai.php
+    - routes/service-proposals-reviewer-workspace.php
+    - routes/service-proposals-reviewer-collaboration.php
+    - routes/service-proposals-reviewer-files.php
+    - routes/service-proposals-reviewer-images.php
+    - routes/service-proposals-reviewer-downloads.php
+    - routes/service-proposals-reviewer-maintenance.php
+    - routes/service-proposals-reviewer-initialization.php
+    - routes/service-proposals-legacy-capture.php
+    - routes/service-proposals-reviewer-preparation.php
     - routes/campus-demo.php
     - resources/data/enterprise/**
+    - resources/legacy-campus/**
     - resources/views/enterprise/**
     - resources/views/service-proposals/**
     - resources/js/enterprise/**
@@ -34,12 +50,46 @@ name: Enterprise isolated runtime
     - scripts/proposals/activity-browser.mjs
     - resources/js/service-proposals/**
     - scripts/proposals/financial-browser.mjs
+    - scripts/proposals/reviewer-workspace-*.mjs
+    - scripts/proposals/reviewer-legacy-capture-browser.mjs
+    - tests/Support/proposal-legacy-capture-browser-fixture.php
+    - tests/Support/proposal-legacy-capture-browser-router.php
+    - scripts/proposals/build-legacy-campus-v5.py
+    - tests/Support/proposal-reviewer-workspace*.php
     - tests/Feature/Enterprise/**
     - tests/Feature/Proposals/**
     - tests/Support/proposal-review-browser*.php
     - tests/Support/proposal-financial-browser-inspect.php
     - tests/Feature/LeesMcRaeCampusDemoTest.php
     - tests/e2e/enterprise-*
+    - tests/e2e/proposal-reviewer-*
+    - tests/e2e/independent-shared-files-bridge.test.mjs
+    - tests/browser/proposal-reviewer-ai.smoke.mjs
+    - tests/browser/enterprise-attachment-gallery.smoke.mjs
+    - tests/browser/reviewer-workspace-files.smoke.mjs
+    - tests/Support/proposal-reviewer-ai-render.php
+    - tests/Unit/Enterprise/GroundedEvidenceTest.php
+    - tests/js/reviewer-workspace-*
+    - tests/js/reviewer-shared-*
+    - tests/Fixtures/proposals/workspace-canonical.php
+    - tests/Support/ReviewerWorkspace*.php
+    - tests/Support/ReviewerAi*.php
+    - tests/Fixtures/proposals/reviewer-workspace-*
+    - tests/Fixtures/proposals/reviewer-workspace-map-seed.json
+    - tests/Unit/Proposals/ReviewerOperationKindTest.php
+    - tests/Unit/Proposals/ReviewerWorkspaceMySqlFixtureTest.php
+    - tests/Unit/Proposals/ReviewerWorkspaceMapReferenceTest.php
+    - tests/Unit/Proposals/ReviewerWorkspaceRuntimeConfigurationTest.php
+    - tests/Unit/Proposals/ReviewerWorkspaceMaintenanceConfigurationTest.php
+    - tests/Unit/Proposals/ReviewerWorkspaceScheduledCleanupConfigurationTest.php
+    - tests/Unit/Proposals/ReviewerWorkspaceInitializationConfigurationTest.php
+    - tests/Unit/Proposals/ReviewerLegacyCaptureConfigurationTest.php
+    - tests/Unit/Proposals/ReviewerWorkspacePreparationConfigurationTest.php
+    - tests/Unit/Proposals/CampusReviewSourceBoundTest.php
+    - tests/Unit/Proposals/IndependentWorkspaceRuntimeConfigurationTest.php
+    - tests/Unit/Proposals/LegacyCampusConfigurationTest.php
+    - tests/Unit/test_legacy_campus_generator.py
+    - tests/Fixtures/legacy-campus-*
     - tests/browser/enterprise-voice-jobs.smoke.mjs
     - tests/browser/enterprise-read-only-assistant.smoke.mjs
     - tests/browser/enterprise-conversation.smoke.mjs
@@ -53,6 +103,14 @@ name: Enterprise isolated runtime
     - tests/Integration/EnterpriseMemoryMySqlConcurrencyTest.php
     - tests/Support/EnterpriseConversationFixture.php
     - tests/Integration/EnterpriseClientProvisioningMySqlTest.php
+    - tests/Integration/ReviewerWorkspaceMySqlConcurrencyTest.php
+    - tests/Support/reviewer-workspace-mysql-worker.php
+    - tests/Integration/ReviewerWorkspaceInitializationMySqlConcurrencyTest.php
+    - tests/Support/reviewer-workspace-initialization-mysql-worker.php
+    - tests/Integration/ReviewerWorkspacePreparationMySqlConcurrencyTest.php
+    - tests/Support/reviewer-workspace-preparation-mysql-worker.php
+    - tests/Integration/ReviewerWorkspaceScheduledCleanupMySqlTest.php
+    - tests/Support/reviewer-workspace-scheduled-mysql-worker.php
     - tests/Integration/migration-recovery-manifest.php
     - phpunit.enterprise.xml
     - phpunit.team.xml
@@ -87,6 +145,8 @@ jobs:
       run: |-
         node --test tests/e2e/enterprise-ci-plan.test.mjs
         python3 -m unittest discover -s tests/ci -p "test_enterprise_ci_bundle.py" -v
+    - name: Check the pinned public legacy campus builder without runtime access
+      run: python3 -m unittest discover -s tests/Unit -p "test_legacy_campus_generator.py" -v
     - name: Find Composer download cache
       id: composer-cache
       run: echo "directory=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
@@ -101,13 +161,15 @@ jobs:
     - run: npm ci
     - name: Check private transport and isolated sample contracts
       run: node --test tests/e2e/enterprise-transport.test.mjs tests/e2e/enterprise-reviewer-sample.test.mjs tests/e2e/enterprise-job-sample-upgrade.test.mjs tests/e2e/enterprise-job-sample-commands.test.mjs
-        tests/e2e/enterprise-work-scope-map.test.mjs tests/e2e/enterprise-workspace-tour.test.mjs tests/e2e/enterprise-procedures-ui.test.mjs tests/e2e/enterprise-resource-presentation.test.mjs
+        tests/e2e/enterprise-work-scope-map.test.mjs tests/e2e/enterprise-workspace-tour.test.mjs tests/e2e/enterprise-reviewer-tour-fixture.test.mjs tests/e2e/enterprise-procedures-ui.test.mjs tests/e2e/enterprise-resource-presentation.test.mjs
         tests/e2e/enterprise-resource-history-time.test.mjs tests/e2e/enterprise-buildings-map-state.test.mjs tests/e2e/enterprise-request-building.test.mjs tests/e2e/enterprise-read-only-assistant.test.mjs
         tests/e2e/enterprise-conversation.test.mjs tests/e2e/enterprise-saved-assistants.test.mjs tests/e2e/enterprise-private-memory.test.mjs tests/e2e/enterprise-tour-position.test.mjs
         tests/e2e/enterprise-work-table-drawer.test.mjs tests/e2e/enterprise-detail-placement.test.mjs tests/e2e/enterprise-project-detail-generation.test.mjs tests/e2e/enterprise-work-views.test.mjs
         tests/e2e/enterprise-roll-call-projects.test.mjs tests/e2e/enterprise-shell-navigation.test.mjs tests/e2e/enterprise-preference-lifecycle.test.mjs tests/e2e/enterprise-theme.test.mjs
         tests/e2e/enterprise-executive.test.mjs tests/e2e/enterprise-role-preview.test.mjs tests/js/enterprise-sample-voice.test.mjs tests/js/enterprise-usage.test.mjs
         tests/e2e/ai-voice-conversation.test.mjs tests/e2e/enterprise-voice-jobs.test.mjs tests/e2e/enterprise-request-classification-draft.test.mjs
+    - name: Check private reviewer AI snapshot, receipts, voice and gallery without providers
+      run: node --test tests/e2e/proposal-reviewer-*.test.mjs tests/e2e/enterprise-attachment-gallery.test.mjs tests/e2e/independent-shared-files-bridge.test.mjs tests/js/reviewer-workspace-*.test.mjs tests/js/reviewer-shared-*.test.mjs
     - name: Check voice shell scope without providers
       run: node --test tests/e2e/enterprise-voice-shell-scope.test.mjs
     - run: npm run build:enterprise
@@ -161,6 +223,8 @@ jobs:
       run: php -r 'foreach ([".env", "apps/enterprise/.env"] as $path) { if (!is_file($path)) { file_put_contents($path, ""); } }'
     - run: php apps/enterprise/scripts/lint-schema.php
     - run: php vendor/bin/phpunit -c phpunit.enterprise.xml --display-warnings
+    - name: Check private reviewer AI and gallery mounted boundaries without providers
+      run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/ReviewerAiBudgetTest.php tests/Feature/Enterprise/ReviewerAiConnectionTest.php tests/Feature/Enterprise/ReviewerAiHttpTest.php tests/Feature/Enterprise/ReviewerAiIntegrationTest.php tests/Feature/Enterprise/ReviewerAiOrchestrationTest.php tests/Feature/Enterprise/ReviewerAiReceiptTest.php tests/Feature/Enterprise/ReviewerAiRetentionCommandTest.php tests/Feature/Enterprise/ReviewerAiWorkspaceSeamTest.php tests/Feature/Enterprise/ReviewerAiWorkspaceBoundaryProofTest.php tests/Feature/Enterprise/EnterpriseAttachmentGalleryTest.php tests/Feature/Enterprise/EnterpriseGroundedConversationTest.php tests/Unit/Enterprise/GroundedEvidenceTest.php --compact --display-warnings
     - name: Check voice lifecycle and scoped job lookup without providers
       run: |
         php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseVoiceJobsTest.php tests/Feature/Enterprise/EnterpriseVoiceAssistantTest.php --compact --display-warnings
@@ -169,7 +233,7 @@ jobs:
         tests/Feature/Enterprise/EnterpriseReviewerTrialEntryTest.php tests/Feature/EnterpriseReviewerPublicTest.php tests/Feature/LeesMcRaeCampusDemoTest.php --compact
         --display-warnings
     - name: Check immutable proposal and version-bound campus review policies
-      run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Proposals --compact --display-warnings
+      run: php -d memory_limit=1G vendor/bin/pest -c phpunit.team.xml tests/Feature/Proposals tests/Feature/Enterprise/LegacyCampusRuntimeTest.php tests/Unit/Proposals/ReviewerOperationKindTest.php tests/Unit/Proposals/ReviewerWorkspaceMySqlFixtureTest.php tests/Unit/Proposals/ReviewerWorkspaceMapReferenceTest.php tests/Unit/Proposals/ReviewerWorkspaceRuntimeConfigurationTest.php tests/Unit/Proposals/ReviewerWorkspaceMaintenanceConfigurationTest.php tests/Unit/Proposals/ReviewerWorkspaceScheduledCleanupConfigurationTest.php tests/Unit/Proposals/ReviewerWorkspaceInitializationConfigurationTest.php tests/Unit/Proposals/ReviewerLegacyCaptureConfigurationTest.php tests/Unit/Proposals/ReviewerWorkspacePreparationConfigurationTest.php tests/Unit/Proposals/CampusReviewSourceBoundTest.php tests/Unit/Proposals/IndependentWorkspaceRuntimeConfigurationTest.php tests/Unit/Proposals/LegacyCampusConfigurationTest.php --compact --display-warnings
     - name: Check permission-filtered period reports and certificate register
       run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseContractorCertificatesTest.php tests/Feature/Enterprise/EnterpriseReportExportTest.php
         tests/Feature/Enterprise/EnterpriseFinancePacketsTest.php tests/Feature/Enterprise/EnterpriseOperationsTest.php --compact --display-warnings
@@ -225,6 +289,46 @@ jobs:
           group: ''
         - id: proposal-webkit
           kind: proposal
+          engine: webkit
+          group: ''
+        - id: shared-workspace-chromium
+          kind: shared-workspace
+          engine: chromium
+          group: ''
+        - id: shared-workspace-webkit
+          kind: shared-workspace
+          engine: webkit
+          group: ''
+        - id: shared-comments-chromium
+          kind: shared-comments
+          engine: chromium
+          group: ''
+        - id: shared-comments-webkit
+          kind: shared-comments
+          engine: webkit
+          group: ''
+        - id: shared-files-chromium
+          kind: shared-files
+          engine: chromium
+          group: ''
+        - id: shared-files-webkit
+          kind: shared-files
+          engine: webkit
+          group: ''
+        - id: shared-downloads-chromium
+          kind: shared-downloads
+          engine: chromium
+          group: ''
+        - id: shared-downloads-webkit
+          kind: shared-downloads
+          engine: webkit
+          group: ''
+        - id: shared-ai-chromium
+          kind: shared-ai
+          engine: chromium
+          group: ''
+        - id: shared-ai-webkit
+          kind: shared-ai
           engine: webkit
           group: ''
         - id: reviewer-chromium
@@ -283,6 +387,12 @@ jobs:
         VOICE_EVIDENCE_DIR: test-results/enterprise/voice-jobs
       run: node tests/browser/enterprise-voice-jobs.smoke.mjs
       if: matrix.kind == 'components'
+    - name: Check private image gallery and reviewer AI clients without providers
+      run: |
+        node tests/browser/enterprise-attachment-gallery.smoke.mjs
+        node tests/browser/reviewer-workspace-files.smoke.mjs
+        node tests/browser/proposal-reviewer-ai.smoke.mjs
+      if: matrix.kind == 'components'
     - name: Check persistent Enterprise UI in Chromium and WebKit
       env:
         ENTERPRISE_TEST_PHP: php
@@ -309,6 +419,61 @@ jobs:
         PROPOSAL_BROWSER_ENGINE="$engine" PROPOSAL_BROWSER_EVIDENCE="test-results/enterprise/proposal-review/$engine" node scripts/proposals/review-browser.mjs
         PROPOSAL_BROWSER_ENGINE="$engine" PROPOSAL_BROWSER_EVIDENCE="test-results/enterprise/proposal-activity/$engine" node scripts/proposals/activity-browser.mjs
       if: matrix.kind == 'proposal'
+    - name: Check shared reviewer workspace through real HTTP in Chromium and WebKit
+      timeout-minutes: 15
+      env:
+        ENTERPRISE_TEST_PHP: php
+        EVERBRANCH_PLAYWRIGHT_MODULE: node_modules/playwright/index.mjs
+        engine: ${{ matrix.engine }}
+      run: |
+        PROPOSAL_BROWSER_ENGINE="$engine" PROPOSAL_BROWSER_EVIDENCE="test-results/enterprise/proposal-shared-workspace/$engine" node scripts/proposals/reviewer-workspace-browser.mjs
+        PROPOSAL_WORKSPACE_SCENARIO=directory PROPOSAL_BROWSER_ENGINE="$engine" PROPOSAL_BROWSER_EVIDENCE="test-results/enterprise/proposal-shared-directory/$engine" node scripts/proposals/reviewer-workspace-browser.mjs
+      if: matrix.kind == 'shared-workspace'
+    - name: Check persisted shared reviewer comments in Chromium and WebKit
+      timeout-minutes: 15
+      env:
+        ENTERPRISE_TEST_PHP: php
+        EVERBRANCH_PLAYWRIGHT_MODULE: node_modules/playwright/index.mjs
+        engine: ${{ matrix.engine }}
+      run: |
+        PROPOSAL_BROWSER_ENGINE="$engine" PROPOSAL_BROWSER_EVIDENCE="test-results/enterprise/proposal-shared-comments/$engine" node scripts/proposals/reviewer-workspace-comments-browser.mjs
+      if: matrix.kind == 'shared-comments'
+    - name: Check persisted private workspace photos with a fake scanner in Chromium and WebKit
+      timeout-minutes: 15
+      env:
+        ENTERPRISE_TEST_PHP: php
+        EVERBRANCH_PLAYWRIGHT_MODULE: node_modules/playwright/index.mjs
+        engine: ${{ matrix.engine }}
+      run: |
+        PROPOSAL_BROWSER_ENGINE="$engine" PROPOSAL_BROWSER_EVIDENCE="test-results/enterprise/proposal-shared-files/$engine" node scripts/proposals/reviewer-workspace-files-browser.mjs
+      if: matrix.kind == 'shared-files'
+    - name: Check persisted private PDF downloads with a fake scanner in Chromium and WebKit
+      timeout-minutes: 15
+      env:
+        ENTERPRISE_TEST_PHP: php
+        EVERBRANCH_PLAYWRIGHT_MODULE: node_modules/playwright/index.mjs
+        engine: ${{ matrix.engine }}
+      run: |
+        PROPOSAL_BROWSER_ENGINE="$engine" PROPOSAL_BROWSER_EVIDENCE="test-results/enterprise/proposal-shared-downloads/$engine" node scripts/proposals/reviewer-workspace-downloads-browser.mjs
+      if: matrix.kind == 'shared-downloads'
+    - name: Check private owner local tab export in Chromium and WebKit
+      timeout-minutes: 15
+      env:
+        ENTERPRISE_TEST_PHP: php
+        EVERBRANCH_PLAYWRIGHT_MODULE: node_modules/playwright/index.mjs
+        engine: ${{ matrix.engine }}
+      run: |
+        PROPOSAL_BROWSER_ENGINE="$engine" PROPOSAL_BROWSER_EVIDENCE="test-results/enterprise/proposal-local-capture/$engine" node scripts/proposals/reviewer-legacy-capture-browser.mjs
+      if: matrix.kind == 'shared-downloads'
+    - name: Check mounted shared reviewer AI with a fake provider in Chromium and WebKit
+      timeout-minutes: 15
+      env:
+        ENTERPRISE_TEST_PHP: php
+        EVERBRANCH_PLAYWRIGHT_MODULE: node_modules/playwright/index.mjs
+        engine: ${{ matrix.engine }}
+      run: |
+        PROPOSAL_BROWSER_ENGINE="$engine" PROPOSAL_BROWSER_EVIDENCE="test-results/enterprise/proposal-shared-ai/$engine" node scripts/proposals/reviewer-workspace-ai-browser.mjs
+      if: matrix.kind == 'shared-ai'
     - name: Check private Financial planning cart in Chromium and WebKit
       timeout-minutes: 10
       env:

@@ -3,6 +3,7 @@
 namespace App\Proposals;
 
 use App\Models\Tenant;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
@@ -116,6 +117,7 @@ class ProposalService
             if ($id) {
                 $draft = Draft::query()->where('tenant_id', $tenant->id)->lockForUpdate()->findOrFail($id);
                 abort_unless((int) ($input['revision'] ?? 0) === (int) $draft->revision, 409, 'This draft changed. Reload before saving.');
+                abort_if(ReviewerWorkspacePreparation::isPrepared($draft), 409, 'Prepared drafts are read-only. Edit the original draft.');
                 $payload = CommercialSnapshot::preserve($draft->payload, $payload);
                 $draft->fill(['client_id' => $client->id, 'payload' => $payload, 'revision' => $draft->revision + 1])->save();
 
@@ -127,26 +129,55 @@ class ProposalService
     }
 
     /** Explicit owner action only. It returns a private link and never sends it. */
-    public function publish(Tenant $tenant, int $actor, string $id, int $revision, string $password, int $days, string $requestKey, string $audience = 'client'): array
+    public function publish(Tenant $tenant, int $actor, string $id, int $revision, string $password, int $days, string $requestKey, string $audience = 'client', ?Request $ownerRequest = null): array
     {
         abort_unless(config('service_proposals.publish_enabled'), 403, 'Publication is disabled.');
         Validator::make(['password' => $password, 'days' => $days, 'request_key' => $requestKey], ['password' => ['required', 'string', 'min:12', 'max:128'], 'days' => ['integer', 'min:1', 'max:30'], 'request_key' => ['required', 'uuid']])->validate();
 
         abort_unless(in_array($audience, ['client', 'reviewer'], true), 422);
 
-        return DB::transaction(function () use ($tenant, $actor, $id, $revision, $password, $days, $requestKey, $audience): array {
+        return DB::transaction(function () use ($tenant, $actor, $id, $revision, $password, $days, $requestKey, $audience, $ownerRequest): array {
+            $preparation = app(ReviewerWorkspacePreparation::class);
+            $prepared = $preparation->publicationContext($ownerRequest, $tenant, $actor, $id);
             $draft = Draft::query()->where('tenant_id', $tenant->id)->lockForUpdate()->findOrFail($id);
-            $existing = Version::where('tenant_id', $tenant->id)->where('draft_id', $id)->where('publish_key', hash('sha256', $requestKey))->first();
+            abort_unless(ReviewerWorkspacePreparation::isPrepared($draft) === ($prepared !== null), 409);
+            $query = Version::where('tenant_id', $tenant->id)->where('draft_id', $id)->where('publish_key', hash('sha256', $requestKey));
+            $existing = $prepared !== null ? $query->lockForUpdate()->first() : $query->first();
+            $clean = $prepared !== null ? $preparation->publicationPayload($draft, $prepared, $existing !== null) : $draft->payload;
+            if ($prepared !== null) {
+                abort_unless($audience === 'reviewer', 409);
+                abort_if($existing === null && Version::where('tenant_id', $tenant->id)->where('draft_id', $id)->lockForUpdate()->first() !== null, 409, 'Use the original publication request.');
+            }
             if ($existing) {
+                if ($prepared !== null) {
+                    $expected = [...$clean, 'draft_revision' => $revision, 'audience' => $audience];
+                    $expected['campus_review'] = app(CampusReviewManifest::class)->forPublication($tenant, $expected);
+                    abort_unless($existing->payload === $expected && hash_equals($existing->content_hash, $this->hash($expected))
+                        && $existing->revoked_at === null && $existing->expires_at->isFuture(), 409);
+                }
                 abort_unless($existing->payload['draft_revision'] === $revision && $existing->payload['audience'] === $audience
                     && $existing->access_result['days'] === $days && Hash::check($password, $existing->password_hash), 409, 'This publication request was already used with different details.');
 
                 return ['version' => $existing, 'token' => $existing->access_result['token']];
             }
+            $preparedExpiry = null;
+            if ($prepared !== null) {
+                // Capture once: validation and persistence must use the identical intended expiry.
+                $publicationTime = now();
+                $preparedExpiry = $publicationTime->copy()->addDays($days);
+                abort_unless(ReviewerWorkspacePreparation::descriptorsFuture($clean['review_workspace'],
+                    $clean['review_workspace_collaboration'] ?? null, $publicationTime), 410);
+                foreach (['review_workspace', 'review_workspace_collaboration'] as $descriptor) {
+                    if (isset($clean[$descriptor])) {
+                        abort_unless(\Carbon\CarbonImmutable::parse($clean[$descriptor]['expires_at'])->lte($preparedExpiry), 409,
+                            'The chosen lifetime ends before the fixed reviewed workspace expiry.');
+                    }
+                }
+            }
             abort_unless($draft->revision === $revision, 409, 'Review the current draft before publishing.');
-            CommercialSnapshot::verify($draft->payload);
+            CommercialSnapshot::verify($clean);
             $token = Str::random(64);
-            $payload = [...$draft->payload, 'draft_revision' => $revision, 'audience' => $audience];
+            $payload = [...$clean, 'draft_revision' => $revision, 'audience' => $audience];
             if (($campus = app(CampusReviewManifest::class)->forPublication($tenant, $payload)) !== null) {
                 $payload['campus_review'] = $campus;
             }
@@ -154,9 +185,13 @@ class ProposalService
                 'tenant_id' => $tenant->id, 'draft_id' => $draft->id,
                 'number' => Version::where('tenant_id', $tenant->id)->where('draft_id', $id)->max('number') + 1,
                 'payload' => $payload, 'content_hash' => $this->hash($payload), 'token_hash' => hash('sha256', $token),
-                'password_hash' => Hash::make($password), 'expires_at' => now()->addDays($days), 'created_by' => $actor,
+                'password_hash' => Hash::make($password), 'expires_at' => $preparedExpiry ?? now()->addDays($days), 'created_by' => $actor,
                 'publish_key' => hash('sha256', $requestKey), 'access_result' => ['token' => $token, 'days' => $days],
             ]);
+
+            if ($prepared !== null) {
+                $preparation->publicationPayload($draft, $prepared, false);
+            }
 
             return ['version' => $version, 'token' => $token];
         });
@@ -266,7 +301,7 @@ class ProposalService
 
         return DB::transaction(function () use ($version, $name, $page, $body, $requestKey, $binding): Comment {
             $locked = Version::where('tenant_id', $version->tenant_id)->lockForUpdate()->findOrFail($version->id);
-            $manifest = app(CampusReviewManifest::class)->assertCurrent($locked, $page);
+            $manifest = app(CampusReviewManifest::class)->resolveReviewEdition($locked, $page)['manifest'];
             abort_unless(in_array($name, $locked->payload['reviewer_names'] ?? [], true), 403);
             abort_unless(($binding['version_hash'] ?? null) === $locked->content_hash
                 && ($binding['build_id'] ?? null) === $manifest['build_id']

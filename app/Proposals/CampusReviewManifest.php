@@ -28,10 +28,22 @@ class CampusReviewManifest
             'pages' => array_map(fn ($id, $title) => ['id' => $id, 'title' => $title], array_keys(self::PAGES), array_values(self::PAGES))];
     }
 
+    /** Nonsecret source evidence only; this grants no renderer, owner or scheduled authority. */
+    public function sourceFingerprint(): string
+    {
+        return $this->sourceHash();
+    }
+
     /** Fixed local source groups only; never accepts a file path from a reviewer. */
     protected function sourceHash(): string
     {
-        $paths = ['app/Proposals/Activity.php', 'app/Proposals/ActivityController.php', 'app/Proposals/RecordActivity.php',
+        $paths = ['app/Proposals/ReviewerLegacyCaptureConfiguration.php', 'app/Proposals/ReviewerLegacyCapture.php', 'app/Proposals/ReviewerLegacyCaptureController.php',
+            'app/Http/Middleware/ReviewerLegacyCaptureBoundary.php', 'routes/service-proposals-legacy-capture.php',
+            'resources/views/service-proposals/legacy-capture.blade.php', 'app/Proposals/Activity.php', 'app/Proposals/ActivityController.php', 'app/Proposals/RecordActivity.php',
+            'app/Proposals/LegacyCampusRenderer.php', 'app/Proposals/LegacyCampusViews.php',
+            'app/Proposals/LegacyCampusArtifact.php', 'app/Proposals/LegacyCampusRegistry.php', 'app/Proposals/LegacyCampusV5Definition.php',
+            'resources/legacy-campus/v5/index.json', 'resources/legacy-campus/v5-definition.json',
+            'scripts/proposals/build-legacy-campus-v5.py',
             'app/Proposals/RateLimits.php', 'app/Proposals/ResponsePolicy.php', 'app/Proposals/RecipientController.php', 'app/Proposals/CampusReviewController.php', 'routes/service-proposals.php',
             'resources/js/service-proposals/activity.js', 'resources/views/service-proposals/activity-bridge.blade.php',
             'resources/views/service-proposals/section-tabs.blade.php',
@@ -39,9 +51,29 @@ class CampusReviewManifest
             'app/Proposals/CampusReviewManifest.php', 'resources/views/service-proposals/campus-review.blade.php',
             'resources/data/enterprise/lees-mcrae-locations.json', 'resources/data/enterprise/official-campus-plan.png',
             'resources/data/enterprise/campus-map-points.json',
-            'resources/images/enterprise/Everbranch-Rooted-Peak-Aligned.svg', 'resources/images/enterprise/Everbranch-Rooted-Peak-Aligned.png'];
-        foreach (['resources/views/enterprise/*.blade.php', 'resources/js/enterprise/*.js', 'resources/js/enterprise/*.tsx',
-            'resources/js/enterprise/*.css', 'resources/js/enterprise/reviewer/*.js'] as $pattern) {
+            'resources/images/enterprise/Everbranch-Rooted-Peak-Aligned.svg', 'resources/images/enterprise/Everbranch-Rooted-Peak-Aligned.png',
+            'resources/js/enterprise/reviewer/assets/lees-mcrae-official-wordmark.png',
+            'app/Proposals/ProposalService.php', 'app/Proposals/OwnerController.php', 'app/Proposals/Draft.php',
+            'resources/views/service-proposals/edit.blade.php', 'routes/service-proposals-reviewer-preparation.php',
+            'app/Proposals/Access.php', 'app/Proposals/Version.php', 'app/Proposals/CampusReviewController.php',
+            'app/Enterprise/RecordStore.php', 'app/Enterprise/MountUrls.php', 'app/Enterprise/Provisioning/ClientSilo.php',
+            'app/Enterprise/Provisioning/RuntimePaths.php', 'app/Enterprise/Trial/TrialBudget.php', 'app/Enterprise/Trial/TrialStore.php',
+            'app/Enterprise/Conversation/Connection.php', 'app/Models/TeamOperationRecord.php', 'app/Models/TeamArea.php', 'app/Models/Tenant.php', 'app/Models/User.php',
+            'app/Console/Commands/PruneScheduledProposalWorkspace.php', 'app/Http/Middleware/ReviewerAiBoundary.php', 'app/Console/Commands/PruneProposalReviewerAi.php',
+            'app/Http/Middleware/EnterpriseCsrfToken.php', 'app/Http/Middleware/EnsureEnterpriseRuntime.php',
+            'app/Http/Middleware/EnsureEnterprisePrefixMount.php', 'app/Http/Middleware/EnsureEnterpriseClientSilo.php',
+            'app/Providers/EnterpriseServiceProvider.php', 'apps/enterprise/bootstrap/app.php',
+            'config/service_proposals.php', 'config/enterprise.php', 'apps/enterprise/config/service_proposals.php',
+            'apps/enterprise/config/enterprise_runtime.php', 'apps/enterprise/config/enterprise_client.php',
+            'apps/enterprise/config/enterprise.php', 'apps/enterprise/config/session.php', 'apps/enterprise/config/database.php',
+            'routes/service-proposals.php', 'routes/service-proposals-reviewer-ai.php', 'routes/service-proposals-reviewer-workspace.php',
+            'routes/service-proposals-reviewer-collaboration.php', 'routes/service-proposals-reviewer-files.php',
+            'routes/service-proposals-reviewer-maintenance.php', 'routes/service-proposals-reviewer-initialization.php', 'routes/service-proposals-reviewer-images.php',
+            'routes/service-proposals-reviewer-downloads.php',
+            'resources/views/enterprise/partials/reviewer-workspace-files.blade.php',
+            'app/Services/Team/TeamFileScanner.php', 'config/team_work.php', 'composer.lock'];
+        foreach (['resources/views/enterprise/*.blade.php', 'resources/views/enterprise/partials/*.blade.php', 'resources/js/enterprise/*.js', 'resources/js/enterprise/*.tsx',
+            'resources/js/enterprise/*.css', 'resources/js/enterprise/reviewer/*.js', 'app/Proposals/ReviewerAi*.php', 'app/Proposals/ReviewerWorkspace*.php'] as $pattern) {
             foreach (glob(base_path($pattern)) ?: [] as $file) {
                 $paths[] = str_replace('\\', '/', substr($file, strlen(base_path()) + 1));
             }
@@ -59,7 +91,7 @@ class CampusReviewManifest
         }
         $paths = array_values(array_unique($paths));
         sort($paths, SORT_STRING);
-        abort_if(count($paths) > 200, 503, 'The campus review source manifest exceeds its reviewed bound.');
+        abort_if(count($paths) > 256, 503, 'The campus review source manifest exceeds its reviewed bound.');
         $hashes = [];
         foreach ($paths as $path) {
             $absolute = base_path($path);
@@ -84,7 +116,7 @@ class CampusReviewManifest
     public function available(Version $version): bool
     {
         try {
-            $this->assertCurrent($version, 'home');
+            $this->resolveReviewEdition($version, 'home');
 
             return true;
         } catch (\Symfony\Component\HttpKernel\Exception\HttpException $error) {
@@ -94,6 +126,14 @@ class CampusReviewManifest
 
             return false;
         }
+    }
+
+    /** Display/feedback compatibility only. AI, shared work and publication admission remain strict-current. */
+    public function resolveReviewEdition(Version $version, string $page): array
+    {
+        $legacy = app(LegacyCampusRegistry::class)->resolve($version, $page);
+
+        return $legacy ?? ['kind' => 'current', 'manifest' => $this->assertCurrent($version, $page), 'renderer' => null];
     }
 
     public function assertCurrent(Version $version, string $page): array

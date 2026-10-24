@@ -213,13 +213,37 @@ class TeamFileService
                 + ((int) $row->uploader_user_id === (int) $user->id ? ['client_key' => $row->client_key] : []))->all();
     }
 
-    public function download(Tenant $tenant, User $user, string $id)
+    private function verifiedReadyFile(Tenant $tenant, User $user, string $id, ?string $taskId = null): array
     {
         $row = $this->upload($tenant, $user, $id, false);
-        abort_unless($row->status === 'ready' && $row->storage_key === $this->prefix($row).'/original', 404);
+        abort_unless(($taskId === null || $row->task_id === $taskId) && $row->status === 'ready'
+            && $row->storage_key === $this->prefix($row).'/original', 404);
         $disk = Storage::disk('team_private');
         abort_unless($disk->exists($row->storage_key) && $disk->size($row->storage_key) === (int) $row->expected_size
             && hash_equals($row->sha256, hash_file('sha256', $disk->path($row->storage_key))), 503, 'Attachment is unavailable.');
+
+        return [$row, $disk];
+    }
+
+    /** A presentation of existing scanned bytes; this never scans or promotes a file. */
+    public function preview(Tenant $tenant, User $user, string $id, string $taskId)
+    {
+        [$row, $disk] = $this->verifiedReadyFile($tenant, $user, $id, $taskId);
+        abort_unless(in_array($row->mime_type, ['image/jpeg', 'image/png'], true), 404);
+        abort_unless((int) $row->expected_size > 0 && (int) $row->expected_size <= config('team_work.file_max_bytes'), 404);
+        $path = $disk->path($row->storage_key);
+        $image = @getimagesize($path);
+        abort_unless($image && $image[0] > 0 && $image[1] > 0 && $image[0] * $image[1] <= 20000000
+            && ($image['mime'] ?? null) === $row->mime_type && (new \finfo(FILEINFO_MIME_TYPE))->file($path) === $row->mime_type, 404);
+
+        return response()->file($path, ['Content-Type' => $row->mime_type, 'Content-Disposition' => 'inline',
+            'X-Content-Type-Options' => 'nosniff', 'Cache-Control' => 'private, no-store', 'Referrer-Policy' => 'no-referrer',
+            'Content-Security-Policy' => "sandbox; default-src 'none'", 'Cross-Origin-Resource-Policy' => 'same-origin'])->setPrivate();
+    }
+
+    public function download(Tenant $tenant, User $user, string $id)
+    {
+        [$row, $disk] = $this->verifiedReadyFile($tenant, $user, $id);
 
         return response()->download($disk->path($row->storage_key), $row->filename, ['Content-Type' => 'application/octet-stream',
             'X-Content-Type-Options' => 'nosniff', 'Cache-Control' => 'private, no-store', 'Content-Security-Policy' => "sandbox; default-src 'none'"]);

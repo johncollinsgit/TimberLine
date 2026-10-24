@@ -26,10 +26,11 @@ class OwnerController
         $tenant = $this->access->owner($request);
         $draft = $draftId ? $this->proposals->draft($tenant, $draftId) : null;
         $assets = $this->proposals->assets($tenant);
+        $preparedDraft = $draft !== null && ReviewerWorkspacePreparation::isPrepared($draft);
 
         $publishKey = \Illuminate\Support\Str::uuid()->toString();
 
-        return response()->view('service-proposals.edit', compact('tenant', 'draft', 'assets', 'publishKey'))->header('Cache-Control', 'private, no-store');
+        return response()->view('service-proposals.edit', compact('tenant', 'draft', 'assets', 'publishKey', 'preparedDraft'))->header('Cache-Control', 'private, no-store');
     }
 
     public function save(Request $request, string $workspace, ?string $draftId = null)
@@ -120,7 +121,7 @@ class OwnerController
             && in_array(strtolower(parse_url($recipientBase, PHP_URL_HOST)), config('service_proposals.recipient_hosts', []), true),
             503, 'Configure a canonical HTTPS recipient host and mount before publishing.');
 
-        $result = $this->proposals->publish($tenant, $request->user()->id, $draftId, (int) $data['revision'], $data['password'], (int) $data['days'], $data['publish_key'], $data['audience']);
+        $result = $this->proposals->publish($tenant, $request->user()->id, $draftId, (int) $data['revision'], $data['password'], (int) $data['days'], $data['publish_key'], $data['audience'], $request);
 
         // Flash only the one-time token, never the recipient password.
         return redirect()->route('service-proposals.owner.edit', [$workspace, $draftId])->with('private_proposal_path', $recipientBase.'/'.$result['token']);

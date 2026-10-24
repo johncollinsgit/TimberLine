@@ -121,7 +121,7 @@ Route::middleware(['auth', 'verified', ResolveWorkspace::class, \App\Http\Middle
     Route::get('/enterprise/conversation/sessions/{id}', [\App\Enterprise\Conversation\Controller::class, 'show'])->whereUuid('id')->name('enterprise.conversation.show');
     Route::post('/enterprise/conversation/turns', [\App\Enterprise\Conversation\Controller::class, 'turn'])->middleware('throttle:20,1,enterprise-conversation:')->name('enterprise.conversation.turn');
     Route::post('/enterprise/conversation/sessions/{id}/end', [\App\Enterprise\Conversation\Controller::class, 'end'])->whereUuid('id')->name('enterprise.conversation.end');
-    Route::get('/enterprise/assistant-sources/{kind}/{id}', \App\Enterprise\ReadOnlyAssistantSourceController::class)->whereIn('kind', ['request', 'project', 'building', 'cost', 'task'])->whereUuid('id')->name('enterprise.assistant_source');
+    Route::get('/enterprise/assistant-sources/{kind}/{id}', \App\Enterprise\ReadOnlyAssistantSourceController::class)->whereIn('kind', ['request', 'project', 'building', 'cost', 'task', 'contractor', 'schedule'])->whereUuid('id')->name('enterprise.assistant_source');
     Route::post('/enterprise/read-only-assistant', \App\Enterprise\ReadOnlyAssistantController::class)->middleware('throttle:20,1,enterprise-read-only-assistant:')->name('enterprise.read_only_assistant');
     Route::post('/enterprise/ask', [\App\Enterprise\AskController::class, 'ask'])->middleware('throttle:20,1,enterprise-ask:')->middleware(\App\Enterprise\Conversation\OtherPaidPaths::class)->name('enterprise.ask');
     Route::get('/enterprise/mailboxes', [\App\Enterprise\EmailController::class, 'mailboxes'])->name('enterprise.mailboxes');
@@ -131,6 +131,7 @@ Route::middleware(['auth', 'verified', ResolveWorkspace::class, \App\Http\Middle
     Route::post('/enterprise/email-drafts', [\App\Enterprise\EmailController::class, 'create'])->name('enterprise.email.create');
     Route::get('/enterprise/email-drafts/{id}', [\App\Enterprise\EmailController::class, 'preview'])->whereUuid('id')->name('enterprise.email.preview');
     Route::post('/enterprise/email-drafts/{id}/confirm', [\App\Enterprise\EmailController::class, 'confirm'])->whereUuid('id')->middleware(\App\Enterprise\Conversation\OtherPaidPaths::class)->name('enterprise.email.confirm');
+    Route::get('/enterprise/discussion/{kind}/{id}/files/{upload}/preview', [\App\Enterprise\DiscussionController::class, 'preview'])->whereIn('kind', ['project', 'request', 'task'])->whereUuid(['id', 'upload'])->name('enterprise.discussion.preview');
     Route::get('/enterprise/discussion/{kind}/{id}', [\App\Enterprise\DiscussionController::class, 'show'])->whereIn('kind', ['project', 'request', 'task'])->whereUuid('id')->name('enterprise.discussion');
     Route::post('/enterprise/discussion/{kind}/{id}/open', [\App\Enterprise\DiscussionController::class, 'open'])->whereIn('kind', ['project', 'request', 'task'])->whereUuid('id')->name('enterprise.discussion.open');
     Route::post('/enterprise/discussion/{kind}/{id}/comments', [\App\Enterprise\DiscussionController::class, 'comment'])->whereIn('kind', ['project', 'request', 'task'])->whereUuid('id')->name('enterprise.discussion.comment');

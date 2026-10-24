@@ -21,7 +21,9 @@ artifact or permission to copy CI files into Forge.
 
 After preparation, the native job retains the original MySQL 8.4 service,
 loopback-only disposable database guard and complete PHP commands, including all
-five real MySQL recovery/concurrency/provisioning classes. In parallel, thirteen
+original five real MySQL recovery/concurrency/provisioning classes, plus the
+publication-bound shared-workspace concurrency gate and its separately registered
+owner-initialization gate. In parallel, twenty-three
 browser entries use independent GitHub-hosted runners/filesystems:
 
 | Entries | Existing checks retained |
@@ -30,7 +32,12 @@ browser entries use independent GitHub-hosted runners/filesystems:
 | Operations tour × Chromium/WebKit | Full signed-in tour. |
 | Operations workspace × Chromium/WebKit | Procedures, Finance, navigation, role preview and voice shell, in original order. Procedures must precede roles to supply populated shared-work evidence. |
 | Native × Chromium/WebKit | Original default-off persistent UI, jobs wizard, generated voice with provider-only fake. |
-| Proposal × Chromium/WebKit | Persisted proposal review, activity, Financial planning. |
+| Proposal × Chromium/WebKit | Original persisted proposal review, activity and Financial planning, sequentially. |
+| Shared workspace × Chromium/WebKit | New mounted workspace core and directory checks, sequentially. |
+| Shared comments × Chromium/WebKit | New persisted shared comments, including the responsive composer. |
+| Shared files × Chromium/WebKit | New persisted private photos with fake scanner evidence only. |
+| Shared downloads × Chromium/WebKit | New persisted private PDF downloads with fake scanner evidence only. |
+| Shared AI × Chromium/WebKit | New mounted shared-AI checks with a fake provider only. |
 | Reviewer × Chromium/WebKit | Tour, shared renderer, priorities, public procedures. |
 | Components (one entry) | Assistant, conversation, Blaine sample and voice-job scripts, each retaining its own internal two-engine loop. |
 
@@ -43,6 +50,14 @@ No-group `all` remains available for a continuous accumulated-state manual run.
 The matrix preserves each explicit helper case/configuration, with independent
 fixtures between groups; it does not claim identical accumulated state across
 all eleven helpers. `jobs` and `voice-generation` remain separate required gates.
+
+The five new shared harness groups have separate two-engine entries rather than
+adding their approximately 17 minutes of observed local serial work to the existing
+proposal lane. This preserves all thirteen existing entries and adds ten fresh
+runners. It costs additional setup, artifact transfers and browser installations;
+with twelve matrix jobs at a time, queue waves may also affect elapsed time.
+Measure the complete exact-head run before claiming a speed improvement. Local
+measurements are not an Ubuntu or production-release ETA.
 
 Never parallelize fixed-port harnesses in one checkout: independent SQLite names
 or ports alone do not isolate file caches, sessions, quarantine storage or login
@@ -95,6 +110,17 @@ stops obsolete batches from starting more reads during provisional navigation.
 Cancelling navigation preserves data, pending writes and exact retry receipts;
 a deliberate fresh load still works. Keep strict browser-error assertions and
 the existing request pacing. Do not suppress access-control errors to pass CI.
+
+The immutable-proposal native gate also covers the default-off actual-owner
+initializer and its strict configuration assembly. Those mounted tests exercise
+preview/apply/status, fresh owner authority and original-receipt recovery; they
+do not claim actual current-browser capture, a new hosted publication or MySQL
+concurrency from SQLite. The separate initializer MySQL gate reuses the unchanged
+loopback worker safeguards and runs after the workspace gate cleanup. It observes
+actual independent-connection waits on the parent-held User/membership/tenant rows,
+competing same-intent initialization, unsettled status and later-edit preservation.
+Its local refusal check passes; actual concurrency is NOT RUN until the normal
+MySQL 8.4 CI job executes the registered test. A skipped local test is not acceptance.
 
 The dedicated PHPUnit process uses the same `1G` test memory ceiling as the
 primary `phpunit.xml`. This accommodates the complete combined suite, including
@@ -164,3 +190,72 @@ Four real disposable MySQL connections compete across SMS/email/AI/acceptance
 for the final shared allowance, assert named-lock ownership and retain uncertain
 reservations. SQLite explicitly skips this gate. Never point the fixture at a
 customer database; its guard requires local everbranch_enterprise_ci.
+
+
+## Source-fingerprint test isolation
+
+Tests that deliberately change manifest-bound source or the legacy capture module
+must use `Tests\Support\ReviewerWorkspaceSourceSnapshot`. It copies only bounded
+nonsecret source/build groups, requires exact production manifest/module parity,
+redirects source lookups inside that test, and restores application paths in a
+`finally` block. ENV, vendor, private storage, credentials, sessions and database
+fixtures remain outside the copy. Keep real byte changes and denial assertions;
+do not relax source validation or serialize the production CI suite to hide races.
+
+The October 24 repair preserves all original source-drift cases. Four synchronized
+process checks distinguish shared-file interference from private-copy isolation;
+a full-class cohort covering both mutators and the affected readers passed
+106 tests/1,623 assertions with four local parallel processes. This PHP 8.5/SQLite
+check supplements normal exact-head PHP 8.4, MySQL and browser CI. It does not
+replace those gates or establish hosted/runtime/provider acceptance.
+
+
+### Fresh formatter checks and asynchronous fixture waits
+
+For changed-byte formatter acceptance, use an explicit previously absent
+`--cache-file` for the final `pint --test` command. A formatting pass followed by
+the same cache can mask residual fixes: the observed Pint 1.27 first pass left
+five comma spaces and a same-cache test passed while a fresh-cache test failed.
+Keep the locked formatter/config and exact workflow file selection unchanged.
+
+Asynchronous UI fixtures must bound expected transitions by monotonic elapsed
+time and yield to timers, rather than assuming a count of immediate event-loop
+turns provides enough time for genuine WebCrypto. The shared-comment helper
+allows at most five seconds, polls after 1 ms and preserves every original
+state/access/identity assertion. Missing transitions and predicate errors remain
+failures. Local delayed-digest proofs and the 307-case command supplement normal
+exact-head CI; they do not establish hosted or physical-device acceptance.
+
+
+### 2026-10-24 native MySQL and standalone tour fixture correction
+
+Normal 4a0 CI passed quality, both general jobs (5,321 PHP tests / 48,248
+assertions, eight skips) and 20 of 23 browser lanes. Enterprise MySQL exposed a
+new unreleased collaboration receipt kind of 26 ASCII characters against the
+unchanged released VARCHAR(24). Its sole product correction uses the unique
+23-character ent_proposal_ws_cmt_cmd namespace. All store methods, encryption,
+source/context/request/digest checks and once-only behavior are unchanged. No
+schema/data migration, truncation, old-name fallback or live rename is authorized.
+The collaboration class and both names are absent deployed main9a4 source; this
+is source provenance, not a live database inventory.
+
+Native test fixtures now order team_work_locks by its actual tenant_id primary
+key, compare receipt objects with exact closed keys/types/values independently
+of MySQL JSON key placement, and balance only their own Laravel handler layers.
+All 200 original assertion sites, workers and refusal guards remain. Handler
+observations use PHP8.4-compatible balanced set/restore operations. Native get_*
+handler functions arrived in8.5, but the locked autoloader supplied their Symfony
+polyfill on8.4; no actual8.4 failure from those names was observed. Real native
+MySQL acceptance still requires the final normal CI gate, never local skips.
+
+The standalone public tour fixture resolves exactly three known nested AI-false
+expressions, each required once. Its unresolved-Blade/embedded-asset guards and
+all existing browser cases remain unchanged; full standalone Chromium and WebKit
+checks pass. Product templates and tour JavaScript are unchanged. Five focused
+renderer cases and two native units are added to existing CI commands; every
+original command, matrix lane and guard remains required.
+
+The old native-WebKit wizard gate failed on hidden Next after a click. Two exact
+local unchanged runs passed; an assumed catalog race was not reproduced. No
+speculative product/test workaround is added. The repaired-head WebKit gate must
+pass. No runtime, provider, publication, merge or deployment action occurred.

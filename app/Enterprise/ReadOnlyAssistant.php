@@ -83,6 +83,8 @@ class ReadOnlyAssistant
             'facts' => ['status' => 'active', 'version' => $building['version']]]];
         $counts = ['linked_requests' => 0, 'open_requests' => 0, 'urgent_open_requests' => 0, 'unknown_priority_open_requests' => 0];
         $jobs = [];
+        $projects = [];
+        $state = $this->work->state($tenant->id);
         $rows = TeamOperationRecord::query()->where(['tenant_id' => $tenant->id, 'area_id' => $areaId, 'kind' => 'enterprise_request'])
             ->orderByDesc('updated_at')->orderBy('id')->limit(1000)->cursor();
         foreach ($rows as $row) {
@@ -111,8 +113,27 @@ class ReadOnlyAssistant
                 try {
                     $task = $this->operations->show($tenant, $user, $request['data']['task_id']);
                     if ($task['area_id'] === $areaId) {
-                        $jobs[$task['id']] = array_intersect_key($task, array_flip(['id', 'title', 'status', 'priority', 'next_action', 'due_on', 'updated_at']));
+                        $projectIds = array_values(array_filter(array_keys($state['tasks'][$task['id']]['memberships'] ?? []),
+                            fn ($projectId) => isset($state['projects'][$projectId])
+                                && ($state['projects'][$projectId]['enterprise_area_id'] ?? null) === $areaId
+                                && ! $state['projects'][$projectId]['archived']
+                                && $this->graph->can($state, $actor, 'project', $projectId)));
+                        $explicit = $request['data']['project_id'] ?? null;
+                        // A stale explicit association never falls back to a different project.
+                        $projectId = array_key_exists('project_id', $request['data'])
+                            ? (is_string($explicit) && in_array($explicit, $projectIds, true) ? $explicit : null)
+                            : (count($projectIds) === 1 ? $projectIds[0] : null);
+                        $jobs[$task['id']] ??= array_intersect_key($task, array_flip(['id', 'title', 'status', 'priority', 'next_action', 'due_on', 'updated_at', 'task_version', 'version']));
                         $jobs[$task['id']]['url'] = $this->url($tenant, $areaId, 'projects', $task['project_id'], ['task' => $task['id']]);
+                        $jobs[$task['id']]['request_refs'][] = 'request:'.$row->id;
+                        $jobs[$task['id']]['project_refs'] ??= [];
+                        if ($projectId !== null) {
+                            $projects[$projectId] = $state['projects'][$projectId];
+                            $jobs[$task['id']]['project_refs'][] = 'project:'.$projectId;
+                        }
+                        $jobs[$task['id']]['owner'] = $this->assignment($tenant, $actor, $areaId, $task['owner_user_id'], $task['id'], $state);
+                        $jobs[$task['id']]['handler'] = $this->assignment($tenant, $actor, $areaId, $task['ball_user_id'], $task['id'], $state);
+                        $jobs[$task['id']]['team_queue'] = $task['ball_team'];
                     }
                 } catch (HttpExceptionInterface $error) {
                     if (! in_array($error->getStatusCode(), [403, 404], true)) {
@@ -124,6 +145,18 @@ class ReadOnlyAssistant
                 break;
             }
         }
+        foreach ($jobs as &$job) {
+            $job['request_refs'] = array_values(array_unique($job['request_refs']));
+            $job['project_refs'] = array_values(array_unique($job['project_refs']));
+            $sources[] = ['ref' => 'task:'.$job['id'], 'title' => $job['title'], 'url' => $job['url'],
+                'facts' => array_diff_key($job, array_flip(['id', 'title', 'url']))];
+        }
+        unset($job);
+        $contractors = $this->scheduledContractors($tenant, $actor, $areaId, $projects);
+        $sources = [...$sources, ...$contractors['sources']];
+        $costs = config('enterprise.planning_enabled') && Planning::financial($actor)
+            ? $this->costs($tenant, $user, $actor, $areaId, array_keys($projects)) : ['sources' => [], 'comparisons' => []];
+        $sources = [...$sources, ...$costs['sources']];
         $rank = ['urgent' => 0, 'high' => 1, 'normal' => 2, 'low' => 3];
         usort($jobs, fn ($a, $b) => [$rank[$a['priority']] ?? 4, $a['due_on'] ?? '9999', $a['id']]
             <=> [$rank[$b['priority']] ?? 4, $b['due_on'] ?? '9999', $b['id']]);
@@ -135,11 +168,72 @@ class ReadOnlyAssistant
         return ['reply' => $counts['open_requests'].' open requests; '.$counts['urgent_open_requests'].' recorded urgent open requests in the checked linked sample.'
             .($counts['unknown_priority_open_requests'] ? ' Priority is not recorded for '.$counts['unknown_priority_open_requests'].' open requests.' : ''),
             'building' => ['id' => $id, 'title' => $building['title'], 'counts' => $counts], 'jobs' => array_values($jobs),
-            'sources' => $sources, 'comparisons' => [], 'partial' => true,
-            'coverage' => 'Up to 100 currently authorized requests with this saved building ID from a 1000-request scan. Text-only location labels and the public campus catalog are excluded. Counts are checked-sample counts, not building totals. Jobs have no inferred staffing capacity or cost allocation.'];
+            'sources' => $sources, 'comparisons' => $costs['comparisons'], 'contractors' => $contractors['items'], 'partial' => true,
+            'coverage' => 'Up to 100 currently authorized requests with this saved building ID from a 1000-request scan. Text-only location labels and the public campus catalog are excluded. Counts are checked-sample counts, not building totals. Jobs have no inferred staffing capacity or cost allocation. Only explicit request/project membership or a single authorized project joins planned contractors and project-level costs; ambiguous associations are omitted. Planned contractor dates do not establish physical presence. Costs are project-level, never a building allocation or approved budget. Contractor schedules are bounded to 100 valid records from a 1000-record scan.'];
     }
 
-    private function costs(Tenant $tenant, User $user, array $actor, string $areaId): array
+    /** Names only for current verified workspace participants already named by authorized Operations. */
+    private function assignment(Tenant $tenant, array $actor, string $area, ?string $id, string $taskId, array $state): ?array
+    {
+        if ($id === null || ! in_array($id, $actor['verified_user_ids'], true)
+            || ! WorkspaceAccess::permits(array_replace($actor, ['user_id' => $id, 'role' => $actor['active_roles'][$id] ?? 'guest']), $area, true)
+            || ! $this->graph->can($state, array_replace($actor, ['user_id' => $id, 'role' => $actor['active_roles'][$id] ?? 'guest']), 'task', $taskId)) {
+            return null;
+        }
+        $name = $tenant->users()->wherePivot('membership_active', true)->where('users.id', $id)
+            ->where('users.is_active', true)->whereNotNull('users.email_verified_at')->value('users.name');
+
+        return $name !== null ? ['id' => $id, 'name' => $name] : null;
+    }
+
+    private function scheduledContractors(Tenant $tenant, array $actor, string $area, array $projects): array
+    {
+        $sources = $items = [];
+        if (! config('enterprise.planning_enabled') || $projects === []) {
+            return compact('sources', 'items');
+        }
+        $rows = TeamOperationRecord::query()->where(['tenant_id' => $tenant->id, 'area_id' => $area, 'kind' => Planning::KINDS['schedule']])
+            ->orderByDesc('updated_at')->orderBy('id')->limit(1000)->cursor();
+        foreach ($rows as $row) {
+            $data = $row->data ?? [];
+            if (! is_string($data['project_id'] ?? null) || ! isset($projects[$data['project_id']])
+                || ! is_string($data['contractor_id'] ?? null) || $row->status !== 'planned' || $row->starts_on === null || $row->ends_on === null
+                || $row->starts_on->gt($row->ends_on)) {
+                continue;
+            }
+            try {
+                $schedule = $this->planning->view($tenant, $actor, $row);
+                $contractor = $this->planning->view($tenant, $actor, $this->planning->record($tenant, $actor, 'contractor', $data['contractor_id']));
+                if ($schedule['area_id'] !== $area || $contractor['area_id'] !== $area || $contractor['status'] !== 'active') {
+                    continue;
+                }
+            } catch (HttpExceptionInterface $error) {
+                if (! in_array($error->getStatusCode(), [403, 404], true)) {
+                    throw $error;
+                }
+
+                continue;
+            }
+            $facts = ['project_ref' => 'project:'.$data['project_id'], 'project' => $projects[$data['project_id']]['name'],
+                'contractor_ref' => 'contractor:'.$contractor['id'], 'contractor' => $contractor['title'],
+                'starts_on' => $schedule['starts_on'], 'ends_on' => $schedule['ends_on'], 'status' => $schedule['status'],
+                'version' => $schedule['version'], 'contractor_version' => $contractor['version'],
+                'basis' => 'Recorded project-level plan; not a task assignment or verified on-site presence.'];
+            $url = fn ($kind, $id) => route('enterprise.assistant_source', ['tenant' => $tenant->slug, 'area_id' => $area, 'kind' => $kind, 'id' => $id]);
+            $items[] = ['ref' => 'schedule:'.$schedule['id']] + $facts;
+            $sources['schedule:'.$schedule['id']] = ['ref' => 'schedule:'.$schedule['id'], 'title' => $schedule['title'],
+                'url' => $url('schedule', $schedule['id']), 'facts' => $facts];
+            $sources['contractor:'.$contractor['id']] = ['ref' => 'contractor:'.$contractor['id'], 'title' => $contractor['title'],
+                'url' => $url('contractor', $contractor['id']), 'facts' => ['status' => $contractor['status'], 'version' => $contractor['version']]];
+            if (count($items) === 100) {
+                break;
+            }
+        }
+
+        return ['sources' => array_values($sources), 'items' => $items];
+    }
+
+    private function costs(Tenant $tenant, User $user, array $actor, string $areaId, ?array $projectIds = null): array
     {
         abort_unless(config('enterprise.planning_enabled') && Planning::financial($actor), 404);
         $state = $this->work->state($tenant->id);
@@ -154,6 +248,9 @@ class ReadOnlyAssistant
                 || $data['amount_minor'] < 0 || $data['amount_minor'] > 1000000000
                 || ! is_string($data['currency'] ?? null) || ! preg_match('/^[A-Z]{3}$/D', $data['currency'])
                 || ! in_array($data['basis'] ?? null, ['estimate', 'recorded_cost'], true)) {
+                continue;
+            }
+            if ($projectIds !== null && ! in_array($data['project_id'], $projectIds, true)) {
                 continue;
             }
             try {
@@ -176,7 +273,7 @@ class ReadOnlyAssistant
             }
             $project = $this->graph->read($state, $actor, 'project', $projectId);
             $key = $projectId.':'.$data['currency'];
-            $groups[$key] ??= ['project_id' => $projectId, 'project_title' => $project['name'], 'currency' => $data['currency'],
+            $groups[$key] ??= ['project_id' => $projectId, 'scope' => 'project_level', 'project_title' => $project['name'], 'currency' => $data['currency'],
                 'project_url' => $this->url($tenant, $areaId, 'projects', $projectId),
                 'estimate_minor' => 0, 'recorded_cost_minor' => 0, 'estimate_refs' => [], 'recorded_cost_refs' => []];
             $basis = $data['basis'];
@@ -184,7 +281,7 @@ class ReadOnlyAssistant
             $groups[$key][$basis.'_minor'] += $data['amount_minor'];
             $groups[$key][$basis.'_refs'][] = $ref;
             $sources[] = ['ref' => $ref, 'title' => $cost['title'], 'url' => $this->url($tenant, $areaId, 'contractors', $row->id),
-                'facts' => ['project' => $project['name'], 'amount_minor' => $data['amount_minor'], 'currency' => $data['currency'],
+                'facts' => ['project_id' => $projectId, 'project' => $project['name'], 'scope' => 'project_level', 'amount_minor' => $data['amount_minor'], 'currency' => $data['currency'],
                     'basis' => $basis, 'version' => $cost['version'], 'updated_at' => $cost['updated_at']]];
             if (count($sources) === 200) {
                 break;

@@ -11,7 +11,7 @@ class TrialBudget
 
     public function __construct(private TrialStore $store) {}
 
-    private function baseline(): array
+    protected function baseline(): array
     {
         $prior = config('enterprise.trial.prior_spend_microusd');
         $evidence = config('enterprise.trial.prior_spend_evidence');
@@ -21,7 +21,7 @@ class TrialBudget
         return ['prior_microusd' => $prior, 'evidence_hash' => hash('sha256', $evidence)];
     }
 
-    private function ledger(?string $approvedLedgerId = null): TeamOperationRecord
+    protected function ledger(?string $approvedLedgerId = null): TeamOperationRecord
     {
         $baseline = $this->baseline();
         $ledgers = TeamOperationRecord::query()->where('kind', 'ent_trial_budget')->get();
@@ -31,7 +31,7 @@ class TrialBudget
                 'The separately approved existing lifetime ledger is unavailable. Reconciliation is required; no ledger will be initialized.');
         }
         if ($existing) {
-            abort_unless((int) $existing->tenant_id === (int) $this->store->tenant()->id && $existing->area_id === config('enterprise.trial.area_id')
+            abort_unless((int) $existing->tenant_id === (int) $this->store->tenant()->id && $existing->area_id === $this->store->areaId()
                 && $existing->data['baseline'] === $baseline, 503, 'The lifetime ledger anchor or prior-spend baseline changed. Reconcile rather than resetting the cap.');
 
             return $existing;

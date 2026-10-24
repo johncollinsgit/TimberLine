@@ -553,6 +553,8 @@ function Workspace({ boot }: { boot: any }) {
                 <a className="ew-brand" href={transport.href(boot.back)}>
                     <img src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(enterpriseLogo)}`} alt="Everbranch Enterprise by Evergrove Software" width="574.781" height="153.328" />
                 </a>
+                <button className="enterprise-navigation-toggle" id="enterprise-navigation-toggle" type="button" aria-controls="enterprise-mobile-navigation" aria-expanded="false"><span aria-hidden="true">☰</span> Menu</button>
+                <div id="enterprise-mobile-navigation" className="enterprise-nav-links">
                 <p className="ew-eyebrow">OPERATING WORKSPACE</p>
                 <nav aria-label="Workflow workspace">
                     {tabs.map((t) => (
@@ -601,6 +603,8 @@ function Workspace({ boot }: { boot: any }) {
                 <a className="ew-back" href={transport.href(boot.back)}>
                     ← Back to Projects
                 </a>
+                <div className="enterprise-mobile-actions" data-mobile-nav-actions></div>
+                </div>
             </aside>
             <main className="ew-main">
                 <header className="ew-header">

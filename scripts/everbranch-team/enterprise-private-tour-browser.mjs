@@ -1,5 +1,6 @@
 import {createProjectThroughWizard} from './enterprise-job-wizard-browser.mjs';
 import assert from 'node:assert/strict';
+import {openEnterpriseAction} from './enterprise-mobile-navigation-browser.mjs';
 import {resolve} from 'node:path';
 
 /** Authenticated server-backed tour acceptance. All records belong to the disposable fixture. */
@@ -60,7 +61,7 @@ export async function checkPrivateWorkspaceTour(page,evidence) {
     const writes=[];
     const recordWrite=req=>{if(!['GET','HEAD','OPTIONS'].includes(req.method()))writes.push({method:req.method(),url:req.url()});};
     page.on('request',recordWrite);
-    const open=async()=>{await closeDetail();await root.locator('[data-tour-open]').click();await root.locator('[data-tour-dialog]').waitFor({state:'visible'});};
+    const open=async()=>{await closeDetail();await openEnterpriseAction(page,'Tour',root.locator('[data-tour-open]'));await root.locator('[data-tour-dialog]').waitFor({state:'visible'});};
     const scene=async index=>{await root.locator(`button[data-tour-scene="${index}"]`).click();await page.waitForFunction(index=>document.querySelector('[data-workspace-tour="private"]').dataset.tourScene===String(index),index);};
     const expectedLinks=[['overview','buildings','calendar'],['requests','requester'],['workflow','projects'],['projects','roll-call'],['people','assets','calendar'],['roll-call','projects']];
     await open();

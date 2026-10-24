@@ -1,3 +1,4 @@
+import {clickEnterpriseNavigation} from './enterprise-mobile-navigation-browser.mjs';
 import assert from "node:assert/strict";
 import {closeWorkDetail} from "./enterprise-work-detail-browser.mjs";
 
@@ -144,7 +145,7 @@ export async function verifyShellNavigationHistory(
     assert.equal((await nav(page)).selected, projectId);
     assert.equal(await page.locator("#discussion-body").inputValue(), retained);
     await closeWorkDetail(page);
-    await page.locator(`#areas [data-area="${otherAreaId}"]`).click();
+    await clickEnterpriseNavigation(page,page.locator(`#areas [data-area="${otherAreaId}"]`));
     await page.waitForFunction(
         (id) => new URLSearchParams(
             location.pathname.startsWith("/platform/demos/")

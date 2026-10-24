@@ -13,14 +13,19 @@ use Illuminate\Support\Str;
 /** A configured synthetic storage anchor, never a new organization or access grant. */
 class TrialStore
 {
+    public function areaId(): mixed
+    {
+        return config('enterprise.trial.area_id');
+    }
+
     public function tenant(): Tenant
     {
         abort_unless(config('enterprise.runtime') === true && config('enterprise.trial.enabled'), 404);
         abort_unless((is_int(config('enterprise.trial.tenant_id')) || (is_string(config('enterprise.trial.tenant_id')) && ctype_digit(config('enterprise.trial.tenant_id'))))
             && (int) config('enterprise.trial.tenant_id') > 0
-            && is_string(config('enterprise.trial.area_id')) && Str::isUuid(config('enterprise.trial.area_id')), 503);
+            && is_string($this->areaId()) && Str::isUuid($this->areaId()), 503);
         $tenant = Tenant::query()->findOrFail(config('enterprise.trial.tenant_id'));
-        $area = TeamArea::query()->where(['tenant_id' => $tenant->id, 'id' => config('enterprise.trial.area_id')])->first();
+        $area = TeamArea::query()->where(['tenant_id' => $tenant->id, 'id' => $this->areaId()])->first();
         abort_unless($area && in_array($area->profile, ['enterprise_shared', 'enterprise_department'], true)
             && ($area->settings['synthetic_fixture'] ?? null) === true, 503, 'A separately marked synthetic trial storage anchor must be configured.');
 
@@ -47,13 +52,13 @@ class TrialStore
     public function create(string $kind, string $source, array $data, string $status = 'active'): TeamOperationRecord
     {
         return TeamOperationRecord::query()->create(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenant()->id,
-            'area_id' => config('enterprise.trial.area_id'), 'kind' => $kind, 'source_key' => hash('sha256', $source),
+            'area_id' => $this->areaId(), 'kind' => $kind, 'source_key' => hash('sha256', $source),
             'visibility' => 'area', 'title' => 'Private synthetic reviewer trial', 'status' => $status, 'version' => 1, 'data' => $data]);
     }
 
     public function row(string $kind, string $id): TeamOperationRecord
     {
-        return TeamOperationRecord::query()->where(['tenant_id' => $this->tenant()->id, 'area_id' => config('enterprise.trial.area_id'), 'kind' => $kind])->findOrFail($id);
+        return TeamOperationRecord::query()->where(['tenant_id' => $this->tenant()->id, 'area_id' => $this->areaId(), 'kind' => $kind])->findOrFail($id);
     }
 
     public function save(TeamOperationRecord $row, array $data, ?string $status = null): void

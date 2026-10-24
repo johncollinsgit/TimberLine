@@ -76,10 +76,22 @@ class Discussion
             $files = array_map(fn ($file) => $file + ['caption' => $captions[$file['id']]['caption'] ?? '', 'caption_version' => $captions[$file['id']]['version'] ?? 0], $files);
         }
 
+        $files = array_map(fn ($file) => $file + ['preview_url' => $file['status'] === 'ready'
+            && in_array($file['mime_type'], ['image/jpeg', 'image/png'], true)
+                ? route('enterprise.discussion.preview', ['tenant' => $tenant->slug, 'kind' => $kind, 'id' => $id, 'upload' => $file['id']]) : null], $files);
+
         return ['task_id' => $task['id'] ?? null, 'can_write' => $result['can_write'],
             'comments' => array_slice(array_map(fn ($row) => array_intersect_key($row, array_flip(['id', 'author_id', 'body', 'created_at'])), $comments), -100),
             'files' => $files,
             'coverage' => 'Latest 100 notes. Files inherit this native task and department visibility; confidential contracts need a separate future document lane.'];
+    }
+
+    public function preview(Tenant $tenant, User $user, string $kind, string $id, string $upload)
+    {
+        $result = $this->resolve($tenant, $user, $kind, $id);
+        abort_unless($result['task'], 404);
+
+        return $this->files->preview($tenant, $user, $upload, $result['task']['id']);
     }
 
     public function comment(Tenant $tenant, User $user, string $kind, string $id, string $body, string $requestId): array

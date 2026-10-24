@@ -134,6 +134,7 @@ beforeEach(function (): void {
 });
 
 test('duplicate checkout requests reuse one frozen order payment and stock hold', function (): void {
+    $this->freezeTime();
     $first = ($this->begin)();
     $second = ($this->begin)();
     expect($first['url'])->toBe($second['url'])->and($second['order']->id)->toBe($first['order']->id)
