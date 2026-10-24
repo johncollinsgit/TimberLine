@@ -133,6 +133,6 @@ final class IndependentWorkspaceRuntimeConfigurationTest extends TestCase
         $this->assertNull(ReviewerWorkspaceRuntimeConfiguration::parse(json_encode($bad, JSON_PRESERVE_ZERO_FRACTION)));
         $bad = $base;
         $bad['secret'] = 'unexpected';
-        $this->assertNull(ReviewerWorkspaceRuntimeConfiguration::parse(json_encode($bad,JSON_PRESERVE_ZERO_FRACTION)));
+        $this->assertNull(ReviewerWorkspaceRuntimeConfiguration::parse(json_encode($bad, JSON_PRESERVE_ZERO_FRACTION)));
     }
 }

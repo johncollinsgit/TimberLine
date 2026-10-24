@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {webcrypto,createHash} from 'node:crypto';
 import vm from 'node:vm';
+import {setTimeout as delay} from 'node:timers/promises';
 const [shared,clientSource,uiSource]=await Promise.all([
   '../../resources/js/enterprise/reviewer/shared-workspace.js',
   '../../resources/js/enterprise/reviewer/collaboration-client.js',
@@ -10,7 +11,7 @@ const [shared,clientSource,uiSource]=await Promise.all([
 ].map(path=>readFile(new URL(path,import.meta.url),'utf8')));
 const id=n=>String(n).padStart(8,'0')+'-0000-4000-8000-000000000001',W=id(1),A=id(2),B=id(3),T=id(4),P=id(5),K=id(6);
 const plain=v=>JSON.parse(JSON.stringify(v)),tick=()=>new Promise(resolve=>setImmediate(resolve));
-async function until(check){for(let i=0;i<200;i++){if(check())return;await tick();}throw Error('Bounded expected UI transition did not occur.');}
+async function until(check){const deadline=performance.now()+5000;while(!check()){if(performance.now()>=deadline)throw Error('Bounded expected UI transition did not occur.');await delay(1);}}
 const held=()=>{let resolve;const promise=new Promise(r=>resolve=r);return{resolve,promise};};
 class Node {
   constructor(tag,doc){this.tagName=tag.toUpperCase();this.doc=doc;this.parentNode=null;this.children=[];this.listeners=new Map();this.style={};this.dataset={};this.value='';this.hidden=false;this.disabled=false;this.readOnly=false;this.scrollTop=0;this._text='';}

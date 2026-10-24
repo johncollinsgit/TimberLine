@@ -3611,3 +3611,24 @@ parallelism and strict source/access guards remain unchanged. The original gener
 MySQL recovery job passed; Enterprise-specific MySQL gates were skipped after
 prepare failed and remain unverified. Final new-head normal PHP 8.4/MySQL/browser
 CI is required. No runtime, publication, provider or deployment action occurred.
+
+
+### 2026-10-24 fresh formatter and asynchronous test follow-up
+
+Normal 5816 CI passed the 230-case JavaScript transport step, then exposed two
+comment-UI waits exhausting 200 `setImmediate` turns in roughly 8–10 ms. The
+test-only wait now uses a five-second monotonic deadline and an awaited 1 ms
+timer. Every original test body/assertion is unchanged. A controlled 50 ms delay
+around genuine WebCrypto reproduces the two CI failures with the old helper;
+both pass after correction. All 307 cases of the affected command pass locally
+on Node 26.3.1; missing transitions and predicate errors still fail. This does
+not substitute for final exact-head Node 22/PHP 8.4/MySQL/browser CI.
+
+The locked formatter's first pass left five comma spaces unfixed; its own cache
+masked them. Fresh-cache checking reproduces the failure on local PHP 8.5 too.
+The earlier local PASS did not establish fresh final-byte idempotence; that cache
+assurance is superseded. Exactly five spaces correct the two tests, preserving
+all non-whitespace tokens/comments and the full resolved AST. A new explicit
+cache passes both files and another new cache passes the exact 321-file workflow
+selection. No formatter rule, test case, application source, dependency, workflow,
+parallelism, runtime or provider gate changed. New-head CI remains required.

@@ -208,3 +208,20 @@ a full-class cohort covering both mutators and the affected readers passed
 106 tests/1,623 assertions with four local parallel processes. This PHP 8.5/SQLite
 check supplements normal exact-head PHP 8.4, MySQL and browser CI. It does not
 replace those gates or establish hosted/runtime/provider acceptance.
+
+
+### Fresh formatter checks and asynchronous fixture waits
+
+For changed-byte formatter acceptance, use an explicit previously absent
+`--cache-file` for the final `pint --test` command. A formatting pass followed by
+the same cache can mask residual fixes: the observed Pint 1.27 first pass left
+five comma spaces and a same-cache test passed while a fresh-cache test failed.
+Keep the locked formatter/config and exact workflow file selection unchanged.
+
+Asynchronous UI fixtures must bound expected transitions by monotonic elapsed
+time and yield to timers, rather than assuming a count of immediate event-loop
+turns provides enough time for genuine WebCrypto. The shared-comment helper
+allows at most five seconds, polls after 1 ms and preserves every original
+state/access/identity assertion. Missing transitions and predicate errors remain
+failures. Local delayed-digest proofs and the 307-case command supplement normal
+exact-head CI; they do not establish hosted or physical-device acceptance.

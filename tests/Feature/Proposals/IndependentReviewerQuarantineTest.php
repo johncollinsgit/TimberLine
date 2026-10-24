@@ -204,10 +204,10 @@ final class IndependentReviewerQuarantineTest extends ReviewerWorkspaceFixture
         $this->assertSame($before, TeamOperationRecord::find($id)->getRawOriginal('data'));
         $this->assertSame('assembling', TeamOperationRecord::find($id)->status);
         $this->travel(80)->seconds();
-        $done = $prune->prune($owner,dryRun: false);
-        $this->assertSame(1,$done['erased']);
-        $this->assertSame(0,$done['failed']);
-        $this->assertSame('expired',TeamOperationRecord::find($id)->status);
+        $done = $prune->prune($owner, dryRun: false);
+        $this->assertSame(1, $done['erased']);
+        $this->assertSame(0, $done['failed']);
+        $this->assertSame('expired', TeamOperationRecord::find($id)->status);
         Http::assertNothingSent();
     }
 }
