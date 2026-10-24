@@ -10,7 +10,9 @@ explicit POS schema/routes in its independent runtime and adds assigned-location
 stock/reporting controls. All collection/signing/provider/merchant gates remain
 off until reviewed. No merchant activation, physical acceptance or deployment is
 implied. Collection is online-only; offline capture/queued charging is a future
-release item. See [the live POS runbook](docs/operations/everbranch-pos-live.md).
+release item. Native CI boots an isolated iOS simulator, bounds startup/test
+time and retains XCTest diagnostics; it does not establish device acceptance.
+See [the live POS runbook](docs/operations/everbranch-pos-live.md).
 
 ## Evergrove Payments durable server contracts (2026-10-22; disabled source candidate)
 
