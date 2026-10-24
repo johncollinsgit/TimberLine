@@ -15,7 +15,7 @@ final class PosWebSession
         }
         $request->attributes->set('pos_web_session', true);
         $request->headers->set('X-Pos-Device', $request->session()->get('pos_web_device'));
-        $request->headers->set('X-Pos-Build', 'web-prepare');
+        $request->headers->set('X-Pos-Build', config('pos_live.web_build') ?: 'web-prepare');
 
         $response = $next($request);
         $response->headers->set('Cache-Control', 'private, no-store');

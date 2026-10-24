@@ -25,7 +25,7 @@ final class PosStore
 
     public function rows(string $table, int $tenant): Builder
     {
-        if (! in_array($table, ['merchants', 'registers', 'assignments', 'connections', 'items', 'sales', 'holds', 'outbox', 'events', 'handoffs'], true) || $tenant < 1) {
+        if (! in_array($table, ['merchants', 'registers', 'assignments', 'connections', 'items', 'sales', 'holds', 'outbox', 'events', 'handoffs', 'terminals', 'terminal_checkouts'], true) || $tenant < 1) {
             throw new PosException('scope_invalid', 403);
         }
 
