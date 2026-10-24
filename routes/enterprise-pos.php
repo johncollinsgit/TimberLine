@@ -21,6 +21,7 @@ Route::middleware(['auth', 'verified', 'throttle:10,1'])->group(function (): voi
 Route::withoutMiddleware([\Illuminate\Cookie\Middleware\EncryptCookies::class, \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
     \Illuminate\Session\Middleware\StartSession::class, \Illuminate\View\Middleware\ShareErrorsFromSession::class,
     \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class, \App\Http\Middleware\EnterpriseCsrfToken::class])->prefix('/api')->group(function (): void {
+        Route::post('/pos/stripe/webhook', \App\Http\Controllers\PosStripeWebhookController::class)->middleware('throttle:300,1');
         Route::post('/pos/square/webhook', \App\Http\Controllers\PosSquareWebhookController::class)->middleware('throttle:300,1');
         Route::prefix('/mobile/v1')->name('enterprise.pos.api.')->group(function (): void {
             Route::post('/auth/exchange', [EverbranchMobileAuthController::class, 'exchange'])->middleware('throttle:20,1');

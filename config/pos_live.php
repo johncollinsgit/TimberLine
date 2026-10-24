@@ -1,10 +1,20 @@
 <?php
 
 return [
+    'pilot_enabled' => (bool) env('POS_PILOT_ENABLED', false),
     'enabled' => (bool) env('POS_LIVE_ENABLED', false),
     'collection_enabled' => (bool) env('POS_LIVE_COLLECTION_ENABLED', false),
     'servicing_enabled' => (bool) env('POS_LIVE_SERVICING_ENABLED', false),
     'runtime_id' => env('POS_RUNTIME_ID'),
+    'stripe_terminal_enabled' => (bool) env('POS_STRIPE_TERMINAL_ENABLED', false),
+    'stripe_setup_enabled' => (bool) env('POS_STRIPE_SETUP_ENABLED', false),
+    'stripe_secret' => env('POS_STRIPE_SECRET'),
+    'stripe_platform_account' => env('POS_STRIPE_PLATFORM_ACCOUNT'),
+    'stripe_environment' => env('POS_STRIPE_ENVIRONMENT', 'sandbox'),
+    'stripe_webhook_secret' => env('POS_STRIPE_WEBHOOK_SECRET'),
+    'stripe_webhooks_verified' => (bool) env('POS_STRIPE_WEBHOOKS_VERIFIED', false),
+    'web_build' => env('POS_WEB_BUILD'),
+    'stripe_api_version' => '2025-06-30.basil',
     'native_client_enabled' => (bool) env('POS_NATIVE_CLIENT_ENABLED', false),
     'square_application_id' => env('POS_SQUARE_APPLICATION_ID'),
     'square_application_secret' => env('POS_SQUARE_APPLICATION_SECRET'),

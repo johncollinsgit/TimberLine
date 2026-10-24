@@ -1,5 +1,7 @@
 <?php
 
+\Illuminate\Support\Facades\Route::post('/pos/stripe/webhook', \App\Http\Controllers\PosStripeWebhookController::class)->middleware('throttle:300,1')->name('pos.stripe.webhook');
+
 \Illuminate\Support\Facades\Route::post('/pos/square/webhook', \App\Http\Controllers\PosSquareWebhookController::class)
     ->middleware('throttle:300,1')->name('pos.square.webhook');
 

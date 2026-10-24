@@ -3,16 +3,15 @@
 namespace App\Services\Pos;
 
 use App\Models\User;
-use Illuminate\Http\Request;
 
 final class PosAdministration
 {
-    public function __construct(private PosStore $store, private Request $request) {}
+    public function __construct(private PosStore $store) {}
 
     public function scope(): array
     {
-        $user = $this->request->user();
-        $tenant = (int) ($this->request->attributes->get('current_tenant_id') ?: $this->request->attributes->get('current_tenant')?->id);
+        $user = request()->user();
+        $tenant = (int) (request()->attributes->get('current_tenant_id') ?: request()->attributes->get('current_tenant')?->id);
         $current = $user instanceof User ? User::query()->find($user->id) : null;
         $membership = $this->store->db->table('tenant_user')->where('tenant_id', $tenant)->where('user_id', $user?->id)->first();
         if (config('pos_live.enabled') !== true || ! $current?->is_active || ! $current->hasVerifiedEmail()

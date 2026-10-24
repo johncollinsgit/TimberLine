@@ -1,4 +1,9 @@
-# Everbranch POS: Square iPhone pilot
+# Everbranch POS: native Square and staff web pilots
+
+The [Everbranch Pay event pilot](everbranch-pay-event-pilot.md) extends this
+native baseline with the separately gated Stripe reader web register. Its staff
+identities, enrollment, reporting and release instructions supersede the older
+web-preparation-only limits below for `/terminal` routes.
 
 Source candidate, collection disabled by default. Alpha Printing and Modern
 Forestry are the first intended merchants. No merchant, entitlement, staff,
@@ -88,7 +93,7 @@ Collection requires connectivity. Offline card collection, holding card details
 and submitting a charge later are deferred to a future release, as confirmed
 2026-10-24. That release also needs an explicit provider-level idempotency contract
 for offline submission and retries. Existing online duplicate-payment protection
-remains mandatory in this pilot. Android, Stripe, browser readers, Dejavoo, cash, deposits, split
+remains mandatory in this pilot. The Stripe smart-reader web path is now a separate default-off pilot. Android, Dejavoo, cash, deposits, split
 payments, tips, gift cards and postage remain deferred.
 
 Persist only recovery identifiers in device-only Keychain before requesting a

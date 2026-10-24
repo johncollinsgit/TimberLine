@@ -89,7 +89,7 @@ final class NativePosCommerce
                 $details['invoice']['pos_payment_reference'] = $operation['provider_id'];
                 $order->update(['service_request' => $details, 'payment_status' => 'paid', 'paid_at' => now()]);
                 WebsitePayment::query()->create(['tenant_id' => $tenant, 'website_order_id' => $order->id,
-                    'provider' => 'square', 'status' => 'paid', 'amount_cents' => $operation['amount_minor'], 'currency' => 'usd',
+                    'provider' => $snapshot['binding']['provider'] === 'stripe_terminal' ? 'stripe' : 'square', 'status' => 'paid', 'amount_cents' => $operation['amount_minor'], 'currency' => 'usd',
                     'provider_payment_intent_id' => $operation['provider_id'],
                     'metadata' => ['checkout_version' => 3, 'paid_confirmed' => true, 'pos_sale_id' => $sale->id,
                         'merchant_id' => $snapshot['binding']['merchant_account'], 'runtime_id' => $this->store->runtime()]]);

@@ -19,6 +19,7 @@ struct POSReceipt: Decodable {
     }
 }
 
+#if !POS_PREVIEW
 @MainActor final class POSViewModel: ObservableObject {
     let api = POSAPI()
     let signIn = POSSignIn()
@@ -216,3 +217,5 @@ struct POSReceipt: Decodable {
         }
     }
 }
+
+#endif

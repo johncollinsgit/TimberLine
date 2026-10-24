@@ -41,7 +41,7 @@ final class PosReconcileCommand extends Command
                         ->where('r.kind', 'refund')->whereIn('r.state', ['reserved', 'processing', 'unknown', 'review']));
             });
         }
-        $core = new PaymentCore($journal, ['square_native' => $square], new PosRecoveryAccess($store));
+        $core = new PaymentCore($journal, app(\App\Services\Pos\PosProviders::class)->all(), new PosRecoveryAccess($store));
         $failed = 0;
         foreach ($query->orderBy('reconciled_at')->orderBy('created_at')->limit(min(500, max(1, (int) $this->option('limit'))))->get() as $sale) {
             try {
@@ -55,7 +55,7 @@ final class PosReconcileCommand extends Command
                 if ($operation) {
                     $result = $core->recover($binding, $operation['id']);
                     if ($this->option('all') && in_array($result['state'], ['succeeded', 'failed', 'cancelled'], true)) {
-                        $square->audit($result);
+                        app(\App\Services\Pos\PosProviders::class)->get($result['binding']['provider'])->audit($result);
                     }
                     $service->recordOutcome($sale, $result);
                     $refunds = $store->db->table('payment_core_operations')->where('tenant_id', $sale->tenant_id)
@@ -63,8 +63,9 @@ final class PosReconcileCommand extends Command
                     foreach ($refunds as $refund) {
                         $result = $core->recover($binding, $refund->id);
                         if ($this->option('all') && in_array($result['state'], ['succeeded', 'failed', 'cancelled'], true)) {
-                            $square->audit($result);
+                            app(\App\Services\Pos\PosProviders::class)->get($result['binding']['provider'])->audit($result);
                         }
+                        app(\App\Services\Pos\PosPilotRefunds::class)->record($sale, $result);
                         if ($result['state'] === 'succeeded') {
                             $service->enqueue((int) $sale->tenant_id, $sale->id, 'refund_'.$result['id'], ['operation_id' => $result['id']]);
                         }
@@ -84,7 +85,9 @@ final class PosReconcileCommand extends Command
         $this->line(json_encode(['reconciliation_errors' => $failed, 'commerce_effects_pending_review' => $review]));
 
         $unresolved = $store->db->table('pos_live_sales')->where('runtime_id', $store->runtime())
-            ->whereIn('state', ['unknown', 'processing'])->where('created_at', '<', now()->subMinutes(5))->count();
+            ->where(function ($q) {
+                $q->whereIn('state', ['unknown', 'processing', 'review'])->orWhere(fn ($p) => $p->where('state', 'quoted')->whereNotNull('source_reference'));
+            })->where('created_at', '<', now()->subMinutes(5))->count();
         if ($review || $failed || $unresolved) {
             \Illuminate\Support\Facades\Log::warning('pos.reconciliation_attention', ['runtime_id' => $store->runtime(),
                 'errors' => $failed, 'commerce_pending_review' => $review, 'unresolved_payments' => $unresolved]);

@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Http;
 /** Dedicated POS adapter. It never reuses native Website stock or Shopify checkout. */
 final class ShopifyPosCommerce
 {
-    private const ORDER_FIELDS = 'id displayFinancialStatus cancelledAt totalPriceSet{shopMoney{amount currencyCode}} totalTaxSet{shopMoney{amount currencyCode}} totalOutstandingSet{shopMoney{amount currencyCode}} tags transactions{id kind status gateway amountSet{shopMoney{amount currencyCode}}} fulfillmentOrders(first:50){pageInfo{hasNextPage} nodes{id status assignedLocation{location{id}} lineItems(first:100){pageInfo{hasNextPage} nodes{id remainingQuantity totalQuantity lineItem{variant{id}}}}}}';
+    private const ORDER_FIELDS = 'id displayFinancialStatus cancelledAt totalPriceSet{shopMoney{amount currencyCode}} totalTaxSet{shopMoney{amount currencyCode}} totalOutstandingSet{shopMoney{amount currencyCode}} tags transactions{id kind status gateway amountSet{shopMoney{amount currencyCode}}} fulfillmentOrders(first:50){pageInfo{hasNextPage} nodes{id status assignedLocation{location{id}} lineItems(first:100){pageInfo{hasNextPage} nodes{id remainingQuantity totalQuantity lineItem{id variant{id}}}}}}';
 
     public function __construct(private PosStore $store) {}
 
@@ -22,7 +22,7 @@ final class ShopifyPosCommerce
         if (! is_array($ids) || ! $ids || count($ids) > 200 || count(array_unique($ids)) !== count($ids)) {
             throw new PosException('shopify_catalog_unreviewed', 503);
         }
-        $data = $this->graphql($scope, 'query PosCatalog($ids:[ID!]!,$location:ID!){nodes(ids:$ids){... on ProductVariant{id title sku price updatedAt inventoryPolicy product{id title status isGiftCard} inventoryItem{tracked inventoryLevel(locationId:$location){quantities(names:["available"]){name quantity}}}}}}',
+        $data = $this->graphql($scope, 'query PosCatalog($ids:[ID!]!,$location:ID!){nodes(ids:$ids){... on ProductVariant{id title sku barcode image{url} price updatedAt inventoryPolicy product{id title status isGiftCard featuredImage{url}} inventoryItem{tracked inventoryLevel(locationId:$location){quantities(names:["available"]){name quantity}}}}}}',
             ['ids' => $ids, 'location' => $settings['location_id']]);
         $items = [];
         foreach ($data['nodes'] ?? [] as $variant) {
@@ -31,14 +31,14 @@ final class ShopifyPosCommerce
                 continue;
             }
             $quantity = $variant['inventoryItem']['inventoryLevel']['quantities'][0]['quantity'] ?? null;
-            if ($variant['inventoryItem']['tracked'] && (($variant['inventoryPolicy'] ?? '') !== 'DENY' || ! is_int($quantity) || $quantity < 1)) {
+            if ($variant['inventoryItem']['tracked'] && (($variant['inventoryPolicy'] ?? '') !== 'DENY' || ! is_int($quantity))) {
                 continue;
             }
             $price = self::minor($variant['price']);
-            $items[] = ['item_id' => $variant['id'], 'sku' => $variant['sku'],
+            $items[] = ['item_id' => $variant['id'], 'sku' => $variant['sku'], 'barcode' => $variant['barcode'] ?? null, 'product_id' => $variant['product']['id'], 'product_title' => $variant['product']['title'], 'option_title' => $variant['title'], 'image_url' => $variant['image']['url'] ?? $variant['product']['featuredImage']['url'] ?? null,
                 'title' => $variant['product']['title'].' / '.$variant['title'], 'kind' => 'merchandise',
                 'unit_amount_minor' => $price, 'revision' => Contract::hash([$variant['id'], $variant['updatedAt'], $price, $settings['location_id']]),
-                'available_quantity' => $variant['inventoryItem']['tracked'] ? $quantity : null];
+                'available_quantity' => $variant['inventoryItem']['tracked'] ? max(0, $quantity) : null];
         }
 
         return $items;
@@ -70,7 +70,8 @@ final class ShopifyPosCommerce
         $orderLines = [];
         foreach ($value['lineItems'] as $line) {
             $id = $line['variant']['id'] ?? '';
-            if (! isset($catalog[$id])) {
+            if (! isset($catalog[$id]) || ($line['originalUnitPriceSet']['shopMoney']['currencyCode'] ?? '') !== 'USD'
+                || self::minor($line['originalUnitPriceSet']['shopMoney']['amount'] ?? '0') !== $catalog[$id]['unit_amount_minor']) {
                 throw new PosException('shopify_quote_mismatch');
             }
             $orderLines[] = ['variantId' => $id, 'quantity' => $line['quantity'], 'priceSet' => ['shopMoney' => $line['originalUnitPriceSet']['shopMoney']]];
@@ -79,7 +80,9 @@ final class ShopifyPosCommerce
         $actual = array_column($orderLines, 'quantity', 'variantId');
         ksort($expected);
         ksort($actual);
-        if ($expected !== $actual || $total <= $tax) {
+        if ($expected !== $actual || count($orderLines) !== count($selections) || $total <= $tax
+            || ($value['totalTaxSet']['shopMoney']['currencyCode'] ?? '') !== 'USD'
+            || $total !== array_sum(array_column($display, 'subtotal_minor')) + $tax) {
             throw new PosException('shopify_quote_mismatch');
         }
 
@@ -192,7 +195,20 @@ final class ShopifyPosCommerce
             throw new PosException('unpaid_confirmation_required');
         }
         $reference = $this->reference($sale);
+        if (empty($reference['order_id'])) {
+            $tag = 'EverbranchPOS-'.$sale->id;
+            $data = $this->graphql($scope, 'query PosRecover($q:String!){orders(first:2,query:$q){nodes{'.self::ORDER_FIELDS.'}}}', ['q' => 'tag:'.$tag]);
+            $matches = $data['orders']['nodes'] ?? [];
+            if (count($matches) !== 1) {
+                throw new PosException('shopify_creation_unconfirmed', 503);
+            }
+            $reference['order_id'] = $matches[0]['id'];
+            $this->store->rows('sales', $scope['tenant_id'])->where('id', $sale->id)->update(['source_reference' => $this->store->encrypt($reference)]);
+        }
         $order = $this->order($scope, $reference['order_id']);
+        if (! in_array('EverbranchPOS-'.$sale->id, $order['tags'] ?? [], true) || ($order['totalPriceSet']['shopMoney']['currencyCode'] ?? '') !== 'USD' || self::minor($order['totalPriceSet']['shopMoney']['amount']) !== (int) $sale->amount_minor) {
+            throw new PosException('shopify_cancellation_identity_mismatch');
+        }
         if (! $order['cancelledAt']) {
             if ($order['displayFinancialStatus'] !== 'PENDING') {
                 throw new PosException('shopify_cancel_payment_review');
@@ -211,16 +227,19 @@ final class ShopifyPosCommerce
     {
         $reference = $this->reference($sale);
         $note = 'EverbranchPOS refund '.$refund['id'];
-        $data = $this->graphql($scope, 'query PosRefunds($id:ID!){order(id:$id){refunds(first:100){id note transactions(first:100){nodes{kind status gateway parentTransaction{id} amountSet{shopMoney{amount currencyCode}}}}}}}', ['id' => $reference['order_id']]);
+        $decision = app(PosPilotRefunds::class)->decision($sale, $refund);
+        $data = $this->graphql($scope, 'query PosRefunds($id:ID!){order(id:$id){refunds(first:100){id note refundLineItems(first:100){pageInfo{hasNextPage} nodes{quantity restocked restockType location{id} lineItem{variant{id}}}} transactions(first:100){pageInfo{hasNextPage} nodes{kind status gateway parentTransaction{id} amountSet{shopMoney{amount currencyCode}}}}}}}', ['id' => $reference['order_id']]);
         foreach ($data['order']['refunds'] ?? [] as $existing) {
             if (($existing['note'] ?? '') === $note) {
                 $transactions = $existing['transactions']['nodes'] ?? [];
-                if (count($transactions) !== 1 || ($transactions[0]['parentTransaction']['id'] ?? null) !== ($reference['manual_transaction_id'] ?? null)
+                if (($existing['transactions']['pageInfo']['hasNextPage'] ?? true) || count($transactions) !== 1 || ($transactions[0]['parentTransaction']['id'] ?? null) !== ($reference['manual_transaction_id'] ?? null)
                     || ($transactions[0]['gateway'] ?? '') !== 'manual' || ($transactions[0]['kind'] ?? '') !== 'REFUND'
                     || ($transactions[0]['status'] ?? '') !== 'SUCCESS' || ($transactions[0]['amountSet']['shopMoney']['currencyCode'] ?? '') !== 'USD'
                     || self::minor($transactions[0]['amountSet']['shopMoney']['amount'] ?? '0') !== $refund['amount_minor']) {
                     throw new PosException('shopify_refund_mismatch');
                 }
+
+                $this->verifyRestock($existing, $decision, app(PosService::class)->snapshot($sale)['terms']['shopify_location_id']);
 
                 return;
             }
@@ -232,14 +251,55 @@ final class ShopifyPosCommerce
             throw new PosException('shopify_original_payment_unconfirmed');
         }
         $this->claimPhase($scope, $sale, 'refund_'.$refund['id']);
-        // The parent is the verified manual bookkeeping transaction. Square has
+        $restockLines = [];
+        if ($decision['restock']) {
+            $original = $this->order($scope, $reference['order_id']);
+            $this->verifyOrder($scope, $sale, app(PosService::class)->snapshot($sale), $original);
+            $ids = [];
+            foreach ($original['fulfillmentOrders']['nodes'] as $fo) {
+                foreach ($fo['lineItems']['nodes'] as $line) {
+                    $ids[$line['lineItem']['variant']['id']] = $line['lineItem']['id'];
+                }
+            }
+            foreach ($decision['lines'] as $line) {
+                if (! isset($ids[$line['item_id']])) {
+                    throw new PosException('restock_line_unconfirmed');
+                } $restockLines[] = ['lineItemId' => $ids[$line['item_id']], 'quantity' => $line['quantity'], 'restockType' => 'RETURN', 'locationId' => app(PosService::class)->snapshot($sale)['terms']['shopify_location_id']];
+            }
+        }
+        // The parent is the verified manual bookkeeping transaction. The original processor has
         // already refunded the money; Shopify must never contact a card gateway.
         $data = $this->graphql($scope, 'mutation PosRefund($input:RefundInput!){refundCreate(input:$input){refund{id} userErrors{field message}}}', ['input' => [
-            'orderId' => $reference['order_id'], 'note' => $note, 'notify' => false,
+            'orderId' => $reference['order_id'], 'note' => $note, 'notify' => false, 'refundLineItems' => $restockLines,
             'transactions' => [['orderId' => $reference['order_id'], 'parentId' => $reference['manual_transaction_id'],
                 'amount' => self::decimal($refund['amount_minor']), 'kind' => 'REFUND', 'gateway' => 'manual']],
         ]]);
         $this->result($data, 'refundCreate');
+        // Verify the recorded manual refund and exact returned quantities before marking
+        // bookkeeping complete. A lost response recovers by the original note only.
+        $this->refund($scope, $sale, $refund);
+    }
+
+    private function verifyRestock(array $refund, array $decision, string $location): void
+    {
+        if (($refund['refundLineItems']['pageInfo']['hasNextPage'] ?? true) || ! is_array($refund['refundLineItems']['nodes'] ?? null)) {
+            throw new PosException('shopify_refund_lines_unconfirmed');
+        }
+        $expected = $decision['restock'] ? array_column($decision['lines'], 'quantity', 'item_id') : [];
+        $actual = [];
+        foreach ($refund['refundLineItems']['nodes'] as $line) {
+            if (($line['restockType'] ?? '') !== 'RETURN' || ($line['restocked'] ?? false) !== true || ($line['location']['id'] ?? '') !== $location
+                || ! is_int($line['quantity'] ?? null) || $line['quantity'] < 1 || ! isset($line['lineItem']['variant']['id'])) {
+                throw new PosException('shopify_refund_restock_mismatch');
+            }
+            $id = $line['lineItem']['variant']['id'];
+            $actual[$id] = ($actual[$id] ?? 0) + $line['quantity'];
+        }
+        ksort($actual);
+        ksort($expected);
+        if ($actual !== $expected) {
+            throw new PosException('shopify_refund_restock_mismatch');
+        }
     }
 
     private function claimPhase(array $scope, object $sale, string $phase): void

@@ -7449,6 +7449,39 @@ CREATE TABLE `pos_live_assignments` (
   UNIQUE KEY `posla_actor_uq` (`register_id`,`user_id`,`device_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `pos_live_baskets`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pos_live_baskets` (
+  `id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `runtime_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `created_at` timestamp NOT NULL,
+  `event_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `operator_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `register_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `state` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'saved',
+  `sale_request_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `claimed_device_id` char(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `updated_at` timestamp NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `pos_live_company_settings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pos_live_company_settings` (
+  `id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `runtime_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `created_at` timestamp NOT NULL,
+  `reporting_timezone` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `poscompany_scope_uq` (`runtime_id`,`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `pos_live_connections`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -7464,8 +7497,56 @@ CREATE TABLE `pos_live_connections` (
   `verified_at` timestamp NULL DEFAULT NULL,
   `acceptance_at` timestamp NULL DEFAULT NULL,
   `acceptance_build` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `provider` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'square_native',
   PRIMARY KEY (`id`),
   UNIQUE KEY `poslc_scope_uq` (`runtime_id`,`tenant_id`,`merchant_id`,`provider_location_id`,`environment`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `pos_live_devices`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pos_live_devices` (
+  `id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `runtime_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `created_at` timestamp NOT NULL,
+  `device_key` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `register_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `enrolled_by` bigint unsigned NOT NULL,
+  `active` tinyint(1) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `posdev_key_uq` (`runtime_id`,`tenant_id`,`device_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `pos_live_event_registers`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pos_live_event_registers` (
+  `id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `runtime_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `created_at` timestamp NOT NULL,
+  `event_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `register_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `active` tinyint(1) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `posev_register_uq` (`runtime_id`,`tenant_id`,`event_id`,`register_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `pos_live_event_staff`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pos_live_event_staff` (
+  `id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `runtime_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `created_at` timestamp NOT NULL,
+  `event_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `operator_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `active` tinyint(1) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `posev_staff_uq` (`runtime_id`,`tenant_id`,`event_id`,`operator_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `pos_live_events`;
@@ -7483,23 +7564,38 @@ CREATE TABLE `pos_live_events` (
   KEY `posle_sale_idx` (`runtime_id`,`tenant_id`,`sale_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `pos_live_favorites`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pos_live_favorites` (
+  `id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `runtime_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `created_at` timestamp NOT NULL,
+  `operator_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `register_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `item_id` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `posfav_item_uq` (`runtime_id`,`tenant_id`,`operator_id`,`register_id`,`item_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `pos_live_handoffs`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `pos_live_handoffs` (
-  `id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `runtime_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id` char(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `runtime_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
-  `register_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `register_id` char(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `actor_id` bigint unsigned NOT NULL,
-  `device_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `request_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
-  `payload_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `state` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'ready',
+  `device_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `request_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload_hash` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `state` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'ready',
   `claimed_by` bigint unsigned DEFAULT NULL,
-  `claimed_device` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `sale_id` char(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `claimed_device` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `sale_id` char(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` timestamp NOT NULL,
   `expires_at` timestamp NOT NULL,
   PRIMARY KEY (`id`),
@@ -7560,6 +7656,23 @@ CREATE TABLE `pos_live_merchants` (
   UNIQUE KEY `poslm_tenant_uq` (`runtime_id`,`tenant_id`,`environment`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `pos_live_operators`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pos_live_operators` (
+  `id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `runtime_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `created_at` timestamp NOT NULL,
+  `user_id` bigint unsigned DEFAULT NULL,
+  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `role` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `pin_hash` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `active` tinyint(1) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `posop_user_uq` (`runtime_id`,`tenant_id`,`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `pos_live_outbox`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -7581,6 +7694,67 @@ CREATE TABLE `pos_live_outbox` (
   KEY `poslo_work_idx` (`runtime_id`,`state`,`available_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `pos_live_readers`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pos_live_readers` (
+  `id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `runtime_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `register_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `connection_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `reader_id` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `location_id` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `identity_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `state` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `verified_at` timestamp NULL DEFAULT NULL,
+  `acceptance_at` timestamp NULL DEFAULT NULL,
+  `acceptance_build` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `posreader_register_uq` (`runtime_id`,`tenant_id`,`register_id`),
+  UNIQUE KEY `posreader_identity_uq` (`runtime_id`,`identity_hash`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `pos_live_refund_details`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pos_live_refund_details` (
+  `id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `runtime_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `created_at` timestamp NOT NULL,
+  `sale_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `request_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `operator_id` char(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `amount_minor` bigint unsigned NOT NULL,
+  `state` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'reserved',
+  `decision` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `operation_id` char(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `confirmed_at` timestamp NULL DEFAULT NULL,
+  `restocked_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `posrefund_request_uq` (`runtime_id`,`tenant_id`,`request_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `pos_live_register_sessions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pos_live_register_sessions` (
+  `id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `runtime_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `created_at` timestamp NOT NULL,
+  `device_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `token_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `operator_id` char(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `shift_id` char(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `last_used_at` timestamp NULL DEFAULT NULL,
+  `expires_at` timestamp NOT NULL,
+  `active` tinyint(1) NOT NULL DEFAULT '1',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `possess_token_uq` (`runtime_id`,`token_hash`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `pos_live_registers`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -7598,6 +7772,7 @@ CREATE TABLE `pos_live_registers` (
   `active` tinyint(1) NOT NULL DEFAULT '0',
   `collection_enabled` tinyint(1) NOT NULL DEFAULT '0',
   `servicing_enabled` tinyint(1) NOT NULL DEFAULT '0',
+  `provider` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'square_native',
   PRIMARY KEY (`id`),
   KEY `poslr_scope_idx` (`runtime_id`,`tenant_id`,`location_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -7634,12 +7809,97 @@ CREATE TABLE `pos_live_sales` (
   `created_at` timestamp NOT NULL,
   `expires_at` timestamp NOT NULL,
   `reconciled_at` timestamp NULL DEFAULT NULL,
+  `operator_id` char(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `event_id` char(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `shift_id` char(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `device_record_id` char(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `confirmed_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `posls_request_uq` (`runtime_id`,`tenant_id`,`request_id`),
   UNIQUE KEY `posls_payment_uq` (`runtime_id`,`tenant_id`,`payment_request_id`),
   UNIQUE KEY `posls_source_uq` (`runtime_id`,`tenant_id`,`active_source_claim`),
   KEY `posls_reconcile_idx` (`runtime_id`,`reconciled_at`),
   KEY `posls_register_idx` (`runtime_id`,`tenant_id`,`register_id`,`state`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `pos_live_shifts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pos_live_shifts` (
+  `id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `runtime_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `created_at` timestamp NOT NULL,
+  `event_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `operator_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `device_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `register_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `state` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'open',
+  `closed_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `pos_live_stock_counts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pos_live_stock_counts` (
+  `id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `runtime_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `created_at` timestamp NOT NULL,
+  `event_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `operator_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `register_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `stage` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `sequence` int unsigned NOT NULL DEFAULT '0',
+  `context_hash` char(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `counts` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `pos_live_stripe_operations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pos_live_stripe_operations` (
+  `id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `runtime_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `reader_binding_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `connection_id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `reader_id` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `request_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payment_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `active_reader_claim` char(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `reader_state` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'reserved',
+  `dispatch_generation` int unsigned NOT NULL DEFAULT '0',
+  `created_at` timestamp NOT NULL,
+  `verified_at` timestamp NULL DEFAULT NULL,
+  `receipt` longtext COLLATE utf8mb4_unicode_ci,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `posstripe_request_uq` (`runtime_id`,`tenant_id`,`request_id`),
+  UNIQUE KEY `posstripe_active_uq` (`runtime_id`,`active_reader_claim`),
+  KEY `posstripe_payment_idx` (`runtime_id`,`payment_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `pos_live_trade_events`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `pos_live_trade_events` (
+  `id` char(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `runtime_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `created_at` timestamp NOT NULL,
+  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `location_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `timezone` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `starts_at` timestamp NOT NULL,
+  `ends_at` timestamp NOT NULL,
+  `state` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'planned',
+  `version` int unsigned NOT NULL DEFAULT '1',
+  `configuration` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `pos_payment_attempts`;
@@ -13551,3 +13811,5 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (312,'2026_10_22_19
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (313,'2026_10_22_190100_create_payment_core_quotes_table',36);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (314,'2026_10_24_010000_create_pos_live_tables',36);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (315,'2026_10_24_030000_create_pos_live_handoffs',37);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (316,'2026_10_24_050000_create_pos_stripe_adapter',38);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (317,'2026_10_24_060000_create_pos_pilot_operations',38);

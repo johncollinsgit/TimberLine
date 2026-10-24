@@ -22,6 +22,9 @@ final class PosAccess implements PaymentAccess
 
     public function actor(bool $write = false): array
     {
+        if (request()->routeIs('pos.web.terminal.*', 'enterprise.pos.web.terminal.*')) {
+            return app(PosPilotAccess::class)->context();
+        }
         $user = request()->user();
         $tenant = (int) request()->attributes->get('current_tenant_id');
         if (! $user instanceof User || $tenant < 1 || config('pos_live.enabled') !== true) {
@@ -53,8 +56,8 @@ final class PosAccess implements PaymentAccess
 
     public function register(string $id, string $operation = 'read'): array
     {
-        if ($this->isWeb() && ! in_array($operation, ['read', 'catalog'], true)) {
-            throw new PosException('native_payment_app_required', 403);
+        if (request()->routeIs('pos.web.terminal.*', 'enterprise.pos.web.terminal.*')) {
+            return app(PosPilotAccess::class)->register($id, $operation);
         }
         $actor = $this->actor(in_array($operation, ['quote', 'collect', 'recover', 'refund', 'admin'], true));
         $register = $this->store->rows('registers', $actor['tenant_id'])->where('id', $id)->first();
@@ -63,6 +66,13 @@ final class PosAccess implements PaymentAccess
             ->where('user_id', $actor['actor_id'])->where('device_id', $device)->where('active', true)->first();
         if (! $register || ! $assignment || ! in_array($assignment->role, ['cashier', 'manager', 'admin'], true)) {
             throw new PosException('register_unavailable', 404);
+        }
+        $terminalWeb = $this->isWeb() && request()->routeIs('pos.web.terminal.*', 'enterprise.pos.web.terminal.*') && ($register->provider ?? 'square_native') === 'stripe_terminal';
+        if ($this->isWeb() && ! in_array($operation, ['read', 'catalog'], true) && ! $terminalWeb) {
+            throw new PosException('native_payment_app_required', 403);
+        }
+        if (($register->provider ?? 'square_native') === 'stripe_terminal' && ! $this->isWeb()) {
+            throw new PosException('staff_web_register_required', 403);
         }
         if ($operation === 'refund' && ($assignment->role === 'cashier' || $actor['role'] === 'member')) {
             throw new PosException('manager_required', 403);
@@ -80,6 +90,10 @@ final class PosAccess implements PaymentAccess
             throw new PosException('merchant_unavailable', 503);
         }
 
+        if (($connection->provider ?? 'square_native') !== ($register->provider ?? 'square_native')) {
+            throw new PosException('provider_binding_mismatch');
+        }
+
         return [...$actor, 'register' => $register, 'connection' => $connection,
             'can_refund' => $assignment->role !== 'cashier' && $actor['role'] !== 'member'];
     }
@@ -88,7 +102,7 @@ final class PosAccess implements PaymentAccess
     {
         $connection = $scope['connection'];
 
-        return new MerchantBinding($scope['tenant_id'], $scope['register']->id, 'square_native',
+        return new MerchantBinding($scope['tenant_id'], $scope['register']->id, $scope['register']->provider ?? 'square_native',
             $connection->merchant_id, $connection->provider_location_id, $connection->environment === 'production' ? 'live' : 'test', $this->store->runtime());
     }
 
@@ -100,11 +114,16 @@ final class PosAccess implements PaymentAccess
         }
         if ($operation === 'collect' && $scope['connection']->environment === 'production') {
             $settings = $this->store->decrypt($scope['register']->configuration);
-            $acceptedBuild = $scope['connection']->acceptance_build ?: ($settings['acceptance']['build'] ?? null);
+            $accepted = ($scope['register']->provider ?? 'square_native') === 'stripe_terminal'
+                ? $this->store->rows('readers', $scope['tenant_id'])->where('register_id', $scope['register']->id)->firstOrFail() : $scope['connection'];
+            $acceptedBuild = $accepted->acceptance_build ?: ($settings['acceptance']['build'] ?? null);
             if (! is_string($acceptedBuild) || ! hash_equals($acceptedBuild, request()->header('X-Pos-Build', ''))) {
                 throw new PosException('accepted_build_required', 403);
             }
-            if (! $scope['connection']->acceptance_at && (($settings['acceptance']['actor_id'] ?? null) !== $scope['actor_id']
+            if (! $accepted->acceptance_at && ($scope['register']->provider ?? '') === 'stripe_terminal' && (($settings['acceptance']['operator_id'] ?? null) !== ($scope['operator_id'] ?? null))) {
+                throw new PosException('acceptance_operator_required', 403);
+            }
+            if (! $accepted->acceptance_at && (($settings['acceptance']['actor_id'] ?? null) !== $scope['actor_id']
                 || ($settings['acceptance']['device_id'] ?? null) !== request()->header('X-Pos-Device'))) {
                 throw new PosException('acceptance_device_required', 403);
             }

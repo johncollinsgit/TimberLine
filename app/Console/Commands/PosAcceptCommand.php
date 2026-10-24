@@ -37,6 +37,12 @@ final class PosAcceptCommand extends Command
         $evidence = json_decode(file_get_contents($path), true, 16, JSON_THROW_ON_ERROR);
         $sale = $store->rows('sales', $tenant)->where('id', $this->argument('sale'))->firstOrFail();
         $snapshot = $service->snapshot($sale);
+        if (($snapshot['binding']['provider'] ?? '') === 'stripe_terminal') {
+            $result = app(\App\Services\Pos\PosStripeAcceptance::class)->verify($sale, $snapshot, $evidence, (int) $actor->id, hash_file('sha256', $path), (bool) $this->option('apply'));
+            $this->line(json_encode($result));
+
+            return self::SUCCESS;
+        }
         if (($evidence['sale_id'] ?? null) !== $sale->id || ($evidence['build'] ?? null) !== ($snapshot['build'] ?? null)
             || empty($snapshot['build']) || empty($snapshot['device_id']) || ($evidence['physical_iphone_observed'] ?? null) !== true
             || ($evidence['receipt_shared_or_printed'] ?? null) !== true || ($evidence['stock_and_refund_reviewed'] ?? null) !== true

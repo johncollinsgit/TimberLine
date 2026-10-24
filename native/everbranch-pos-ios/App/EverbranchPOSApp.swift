@@ -11,9 +11,14 @@ struct POSView: View {
         NavigationStack {
             List {
                 Section {
-                    Label("Everbranch POS", systemImage: "leaf.fill").font(.title2.bold()).foregroundStyle(.green)
+                    Label("Everbranch Pay", systemImage: "leaf.fill").font(.title2.bold()).foregroundStyle(.green)
+                    #if POS_PREVIEW
+                    Text("Preview — no real payments").font(.headline).foregroundStyle(.orange)
+                    Text("Fictional businesses and simulated payment recovery. No account sign-in or payment connection.").font(.footnote)
+                    #else
                     Text("Payments go to your business’s connected Square account.").font(.footnote).foregroundStyle(.secondary)
                     if POSAppDelegate.environment != "production" { Text("SANDBOX — no real customer payments").font(.caption.bold()).foregroundStyle(.orange) }
+                    #endif
                 }
                 if let message = model.message { Section { Text(message).foregroundStyle(.red).accessibilityIdentifier("status-message") } }
                 if model.busy { ProgressView("Checking…") }
@@ -24,13 +29,15 @@ struct POSView: View {
                 } else {
                     selection
                 }
+                #if !POS_PREVIEW
                 Section("Device enrollment") {
                     Text(SecureStore.deviceID).font(.caption.monospaced()).textSelection(.enabled)
                     Text("Ask your administrator to assign this device to a register.").font(.footnote).foregroundStyle(.secondary)
                     if model.signedIn { Button("Sign out", role: .destructive, action: model.logout).disabled(model.busy) }
                 }
+                #endif
             }
-            .navigationTitle(model.selectedRegister?.name ?? "Everbranch POS")
+            .navigationTitle(model.selectedRegister?.name ?? "Everbranch Pay")
             .disabled(model.busy)
             .task { if model.signedIn { model.perform { try await model.loadWorkspaces() } } }
         }
@@ -64,12 +71,16 @@ struct POSView: View {
                     Button("Refresh staff baskets") { model.perform { try await model.loadHandoffs() } }
                     Text("Match the staff member’s sale code, then review the total before taking payment.").font(.caption).foregroundStyle(.secondary)
                 }
+                #if POS_PREVIEW
+                Section("Preview — no real payments") { Text("Review a basket, simulate an interrupted payment, then check its original status. No card is read or charged.") }
+                #else
                 Section("Tap to Pay") {
                     ForEach(register.blockers, id: \.self) { Text($0.replacingOccurrences(of: "_", with: " ")).font(.caption).foregroundStyle(.orange) }
                     Toggle("Share Square diagnostic data", isOn: $model.diagnostics)
                     Button(model.tapReady ? "Tap to Pay ready" : "Set up Tap to Pay", action: model.setup)
                         .disabled(register.blockers.contains { $0 != "merchant_evidence_stale" })
                 }
+                #endif
                 Section("Products") {
                     ForEach(model.items) { item in
                         Stepper(value: Binding(get: { model.quantities[item.id] ?? 0 }, set: { model.quantities[item.id] = $0 }), in: 0...min(99, item.availableQuantity ?? 99)) {
@@ -108,7 +119,11 @@ struct POSView: View {
                     if sale.canonicalConfirmation && !sale.receiptAvailable { Text("Payment received. Order finalization needs reconciliation. Do not charge again.").foregroundStyle(.orange) }
                     if model.pending?.collectionRequested == false && sale.state == "quoted" {
                         if !model.tapReady { Button("Set up Tap to Pay", action: model.setup) }
+                        #if POS_PREVIEW
+                        Button("Simulate interrupted payment", action: model.pay)
+                        #else
                         Button("Tap to pay \(POSMoney.display(sale.amountMinor))", action: model.pay).disabled(!model.tapReady)
+                        #endif
                     }
                     if sale.canLeave && model.pending?.refundRequestID == nil { Button("New sale", action: model.nextSale) }
                 } else { Text("Recover this sale before starting another payment.") }
@@ -117,6 +132,9 @@ struct POSView: View {
             }
             if let receipt = model.receipt {
                 Section("Receipt") {
+                    #if POS_PREVIEW
+                    Text("Preview — no real payments").foregroundStyle(.orange)
+                    #endif
                     Text(receipt.receiptNumber).font(.headline)
                     ForEach(Array(receipt.lines.enumerated()), id: \.offset) { _, line in Text("\(line.quantity) × \(line.title)") }
                     Text("Refunded: \(POSMoney.display(receipt.refundedMinor))")

@@ -21,9 +21,9 @@ refs = []
 def sources(files, prefix):
     builds = []
     for path in files:
-        ref = add("file:" + path, f'isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "{path}"; sourceTree = "<group>";')
+        ref = key("file:" + path) if key("file:" + path) in [o.split(" = ")[0] for o in objects] else add("file:" + path, f'isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "{path}"; sourceTree = "<group>";')
         refs.append(ref)
-        builds.append(add("build:" + path, f"isa = PBXBuildFile; fileRef = {ref};"))
+        builds.append(add(prefix + "build:" + path, f"isa = PBXBuildFile; fileRef = {ref};"))
     return add(prefix + "Sources", f"isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = {array(builds)}; runOnlyForDeploymentPostprocessing = 0;")
 app_sources = sources(app_files, "App")
 test_sources = sources(test_files, "Test")
@@ -39,7 +39,10 @@ setup_script = 'if [ "$CODE_SIGNING_ALLOWED" = "NO" ]; then export EXPANDED_CODE
 setup_phase = add("SquareSetup", f'isa = PBXShellScriptBuildPhase; buildActionMask = 2147483647; files = (); inputPaths = (); outputPaths = (); runOnlyForDeploymentPostprocessing = 0; shellPath = "/bin/sh"; shellScript = {json.dumps(setup_script)};')
 app_product = add("AppProduct", 'isa = PBXFileReference; explicitFileType = wrapper.application; path = EverbranchPOS.app; sourceTree = BUILT_PRODUCTS_DIR;')
 test_product = add("TestProduct", 'isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = EverbranchPOSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR;')
-products = add("Products", f'isa = PBXGroup; children = {array([app_product, test_product])}; name = Products; sourceTree = "<group>";')
+preview_files = ["App/EverbranchPOSApp.swift", "App/POSViewModel.swift", "Preview/PreviewModel.swift"] + sorted(str(p.relative_to(base)) for p in (base / "Sources").rglob("*.swift"))
+preview_sources = sources(preview_files, "Preview")
+preview_product = add("PreviewProduct", 'isa = PBXFileReference; explicitFileType = wrapper.application; path = EverbranchPayPreview.app; sourceTree = BUILT_PRODUCTS_DIR;')
+products = add("Products", f'isa = PBXGroup; children = {array([app_product, test_product, preview_product])}; name = Products; sourceTree = "<group>";')
 group = add("MainGroup", f'isa = PBXGroup; children = {array(refs + [products])}; sourceTree = "<group>";')
 common = 'CLANG_ENABLE_MODULES = YES; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 17.1; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = 1; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; CODE_SIGN_STYLE = Automatic; PRODUCT_NAME = "$(TARGET_NAME)";'
 def configs(prefix, settings):
@@ -54,7 +57,9 @@ app_target = add("AppTarget", f'isa = PBXNativeTarget; buildConfigurationList = 
 proxy = add("AppProxy", f'isa = PBXContainerItemProxy; containerPortal = {key("Project")}; proxyType = 1; remoteGlobalIDString = {app_target}; remoteInfo = EverbranchPOS;')
 dependency = add("AppDependency", f"isa = PBXTargetDependency; target = {app_target}; targetProxy = {proxy};")
 test_target = add("TestTarget", f'isa = PBXNativeTarget; buildConfigurationList = {test_configs}; buildPhases = {array([test_sources])}; buildRules = (); dependencies = {array([dependency])}; name = EverbranchPOSUITests; productName = EverbranchPOSUITests; productReference = {test_product}; productType = "com.apple.product-type.bundle.ui-testing";')
-root = add("Project", f'isa = PBXProject; attributes = {{LastUpgradeCheck = 2630; TargetAttributes = {{{test_target} = {{TestTargetID = {app_target};}};}};}}; buildConfigurationList = {project_configs}; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = {group}; productRefGroup = {products}; projectDirPath = ""; projectRoot = ""; packageReferences = {array([package_ref])}; targets = {array([app_target, test_target])};')
+preview_configs = configs("Preview", 'PRODUCT_BUNDLE_IDENTIFIER = com.everbranch.pos.preview; CURRENT_PROJECT_VERSION = 2026102401; MARKETING_VERSION = 1.0; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = "Everbranch Pay Preview"; INFOPLIST_KEY_UILaunchScreen_Generation = YES; DEVELOPMENT_TEAM = ACG3V4UATT; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) POS_PREVIEW";')
+preview_target = add("PreviewTarget", f'isa = PBXNativeTarget; buildConfigurationList = {preview_configs}; buildPhases = {array([preview_sources])}; buildRules = (); dependencies = (); packageProductDependencies = (); name = EverbranchPayPreview; productName = EverbranchPayPreview; productReference = {preview_product}; productType = "com.apple.product-type.application";')
+root = add("Project", f'isa = PBXProject; attributes = {{LastUpgradeCheck = 2630; TargetAttributes = {{{test_target} = {{TestTargetID = {app_target};}};}};}}; buildConfigurationList = {project_configs}; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = {group}; productRefGroup = {products}; projectDirPath = ""; projectRoot = ""; packageReferences = {array([package_ref])}; targets = {array([app_target, test_target, preview_target])};')
 (project / "project.pbxproj").write_text('// !$*UTF8*$!\n{ archiveVersion = 1; classes = {}; objectVersion = 56; objects = {\n' + '\n'.join(objects) + f'\n}}; rootObject = {root}; }}\n')
 scheme_dir = project / "xcshareddata/xcschemes"
 scheme_dir.mkdir(parents=True, exist_ok=True)
@@ -71,3 +76,12 @@ test_ref = buildable(test_target, "EverbranchPOSUITests", "EverbranchPOSUITests.
  <AnalyzeAction buildConfiguration="Debug"/><ArchiveAction buildConfiguration="Release" revealArchiveInOrganizer="YES"/>
 </Scheme>\n''')
 print("Generated EverbranchPOS.xcodeproj (no selected signing team).")
+
+preview_ref = buildable(preview_target, "EverbranchPayPreview", "EverbranchPayPreview.app")
+(scheme_dir / "EverbranchPayPreview.xcscheme").write_text(f'''<?xml version="1.0" encoding="UTF-8"?>
+<Scheme LastUpgradeVersion="2630" version="1.3">
+<BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES"><BuildActionEntries><BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES">{preview_ref}</BuildActionEntry></BuildActionEntries></BuildAction>
+<LaunchAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.LLDB" launchStyle="0" useCustomWorkingDirectory="NO" ignoresPersistentStateOnLaunch="NO"><BuildableProductRunnable runnableDebuggingMode="0">{preview_ref}</BuildableProductRunnable></LaunchAction>
+<AnalyzeAction buildConfiguration="Debug"/><ArchiveAction buildConfiguration="Release" revealArchiveInOrganizer="YES"/>
+</Scheme>
+''')

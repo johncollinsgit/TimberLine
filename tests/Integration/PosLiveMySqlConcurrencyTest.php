@@ -84,3 +84,76 @@ it('holds the last location stock unit for exactly one of four simultaneous cash
         } rmdir($directory);
     }
 });
+
+it('grants exactly one of four concurrent cashiers the same Stripe reader before stock commitment', function (): void {
+    $db = DB::connection();
+    if ($db->getDriverName() !== 'mysql' || getenv('POS_LIVE_DISPOSABLE_MYSQL') !== '1' || ! function_exists('pcntl_fork')) {
+        $this->markTestSkipped('Disposable MySQL and fork required.');
+    }
+    if (! app()->environment('testing') || ! preg_match('/(^|_)(ci|test|testing)(_|$)/i', $db->getDatabaseName()) || ! in_array($db->getConfig('host'), ['127.0.0.1', 'localhost'], true)) {
+        throw new RuntimeException('Unsafe contention DB.');
+    }
+    PosSchema::install();
+    \App\Services\Pos\PosStripeSchema::install();
+    config(['pos_live.runtime_id' => 'reader_race_fixture']);
+    $store = app(PosStore::class);
+    $tenant = 900000001;
+    $register = bin2hex(random_bytes(16));
+    $connection = bin2hex(random_bytes(16));
+    $reader = bin2hex(random_bytes(16));
+    $sales = [];
+    $store->rows('readers', $tenant)->insert($store->values($tenant, ['id' => $reader, 'register_id' => $register, 'connection_id' => $connection, 'reader_id' => 'tmr_race', 'location_id' => 'tml_race', 'identity_hash' => hash('sha256', $reader), 'state' => 'online']));
+    for ($i = 0; $i < 4; $i++) {
+        $sales[] = $id = bin2hex(random_bytes(16));
+        $store->rows('sales', $tenant)->insert($store->values($tenant, ['id' => $id, 'register_id' => $register, 'location_id' => 'race', 'actor_id' => 900000002 + $i,
+            'request_id' => (string) Str::uuid(), 'payment_request_id' => (string) Str::uuid(), 'sdk_attempt_id' => (string) Str::uuid(), 'snapshot' => $store->encrypt(['fixture' => true]), 'snapshot_hash' => str_repeat('a', 64),
+            'amount_minor' => 1000, 'currency' => 'usd', 'commerce_source' => 'native', 'state' => 'quoted', 'created_at' => now(), 'expires_at' => now()->addMinute()]));
+    }
+    $dir = sys_get_temp_dir().'/pos-reader-race-'.bin2hex(random_bytes(8));
+    mkdir($dir, 0700);
+    DB::purge();
+    $children = [];
+    try {
+        foreach ($sales as $i => $id) {
+            $pid = pcntl_fork();
+            if ($pid === -1) {
+                throw new RuntimeException('Cannot fork');
+            }
+            if ($pid === 0) {
+                try {
+                    $s = new PosStore(DB::connection(), app('encrypter'));
+                    $p = new \App\Services\Pos\StripeTerminalProvider($s, new \App\Services\Pos\StripeTerminalClient($s));
+                    try {
+                        $p->reserve(['tenant_id' => $tenant, 'connection' => (object) ['id' => $connection, 'provider_location_id' => 'tml_race']], $s->rows('sales', $tenant)->where('id', $id)->firstOrFail());
+                        $result = 'reserved';
+                    } catch (PosException $e) {
+                        $result = $e->blocker;
+                    }file_put_contents($dir.'/'.$i, $result);
+                    DB::disconnect();
+                    exit(0);
+                } catch (Throwable) {
+                    exit(1);
+                }
+            }
+            $children[] = $pid;
+        }
+        foreach ($children as $pid) {
+            pcntl_waitpid($pid, $status);
+            expect(pcntl_wexitstatus($status))->toBe(0);
+        }
+        $results = array_map(fn ($i) => file_get_contents($dir.'/'.$i), range(0, 3));
+        expect(count(array_filter($results, fn ($r) => $r === 'reserved')))->toBe(1)->and(count(array_filter($results, fn ($r) => $r === 'reader_busy')))->toBe(3);
+        expect(DB::table('pos_live_stripe_operations')->whereIn('id', $sales)->whereNotNull('active_reader_claim')->count())->toBe(1);
+        expect(DB::table('pos_live_holds')->whereIn('sale_id', $sales)->count())->toBe(0);
+    } finally {
+        foreach ($children as $pid) {
+            pcntl_waitpid($pid, $status, WNOHANG);
+        }
+        DB::table('pos_live_stripe_operations')->whereIn('id', $sales)->delete();
+        DB::table('pos_live_sales')->whereIn('id', $sales)->delete();
+        DB::table('pos_live_readers')->where('id', $reader)->delete();
+        foreach (glob($dir.'/*') as $file) {
+            unlink($file);
+        }rmdir($dir);
+    }
+});

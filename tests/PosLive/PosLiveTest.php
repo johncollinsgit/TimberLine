@@ -271,6 +271,9 @@ function posFixtureShopify($test, bool $loseCreate = false, bool $wrongLocation 
     $test->shopifyCreates = 0;
     $test->shopifyPaid = false;
     $test->shopifyFulfilled = false;
+    $test->shopifyRefunds = [];
+    $test->shopifyRefundCreates = 0;
+    $test->shopifyRefundResponseLost = false;
     Http::fake(['https://fictional-pos-*.myshopify.com/*' => function ($request) use ($test, $loseCreate, $wrongLocation) {
         $query = $request['query'];
         $shop = ['id' => 'gid://shopify/Shop/1', 'currencyCode' => 'USD'];
@@ -283,7 +286,7 @@ function posFixtureShopify($test, bool $loseCreate = false, bool $wrongLocation 
             'fulfillmentOrders' => ['pageInfo' => ['hasNextPage' => false], 'nodes' => [['id' => 'gid://shopify/FulfillmentOrder/6',
                 'status' => $test->shopifyFulfilled ? 'CLOSED' : 'OPEN', 'assignedLocation' => ['location' => ['id' => $wrongLocation ? 'gid://shopify/Location/999' : 'gid://shopify/Location/2']],
                 'lineItems' => ['pageInfo' => ['hasNextPage' => false], 'nodes' => [['id' => 'gid://shopify/FulfillmentOrderLineItem/7',
-                    'remainingQuantity' => 1, 'totalQuantity' => 1, 'lineItem' => ['variant' => ['id' => 'gid://shopify/ProductVariant/3']]]]]]]]];
+                    'remainingQuantity' => 1, 'totalQuantity' => 1, 'lineItem' => ['id' => 'gid://shopify/LineItem/10', 'variant' => ['id' => 'gid://shopify/ProductVariant/3']]]]]]]]];
         if (str_contains($query, 'PosCatalog')) {
             $data = ['shop' => $shop, 'nodes' => [['id' => 'gid://shopify/ProductVariant/3', 'title' => 'Default', 'sku' => 'FICTIONAL-SHOPIFY',
                 'price' => '10.00', 'updatedAt' => '2026-10-24T00:00:00Z', 'inventoryPolicy' => 'DENY',
@@ -292,7 +295,7 @@ function posFixtureShopify($test, bool $loseCreate = false, bool $wrongLocation 
         } elseif (str_contains($query, 'PosCalculate')) {
             $data = ['draftOrderCalculate' => ['userErrors' => [], 'calculatedDraftOrder' => ['taxesIncluded' => false, 'totalPriceSet' => $money('10.70'), 'totalTaxSet' => $money('0.70'),
                 'taxLines' => [['title' => 'Fictional tax', 'rate' => 0.07, 'priceSet' => $money('0.70')]],
-                'lineItems' => [['variant' => ['id' => 'gid://shopify/ProductVariant/3'], 'quantity' => 1, 'originalUnitPriceSet' => $money('10.00')]]]]];
+                'lineItems' => [['variant' => ['id' => 'gid://shopify/ProductVariant/3'], 'quantity' => 1, 'originalUnitPriceSet' => $money($test->shopifyDraftPrice ?? '10.00')]]]]];
         } elseif (str_contains($query, 'mutation PosOrder')) {
             $test->shopifyCreates++;
             expect($request['variables']['options']['inventoryBehaviour'])->toBe('DECREMENT_OBEYING_POLICY');
@@ -308,6 +311,18 @@ function posFixtureShopify($test, bool $loseCreate = false, bool $wrongLocation 
         } elseif (str_contains($query, 'PosPaid')) {
             $test->shopifyPaid = true;
             $data = ['orderMarkAsPaid' => ['order' => ['id' => 'gid://shopify/Order/4'], 'userErrors' => []]];
+        } elseif (str_contains($query, 'query PosRefunds')) {
+            $data = ['shop' => $shop, 'order' => ['refunds' => $test->shopifyRefunds]];
+        } elseif (str_contains($query, 'mutation PosRefund')) {
+            $test->shopifyRefundCreates++;
+            $input = $request['variables']['input'];
+            $test->shopifyRefunds[] = ['id' => 'gid://shopify/Refund/11', 'note' => $input['note'],
+                'transactions' => ['pageInfo' => ['hasNextPage' => false], 'nodes' => [['kind' => 'REFUND', 'status' => 'SUCCESS', 'gateway' => 'manual', 'parentTransaction' => ['id' => $input['transactions'][0]['parentId']], 'amountSet' => $money($input['transactions'][0]['amount'])]]],
+                'refundLineItems' => ['pageInfo' => ['hasNextPage' => false], 'nodes' => array_map(fn ($l) => ['quantity' => $l['quantity'], 'restocked' => true, 'restockType' => $l['restockType'], 'location' => ['id' => $l['locationId']], 'lineItem' => ['variant' => ['id' => 'gid://shopify/ProductVariant/3']]], $input['refundLineItems'])]];
+            if ($test->shopifyRefundResponseLost) {
+                throw new \Illuminate\Http\Client\ConnectionException('Synthetic refund response lost');
+            }
+            $data = ['refundCreate' => ['refund' => ['id' => 'gid://shopify/Refund/11'], 'userErrors' => []]];
         } elseif (str_contains($query, 'PosFulfill')) {
             $test->shopifyFulfilled = true;
             $data = ['fulfillmentCreate' => ['fulfillment' => ['id' => 'gid://shopify/Fulfillment/9', 'status' => 'SUCCESS'], 'userErrors' => []]];
@@ -606,4 +621,436 @@ it('durably cancels an unknown browser request before a delayed preparation can 
     posNativeCollector($this);
     $this->postJson($this->base.'/handoffs/'.$basket['id'].'/claim')->assertConflict();
     expect($this->store->rows('sales', $this->tenant->id)->count())->toBe(0);
+});
+
+// Event pilot integration fixtures are exclusively synthetic and stay in the disposable DB.
+function posPilotFixture($test): string
+{
+    config()->set(['pos_live.pilot_enabled' => true, 'pos_live.stripe_terminal_enabled' => true,
+        'pos_live.stripe_environment' => 'sandbox', 'pos_live.stripe_secret' => 'sk_test_fixture',
+        'pos_live.stripe_platform_account' => 'acct_platformfixture', 'pos_live.web_build' => 'pilot-test-build']);
+    $test->pilot = '/pos/staff/'.$test->tenant->slug.'/terminal';
+    $test->pilotDevice = 'web-'.bin2hex(random_bytes(16));
+    $test->withoutHeader('Authorization')->actingAs($test->actor, 'web')->withSession(['pos_web_device' => $test->pilotDevice]);
+    $test->store->rows('connections', $test->tenant->id)->where('id', $test->connection)->update(['provider' => 'stripe_terminal',
+        'merchant_id' => 'acct_fixture', 'provider_location_id' => 'tml_fixture', 'credentials' => $test->store->encrypt(['platform_account' => 'acct_platformfixture'])]);
+    $test->store->rows('registers', $test->tenant->id)->where('id', $test->register)->update(['provider' => 'stripe_terminal', 'configuration' => $test->store->encrypt([
+        'catalog_reviewed' => true, 'tax_reviewed' => true, 'tax_valid_until' => now()->addDay()->toIso8601String(),
+        'tax_address' => ['address1' => '1 Fixture Road', 'city' => 'Example', 'provinceCode' => 'SC', 'zip' => '29642', 'countryCode' => 'US']])]);
+    $test->store->rows('items', $test->tenant->id)->where('id', $test->item)->update(['quantity' => 10]);
+    $test->store->rows('readers', $test->tenant->id)->insert($test->store->values($test->tenant->id, ['id' => str_repeat('e', 32),
+        'register_id' => $test->register, 'connection_id' => $test->connection, 'reader_id' => 'tmr_fixture', 'location_id' => 'tml_fixture',
+        'identity_hash' => hash('sha256', 'fixture'.$test->tenant->id), 'state' => 'online', 'verified_at' => now()]));
+    $test->operator = $test->postJson($test->pilot.'/owner/staff', ['name' => 'Fixture owner', 'role' => 'admin', 'active' => true, 'user_id' => $test->actor->id, 'pin' => '123456'])->assertOk()->json('operator_id');
+    $test->cashier = $test->postJson($test->pilot.'/owner/staff', ['name' => 'Fixture cashier', 'role' => 'cashier', 'active' => true, 'pin' => '654321'])->assertOk()->json('operator_id');
+    $test->postJson($test->pilot.'/owner/timezone', ['timezone' => 'America/New_York'])->assertOk();
+    $test->postJson($test->pilot.'/owner/enroll', ['register_id' => $test->register, 'name' => 'Fixture device', 'shared' => false])->assertOk();
+    $test->assertGuest('web');
+    $test->actingAs($test->actor, 'web'); // A fresh individual sign-in after enrollment.
+    $test->event = $test->postJson($test->pilot.'/events', ['name' => 'Fixture event', 'timezone' => 'America/New_York',
+        'starts_at' => now()->subMinute()->toIso8601String(), 'ends_at' => now()->addHour()->toIso8601String(),
+        'address' => ['address1' => '1 Fixture Road', 'city' => 'Example', 'region' => 'SC', 'postal_code' => '29642', 'country' => 'US'],
+        'register_ids' => [$test->register], 'operator_ids' => [$test->operator, $test->cashier], 'shopify_routing_verified' => false])->assertOk()->json('event_id');
+    $test->postJson($test->pilot.'/events/'.$test->event.'/count', ['register_id' => $test->register, 'stage' => 'opening', 'counts' => [['item_id' => $test->item, 'quantity' => 10]]])->assertOk();
+    $test->postJson($test->pilot.'/events/'.$test->event.'/open', [])->assertOk();
+    $test->postJson($test->pilot.'/session/shift', ['event_id' => $test->event])->assertOk();
+
+    return $test->pilot.'/registers/'.$test->register;
+}
+
+function posPilotStripe($test): void
+{
+    $test->stripeState = 'requires_payment_method';
+    $test->stripeAction = null;
+    $test->stripePayload = null;
+    $test->stripeRefunds = [];
+    $test->stripeCreateFailures = 0;
+    $test->stripeCreateKeys = [];
+    Http::fake(['https://api.stripe.com/*' => function ($r) use ($test) {
+        expect(DB::connection()->transactionLevel())->toBe(0);
+        $path = parse_url($r->url(), PHP_URL_PATH);
+        if ($path === '/v1/account') {
+            return Http::response($r->hasHeader('Stripe-Account') ? ['id' => 'acct_fixture', 'type' => 'standard', 'country' => 'US', 'charges_enabled' => true, 'payouts_enabled' => true, 'capabilities' => ['card_payments' => 'active']] : ['id' => 'acct_platformfixture']);
+        }
+        if ($path === '/v1/terminal/locations/tml_fixture') {
+            return Http::response(['id' => 'tml_fixture', 'livemode' => false, 'address' => ['country' => 'US']]);
+        }
+        if ($path === '/v1/terminal/readers/tmr_fixture') {
+            return Http::response(['id' => 'tmr_fixture', 'location' => 'tml_fixture', 'livemode' => false, 'device_type' => 'simulated_stripe_s710', 'status' => 'online', 'action' => $test->stripeAction]);
+        }
+        if ($path === '/v1/payment_intents' && $r->method() === 'POST') {
+            $test->stripePayload = $r->data();
+            $test->stripeCreateKeys[] = $r->header('Idempotency-Key');
+            if ($test->stripeCreateFailures > 0) {
+                $test->stripeCreateFailures--;
+                throw new \Illuminate\Http\Client\ConnectionException('Synthetic lost creation response');
+            }
+        }
+        if ($path === '/v1/payment_intents/search') {
+            return Http::response(['has_more' => false, 'data' => []]);
+        }
+        if ($path === '/v1/terminal/readers/tmr_fixture/process_payment_intent') {
+            $test->stripeAction = ['status' => 'in_progress', 'process_payment_intent' => ['payment_intent' => 'pi_fixture']];
+
+            return Http::response(['id' => 'tmr_fixture']);
+        }
+        if ($path === '/v1/terminal/readers/tmr_fixture/cancel_action') {
+            $test->stripeAction = null;
+
+            return Http::response(['id' => 'tmr_fixture']);
+        }
+        if ($path === '/v1/payment_intents/pi_fixture/cancel') {
+            $test->stripeState = 'canceled';
+        }
+        if ($path === '/v1/payment_intents' || str_starts_with($path, '/v1/payment_intents/pi_fixture')) {
+            $value = $test->stripePayload;
+            $value['amount'] = (int) $value['amount'];
+
+            return Http::response([...$value, 'id' => 'pi_fixture', 'livemode' => false, 'status' => $test->stripeState,
+                'amount_received' => $test->stripeState === 'succeeded' ? $value['amount'] : 0,
+                'latest_charge' => ['id' => 'ch_fixture', 'payment_intent' => 'pi_fixture', 'amount' => $value['amount'], 'currency' => 'usd', 'paid' => true, 'captured' => true,
+                    'receipt_url' => 'https://pay.stripe.com/receipts/fixture', 'payment_method_details' => ['type' => 'card_present', 'card_present' => ['brand' => 'visa', 'last4' => '4242']]]]);
+        }
+        if ($path === '/v1/refunds' && $r->method() === 'POST') {
+            $d = $r->data();
+            $id = 're_'.substr(hash('sha256', $d['metadata']['pos_request']), 0, 12);
+            $test->stripeRefunds[$id] = ['id' => $id, 'payment_intent' => 'pi_fixture', 'amount' => (int) $d['amount'], 'currency' => 'usd', 'status' => 'succeeded', 'metadata' => $d['metadata']];
+
+            return Http::response($test->stripeRefunds[$id]);
+        }
+        if ($path === '/v1/refunds') {
+            return Http::response(['has_more' => false, 'data' => array_values($test->stripeRefunds)]);
+        }
+        if (str_starts_with($path, '/v1/refunds/re_')) {
+            return Http::response($test->stripeRefunds[basename($path)]);
+        }
+
+        return Http::response(['fixture_unhandled' => $path], 500);
+    }]);
+}
+
+it('enrolls an event register with canonical staff identity and no preview data', function (): void {
+    $web = posPilotFixture($this);
+    $this->get($this->pilot)->assertOk()->assertSee('Everbranch Pay')->assertDontSee('SAMPLE-');
+    $quote = $this->postJson($web.'/quotes', $this->selection)->assertOk()->json();
+    $sale = $this->store->rows('sales', $this->tenant->id)->where('id', $quote['sale_id'])->first();
+    expect($sale->operator_id)->toBe($this->operator)->and($sale->event_id)->toBe($this->event)->and($sale->device_record_id)->not->toBeNull()->and($sale->confirmed_at)->toBeNull();
+    $this->getJson($this->pilot.'/activity?scope=company&period=day&date='.now()->format('Y-m-d'))->assertOk()->assertJsonPath('totals.collected_minor', 0);
+});
+
+it('logs out the owner for a PIN register and enforces PIN lockout and immediate revocation', function (): void {
+    posPilotFixture($this);
+    $this->postJson($this->pilot.'/owner/enroll', ['register_id' => $this->register, 'name' => 'Shared fixture', 'shared' => true])->assertOk();
+    $this->assertGuest('web');
+    for ($i = 0; $i < 5; $i++) {
+        $this->postJson($this->pilot.'/session/unlock', ['operator_id' => $this->cashier, 'pin' => '000000'])->assertForbidden();
+    }
+    $this->postJson($this->pilot.'/session/unlock', ['operator_id' => $this->cashier, 'pin' => '654321'])->assertStatus(429);
+    $this->postJson($this->pilot.'/session/unlock', ['operator_id' => $this->operator, 'pin' => '123456'])->assertOk();
+    $this->getJson($this->pilot.'/state')->assertOk()->assertJsonPath('operator.id', $this->operator)->assertJsonPath('operator.role', 'manager')->assertJsonPath('owner_setup', false);
+    $this->postJson($this->pilot.'/owner/timezone', ['timezone' => 'UTC'])->assertUnauthorized();
+    $this->getJson($this->pilot.'/activity?scope=company&period=year&date=2026')->assertForbidden();
+    $this->store->rows('devices', $this->tenant->id)->update(['active' => false]);
+    $this->getJson($this->pilot.'/state')->assertForbidden();
+});
+
+it('locks an inactive shared register without losing original payment recovery identifiers', function (): void {
+    posPilotFixture($this);
+    $this->postJson($this->pilot.'/owner/enroll', ['register_id' => $this->register, 'name' => 'Shared fixture', 'shared' => true])->assertOk();
+    $this->postJson($this->pilot.'/session/unlock', ['operator_id' => $this->cashier, 'pin' => '654321'])->assertOk();
+    $this->postJson($this->pilot.'/session/touch', [])->assertOk();
+    $this->getJson($this->pilot.'/state')->assertJsonPath('operator.id', $this->cashier);
+    $this->store->rows('register_sessions', $this->tenant->id)->update(['last_used_at' => now()->subMinutes(6)]);
+    $this->getJson($this->pilot.'/state')->assertOk()->assertJsonPath('operator', null);
+    $this->postJson($this->pilot.'/session/shift', ['event_id' => $this->event])->assertStatus(423);
+    $this->postJson($this->pilot.'/session/unlock', ['operator_id' => $this->cashier, 'pin' => '654321'])->assertOk();
+    $this->getJson($this->pilot.'/state')->assertJsonPath('operator.id', $this->cashier);
+});
+
+it('collects through Stripe and retries only the original declined PaymentIntent', function (): void {
+    $web = posPilotFixture($this);
+    posPilotStripe($this);
+    $sale = $this->postJson($web.'/quotes', $this->selection)->assertOk()->json('sale_id');
+    $this->postJson($web.'/sales/'.$sale.'/collect', [])->assertOk()->assertJsonPath('canonical_confirmation', false)->assertJsonMissingPath('collection.access_token');
+    $this->stripeAction = ['status' => 'failed', 'process_payment_intent' => ['payment_intent' => 'pi_fixture']];
+    $this->postJson($web.'/sales/'.$sale.'/reconcile', [])->assertOk()->assertJsonPath('retry_available', true);
+    $this->postJson($web.'/sales/'.$sale.'/retry', [])->assertOk();
+    $this->stripeState = 'succeeded';
+    $this->postJson($web.'/sales/'.$sale.'/reconcile', [])->assertOk()->assertJsonPath('canonical_confirmation', true)->assertJsonPath('stock_state', 'committed');
+    $this->postJson($web.'/sales/'.$sale.'/collect', [])->assertOk();
+    $this->getJson($web.'/sales/'.$sale.'/receipt')->assertOk()->assertJsonPath('attribution.operator_id', $this->operator)->assertJsonPath('provider_receipt.card_last4', '4242');
+    expect($this->store->rows('items', $this->tenant->id)->where('id', $this->item)->value('quantity'))->toBe(9);
+    $created = collect(Http::recorded())->filter(fn ($pair) => parse_url($pair[0]->url(), PHP_URL_PATH) === '/v1/payment_intents' && $pair[0]->method() === 'POST');
+    expect($created)->toHaveCount(1);
+});
+
+it('keeps explicit partial refund and restock decisions immutable and reports only confirmed money', function (): void {
+    $web = posPilotFixture($this);
+    posPilotStripe($this);
+    $sale = $this->postJson($web.'/quotes', $this->selection)->assertOk()->json('sale_id');
+    $this->postJson($web.'/sales/'.$sale.'/collect', [])->assertOk();
+    $this->stripeState = 'succeeded';
+    $this->postJson($web.'/sales/'.$sale.'/reconcile', [])->assertOk();
+    $input = ['request_id' => (string) Str::uuid(), 'amount_minor' => 535, 'reason' => 'requested_by_customer', 'restock' => true, 'restock_lines' => [['item_id' => $this->item, 'quantity' => 1]]];
+    $this->postJson($web.'/sales/'.$sale.'/refund', $input)->assertOk()->assertJsonPath('state', 'succeeded');
+    $this->postJson($web.'/sales/'.$sale.'/refund', $input)->assertOk();
+    expect($this->store->rows('items', $this->tenant->id)->where('id', $this->item)->value('quantity'))->toBe(10);
+    $changed = $input;
+    $changed['restock'] = false;
+    $changed['restock_lines'] = [];
+    $this->postJson($web.'/sales/'.$sale.'/refund', $changed)->assertConflict();
+    $this->getJson($this->pilot.'/activity?scope=company&period=year&date='.now()->year)->assertOk()->assertJsonPath('totals.collected_minor', 1070)->assertJsonPath('totals.refund_minor', 535)->assertJsonPath('totals.net_minor', 535);
+});
+
+it('recovers a lost Stripe creation response without replacing the idempotency key or collecting in background', function (): void {
+    $web = posPilotFixture($this);
+    posPilotStripe($this);
+    $this->stripeCreateFailures = 1;
+    $sale = $this->postJson($web.'/quotes', $this->selection)->assertOk()->json('sale_id');
+    $this->postJson($web.'/sales/'.$sale.'/collect', [])->assertOk()->assertJsonPath('canonical_confirmation', false);
+    $this->postJson($web.'/sales/'.$sale.'/reconcile', [])->assertOk()->assertJsonPath('resume_available', true);
+    $this->artisan('pos:reconcile', ['--tenant' => $this->tenant->id])->assertExitCode(0);
+    expect(collect(Http::recorded())->filter(fn ($p) => str_ends_with(parse_url($p[0]->url(), PHP_URL_PATH), 'process_payment_intent')))->toHaveCount(0);
+    $this->postJson($web.'/sales/'.$sale.'/resume', [])->assertOk();
+    $creates = collect(Http::recorded())->filter(fn ($p) => parse_url($p[0]->url(), PHP_URL_PATH) === '/v1/payment_intents' && $p[0]->method() === 'POST');
+    expect($this->stripeCreateKeys)->toHaveCount(2)->and(collect($this->stripeCreateKeys)->unique()->count())->toBe(1);
+});
+
+it('requires provider review after the conservative Stripe idempotency window', function (): void {
+    $web = posPilotFixture($this);
+    posPilotStripe($this);
+    $this->stripeCreateFailures = 1;
+    $sale = $this->postJson($web.'/quotes', $this->selection)->assertOk()->json('sale_id');
+    $this->postJson($web.'/sales/'.$sale.'/collect', [])->assertOk();
+    $this->store->rows('stripe_operations', $this->tenant->id)->where('id', $sale)->update(['created_at' => now()->subHours(24)]);
+    $this->postJson($web.'/sales/'.$sale.'/resume', [])->assertOk()->assertJsonPath('resume_available', false)->assertJsonPath('review_required', true);
+    expect($this->stripeCreateKeys)->toHaveCount(1);
+});
+
+it('reserves a shared reader before holding a second cashiers stock and cancels only the original intent', function (): void {
+    $web = posPilotFixture($this);
+    posPilotStripe($this);
+    $first = $this->postJson($web.'/quotes', $this->selection)->assertOk()->json('sale_id');
+    $this->postJson($web.'/sales/'.$first.'/collect', [])->assertOk();
+    $input = $this->selection;
+    $input['request_id'] = (string) Str::uuid();
+    $second = $this->postJson($web.'/quotes', $input)->assertOk()->json('sale_id');
+    $this->postJson($web.'/sales/'.$second.'/collect', [])->assertConflict();
+    expect($this->store->rows('holds', $this->tenant->id)->where('sale_id', $second)->count())->toBe(0);
+    $this->postJson($web.'/sales/'.$first.'/cancel', [])->assertOk()->assertJsonPath('state', 'cancelled')->assertJsonPath('stock_state', 'released');
+    expect($this->store->rows('stripe_operations', $this->tenant->id)->where('id', $first)->value('active_reader_claim'))->toBeNull();
+    expect(collect(Http::recorded())->filter(fn ($p) => parse_url($p[0]->url(), PHP_URL_PATH) === '/v1/payment_intents' && $p[0]->method() === 'POST'))->toHaveCount(1);
+});
+
+it('pauses new collection and retry while retaining original status and cancellation', function (): void {
+    $web = posPilotFixture($this);
+    posPilotStripe($this);
+    $sale = $this->postJson($web.'/quotes', $this->selection)->assertOk()->json('sale_id');
+    $this->postJson($web.'/sales/'.$sale.'/collect', [])->assertOk();
+    $this->stripeAction = ['status' => 'failed', 'process_payment_intent' => ['payment_intent' => 'pi_fixture']];
+    $this->postJson($this->pilot.'/owner/pause', ['register_id' => $this->register])->assertOk();
+    $this->postJson($web.'/sales/'.$sale.'/retry', [])->assertStatus(503);
+    $this->getJson($web.'/sales/'.$sale.'/status')->assertOk();
+    $this->postJson($web.'/sales/'.$sale.'/cancel', [])->assertOk()->assertJsonPath('state', 'cancelled');
+});
+
+it('rejects revoked event assignments and changed event or tax terms before charging', function (): void {
+    $web = posPilotFixture($this);
+    posPilotStripe($this);
+    $sale = $this->postJson($web.'/quotes', $this->selection)->assertOk()->json('sale_id');
+    $this->store->rows('trade_events', $this->tenant->id)->where('id', $this->event)->increment('version');
+    $this->postJson($web.'/sales/'.$sale.'/collect', [])->assertConflict();
+    Http::assertNothingSent();
+    $this->postJson($this->pilot.'/owner/assignment', ['event_id' => $this->event, 'operator_id' => $this->operator, 'active' => false])->assertOk();
+    $this->postJson($web.'/quotes', [...$this->selection, 'request_id' => (string) Str::uuid()])->assertNotFound();
+});
+
+it('claims a saved basket once and reuses its original sale request', function (): void {
+    $web = posPilotFixture($this);
+    $id = $this->postJson($this->pilot.'/baskets', ['register_id' => $this->register, 'items' => $this->selection['items']])->assertOk()->json('basket_id');
+    $saved = $this->getJson($this->pilot.'/baskets/'.$id)->assertOk()->json();
+    $input = [...$this->selection, 'basket_id' => $id, 'request_id' => $saved['request_id']];
+    $quote = $this->postJson($web.'/quotes', $input)->assertOk()->json('sale_id');
+    $this->postJson($web.'/quotes', $input)->assertOk()->assertJsonPath('sale_id', $quote);
+    $this->postJson($web.'/quotes', [...$input, 'request_id' => (string) Str::uuid()])->assertConflict();
+    expect($this->store->rows('holds', $this->tenant->id)->count())->toBe(0);
+    $otherDevice = bin2hex(random_bytes(16));
+    $this->store->rows('devices', $this->tenant->id)->insert($this->store->values($this->tenant->id, ['id' => $otherDevice, 'device_key' => 'web-'.str_repeat('f', 32), 'register_id' => $this->register, 'name' => 'Other fixture device', 'enrolled_by' => $this->actor->id, 'created_at' => now()]));
+    $this->withSession(['pos_web_device' => 'web-'.str_repeat('f', 32), 'pos_pilot_individual' => null]);
+    $this->postJson($this->pilot.'/session/shift', ['event_id' => $this->event])->assertOk();
+    $this->getJson($this->pilot.'/baskets/'.$id)->assertConflict();
+});
+
+it('keeps closeout provisional until synchronization and physical stock variances resolve', function (): void {
+    posPilotFixture($this);
+    $this->postJson($this->pilot.'/events/'.$this->event.'/close', [])->assertOk()->assertJsonPath('state', 'closing');
+    $this->postJson($this->pilot.'/events/'.$this->event.'/count', ['register_id' => $this->register, 'stage' => 'closing', 'counts' => [['item_id' => $this->item, 'quantity' => 9]]])->assertOk();
+    $this->postJson($this->pilot.'/events/'.$this->event.'/finalize', [])->assertConflict();
+    $this->postJson($this->pilot.'/events/'.$this->event.'/count', ['register_id' => $this->register, 'stage' => 'closing', 'counts' => [['item_id' => $this->item, 'quantity' => 10]]])->assertOk();
+    $this->postJson($this->pilot.'/events/'.$this->event.'/finalize', [])->assertOk()->assertJsonPath('state', 'closed');
+    $this->postJson($this->pilot.'/registers/'.$this->register.'/quotes', $this->selection)->assertConflict();
+});
+
+it('verifies connected Stripe signatures and enqueues duplicate or reordered events without collecting', function (): void {
+    $web = posPilotFixture($this);
+    posPilotStripe($this);
+    config()->set('pos_live.stripe_webhook_secret', 'whsec_fixture');
+    $sale = $this->postJson($web.'/quotes', $this->selection)->assertOk()->json('sale_id');
+    $this->postJson($web.'/sales/'.$sale.'/collect', [])->assertOk();
+    $event = ['id' => 'evt_fixture', 'type' => 'payment_intent.succeeded', 'account' => 'acct_fixture', 'livemode' => false,
+        'data' => ['object' => ['id' => 'pi_fixture', 'object' => 'payment_intent', 'metadata' => ['pos_request' => $this->store->rows('sales', $this->tenant->id)->where('id', $sale)->value('payment_request_id')]]]];
+    $send = function ($body, $secret = 'whsec_fixture', $time = null) {
+        $raw = json_encode($body);
+        $time ??= time();
+
+        return $this->call('POST', '/api/pos/stripe/webhook', [], [], [], ['CONTENT_TYPE' => 'application/json', 'HTTP_STRIPE_SIGNATURE' => 't='.$time.',v1='.hash_hmac('sha256', $time.'.'.$raw, $secret)], $raw);
+    };
+    $send($event)->assertOk();
+    $send($event)->assertOk();
+    expect($this->store->rows('outbox', $this->tenant->id)->where('sale_id', $sale)->where('effect_key', 'reconcile_'.hash('sha256', 'evt_fixture'))->count())->toBe(1);
+    expect($this->store->rows('sales', $this->tenant->id)->where('id', $sale)->value('state'))->not->toBe('succeeded');
+    $send($event, 'wrong')->assertForbidden();
+    $send($event, 'whsec_fixture', time() - 301)->assertForbidden();
+    $readerEvent = [...$event, 'id' => 'evt_reader_declined', 'type' => 'terminal.reader.action_failed', 'data' => ['object' => ['id' => 'tmr_fixture', 'object' => 'terminal.reader', 'action' => ['process_payment_intent' => ['payment_intent' => 'pi_fixture'], 'status' => 'failed']]]];
+    $send($readerEvent)->assertOk();
+    expect($this->store->rows('outbox', $this->tenant->id)->where('effect_key', 'reconcile_'.hash('sha256', 'evt_reader_declined'))->exists())->toBeTrue();
+    $event['id'] = 'evt_wrong_account';
+    $event['account'] = 'acct_other';
+    $send($event)->assertOk();
+    expect($this->store->rows('outbox', $this->tenant->id)->where('effect_key', 'reconcile_'.hash('sha256', 'evt_wrong_account'))->exists())->toBeFalse();
+});
+
+it('uses company timezone boundaries and refund issue dates without changing historical sale totals', function (): void {
+    $web = posPilotFixture($this);
+    posPilotStripe($this);
+    $sale = $this->postJson($web.'/quotes', $this->selection)->assertOk()->json('sale_id');
+    $this->postJson($web.'/sales/'.$sale.'/collect', [])->assertOk();
+    $this->stripeState = 'succeeded';
+    $this->postJson($web.'/sales/'.$sale.'/reconcile', [])->assertOk();
+    $refund = ['request_id' => (string) Str::uuid(), 'amount_minor' => 535, 'reason' => 'requested_by_customer', 'restock' => false, 'restock_lines' => []];
+    $this->postJson($web.'/sales/'.$sale.'/refund', $refund)->assertOk();
+    $this->store->rows('sales', $this->tenant->id)->where('id', $sale)->update(['confirmed_at' => '2027-01-01 02:00:00']);
+    $this->store->rows('refund_details', $this->tenant->id)->where('sale_id', $sale)->update(['confirmed_at' => '2027-02-02 14:00:00']);
+    $this->getJson($this->pilot.'/activity?scope=company&period=year&date=2026')->assertOk()->assertJsonPath('totals.collected_minor', 1070)->assertJsonPath('totals.refund_minor', 0)->assertJsonPath('buckets.11.total_minor', 1070);
+    $this->getJson($this->pilot.'/activity?scope=company&period=year&date=2027')->assertOk()->assertJsonPath('totals.collected_minor', 0)->assertJsonPath('totals.refund_minor', 535)->assertJsonPath('totals.net_minor', -535);
+    $this->getJson($this->pilot.'/activity?scope=device&period=day&date=2026-12-31&bucket=21')->assertOk()->assertJsonPath('transactions.0.id', $sale);
+    $this->getJson($this->pilot.'/activity?scope=user&period=month&date=2024-02')->assertOk()->assertJsonCount(29, 'buckets');
+    $this->getJson($this->pilot.'/activity?scope=user&period=day&date=2026-02-31')->assertUnprocessable();
+});
+
+it('does not give Stripe reader readiness an Apple Tap to Pay dependency', function (): void {
+    posPilotFixture($this);
+    config()->set(['pos_live.native_client_enabled' => false, 'pos_live.tap_entitlement_verified' => false, 'pos_live.distribution_verified' => false, 'pos_live.square_signature_verified' => false]);
+    $r = $this->store->rows('registers', $this->tenant->id)->where('id', $this->register)->first();
+    $c = $this->store->rows('connections', $this->tenant->id)->where('id', $this->connection)->first();
+    expect(app(\App\Services\Pos\PosReadiness::class)->blockers($r, $c))->toBe([]);
+    $this->getJson($this->pilot.'/state')->assertOk()->assertJsonPath('registers.0.provider', 'stripe_terminal')->assertJsonPath('registers.0.blockers', []);
+});
+
+it('keeps original refunds recoverable without a replacement request', function (): void {
+    $web = posPilotFixture($this);
+    posPilotStripe($this);
+    $sale = $this->postJson($web.'/quotes', $this->selection)->assertOk()->json('sale_id');
+    $this->postJson($web.'/sales/'.$sale.'/collect', [])->assertOk();
+    $this->stripeState = 'succeeded';
+    $this->postJson($web.'/sales/'.$sale.'/reconcile', [])->assertOk();
+    $input = ['request_id' => (string) Str::uuid(), 'amount_minor' => 200, 'reason' => 'other', 'restock' => false, 'restock_lines' => []];
+    $this->postJson($web.'/sales/'.$sale.'/refund', $input)->assertOk();
+    $this->postJson($web.'/sales/'.$sale.'/refund-status', ['request_id' => $input['request_id']])->assertOk()->assertJsonPath('state', 'succeeded');
+    $this->postJson($web.'/sales/'.$sale.'/refund-resume', ['request_id' => $input['request_id']])->assertOk()->assertJsonPath('state', 'succeeded');
+    expect($this->stripeRefunds)->toHaveCount(1);
+});
+
+it('reassigns a cleared device between event registers without changing its reporting identity', function (): void {
+    $web = posPilotFixture($this);
+    $device = $this->getJson($this->pilot.'/state')->assertOk()->json('device.id');
+    $next = (array) $this->store->rows('registers', $this->tenant->id)->where('id', $this->register)->first();
+    $next['id'] = str_repeat('9', 32);
+    $next['location_id'] = 'fixture_next_event';
+    $next['name'] = 'Next event register';
+    $this->store->rows('registers', $this->tenant->id)->insert($next);
+    $this->postJson($web.'/quotes', $this->selection)->assertOk();
+    $request = ['register_id' => $next['id'], 'name' => 'Same phone, next event', 'shared' => false];
+    $this->postJson($this->pilot.'/owner/enroll', $request)->assertConflict();
+    $this->postJson($web.'/requests/'.$this->selection['request_id'].'/cancel', [])->assertOk();
+    $this->postJson($this->pilot.'/owner/enroll', $request)->assertOk()->assertJsonPath('device_id', $device);
+    $this->assertGuest('web');
+    $this->actingAs($this->actor, 'web');
+    $this->getJson($this->pilot.'/state')->assertOk()->assertJsonPath('device.register_id', $next['id'])->assertJsonPath('operator.id', $this->operator)->assertJsonPath('current_shift', null);
+});
+
+it('denies another runtime and tenant for a server-enrolled POS device', function (): void {
+    posPilotFixture($this);
+    config()->set('pos_live.runtime_id', 'another_fixture_runtime');
+    $this->getJson($this->pilot.'/state')->assertOk()->assertJsonPath('device', null)->assertJsonCount(0, 'registers');
+    $this->getJson($this->pilot.'/activity?scope=company&period=year&date=2026')->assertForbidden();
+});
+
+it('verifies Shopify refund restocking after a lost response without creating another refund', function (): void {
+    posFixtureShopify($this);
+    $id = posFixtureQuote($this)['sale_id'];
+    $this->postJson($this->base.'/sales/'.$id.'/collect')->assertOk();
+    posFixtureSquarePayment($this, $id);
+    $this->postJson($this->base.'/sales/'.$id.'/reconcile', ['payment_id' => 'fixture_payment'])->assertOk();
+    $sale = $this->store->rows('sales', $this->tenant->id)->where('id', $id)->first();
+    $operation = ['id' => str_repeat('a', 32), 'request_id' => (string) Str::uuid(), 'amount_minor' => 535];
+    $this->store->rows('refund_details', $this->tenant->id)->insert($this->store->values($this->tenant->id, ['id' => str_repeat('b', 32), 'sale_id' => $id, 'request_id' => $operation['request_id'], 'operator_id' => str_repeat('c', 32), 'amount_minor' => 535, 'decision' => $this->store->encrypt(['reason' => 'other', 'restock' => true, 'lines' => [['item_id' => 'gid://shopify/ProductVariant/3', 'quantity' => 1]]]), 'created_at' => now()]));
+    $commerce = app(\App\Services\Pos\ShopifyPosCommerce::class);
+    $scope = app(\App\Services\Pos\PosAccess::class)->register($this->register);
+    $this->shopifyRefundResponseLost = true;
+    expect(fn () => $commerce->refund($scope, $sale, $operation))->toThrow(\App\Services\Pos\PosException::class, 'shopify_operation_unconfirmed');
+    expect($this->shopifyRefundCreates)->toBe(1);
+    $this->shopifyRefunds[0]['refundLineItems']['nodes'][0]['location']['id'] = 'gid://shopify/Location/999';
+    expect(fn () => $commerce->refund($scope, $sale, $operation))->toThrow(\App\Services\Pos\PosException::class, 'shopify_refund_restock_mismatch');
+    $this->shopifyRefunds[0]['refundLineItems']['nodes'][0]['location']['id'] = 'gid://shopify/Location/2';
+    $commerce->refund($scope, $sale, $operation);
+    expect($this->shopifyRefundCreates)->toBe(1);
+});
+
+it('requires separate physical Shopify locations for overlapping events even through different internal locations', function (): void {
+    posPilotFixture($this);
+    $this->store->rows('trade_events', $this->tenant->id)->update(['state' => 'closed']);
+    $config = $this->store->decrypt($this->store->rows('registers', $this->tenant->id)->first()->configuration);
+    $config['shopify_acceptance_verified'] = true;
+    $config['shopify'] = ['store_id' => 1, 'location_id' => 'gid://shopify/Location/2', 'tax_address' => $config['tax_address']];
+    $this->store->rows('registers', $this->tenant->id)->update(['catalog_source' => 'shopify', 'configuration' => $this->store->encrypt($config)]);
+    $next = (array) $this->store->rows('registers', $this->tenant->id)->first();
+    $next['id'] = str_repeat('9', 32);
+    $next['location_id'] = 'different_internal_location';
+    $this->store->rows('registers', $this->tenant->id)->insert($next);
+    $input = ['name' => 'Parallel fixture event', 'timezone' => 'America/New_York', 'starts_at' => now()->subMinute()->toIso8601String(), 'ends_at' => now()->addHour()->toIso8601String(), 'address' => ['address1' => '1 Fixture Road', 'city' => 'Example', 'region' => 'SC', 'postal_code' => '29642', 'country' => 'US'], 'register_ids' => [$this->register], 'operator_ids' => [$this->operator], 'shopify_routing_verified' => true];
+    $this->postJson($this->pilot.'/events', $input)->assertOk();
+    $input['register_ids'] = [$next['id']];
+    $this->postJson($this->pilot.'/events', $input)->assertConflict()->assertJsonPath('error.code', 'event_stock_location_in_use');
+    $config['shopify']['location_id'] = 'gid://shopify/Location/3';
+    $this->store->rows('registers', $this->tenant->id)->where('id', $next['id'])->update(['configuration' => $this->store->encrypt($config)]);
+    $this->postJson($this->pilot.'/events', $input)->assertOk();
+});
+
+it('shows confirmed refund bookkeeping separately and requires a fresh closing count after a refund', function (): void {
+    $web = posPilotFixture($this);
+    posPilotStripe($this);
+    $sale = $this->postJson($web.'/quotes', $this->selection)->assertOk()->json('sale_id');
+    $this->postJson($web.'/sales/'.$sale.'/collect', [])->assertOk();
+    $this->stripeState = 'succeeded';
+    $this->postJson($web.'/sales/'.$sale.'/reconcile', [])->assertOk();
+    $this->postJson($web.'/sales/'.$sale.'/reconcile', [])->assertOk(); // Finish the independently queued receipt effect.
+    $this->postJson($this->pilot.'/events/'.$this->event.'/close', [])->assertOk();
+    $count = ['register_id' => $this->register, 'stage' => 'closing', 'counts' => [['item_id' => $this->item, 'quantity' => 9]]];
+    $this->postJson($this->pilot.'/events/'.$this->event.'/count', $count)->assertOk();
+    $this->postJson($this->pilot.'/events/'.$this->event.'/finalize', [])->assertOk()->assertJsonPath('provisional', false)->assertJsonPath('tax_minor', 70)->assertJsonPath('subtotal_minor', 1000);
+    $input = ['request_id' => (string) Str::uuid(), 'amount_minor' => 535, 'reason' => 'other', 'restock' => false, 'restock_lines' => []];
+    $this->postJson($web.'/sales/'.$sale.'/refund', $input)->assertOk();
+    $this->getJson($web.'/sales/'.$sale.'/receipt')->assertOk()->assertJsonPath('refunds.0.state', 'succeeded')->assertJsonPath('refunds.0.synchronization_pending', false);
+    $this->postJson($this->pilot.'/events/'.$this->event.'/inspect', [])->assertOk()->assertJsonPath('provisional', true)->assertJsonPath('refund_minor', 535)->assertJsonPath('net_minor', 535);
+    $this->postJson($this->pilot.'/events/'.$this->event.'/finalize', [])->assertConflict();
+    $this->postJson($this->pilot.'/events/'.$this->event.'/count', $count)->assertOk();
+    $this->postJson($this->pilot.'/events/'.$this->event.'/finalize', [])->assertOk()->assertJsonPath('provisional', false);
+});
+
+it('blocks a Shopify price change between catalog lookup and calculated tax before creating a sale', function (): void {
+    posFixtureShopify($this);
+    $this->shopifyDraftPrice = '11.00';
+    $this->postJson($this->base.'/quotes', $this->selection)->assertConflict()->assertJsonPath('error.code', 'shopify_quote_mismatch');
+    expect($this->store->rows('sales', $this->tenant->id)->count())->toBe(0)->and($this->shopifyCreates)->toBe(0);
 });

@@ -3,10 +3,20 @@
 // Every provider/configuration value belongs to this isolated runtime's ENV.
 // No fallback to retail POS variables or credentials is permitted.
 return [
+    'pilot_enabled' => (bool) env('ENTERPRISE_POS_PILOT_ENABLED', false),
     'enabled' => (bool) env('ENTERPRISE_POS_ENABLED', false),
     'collection_enabled' => (bool) env('ENTERPRISE_POS_COLLECTION_ENABLED', false),
     'servicing_enabled' => (bool) env('ENTERPRISE_POS_SERVICING_ENABLED', false),
     'runtime_id' => env('ENTERPRISE_POS_RUNTIME_ID'),
+    'stripe_terminal_enabled' => (bool) env('ENTERPRISE_POS_STRIPE_TERMINAL_ENABLED', false),
+    'stripe_setup_enabled' => (bool) env('ENTERPRISE_POS_STRIPE_SETUP_ENABLED', false),
+    'stripe_secret' => env('ENTERPRISE_POS_STRIPE_SECRET'),
+    'stripe_platform_account' => env('ENTERPRISE_POS_STRIPE_PLATFORM_ACCOUNT'),
+    'stripe_environment' => env('ENTERPRISE_POS_STRIPE_ENVIRONMENT', 'sandbox'),
+    'stripe_webhook_secret' => env('ENTERPRISE_POS_STRIPE_WEBHOOK_SECRET'),
+    'stripe_webhooks_verified' => (bool) env('ENTERPRISE_POS_STRIPE_WEBHOOKS_VERIFIED', false),
+    'web_build' => env('ENTERPRISE_POS_WEB_BUILD'),
+    'stripe_api_version' => '2025-06-30.basil',
     'native_client_enabled' => (bool) env('ENTERPRISE_POS_NATIVE_CLIENT_ENABLED', false),
     'square_application_id' => env('ENTERPRISE_POS_SQUARE_APPLICATION_ID'),
     'square_application_secret' => env('ENTERPRISE_POS_SQUARE_APPLICATION_SECRET'),

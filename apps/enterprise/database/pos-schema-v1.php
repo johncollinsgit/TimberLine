@@ -7,4 +7,6 @@ return [
     '2026_10_22_190100_create_payment_core_quotes_table.php' => '0e3329bbde9bfc11e5799fc599aa37cd23532dfde3e070826f8743889c7eba5c',
     '2026_10_24_010000_create_pos_live_tables.php' => 'c5b831fd5af01f2d17a4aafde586669010f5121325de453ff09354a9227378d5',
     '2026_10_24_030000_create_pos_live_handoffs.php' => 'e35823f31cf1af622b59be3dd3051471aaa5b6f978d447a85c269d1f956c8c5d',
+    '2026_10_24_050000_create_pos_stripe_adapter.php' => 'cc4d5fc760f0da4a975728c70eb8e2065a8ab8ca674ab6401d0540b6a1891850',
+    '2026_10_24_060000_create_pos_pilot_operations.php' => 'a618682483e4b997a6263f290d1d33ae6ccfe6e1ab6678e5e18e207fd4f243ab',
 ];

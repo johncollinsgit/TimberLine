@@ -132,6 +132,9 @@ jobs:
       - name: Verify Fleet embedding and allowance in Chromium and WebKit
         run: npm run test:highlevel-fleet
 
+      - name: Verify event register and reporting in Chromium and WebKit
+        run: node scripts/qa/pos-pilot-browser.mjs
+
       - name: Verify conversational voice, memory and stop controls with fictional fixtures
         run: node tests/browser/ai-voice-conversation.smoke.mjs
 
@@ -261,7 +264,7 @@ jobs:
       - name: Verify live POS merchant, stock, Shopify and refund boundaries
         env:
           POS_LIVE_DISPOSABLE_MYSQL: '1'
-        run: php ./vendor/bin/pest tests/PosLive tests/Integration/PosLiveMySqlRecoveryTest.php tests/Integration/PosLiveMySqlConcurrencyTest.php --compact
+        run: php ./vendor/bin/pest tests/PosLive tests/Integration/PosLiveMySqlRecoveryTest.php tests/Integration/PosPilotMySqlRecoveryTest.php tests/Integration/PosLiveMySqlConcurrencyTest.php --compact
 
       - name: Rehearse prior production schema upgrade
         run: scripts/ci/rehearse-migrations.sh "${{ steps.migration-base.outputs.sha }}"

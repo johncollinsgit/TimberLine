@@ -13,7 +13,7 @@ use Illuminate\Console\Command;
 /** An operator records reviewed facts; this does not create provider or Apple permissions. */
 final class PosActivateCommand extends Command
 {
-    protected $signature = 'pos:activate {tenant} {register} {--actor=} {--review=} {--build=} {--acceptance-device=} {--acceptance-minutes=60} {--acceptance-cap=500} {--apply}';
+    protected $signature = 'pos:activate {tenant} {register} {--actor=} {--review=} {--build=} {--acceptance-device=} {--acceptance-operator=} {--acceptance-minutes=60} {--acceptance-cap=500} {--apply}';
 
     protected $description = 'Preview/activate one reviewed register or a bounded named-device acceptance session';
 
@@ -32,18 +32,19 @@ final class PosActivateCommand extends Command
             throw new PosException('private_merchant_review_required');
         }
         $review = json_decode(file_get_contents($path), true, 32, JSON_THROW_ON_ERROR);
+        $register = $store->rows('registers', $tenant)->where('id', $this->argument('register'))->firstOrFail();
+        $stripe = ($register->provider ?? 'square_native') === 'stripe_terminal';
         if (! is_array($review) || ($review['tenant_id'] ?? null) !== $tenant
             || ! is_string($review['actual_processing_rate'] ?? null) || strlen($review['actual_processing_rate']) < 3
             || strlen($review['actual_processing_rate']) > 200 || ($review['everbranch_markup_minor'] ?? null) !== 0
-            || ($review['paid_square_subscription_added'] ?? null) !== false) {
+            || ($stripe ? ($review['everbranch_application_fee_minor'] ?? null) !== 0 : ($review['paid_square_subscription_added'] ?? null) !== false)) {
             throw new PosException('merchant_rate_review_required');
         }
-        $register = $store->rows('registers', $tenant)->where('id', $this->argument('register'))->firstOrFail();
-        $connection = $square->connection($tenant, $register->connection_id);
+        $connection = $stripe ? $store->rows('connections', $tenant)->where('id', $register->connection_id)->firstOrFail() : $square->connection($tenant, $register->connection_id);
         if (($review['merchant_id'] ?? null) !== $connection->merchant_id || ($review['location_id'] ?? null) !== $connection->provider_location_id) {
             throw new PosException('merchant_review_binding_mismatch');
         }
-        $square->verify($connection, false);
+        app(\App\Services\Pos\PosProviders::class)->verify($connection, false);
         $connection->active = true;
         $connection->verified_at = now()->toDateTimeString();
         $settings = $store->decrypt($register->configuration);
@@ -51,18 +52,25 @@ final class PosActivateCommand extends Command
         if (! is_string($build) || ! preg_match('/^[A-Za-z0-9._-]{1,100}$/D', $build)) {
             throw new PosException('exact_build_required');
         }
+        if ($stripe && $build !== config('pos_live.web_build')) {
+            throw new PosException('exact_web_build_required');
+        }
         if ($device = $this->option('acceptance-device')) {
             $minutes = (int) $this->option('acceptance-minutes');
             $cap = (int) $this->option('acceptance-cap');
             if ($minutes < 1 || $minutes > 120 || $cap < 1 || $cap > 1000
-                || ! $store->rows('assignments', $tenant)->where('register_id', $register->id)->where('user_id', $actor->id)
-                    ->where('device_id', $device)->where('active', true)->exists()) {
+                || ($stripe ? ! $store->rows('devices', $tenant)->where('register_id', $register->id)->where('device_key', $device)->where('active', true)->exists() : ! $store->rows('assignments', $tenant)->where('register_id', $register->id)->where('user_id', $actor->id)->where('device_id', $device)->where('active', true)->exists())) {
                 throw new PosException('bounded_assigned_acceptance_required');
             }
-            $settings['acceptance'] = ['actor_id' => $actor->id, 'device_id' => $device, 'build' => $build,
+            if ($stripe && (! is_string($this->option('acceptance-operator')) || ! $store->rows('operators', $tenant)->where('id', $this->option('acceptance-operator'))->where('active', true)->exists())) {
+                throw new PosException('named_acceptance_operator_required');
+            }
+            $settings['acceptance'] = ['operator_id' => $stripe ? $this->option('acceptance-operator') : null, 'actor_id' => $actor->id, 'device_id' => $device, 'build' => $build,
                 'expires_at' => now()->addMinutes($minutes)->toIso8601String(), 'max_amount_minor' => $cap];
-        } elseif ($connection->acceptance_build !== $build || ! $connection->acceptance_at) {
+        } elseif (($stripe ? $store->rows('readers', $tenant)->where('register_id', $register->id)->value('acceptance_build') : $connection->acceptance_build) !== $build || ! ($stripe ? $store->rows('readers', $tenant)->where('register_id', $register->id)->value('acceptance_at') : $connection->acceptance_at)) {
             throw new PosException('physical_build_acceptance_required');
+        } else {
+            unset($settings['acceptance']);
         }
         $settings['merchant_review'] = ['actor_id' => $actor->id, 'reviewed_at' => now()->toIso8601String(),
             'document_hash' => hash_file('sha256', $path), 'actual_processing_rate' => $review['actual_processing_rate'], 'markup_minor' => 0];

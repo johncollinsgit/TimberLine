@@ -16,7 +16,9 @@ class PosLiveTestCase extends \Tests\TestCase
             }
             \App\Services\Pos\PosSchema::install();
             \App\Services\Pos\PosHandoffSchema::install();
-            foreach (['handoffs', 'events', 'outbox', 'holds', 'sales', 'items', 'assignments', 'registers', 'connections', 'merchants'] as $name) {
+            \App\Services\Pos\PosStripeSchema::install();
+            \App\Services\Pos\PosPilotSchema::install();
+            foreach (['operators', 'devices', 'register_sessions', 'trade_events', 'event_staff', 'event_registers', 'shifts', 'baskets', 'favorites', 'stock_counts', 'refund_details', 'company_settings', 'readers', 'stripe_operations', 'handoffs', 'events', 'outbox', 'holds', 'sales', 'items', 'assignments', 'registers', 'connections', 'merchants'] as $name) {
                 $db->table('pos_live_'.$name)->delete();
             }
             $db->table('payment_core_events')->delete();

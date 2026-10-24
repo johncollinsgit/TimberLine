@@ -5,6 +5,8 @@ use App\Http\Middleware\PosWebSession;
 use App\Http\Middleware\ResolvePosTenant;
 use Illuminate\Support\Facades\Route;
 
+require __DIR__.'/pos-pilot.php';
+
 Route::middleware(['auth', 'verified', ResolvePosTenant::class, PosWebSession::class])
     ->prefix(config('enterprise.runtime') ? '/enterprise/pos/staff/{tenant}' : '/pos/staff/{tenant}')
     ->name(config('enterprise.runtime') ? 'enterprise.pos.web.' : 'pos.web.')

@@ -1,3 +1,20 @@
+## Everbranch Pay event pilot (October 24, 2026; source candidate, disabled)
+
+The approved staff web design now has a separate authenticated event-register
+surface, canonical individual/PIN staff identities, restricted enrolled browser
+sessions, events/shifts, stock counts, saved baskets, favorites, live-journal
+reporting/graphs/CSV and provisional closeout. Stripe S710 server-driven support
+uses original-account idempotent payments/refunds, verified connected callbacks,
+reader contention guards and provider-specific readiness independent of Apple.
+No preview records migrate into production. Shared enrollment logs out the
+owner; PIN sessions cannot administer company payment accounts. Enterprise
+retains independent schema/configuration/callbacks without wider activation.
+Collection is still default-off; actual reader/merchant/Shopify/tax/settlement
+acceptance and protected exact-build deployment remain required. The private
+Everbranch Pay Preview was installed/launched separately on John's iPhone as
+build 2026102401; it has no payment SDK or Tap to Pay entitlement and is not
+payment acceptance. See [event pilot](docs/operations/everbranch-pay-event-pilot.md).
+
 ## POS staff handoff update (2026-10-24)
 
 POS now has an enrolled staff browser preparation surface and an atomic native

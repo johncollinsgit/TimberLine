@@ -59,8 +59,23 @@ final class PosOutbox
             $operation = $this->journal->findByRequest($scope['tenant_id'], $sale->payment_request_id);
             if ($operation) {
                 $binding = MerchantBinding::restore($operation['binding']);
-                $core = new PaymentCore($this->journal, ['square_native' => app(SquareNativeProvider::class)], new PosRecoveryAccess($this->store));
+                $core = new PaymentCore($this->journal, app(\App\Services\Pos\PosProviders::class)->all(), new PosRecoveryAccess($this->store));
                 $service->recordOutcome($sale, $core->recover($binding, $operation['id']));
+            }
+
+            return;
+        }
+        if ($effect->effect_key === 'release_unstarted') {
+            if ($sale->state !== 'cancelled' || $sale->attempt_id || $this->journal->findByRequest($scope['tenant_id'], $sale->payment_request_id)) {
+                throw new PosException('unstarted_release_review');
+            }
+            if ($snapshot['terms']['source'] === 'shopify') {
+                $this->shopify->release($scope, $sale);
+            } else {
+                $this->native->release($sale, $snapshot);
+            }
+            if ($snapshot['binding']['provider'] === 'stripe_terminal') {
+                app(StripeTerminalProvider::class)->releaseUnstarted($sale);
             }
 
             return;
@@ -89,11 +104,13 @@ final class PosOutbox
             if ($operation['kind'] !== 'refund' || $operation['state'] !== 'succeeded') {
                 throw new PosException('confirmed_refund_required');
             }
+            app(PosPilotRefunds::class)->record($sale, $operation);
             if ($snapshot['terms']['source'] === 'shopify') {
                 $this->shopify->refund($scope, $sale, $operation);
             } elseif ($snapshot['terms']['source'] === 'website_invoice') {
                 $this->invoiceRefund($sale, $snapshot, $operation);
             }
+            app(PosPilotRefunds::class)->completeStock($sale, $snapshot, $operation);
         } elseif ($effect->effect_key !== 'receipt') {
             throw new PosException('effect_unrecognized');
         }
@@ -104,7 +121,7 @@ final class PosOutbox
     {
         $this->store->db->transaction(function () use ($sale, $snapshot, $refund): void {
             $order = WebsiteOrder::forTenantId($sale->tenant_id)->whereKey($snapshot['terms']['source_order_id'])->lockForUpdate()->firstOrFail();
-            $payment = WebsitePayment::forTenantId($sale->tenant_id)->where('website_order_id', $order->id)->where('provider', 'square')
+            $payment = WebsitePayment::forTenantId($sale->tenant_id)->where('website_order_id', $order->id)->where('provider', $snapshot['binding']['provider'] === 'stripe_terminal' ? 'stripe' : 'square')
                 ->where('metadata->pos_sale_id', $sale->id)->lockForUpdate()->firstOrFail();
             $metadata = $payment->metadata;
             if (isset($metadata['refunds'][$refund['id']])) {

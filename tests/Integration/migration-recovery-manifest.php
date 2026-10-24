@@ -3,6 +3,18 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_24_050000_create_pos_stripe_adapter.php' => [
+        'test' => 'tests/Integration/PosPilotMySqlRecoveryTest.php',
+        'scenarios' => ['retained encrypted payment and operator evidence across partial DDL, named-index recovery, isolated schema composition, replay and rollback'],
+    ],
+    '2026_10_24_060000_create_pos_pilot_operations.php' => [
+        'test' => 'tests/Integration/PosPilotMySqlRecoveryTest.php',
+        'scenarios' => ['retained encrypted payment and operator evidence across partial DDL, named-index recovery, isolated schema composition, replay and rollback'],
+    ],
+    '2026_10_24_070000_install_pos_pilot_schema.php' => [
+        'test' => 'tests/Integration/PosPilotMySqlRecoveryTest.php',
+        'scenarios' => ['retained encrypted payment and operator evidence across partial DDL, named-index recovery, isolated schema composition, replay and rollback'],
+    ],
     '2026_10_24_030000_create_pos_live_handoffs.php' => [
         'test' => 'tests/Integration/PosLiveMySqlRecoveryTest.php',
         'scenarios' => ['encrypted claimed handoff survives missing named indexes, replay, altered-index refusal and non-destructive rollback'],
