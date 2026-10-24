@@ -14,6 +14,7 @@ for(const [engine,name] of [[chromium,'chromium'],[webkit,'webkit']]){
    page.on('pageerror',error=>errors.push(error.message));let paid=false,created=false;
    const state={company:'Fictional Forestry',operator:{id:operator,name:'John Sample',role:'admin'},device:{id:'f'.repeat(32),name:'Fictional phone',register_id:reg},current_shift:{event_id:event,state:'open'},events:[{id:event,name:'Sample market',state:'open',timezone:'America/New_York',today_total_minor:paid?1070:0}],registers:[{id:reg,name:'Sample register',blockers:[]}],owner_setup:false,shared:false,baskets:[],favorites:[],reporting_timezone:'America/New_York',build:'fixture-build',collection_enabled:true};
    const product={item_id:item,title:'Fictional candle / 8oz',product_id:'product-fixture',product_title:'Fictional candle',option_title:'8oz cotton wick',image_url:base+'/assets/item.svg',sku:'FIXTURE-8',barcode:'123456789012',revision:'1'.repeat(64),unit_amount_minor:1000,available_quantity:4,kind:'merchandise'};
+   const large={...product,item_id:'6'.repeat(32),title:'Fictional candle / 16oz',option_title:'16oz wooden wick',image_url:base+'/assets/item16.svg',sku:'FIXTURE-16',barcode:'123456789013',unit_amount_minor:1800},soldOut={...product,item_id:'7'.repeat(32),title:'Fictional candle / 32oz',option_title:'32oz',unit_amount_minor:2500,available_quantity:0};
    const payment=()=>({sale_id:sale,request_id:'11111111-1111-4111-8111-111111111111',state:paid?'succeeded':created?'processing':'quoted',stock_state:paid?'committed':created?'held':'unprepared',amount_minor:1070,lines:[{title:product.title,quantity:1,subtotal_minor:1000}],canonical_confirmation:paid,recovery_required:created&&!paid,receipt_available:paid,can_leave:paid,manager_refunds_allowed:true,retry_available:false,resume_available:false});
    await page.route('**/*',async route=>{
     const r=route.request(),url=new URL(r.url());assert.equal(url.origin,'https://pos-pilot.test','Unexpected outbound request');const path=url.pathname.slice(new URL(base).pathname.length);let body;
@@ -23,9 +24,9 @@ for(const [engine,name] of [[chromium,'chromium'],[webkit,'webkit']]){
     if(path==='/assets/register.js')return route.fulfill({contentType:'application/javascript',body:read('resources/js/pos-pilot-register.js')});
     if(path==='/assets/register.css')return route.fulfill({contentType:'text/css',body:read('resources/css/pos-pilot.css')});
     if(path==='/assets/trees.png')return route.fulfill({contentType:'image/png',body:read('resources/images/pos-trees.png')});
-    if(path==='/assets/item.svg')return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><rect width="160" height="160" fill="#e5e8d9"/><rect x="48" y="42" width="64" height="86" rx="9" fill="#a68659"/><rect x="45" y="35" width="70" height="15" rx="5" fill="#103e32"/><rect x="56" y="67" width="48" height="42" fill="#f5f1e6"/><path d="M80 73 67 96h26Z" fill="#103e32"/></svg>'});
+    if(['/assets/item.svg','/assets/item16.svg'].includes(path))return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><rect width="160" height="160" fill="#e5e8d9"/><rect x="48" y="42" width="64" height="86" rx="9" fill="#a68659"/><rect x="45" y="35" width="70" height="15" rx="5" fill="#103e32"/><rect x="56" y="67" width="48" height="42" fill="#f5f1e6"/><path d="M80 73 67 96h26Z" fill="#103e32"/></svg>'});
     if(path==='/state')return json(state);
-    if(path===`/registers/${reg}/catalog`)return json({items:[product],quotes:[]});
+    if(path===`/registers/${reg}/catalog`)return json({items:[product,large,soldOut],quotes:[]});
     if(path===`/registers/${reg}/quotes`){assert.deepEqual(body.items,[{item_id:item,quantity:1,revision:'1'.repeat(64)}]);assert(!('amount_minor'in body));return json(payment())}
     if(path===`/registers/${reg}/sales/${sale}/collect`){created=true;return json(payment())}
     if(path===`/registers/${reg}/sales/${sale}/reconcile`){paid=true;return json(payment())}
@@ -42,7 +43,22 @@ for(const [engine,name] of [[chromium,'chromium'],[webkit,'webkit']]){
    await page.goto(base);await page.getByRole('heading',{name:'Fictional candle',exact:true}).waitFor();
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    const header=page.locator('.brandheader');assert.equal(await header.evaluate(e=>getComputedStyle(e).position),'sticky');
-   await page.getByRole('button',{name:'Add Fictional candle / 8oz'}).click();
+   assert.equal(await page.locator('select.variant').count(),0);
+   await page.getByLabel('Search or scan products').fill('candle');
+   await page.getByRole('button',{name:'View Fictional candle variants',exact:true}).click();
+   await page.getByRole('heading',{name:'Fictional candle',level:1,exact:true}).waitFor();
+   assert.equal(await page.locator('.variant-tile').count(),3);
+   assert.equal(await page.getByRole('button',{name:'Add Fictional candle / 16oz',exact:true}).locator('img').getAttribute('src'),large.image_url);
+   assert(await page.getByRole('button',{name:'Add Fictional candle / 32oz',exact:true}).isDisabled());
+   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+   await page.screenshot({path:`${output}/${name}-${width}-variants.png`});
+   await page.getByRole('button',{name:'Add Fictional candle / 8oz',exact:true}).click();
+   await page.getByRole('button',{name:'Back to products',exact:true}).click();
+   assert.equal(await page.getByLabel('Search or scan products').inputValue(),'candle');
+   assert.equal(await page.locator('.product-parent').count(),1);
+   await page.getByRole('button',{name:'View Fictional candle variants',exact:true}).focus();await page.keyboard.press('Enter');
+   await page.getByRole('button',{name:'Back to products',exact:true}).waitFor();
+   await page.getByRole('button',{name:'Back to products',exact:true}).click();
    await page.getByRole('button',{name:/Review basket/}).click();
    await page.getByRole('button',{name:'Check prices & tax'}).click();
    await page.getByRole('button',{name:'Collect $10.70',exact:true}).click();
@@ -68,7 +84,7 @@ for(const [engine,name] of [[chromium,'chromium'],[webkit,'webkit']]){
    await page.screenshot({path:`${output}/${name}-${width}-sell.png`});
    assert.deepEqual(errors,[]);assert.equal(calls.filter(c=>c.path.endsWith('/collect')).length,1);
    assert(!JSON.stringify(await page.evaluate(()=>Object.entries(localStorage))).includes('John Sample'),'Only opaque recovery identifiers may be stored');
-   await page.close();console.log(`PASS ${name} ${width}: responsive register, exact quote, pending recovery, receipt and chart controls`);
+   await page.close();console.log(`PASS ${name} ${width}: photo variant drill-in/back, exact variant quote, pending recovery, receipt and charts`);
   }
  }finally{await browser.close()}
 }
