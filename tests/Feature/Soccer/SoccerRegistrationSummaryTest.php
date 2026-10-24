@@ -87,3 +87,61 @@ it('emails a waitlist-only signup and suppresses recipients removed before deliv
     expect($this->store->query('deliveries', $this->tenant->id)->where('error', 'admin_recipient_removed')->count())->toBe(1);
     Http::assertNothingSent();
 });
+
+it('sends one platform signup alert to each organizer while parents keep email', function () {
+    $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-23 12:00:00', 'America/New_York'));
+    config()->set(['soccer.admin_sms_enabled' => true, 'soccer.admin_sms_recipients' => ['8645550111', '+18645550112', '(864) 555-0111', 'invalid'], 'soccer.admin_sms_sender_key' => 'platform_alerts', 'soccer.sms_enabled' => false, 'marketing.sms.enabled' => true, 'marketing.twilio.enabled' => true, 'marketing.sms.dry_run' => false]);
+    $this->mock(\App\Services\Marketing\Messaging\TenantMessagingGateway::class)->shouldNotReceive('sendSms');
+    $this->mock(\App\Services\Marketing\TwilioProviderClient::class)->shouldReceive('sendSms')->twice()
+        ->withArgs(fn ($phone, $body, $options) => in_array($phone, ['+18645550111', '+18645550112'], true)
+            && str_contains($body, 'Everbranch: Wren Soccer signup.') && str_contains($body, '2 awaiting payment, 0 waitlisted')
+            && ! str_contains($body, 'private medical') && $options === ['sender_key' => 'platform_alerts'])
+        ->andReturnUsing(fn ($phone) => ['success' => true, 'provider_message_id' => 'SMfictional'.$phone, 'dry_run' => false]);
+    $registration = app(SoccerRegistrationService::class);
+    $registration->register($this->tenant->id, $this->family, $this->input);
+    $registration->register($this->tenant->id, $this->family, $this->input);
+    $delivery = app(SoccerDeliveryService::class);
+    $delivery->run($this->tenant->id);
+    $delivery->run($this->tenant->id);
+    expect($this->store->query('deliveries', $this->tenant->id)->where('status', 'accepted')->count())->toBe(5);
+    expect(Mail::mailer()->getSymfonyTransport()->messages())->toHaveCount(3);
+    Http::assertNothingSent();
+});
+
+it('queues waitlist-only signup alerts, observes quiet hours and suppresses removed organizers', function () {
+    $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-23 20:00:00', 'America/New_York'));
+    config()->set(['soccer.admin_sms_enabled' => true, 'soccer.admin_sms_recipients' => ['8645550111', '8645550112'], 'soccer.admin_sms_sender_key' => 'platform_alerts', 'marketing.sms.enabled' => true, 'marketing.twilio.enabled' => true, 'marketing.sms.dry_run' => false]);
+    $teams = config('soccer.teams');
+    foreach ($teams as &$team) {
+        $team['public'] = $team['reserved'] = 0;
+    }
+    $this->store->query('seasons', $this->tenant->id)->update(['teams' => json_encode($teams)]);
+    app(SoccerRegistrationService::class)->register($this->tenant->id, $this->family, $this->input);
+    $alerts = $this->store->query('deliveries', $this->tenant->id)->get()->filter(fn ($d) => ($this->store->decrypt($d->payload)['channel'] ?? '') === 'admin_sms');
+    expect($alerts)->toHaveCount(2);
+    expect($this->store->decrypt($alerts->first()->payload)['body'])->toContain('0 registered, 0 awaiting payment, 2 waitlisted');
+    $provider = $this->mock(\App\Services\Marketing\TwilioProviderClient::class);
+    $provider->shouldReceive('sendSms')->once()->withArgs(fn ($phone) => $phone === '+18645550111')->andReturn(['success' => true, 'provider_message_id' => 'SMfictional']);
+    $delivery = app(SoccerDeliveryService::class);
+    $delivery->run($this->tenant->id);
+    foreach ($alerts as $alert) {
+        expect($this->store->row('deliveries', $this->tenant->id, $alert->id)->attempts)->toBe(0);
+    }
+    config()->set('soccer.admin_sms_recipients', ['8645550111']);
+    $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-24 08:00:00', 'America/New_York'));
+    $delivery->run($this->tenant->id);
+    expect($this->store->query('deliveries', $this->tenant->id)->where('error', 'admin_sms_recipient_removed')->count())->toBe(1);
+});
+
+it('does not notify Wren organizers for another tenant or retry uncertain platform texts', function () {
+    $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-23 12:00:00', 'America/New_York'));
+    config()->set(['soccer.admin_sms_enabled' => true, 'soccer.admin_sms_recipients' => ['8645550111'], 'soccer.admin_sms_sender_key' => 'platform_alerts', 'marketing.sms.enabled' => true, 'marketing.twilio.enabled' => true, 'marketing.sms.dry_run' => false]);
+    $other = Tenant::create(['name' => 'Other', 'slug' => 'other-soccer']);
+    expect(app(\App\Services\Soccer\SoccerEvents::class)->adminSmsRecipients($other->id))->toBe([]);
+    $this->mock(\App\Services\Marketing\TwilioProviderClient::class)->shouldReceive('sendSms')->once()->andReturn(['success' => false, 'error_code' => 'exception']);
+    app(SoccerRegistrationService::class)->register($this->tenant->id, $this->family, $this->input);
+    $delivery = app(SoccerDeliveryService::class);
+    $delivery->run($this->tenant->id);
+    $delivery->run($this->tenant->id);
+    expect($this->store->query('deliveries', $this->tenant->id)->where('status', 'uncertain')->count())->toBe(1);
+});

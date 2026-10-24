@@ -1,3 +1,14 @@
+## Wren signup organizer texts and inactive offers (2026-10-23; source candidate)
+
+The owner requested Everbranch's existing SMS setup for signup alerts to John
+and Sarah. Optional, default-off organizer texts now use an explicit platform
+sender key and normalized recipient allowlist independently of parent email.
+Each submitted family gets one short alert, including waitlist-only submissions;
+parent texts continue to require Wren's isolated sender. Inactive expired unpaid
+offers retain their history but no longer block available seats or eligible
+waitlist promotion. Provider setup and genuine delivery remain separate from
+local test results; see `docs/operations/wren-soccer.md`.
+
 ## CI Ubuntu package mirrors (October 23; source candidate)
 
 The primary PHP 8.4 and isolated Enterprise jobs verify the runner's known Ubuntu
