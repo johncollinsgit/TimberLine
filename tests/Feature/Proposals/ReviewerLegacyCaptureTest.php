@@ -315,25 +315,27 @@ final class ReviewerLegacyCaptureTest extends ReviewerAiFixture
 
     private function assertUiModuleDriftRefused(string $method): void
     {
-        $payload = $this->version->payload;
-        $payload['campus_review'] = (new \App\Proposals\LegacyCampusArtifact)->manifest();
-        $this->syntheticVersion($payload);
-        config(['service_proposals.campus_review.legacy_versions' => [$this->version->id => ['tenant_id' => (int) $this->tenant->id,
-            'content_hash' => $this->version->content_hash, 'renderer' => 'lees-mcrae-v5']]]);
-        $this->login();
-        $path = resource_path('js/enterprise/reviewer/legacy-capture-ui.js');
-        $original = file_get_contents($path);
-        $before = $this->rows();
-        try {
-            file_put_contents($path, $original."\n// Harmless fixture-only byte drift; no human storage access.\n");
-            $this->assertSame('ea305f02a19ba49371aa297107e8ab35317b9424945fe123f4585cc9163b4608', hash_file('sha256', resource_path('js/enterprise/reviewer/legacy-capture.js')));
-            $out = $method === 'GET' ? $this->http($this->path()) : $this->http($this->path('/authorize'), 'POST', $this->pins);
-            $this->assertSame(409, $out->getStatusCode(), 'Unapproved exact concatenated UI bytes must refuse, including registered legacy editions.');
-            $this->assertSame(['error' => 'capture_unavailable'], json_decode($out->getContent(), true));
-            $this->assertSame($before, $this->rows());
-        } finally {
-            file_put_contents($path, $original);
-        }
+        \Tests\Support\ReviewerWorkspaceSourceSnapshot::run(function () use ($method): void {
+            $payload = $this->version->payload;
+            $payload['campus_review'] = (new \App\Proposals\LegacyCampusArtifact)->manifest();
+            $this->syntheticVersion($payload);
+            config(['service_proposals.campus_review.legacy_versions' => [$this->version->id => ['tenant_id' => (int) $this->tenant->id,
+                'content_hash' => $this->version->content_hash, 'renderer' => 'lees-mcrae-v5']]]);
+            $this->login();
+            $path = resource_path('js/enterprise/reviewer/legacy-capture-ui.js');
+            $original = file_get_contents($path);
+            $before = $this->rows();
+            try {
+                file_put_contents($path, $original."\n// Harmless fixture-only byte drift; no human storage access.\n");
+                $this->assertSame('ea305f02a19ba49371aa297107e8ab35317b9424945fe123f4585cc9163b4608', hash_file('sha256', resource_path('js/enterprise/reviewer/legacy-capture.js')));
+                $out = $method === 'GET' ? $this->http($this->path()) : $this->http($this->path('/authorize'), 'POST', $this->pins);
+                $this->assertSame(409, $out->getStatusCode(), 'Unapproved exact concatenated UI bytes must refuse, including registered legacy editions.');
+                $this->assertSame(['error' => 'capture_unavailable'], json_decode($out->getContent(), true));
+                $this->assertSame($before, $this->rows());
+            } finally {
+                file_put_contents($path, $original);
+            }
+        });
     }
 
     public function test_marker_and_outside_boundary_behaviour_are_preserved(): void

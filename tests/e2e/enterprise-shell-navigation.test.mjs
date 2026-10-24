@@ -46,6 +46,8 @@ const dispatch = between(
     "  document.addEventListener('enterprise:navigate'",
     "  @include('enterprise.proposal-ai-script')",
 );
+// Evaluate the actual mode declaration, rather than inventing a boolean in this partial VM.
+const reviewerModeSource = between(shell, "  const reviewerMode =", "  const allowedSections =");
 const composerSource = between(
     next,
     "  function readDraft",
@@ -112,6 +114,9 @@ function fixture(mode = "private") {
         navigationPushPending: false,
         navigationSearchBatch: false,
         navigationViewOverride: null,
+        workspaceLoadGeneration: 0,
+        projectCatalogGeneration: 0,
+        clearWorkspaceContext(failed) { calls.push({clearWorkspaceContext: failed}); },
         allowedSections: ["requests", "projects", "roll_call"],
         tenantSlug: "synthetic",
         viewer: "u1",
@@ -178,7 +183,7 @@ function fixture(mode = "private") {
         mode,
         replace: (value) => context.rememberNavigation(value),
     };
-    vm.runInContext(composerSource, context);
+    vm.runInContext(reviewerModeSource + composerSource, context);
     function render() {
         context.stashComposer();
         context.rememberUrl();
@@ -419,3 +424,22 @@ for (const mode of ["private", "sample"]) {
         assert.equal(url.origin, "https://workspace.example");
     });
 }
+
+test('the actual reviewer-mode declaration includes sample and shared transports and excludes private', () => {
+    for (const [mode, expected] of [['private', false], ['sample', true], ['shared', true]]) {
+        const context = vm.createContext({transport: {mode}});
+        vm.runInContext(reviewerModeSource, context);
+        assert.equal(vm.runInContext('reviewerMode', context), expected);
+    }
+});
+test('actual departing-document handlers invalidate both read generations and clear context before persisted-page restore', () => {
+    const f = fixture();
+    f.events.get('beforeunload')();
+    assert.equal(f.context.workspaceLoadGeneration, 1);
+    assert.equal(f.context.projectCatalogGeneration, 1);
+    f.events.get('pagehide')();
+    assert.deepEqual(f.calls.at(-1), {clearWorkspaceContext: true});
+    const before = f.calls.filter(value => value === 'load').length;
+    f.events.get('pageshow')({persisted: true});
+    assert.equal(f.calls.filter(value => value === 'load').length, before + 1);
+});

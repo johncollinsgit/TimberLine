@@ -14,6 +14,7 @@ final class LegacyCampusConfigurationTest extends TestCase
         $fixture = json_decode(stream_get_contents(STDIN), true, 16, JSON_THROW_ON_ERROR);
         function env($key, $default = null) {global $fixture; return $fixture[$key] ?? $default;}
         function base_path($path = '') {return $GLOBALS['argv'][1].'/'.$path;}
+        require base_path('vendor/autoload.php');
         $config = require base_path('apps/enterprise/config/service_proposals.php');
         echo json_encode(['legacy'=>$config['campus_review']['legacy_versions'], 'ai'=>$config['reviewer_ai']['enabled'],
             'workspace'=>$config['reviewer_workspace']['enabled']], JSON_THROW_ON_ERROR);

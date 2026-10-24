@@ -190,3 +190,21 @@ Four real disposable MySQL connections compete across SMS/email/AI/acceptance
 for the final shared allowance, assert named-lock ownership and retain uncertain
 reservations. SQLite explicitly skips this gate. Never point the fixture at a
 customer database; its guard requires local everbranch_enterprise_ci.
+
+
+## Source-fingerprint test isolation
+
+Tests that deliberately change manifest-bound source or the legacy capture module
+must use `Tests\Support\ReviewerWorkspaceSourceSnapshot`. It copies only bounded
+nonsecret source/build groups, requires exact production manifest/module parity,
+redirects source lookups inside that test, and restores application paths in a
+`finally` block. ENV, vendor, private storage, credentials, sessions and database
+fixtures remain outside the copy. Keep real byte changes and denial assertions;
+do not relax source validation or serialize the production CI suite to hide races.
+
+The October 24 repair preserves all original source-drift cases. Four synchronized
+process checks distinguish shared-file interference from private-copy isolation;
+a full-class cohort covering both mutators and the affected readers passed
+106 tests/1,623 assertions with four local parallel processes. This PHP 8.5/SQLite
+check supplements normal exact-head PHP 8.4, MySQL and browser CI. It does not
+replace those gates or establish hosted/runtime/provider acceptance.

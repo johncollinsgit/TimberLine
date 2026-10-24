@@ -277,7 +277,7 @@ final class ReviewerWorkspaceMaintenanceAuthorityTest extends ReviewerWorkspaceF
         $this->assertTrue(collect(Storage::disk('team_private')->allFiles())->every(fn ($f) => str_ends_with($f, '.retired') || str_ends_with($f, '.quota.lock')));
         $this->assertTrue($cached->is_active);
         $this->assertFalse(\App\Models\User::find($this->owner->id)->is_active);
-        $this->assertSame(0,DB::transactionLevel());
+        $this->assertSame(0, DB::transactionLevel());
         $this->restoreOwner();
         Http::assertNothingSent();
     }

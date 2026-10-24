@@ -3580,3 +3580,34 @@ Actual MySQL8.4/PHP8.4 exact-head CI, query/locking behavior and hosted cleanup
 remain unverified. No runtime policy/delegation/ENV/cache/job was installed.
 Recurring operation needs its own concrete finite-scope human approval and
 observed installation; this source checkpoint never supplies that authority.
+
+
+### 2026-10-24 CI fixture repair checkpoint
+
+The first normal 97dce88e CI run exposed extracted JavaScript fixtures missing
+current production declarations/teardown helpers, three PHP test-formatting
+failures, a child configuration test missing Composer autoload, and parallel
+source-fingerprint interference. The repair changes tests and documentation only.
+Original cases and assertions remain. Five added JavaScript cases check actual
+native/shared delegation, lifecycle fences and production privacy cleanup helpers;
+the exact existing 31-file prepare command passes 230/230 locally, with no skips.
+
+The unchanged locked Pint passes its three corrected tests. Required unused-import
+removal and braces accompany whitespace; independent name-resolved whole-AST
+proof preserves all 10 test methods, 81 assertion sites, control flow and comments.
+The configuration child now loads the same Composer autoloader as its neighboring
+fixtures; both original tests pass. No application/configuration behavior changes.
+
+Two source-mutating suites now use a bounded private nonsecret source snapshot.
+Real source/module drift still produces the original denials; separate readers
+retain unchanged original bytes. Runtime ENV, storage, credentials and sessions
+are never copied. Four synchronized two-process checks demonstrate the old race
+and its isolation. Root's combined full-class cohort passes 106 tests and 1,623
+assertions in four parallel processes on local PHP 8.5/SQLite. This targeted result
+does not establish that every original CI failure had the same cause.
+
+Application source, dependencies, formatter rules, workflows, all 23 browser lanes,
+parallelism and strict source/access guards remain unchanged. The original general
+MySQL recovery job passed; Enterprise-specific MySQL gates were skipped after
+prepare failed and remain unverified. Final new-head normal PHP 8.4/MySQL/browser
+CI is required. No runtime, publication, provider or deployment action occurred.

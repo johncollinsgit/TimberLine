@@ -325,19 +325,21 @@ final class ReviewerWorkspaceMaintenanceTest extends ReviewerWorkspaceFixture
 
     public function test_modern_manifest_covers_controller_route_and_runtime_gate_without_touching_legacy_registry(): void
     {
-        $manifest = app(\App\Proposals\CampusReviewManifest::class);
-        $before = $manifest->current()['source_hash'];
-        foreach (['app/Proposals/ReviewerWorkspaceMaintenanceController.php', 'routes/service-proposals-reviewer-maintenance.php', 'app/Models/User.php', 'config/service_proposals.php', 'apps/enterprise/config/service_proposals.php'] as $path) {
-            $file = base_path($path);
-            $original = file_get_contents($file);
-            try {
-                file_put_contents($file, $original."\n// SYNTHETIC SOURCE FINGERPRINT TEST\n");
-                $this->assertNotSame($before, $manifest->current()['source_hash']);
-            } finally {
-                file_put_contents($file, $original);
+        \Tests\Support\ReviewerWorkspaceSourceSnapshot::run(function (): void {
+            $manifest = app(\App\Proposals\CampusReviewManifest::class);
+            $before = $manifest->current()['source_hash'];
+            foreach (['app/Proposals/ReviewerWorkspaceMaintenanceController.php', 'routes/service-proposals-reviewer-maintenance.php', 'app/Models/User.php', 'config/service_proposals.php', 'apps/enterprise/config/service_proposals.php'] as $path) {
+                $file = base_path($path);
+                $original = file_get_contents($file);
+                try {
+                    file_put_contents($file, $original."\n// SYNTHETIC SOURCE FINGERPRINT TEST\n");
+                    $this->assertNotSame($before, $manifest->current()['source_hash']);
+                } finally {
+                    file_put_contents($file, $original);
+                }
             }
-        }
-        $this->assertSame($before, $manifest->current()['source_hash']);
-        $this->assertSame([], config('service_proposals.campus_review.legacy_versions', []));
+            $this->assertSame($before, $manifest->current()['source_hash']);
+            $this->assertSame([], config('service_proposals.campus_review.legacy_versions', []));
+        });
     }
 }
