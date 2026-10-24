@@ -5,6 +5,11 @@ Forestry are the first intended merchants. No merchant, entitlement, staff,
 device, tax rate or production credential is seeded by this implementation.
 The fictional public demonstration and older simulator remain separate.
 
+The native CI job creates and fully boots its own iOS 26.2 iPhone simulator,
+then runs the sandbox launch test without parallel simulator clones. Startup
+and testing have explicit time bounds; the XCTest result bundle is retained
+for three days for diagnosis. A timeout is a failed gate, not payment evidence.
+
 ## Implemented composition
 
 - `native/everbranch-pos-ios`: dedicated iOS 17.1+ SwiftUI target, bundle
