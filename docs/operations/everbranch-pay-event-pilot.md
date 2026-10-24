@@ -132,6 +132,8 @@ Activity filters day/month/year, company timezone, event and enrolled device or
 canonical staff identity. Company scope requires owner/admin; managers remain
 assigned-event scoped; cashiers see their own or approved-device records.
 Bars/lines share server-computed buckets and clickable transaction filtering.
+Receipt-number/event/cashier search filters permitted transactions in the
+selected period without changing its aggregate totals.
 Gross includes tax; sales before tax, tax, confirmed refunds, net collected,
 average sale, product/size rankings and comparisons are labeled separately.
 Net collected is not a payout. Refunds belong to their own confirmation date.

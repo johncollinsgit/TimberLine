@@ -355,6 +355,18 @@ final class PosService
     public function refund(string $register, string $id, array $input): array
     {
         $scope = $this->access->register($register, 'refund');
+
+        return Cache::lock($this->refundLock($scope['tenant_id'], $input['request_id']), 180)->block(5, fn () => $this->performRefund($register, $id, $input));
+    }
+
+    private function refundLock(int $tenant, string $request): string
+    {
+        return 'pos-refund-request-'.hash('sha256', $this->store->runtime().':'.$tenant.':'.$request);
+    }
+
+    private function performRefund(string $register, string $id, array $input): array
+    {
+        $scope = $this->access->register($register, 'refund');
         $sale = $this->sale($scope, $id);
         $snapshot = $this->snapshot($sale);
         if (! $sale->attempt_id || $sale->stock_state !== 'committed') {
@@ -386,9 +398,26 @@ final class PosService
     public function refundStatus(string $register, string $id, string $requestId, bool $resume = false): array
     {
         $scope = $this->access->register($register, 'refund');
+
+        return Cache::lock($this->refundLock($scope['tenant_id'], $requestId), 180)->block(5, fn () => $this->inspectRefund($register, $id, $requestId, $resume));
+    }
+
+    private function inspectRefund(string $register, string $id, string $requestId, bool $resume): array
+    {
+        $scope = $this->access->register($register, 'refund');
         $sale = $this->sale($scope, $id);
-        $detail = $this->store->rows('refund_details', $scope['tenant_id'])->where('sale_id', $id)->where('request_id', $requestId)->firstOrFail();
+        $detail = $this->store->rows('refund_details', $scope['tenant_id'])->where('sale_id', $id)->where('request_id', $requestId)->first();
         $operation = $this->journal->findByRequest($scope['tenant_id'], $requestId);
+        if (! $detail) {
+            if ($operation) {
+                throw new PosException('refund_decision_review_required');
+            }
+            // The request lock also guards delayed submitters. Retire an absent
+            // request durably before telling the browser it can use a fresh key.
+            $this->store->rows('refund_details', $scope['tenant_id'])->insert($this->store->values($scope['tenant_id'], ['id' => bin2hex(random_bytes(16)), 'sale_id' => $id, 'request_id' => $requestId, 'operator_id' => $scope['operator_id'], 'amount_minor' => 0, 'state' => 'not_dispatched', 'decision' => $this->store->encrypt(['reason' => 'other', 'restock' => false, 'lines' => []]), 'created_at' => now()]));
+
+            return ['state' => 'not_dispatched', 'resume_original_available' => false];
+        }
         if (! $operation) {
             if ($detail->state === 'not_dispatched') {
                 return ['state' => 'not_dispatched', 'resume_original_available' => false];
@@ -398,7 +427,7 @@ final class PosService
             }
             $decision = $this->store->decrypt($detail->decision);
 
-            return $this->refund($register, $id, ['request_id' => $requestId, 'amount_minor' => (int) $detail->amount_minor, 'reason' => $decision['reason'], 'restock' => $decision['restock'], 'restock_lines' => $decision['lines']]);
+            return $this->performRefund($register, $id, ['request_id' => $requestId, 'amount_minor' => (int) $detail->amount_minor, 'reason' => $decision['reason'], 'restock' => $decision['restock'], 'restock_lines' => $decision['lines']]);
         }
         if ($operation['kind'] !== 'refund' || $operation['sale_id'] !== $id) {
             throw new PosException('refund_sale_mismatch');

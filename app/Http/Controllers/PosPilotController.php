@@ -171,6 +171,18 @@ final class PosPilotController extends Controller
 
     public function sessionAction(Request $r, string $tenant, string $action)
     {
+        if ($action === 'signout') {
+            $this->input($r, []);
+            $ctx = $this->access->context(true);
+            $this->ops->lock(true);
+            $this->store->rows('register_sessions', $ctx['tenant_id'])->where('id', $ctx['session']->id)->update(['active' => false]);
+            \Illuminate\Support\Facades\Auth::guard('web')->logout();
+            $r->session()->invalidate();
+            $r->session()->regenerateToken();
+            $r->session()->put(['pos_web_device' => $r->header('X-Pos-Device'), 'url.intended' => preg_replace('~/session/signout$~D', '', $r->url())]);
+
+            return ['signed_out' => true];
+        }
         if ($action === 'unlock') {
             $i = $this->input($r, ['operator_id' => ['required', 'regex:/^[a-f0-9]{32}$/D'], 'pin' => 'required|string|max:6']);
 
@@ -281,7 +293,7 @@ final class PosPilotController extends Controller
 
     public function report(Request $r, string $tenant, ?string $format = null)
     {
-        $i = $this->input($r, ['scope' => 'sometimes|in:device,user,company', 'period' => 'sometimes|in:day,month,year', 'date' => ['sometimes', 'regex:/^\d{4}(?:-\d{2}){0,2}$/D'], 'event_id' => ['sometimes', 'regex:/^[a-f0-9]{32}$/D'], 'offset' => 'sometimes|integer|min:0|max:50000', 'bucket' => 'sometimes|integer|min:0|max:30']);
+        $i = $this->input($r, ['search' => 'sometimes|string|max:100', 'scope' => 'sometimes|in:device,user,company', 'period' => 'sometimes|in:day,month,year', 'date' => ['sometimes', 'regex:/^\d{4}(?:-\d{2}){0,2}$/D'], 'event_id' => ['sometimes', 'regex:/^[a-f0-9]{32}$/D'], 'offset' => 'sometimes|integer|min:0|max:50000', 'bucket' => 'sometimes|integer|min:0|max:30']);
         $result = app(PosPilotReports::class)->activity($i, $format === 'csv');
         if ($format !== 'csv') {
             return $result;

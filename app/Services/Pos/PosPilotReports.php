@@ -128,6 +128,10 @@ final class PosPilotReports
             }
             $transactions = array_values(array_filter($transactions, fn ($r) => $r['bucket'] === (int) $input['bucket']));
         }
+        $search = mb_strtolower(trim($input['search'] ?? ''));
+        if ($search !== '') {
+            $transactions = array_values(array_filter($transactions, fn ($r) => str_contains(mb_strtolower('EB-'.substr($r['id'], 0, 12).' '.$r['id'].' '.$r['staff'].' '.$r['event']), $search)));
+        }
         $offset = max(0, (int) ($input['offset'] ?? 0));
 
         return ['period' => $period, 'date' => $date, 'scope' => $scope, 'timezone' => $timezone, 'totals' => $totals, 'buckets' => $buckets,

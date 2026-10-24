@@ -116,14 +116,16 @@ final class PosAccess implements PaymentAccess
             $settings = $this->store->decrypt($scope['register']->configuration);
             $accepted = ($scope['register']->provider ?? 'square_native') === 'stripe_terminal'
                 ? $this->store->rows('readers', $scope['tenant_id'])->where('register_id', $scope['register']->id)->firstOrFail() : $scope['connection'];
-            $acceptedBuild = $accepted->acceptance_build ?: ($settings['acceptance']['build'] ?? null);
+            $physical = $accepted->acceptance_at && (($scope['register']->provider ?? 'square_native') !== 'stripe_terminal'
+                || is_string($accepted->acceptance_build) && hash_equals($accepted->acceptance_build, request()->header('X-Pos-Build', '')));
+            $acceptedBuild = $physical ? $accepted->acceptance_build : ($settings['acceptance']['build'] ?? null);
             if (! is_string($acceptedBuild) || ! hash_equals($acceptedBuild, request()->header('X-Pos-Build', ''))) {
                 throw new PosException('accepted_build_required', 403);
             }
-            if (! $accepted->acceptance_at && ($scope['register']->provider ?? '') === 'stripe_terminal' && (($settings['acceptance']['operator_id'] ?? null) !== ($scope['operator_id'] ?? null))) {
+            if (! $physical && ($scope['register']->provider ?? '') === 'stripe_terminal' && (($settings['acceptance']['operator_id'] ?? null) !== ($scope['operator_id'] ?? null))) {
                 throw new PosException('acceptance_operator_required', 403);
             }
-            if (! $accepted->acceptance_at && (($settings['acceptance']['actor_id'] ?? null) !== $scope['actor_id']
+            if (! $physical && (($settings['acceptance']['actor_id'] ?? null) !== $scope['actor_id']
                 || ($settings['acceptance']['device_id'] ?? null) !== request()->header('X-Pos-Device'))) {
                 throw new PosException('acceptance_device_required', 403);
             }

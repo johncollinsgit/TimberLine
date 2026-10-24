@@ -936,6 +936,8 @@ it('uses company timezone boundaries and refund issue dates without changing his
     $this->getJson($this->pilot.'/activity?scope=device&period=day&date=2026-12-31&bucket=21')->assertOk()->assertJsonPath('transactions.0.id', $sale);
     $this->getJson($this->pilot.'/activity?scope=user&period=month&date=2024-02')->assertOk()->assertJsonCount(29, 'buckets');
     $this->getJson($this->pilot.'/activity?scope=user&period=day&date=2026-02-31')->assertUnprocessable();
+    $this->getJson($this->pilot.'/activity?scope=company&period=year&date=2026&search=EB-'.strtoupper(substr($sale, 0, 12)))->assertOk()->assertJsonPath('transactions.0.id', $sale);
+    $this->getJson($this->pilot.'/activity?scope=company&period=year&date=2026&search=missing-receipt')->assertOk()->assertJsonCount(0, 'transactions')->assertJsonPath('totals.collected_minor', 1070);
 });
 
 it('does not give Stripe reader readiness an Apple Tap to Pay dependency', function (): void {
@@ -1053,4 +1055,54 @@ it('blocks a Shopify price change between catalog lookup and calculated tax befo
     $this->shopifyDraftPrice = '11.00';
     $this->postJson($this->base.'/quotes', $this->selection)->assertConflict()->assertJsonPath('error.code', 'shopify_quote_mismatch');
     expect($this->store->rows('sales', $this->tenant->id)->count())->toBe(0)->and($this->shopifyCreates)->toBe(0);
+});
+
+it('keeps a new Stripe build gated despite an older reader acceptance and permits only its named acceptance session', function (): void {
+    posPilotFixture($this);
+    config()->set(['pos_live.stripe_environment' => 'production', 'pos_live.stripe_secret' => 'sk_live_fixture', 'pos_live.stripe_webhooks_verified' => true, 'pos_live.stripe_webhook_secret' => 'whsec_fixture', 'app.release_id' => 'pilot-test-build', 'cache.default' => 'file']);
+    $this->store->rows('connections', $this->tenant->id)->update(['environment' => 'production']);
+    $this->store->rows('readers', $this->tenant->id)->update(['acceptance_at' => now(), 'acceptance_build' => 'older-build']);
+    $register = $this->store->rows('registers', $this->tenant->id)->first();
+    $connection = $this->store->rows('connections', $this->tenant->id)->first();
+    $settings = $this->store->decrypt($register->configuration);
+    $settings['merchant_review'] = ['document_hash' => str_repeat('a', 64), 'markup_minor' => 0];
+    $register->configuration = $this->store->encrypt($settings);
+    expect(app(\App\Services\Pos\PosReadiness::class)->blockers($register, $connection))->toContain('physical_acceptance_missing');
+    $settings['acceptance'] = ['build' => 'pilot-test-build', 'expires_at' => now()->addHour()->toIso8601String(), 'max_amount_minor' => 500, 'actor_id' => $this->actor->id, 'operator_id' => $this->operator, 'device_id' => $this->pilotDevice];
+    $register->configuration = $this->store->encrypt($settings);
+    expect(app(\App\Services\Pos\PosReadiness::class)->blockers($register, $connection, 100))->toBe([]);
+    $this->store->rows('registers', $this->tenant->id)->where('id', $register->id)->update(['configuration' => $register->configuration]);
+    $this->getJson($this->pilot.'/state')->assertOk();
+    $access = app(\App\Services\Pos\PosAccess::class);
+    $binding = $access->binding($access->register($register->id, 'collect'));
+    $access->assertAllowed($binding, 'collect');
+    $settings['acceptance']['operator_id'] = $this->cashier;
+    $this->store->rows('registers', $this->tenant->id)->where('id', $register->id)->update(['configuration' => $this->store->encrypt($settings)]);
+    expect(fn () => $access->assertAllowed($binding, 'collect'))->toThrow(\App\Services\Pos\PosException::class, 'acceptance_operator_required');
+});
+
+it('ends individual staff access and its shift on register signout while retaining the enrolled device', function (): void {
+    posPilotFixture($this);
+    $device = $this->getJson($this->pilot.'/state')->assertOk()->json('device.id');
+    $this->postJson($this->pilot.'/session/signout', [])->assertOk();
+    $this->assertGuest('web');
+    $this->postJson($this->pilot.'/session/shift', ['event_id' => $this->event])->assertUnauthorized();
+    expect($this->store->rows('shifts', $this->tenant->id)->where('state', 'open')->count())->toBe(0)->and($this->store->rows('devices', $this->tenant->id)->where('id', $device)->where('active', true)->exists())->toBeTrue();
+});
+
+it('durably retires an absent refund request before permitting a replacement', function (): void {
+    $web = posPilotFixture($this);
+    posPilotStripe($this);
+    $sale = $this->postJson($web.'/quotes', $this->selection)->assertOk()->json('sale_id');
+    $this->postJson($web.'/sales/'.$sale.'/collect', [])->assertOk();
+    $this->stripeState = 'succeeded';
+    $this->postJson($web.'/sales/'.$sale.'/reconcile', [])->assertOk();
+    $request = (string) Str::uuid();
+    $this->postJson($web.'/sales/'.$sale.'/refund-status', ['request_id' => $request])->assertOk()->assertJsonPath('state', 'not_dispatched');
+    $input = ['request_id' => $request, 'amount_minor' => 100, 'reason' => 'other', 'restock' => false, 'restock_lines' => []];
+    $this->postJson($web.'/sales/'.$sale.'/refund', $input)->assertConflict()->assertJsonPath('error.code', 'refund_request_retired');
+    expect($this->stripeRefunds)->toHaveCount(0);
+    $input['request_id'] = (string) Str::uuid();
+    $this->postJson($web.'/sales/'.$sale.'/refund', $input)->assertOk()->assertJsonPath('state', 'succeeded');
+    expect($this->stripeRefunds)->toHaveCount(1);
 });

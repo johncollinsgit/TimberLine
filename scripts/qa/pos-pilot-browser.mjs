@@ -58,6 +58,8 @@ for(const [engine,name] of [[chromium,'chromium'],[webkit,'webkit']]){
    await page.locator('rect.chart-bar').nth(10).waitFor();
    assert.equal(await page.locator('g.chart-target').count(),31);
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+   await page.getByLabel('Find receipt in this period').fill('EB-FIXTURE');
+   await Promise.all([page.waitForResponse(r=>r.url().includes('/activity?')&&new URL(r.url()).searchParams.get('search')==='EB-FIXTURE'),page.getByRole('button',{name:'Search receipts',exact:true}).click()]);
    await page.screenshot({path:`${output}/${name}-${width}-activity.png`});
    await page.getByRole('button',{name:'Sell',exact:true}).click();await page.getByRole('heading',{name:'Fictional candle',exact:true}).waitFor();
    await page.screenshot({path:`${output}/${name}-${width}-sell.png`});

@@ -137,10 +137,10 @@ final class PosReadiness
             if (empty($s['merchant_review']['document_hash']) || ($s['merchant_review']['markup_minor'] ?? null) !== 0) {
                 $blockers[] = 'actual_merchant_rate_review_missing';
             }
-            if (! $reader?->acceptance_at || ! $reader?->acceptance_build) {
+            if (! $reader?->acceptance_at || $reader?->acceptance_build !== config('pos_live.web_build')) {
                 $test = $s['acceptance'] ?? [];
                 $spent = (int) $this->store->rows('sales', (int) $register->tenant_id)->where('register_id', $register->id)->whereNotIn('state', ['quoted', 'failed', 'cancelled'])->sum('amount_minor');
-                if (empty($test['build']) || empty($test['expires_at']) || strtotime($test['expires_at']) <= time() || ! is_int($test['max_amount_minor'] ?? null) || $test['max_amount_minor'] <= 0 || ($amount !== null && $spent + $amount > $test['max_amount_minor'])) {
+                if (($test['build'] ?? null) !== config('pos_live.web_build') || empty($test['expires_at']) || strtotime($test['expires_at']) <= time() || ! is_int($test['max_amount_minor'] ?? null) || $test['max_amount_minor'] <= 0 || ($amount !== null && $spent + $amount > $test['max_amount_minor'])) {
                     $blockers[] = 'physical_acceptance_missing';
                 }
             }
