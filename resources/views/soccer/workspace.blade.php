@@ -37,7 +37,7 @@
 @endif
 
 @if($section==='home')
-<div class="section"><h2>This season</h2><div class="cards"><div><span class="number">{{ $registrations->where('status','registered')->count() }}</span><p class="muted">Registered players</p></div><div><span class="number">{{ $registrations->where('status','offered')->count() }}</span><p class="muted">Reserved, awaiting payment</p></div><div><span class="number">{{ $registrations->where('status','waitlisted')->count() }}</span><p class="muted">On the waitlist</p></div></div><a class="btn" href="{{ $pageUrl('players') }}">Open players & waitlist</a></div>
+<div class="section"><h2>This season</h2><div class="cards"><div><span class="number">{{ $registrations->where('status','registered')->count() }}</span><p class="muted">Registered players</p></div><div><span class="number">{{ $registrations->whereIn('status',['offered','payment_pending'])->count() }}</span><p class="muted">Awaiting payment</p></div><div><span class="number">{{ $registrations->where('status','waitlisted')->count() }}</span><p class="muted">On the waitlist</p></div></div><a class="btn" href="{{ $pageUrl('players') }}">Open players & waitlist</a></div>
 
 @if($admin)<div class="section"><h2>Recent changes</h2>
 @forelse($events as $e)<div class="row"><div><strong>{{ ucwords(str_replace('_',' ',$e['action'])) }}</strong><p class="muted">{{ $e['data']['summary']??'' }}</p></div><small class="muted">{{ $e['created_at'] }}</small></div>
@@ -70,19 +70,19 @@
 @foreach(['allergies'=>'Allergies','allergenList'=>'Allergen details','epipen'=>'EpiPen','conditions'=>'Conditions','restrictions'=>'Restrictions','comments'=>'Notes','medical_note'=>'Historical notes'] as $field=>$label)
 @if($players[$reg->player_id]['profile'][$field]??false)<p><strong>{{ $label }}:</strong> {{ $players[$reg->player_id]['profile'][$field] }}</p>
 @endif
-@endforeach</details></td><td>{{ config('soccer.teams.'.$reg->team_key.'.name') }}</td><td><span class="pill {{ $reg->status }}">{{ ucfirst($reg->status) }}</span>
+@endforeach</details></td><td>{{ config('soccer.teams.'.$reg->team_key.'.name') }}</td><td><span class="pill {{ $reg->status }}">{{ $reg->status==='payment_pending'?'Payment pending · saved':ucfirst($reg->status) }}</span>
 @if($reg->offer_expires_at)<p class="muted">Pay by {{ \Carbon\Carbon::parse($reg->offer_expires_at)->timezone('America/New_York')->format('M j, g:i A') }}</p>
 @endif</td><td>{{ $reg->needs_jersey?($reg->jersey_size??'Size needed'):'Reusing jersey' }}</td>
 @if($admin)<td>
 @if($reg->release_id)<a class="btn ghost" href="{{ route('soccer.release-export',['id'=>$reg->release_id,'tenant'=>$tenant->slug]) }}">Release PDF</a>
 @endif{{ $reg->status==='historical'?'Historical fee unverified':($reg->waived?'Waived':'$'.number_format($reg->amount_cents/100,2)) }}<p class="muted">{{ $reg->payment_status }}</p></td><td>
-@if($reg->status==='waitlisted')<form method="post" action="{{ $actionUrl('offer') }}">
+@if(in_array($reg->status,['waitlisted','payment_pending']))<form method="post" action="{{ $actionUrl('offer') }}">
 @csrf<input type="hidden" name="season_id" value="{{ $reg->season_id }}"><input type="hidden" name="family_id" value="{{ $reg->family_id }}"><input type="hidden" name="assignments[0][id]" value="{{ $reg->id }}"><select name="assignments[0][seat_kind]" aria-label="Seat pool"><option value="public">Public seat</option><option value="reserved">Reserved seat</option></select><button>Offer & invoice</button></form>
 @if(!$reg->auto_eligible)<form method="post" action="{{ $actionUrl('reactivate') }}">
 @csrf<input type="hidden" name="id" value="{{ $reg->id }}"><button class="ghost">Reactivate</button></form>
 @endif
 @endif
-@if(in_array($reg->status,['registered','waitlisted']))<details><summary>Override team</summary><form method="post" action="{{ $actionUrl('override-team') }}">
+@if(in_array($reg->status,['registered','waitlisted','payment_pending']))<details><summary>Override team</summary><form method="post" action="{{ $actionUrl('override-team') }}">
 @csrf<input type="hidden" name="id" value="{{ $reg->id }}"><select name="team_key" aria-label="Destination team">
 @foreach(config('soccer.teams') as $key=>$team)<option value="{{ $key }}">{{ $team['name'] }}</option>
 @endforeach</select><label>Reason<input name="reason" required></label><button>Move player</button></form></details><form method="post" action="{{ $actionUrl('cancel') }}">
@@ -231,7 +231,7 @@
 @if(!empty($settings['help_ai_key']))<label><span><input type="checkbox" name="remove_key" value="1"> Remove saved key</span></label>@endif
 <button>Save family help settings</button></form></section><section class="section"><h2>Spring 2027 season</h2>
 @if($season)<form method="post" action="{{ $actionUrl('season') }}">
-@csrf<input type="hidden" name="id" value="{{ $season->id }}"><div class="form-grid"><label>First practice date<input type="date" name="starts_on" value="{{ $season->starts_on }}"></label><label>Age cutoff date<input type="date" name="age_as_of" value="{{ $season->age_as_of??$season->starts_on }}"></label><label>Scheduled opening · Eastern time<input type="datetime-local" name="registration_opens_at" value="{{ $season->registration_opens_at?\Carbon\CarbonImmutable::parse($season->registration_opens_at)->timezone('America/New_York')->format('Y-m-d\\TH:i'):'' }}"></label><label>Offer deadline (hours)<input type="number" name="offer_hours" min="1" max="336" value="{{ $season->offer_hours }}"></label></div>
+@csrf<input type="hidden" name="id" value="{{ $season->id }}"><div class="form-grid"><label>First practice date<input type="date" name="starts_on" value="{{ $season->starts_on }}"></label><label>Age cutoff date<input type="date" name="age_as_of" value="{{ $season->age_as_of??$season->starts_on }}"></label><label>Scheduled opening · Eastern time<input type="datetime-local" name="registration_opens_at" value="{{ $season->registration_opens_at?\Carbon\CarbonImmutable::parse($season->registration_opens_at)->timezone('America/New_York')->format('Y-m-d\\TH:i'):'' }}"></label><div><strong>Checkout reservation</strong><p class="muted">30 minutes. Expired unpaid applications stay saved and can be resumed; daily reminders stop after payment.</p><input type="hidden" name="offer_hours" value="{{ $season->offer_hours }}"></div></div>
 @foreach($capacity as $k=>$tm)<div class="row"><strong>{{ $tm['name'] }}</strong><div class="actions"><label>Public spots<input type="number" name="teams[{{ $k }}][public]" value="{{ $tm['public'] }}" min="{{ $tm['public_used'] }}"></label><label>Admin reserve<input type="number" name="teams[{{ $k }}][reserved]" value="{{ $tm['reserved'] }}" min="{{ $tm['reserved_used'] }}"></label></div></div>
 @endforeach<label style="margin:20px 0"><span><input type="checkbox" name="registration_open" value="1"
 @checked($season->registration_open)> Open registration after setup verification</span></label><button>Save season</button></form>

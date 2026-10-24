@@ -1,0 +1,29 @@
+# Native saved-building links for request intake — source candidate
+
+This packet depends on the approved release `058d0bfeb46b0127733913e9e878fcbeded2b1e2`, frozen Buildings UX patch `2d5d8f0d7a251d48cef5bcf52237202357f7c11cdf2ecda76ad96050ffdb89c1`, and request-completion patch `c9ea1e4fd4dedc122802b0bff8eb97c1886f8f11c0e6163587e0cf41c82c08d9`. It is prepared source only. No branch, commit, PR, deployment, provider activation, migration, production account or live data write is included.
+
+## Intake and authorization
+
+The private New request form offers an optional **Saved building** choice. The data projection returns at most 200 current active `facility` location records (ID, title, version only) from a scan of 1000 active same-tenant/same-area locations. `has_more` and coverage disclose this bound. A public map entry, typed label, room, asset, other department or other tenant never establishes a link.
+
+`request.create` may supply `location_id` (UUID) together with positive integer `location_version`. Both fields are prohibited on other lifecycle commands. A selection is rechecked under the existing tenant work lock shared with resource edits: current authenticated membership/rollout/write permission, same tenant/runtime, currently authorized exact area, resource kind `location`, active status, level `facility`, and exact version. Fresh stale or unavailable targets reject without creating a request, receipt or audit. No grant is added. The isolated runtime supplies the existing database/key/storage boundary; no cross-runtime lookup is added.
+
+The server stores the saved ID and accepted version in the existing encrypted request `data`, using the server's building title as a label snapshot. Coordinates are prohibited with a native link; resource map data never becomes a surveyed position. Later renames do not rewrite existing request text; the stable ID remains the relationship. Existing request lifecycle, task ACLs and completion-note preservation remain intact.
+
+The form captures choices/version when opened. Background refresh cannot silently substitute a version the user has not reviewed. After a stale-selection rejection, close the form, refresh the workspace, and choose again. An exact already-accepted retry recovers the existing request without a new acceptance/write, even if building metadata has since changed; current actor/area/request permissions are still required. A changed body under the same receipt key rejects. This preserves the existing uncertain-outcome retry contract.
+
+## Truthful Buildings results
+
+The frozen Buildings workflow counts only explicit current authorized IDs in its bounded request result, sorts open work before completed work and then by current canonical task priority or saved intake priority before assignment. Legacy unset values remain unrecorded; see [department classification](enterprise-request-classification.md). Free-text name matches remain visibly separate and never contribute counts or priority summaries. Empty private results say **No linked tickets in this result**; no building-wide zero is inferred. The list covers at most 100 readable requests from a 1000-record scan; more work may exist.
+
+Legacy label/optional-coordinate intake stays available when no building is selected, including when Resources is disabled. Existing text-only requests are not retrofitted. The public fictional sample keeps text-only intake and explicitly disables native selection; it does not simulate persistence or ACL acceptance. The 68-entry official catalog, saved workspace locations, and map source remain distinct.
+
+Matching concise tour/header/table guidance is a coordinated separate source packet dependent on frozen tour-position `3962c5d1395e58c9ddedf9264f36bfb2a42b374888addd3b86989859fce51d0e`; integrate and review that delivery together with this UI. No tour should promise native selection in the public sample, project owner fields, or an automatic drawer open. The final CI-registration packet must explicitly include `EnterpriseRequestBuildingTest.php` in `phpunit.enterprise.xml` and `enterprise-request-building.test.mjs` in its existing Node gate; this packet intentionally does not modify that shared registration.
+
+## Local evidence and release limits
+
+Seven real isolated-runtime SQLite tests use actual Enterprise migrations/routes with a disposable synthetic member/coordinator. They cover encrypted persistence, audit/reload, real canonical urgent task projection, text exclusion, scope/kind/status/version rejection, prohibited retargeting/coordinates, bounded choices, Resources-disabled legacy intake, current/revoked access and exact retries. Together with the eight unchanged completion tests: 15 tests / 409 assertions. No external HTTP is sent.
+
+Five Node tests execute the actual form handler and Buildings projection functions, including captured-version behavior and linked-only open/urgent counts. Ten local headless browser cases use the actual dialog markup, handler and shared styles in Chromium and WebKit at desktop, iPad portrait/landscape and mobile sizes plus disabled sample selection. Real native FormData sends the captured ID/version, escapes titles, clears coordinates, preserves legacy intake and exposes a stable accessible field name. Local fixture screenshots and JSON are retained beside the patch. These fixtures are not a live workspace or an authorization boundary.
+
+Pint and PHP lint pass. No migration or MySQL schema change exists; local tests use PHP 8.5.2 and SQLite, not a production MySQL concurrency proof. The shared existing tenant lock is retained, but CI and the protected GitHub-to-Forge release procedure remain mandatory. Hosted verification of the final approved commit, real reload persistence, ACL isolation, `/ready` and existing-site health remains the primary release task's responsibility. AI, messages, payments and memberships are unchanged.

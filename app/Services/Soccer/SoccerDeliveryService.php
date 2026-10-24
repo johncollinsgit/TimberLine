@@ -32,6 +32,12 @@ class SoccerDeliveryService
             $d = $this->store->row('deliveries', $tenant, $id);
             $p = $this->store->decrypt($d->payload);
             $event = $this->store->row('events', $tenant, $d->event_id);
+            if (in_array($event->action, ['registration_payment_reminder', 'payment_reminder'], true)
+                && ! app(SoccerRecoveryService::class)->reminderEligible($tenant, $event)) {
+                $this->store->query('deliveries', $tenant)->where('id', $id)->update(['status' => 'suppressed', 'error' => 'payment_reminder_no_longer_due', 'updated_at' => now()]);
+
+                continue;
+            }
             if (! empty($p['invoice_id'])) {
                 $invoice = $this->store->query('invoices', $tenant)->where('id', $p['invoice_id'])->first();
                 if (! $invoice || $invoice->status !== 'unpaid' || CarbonImmutable::parse($invoice->expires_at)->lte(now())) {

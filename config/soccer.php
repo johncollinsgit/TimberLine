@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'checkout_hold_minutes' => 30,
+    'payment_reminders_enabled' => (bool) env('WREN_SOCCER_PAYMENT_REMINDERS_ENABLED', false),
     'enabled' => (bool) env('SOCCER_ENABLED', false),
     'tenant_slug' => 'wren-family-soccer',
     'origin' => 'https://easleyfamilysoccer.com',

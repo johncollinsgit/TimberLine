@@ -1,0 +1,668 @@
+{
+  "schema_version": 1,
+  "client_id": "c9634000-0000-4000-8000-000000000001",
+  "silo_id": "c9634000-0000-4000-8000-000000000002",
+  "environment": "demo",
+  "storage_id": "c9634000-0000-4000-8000-000000000003",
+  "tenant": {
+    "business_id": "c9634000-0000-4000-8000-000000000004",
+    "slug": "lees-mcrae-demonstration",
+    "name": "Lees-McRae - persistent demonstration"
+  },
+  "branding": {
+    "organization_name": "Lees-McRae demonstration",
+    "accent": "#a88b4c"
+  },
+  "departments": [
+    {
+      "id": "c9634000-0000-4000-8000-000000000005",
+      "key": "campus-shared",
+      "name": "Campus shared directory",
+      "visibility": "shared"
+    },
+    {
+      "id": "c9634000-0000-4000-8000-000000000006",
+      "key": "operations",
+      "name": "Operations",
+      "visibility": "department_only"
+    }
+  ],
+  "locations": [
+    {
+      "id": "c9634100-0000-4000-8000-000000000001",
+      "key": "map-1",
+      "department_key": "campus-shared",
+      "name": "Robb Center",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:1"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000002",
+      "key": "map-2",
+      "department_key": "campus-shared",
+      "name": "May School of Natural and Health Sciences",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:2"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000003",
+      "key": "map-3",
+      "department_key": "campus-shared",
+      "name": "Maple House",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:3"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000004",
+      "key": "map-4",
+      "department_key": "campus-shared",
+      "name": "Hayes Auditorium",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:4"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000005",
+      "key": "map-5",
+      "department_key": "campus-shared",
+      "name": "The Summit",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:5"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000006",
+      "key": "map-6",
+      "department_key": "campus-shared",
+      "name": "Cannon Welcome Center",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:6"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000007",
+      "key": "map-7",
+      "department_key": "campus-shared",
+      "name": "Lauritsen Building",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:7"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000008",
+      "key": "map-8",
+      "department_key": "campus-shared",
+      "name": "Lauritsen Technical Theatre and Design Studio",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:8"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000009",
+      "key": "map-9",
+      "department_key": "campus-shared",
+      "name": "Avery Hall",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:9"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000010",
+      "key": "map-10",
+      "department_key": "campus-shared",
+      "name": "Theatre Arts Building",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:10"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000011",
+      "key": "map-11",
+      "department_key": "campus-shared",
+      "name": "Tate Hall",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:11"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000012",
+      "key": "map-12",
+      "department_key": "campus-shared",
+      "name": "Chaffee Center",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:12"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000013",
+      "key": "map-13",
+      "department_key": "campus-shared",
+      "name": "Shelton Learning Commons",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:13"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000014",
+      "key": "map-14",
+      "department_key": "campus-shared",
+      "name": "Bowman Building",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:14"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000015",
+      "key": "map-15",
+      "department_key": "campus-shared",
+      "name": "Rock House",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:15"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000016",
+      "key": "map-16",
+      "department_key": "campus-shared",
+      "name": "McRae House",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:16"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000017",
+      "key": "map-17",
+      "department_key": "campus-shared",
+      "name": "Tennessee Hall",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:17"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000018",
+      "key": "map-18",
+      "department_key": "campus-shared",
+      "name": "Pinnacle Room/Deck",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:18"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000019",
+      "key": "map-19",
+      "department_key": "campus-shared",
+      "name": "North Carolina Building",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:19"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000020",
+      "key": "map-20",
+      "department_key": "campus-shared",
+      "name": "Virginia Hall",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:20"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000021",
+      "key": "map-21",
+      "department_key": "campus-shared",
+      "name": "Tufts Tower",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:21"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000022",
+      "key": "map-22",
+      "department_key": "campus-shared",
+      "name": "Banner Elk Presbyterian Church",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:22"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000023",
+      "key": "map-23",
+      "department_key": "campus-shared",
+      "name": "Banner Elk Methodist Church",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:23"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000024",
+      "key": "map-24",
+      "department_key": "campus-shared",
+      "name": "Needham Alumni House",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:24"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000025",
+      "key": "map-25",
+      "department_key": "campus-shared",
+      "name": "Kiln Building",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:25"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000026",
+      "key": "map-26",
+      "department_key": "campus-shared",
+      "name": "Whitesell Art Building and Costume Shop",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:26"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000027",
+      "key": "map-27",
+      "department_key": "campus-shared",
+      "name": "Carriage House",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:27"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000028",
+      "key": "map-28",
+      "department_key": "campus-shared",
+      "name": "McMillan Hall",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:28"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000029",
+      "key": "map-29",
+      "department_key": "campus-shared",
+      "name": "Bentley Hall",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:29"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000030",
+      "key": "map-30",
+      "department_key": "campus-shared",
+      "name": "Baldwin Hall",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:30"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000031",
+      "key": "map-31",
+      "department_key": "campus-shared",
+      "name": "Cycling Team Training Space",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:31"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000032",
+      "key": "map-32",
+      "department_key": "campus-shared",
+      "name": "Stephenson Center for Appalachia",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:32"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000033",
+      "key": "map-33",
+      "department_key": "campus-shared",
+      "name": "Daniel Boone VI Cottage",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:33"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000034",
+      "key": "map-34",
+      "department_key": "campus-shared",
+      "name": "Hemlock Village",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:34"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000035",
+      "key": "map-35",
+      "department_key": "campus-shared",
+      "name": "Cannon Cottage",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:35"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000036",
+      "key": "map-36",
+      "department_key": "campus-shared",
+      "name": "Elk River Apartments",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:36"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000037",
+      "key": "map-37",
+      "department_key": "campus-shared",
+      "name": "Arthur Student Recreation Complex",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:37"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000038",
+      "key": "map-38",
+      "department_key": "campus-shared",
+      "name": "Facilities Complex",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:38"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000039",
+      "key": "map-39",
+      "department_key": "campus-shared",
+      "name": "May Wildlife Rehabilitation Center",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:39"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000040",
+      "key": "map-40",
+      "department_key": "campus-shared",
+      "name": "Cheese House",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:40"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000041",
+      "key": "map-41",
+      "department_key": "campus-shared",
+      "name": "Haigler Athletic Center",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:41"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000042",
+      "key": "map-42",
+      "department_key": "campus-shared",
+      "name": "Williams Physical Education Center",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:42"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000043",
+      "key": "map-43",
+      "department_key": "campus-shared",
+      "name": "Rhea-Lyons Indoor Swimming Pool",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:43"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000044",
+      "key": "map-44",
+      "department_key": "campus-shared",
+      "name": "Chesley Indoor Tennis Courts",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:44"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000045",
+      "key": "map-45",
+      "department_key": "campus-shared",
+      "name": "Tate Field",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:45"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000046",
+      "key": "map-46",
+      "department_key": "campus-shared",
+      "name": "Arthur-Lauritsen-Sanders Track",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:46"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000047",
+      "key": "map-47",
+      "department_key": "campus-shared",
+      "name": "Outdoor Tennis Courts",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:47"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000048",
+      "key": "map-48",
+      "department_key": "campus-shared",
+      "name": "Softball Field",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:48"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000049",
+      "key": "map-49",
+      "department_key": "campus-shared",
+      "name": "Alumni House",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:49"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000050",
+      "key": "map-50",
+      "department_key": "campus-shared",
+      "name": "Green House",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:50"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000051",
+      "key": "map-51",
+      "department_key": "campus-shared",
+      "name": "Annie L. Cannon Cottage",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:51"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000052",
+      "key": "map-52",
+      "department_key": "campus-shared",
+      "name": "Bryan Gym",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:52"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000053",
+      "key": "map-53",
+      "department_key": "campus-shared",
+      "name": "Barnhardt Building",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:53"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000054",
+      "key": "map-54",
+      "department_key": "campus-shared",
+      "name": "Hodges Amphitheater",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:54"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000055",
+      "key": "map-55",
+      "department_key": "campus-shared",
+      "name": "Poteat Vocational/Maintenance Building",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:55"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000056",
+      "key": "map-56",
+      "department_key": "campus-shared",
+      "name": "East Wing",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:56"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000057",
+      "key": "map-57",
+      "department_key": "campus-shared",
+      "name": "Cannon Administration Building",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:57"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000058",
+      "key": "map-58",
+      "department_key": "campus-shared",
+      "name": "West Wing",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:58"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000059",
+      "key": "map-59",
+      "department_key": "campus-shared",
+      "name": "Keener Hall",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:59"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000060",
+      "key": "map-60",
+      "department_key": "campus-shared",
+      "name": "Douglass Cottage",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:60"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000061",
+      "key": "map-61",
+      "department_key": "campus-shared",
+      "name": "Harris Cottage",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:61"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000062",
+      "key": "map-62",
+      "department_key": "campus-shared",
+      "name": "McKowen Cottage",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:62"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000063",
+      "key": "map-63",
+      "department_key": "campus-shared",
+      "name": "Hickory Cottage",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:63"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000064",
+      "key": "map-64",
+      "department_key": "campus-shared",
+      "name": "Campbell Hall",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:64"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000065",
+      "key": "map-65",
+      "department_key": "campus-shared",
+      "name": "Neale Cottage",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:65"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000066",
+      "key": "map-66",
+      "department_key": "campus-shared",
+      "name": "Lakeside Apartments",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:66"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000067",
+      "key": "map-67",
+      "department_key": "campus-shared",
+      "name": "Wildcat Lake Rentals",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:67"
+    },
+    {
+      "id": "c9634100-0000-4000-8000-000000000068",
+      "key": "map-68",
+      "department_key": "campus-shared",
+      "name": "Townhouse",
+      "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+      "source_label": "Official map legend; placement and ownership unverified",
+      "source_entry": "lees-mcrae-official-map-v1:68"
+    }
+  ],
+  "workflow_defaults": [
+    {
+      "key": "operations-intake",
+      "name": "Operations intake and review",
+      "template": "maintenance_v1"
+    }
+  ],
+  "role_defaults": {
+    "manager": {
+      "label": "Department manager",
+      "view": "list",
+      "density": "comfortable"
+    },
+    "employee": {
+      "label": "Employee",
+      "view": "list",
+      "density": "comfortable"
+    },
+    "viewer": {
+      "label": "Read-only viewer",
+      "view": "list",
+      "density": "comfortable"
+    }
+  }
+}

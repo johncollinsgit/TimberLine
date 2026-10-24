@@ -1,3 +1,114 @@
+## 2026-10-23 — Reviewer AI Coming soon placeholders (source candidate)
+
+Leaving a native page stops obsolete workspace/catalog read batches before the
+replacement document commits. Cancelling navigation retains drafts and exact
+retry state, and a fresh load remains available. Existing access controls and
+write behavior are preserved.
+
+Show compact Chats, Assistants and Voice cards in the fictional reviewer demo.
+Keep chat, microphone, generated workflow drafting, Home AI summaries and AI
+usage controls unavailable, with matching tour guidance. Do not invent existing
+chats. Preserve native signed-in record checks and manual work controls. This
+proposal/PDF/workspace release activates no provider; live reviewer AI follows
+as a separate release and acceptance milestone.
+
+## 2026-10-23 — Jobs, incoming tickets and project details (source candidate)
+
+Show projects and incoming tickets in compact searchable rows with department,
+person and status controls. New ticket files an unassigned request without
+requiring a project; assignment and job wizards choose the current department,
+project, person and saved building. Roll Call opens permitted projects with
+in-house people, contractors and locations. One roomy Center/Side dialog retains
+comment drafts, selected photos and active uploads. Existing private quarantine
+and native edit permissions remain authoritative.
+
+Remove workspace slogans and keep layout/intake preferences in Settings. Use
+month grids for work due dates and Eastern resource bookings, with separate
+semantics. The campus map uses explicit current building links on the official
+plan. List and Calendar remain above an optional secondary map. The fictional
+browser dataset grows additively to 20 jobs, 10 field workers and five contractors;
+Blaine is a demo role. These fixtures create no real accounts or database seed.
+Local browser results remain separate from release and hosted verification.
+
+## 2026-10-23 — Proposal tabs, college animation, PDF and usage comparison (source candidate)
+
+Proposal previews, readers and selection summaries show one section at a time
+with native keyboard controls; switching preserves unsent form values and print
+reveals all sections. The Lees-McRae password page and Overview reuse the original
+college animation, with static reduced-motion rendering. The locked page receives
+only a branding boolean and keeps proposal content behind its existing password.
+
+A top-of-reader Download PDF action exports the complete saved proposal with its
+stored terms and prices. Financial offers up to three private planning scenarios
+for the quoted one- or three-workspace options, editable departmental AI, voice,
+email and SMS assumptions, and explicit university or department preferences.
+Unpriced costs and unselected preferences remain pending. These controls preserve
+the stored proposal and existing access; no provider, agreement or spending is
+activated. Local verification is separate from final hosted acceptance.
+
+## 2026-10-23 — Stored proposal commercial sections (source candidate)
+
+Show saved financial, implementation, support, usage and renewal sections with
+semantic fee tables, visible keyboard focus and narrow-screen table geometry.
+Save and reload retain reviewed terms and prices; changed contractual scope
+requires a new commercial review. Older publications retain their original copy.
+Runtime draft reconciliation, publication and hosted acceptance remain separate.
+
+## 2026-10-23 — Explicit typed private memory candidate
+
+- Ask offers inspect/edit/delete for account-and-department memory, initially off
+  for each conversation. Only typed formatting choices and explicitly previewed
+  current source observations can be saved; no arbitrary fact/secret field exists.
+- Each entry shows confirmation provenance and expiry. Changed or inaccessible
+  sources withhold observations; no additional retrieval authority is granted.
+- Save/delete confirmation, exact uncertain retries, late-response fences and
+  current scope checks mirror the existing Ask lifecycle. The matching tour
+  describes opt-in and current-source limits. Voice remains separate.
+- Source-only, default off; local fixture evidence uses fake HTTP and sample data.
+
+## 2026-10-23 — Private saved assistants in Ask (separate disabled candidate)
+
+Let an authorized user explicitly save, inspect, edit and delete a private assistant's purpose, instructions and fixed currently permitted read checks in the existing Ask pane. Configuration never grants roles, adds provider tools, chooses a model/account or captures chat automatically. Profile selection is frozen during a short conversation; edits/deletion invalidate its stale context. Exact retries retain UUID/version, confirmations identify the configuration action, and role/department resets clear form content. Browser drafts are not persisted. The same tour points to the reader selector and distinguishes saved configuration from queued persistent memory. Native controls and responsive editor targets retain the existing accessibility palette and sizing. Local fake-provider evidence is separate from live model/voice acceptance.
+
+## 2026-10-23 — Text conversation in the existing Ask pane (separate disabled candidate)
+
+Add separately gated setup/availability, explicit bounded Send to OpenAI, current source/calculation links and short-session recovery to the existing Ask log/composer. Browser storage retains opaque receipt IDs only. Stop/navigation fence late replies without cancelling cost exposure; read-only checks never resend a turn. Explicit clear preserves metering, with an honest local-only receipt fallback when server content cannot resolve. Text uses the available panel width, native 44px controls and the approved system-palette disclosure. The same tour distinguishes approved text, unavailable setup, deterministic checks and queued voice. Local fictional desktop/iPad/mobile/reflow and forced-palette browser evidence is separate from live provider acceptance. No provider, send, voice, account, permission or infrastructure is activated.
+
+## 2026-10-23 — Read-only COO record checks (separate source candidate)
+
+The private Ask pane can offer explicit current-work, saved-building and recorded-cost checks behind a new default-off flag. Building counts use authorized saved IDs only. Owner/admin cost comparisons retain integer inputs, currencies and estimate/recorded-cost basis; they do not claim approved budgets or staffing capacity. Source records and calculation inputs are clickable. Scope changes and denied access clear evidence; matching tour copy targets the new controls. No paid model, voice, memory, send or work-write capability is activated. Local fictional desktop/iPad/mobile/reflow checks are separate from deployed acceptance. Exact source citations now open a current authorized read-only record page independently of bounded workspace lists. Product, status and tour copy explicitly say deterministic and no AI model. The new native selectors reuse the approved system-palette SVG disclosure, with a light default, painted forced-color light/dark arrows and distinct disabled system colors; native semantics and 44px targets remain intact.
+
+## 2026-10-23 — Compact Enterprise header, explicit building links and approved logo (source candidate)
+
+- Replace the large demo banner with a compact workspace identity, discreet sample-data label, expandable help and Tour controls. Proposal uses only the existing authorized published-review context.
+- Match tour destinations to the full-width tables. Hide outside guide controls while the native detail drawer is open; Close/Escape returns to the same list and guide step.
+- Use the exact approved Rooted Peak horizontal SVG with its unchanged PNG fallback and proportions in the existing sidebar. Bind both asset files into the immutable reviewer source fingerprint.
+- Let request intake select an active saved building in the current workspace. Validate its identity/version on the server; typed location text remains unlinked. Serialize resource history as explicit UTC without rewriting stored audit evidence.
+- Keep Roll Call and period-report selects at least 44px high in WebKit, with visible arrows and native keyboard, disabled and focus behavior.
+- Keep existing tenant/record permissions, provider gates and release checks. Local responsive browser checks do not establish physical-device or hosted acceptance.
+
+## 2026-10-23 — Full-width Enterprise work tables and dismissible details (source candidate)
+
+Projects and Requests use the full work canvas. Sort headers for fields present in the current authorized projection; request priority and assignee come from its linked task, and explicit saved building links stay distinct from unverified typed location labels. A row or title opens the existing work actions and discussion in a native modal drawer. Close or Escape returns focus and the original search, sort and scroll. Workspace reload clears private detail synchronously. Buildings keeps its separate master/ticket/detail hierarchy. The desktop Work rail adds quiet outline icons, a divider and aligned full-row targets using Everbranch colors and existing destinations. The same status and exact-retry controls stay reachable inside the modal and return to their original positions on Close. No authority, operational record, provider or payment behavior changes. Shared public/private renderer preview and focused interaction checks are in the separate work-table review packet; production acceptance remains gated by the approved release procedure.
+
+## 2026-10-23 — Enterprise Buildings workflow and readable tours
+
+- Keep building search, priority-ranked authorized tickets and selected details adjacent on desktop; use explicit Back navigation on smaller screens and keep the synchronized map secondary.
+- Count explicit saved building links only. Show unverified text matches separately and clear detached map context whenever workspace access resets or disappears.
+- Shorten tour headings and explanations, move extra detail into expandable help and keep destinations aligned with the actual screen controls.
+- Preserve saved progress when completing a request without a replacement note; checklist completion and current coordinator approval remain required.
+
+## 2026-10-23 — Enterprise desktop navigation readability
+
+- Increase desktop navigation labels to 16px and workspace links to 15px, with a 280px rail and larger targets.
+- Keep existing touch/tablet navigation, selected-state contrast, focus indicators and scroll reachability; keep the narrow desktop rail vertical during zoom reflow. Page content is not zoomed.
+
+## 2026-10-22 — Enterprise campus spacing
+
+- Separate the campus search label from the field so the visible keyboard focus ring stays clear of the label; align the adjacent action with the field.
+- Use the available operational canvas beside the navigation rail while retaining responsive padding and bounded sign-in/organization-selection pages.
+- Preserve labels, focus styling, access controls, record behavior and provider gates.
+
 ## 2026-10-20 — Markets & Makers management candidate
 
 - Replace wrapped management tabs with grouped persistent navigation and a mobile drawer.

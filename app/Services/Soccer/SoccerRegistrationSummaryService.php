@@ -12,18 +12,18 @@ class SoccerRegistrationSummaryService
         $family = $this->store->row('families', $tenant, $event->family_id);
         $profile = $this->store->decrypt($family->profile);
         $data = $this->store->decrypt($event->data);
-        $rows = $this->store->query('registrations', $tenant)->where('season_id', $season->id)->whereIn('status', ['registered', 'offered', 'waitlisted'])->get();
+        $rows = $this->store->query('registrations', $tenant)->where('season_id', $season->id)->whereIn('status', ['registered', 'offered', 'waitlisted', 'payment_pending'])->get();
         $players = $this->store->query('players', $tenant)->whereIn('id', $rows->pluck('player_id'))->get()->keyBy('id');
         $placed = $rows->whereIn('status', ['registered', 'offered']);
         $paid = $placed->where('payment_status', 'paid')->where('waived', false);
-        $unpaid = $placed->where('payment_status', 'unpaid')->where('waived', false);
+        $unpaid = $rows->whereIn('status', ['offered', 'payment_pending'])->where('payment_status', 'unpaid')->where('waived', false);
         $invoices = $this->store->query('invoices', $tenant)->where('season_id', $season->id)->where('status', 'paid')->get();
         $received = (int) $invoices->sum('amount_cents');
         $refunded = (int) $invoices->sum('refunded_cents');
         $describe = fn ($row) => [
             'name' => $players[$row->player_id]->name ?? 'Player',
             'team' => config('soccer.teams.'.$row->team_key.'.name', $row->team_key),
-            'status' => $row->status === 'waitlisted' ? 'Waitlisted' : ($row->waived ? 'Fee waived' : ($row->payment_status === 'paid' ? 'Paid' : 'Payment due')),
+            'status' => $row->status === 'payment_pending' ? 'Payment pending · application saved' : ($row->status === 'waitlisted' ? 'Waitlisted' : ($row->waived ? 'Fee waived' : ($row->payment_status === 'paid' ? 'Paid' : 'Payment due'))),
         ];
         $groups = [];
         foreach (json_decode($season->teams, true) as $key => $team) {

@@ -2,6 +2,12 @@ name: Build MySQL Schema Baseline
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'database/migrations/**'
+      - '.github/workflows/schema-baseline.yml'
+      - 'scripts/ci/refresh-mysql-schema-baseline.sh'
+      - 'scripts/ci/verify-mysql-schema-baseline.sh'
 
 permissions:
   contents: read
@@ -9,6 +15,7 @@ permissions:
 jobs:
   build-baseline:
     name: Build and verify disposable MySQL baseline
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     environment: Testing
     services:
@@ -33,6 +40,8 @@ jobs:
       DB_PASSWORD: root
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - uses: shivammathur/setup-php@v2
         with:
