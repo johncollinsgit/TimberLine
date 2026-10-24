@@ -7,6 +7,9 @@ on:
       - 'app/Services/Pos/**'
       - 'app/Http/Controllers/Mobile/PosController.php'
       - 'routes/pos-mobile.php'
+      - 'routes/pos-staff.php'
+      - 'app/Http/Controllers/PosHandoffController.php'
+      - 'resources/js/pos-staff-register.js'
       - '.github/workflows/everbranch-pos.yml'
   workflow_dispatch:
 permissions:

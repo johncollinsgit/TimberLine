@@ -22,3 +22,9 @@ paid status. The original field application remains independent.
 
 Future release: offline collection and explicit provider-level idempotency for
 queued submission/retries. Current online duplicate-payment safeguards stay in place.
+
+Staff baskets arrive in the selected register's native inbox. Match the displayed
+handoff code and review the exact total. Claim identifiers are saved before HTTP;
+a missing reply resumes the same claim. Claiming never initiates collection.
+The mobile web register is for enrolled staff preparation and verified receipts;
+it cannot run iPhone Tap to Pay.

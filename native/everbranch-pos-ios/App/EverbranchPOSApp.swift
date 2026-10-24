@@ -51,6 +51,19 @@ struct POSView: View {
                 }
             }
             if let register = model.selectedRegister {
+                Section("Staff baskets") {
+                    ForEach(model.staffHandoffs) { handoff in
+                        Button { model.claim(handoff) } label: {
+                            VStack(alignment: .leading) {
+                                HStack { Text(handoff.code).monospaced(); Spacer(); Text(POSMoney.display(handoff.amountMinor)) }
+                                Text(handoff.lines.map { "\($0.quantity) × \($0.title)" }.joined(separator: ", ")).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    if model.staffHandoffs.isEmpty { Text("No waiting staff baskets.").foregroundStyle(.secondary) }
+                    Button("Refresh staff baskets") { model.perform { try await model.loadHandoffs() } }
+                    Text("Match the staff member’s sale code, then review the total before taking payment.").font(.caption).foregroundStyle(.secondary)
+                }
                 Section("Tap to Pay") {
                     ForEach(register.blockers, id: \.self) { Text($0.replacingOccurrences(of: "_", with: " ")).font(.caption).foregroundStyle(.orange) }
                     Toggle("Share Square diagnostic data", isOn: $model.diagnostics)
@@ -90,6 +103,7 @@ struct POSView: View {
             Section("Current sale") {
                 if let sale = model.sale {
                     Text(POSMoney.display(sale.amountMinor)).font(.largeTitle.bold())
+                    ForEach(Array((sale.lines ?? []).enumerated()), id: \.offset) { _, line in Text("\(line.quantity) × \(line.title)") }
                     Text("Payment: \(sale.state) · Stock: \(sale.stockState)")
                     if sale.canonicalConfirmation && !sale.receiptAvailable { Text("Payment received. Order finalization needs reconciliation. Do not charge again.").foregroundStyle(.orange) }
                     if model.pending?.collectionRequested == false && sale.state == "quoted" {

@@ -27,6 +27,7 @@ struct POSReceipt: Decodable {
     @Published var workspaces: [Workspace] = []
     @Published var registers: [Register] = []
     @Published var printingQuotes: [PrintingQuote] = []
+    @Published var staffHandoffs: [StaffHandoff] = []
     @Published var items: [CatalogItem] = []
     @Published var quantities: [String: Int] = [:]
     @Published var selectedWorkspace: Workspace?
@@ -88,6 +89,22 @@ struct POSReceipt: Decodable {
             self.items = value.items
             let quotes: PrintingQuoteList = try await self.api.request(self.base! + "/printing-quotes")
             self.printingQuotes = quotes.quotes
+            try await self.loadHandoffs()
+        }
+    }
+    func loadHandoffs() async throws {
+        guard let base, pending == nil else { return }
+        let response: StaffHandoffList = try await api.request(base + "/handoffs")
+        staffHandoffs = response.handoffs
+    }
+    func claim(_ handoff: StaffHandoff) {
+        guard pending == nil, let workspace = selectedWorkspace, let register = selectedRegister, let base else { return }
+        perform {
+            self.pending = PendingSale(workspace: workspace.slug, register: register.id, requestID: handoff.requestId)
+            self.pending?.handoffID = handoff.id
+            try self.savePending() // Persist original correlation before claiming. This never collects.
+            let result: Sale = try await self.api.request(base + "/handoffs/\(handoff.id)/claim", method: "POST", body: [:])
+            self.sale = result; self.pending?.saleID = result.saleId; try self.savePending()
         }
     }
     func setup() {
@@ -142,6 +159,9 @@ struct POSReceipt: Decodable {
             if pending.collectionRequested && result.state != "quoted" && result.state != "cancelled" {
                 result = try await api.request(base + "/sales/\(id)/reconcile", method: "POST", body: hint.map { ["payment_id": $0] } ?? [:])
             }
+        } else if let handoffID = pending.handoffID {
+            // A lost claim response resumes the same actor/device and original quote request.
+            result = try await api.request(base + "/handoffs/\(handoffID)/claim", method: "POST", body: [:])
         } else { result = try await api.request(base + "/requests/\(pending.requestID)") }
         if result.state == "quoted" && !result.recoveryRequired { self.pending?.collectionRequested = false }
         sale = result; self.pending?.saleID = result.saleId; try savePending()
@@ -184,6 +204,7 @@ struct POSReceipt: Decodable {
         perform {
             self.pending = nil; try self.savePending(); self.sale = nil; self.receipt = nil
             self.customerName = ""; self.customerEmail = ""; self.invoiceID = ""; self.quantities = [:]
+            try await self.loadHandoffs()
         }
     }
     func logout() {

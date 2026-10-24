@@ -489,3 +489,121 @@ it('renews stale merchant evidence through provider retrieval while retaining in
     config()->set('pos_live.tap_entitlement_verified', false);
     $this->postJson($this->base.'/authorize-device')->assertStatus(503);
 });
+
+function posStaffBrowser($test): string
+{
+    $staff = User::factory()->create(['is_active' => true, 'email_verified_at' => now()]);
+    $staff->tenants()->attach($test->tenant, ['role' => 'member', 'membership_active' => true]);
+    $test->staff = $staff;
+    $test->store->rows('assignments', $test->tenant->id)->insert($test->store->values($test->tenant->id, [
+        'register_id' => $test->register, 'user_id' => $staff->id, 'device_id' => 'web-fixture-browser', 'role' => 'cashier', 'active' => true,
+    ]));
+    $test->withoutHeader('Authorization')->actingAs($staff, 'web')->withSession(['pos_web_device' => 'web-fixture-browser']);
+
+    return '/pos/staff/'.$test->tenant->slug.'/registers/'.$test->register;
+}
+
+function posNativeCollector($test, string $device = 'fixture_device_1234'): void
+{
+    app('auth')->forgetGuards();
+    $test->withToken($test->token)->withHeader('X-Pos-Device', $device);
+}
+
+it('prepares a staff basket without stock or payment and denies browser-native credentials', function (): void {
+    $web = posStaffBrowser($this);
+    $this->get('/pos/staff/'.$this->tenant->slug)->assertOk()->assertSee('Staff register')->assertSee('web-fixture-browser');
+    $this->getJson($web.'/catalog')->assertOk();
+    $basket = $this->postJson($web.'/handoffs', $this->selection)->assertOk()->assertJsonPath('amount_minor', 1070)->json();
+    $this->postJson($web.'/handoffs', $this->selection)->assertOk()->assertJsonPath('id', $basket['id']);
+    expect($this->store->rows('sales', $this->tenant->id)->count())->toBe(0)
+        ->and($this->store->rows('holds', $this->tenant->id)->count())->toBe(0);
+    $this->postJson($this->base.'/authorize-device')->assertForbidden();
+    $this->postJson($this->base.'/handoffs/'.$basket['id'].'/claim')->assertForbidden();
+    Http::assertNothingSent();
+});
+
+it('claims a staff basket once and recovers a lost response with the original native request', function (): void {
+    $web = posStaffBrowser($this);
+    $basket = $this->postJson($web.'/handoffs', $this->selection)->assertOk()->json();
+    posNativeCollector($this);
+    $this->getJson($this->base.'/handoffs')->assertOk()->assertJsonPath('handoffs.0.id', $basket['id']);
+    $first = $this->postJson($this->base.'/handoffs/'.$basket['id'].'/claim')->assertOk()->json();
+    // Simulate failure after quote persistence, before handoff linkage/HTTP response.
+    $this->store->rows('handoffs', $this->tenant->id)->where('id', $basket['id'])->update(['sale_id' => null]);
+    $this->postJson($this->base.'/handoffs/'.$basket['id'].'/claim')->assertOk()->assertJsonPath('sale_id', $first['sale_id']);
+    expect($this->store->rows('sales', $this->tenant->id)->count())->toBe(1)
+        ->and($this->store->rows('sales', $this->tenant->id)->first()->request_id)->toBe($basket['request_id']);
+    Http::assertNothingSent();
+});
+
+it('rejects a competing assigned collector device and preserves the first handoff claim', function (): void {
+    $web = posStaffBrowser($this);
+    $basket = $this->postJson($web.'/handoffs', $this->selection)->assertOk()->json();
+    posNativeCollector($this);
+    $first = $this->postJson($this->base.'/handoffs/'.$basket['id'].'/claim')->assertOk()->json();
+    $this->store->rows('assignments', $this->tenant->id)->insert($this->store->values($this->tenant->id, [
+        'register_id' => $this->register, 'user_id' => $this->actor->id, 'device_id' => 'another_native_install', 'role' => 'admin', 'active' => true,
+    ]));
+    $this->withHeader('X-Pos-Device', 'another_native_install')->postJson($this->base.'/handoffs/'.$basket['id'].'/claim')->assertConflict();
+    expect($this->store->rows('sales', $this->tenant->id)->count())->toBe(1)
+        ->and($this->store->rows('handoffs', $this->tenant->id)->first()->sale_id)->toBe($first['sale_id']);
+});
+
+it('fails closed on changed terms, expired baskets and revoked preparing staff', function (): void {
+    $web = posStaffBrowser($this);
+    $basket = $this->postJson($web.'/handoffs', $this->selection)->assertOk()->json();
+    $this->store->rows('items', $this->tenant->id)->where('id', $this->item)->update(['unit_amount_minor' => 2000]);
+    posNativeCollector($this);
+    $this->postJson($this->base.'/handoffs/'.$basket['id'].'/claim')->assertConflict()->assertJsonPath('error.code', 'handoff_terms_changed');
+    expect($this->store->rows('handoffs', $this->tenant->id)->first()->state)->toBe('invalid');
+    $this->store->rows('handoffs', $this->tenant->id)->where('id', $basket['id'])->update(['state' => 'ready', 'expires_at' => now()->subMinute()]);
+    $this->postJson($this->base.'/handoffs/'.$basket['id'].'/claim')->assertConflict()->assertJsonPath('error.code', 'handoff_expired');
+    $this->store->rows('handoffs', $this->tenant->id)->where('id', $basket['id'])->update(['expires_at' => now()->addMinute()]);
+    DB::table('tenant_user')->where('tenant_id', $this->tenant->id)->where('user_id', $this->staff->id)->update(['membership_active' => false]);
+    $this->postJson($this->base.'/handoffs/'.$basket['id'].'/claim')->assertForbidden();
+    expect($this->store->rows('sales', $this->tenant->id)->count())->toBe(0);
+});
+
+it('scopes staff status to the enrolled browser and does not trust spoofed native headers', function (): void {
+    $web = posStaffBrowser($this);
+    $basket = $this->postJson($web.'/handoffs', $this->selection)->assertOk()->json();
+    $this->getJson($web.'/requests/'.$basket['request_id'])->assertOk()->assertJsonPath('id', $basket['id']);
+    $this->withSession(['pos_web_device' => 'unassigned-browser'])->withHeader('X-Pos-Device', 'web-fixture-browser');
+    $this->getJson($web.'/handoffs/'.$basket['id'])->assertNotFound();
+    $this->postJson($web.'/handoffs', $this->selection)->assertNotFound();
+    $this->getJson($web.'/handoffs/'.$basket['id'].'/receipt')->assertNotFound();
+});
+
+it('cancels only waiting staff baskets and prevents collection after cancellation', function (): void {
+    $web = posStaffBrowser($this);
+    $basket = $this->postJson($web.'/handoffs', $this->selection)->assertOk()->json();
+    $this->postJson($web.'/handoffs/'.$basket['id'].'/cancel')->assertOk();
+    $this->getJson($web.'/handoffs/'.$basket['id'])->assertOk()->assertJsonPath('state', 'cancelled')->assertJsonPath('can_leave', true);
+    posNativeCollector($this);
+    $this->postJson($this->base.'/handoffs/'.$basket['id'].'/claim')->assertConflict();
+    expect($this->store->rows('sales', $this->tenant->id)->count())->toBe(0);
+});
+
+it('shows the preparing cashier a receipt only after canonical payment and stock completion', function (): void {
+    $web = posStaffBrowser($this);
+    $basket = $this->postJson($web.'/handoffs', $this->selection)->assertOk()->json();
+    $this->getJson($web.'/handoffs/'.$basket['id'].'/receipt')->assertConflict();
+    posNativeCollector($this);
+    $sale = $this->postJson($this->base.'/handoffs/'.$basket['id'].'/claim')->assertOk()->json('sale_id');
+    $this->postJson($this->base.'/sales/'.$sale.'/collect')->assertOk();
+    posFixtureSquarePayment($this, $sale);
+    $this->postJson($this->base.'/sales/'.$sale.'/reconcile', ['payment_id' => 'fixture_payment'])->assertOk();
+    $this->withoutHeader('Authorization')->actingAs($this->staff, 'web')->withSession(['pos_web_device' => 'web-fixture-browser']);
+    $this->getJson($web.'/handoffs/'.$basket['id'])->assertOk()->assertJsonPath('state', 'succeeded')->assertJsonPath('receipt_available', true);
+    $this->getJson($web.'/handoffs/'.$basket['id'].'/receipt')->assertOk()->assertJsonPath('payment_reference', 'fixture_payment');
+    $this->postJson($web.'/handoffs/'.$basket['id'].'/cancel')->assertConflict();
+});
+
+it('durably cancels an unknown browser request before a delayed preparation can arrive', function (): void {
+    $web = posStaffBrowser($this);
+    $this->postJson($web.'/requests/'.$this->selection['request_id'].'/cancel')->assertOk();
+    $basket = $this->postJson($web.'/handoffs', $this->selection)->assertOk()->assertJsonPath('state', 'cancelled')->json();
+    posNativeCollector($this);
+    $this->postJson($this->base.'/handoffs/'.$basket['id'].'/claim')->assertConflict();
+    expect($this->store->rows('sales', $this->tenant->id)->count())->toBe(0);
+});

@@ -10,6 +10,9 @@ Route::prefix('pos')->name('workspace.pos.')->group(function (): void {
     Route::prefix('/registers/{register}')->where(['register' => '[a-f0-9]{32}'])->group(function () use ($read, $write): void {
         Route::get('/catalog', [PosController::class, 'catalog'])->middleware($read)->name('catalog');
         Route::get('/printing-quotes', [PosController::class, 'approvedQuotes'])->middleware($read)->name('printing-quotes');
+        Route::get('/handoffs', [\App\Http\Controllers\PosHandoffController::class, 'inbox'])->middleware($read)->name('handoffs');
+        Route::post('/handoffs/{handoff}/claim', [\App\Http\Controllers\PosHandoffController::class, 'claim'])
+            ->where('handoff', '[a-f0-9]{32}')->middleware($write)->name('handoffs.claim');
         Route::post('/quotes', [PosController::class, 'quote'])->middleware($write)->name('quotes');
         Route::post('/authorize-device', [PosController::class, 'authorizeDevice'])->middleware($write)->name('device.authorize');
         Route::get('/requests/{requestId}', [PosController::class, 'requestStatus'])->whereUuid('requestId')->middleware($read)->name('requests.show');

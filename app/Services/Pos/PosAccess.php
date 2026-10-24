@@ -8,17 +8,22 @@ use App\Models\User;
 use App\Services\PaymentsCore\MerchantBinding;
 use App\Services\PaymentsCore\PaymentAccess;
 use App\Services\Tenancy\TenantModuleAccessResolver;
-use Illuminate\Http\Request;
 use Laravel\Sanctum\PersonalAccessToken;
 
 final class PosAccess implements PaymentAccess
 {
-    public function __construct(private Request $request, private PosStore $store, private PosReadiness $readiness) {}
+    public function __construct(private PosStore $store, private PosReadiness $readiness) {}
+
+    public function isWeb(): bool
+    {
+        return request()->attributes->get('pos_web_session') === true
+            && request()->routeIs('pos.web.*', 'enterprise.pos.web.*');
+    }
 
     public function actor(bool $write = false): array
     {
-        $user = $this->request->user();
-        $tenant = (int) $this->request->attributes->get('current_tenant_id');
+        $user = request()->user();
+        $tenant = (int) request()->attributes->get('current_tenant_id');
         if (! $user instanceof User || $tenant < 1 || config('pos_live.enabled') !== true) {
             throw new PosException('pos_unavailable', 404);
         }
@@ -30,8 +35,8 @@ final class PosAccess implements PaymentAccess
         }
         $token = $user->currentAccessToken();
         // Enterprise administrative routes use their own CSRF-protected session.
-        $enterpriseSession = config('enterprise.runtime') === true && ! $this->request->routeIs('enterprise.pos.api.*');
-        if (! $enterpriseSession) {
+        $enterpriseSession = config('enterprise.runtime') === true && ! request()->routeIs('enterprise.pos.api.*');
+        if (! $enterpriseSession && ! $this->isWeb()) {
             $current = $token instanceof PersonalAccessToken ? PersonalAccessToken::query()->find($token->id) : null;
             $abilities = $current?->abilities ?? [];
             if (! $current || $current->tokenable_id !== $user->id || $current->tokenable_type !== $user->getMorphClass()
@@ -43,14 +48,17 @@ final class PosAccess implements PaymentAccess
             }
         }
 
-        return ['tenant_id' => $tenant, 'actor_id' => (int) $user->id, 'role' => $member->role, 'build' => $this->request->header('X-Pos-Build', ''), 'device_id' => $this->request->header('X-Pos-Device', '')];
+        return ['tenant_id' => $tenant, 'actor_id' => (int) $user->id, 'role' => $member->role, 'build' => request()->header('X-Pos-Build', ''), 'device_id' => request()->header('X-Pos-Device', '')];
     }
 
     public function register(string $id, string $operation = 'read'): array
     {
+        if ($this->isWeb() && ! in_array($operation, ['read', 'catalog'], true)) {
+            throw new PosException('native_payment_app_required', 403);
+        }
         $actor = $this->actor(in_array($operation, ['quote', 'collect', 'recover', 'refund', 'admin'], true));
         $register = $this->store->rows('registers', $actor['tenant_id'])->where('id', $id)->first();
-        $device = $this->request->header('X-Pos-Device', '');
+        $device = request()->header('X-Pos-Device', '');
         $assignment = $this->store->rows('assignments', $actor['tenant_id'])->where('register_id', $id)
             ->where('user_id', $actor['actor_id'])->where('device_id', $device)->where('active', true)->first();
         if (! $register || ! $assignment || ! in_array($assignment->role, ['cashier', 'manager', 'admin'], true)) {
@@ -93,11 +101,11 @@ final class PosAccess implements PaymentAccess
         if ($operation === 'collect' && $scope['connection']->environment === 'production') {
             $settings = $this->store->decrypt($scope['register']->configuration);
             $acceptedBuild = $scope['connection']->acceptance_build ?: ($settings['acceptance']['build'] ?? null);
-            if (! is_string($acceptedBuild) || ! hash_equals($acceptedBuild, $this->request->header('X-Pos-Build', ''))) {
+            if (! is_string($acceptedBuild) || ! hash_equals($acceptedBuild, request()->header('X-Pos-Build', ''))) {
                 throw new PosException('accepted_build_required', 403);
             }
             if (! $scope['connection']->acceptance_at && (($settings['acceptance']['actor_id'] ?? null) !== $scope['actor_id']
-                || ($settings['acceptance']['device_id'] ?? null) !== $this->request->header('X-Pos-Device'))) {
+                || ($settings['acceptance']['device_id'] ?? null) !== request()->header('X-Pos-Device'))) {
                 throw new PosException('acceptance_device_required', 403);
             }
         }

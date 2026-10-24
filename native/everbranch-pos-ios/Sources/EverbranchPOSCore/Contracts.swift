@@ -34,6 +34,20 @@ public struct CatalogItem: Decodable, Identifiable, Sendable {
     public let availableQuantity: Int?
 }
 public struct CatalogList: Decodable, Sendable { public let items: [CatalogItem] }
+public struct SaleLine: Decodable, Sendable {
+    public let title: String
+    public let quantity: Int
+    public let subtotalMinor: Int
+    public let taxMinor: Int
+}
+public struct StaffHandoff: Decodable, Identifiable, Sendable {
+    public let id: String
+    public let requestId: String
+    public let code: String
+    public let amountMinor: Int
+    public let lines: [SaleLine]
+}
+public struct StaffHandoffList: Decodable, Sendable { public let handoffs: [StaffHandoff] }
 public struct Sale: Decodable, Sendable {
     public let saleId: String
     public let requestId: String
@@ -46,6 +60,7 @@ public struct Sale: Decodable, Sendable {
     public let recoveryRequired: Bool
     public let managerRefundsAllowed: Bool?
     public let collection: CollectionDescriptor?
+    public let lines: [SaleLine]?
     public var canLeave: Bool {
         (state == "succeeded" && stockState == "committed") || (["failed", "cancelled"].contains(state) && stockState == "released")
     }
@@ -95,6 +110,7 @@ public struct PendingSale: Codable, Equatable, Sendable {
     public var sdkStarted = false
     public var refundRequestID: String?
     public var refundAmountMinor: Int?
+    public var handoffID: String?
     public init(workspace: String, register: String, requestID: String = UUID().uuidString.lowercased()) {
         self.workspace = workspace; self.register = register; self.requestID = requestID
     }

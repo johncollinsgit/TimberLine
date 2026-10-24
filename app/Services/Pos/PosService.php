@@ -80,7 +80,7 @@ final class PosService
         return $this->inspect($register, $sale->id);
     }
 
-    public function quote(string $register, array $input): array
+    public function quote(string $register, array $input, ?string $expectedTermsHash = null): array
     {
         $scope = $this->access->register($register, 'quote');
         $binding = $this->access->binding($scope);
@@ -90,10 +90,16 @@ final class PosService
             if (! hash_equals($this->snapshot($old)['input_hash'], $hash)) {
                 throw new PosException('request_conflict');
             }
+            if ($expectedTermsHash !== null && ! hash_equals($expectedTermsHash, Contract::hash($this->snapshot($old)['terms']))) {
+                throw new PosException('handoff_terms_changed');
+            }
 
             return $this->projection($old);
         }
         $terms = $this->catalog->terms($scope, $input);
+        if ($expectedTermsHash !== null && ! hash_equals($expectedTermsHash, Contract::hash($terms))) {
+            throw new PosException('handoff_terms_changed');
+        }
         $id = bin2hex(random_bytes(16));
         $sale = new SaleSnapshot($id, 'usd', $terms['lines']);
         $settings = $this->store->decrypt($scope['register']->configuration);
@@ -135,6 +141,10 @@ final class PosService
             $scope = $this->access->register($register, 'collect');
             $sale = $this->sale($scope, $id);
             $snapshot = $this->snapshot($sale);
+            $handoff = $this->store->rows('handoffs', $scope['tenant_id'])->where('register_id', $register)->where('request_id', $sale->request_id)->first();
+            if ($handoff && ((int) $handoff->claimed_by !== $scope['actor_id'] || $handoff->claimed_device !== $scope['device_id'])) {
+                throw new PosException('handoff_claimed_by_another_device', 403);
+            }
             $binding = MerchantBinding::restore($snapshot['binding']);
             if ($sale->attempt_id || $this->journal->findByRequest($scope['tenant_id'], $sale->payment_request_id)) {
                 // Never issue another native collection descriptor on an HTTP retry.
@@ -315,7 +325,10 @@ final class PosService
         if (! $sale) {
             throw new PosException('sale_unavailable', 404);
         }
-        if ($sale->actor_id != $scope['actor_id'] && $scope['role'] === 'member') {
+        $webCreator = $this->access->isWeb() && $this->store->rows('handoffs', $scope['tenant_id'])
+            ->where('register_id', $scope['register']->id)->where('request_id', $sale->request_id)
+            ->where('claimed_by', $sale->actor_id)->where('actor_id', $scope['actor_id'])->where('device_id', $scope['device_id'])->exists();
+        if (($this->access->isWeb() && ! $webCreator) || (! $webCreator && $sale->actor_id != $scope['actor_id'] && $scope['role'] === 'member')) {
             throw new PosException('sale_unavailable', 404);
         }
 

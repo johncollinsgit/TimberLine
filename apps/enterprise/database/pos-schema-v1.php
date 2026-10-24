@@ -6,4 +6,5 @@ return [
     '2026_10_22_190000_create_payment_core_journal_tables.php' => 'de47f568f94f7c388cb4141969d4f10031cda0462b8365dc7d3f625c26470a83',
     '2026_10_22_190100_create_payment_core_quotes_table.php' => '0e3329bbde9bfc11e5799fc599aa37cd23532dfde3e070826f8743889c7eba5c',
     '2026_10_24_010000_create_pos_live_tables.php' => 'c5b831fd5af01f2d17a4aafde586669010f5121325de453ff09354a9227378d5',
+    '2026_10_24_030000_create_pos_live_handoffs.php' => 'e35823f31cf1af622b59be3dd3051471aaa5b6f978d447a85c269d1f956c8c5d',
 ];

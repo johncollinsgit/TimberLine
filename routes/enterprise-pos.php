@@ -6,6 +6,7 @@ use App\Http\Middleware\ResolvePosTenant;
 use Illuminate\Support\Facades\Route;
 
 // Loaded only by the explicitly enabled independent Enterprise composition.
+require __DIR__.'/pos-staff.php';
 Route::get('/mobile/authorize', [\App\Enterprise\PosMobileController::class, 'authorize'])->name('mobile.everbranch.authorize');
 Route::middleware(['auth', 'verified', ResolvePosTenant::class])->prefix('/enterprise/pos')->name('enterprise.pos.')->group(function (): void {
     Route::get('/', [PosAdminController::class, 'index'])->name('index');

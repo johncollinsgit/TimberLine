@@ -120,6 +120,26 @@ final class EnterprisePosRuntimeTest extends TestCase
         $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/pos/registers')->assertUnauthorized();
     }
 
+    public function test_staff_web_register_uses_only_its_enterprise_location_and_cannot_authorize_collection(): void
+    {
+        [$tenant, $user, $store] = $this->fixture('member');
+        \App\Models\TenantModuleEntitlement::create(['tenant_id' => $tenant->id, 'module_key' => 'pos',
+            'availability_status' => 'available', 'enabled_status' => 'enabled', 'billing_status' => 'add_on_comped',
+            'entitlement_source' => 'test', 'price_source' => 'catalog']);
+        $store->rows('connections', $tenant->id)->insert($store->values($tenant->id, ['id' => str_repeat('c', 32),
+            'merchant_id' => 'fictional_enterprise_merchant', 'provider_location_id' => 'fictional_enterprise_location',
+            'environment' => 'sandbox', 'credentials' => $store->encrypt([])]));
+        $this->withSession(['pos_web_device' => 'assigned_enterprise_fixture']);
+        $base = '/enterprise/pos/staff/'.$tenant->slug;
+        $this->get($base)->assertOk()->assertSee('Staff register');
+        $this->get($base.'/register.js')->assertOk()->assertHeader('Content-Type', 'application/javascript');
+        $this->getJson($base.'/registers/'.str_repeat('a', 32).'/catalog')->assertOk()->assertJsonPath('items.0.sku', 'FIXTURE-a');
+        $this->getJson($base.'/registers/'.str_repeat('b', 32).'/catalog')->assertNotFound();
+        $this->postJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/pos/registers/'.str_repeat('a', 32).'/authorize-device')->assertUnauthorized();
+        $this->assertTrue(Schema::hasTable('pos_live_handoffs'));
+        $this->assertFalse(Schema::hasTable('shopify_stores'));
+    }
+
     public function test_native_pkce_exchange_and_assigned_catalog_use_only_enterprise_identity(): void
     {
         [$tenant, $user, $store] = $this->fixture('admin');

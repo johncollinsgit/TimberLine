@@ -16,6 +16,46 @@ then runs the sandbox launch test without parallel simulator clones. Startup
 and testing have explicit time bounds; the XCTest result bundle is retained
 for three days for diagnosis. A timeout is a failed gate, not payment evidence.
 
+## Private iPhone pilot and staff web register (2026-10-24)
+
+The owner targets November 7, 2026 for full POS readiness; this is an estimated
+target subject to provider, Apple and physical acceptance. Initial native use
+is private on the owner's iPhone. On October 24 the owner approved submission
+of Apple's entitlement request: one new U.S. app, 0–99 iPhones in year one,
+private development first and proposed Custom App/unlisted distribution later.
+Apple displayed its submission acknowledgment; no entitlement approval, case
+number, provisioning profile or live installation has been established.
+
+Staff use `/pos/staff/{tenant-slug}`; the isolated runtime uses
+`/enterprise/pos/staff/{tenant-slug}`. Staff sign in with verified active
+membership. Browser enrollment displays a server-issued session device ID;
+assign that exact ID, user and register through the reviewed provisioning flow.
+A new sign-in session can require enrollment again. Session access prepares
+baskets and reads their own status/receipts. It cannot obtain SDK credentials,
+collect, reconcile or refund through the native token endpoints. Enterprise
+serves only this explicit POS script/route surface from its own runtime.
+
+Products or approved printing quotes receive a server-calculated total and
+an expiring handoff code. Preparation does not reserve stock, create a Shopify
+order or initiate payment. The native inbox shows assigned-register baskets.
+An atomic claim binds the original request to one collector and install;
+current staff authorization, merchant binding and exact terms are checked again.
+Changed terms require a fresh basket. Persist the handoff/request identifiers
+before claiming; lost replies resume that claim instead of creating a new sale.
+Only the native app can request the existing online-only collection descriptor.
+Existing Shopify stock commitment and Alpha quote serialization still run before
+collection. Browser status and printable receipts follow canonical payment and
+stock completion. Cancel only waiting baskets; cancellation tombstones stop
+late browser submissions. Never clear an uncertain native payment to make a new
+charge. Only opaque recovery identifiers enter browser session storage.
+
+The user's prior demo tablets are Samsung SM-T577U and Lenovo TB336FU (historical
+records, not a fresh device connection). Square's Android Tap to Pay SDK excludes
+tablets. They can run the staff register after rollout, but do not establish a
+collection fallback. No Android payment client was built or activated. A future
+Android phone requires exact-model eligibility, its own native SDK integration,
+registered signing certificate and physical merchant acceptance.
+
 ## Implemented composition
 
 - `native/everbranch-pos-ios`: dedicated iOS 17.1+ SwiftUI target, bundle

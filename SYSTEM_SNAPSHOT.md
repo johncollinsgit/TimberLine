@@ -1,3 +1,11 @@
+## POS staff handoff update (2026-10-24)
+
+POS now has an enrolled staff browser preparation surface and an atomic native
+iPhone handoff. Web sessions cannot collect or retrieve SDK credentials. The
+private pilot's Apple entitlement request was submitted with owner-approved
+forecasts; approval and physical acceptance remain pending. November 7 is a
+target. See `docs/operations/everbranch-pos-live.md`. Collection stays default-off.
+
 ## Shared AI provider review flags (2026-10-24)
 
 The owner requested persistent reminders for Apple publishing, live Tap to Pay

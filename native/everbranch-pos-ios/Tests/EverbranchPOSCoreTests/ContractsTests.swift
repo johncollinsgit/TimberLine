@@ -61,6 +61,7 @@ final class ContractsTests: XCTestCase {
         var pending = PendingSale(workspace: "fixture", register: "counter")
         pending.collectionRequested = true; pending.sdkStarted = true; pending.saleID = "sale"
         pending.refundRequestID = UUID().uuidString; pending.refundAmountMinor = 500
+        pending.handoffID = "fixture-staff-handoff"
         let bytes = try JSONEncoder().encode(pending)
         XCTAssertEqual(try JSONDecoder().decode(PendingSale.self, from: bytes), pending)
         let text = String(data: bytes, encoding: .utf8)!

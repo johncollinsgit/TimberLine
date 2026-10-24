@@ -3,6 +3,14 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_24_030000_create_pos_live_handoffs.php' => [
+        'test' => 'tests/Integration/PosLiveMySqlRecoveryTest.php',
+        'scenarios' => ['encrypted claimed handoff survives missing named indexes, replay, altered-index refusal and non-destructive rollback'],
+    ],
+    '2026_10_24_040000_install_pos_handoff_schema.php' => [
+        'test' => 'tests/Integration/PosLiveMySqlRecoveryTest.php',
+        'scenarios' => ['pinned isolated Enterprise handoff schema replays without deleting staff or payment evidence'],
+    ],
     '2026_10_24_010000_create_pos_live_tables.php' => [
         'test' => 'tests/Integration/PosLiveMySqlRecoveryTest.php',
         'scenarios' => ['retained encrypted unknown payment before trailing table and every named index; changed index and duplicate source claim fail without deleting evidence; rollback retains all tables'],

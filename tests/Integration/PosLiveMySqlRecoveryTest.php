@@ -91,3 +91,35 @@ it('installs only the pinned POS schema in Enterprise and retains all financial 
     expect(Schema::getTableListing())->toBe($before)
         ->and(DB::table('pos_live_sales')->where('id', $this->id)->value('snapshot'))->toBe($this->sentinel);
 });
+
+it('recovers handoff indexes and retains claimed staff correlation in both runtimes', function (): void {
+    \App\Services\Pos\PosHandoffSchema::install();
+    $id = bin2hex(random_bytes(16));
+    DB::table('pos_live_handoffs')->insert(['id' => $id, 'runtime_id' => 'recovery_fixture', 'tenant_id' => 900000001,
+        'register_id' => str_repeat('a', 32), 'actor_id' => 900000002, 'device_id' => 'web-fixture', 'request_id' => (string) Str::uuid(),
+        'payload' => $this->sentinel, 'payload_hash' => str_repeat('d', 64), 'state' => 'claimed', 'claimed_by' => 900000003,
+        'claimed_device' => 'native-fixture', 'created_at' => now(), 'expires_at' => now()->addMinutes(5)]);
+    try {
+        $before = (array) DB::table('pos_live_handoffs')->where('id', $id)->first();
+        Schema::table('pos_live_handoffs', fn ($t) => $t->dropIndex('poslhf_request_uq'));
+        Schema::table('pos_live_handoffs', fn ($t) => $t->dropIndex('poslhf_queue_idx'));
+        $migration = require database_path('migrations/2026_10_24_030000_create_pos_live_handoffs.php');
+        $migration->up();
+        $migration->up();
+        $migration->down();
+        expect((array) DB::table('pos_live_handoffs')->where('id', $id)->first())->toBe($before);
+        Schema::table('pos_live_handoffs', fn ($t) => $t->dropIndex('poslhf_request_uq'));
+        Schema::table('pos_live_handoffs', fn ($t) => $t->index('actor_id', 'poslhf_request_uq'));
+        expect(fn () => $migration->up())->toThrow(RuntimeException::class, 'POS handoff index definition changed');
+        Schema::table('pos_live_handoffs', fn ($t) => $t->dropIndex('poslhf_request_uq'));
+        config()->set(['enterprise.runtime' => true, 'enterprise.pos_enabled' => true, 'pos_live.runtime_id' => 'enterprise_recovery_fixture']);
+        $enterprise = require base_path('apps/enterprise/database/pos-migrations/2026_10_24_040000_install_pos_handoff_schema.php');
+        $enterprise->up();
+        $enterprise->up();
+        $enterprise->down();
+        expect((array) DB::table('pos_live_handoffs')->where('id', $id)->first())->toBe($before);
+    } finally {
+        DB::table('pos_live_handoffs')->where('id', $id)->delete();
+        \App\Services\Pos\PosHandoffSchema::install();
+    }
+});
