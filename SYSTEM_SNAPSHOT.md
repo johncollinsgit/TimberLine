@@ -67,6 +67,22 @@ The new preparation/publication MySQL lifecycle gate is registered after the
 workspace/initializer gates. Only its local refusal guard has run; actual
 independent native sessions, row waits and concurrency remain NOT RUN until CI.
 
+A separate default-off real-owner local export now preserves one tab's exact
+legacy fictional storage text/UTF8/base64/hash without uploading or importing it.
+Actual owner login, fresh membership/Version checks and a short same-origin CSRF
+authorization precede the explicit fixed-key read. The complete approved module
+snapshot is reused for rendering/CSP; display names cannot supply authority.
+Missing is not zero; schema, authorship, edition provenance and all-tabs completeness
+remain unverified. Root verified29 JavaScript cases and21 distinct native/source/
+asset cases across retained results and targeted setup/fixture corrections. All
+assertions and the256 source cap remain; the positive fixture is170 entries plus
+fixed dependencies (251), while257-entry/oversize refusal is unchanged. Both
+engines passed6 synthetic real-login/download cases before the server-only module
+pin correction; executed JS is byte-identical and final native guard regressions
+pass. Do not claim those engines ran final PHP or physical devices. No real data
+was captured. Host config/activation and current-edit conversion/reconciliation
+remain separate. See [local export](docs/operations/reviewer-legacy-capture-screen.md).
+
 ## Enterprise CI performance candidate (October 23, 2026)
 
 The isolated Enterprise workflow keeps the `enterprise-runtime` required result

@@ -51,19 +51,22 @@ test('every mandatory matrix lane and both engines remain scheduled without nest
     ['shared-workspace', ['reviewer-workspace-browser.mjs', 'reviewer-workspace-browser.mjs']],
     ['shared-comments', ['reviewer-workspace-comments-browser.mjs']],
     ['shared-files', ['reviewer-workspace-files-browser.mjs']],
-    ['shared-downloads', ['reviewer-workspace-downloads-browser.mjs']],
+    ['shared-downloads', ['reviewer-workspace-downloads-browser.mjs', 'reviewer-legacy-capture-browser.mjs']],
     ['shared-ai', ['reviewer-workspace-ai-browser.mjs']],
   ]);
   const sharedSteps = browser.split('    - name: ').filter(step => /if: matrix.kind == 'shared-/.test(step));
-  assert.equal(sharedSteps.length, 5);
+  assert.equal(sharedSteps.length, 6);
   for (const [kind, files] of sharedCommands) {
-    const step = sharedSteps.find(step => step.includes(`if: matrix.kind == '${kind}'`));
-    assert.ok(step, `${kind} has an executable step`);
-    assert.deepEqual([...step.matchAll(/node scripts\/proposals\/(reviewer-workspace[^\s]*)/g)].map(match => match[1]), files);
-    assert.match(step, /timeout-minutes: 15/);
-    assert.match(step, /PROPOSAL_BROWSER_ENGINE="\$engine"/);
-    assert.doesNotMatch(step, /continue-on-error|if:.*always|background|&$/m);
+    const steps = sharedSteps.filter(step => step.includes(`if: matrix.kind == '${kind}'`));
+    assert.equal(steps.length, kind === 'shared-downloads' ? 2 : 1, `${kind} has every executable step`);
+    assert.deepEqual(steps.flatMap(step => [...step.matchAll(/node scripts\/proposals\/(reviewer-(?:workspace|legacy-capture)[^\s]*)/g)].map(match => match[1])), files);
+    for (const step of steps) {
+      assert.match(step, /timeout-minutes: 15/);
+      assert.match(step, /PROPOSAL_BROWSER_ENGINE="\$engine"/);
+      assert.doesNotMatch(step, /continue-on-error|if:.*always|background|&$/m);
+    }
   }
+  assert.equal(browser.split('node scripts/proposals/reviewer-legacy-capture-browser.mjs').length - 1, 1);
   assert.match(sharedSteps.find(step => step.includes("if: matrix.kind == 'shared-workspace'")), /PROPOSAL_WORKSPACE_SCENARIO=directory/);
   assert.match(browser, /max-parallel: 12/);
   assert.match(browser, /VOICE_WEBKIT: '1'/);

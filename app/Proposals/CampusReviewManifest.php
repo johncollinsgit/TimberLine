@@ -31,7 +31,9 @@ class CampusReviewManifest
     /** Fixed local source groups only; never accepts a file path from a reviewer. */
     protected function sourceHash(): string
     {
-        $paths = ['app/Proposals/Activity.php', 'app/Proposals/ActivityController.php', 'app/Proposals/RecordActivity.php',
+        $paths = ['app/Proposals/ReviewerLegacyCapture.php', 'app/Proposals/ReviewerLegacyCaptureController.php',
+            'app/Http/Middleware/ReviewerLegacyCaptureBoundary.php', 'routes/service-proposals-legacy-capture.php',
+            'resources/views/service-proposals/legacy-capture.blade.php', 'app/Proposals/Activity.php', 'app/Proposals/ActivityController.php', 'app/Proposals/RecordActivity.php',
             'app/Proposals/LegacyCampusRenderer.php', 'app/Proposals/LegacyCampusViews.php',
             'app/Proposals/LegacyCampusArtifact.php', 'app/Proposals/LegacyCampusRegistry.php', 'app/Proposals/LegacyCampusV5Definition.php',
             'resources/legacy-campus/v5/index.json', 'resources/legacy-campus/v5-definition.json',

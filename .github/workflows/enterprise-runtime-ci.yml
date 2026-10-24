@@ -12,6 +12,7 @@ name: Enterprise isolated runtime
     - app/Http/Middleware/EnsureEnterpriseRuntime.php
     - app/Http/Middleware/EnterpriseCsrfToken.php
     - app/Http/Middleware/ReviewerAiBoundary.php
+    - app/Http/Middleware/ReviewerLegacyCaptureBoundary.php
     - app/Http/Middleware/EnsureEnterpriseTrialMount.php
     - app/Http/Middleware/EnsureEnterprisePrefixMount.php
     - app/Http/Middleware/EnsureEnterpriseClientSilo.php
@@ -33,6 +34,7 @@ name: Enterprise isolated runtime
     - routes/service-proposals-reviewer-downloads.php
     - routes/service-proposals-reviewer-maintenance.php
     - routes/service-proposals-reviewer-initialization.php
+    - routes/service-proposals-legacy-capture.php
     - routes/service-proposals-reviewer-preparation.php
     - routes/campus-demo.php
     - resources/data/enterprise/**
@@ -48,6 +50,9 @@ name: Enterprise isolated runtime
     - resources/js/service-proposals/**
     - scripts/proposals/financial-browser.mjs
     - scripts/proposals/reviewer-workspace-*.mjs
+    - scripts/proposals/reviewer-legacy-capture-browser.mjs
+    - tests/Support/proposal-legacy-capture-browser-fixture.php
+    - tests/Support/proposal-legacy-capture-browser-router.php
     - scripts/proposals/build-legacy-campus-v5.py
     - tests/Support/proposal-reviewer-workspace*.php
     - tests/Feature/Enterprise/**
@@ -443,6 +448,15 @@ jobs:
         engine: ${{ matrix.engine }}
       run: |
         PROPOSAL_BROWSER_ENGINE="$engine" PROPOSAL_BROWSER_EVIDENCE="test-results/enterprise/proposal-shared-downloads/$engine" node scripts/proposals/reviewer-workspace-downloads-browser.mjs
+      if: matrix.kind == 'shared-downloads'
+    - name: Check private owner local tab export in Chromium and WebKit
+      timeout-minutes: 15
+      env:
+        ENTERPRISE_TEST_PHP: php
+        EVERBRANCH_PLAYWRIGHT_MODULE: node_modules/playwright/index.mjs
+        engine: ${{ matrix.engine }}
+      run: |
+        PROPOSAL_BROWSER_ENGINE="$engine" PROPOSAL_BROWSER_EVIDENCE="test-results/enterprise/proposal-local-capture/$engine" node scripts/proposals/reviewer-legacy-capture-browser.mjs
       if: matrix.kind == 'shared-downloads'
     - name: Check mounted shared reviewer AI with a fake provider in Chromium and WebKit
       timeout-minutes: 15

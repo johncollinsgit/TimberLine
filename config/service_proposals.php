@@ -26,6 +26,8 @@ return [
         'attachments' => ['enabled' => false, 'write_enabled' => false, 'policies' => []],
         'image_access' => ['enabled' => false, 'scan_enabled' => false, 'policies' => [], 'scanners' => []],
         'downloads' => ['enabled' => false, 'scan_enabled' => false, 'policies' => [], 'scanners' => []]],
+    // No browser capture until one exact existing browser-only edition is explicitly approved.
+    'legacy_capture' => ['enabled' => false, 'approvals' => []],
     'campus_review' => [
         'enabled' => (bool) env('SERVICE_PROPOSALS_CAMPUS_REVIEW_ENABLED', false),
         'build_id' => env('SERVICE_PROPOSALS_CAMPUS_REVIEW_BUILD_ID', ''),

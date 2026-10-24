@@ -54,6 +54,8 @@ Route::middleware([\App\Proposals\ResponsePolicy::class, \App\Proposals\RecordAc
     Route::post('/request-agreement', [RecipientController::class, 'requestAgreement'])->name('request');
 });
 
+require __DIR__.'/service-proposals-legacy-capture.php';
+
 // Activity and foreground name/comment requests share one session. Lock before
 // loading it so a late report cannot overwrite a newer name, grant or cart.
 foreach (Route::getRoutes() as $proposalRoute) {

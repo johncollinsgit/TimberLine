@@ -27,14 +27,15 @@ final class CampusReviewSourceBoundTest extends TestCase
     public function test_expanded_fixed_source_closure_remains_hashed_without_omitting_files(): void
     {
         $this->isolated(function (string $root): void {
-            // Represents the additional reviewed services/clients beyond the old 200-entry closure.
-            for ($i = 0; $i < 180; $i++) {
+            // Fixed dependencies grew; 170 fixture members still exceed the old 200-entry closure
+            // together with those dependencies, while retaining the reviewed 256-member cap.
+            for ($i = 0; $i < 170; $i++) {
                 file_put_contents($root.'/resources/js/enterprise/bounded-'.$i.'.js', '// fixture '.$i);
             }
             $manifest = new CampusReviewManifest;
             $first = $manifest->current();
             $this->assertSame($first, $manifest->current());
-            file_put_contents($root.'/resources/js/enterprise/bounded-179.js', '// changed final dependency');
+            file_put_contents($root.'/resources/js/enterprise/bounded-169.js', '// changed final dependency');
             $this->assertNotSame($first['source_hash'], $manifest->current()['source_hash']);
         });
     }

@@ -18,7 +18,8 @@ class ResponsePolicy
         $response->headers->set('Cache-Control', 'private, no-store');
         $response->headers->set('Referrer-Policy', 'no-referrer');
         $response->headers->set('X-Robots-Tag', 'noindex, nofollow');
-        if ($request->attributes->get('service_proposal_campus_review') !== true || ! $response->headers->has('Content-Security-Policy')) {
+        if (($request->attributes->get('service_proposal_campus_review') !== true
+            && $request->attributes->get('service_proposal_legacy_capture_response') !== true) || ! $response->headers->has('Content-Security-Policy')) {
             $artwork = $request->getSchemeAndHttpHost().'/images/proposals/evergrove-mountain-corner.svg';
             $wordmark = $request->getSchemeAndHttpHost().'/images/proposals/evergrove-software-wordmark.jpg';
             $content = $response->getContent();
