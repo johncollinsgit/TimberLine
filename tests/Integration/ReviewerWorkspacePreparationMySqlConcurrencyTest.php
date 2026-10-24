@@ -19,12 +19,15 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Process\Process;
+use Tests\Support\ReviewerWorkspaceFixtureHandlers;
 
 require_once dirname(__DIR__).'/Support/reviewer-workspace-preparation-mysql-worker.php';
 
 /** Existing disposable CI service only. Local syntax/refusal never stands for actual MySQL acceptance. */
 final class ReviewerWorkspacePreparationMySqlConcurrencyTest extends TestCase
 {
+    use ReviewerWorkspaceFixtureHandlers;
+
     private array $processes = [];
 
     private array $connectionIds = [];
@@ -285,7 +288,7 @@ final class ReviewerWorkspacePreparationMySqlConcurrencyTest extends TestCase
         $state = [];
         foreach (['tenants', 'team_areas', 'users', 'tenant_user', 'team_area_members', 'team_tasks', 'team_projects', 'enterprise_client_silos',
             'team_operation_records', 'team_operation_revisions', 'team_work_locks', 'service_proposal_comments', 'service_proposal_reviews', 'service_proposal_assets'] as $table) {
-            $state[$table] = DB::table($table)->orderBy('id')->get()->toJson();
+            $state[$table] = DB::table($table)->orderBy($table === 'team_work_locks' ? 'tenant_id' : 'id')->get()->toJson();
         }
         $id = $this->fixture['approval']['prepared_draft_id'];
         $state['drafts'] = DB::table('service_proposal_drafts')->where('id', '<>', $id)->orderBy('id')->get()->toJson();

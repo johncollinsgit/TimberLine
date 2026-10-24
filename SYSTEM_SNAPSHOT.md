@@ -3632,3 +3632,37 @@ all non-whitespace tokens/comments and the full resolved AST. A new explicit
 cache passes both files and another new cache passes the exact 321-file workflow
 selection. No formatter rule, test case, application source, dependency, workflow,
 parallelism, runtime or provider gate changed. New-head CI remains required.
+
+
+### 2026-10-24 native MySQL and standalone tour fixture correction
+
+Normal 4a0 CI passed quality, both general jobs (5,321 PHP tests / 48,248
+assertions, eight skips) and 20 of 23 browser lanes. Enterprise MySQL exposed a
+new unreleased collaboration receipt kind of 26 ASCII characters against the
+unchanged released VARCHAR(24). Its sole product correction uses the unique
+23-character ent_proposal_ws_cmt_cmd namespace. All store methods, encryption,
+source/context/request/digest checks and once-only behavior are unchanged. No
+schema/data migration, truncation, old-name fallback or live rename is authorized.
+The collaboration class and both names are absent deployed main9a4 source; this
+is source provenance, not a live database inventory.
+
+Native test fixtures now order team_work_locks by its actual tenant_id primary
+key, compare receipt objects with exact closed keys/types/values independently
+of MySQL JSON key placement, and balance only their own Laravel handler layers.
+All 200 original assertion sites, workers and refusal guards remain. Handler
+observations use PHP8.4-compatible balanced set/restore operations. Native get_*
+handler functions arrived in8.5, but the locked autoloader supplied their Symfony
+polyfill on8.4; no actual8.4 failure from those names was observed. Real native
+MySQL acceptance still requires the final normal CI gate, never local skips.
+
+The standalone public tour fixture resolves exactly three known nested AI-false
+expressions, each required once. Its unresolved-Blade/embedded-asset guards and
+all existing browser cases remain unchanged; full standalone Chromium and WebKit
+checks pass. Product templates and tour JavaScript are unchanged. Five focused
+renderer cases and two native units are added to existing CI commands; every
+original command, matrix lane and guard remains required.
+
+The old native-WebKit wizard gate failed on hidden Next after a click. Two exact
+local unchanged runs passed; an assumed catalog race was not reproduced. No
+speculative product/test workaround is added. The repaired-head WebKit gate must
+pass. No runtime, provider, publication, merge or deployment action occurred.

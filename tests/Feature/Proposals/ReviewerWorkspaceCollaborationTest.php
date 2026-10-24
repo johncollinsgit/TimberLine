@@ -19,6 +19,35 @@ use Tests\Support\ReviewerWorkspaceFixture;
 
 final class ReviewerWorkspaceCollaborationTest extends ReviewerWorkspaceFixture
 {
+    public function test_real_comment_receipt_replay_and_status_fit_an_enforced_released_kind_bound(): void
+    {
+        $this->assertSame('sqlite', DB::connection()->getDriverName());
+        $limit = \Tests\Unit\Proposals\ReviewerOperationKindTest::operationKindLimit();
+        // SQLite ignores VARCHAR lengths. Enforce the actual released limit for this regression only.
+        DB::unprepared('CREATE TRIGGER reviewer_kind_insert BEFORE INSERT ON team_operation_records '
+            .'WHEN length(NEW.kind) > '.$limit." BEGIN SELECT RAISE(ABORT, 'kind exceeds released bound'); END");
+        DB::unprepared('CREATE TRIGGER reviewer_kind_update BEFORE UPDATE OF kind ON team_operation_records '
+            .'WHEN length(NEW.kind) > '.$limit." BEGIN SELECT RAISE(ABORT, 'kind exceeds released bound'); END");
+        $one = $this->reader();
+        $two = $this->reader();
+        $body = $this->commentBody($one);
+        $service = app(ReviewerWorkspaceDiscussion::class);
+        $result = $service->comment($one, $this->token, $body);
+        $this->assertSame('applied', $result['status']);
+        $receipt = TeamOperationRecord::where('kind', ReviewerWorkspaceCollaborationStore::RECEIPT)->sole();
+        $this->assertLessThanOrEqual($limit, strlen($receipt->kind));
+        $raw = DB::table('team_operation_records')->orderBy('id')->get()->toJson();
+        $this->assertStringNotContainsString($body['body'], $raw);
+        $this->assertSame($result['receipt'], $service->comment($one, $this->token, $body)['receipt']);
+        $this->assertSame($result['receipt'], $service->status($one, $this->token, $this->binding(), $this->selection(), $this->target(),
+            $body['request_id'], ReviewerWorkspaceSchema::digest($body))['receipt']);
+        $this->assertSame(['status' => 'not_observed', 'settled' => false], $service->status($two, $this->token, $this->binding(), $this->selection(),
+            $this->target(), $body['request_id'], ReviewerWorkspaceSchema::digest($body)));
+        $this->denied(fn () => $service->comment($one, $this->token, [...$body, 'body' => 'Changed same request']), 409);
+        $this->assertSame($raw, DB::table('team_operation_records')->orderBy('id')->get()->toJson());
+        $this->assertCount(1, $this->show($two)['comments']);
+    }
+
     protected function setUp(): void
     {
         parent::setUp();

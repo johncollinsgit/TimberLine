@@ -23,12 +23,15 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Process\Process;
+use Tests\Support\ReviewerWorkspaceFixtureHandlers;
 
 require_once dirname(__DIR__).'/Support/reviewer-workspace-mysql-worker.php';
 
 /** This is a real MySQL gate, not SQLite or a mocked lock. It never starts/provisions a DB server. */
 final class ReviewerWorkspaceMySqlConcurrencyTest extends TestCase
 {
+    use ReviewerWorkspaceFixtureHandlers;
+
     private array $processes = [];
 
     private string $runtime;
@@ -173,7 +176,7 @@ final class ReviewerWorkspaceMySqlConcurrencyTest extends TestCase
             $this->assertSame(1, TeamOperationRecord::where('kind', ReviewerWorkspaceStore::COMMAND)->count());
             $this->assertSame(ReviewerWorkspaceSchema::commandDigest($winnerCommand), $results[$winner]['result']['receipt']['digest']);
             $recovered = $this->recover('winner-recover', $sessions[$winner], $winnerCommand);
-            $this->assertSame($results[$winner]['result']['receipt'], $recovered['result']['receipt']);
+            $this->assertSameReceipt($results[$winner]['result']['receipt'], $recovered['result']['receipt']);
             $this->assertSame($protected, $this->protectedState());
 
             // Exact same ID/body/capability on two connections: one durable application, one replay.
@@ -192,13 +195,13 @@ final class ReviewerWorkspaceMySqlConcurrencyTest extends TestCase
             $sameResults = [$this->finish($sameA), $this->finish($sameB)];
             $this->assertSame([200, 200], array_column($sameResults, 'http_status'));
             $this->assertEqualsCanonicalizing([false, true], array_column(array_column($sameResults, 'result'), 'replayed'));
-            $this->assertSame($sameResults[0]['result']['receipt'], $sameResults[1]['result']['receipt']);
+            $this->assertSameReceipt($sameResults[0]['result']['receipt'], $sameResults[1]['result']['receipt']);
             $this->assertSame(3, $this->workspaceRow()->version);
             $this->assertSame(2, TeamOperationRecord::where('kind', ReviewerWorkspaceStore::COMMAND)->count());
             $this->assertSame([2, 3], TeamOperationRecord::where('kind', ReviewerWorkspaceStore::COMMAND)->get()->map(fn ($row) => $row->data['revision'])->sort()->values()->all());
             $this->assertSame(3, DB::table('team_operation_revisions')->count(), 'Initializer plus exactly two applied commands; replay/status add no audit writes.');
             $receipt = $this->recover('same-recover', $sessions[0], $same);
-            $this->assertSame($sameResults[0]['result']['receipt'], $receipt['result']['receipt']);
+            $this->assertSameReceipt($sameResults[0]['result']['receipt'], $receipt['result']['receipt']);
             $before = $this->workspaceState();
             $wrongDigest = $same;
             $wrongDigest['payload']['title'] = 'FICTIONAL substituted body';
@@ -258,6 +261,22 @@ final class ReviewerWorkspaceMySqlConcurrencyTest extends TestCase
                 (new Filesystem)->deleteDirectory($this->runtime);
             }
         }
+    }
+
+    private function assertSameReceipt(array $expected, array $actual): void
+    {
+        foreach ([$expected, $actual] as $receipt) {
+            $keys = array_keys($receipt);
+            sort($keys);
+            $this->assertSame(['digest', 'record_id', 'request_id', 'revision'], $keys);
+            foreach (['digest', 'record_id', 'request_id'] as $key) {
+                $this->assertIsString($receipt[$key]);
+            }
+            $this->assertIsInt($receipt['revision']);
+        }
+        ksort($expected);
+        ksort($actual);
+        $this->assertSame($expected, $actual);
     }
 
     private function workspaceRow(): TeamOperationRecord

@@ -22,12 +22,15 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Process\Process;
+use Tests\Support\ReviewerWorkspaceFixtureHandlers;
 
 require_once dirname(__DIR__).'/Support/reviewer-workspace-initialization-mysql-worker.php';
 
 /** Strict existing disposable CI MySQL only; never starts/provisions a DB server. */
 final class ReviewerWorkspaceInitializationMySqlConcurrencyTest extends TestCase
 {
+    use ReviewerWorkspaceFixtureHandlers;
+
     private array $processes = [];
 
     private array $connectionIds = [];

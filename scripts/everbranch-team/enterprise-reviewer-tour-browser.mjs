@@ -30,8 +30,19 @@ await mkdir(evidence, { recursive: true });
 const image = await readFile(
     "resources/js/enterprise/reviewer/assets/lees-mcrae-official-wordmark.png",
 );
-const markup = (
-    await readFile("resources/views/enterprise/reviewer-tour.blade.php", "utf8")
+// This standalone public sample has no reviewer-AI descriptor. Resolve only
+// these exact nested false branches; unexpected Blade must still fail below.
+const publicAiExpressions = [
+    ["{{ ($enterpriseWorkspaceTour ?? false) ? 'ask-voice-controls' : (($enterprisePresentation['reviewerAi']['enabled'] ?? false) === true ? 'proposal-ai-controls' : 'reviewer-ai-coming-soon') }}", "reviewer-ai-coming-soon"],
+    ["{{ ($enterpriseWorkspaceTour ?? false) ? 'Ask Everbranch & Talk' : (($enterprisePresentation['reviewerAi']['enabled'] ?? false) === true ? 'Chats & Voice' : 'AI tools · Coming soon') }}", "AI tools · Coming soon"],
+    ["{{ ($enterprisePresentation['reviewerAi']['enabled'] ?? false) === true ? 'Confirmed AI requests share only reviewed fictional fields. This tour sends no messages or model requests.' : 'This sample cannot send messages or call paid AI. The trial opens only after its exact destination is approved.' }}", "This sample cannot send messages or call paid AI. The trial opens only after its exact destination is approved."],
+];
+const template = await readFile("resources/views/enterprise/reviewer-tour.blade.php", "utf8");
+for (const [expression] of publicAiExpressions) {
+    assert.equal(template.split(expression).length - 1, 1, "Expected one exact public AI expression");
+}
+const markup = publicAiExpressions.reduce(
+    (rendered, [expression, value]) => rendered.replace(expression, value), template,
 )
     .replace(
         /\{\{ base64_encode\(file_get_contents\(resource_path\('js\/enterprise\/reviewer\/assets\/lees-mcrae-official-wordmark.png'\)\)\) \}\}/g,

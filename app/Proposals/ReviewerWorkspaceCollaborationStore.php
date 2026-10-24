@@ -12,7 +12,7 @@ final class ReviewerWorkspaceCollaborationStore
 {
     public const THREAD = 'ent_proposal_ws_thread';
 
-    public const RECEIPT = 'ent_proposal_ws_collab_cmd';
+    public const RECEIPT = 'ent_proposal_ws_cmt_cmd';
 
     public const MAX_COMMENTS = 100;
 

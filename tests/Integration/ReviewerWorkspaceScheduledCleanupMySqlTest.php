@@ -28,6 +28,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Process\Process;
+use Tests\Support\ReviewerWorkspaceFixtureHandlers;
 use Tests\Unit\Proposals\ReviewerWorkspaceScheduledCleanupConfigurationTest;
 
 require_once dirname(__DIR__).'/Support/reviewer-workspace-scheduled-mysql-worker.php';
@@ -36,6 +37,8 @@ require_once dirname(__DIR__).'/Support/reviewer-workspace-initialization-mysql-
 /** Mutating scheduled paths ONLY on the existing strict disposable loopback MySQL8.4. No fake lock/principal. */
 final class ReviewerWorkspaceScheduledCleanupMySqlTest extends TestCase
 {
+    use ReviewerWorkspaceFixtureHandlers;
+
     private string $runtime;
 
     private array $processes = [];
