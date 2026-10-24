@@ -32,6 +32,8 @@ on:
       - 'vite.enterprise.config.js'
       - 'scripts/everbranch-team/enterprise-*'
       - 'scripts/proposals/review-browser.mjs'
+      - 'scripts/proposals/activity-browser.mjs'
+      - 'resources/js/service-proposals/**'
       - 'scripts/proposals/financial-browser.mjs'
       - 'tests/Feature/Enterprise/**'
       - 'tests/Feature/Proposals/**'
@@ -212,6 +214,7 @@ jobs:
         run: |
           for engine in chromium webkit; do
             PROPOSAL_BROWSER_ENGINE="$engine" PROPOSAL_BROWSER_EVIDENCE="test-results/enterprise/proposal-review/$engine" node scripts/proposals/review-browser.mjs
+            PROPOSAL_BROWSER_ENGINE="$engine" PROPOSAL_BROWSER_EVIDENCE="test-results/enterprise/proposal-activity/$engine" node scripts/proposals/activity-browser.mjs
           done
       - name: Check private Financial planning cart in Chromium and WebKit
         timeout-minutes: 10

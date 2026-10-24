@@ -1,3 +1,26 @@
+## Private review activity (October 23, 2026)
+
+Lees-McRae private review publications now have an owner-only activity view for
+link opens, successful password unlocks, chosen display names, proposal/campus
+pages, PDF downloads, saved-comment actions and browser-reported tour scenes or
+playback completion. Current active owner/admin membership gates each view;
+known owner browser tests are hidden by default. Self-selected names are not
+verified identities, and page opening is not proof of reading.
+
+The private runtime stores a separately encrypted, tenant/version-scoped journal
+under private shared storage, with file locking and fixed event/byte limits. No
+passwords, IP addresses, user agents, form text or sample work content enter the
+journal. A separate rate limiter prevents activity reports from consuming the
+review/comment request budget. Recipient reports require the exact current
+password grant and version; campus/tour reports also require the bound build.
+A small exact-hash script is permitted only on tracked proposal pages; public
+samples have no activity endpoint or additional network authority.
+
+Tracking starts at release; previous visits cannot be reconstructed. Browser
+blocking, expired access or a full/unavailable journal can leave gaps. Campus
+source changes require a fresh immutable publication and review link. See
+[review activity](docs/operations/proposal-review-activity.md).
+
 ## CI Ubuntu package mirrors (October 23; source candidate)
 
 Both browser CI jobs remove the exact Azure entry from the runner's validated
