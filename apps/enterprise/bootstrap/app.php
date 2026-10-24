@@ -41,6 +41,7 @@ return (new ApplicationBuilder($app))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->prepend(\App\Http\Middleware\ReviewerAiBoundary::class);
         $middleware->prepend(\App\Http\Middleware\ReviewerLegacyCaptureBoundary::class);
+        $middleware->alias(['abilities' => \Laravel\Sanctum\Http\Middleware\CheckAbilities::class]);
         $middleware->append(EnsureEnterpriseRuntime::class);
         $middleware->append(\App\Http\Middleware\EnsureEnterprisePrefixMount::class);
         $middleware->append(\App\Http\Middleware\EnsureEnterpriseTrialMount::class);

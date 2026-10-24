@@ -7,6 +7,10 @@ use App\Http\Controllers\TeamFileController;
 use App\Http\Controllers\TeamWorkController;
 use Illuminate\Support\Facades\Route;
 
+if (config('enterprise.pos_enabled') === true) {
+    require __DIR__.'/enterprise-pos.php';
+}
+
 // Independent business-owner proposals share this runtime's web/CSRF/session rails.
 // Recipient capabilities deliberately stay outside employee/Teams middleware.
 Route::middleware(\App\Enterprise\ProposalRuntimeBoundary::class)->group(function (): void {

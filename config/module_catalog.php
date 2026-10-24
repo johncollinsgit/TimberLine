@@ -91,6 +91,9 @@ $catalog = [
     ],
 
     'capabilities' => [
+        'pos.register' => ['display_name' => 'Point of sale', 'module_key' => 'pos'],
+        'pos.locations' => ['display_name' => 'POS locations', 'module_key' => 'pos'],
+        'pos.reports' => ['display_name' => 'POS reports', 'module_key' => 'pos'],
         'ai_branch.chat' => ['display_name' => 'AI Branch chat', 'description' => 'Private, metered workspace assistance.', 'module_key' => 'ai_branch'],
         'trajectory.personal' => ['display_name' => 'Personal trajectory', 'module_key' => 'trajectory'],
         'trajectory.business' => ['display_name' => 'Business trajectory', 'module_key' => 'trajectory'],
@@ -466,6 +469,15 @@ $catalog = [
     ],
 
     'modules' => [
+        'pos' => [
+            'display_name' => 'Point of Sale',
+            'description' => 'Merchant-owned counter and native payment operations with location-scoped staff access.',
+            'status' => 'live', 'market_state' => 'INTERNAL_ONLY', 'channels' => ['both'],
+            'classification' => 'shared-core', 'included_in_plans' => [], 'default_enabled' => false,
+            'default_setup_status' => 'not_started', 'dependencies' => [], 'billing_mode' => 'custom',
+            'activation_policy' => 'guided', 'visibility' => ['public_site' => false, 'app_store' => false, 'mobile_store' => false],
+            'cta_routing' => 'contact_sales', 'capabilities' => ['pos.register', 'pos.locations', 'pos.reports'],
+        ],
         'dashboard' => [
             'display_name' => 'Overview',
             'description' => 'Baseline overview, shell access, and account context.',

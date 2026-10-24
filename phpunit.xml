@@ -5,6 +5,9 @@
          colors="true"
 >
     <testsuites>
+        <testsuite name="POS Live">
+            <directory>tests/PosLive</directory>
+        </testsuite>
         <testsuite name="Unit">
             <directory>tests/Unit</directory>
         </testsuite>

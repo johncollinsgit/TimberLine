@@ -48,6 +48,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('payment_core_quotes');
+        // Retain immutable issued terms for original-payment recovery after code rollback.
     }
 };

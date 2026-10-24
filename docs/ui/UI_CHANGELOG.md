@@ -19,6 +19,15 @@
 - Reused shared Inter, white surfaces and forest accents. Charts have accessible
   data tables and reduced-motion behavior. Customer preparation and report views
   perform no payment, Recharge mutation, notification or automatic API read.
+## 2026-10-24 — Dedicated native Square POS pilot (source candidate, disabled)
+
+Add a separate iPhone register with exact-total review, native Square Tap to Pay,
+approved printing quotes, guest/customer contact, durable original-sale recovery,
+shareable receipts and manager refunds. Add assigned-location inventory/reporting
+and collection pause controls in the explicitly enabled independent Enterprise
+composition. Alpha Printing and Modern Forestry remain the first intended
+merchants; Apple, provider and physical acceptance gates precede activation.
+Offline collection is deferred to a future release. See the live POS runbook.
 
 ## 2026-10-23 — Reviewer AI Coming soon placeholders (source candidate)
 

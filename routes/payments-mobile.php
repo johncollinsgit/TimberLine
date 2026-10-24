@@ -3,6 +3,8 @@
 use App\Http\Controllers\Mobile\EvergrovePaymentsController;
 use Illuminate\Support\Facades\Route;
 
+require __DIR__.'/pos-mobile.php';
+
 // Included only inside the authenticated, tenant-scoped mobile workspace group.
 Route::prefix('payments')->name('workspace.payments.')->group(function (): void {
     $read = ['abilities:mobile:read,payments:read'];

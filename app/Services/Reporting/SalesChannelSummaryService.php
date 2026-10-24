@@ -35,6 +35,16 @@ class SalesChannelSummaryService
             $channels = $channels->concat($this->websiteChannel($tenantId, $startsAt, $endsAt));
         }
 
+        if ($this->hasLivePos()) {
+            $pos = \Illuminate\Support\Facades\DB::table('pos_live_sales')->where('runtime_id', config('pos_live.runtime_id'))
+                ->where('tenant_id', $tenantId)->where('commerce_source', 'native')->where('state', 'succeeded')
+                ->whereBetween('created_at', [$startsAt, $endsAt])->selectRaw('COUNT(*) as n, COALESCE(SUM(amount_minor),0) as gross, MAX(created_at) as latest')->first();
+            if ($pos->n) {
+                $channels->push(['key' => 'everbranch_pos', 'label' => 'Everbranch POS', 'order_count' => (int) $pos->n,
+                    'revenue_cents' => (int) $pos->gross, 'latest_order_at' => $pos->latest]);
+            }
+        }
+
         $channels = $channels
             ->filter(fn (array $channel): bool => $channel['order_count'] > 0)
             ->sortBy('label', SORT_NATURAL | SORT_FLAG_CASE)
@@ -54,7 +64,20 @@ class SalesChannelSummaryService
     {
         $tenantId = $tenant instanceof Tenant ? (int) $tenant->id : $tenant;
         $summary = $this->forTenant($tenantId, $startsAt, $endsAt);
-        $square = \App\Models\SquareOrder::query()->forTenantId($tenantId)
+        $squareQuery = \App\Models\SquareOrder::query()->forTenantId($tenantId);
+        if ($this->hasLivePos()) {
+            $squareQuery->whereNotExists(function ($q) use ($tenantId): void {
+                $q->selectRaw('1')->from('pos_live_sales as pos')->where('pos.runtime_id', config('pos_live.runtime_id'))
+                    ->where('pos.tenant_id', $tenantId)->where('pos.state', 'succeeded')
+                    ->whereColumn('pos.provider_order_id', 'square_orders.square_order_id');
+            })->whereNotExists(function ($q) use ($tenantId): void {
+                $q->selectRaw('1')->from('square_payments as sp')->join('payment_core_operations as op', 'op.provider_id', '=', 'sp.square_payment_id')
+                    ->join('pos_live_sales as pos', 'pos.attempt_id', '=', 'op.id')->where('pos.runtime_id', config('pos_live.runtime_id'))
+                    ->where('pos.tenant_id', $tenantId)->where('op.tenant_id', $tenantId)->where('sp.tenant_id', $tenantId)
+                    ->where('op.kind', 'payment')->where('pos.state', 'succeeded')->whereColumn('sp.square_order_id', 'square_orders.square_order_id');
+            });
+        }
+        $square = $squareQuery
             ->whereIn('state', ['COMPLETED', 'completed'])->where('total_money_currency', 'USD')->whereBetween('closed_at', [$startsAt, $endsAt])
             ->selectRaw('COUNT(*) as order_count, COALESCE(SUM(total_money_amount), 0) as gross_cents, MAX(closed_at) as observed_end')->first();
         if ((int) $square->getAttribute('order_count') > 0) {
@@ -64,6 +87,11 @@ class SalesChannelSummaryService
         }
 
         return [...$summary, 'basis' => 'Gross operational order amounts; refunds, taxes, processing fees and payouts require reconciliation.'];
+    }
+
+    private function hasLivePos(): bool
+    {
+        return is_string(config('pos_live.runtime_id')) && config('pos_live.runtime_id') !== '' && Schema::hasTable('pos_live_sales');
     }
 
     /** @return Collection<int,array{key:string,label:string,order_count:int,revenue_cents:int,latest_order_at:?string}> */
