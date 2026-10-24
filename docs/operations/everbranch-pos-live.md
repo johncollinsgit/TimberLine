@@ -5,6 +5,12 @@ Forestry are the first intended merchants. No merchant, entitlement, staff,
 device, tax rate or production credential is seeded by this implementation.
 The fictional public demonstration and older simulator remain separate.
 
+The shared [provider terms and publishing flags](provider-terms-and-publishing.md)
+record the owner's requested reminders for other Everbranch AI work. Keep the
+in-app privacy link and POS-specific policy/disclosure review on the publishing
+checklist. Apple entitlement and merchant terms remain prerequisites for a live
+pilot. These are review findings, not a compliance certification.
+
 The native CI job creates and fully boots its own iOS 26.2 iPhone simulator,
 then runs the sandbox launch test without parallel simulator clones. Startup
 and testing have explicit time bounds; the XCTest result bundle is retained
