@@ -1,3 +1,82 @@
+## Everbranch Pay event pilot (October 24, 2026; source candidate, disabled)
+
+The approved staff web design now has a separate authenticated event-register
+surface, canonical individual/PIN staff identities, restricted enrolled browser
+sessions, events/shifts, stock counts, saved baskets, favorites, live-journal
+reporting/graphs/CSV and provisional closeout. Stripe S710 server-driven support
+uses original-account idempotent payments/refunds, verified connected callbacks,
+reader contention guards and provider-specific readiness independent of Apple.
+No preview records migrate into production. Shared enrollment logs out the
+owner; PIN sessions cannot administer company payment accounts. Enterprise
+retains independent schema/configuration/callbacks without wider activation.
+Collection is still default-off; actual reader/merchant/Shopify/tax/settlement
+acceptance and protected exact-build deployment remain required. The private
+Everbranch Pay Preview was installed/launched separately on John's iPhone as
+build 2026102401; it has no payment SDK or Tap to Pay entitlement and is not
+payment acceptance. See [event pilot](docs/operations/everbranch-pay-event-pilot.md).
+
+## POS staff handoff update (2026-10-24)
+
+POS now has an enrolled staff browser preparation surface and an atomic native
+iPhone handoff. Web sessions cannot collect or retrieve SDK credentials. The
+private pilot's Apple entitlement request was submitted with owner-approved
+forecasts; approval and physical acceptance remain pending. November 7 is a
+target. See `docs/operations/everbranch-pos-live.md`. Collection stays default-off.
+
+## Shared AI provider review flags (2026-10-24)
+
+The owner requested persistent reminders for Apple publishing, live Tap to Pay
+prerequisites and Square/Apple data-use limits. Root AGENTS and the AI/POS
+runbooks link [the shared review record](docs/operations/provider-terms-and-publishing.md).
+These are development/release flags; no shared tenant memory, automatic legal
+approval, production rollout or runtime AI-data filter is implied.
+
+## Native Square POS pilot (2026-10-24; source candidate, disabled)
+
+A dedicated `native/everbranch-pos-ios` target embeds Square Mobile Payments SDK
+2.7.0. Independent `pos` access, runtime/tenant-bound MySQL payments, stock holds,
+original-account refunds, receipts and durable commerce recovery support the
+intended Alpha Printing and Modern Forestry cohort. Alpha issued quote claims
+serialize online/counter collection; Modern Forestry uses a dedicated live
+Shopify POS adapter and one correlated pending order. Enterprise composes only
+explicit POS schema/routes in its independent runtime and adds assigned-location
+stock/reporting controls. All collection/signing/provider/merchant gates remain
+off until reviewed. No merchant activation, physical acceptance or deployment is
+implied. Collection is online-only; offline capture/queued charging is a future
+release item. Native CI boots an isolated iOS simulator, bounds startup/test
+time and retains XCTest diagnostics; it does not establish device acceptance.
+See [the live POS runbook](docs/operations/everbranch-pos-live.md).
+
+## Evergrove Payments durable server contracts (2026-10-22; disabled source candidate)
+
+The follow-up adds an encrypted MySQL journal, migration recovery/concurrency,
+server-owned Website catalog/quote contracts with unavailable-by-default tax,
+and scoped mobile API contracts with a separately disabled PKCE client. All
+register/rollout settings are empty/off, provider registries are empty, and
+production collection remains hard-blocked pending atomic inventory/provider
+integration. The native offline demo is unchanged and does not call these APIs.
+See `docs/operations/evergrove-payments-production-contracts.md` for acceptance
+and the unconfirmed Alpha catalog, printing/postage/tax/provider choices.
+
+## Evergrove Payments iPhone foundation (2026-10-22; prior milestone)
+
+The separate `app/Services/PaymentsCore` package adds deny-by-default internal
+provider-neutral orchestration with immutable bindings, integer server-priced
+line semantics, durable local attempts/recovery and original-payment refunds.
+Its SQLite reference journal refuses live bindings. No HTTP endpoints, enabled
+server authorizer, provider adapter, production schema or simulator changes ship.
+Read `docs/operations/evergrove-payments-core.md` before integration.
+
+The separate `native/evergrove-payments-ios` rehearsal app embeds the existing
+Alpha Printing Android home-screen demo register as unchanged local JavaScript/CSS
+inside a restricted SwiftUI/WKWebView shell, alongside a distinct native recovery
+lab. No native provider bridge, real merchant or live checkout is included. Read
+its README, `docs/operations/evergrove-payments-iphone-launch.md` and
+`docs/operations/evergrove-payments-security-review.md` for test scope, on-site
+steps and remote-completion gates. The isolated payment workflow tests these
+contracts without secrets or changing the shared production release workflow.
+Test evidence does not establish merchant, physical iPhone, provider or production
+payment acceptance.
 ## Enterprise CI performance candidate (October 23, 2026)
 
 The isolated Enterprise workflow keeps the `enterprise-runtime` required result

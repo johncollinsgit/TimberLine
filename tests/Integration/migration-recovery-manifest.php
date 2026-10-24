@@ -3,6 +3,42 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_24_050000_create_pos_stripe_adapter.php' => [
+        'test' => 'tests/Integration/PosPilotMySqlRecoveryTest.php',
+        'scenarios' => ['retained encrypted payment and operator evidence across partial DDL, named-index recovery, isolated schema composition, replay and rollback'],
+    ],
+    '2026_10_24_060000_create_pos_pilot_operations.php' => [
+        'test' => 'tests/Integration/PosPilotMySqlRecoveryTest.php',
+        'scenarios' => ['retained encrypted payment and operator evidence across partial DDL, named-index recovery, isolated schema composition, replay and rollback'],
+    ],
+    '2026_10_24_070000_install_pos_pilot_schema.php' => [
+        'test' => 'tests/Integration/PosPilotMySqlRecoveryTest.php',
+        'scenarios' => ['retained encrypted payment and operator evidence across partial DDL, named-index recovery, isolated schema composition, replay and rollback'],
+    ],
+    '2026_10_24_030000_create_pos_live_handoffs.php' => [
+        'test' => 'tests/Integration/PosLiveMySqlRecoveryTest.php',
+        'scenarios' => ['encrypted claimed handoff survives missing named indexes, replay, altered-index refusal and non-destructive rollback'],
+    ],
+    '2026_10_24_040000_install_pos_handoff_schema.php' => [
+        'test' => 'tests/Integration/PosLiveMySqlRecoveryTest.php',
+        'scenarios' => ['pinned isolated Enterprise handoff schema replays without deleting staff or payment evidence'],
+    ],
+    '2026_10_24_010000_create_pos_live_tables.php' => [
+        'test' => 'tests/Integration/PosLiveMySqlRecoveryTest.php',
+        'scenarios' => ['retained encrypted unknown payment before trailing table and every named index; changed index and duplicate source claim fail without deleting evidence; rollback retains all tables'],
+    ],
+    '2026_10_24_020000_install_pos_schema.php' => [
+        'test' => 'tests/Integration/PosLiveMySqlRecoveryTest.php',
+        'scenarios' => ['checksum-pinned Enterprise POS schema replay and non-destructive rollback preserve original payment evidence without importing retail records'],
+    ],
+    '2026_10_22_190100_create_payment_core_quotes_table.php' => [
+        'test' => 'tests/Integration/PaymentsCoreQuotesMySqlRecoveryTest.php',
+        'scenarios' => ['encrypted immutable quote rows survive interrupted named-index repair and completed DDL replay', 'duplicate request evidence and changed named index definitions stop without deleting evidence'],
+    ],
+    '2026_10_22_190000_create_payment_core_journal_tables.php' => [
+        'test' => 'tests/Integration/PaymentsCoreMySqlRecoveryTest.php',
+        'scenarios' => ['retained admission and binding rows before operation/event tables', 'retained encrypted operations and events before indexes and foreign keys', 'duplicate and cross-tenant retained rows are rejected without rewriting evidence'],
+    ],
     '2026_10_22_000700_create_enterprise_service_proposals.php' => [
         'test' => 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php',
         'scenarios' => ['checksum-pinned proposal schema repairs missing named comment index and version constraint while preserving encrypted publication and comment evidence; code rollback retains all five tables'],

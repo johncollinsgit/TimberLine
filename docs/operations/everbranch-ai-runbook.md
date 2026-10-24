@@ -30,6 +30,16 @@ Timeouts, incomplete responses, invalid usage and provider HTTP failures keep th
 
 An active platform operator can preview one resolution with `php artisan ai-branch:reconcile-usage EVENT_ID --actor=OPERATOR_ID --evidence=PROVIDER_CASE_REFERENCE --input-tokens=VERIFIED_COUNT --output-tokens=VERIFIED_COUNT`. Use `--no-charge` only when provider evidence confirms no charge. Add `--apply` after reviewing the preview. The request must be unresolved and older than two minutes. The command snapshots before/after state, clears the matching pending marker and never resends the request. It does not fabricate a chat answer or replay the old UUID. Costs exceeding the reservation stay blocked for a pricing investigation. Never put credentials, prompts or customer records in the evidence reference.
 
+## Shared provider and publishing review flags
+
+Use [provider terms and publishing flags](provider-terms-and-publishing.md) when
+planning Apple releases, payment integrations or new AI source/memory adapters.
+This owner-requested record applies across Everbranch work. In particular, do
+not treat merchant consent or anonymization as permission to train/enhance AI
+with Square-derived content. Review proposed model context and retention uses
+before adding an adapter. These developer guardrails are not runtime filtering
+or a shared tenant memory; preserve existing private-memory boundaries.
+
 ## Memory and retention
 
 Conversations and memories are private to a tenant and user and encrypted in LONGTEXT. Keep APP_KEY available under the established backup/key policy; this implementation does not add key rotation. Memory is explicit, at most ten entries of 500 characters, expires after 90 days and is never inferred automatically. Memory changes invalidate previous conversation context; prior replies remain in old chats until deleted or expired. Active chats are limited to 30 per user and 40 messages each, with a conservative input byte ceiling.

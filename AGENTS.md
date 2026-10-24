@@ -1,3 +1,18 @@
+## Shared AI provider and publishing flags (2026-10-24)
+
+- Read `docs/operations/provider-terms-and-publishing.md` when changing Apple
+  app publishing, Tap to Pay, provider-data retrieval or AI memory/training.
+  Flag its applicable requirements and missing evidence in other Everbranch
+  work. Publishing disclosures can remain a later milestone; live pilot
+  entitlement, merchant and signing requirements still apply before collection.
+- Do not repurpose Apple Tap to Pay data for marketing/customer profiling or
+  use Square-derived content (even anonymized) to train or enhance AI. Proposed
+  Square-data context/embedding/memory use requires provider/legal review.
+  Review seller revocation/deletion and record-retention duties together; do not
+  silently delete payment evidence or promise that provider content is permanent.
+- Verify current terms at release. Agreement acceptance, a developer app and
+  passing tests are distinct from legal approval and physical acceptance.
+
 ## Self-service payment accounts, bank linking and native invoices (2026-10-19)
 
 - New Stripe accounts use full Dashboard access and direct charges; owner-session OAuth can connect an existing Standard account. Frozen request/routing/environment/account context prevents cross-merchant retries. Existing Express reservations and Wren routing stay unchanged. Direct payments require their own connected-event signing secret and live proof gate; new direct attempts use stable platform-account/environment fingerprints across key rotation.

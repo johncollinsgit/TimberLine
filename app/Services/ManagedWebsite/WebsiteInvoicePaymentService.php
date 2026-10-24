@@ -25,7 +25,7 @@ class WebsiteInvoicePaymentService
 
     public function balance(WebsiteOrder $order): int
     {
-        return max(0, $order->total_cents - (int) $order->payments()->where('metadata->checkout_version', 2)
+        return max(0, $order->total_cents - (int) $order->payments()->whereIn('metadata->checkout_version', [2, 3])
             ->where('metadata->paid_confirmed', true)->sum('amount_cents'));
     }
 
@@ -41,7 +41,7 @@ class WebsiteInvoicePaymentService
                     if (! data_get($order->service_request, 'invoice.issued_at')) {
                         continue;
                     }
-                    $receipts = $order->payments->filter(fn ($payment) => data_get($payment->metadata, 'checkout_version') === 2
+                    $receipts = $order->payments->filter(fn ($payment) => in_array(data_get($payment->metadata, 'checkout_version'), [2, 3], true)
                         && data_get($payment->metadata, 'paid_confirmed') === true);
                     $collected = (int) $receipts->sum('amount_cents');
                     $totals['collections'] += $collected;
@@ -69,7 +69,7 @@ class WebsiteInvoicePaymentService
 
     public function hasRefundActivity(WebsiteOrder $order): bool
     {
-        return $order->payments()->where('metadata->checkout_version', 2)->get()->contains(fn ($payment) => collect(data_get($payment->metadata, 'refunds', []))->contains(fn ($operation) => ! in_array($operation['status'] ?? '', ['failed', 'canceled'], true)));
+        return $order->payments()->whereIn('metadata->checkout_version', [2, 3])->get()->contains(fn ($payment) => collect(data_get($payment->metadata, 'refunds', []))->contains(fn ($operation) => ! in_array($operation['status'] ?? '', ['failed', 'canceled'], true)));
     }
 
     public function cardAvailable(Tenant $tenant): bool
@@ -101,6 +101,7 @@ class WebsiteInvoicePaymentService
         abort_unless(in_array($method, ['card', 'us_bank_account'], true) && ($method === 'card' || $this->bankAvailable($tenant)), 423, 'This payment method is not enabled.');
         abort_unless($account->routingMode() === 'direct' && (int) $account->platform_fee_bps === 0, 423, 'A verified business-owned payment account is required.');
         $payment = $this->locked($order, function ($order) use ($installment, $origin, $account, $method) {
+            abort_if(filled(data_get($order->service_request, 'invoice.pos_sale_id')), 409, 'Finish the counter payment before starting an online checkout.');
             $invoice = (array) data_get($order->service_request, 'invoice', []);
             abort_unless(in_array($order->source, ['staff_quote', 'staff_draft_invoice'], true)
                 && ! empty($invoice['issued_at']) && ! empty($invoice['manual_tax_confirmed'])

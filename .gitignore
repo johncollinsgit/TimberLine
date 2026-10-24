@@ -34,3 +34,5 @@ yarn-error.log
 
 # Private customer audit evidence and isolated fleet preview output
 /artifacts/collins-fleet/
+
+/work/
