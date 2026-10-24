@@ -83,7 +83,8 @@ with definitive unpaid evidence. Unknown payment/commerce phases retain stock.
 Square refunds precede manual Shopify refund bookkeeping; no automatic restock.
 
 No Square catalog/inventory mapping is created. Shopify and Website orders retain
-their own reporting lanes. Native POS adds one operational channel; exact Square
+their own reporting lanes. Exact store/order correlations exclude pending POS
+Shopify stock commitments until payment is confirmed. Native POS adds one operational channel; exact Square
 order/payment correlations suppress its duplicate provider representation in
 consolidated reporting. Operational totals are not additional accounting revenue.
 

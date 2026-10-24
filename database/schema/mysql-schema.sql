@@ -7598,6 +7598,8 @@ CREATE TABLE `pos_live_sales` (
   `currency` char(3) COLLATE utf8mb4_unicode_ci NOT NULL,
   `commerce_source` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
   `provider_order_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `commerce_order_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `commerce_store_id` bigint unsigned DEFAULT NULL,
   `state` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'quoted',
   `attempt_id` char(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `stock_state` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'unprepared',

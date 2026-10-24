@@ -131,7 +131,11 @@ final class ShopifyPosCommerce
         }
         $reference = [...$reference, 'order_id' => $order['id'], 'tag' => $tag,
             'initial_transaction_ids' => $reference['initial_transaction_ids'] ?? array_column($order['transactions'] ?? [], 'id')];
-        $this->store->rows('sales', $scope['tenant_id'])->where('id', $sale->id)->update(['source_reference' => $this->store->encrypt($reference)]);
+        if (! preg_match('~^gid://shopify/Order/([0-9]+)$~D', $order['id'], $identity)) {
+            throw new PosException('shopify_order_identity_invalid');
+        }
+        $this->store->rows('sales', $scope['tenant_id'])->where('id', $sale->id)->update(['source_reference' => $this->store->encrypt($reference),
+            'commerce_order_id' => $identity[1], 'commerce_store_id' => $snapshot['configuration']['shopify']['store_id']]);
         $this->verifyOrder($scope, $sale, $snapshot, $order);
         if ($order['displayFinancialStatus'] !== 'PENDING' || self::minor($order['totalOutstandingSet']['shopMoney']['amount']) !== (int) $sale->amount_minor) {
             throw new PosException('shopify_order_already_collected');

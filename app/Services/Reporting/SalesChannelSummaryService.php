@@ -97,8 +97,19 @@ class SalesChannelSummaryService
     /** @return Collection<int,array{key:string,label:string,order_count:int,revenue_cents:int,latest_order_at:?string}> */
     private function legacyChannels(int $tenantId, CarbonInterface $startsAt, CarbonInterface $endsAt): Collection
     {
-        return Order::query()
-            ->forTenantId($tenantId)
+        $query = Order::query()->forTenantId($tenantId);
+        if ($this->hasLivePos()) {
+            // A POS-created pending Shopify order is a stock commitment, not a
+            // confirmed sale. Match the exact store and order, never amount/date.
+            $query->whereNotExists(function ($q) use ($tenantId): void {
+                $q->selectRaw('1')->from('pos_live_sales as ps')->join('shopify_stores as shop', 'shop.id', '=', 'ps.commerce_store_id')
+                    ->where('ps.runtime_id', config('pos_live.runtime_id'))->where('ps.tenant_id', $tenantId)->where('shop.tenant_id', $tenantId)
+                    ->where('ps.commerce_source', 'shopify')->where('ps.state', '!=', 'succeeded')
+                    ->whereColumn('ps.commerce_order_id', 'orders.shopify_order_id')->whereColumn('shop.store_key', 'orders.shopify_store_key');
+            });
+        }
+
+        return $query
             ->whereBetween('ordered_at', [$startsAt, $endsAt])
             ->selectRaw("COALESCE(NULLIF(source, ''), 'legacy') as sales_channel")
             ->selectRaw('COUNT(*) as order_count')
