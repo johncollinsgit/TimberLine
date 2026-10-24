@@ -91,6 +91,8 @@ final class PosSchema
                 $t->char('currency', 3);
                 $t->string('commerce_source', 30);
                 $t->string('provider_order_id', 100)->nullable();
+                $t->string('commerce_order_id', 100)->nullable();
+                $t->unsignedBigInteger('commerce_store_id')->nullable();
                 $t->string('state', 30)->default('quoted');
                 $t->char('attempt_id', 32)->nullable();
                 $t->string('stock_state', 30)->default('unprepared');

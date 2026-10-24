@@ -327,9 +327,14 @@ it('correlates one pending Shopify order with Square and finalizes the same orde
     $id = $quote['sale_id'];
     $this->postJson($this->base.'/sales/'.$id.'/collect')->assertOk()->assertJsonPath('stock_state', 'held');
     expect($this->shopifyCreates)->toBe(1)->and($this->shopifyPaid)->toBeFalse();
+    \App\Models\Order::create(['tenant_id' => $this->tenant->id, 'source' => 'shopify', 'shopify_order_id' => 4,
+        'shopify_store_key' => 'fixture-store-'.$this->tenant->id, 'ordered_at' => now(), 'total_price' => '10.70']);
+    $summary = app(\App\Services\Reporting\SalesChannelSummaryService::class);
+    expect($summary->forTenant($this->tenant, now()->subDay(), now()->addDay())['order_count'])->toBe(0);
     posFixtureSquarePayment($this, $id);
     $this->postJson($this->base.'/sales/'.$id.'/reconcile', ['payment_id' => 'fixture_payment'])->assertOk()->assertJsonPath('stock_state', 'committed');
     $this->postJson($this->base.'/sales/'.$id.'/reconcile')->assertOk();
+    expect($summary->forTenant($this->tenant, now()->subDay(), now()->addDay())['order_count'])->toBe(1);
     expect($this->shopifyCreates)->toBe(1)->and($this->shopifyPaid)->toBeTrue()->and($this->shopifyFulfilled)->toBeTrue()
         ->and((int) $this->store->rows('items', $this->tenant->id)->first()->quantity)->toBe(1)
         ->and($this->store->rows('holds', $this->tenant->id)->count())->toBe(0);

@@ -119,4 +119,31 @@ final class EnterprisePosRuntimeTest extends TestCase
         [$tenant] = $this->fixture('admin');
         $this->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/pos/registers')->assertUnauthorized();
     }
+
+    public function test_native_pkce_exchange_and_assigned_catalog_use_only_enterprise_identity(): void
+    {
+        [$tenant, $user, $store] = $this->fixture('admin');
+        config(['pos_live.native_client_enabled' => true]);
+        \App\Models\TenantModuleEntitlement::create(['tenant_id' => $tenant->id, 'module_key' => 'pos',
+            'availability_status' => 'available', 'enabled_status' => 'enabled', 'billing_status' => 'add_on_comped',
+            'entitlement_source' => 'test', 'price_source' => 'catalog']);
+        $store->rows('connections', $tenant->id)->insert($store->values($tenant->id, ['id' => str_repeat('c', 32),
+            'merchant_id' => 'fictional_enterprise_merchant', 'provider_location_id' => 'fictional_enterprise_location',
+            'environment' => 'sandbox', 'credentials' => $store->encrypt([])]));
+        $verifier = str_repeat('v', 43);
+        \App\Models\MobileAuthorizationCode::create(['user_id' => $user->id, 'client_id' => 'everbranch-pos-ios',
+            'redirect_uri' => 'everbranchpos://auth/callback', 'code_hash' => hash('sha256', 'fictional_code'),
+            'code_challenge' => rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '='),
+            'expires_at' => now()->addMinutes(5)]);
+        $token = $this->postJson('/api/mobile/v1/auth/exchange', ['client_id' => 'everbranch-pos-ios',
+            'redirect_uri' => 'everbranchpos://auth/callback', 'code' => 'fictional_code', 'code_verifier' => $verifier])
+            ->assertOk()->json('access_token');
+        $this->withToken($token)->withHeader('X-Pos-Device', 'assigned_enterprise_fixture')
+            ->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/pos/registers/'.str_repeat('a', 32).'/catalog')
+            ->assertOk()->assertJsonPath('items.0.sku', 'FIXTURE-a');
+        $this->assertFalse(Schema::hasTable('shopify_stores'));
+        $this->assertSame(1, DB::table('personal_access_tokens')->count());
+        $this->withHeader('X-Pos-Device', 'unassigned_enterprise_device')
+            ->getJson('/api/mobile/v1/workspaces/'.$tenant->slug.'/pos/registers/'.str_repeat('b', 32).'/catalog')->assertNotFound();
+    }
 }
