@@ -28,6 +28,12 @@ class CampusReviewManifest
             'pages' => array_map(fn ($id, $title) => ['id' => $id, 'title' => $title], array_keys(self::PAGES), array_values(self::PAGES))];
     }
 
+    /** Nonsecret source evidence only; this grants no renderer, owner or scheduled authority. */
+    public function sourceFingerprint(): string
+    {
+        return $this->sourceHash();
+    }
+
     /** Fixed local source groups only; never accepts a file path from a reviewer. */
     protected function sourceHash(): string
     {
@@ -53,7 +59,7 @@ class CampusReviewManifest
             'app/Enterprise/RecordStore.php', 'app/Enterprise/MountUrls.php', 'app/Enterprise/Provisioning/ClientSilo.php',
             'app/Enterprise/Provisioning/RuntimePaths.php', 'app/Enterprise/Trial/TrialBudget.php', 'app/Enterprise/Trial/TrialStore.php',
             'app/Enterprise/Conversation/Connection.php', 'app/Models/TeamOperationRecord.php', 'app/Models/TeamArea.php', 'app/Models/Tenant.php', 'app/Models/User.php',
-            'app/Http/Middleware/ReviewerAiBoundary.php', 'app/Console/Commands/PruneProposalReviewerAi.php',
+            'app/Console/Commands/PruneScheduledProposalWorkspace.php', 'app/Http/Middleware/ReviewerAiBoundary.php', 'app/Console/Commands/PruneProposalReviewerAi.php',
             'app/Http/Middleware/EnterpriseCsrfToken.php', 'app/Http/Middleware/EnsureEnterpriseRuntime.php',
             'app/Http/Middleware/EnsureEnterprisePrefixMount.php', 'app/Http/Middleware/EnsureEnterpriseClientSilo.php',
             'app/Providers/EnterpriseServiceProvider.php', 'apps/enterprise/bootstrap/app.php',

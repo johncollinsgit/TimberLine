@@ -143,6 +143,12 @@ final class ReviewerWorkspaceStore
             $query->where('id', '>', $after);
         }
         $rows = $query->limit($limit + 1)->get();
+
+        return $this->pruneRows($rows, $context, $ownerId, $limit, $dryRun);
+    }
+
+    private function pruneRows($rows, array $context, int $ownerId, int $limit, bool $dryRun, ?ReviewerWorkspaceScheduledAuthority $authority = null, ?string $run = null): array
+    {
         $more = $rows->count() > $limit;
         $eligible = $erased = 0;
         $last = null;
@@ -153,7 +159,8 @@ final class ReviewerWorkspaceStore
             $binding = $data['binding'];
             abort_unless(is_array($binding) && ($binding['context_hash'] ?? null) === $context['context_hash'], 503);
             $descriptor = app(ReviewerWorkspaceSchema::class)->descriptor($binding['descriptor'] ?? []);
-            $version = Version::query()->where('tenant_id', $context['tenant']->id)->find($binding['version_id'] ?? null);
+            $version = $authority !== null ? $authority->version($row, 'graph')
+                : Version::query()->where('tenant_id', $context['tenant']->id)->find($binding['version_id'] ?? null);
             abort_unless($version !== null && $row->id === $descriptor['workspace_id'] && $row->visibility === 'area'
                 && $row->source_key === hash('sha256', 'publication-workspace:'.$version->id)
                 && $version->content_hash === ($binding['version_hash'] ?? null)
@@ -169,12 +176,17 @@ final class ReviewerWorkspaceStore
                 if ($dryRun) {
                     continue;
                 }
+                $authority?->held(true);
                 $data['graph'] = null;
                 $row->data = $data;
                 $row->status = 'expired';
                 $row->version++;
                 $row->save();
-                $this->audit($row, 'workspace.content_erased', [], $ownerId);
+                if ($authority !== null) {
+                    $authority->audit($row, 'workspace.content_erased', $run);
+                } else {
+                    $this->audit($row, 'workspace.content_erased', [], $ownerId);
+                }
                 $erased++;
             }
         }
@@ -182,6 +194,29 @@ final class ReviewerWorkspaceStore
         $result = ['processed' => min($rows->count(), $limit), 'erased' => $erased, 'next_cursor' => $more ? $last : null];
 
         return $dryRun ? $result + ['eligible' => $eligible, 'dry_run' => true] : $result;
+    }
+
+    /** Internal closed scheduled path; recipient/HTTP callers have no principal factory. */
+    public function scheduledPage(ReviewerWorkspaceScheduledAuthority $authority, ?string $after, string $run): array
+    {
+        abort_unless(ReviewerWorkspaceSchema::uuid($run) && ($after === null || ReviewerWorkspaceSchema::uuid($after)), 422);
+        $authority->assertPage();
+        $pins = $authority->pins();
+        abort_unless(in_array('graph', $pins['kinds'], true), 403);
+        $context = $authority->context();
+        $query = TeamOperationRecord::query()->where(['tenant_id' => $context['tenant']->id, 'area_id' => $context['area_id'], 'kind' => self::KIND])
+            ->whereIn('id', array_column($pins['editions'], 'workspace_id'))->orderBy('id');
+        if ($after !== null) {
+            $query->where('id', '>', $after);
+        }
+        $rows = $query->limit($pins['limit'] + 1)->lockForUpdate()->get();
+        foreach ($rows->take($pins['limit']) as $row) {
+            $authority->version($row, 'graph');
+        }
+
+        $this->pruneRows($rows, $context, $pins['authorizing_owner_id'], $pins['limit'], true, $authority, $run);
+
+        return $this->pruneRows($rows, $context, $pins['authorizing_owner_id'], $pins['limit'], false, $authority, $run);
     }
 
     public function audit(TeamOperationRecord $row, string $event, array $evidence, ?int $ownerId = null): void

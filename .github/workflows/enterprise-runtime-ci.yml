@@ -6,6 +6,7 @@ name: Enterprise isolated runtime
     - app/Enterprise/**
     - app/Proposals/**
     - app/Console/Commands/PruneProposalReviewerAi.php
+    - app/Console/Commands/PruneScheduledProposalWorkspace.php
     - bootstrap/providers.php
     - app/Foundation/Enterprise*.php
     - app/Providers/Enterprise*.php
@@ -78,6 +79,7 @@ name: Enterprise isolated runtime
     - tests/Unit/Proposals/ReviewerWorkspaceMapReferenceTest.php
     - tests/Unit/Proposals/ReviewerWorkspaceRuntimeConfigurationTest.php
     - tests/Unit/Proposals/ReviewerWorkspaceMaintenanceConfigurationTest.php
+    - tests/Unit/Proposals/ReviewerWorkspaceScheduledCleanupConfigurationTest.php
     - tests/Unit/Proposals/ReviewerWorkspaceInitializationConfigurationTest.php
     - tests/Unit/Proposals/ReviewerLegacyCaptureConfigurationTest.php
     - tests/Unit/Proposals/ReviewerWorkspacePreparationConfigurationTest.php
@@ -105,6 +107,8 @@ name: Enterprise isolated runtime
     - tests/Support/reviewer-workspace-initialization-mysql-worker.php
     - tests/Integration/ReviewerWorkspacePreparationMySqlConcurrencyTest.php
     - tests/Support/reviewer-workspace-preparation-mysql-worker.php
+    - tests/Integration/ReviewerWorkspaceScheduledCleanupMySqlTest.php
+    - tests/Support/reviewer-workspace-scheduled-mysql-worker.php
     - tests/Integration/migration-recovery-manifest.php
     - phpunit.enterprise.xml
     - phpunit.team.xml
@@ -227,7 +231,7 @@ jobs:
         tests/Feature/Enterprise/EnterpriseReviewerTrialEntryTest.php tests/Feature/EnterpriseReviewerPublicTest.php tests/Feature/LeesMcRaeCampusDemoTest.php --compact
         --display-warnings
     - name: Check immutable proposal and version-bound campus review policies
-      run: php -d memory_limit=1G vendor/bin/pest -c phpunit.team.xml tests/Feature/Proposals tests/Feature/Enterprise/LegacyCampusRuntimeTest.php tests/Unit/Proposals/ReviewerWorkspaceMapReferenceTest.php tests/Unit/Proposals/ReviewerWorkspaceRuntimeConfigurationTest.php tests/Unit/Proposals/ReviewerWorkspaceMaintenanceConfigurationTest.php tests/Unit/Proposals/ReviewerWorkspaceInitializationConfigurationTest.php tests/Unit/Proposals/ReviewerLegacyCaptureConfigurationTest.php tests/Unit/Proposals/ReviewerWorkspacePreparationConfigurationTest.php tests/Unit/Proposals/CampusReviewSourceBoundTest.php tests/Unit/Proposals/IndependentWorkspaceRuntimeConfigurationTest.php tests/Unit/Proposals/LegacyCampusConfigurationTest.php --compact --display-warnings
+      run: php -d memory_limit=1G vendor/bin/pest -c phpunit.team.xml tests/Feature/Proposals tests/Feature/Enterprise/LegacyCampusRuntimeTest.php tests/Unit/Proposals/ReviewerWorkspaceMapReferenceTest.php tests/Unit/Proposals/ReviewerWorkspaceRuntimeConfigurationTest.php tests/Unit/Proposals/ReviewerWorkspaceMaintenanceConfigurationTest.php tests/Unit/Proposals/ReviewerWorkspaceScheduledCleanupConfigurationTest.php tests/Unit/Proposals/ReviewerWorkspaceInitializationConfigurationTest.php tests/Unit/Proposals/ReviewerLegacyCaptureConfigurationTest.php tests/Unit/Proposals/ReviewerWorkspacePreparationConfigurationTest.php tests/Unit/Proposals/CampusReviewSourceBoundTest.php tests/Unit/Proposals/IndependentWorkspaceRuntimeConfigurationTest.php tests/Unit/Proposals/LegacyCampusConfigurationTest.php --compact --display-warnings
     - name: Check permission-filtered period reports and certificate register
       run: php vendor/bin/pest -c phpunit.team.xml tests/Feature/Enterprise/EnterpriseContractorCertificatesTest.php tests/Feature/Enterprise/EnterpriseReportExportTest.php
         tests/Feature/Enterprise/EnterpriseFinancePacketsTest.php tests/Feature/Enterprise/EnterpriseOperationsTest.php --compact --display-warnings

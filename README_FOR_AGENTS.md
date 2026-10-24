@@ -2880,3 +2880,22 @@ intercepted endpoints and phone viewports do not prove physical microphone/mobil
 real provider calls or live private-image/scanner readiness. See the reviewer AI
 and attachment-gallery runbooks. Keep SES transactional source in its separate
 packet; no provider/key/scanner/mail/global routing activation follows from this.
+
+
+### 2026-10-24 scheduled cleanup source checkpoint
+
+The default-off `proposals:prune-scheduled-workspace` source provides at most one
+finite graph page and one comments page under a stable context MySQL advisory
+lock. Exact fixed-file/config pins, current real-owner/context/Version checks,
+per-kind predecessor lineage, two bounded durable cursors and conservative partial
+outcomes retain the existing manual HTTP erasure behavior. See
+`docs/operations/proposal-reviewer-workspace-scheduled-cleanup.md`.
+
+The assembled local PHP8.5/SQLite/pure/refusal checks pass31 cases/865 assertions,
+with one explicitly skipped actual-MySQL scheduled mutation case. CI-plan3 and
+workflow lint pass. These focused checks include current capture configuration
+and source-closure integration; prior broad/browser suites were not repeated.
+Actual MySQL8.4/PHP8.4 exact-head CI, query/locking behavior and hosted cleanup
+remain unverified. No runtime policy/delegation/ENV/cache/job was installed.
+Recurring operation needs its own concrete finite-scope human approval and
+observed installation; this source checkpoint never supplies that authority.

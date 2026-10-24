@@ -87,10 +87,13 @@ test('splitting does not change all feature flags, pacing or native MySQL gates'
   assert.match(harness, /\['all', 'procedures', 'roles'\]\.includes\(operationsScenario\)/);
   assert.match(harness, /\['all', 'finance'\]\.includes\(operationsScenario\)/);
   const suite = readFileSync('phpunit.enterprise.xml','utf8');
-  for (const name of ['EnterpriseClientProvisioningMySqlTest','EnterpriseConversationMySqlConcurrencyTest','EnterpriseMemoryMySqlConcurrencyTest','EnterpriseMySqlMigrationRecoveryTest','EnterpriseTrialBudgetMySqlConcurrencyTest','ReviewerWorkspaceMySqlConcurrencyTest','ReviewerWorkspaceInitializationMySqlConcurrencyTest','ReviewerWorkspacePreparationMySqlConcurrencyTest']) assert.ok(suite.includes(name));
+  for (const name of ['EnterpriseClientProvisioningMySqlTest','EnterpriseConversationMySqlConcurrencyTest','EnterpriseMemoryMySqlConcurrencyTest','EnterpriseMySqlMigrationRecoveryTest','EnterpriseTrialBudgetMySqlConcurrencyTest','ReviewerWorkspaceMySqlConcurrencyTest','ReviewerWorkspaceInitializationMySqlConcurrencyTest','ReviewerWorkspacePreparationMySqlConcurrencyTest','ReviewerWorkspaceScheduledCleanupMySqlTest']) assert.ok(suite.includes(name));
   assert.match(suite, /ReviewerWorkspaceMySqlConcurrencyTest\.php<\/file>\s*<file>tests\/Integration\/ReviewerWorkspaceInitializationMySqlConcurrencyTest\.php<\/file>/);
   assert.match(suite, /ReviewerWorkspaceInitializationMySqlConcurrencyTest\.php<\/file>\s*<file>tests\/Integration\/ReviewerWorkspacePreparationMySqlConcurrencyTest\.php<\/file>/);
   const workflow = readFileSync('.github/workflows/enterprise-runtime-ci.yml','utf8');
+  assert.match(suite, /ReviewerWorkspacePreparationMySqlConcurrencyTest\.php<\/file>\s*<file>tests\/Integration\/ReviewerWorkspaceScheduledCleanupMySqlTest\.php<\/file>/);
+  for (const path of ['app/Console/Commands/PruneScheduledProposalWorkspace.php','tests/Unit/Proposals/ReviewerWorkspaceScheduledCleanupConfigurationTest.php','tests/Integration/ReviewerWorkspaceScheduledCleanupMySqlTest.php','tests/Support/reviewer-workspace-scheduled-mysql-worker.php']) assert.ok(workflow.includes(`    - ${path}\n`));
+  assert.match(workflow, /run: php -d memory_limit=1G vendor\/bin\/pest [^\n]*tests\/Unit\/Proposals\/ReviewerWorkspaceScheduledCleanupConfigurationTest\.php/);
   assert.ok(workflow.includes('    - routes/service-proposals-reviewer-preparation.php\n'));
   assert.ok(workflow.includes('    - tests/Unit/Proposals/ReviewerWorkspacePreparationConfigurationTest.php\n'));
   assert.ok(workflow.includes('    - tests/Unit/Proposals/ReviewerLegacyCaptureConfigurationTest.php\n'));

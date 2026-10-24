@@ -32,7 +32,7 @@ final class EnterpriseServiceProvider extends ServiceProvider
     {
         \App\Proposals\RateLimits::register();
         $this->commands([\App\Enterprise\Provisioning\ProvisionClientCommand::class, \App\Enterprise\VoicePruneCommand::class, \App\Enterprise\Conversation\MemoryPruneCommand::class,
-            \App\Console\Commands\PruneProposalReviewerAi::class]);
+            \App\Console\Commands\PruneProposalReviewerAi::class, \App\Console\Commands\PruneScheduledProposalWorkspace::class]);
         DB::prohibitDestructiveCommands($this->app->isProduction());
         Gate::policy(TeamProject::class, TeamProjectPolicy::class);
         Gate::policy(TeamTask::class, TeamTaskPolicy::class);

@@ -20,6 +20,7 @@ return [
     // Explicit reviewed descriptor/policy/anchor only. No inherited AI/Trial/native grants.
     'reviewer_workspace' => ['enabled' => false, 'writes_enabled' => false, 'initialization_enabled' => false,
         'financial_enabled' => false, 'maintenance_enabled' => false,
+        'scheduled_cleanup' => ['enabled' => false, 'pins_sha256' => null],
         'owner_preparation' => ['enabled' => false, 'approvals' => []],
         'owner_initialization' => ['enabled' => false, 'approvals' => []], 'anchor_area_id' => null, 'anchor_marker_sha256' => null, 'policies' => [],
         'collaboration' => ['enabled' => false, 'comments_write_enabled' => false, 'policies' => []],

@@ -28,6 +28,7 @@
             <file>tests/Integration/ReviewerWorkspaceMySqlConcurrencyTest.php</file>
             <file>tests/Integration/ReviewerWorkspaceInitializationMySqlConcurrencyTest.php</file>
             <file>tests/Integration/ReviewerWorkspacePreparationMySqlConcurrencyTest.php</file>
+            <file>tests/Integration/ReviewerWorkspaceScheduledCleanupMySqlTest.php</file>
             <file>tests/Integration/EnterpriseConversationMySqlConcurrencyTest.php</file>
             <file>tests/Integration/EnterpriseMemoryMySqlConcurrencyTest.php</file>
             <file>tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php</file>

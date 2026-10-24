@@ -80,4 +80,11 @@ $config['legacy_capture'] = \App\Proposals\ReviewerLegacyCaptureConfiguration::c
         'runtime_client_id' => env('ENTERPRISE_CLIENT_ID', ''), 'runtime_silo_id' => env('ENTERPRISE_SILO_ID', ''),
         'runtime_storage_id' => env('ENTERPRISE_CLIENT_STORAGE_ID', '')]);
 
+// A NEW separately approved nonsecret schedule digest; never inferred from AI or manual owner gates.
+$scheduleDigest = env('SERVICE_PROPOSALS_WORKSPACE_CLEANUP_PINS_SHA256', '');
+$config['reviewer_workspace']['scheduled_cleanup'] = ['pins_sha256' => \App\Proposals\ReviewerWorkspaceSchema::hash($scheduleDigest) ? $scheduleDigest : null,
+    'enabled' => \App\Proposals\ReviewerWorkspaceSchema::hash($scheduleDigest)
+        && env('SERVICE_PROPOSALS_WORKSPACE_SCHEDULED_CLEANUP_ENABLED', false) === true
+        && $config['runtime_purpose'] === 'proposal_owner' && count($config['owner_workspaces']) === 1];
+
 return $config;
