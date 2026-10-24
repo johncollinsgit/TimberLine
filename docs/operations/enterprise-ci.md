@@ -22,7 +22,7 @@ artifact or permission to copy CI files into Forge.
 After preparation, the native job retains the original MySQL 8.4 service,
 loopback-only disposable database guard and complete PHP commands, including all
 original five real MySQL recovery/concurrency/provisioning classes, plus the
-publication-bound shared-workspace concurrency gate. In parallel, thirteen
+publication-bound shared-workspace concurrency gate. In parallel, twenty-three
 browser entries use independent GitHub-hosted runners/filesystems:
 
 | Entries | Existing checks retained |
@@ -31,7 +31,12 @@ browser entries use independent GitHub-hosted runners/filesystems:
 | Operations tour × Chromium/WebKit | Full signed-in tour. |
 | Operations workspace × Chromium/WebKit | Procedures, Finance, navigation, role preview and voice shell, in original order. Procedures must precede roles to supply populated shared-work evidence. |
 | Native × Chromium/WebKit | Original default-off persistent UI, jobs wizard, generated voice with provider-only fake. |
-| Proposal × Chromium/WebKit | Persisted proposal review, activity, Financial planning; mounted shared-workspace core/directory and separately fake-provider shared-AI checks, sequentially. |
+| Proposal × Chromium/WebKit | Original persisted proposal review, activity and Financial planning, sequentially. |
+| Shared workspace × Chromium/WebKit | New mounted workspace core and directory checks, sequentially. |
+| Shared comments × Chromium/WebKit | New persisted shared comments, including the responsive composer. |
+| Shared files × Chromium/WebKit | New persisted private photos with fake scanner evidence only. |
+| Shared downloads × Chromium/WebKit | New persisted private PDF downloads with fake scanner evidence only. |
+| Shared AI × Chromium/WebKit | New mounted shared-AI checks with a fake provider only. |
 | Reviewer × Chromium/WebKit | Tour, shared renderer, priorities, public procedures. |
 | Components (one entry) | Assistant, conversation, Blaine sample and voice-job scripts, each retaining its own internal two-engine loop. |
 
@@ -44,6 +49,14 @@ No-group `all` remains available for a continuous accumulated-state manual run.
 The matrix preserves each explicit helper case/configuration, with independent
 fixtures between groups; it does not claim identical accumulated state across
 all eleven helpers. `jobs` and `voice-generation` remain separate required gates.
+
+The five new shared harness groups have separate two-engine entries rather than
+adding their approximately 17 minutes of observed local serial work to the existing
+proposal lane. This preserves all thirteen existing entries and adds ten fresh
+runners. It costs additional setup, artifact transfers and browser installations;
+with twelve matrix jobs at a time, queue waves may also affect elapsed time.
+Measure the complete exact-head run before claiming a speed improvement. Local
+measurements are not an Ubuntu or production-release ETA.
 
 Never parallelize fixed-port harnesses in one checkout: independent SQLite names
 or ports alone do not isolate file caches, sessions, quarantine storage or login

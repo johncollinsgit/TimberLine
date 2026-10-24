@@ -271,6 +271,46 @@ jobs:
           kind: proposal
           engine: webkit
           group: ''
+        - id: shared-workspace-chromium
+          kind: shared-workspace
+          engine: chromium
+          group: ''
+        - id: shared-workspace-webkit
+          kind: shared-workspace
+          engine: webkit
+          group: ''
+        - id: shared-comments-chromium
+          kind: shared-comments
+          engine: chromium
+          group: ''
+        - id: shared-comments-webkit
+          kind: shared-comments
+          engine: webkit
+          group: ''
+        - id: shared-files-chromium
+          kind: shared-files
+          engine: chromium
+          group: ''
+        - id: shared-files-webkit
+          kind: shared-files
+          engine: webkit
+          group: ''
+        - id: shared-downloads-chromium
+          kind: shared-downloads
+          engine: chromium
+          group: ''
+        - id: shared-downloads-webkit
+          kind: shared-downloads
+          engine: webkit
+          group: ''
+        - id: shared-ai-chromium
+          kind: shared-ai
+          engine: chromium
+          group: ''
+        - id: shared-ai-webkit
+          kind: shared-ai
+          engine: webkit
+          group: ''
         - id: reviewer-chromium
           kind: reviewer
           engine: chromium
@@ -368,7 +408,7 @@ jobs:
       run: |
         PROPOSAL_BROWSER_ENGINE="$engine" PROPOSAL_BROWSER_EVIDENCE="test-results/enterprise/proposal-shared-workspace/$engine" node scripts/proposals/reviewer-workspace-browser.mjs
         PROPOSAL_WORKSPACE_SCENARIO=directory PROPOSAL_BROWSER_ENGINE="$engine" PROPOSAL_BROWSER_EVIDENCE="test-results/enterprise/proposal-shared-directory/$engine" node scripts/proposals/reviewer-workspace-browser.mjs
-      if: matrix.kind == 'proposal'
+      if: matrix.kind == 'shared-workspace'
     - name: Check persisted shared reviewer comments in Chromium and WebKit
       timeout-minutes: 15
       env:
@@ -377,7 +417,7 @@ jobs:
         engine: ${{ matrix.engine }}
       run: |
         PROPOSAL_BROWSER_ENGINE="$engine" PROPOSAL_BROWSER_EVIDENCE="test-results/enterprise/proposal-shared-comments/$engine" node scripts/proposals/reviewer-workspace-comments-browser.mjs
-      if: matrix.kind == 'proposal'
+      if: matrix.kind == 'shared-comments'
     - name: Check persisted private workspace photos with a fake scanner in Chromium and WebKit
       timeout-minutes: 15
       env:
@@ -386,7 +426,7 @@ jobs:
         engine: ${{ matrix.engine }}
       run: |
         PROPOSAL_BROWSER_ENGINE="$engine" PROPOSAL_BROWSER_EVIDENCE="test-results/enterprise/proposal-shared-files/$engine" node scripts/proposals/reviewer-workspace-files-browser.mjs
-      if: matrix.kind == 'proposal'
+      if: matrix.kind == 'shared-files'
     - name: Check persisted private PDF downloads with a fake scanner in Chromium and WebKit
       timeout-minutes: 15
       env:
@@ -395,7 +435,7 @@ jobs:
         engine: ${{ matrix.engine }}
       run: |
         PROPOSAL_BROWSER_ENGINE="$engine" PROPOSAL_BROWSER_EVIDENCE="test-results/enterprise/proposal-shared-downloads/$engine" node scripts/proposals/reviewer-workspace-downloads-browser.mjs
-      if: matrix.kind == 'proposal'
+      if: matrix.kind == 'shared-downloads'
     - name: Check mounted shared reviewer AI with a fake provider in Chromium and WebKit
       timeout-minutes: 15
       env:
@@ -404,7 +444,7 @@ jobs:
         engine: ${{ matrix.engine }}
       run: |
         PROPOSAL_BROWSER_ENGINE="$engine" PROPOSAL_BROWSER_EVIDENCE="test-results/enterprise/proposal-shared-ai/$engine" node scripts/proposals/reviewer-workspace-ai-browser.mjs
-      if: matrix.kind == 'proposal'
+      if: matrix.kind == 'shared-ai'
     - name: Check private Financial planning cart in Chromium and WebKit
       timeout-minutes: 10
       env:
