@@ -135,7 +135,7 @@ class SoccerWorkspaceController extends Controller
         } elseif ($action === 'reactivate') {
             $d = $r->validate(['id' => 'required|uuid']);
             $reg = $this->store->row('registrations', $id, $d['id']);
-            abort_unless($reg->status === 'waitlisted', 422);
+            abort_unless(in_array($reg->status, ['waitlisted', 'payment_pending'], true), 422);
             DB::transaction(function () use ($id, $reg, $actor) {
                 $this->store->lockSeason($id, $reg->season_id);
                 $this->store->query('registrations', $id)->where('id', $reg->id)->update(['auto_eligible' => true, 'updated_at' => now()]);

@@ -42,7 +42,7 @@ class SoccerEvents
         if ($familyText && $family) {
             $f = $this->store->row('families', $tenant, $family);
             $p = $this->store->decrypt($f->profile);
-            $invoiceId = in_array($action, ['initial_registration', 'waitlist_offer', 'manual_waitlist_offer', 'payment_reminder'], true) ? ($data['invoice_id'] ?? null) : null;
+            $invoiceId = in_array($action, ['initial_registration', 'waitlist_offer', 'manual_waitlist_offer', 'resumed_registration', 'payment_reminder'], true) ? ($data['invoice_id'] ?? null) : null;
             if ($invoiceId && $this->store->query('invoices', $tenant)->where('id', $invoiceId)->value('status') === 'waived') {
                 $invoiceId = null;
             }

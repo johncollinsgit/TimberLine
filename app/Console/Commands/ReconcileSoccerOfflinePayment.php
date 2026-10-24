@@ -15,7 +15,8 @@ class ReconcileSoccerOfflinePayment extends Command
     protected $signature = 'soccer:reconcile-offline {invoice}
         {--tenant=wren-family-soccer} {--actor=} {--action=}
         {--amount-cents=} {--reference=} {--reason=} {--expected-family=}
-        {--apply : Apply the reviewed reconciliation; otherwise preview only}';
+        {--apply : Apply the reviewed reconciliation; otherwise preview only}
+        {--restore-places : Restore available places for a verified expired Venmo invoice without creating another receipt}';
 
     protected $description = 'Preview or apply an organizer-verified soccer Venmo receipt or fee waiver';
 
@@ -56,6 +57,9 @@ class ReconcileSoccerOfflinePayment extends Command
             $this->info('Organizer waiver recorded. No payment receipt was created.');
         } else {
             $status = $payments->confirmVenmo($tenant->id, $invoice->id, (int) $data['amount'], $data['reference'], $data['reason'], $actor->id);
+            if ($status === 'review' && $this->option('restore-places') && filled($data['reference'])) {
+                $status = $payments->restoreVenmoPlaces($tenant->id, $invoice->id, (int) $data['amount'], $data['reference'], $data['reason'], $actor->id);
+            }
             $this->info($status === 'paid' ? 'Verified Venmo receipt recorded and current places confirmed.' : 'Receipt recorded for review; current places were not changed.');
             if ($status === 'review') {
                 return self::FAILURE;

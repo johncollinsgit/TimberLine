@@ -60,7 +60,7 @@ class SoccerRegistrationService
             ->sortByDesc(fn ($child) => (bool) $child['needs_jersey'])->take($remainingWaivers)->pluck('player_id')->all();
         $capacity = $this->capacities($season);
         $queueByTeam = $this->store->query('registrations', $tenant)->where('season_id', $season->id)
-            ->where('status', 'waitlisted')->pluck('team_key')->flip();
+            ->where('status', 'waitlisted')->where('auto_eligible', true)->pluck('team_key')->flip();
         $pending = [];
         foreach ($selected as $child) {
             if (! in_array($child['player_id'], $newIds, true)) {
@@ -177,7 +177,7 @@ class SoccerRegistrationService
                     ? $datedReleases->first(fn ($row) => $this->store->decrypt($row->answers)['child1Birthday'] === $p->birthday)
                     : $releases->first();
                 abort_unless($release, 422, 'Review and sign this season’s release with the current birthday for every selected player.');
-                $hasQueue = $this->store->query('registrations', $tenant)->where('season_id', $season->id)->where('team_key', $team)->where('status', 'waitlisted')->exists();
+                $hasQueue = $this->store->query('registrations', $tenant)->where('season_id', $season->id)->where('team_key', $team)->where('status', 'waitlisted')->where('auto_eligible', true)->exists();
                 $seat = ! $hasQueue && $capacity[$team]['public_free'] > 0 ? 'public' : null;
                 if ($seat) {
                     $capacity[$team]['public_free']--;
@@ -261,10 +261,10 @@ class SoccerRegistrationService
 
     public function offer(object $season, string $family, array $ids, ?int $actor, string $action = 'waitlist_offer'): string
     {
-        $rows = $this->store->query('registrations', $season->tenant_id)->where('season_id', $season->id)->where('family_id', $family)->whereIn('id', $ids)->where('status', 'waitlisted')->get();
+        $rows = $this->store->query('registrations', $season->tenant_id)->where('season_id', $season->id)->where('family_id', $family)->whereIn('id', $ids)->whereIn('status', ['waitlisted', 'payment_pending'])->get();
         abort_unless($rows->count() === count($ids), 422, 'These players already have an offer or place.');
         $group = (string) \Illuminate\Support\Str::uuid();
-        $expires = now()->addHours($season->offer_hours);
+        $expires = now()->addMinutes((int) config('soccer.checkout_hold_minutes', 30));
         $amount = $rows->sum('amount_cents');
         foreach ($rows as $r) {
             $this->store->query('registrations', $season->tenant_id)->where('id', $r->id)->update(['status' => $r->waived ? 'registered' : 'offered', 'offer_group' => $group, 'offer_expires_at' => $r->waived ? null : $expires, 'payment_status' => $r->waived ? 'waived' : 'unpaid', 'updated_at' => now()]);
@@ -295,7 +295,7 @@ class SoccerRegistrationService
                     }
                     $head = true;
                     foreach ($waiting->groupBy('team_key') as $team => $children) {
-                        $first = $queue->where('team_key', $team)->take($children->count());
+                        $first = $queue->where('auto_eligible', true)->where('team_key', $team)->take($children->count());
                         if ($first->contains(fn ($r) => $r->family_id !== $family)) {
                             $head = false;
                             break;
@@ -340,7 +340,7 @@ class SoccerRegistrationService
             $ids = [];
             foreach ($assignments as $a) {
                 $r = $this->store->row('registrations', $tenant, $a['id']);
-                abort_unless($r->season_id === $s->id && $r->family_id === $family && $r->status === 'waitlisted', 422);
+                abort_unless($r->season_id === $s->id && $r->family_id === $family && in_array($r->status, ['waitlisted', 'payment_pending'], true), 422);
                 $k = $a['seat_kind'];
                 abort_unless(in_array($k, ['public', 'reserved'], true) && $cap[$r->team_key][$k.'_free'] > 0, 422, 'No seat is available in the chosen pool.');
                 $cap[$r->team_key][$k.'_free']--;
@@ -390,7 +390,7 @@ class SoccerRegistrationService
             $r = $this->store->row('registrations', $tenant, $id);
             $season = $this->store->lockSeason($tenant, $r->season_id);
             $r = $this->store->row('registrations', $tenant, $id);
-            abort_unless(isset(config('soccer.teams')[$team]) && in_array($r->status, ['waitlisted', 'registered'], true), 422);
+            abort_unless(isset(config('soccer.teams')[$team]) && in_array($r->status, ['waitlisted', 'payment_pending', 'registered'], true), 422);
             if ($r->team_key === $team) {
                 return;
             }
@@ -405,33 +405,39 @@ class SoccerRegistrationService
         $this->promote($tenant, $r->season_id);
     }
 
-    public function tick(int $tenant, string $seasonId): void
+    public function expireOffers(int $tenant, string $seasonId): void
     {
         DB::transaction(function () use ($tenant, $seasonId) {
-            $s = $this->store->lockSeason($tenant, $seasonId);
-            $invoices = $this->store->query('invoices', $tenant)->where('season_id', $seasonId)->where('status', 'unpaid')->get();
-            foreach ($invoices as $i) {
-                $expires = CarbonImmutable::parse($i->expires_at);
-                if (json_decode($i->registration_ids, true) === []) {
-                    if ($expires->lte(now())) {
-                        $this->store->query('invoices', $tenant)->where('id', $i->id)->update(['status' => 'expired', 'updated_at' => now()]);
+            $this->store->lockSeason($tenant, $seasonId);
+            $invoices = $this->store->query('invoices', $tenant)->where('season_id', $seasonId)->where('status', 'unpaid')->where('expires_at', '<=', now())->get();
+            foreach ($invoices as $invoice) {
+                try {
+                    app(SoccerPayPalService::class)->assertNoInFlightPayment($tenant, $invoice->id);
+                    if (app(SoccerPaymentService::class)->retireStripeCheckout($tenant, $invoice->id)) {
+                        continue;
                     }
-
+                } catch (\Symfony\Component\HttpKernel\Exception\HttpException $error) {
+                    // Unknown provider outcomes retain their reservation for review.
                     continue;
                 }
-                if ($expires->lte(now())) {
-                    $this->store->query('invoices', $tenant)->where('id', $i->id)->update(['status' => 'expired', 'updated_at' => now()]);
-                    $this->store->query('registrations', $tenant)->where('offer_group', $i->offer_group)->where('status', 'offered')->update(['status' => 'waitlisted', 'auto_eligible' => false, 'seat_kind' => null, 'offer_expires_at' => null, 'updated_at' => now()]);
-                    $this->events->record($tenant, $seasonId, $i->family_id, 'offer_expired', ['summary' => 'Unpaid family offer expired.', 'invoice_id' => $i->id], key: 'expired:'.$i->id, waitlist: true, familyText: 'Wren Soccer: your unpaid offer expired. Your children remain on the waitlist. Contact Sarah to reactivate.');
-                } else {
-                    foreach ([24, 2] as $hours) {
-                        if ($expires->lte(now()->addHours($hours))) {
-                            $this->events->record($tenant, $seasonId, $i->family_id, 'payment_reminder', ['summary' => 'Payment deadline reminder.', 'invoice_id' => $i->id], key: 'reminder:'.$i->id.':'.$hours, familyText: 'Wren Soccer: pay your registration invoice before '.$expires->timezone('America/New_York')->format('M j, g:i A T').' to keep the reserved spots: '.config('soccer.origin').'/spring?pay='.$i->id);
-                        }
-                    }
+                $this->store->query('invoices', $tenant)->where('id', $invoice->id)->update(['status' => 'expired', 'updated_at' => now()]);
+                $this->store->query('registrations', $tenant)->where('offer_group', $invoice->offer_group)->where('status', 'offered')
+                    ->update(['status' => 'payment_pending', 'auto_eligible' => false, 'seat_kind' => null, 'offer_expires_at' => null, 'updated_at' => now()]);
+                if (json_decode($invoice->registration_ids, true)) {
+                    $this->events->record($tenant, $seasonId, $invoice->family_id, 'payment_reservation_released', ['summary' => 'Unpaid checkout reservation released; saved application can be resumed.', 'invoice_id' => $invoice->id], key: 'reservation-released:'.$invoice->id);
                 }
             }
-        });
+            app(SoccerRecoveryService::class)->normalize($tenant, $seasonId);
+        }, 3);
+    }
+
+    public function tick(int $tenant, string $seasonId): void
+    {
+        $this->expireOffers($tenant, $seasonId);
         $this->promote($tenant, $seasonId);
+        DB::transaction(function () use ($tenant, $seasonId) {
+            $this->store->lockSeason($tenant, $seasonId);
+            app(SoccerRecoveryService::class)->remind($tenant, $seasonId);
+        }, 3);
     }
 }

@@ -1,3 +1,48 @@
+# Saved application and card-only recovery — October 23, 2026
+
+The public Sites checkout is card-only. The backend retains old provider evidence,
+refunds, and organizer reconciliation; do not erase receipts or reactivate Venmo.
+
+- New offers reserve capacity for 30 minutes. Starting card checkout aligns the
+  provider session and invoice to a 31-minute window (Stripe's minimum plus clock
+  tolerance). Existing seasonal `offer_hours` is retained for historical/rollback
+  compatibility and is no longer an editable checkout policy.
+- Expiry first verifies/retires the original Stripe session and checks PayPal
+  uncertainty. Unknown status keeps the reservation for review. A known unpaid
+  closed session releases capacity and changes offered rows to `payment_pending`.
+  Paid/waived siblings remain registered. Standalone verification invoices do not
+  create family followups.
+- Legacy inactive waitlist entries attached to expired invoices normalize to
+  payment_pending. Explicit withdrawn invoices remain withdrawn. Neither pending
+  nor inactive rows block available seats or eligible waitlist promotion.
+- Signed POST `resume` requires the family's own session, a tenant-owned season,
+  open registration, saved signed release/current birthday and age eligibility.
+  Current receipt or unknown provider activity blocks another collection attempt.
+  Prices and children come from saved registrations, never browser amounts.
+  Earlier eligible queue entries and strict-majority sibling reserves still apply.
+  Available children receive an invoice; actual shortages remain waitlisted with
+  no charge. Repeating resume reuses the current invoice.
+- `payment_recovery` in the private profile supports a persistent resume banner,
+  current payment buttons for mixed offered/waitlisted families (including the
+  reported Adams case), review contact state, and closed-registration state.
+- Daily reminders require `WREN_SOCCER_PAYMENT_REMINDERS_ENABLED=true`. Record the
+  independently verified old receipts before activation. One family/season/day
+  key, a rolling 24-hour cooldown, and current delivery checks suppress paid,
+  review, withdrawn, closed-season and unavailable-only followups. Parent email
+  remains the working channel; this does not enable Twilio or organizer SMS.
+- Preview `soccer:reconcile-offline` with the exact invoice, family, amount, actor
+  and genuine provider reference. After owner authorization, `--apply
+  --restore-places` records at most one verified receipt and restores an expired
+  invoice only against that exact sole receipt, no refund/competing payment, and
+  enough current capacity for every included unpaid child. A conflict stays in
+  review without creating a replacement charge, receipt or forced overbooking.
+- Release backend through protected CI/Forge first, restore verified paid families,
+  then publish the matching Sites source. Verify Adams sees a payable invoice or
+  the resume path. Do not create fictional live registrations to test the flow.
+- Rollback: disable reminders and deploy through the normal release gate. Preserve
+  payment_pending rows and all receipt/event evidence; retain a compatible recovery
+  UI or roll forward. Never relabel paid families as unpaid to fit older code.
+
 # Wren soccer operations
 
 The soccer lane is additive, tenant-scoped to `wren-family-soccer`, and disabled
