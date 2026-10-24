@@ -7,6 +7,18 @@ use Illuminate\Http\Request;
 
 class Access
 {
+    /** Invalid persisted expiry closes access; other recipient/owner failures retain their existing behavior. */
+    private function expiry(Version $version): ?\Carbon\CarbonInterface
+    {
+        try {
+            $expiry = $version->expires_at;
+        } catch (\InvalidArgumentException) {
+            return null;
+        }
+
+        return $expiry instanceof \Carbon\CarbonInterface ? $expiry : null;
+    }
+
     /** A display name is never an access grant; only the existing password unlock is. */
     public function unlocked(Request $request, Version $version): bool
     {
@@ -15,7 +27,7 @@ class Access
         return is_array($grant) && is_string($grant['hash'] ?? null)
             && hash_equals($version->content_hash, $grant['hash'])
             && is_numeric($grant['until'] ?? null) && $grant['until'] > now()->timestamp
-            && ! $version->revoked_at && $version->expires_at->isFuture();
+            && ! $version->revoked_at && ($this->expiry($version)?->isFuture() ?? false);
     }
 
     public function owner(Request $request, bool $write = false): Tenant
@@ -40,7 +52,8 @@ class Access
             && in_array(strtolower($request->getHost()), config('service_proposals.recipient_hosts', []), true), 404);
         $version = Version::query()->where('token_hash', hash('sha256', $token))->firstOrFail();
         abort_unless(in_array(config('service_proposals.owner_workspaces.'.$version->tenant_id), ['regular', 'enterprise'], true), 404);
-        abort_if($version->revoked_at || $version->expires_at->isPast(), 410);
+        $expiry = $this->expiry($version);
+        abort_if($version->revoked_at || $expiry === null || $expiry->isPast(), 410);
 
         return $version;
     }

@@ -35,7 +35,7 @@ class AuthorizedEvidence
     private function read(Tenant $tenant, User $user, array $actor, string $area, string $kind, string $id): array
     {
         $section = match ($kind) {
-            'request' => 'requests', 'project', 'task' => 'projects', 'building' => 'buildings', 'cost' => 'contractors', default => abort(404),
+            'request' => 'requests', 'project', 'task' => 'projects', 'building' => 'buildings', 'cost', 'contractor', 'schedule' => 'contractors', default => abort(404),
         };
         $selected = $id;
         $extra = [];
@@ -59,6 +59,22 @@ class AuthorizedEvidence
             $facts = ['Status' => $record['status'], 'Amount in minor units' => $record['data']['amount_minor'] ?? null,
                 'Currency' => $record['data']['currency'] ?? null, 'Basis' => $record['data']['basis'] ?? null,
                 'Project' => $project['name'], 'Version' => $record['version'], 'Recorded at' => $record['updated_at']];
+        } elseif (in_array($kind, ['contractor', 'schedule'], true)) {
+            abort_unless(config('enterprise.planning_enabled'), 404);
+            $planning = app(Planning::class);
+            $record = $planning->view($tenant, $actor, $planning->record($tenant, $actor, $kind, $id));
+            abort_unless($record['area_id'] === $area, 404);
+            $title = $record['title'];
+            $facts = ['Status' => $record['status'], 'Version' => $record['version']];
+            if ($kind === 'schedule') {
+                abort_unless(is_string($record['data']['contractor_id'] ?? null), 404);
+                $contractor = $planning->view($tenant, $actor, $planning->record($tenant, $actor, 'contractor', $record['data']['contractor_id']));
+                abort_unless($contractor['area_id'] === $area, 404);
+                $facts += ['Contractor' => $contractor['title'], 'Contractor status' => $contractor['status'],
+                    'Contractor version' => $contractor['version'], 'Project ID' => $record['data']['project_id'],
+                    'Starts on' => $record['starts_on'], 'Ends on' => $record['ends_on'],
+                    'Basis' => 'Project-level plan; not a task assignment or verified on-site presence.'];
+            }
         } elseif ($kind === 'project') {
             $state = app(TeamWorkRepository::class)->state($tenant->id);
             $graph = app(WorkGraph::class);

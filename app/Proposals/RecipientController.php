@@ -47,6 +47,7 @@ class RecipientController
         }
         $request->session()->regenerate();
         $request->session()->put('service_proposal_access.'.$version->id, ['hash' => $version->content_hash, 'until' => min(now()->addMinutes(30)->timestamp, $version->expires_at->timestamp)]);
+        $request->attributes->set('service_proposal_activity_completed', 'unlocked');
 
         return redirect()->route('service-proposals.recipient.show', $token);
     }
@@ -85,6 +86,7 @@ class RecipientController
         abort_unless($this->unlocked($request, $version), 403);
         $data = $request->validate(['reviewer_name' => ['required', \Illuminate\Validation\Rule::in($version->payload['reviewer_names'] ?? [])]]);
         $request->session()->put('service_proposal_name.'.$version->id, $data['reviewer_name']);
+        $request->attributes->set('service_proposal_activity_completed', 'name_selected');
 
         return redirect()->route('service-proposals.recipient.show', ['token' => $token, 'section' => 'review']);
     }
@@ -121,6 +123,7 @@ class RecipientController
         abort_unless(in_array($name, $version->payload['reviewer_names'] ?? [], true), 403, 'Choose your review display name first.');
         $data = $request->validate(['page' => ['required', 'in:overview,approach,scope,pricing'], 'body' => ['required', 'string', 'max:4000'], 'comment_key' => ['required', 'uuid']]);
         $this->proposals->comment($version, $name, $data['page'], $data['body'], $data['comment_key']);
+        $request->attributes->set('service_proposal_activity_completed', 'comment_saved');
 
         return redirect()->to(route('service-proposals.recipient.show', ['token' => $token, 'section' => 'review']).'#review-comments')->with('status', 'Comment saved to this proposal version.');
     }

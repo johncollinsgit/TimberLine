@@ -196,7 +196,7 @@ final class EnterpriseReadOnlyAssistantTest extends TestCase
         $result = $this->check('building', ['building_id' => $building['id']])->assertOk()
             ->assertJsonPath('building.counts.linked_requests', 2)->assertJsonPath('building.counts.open_requests', 2)
             ->assertJsonPath('building.counts.urgent_open_requests', 1)->assertJsonPath('building.counts.unknown_priority_open_requests', 1)->assertJsonPath('jobs.0.priority', 'urgent')->json();
-        $this->assertEqualsCanonicalizing(['building:'.$building['id'], 'request:'.$linked['id'], 'request:'.$second['id']], array_column($result['sources'], 'ref'));
+        $this->assertEqualsCanonicalizing(['building:'.$building['id'], 'request:'.$linked['id'], 'request:'.$second['id'], 'task:'.$assigned['task']['id']], array_column($result['sources'], 'ref'));
         $this->assertStringNotContainsString($legacy['id'], json_encode($result));
         $this->assertStringContainsString('task='.$assigned['task']['id'], $result['jobs'][0]['url']);
         $this->assertArrayNotHasKey('assignee_capacity', $result['jobs'][0]);
@@ -451,5 +451,103 @@ final class EnterpriseReadOnlyAssistantTest extends TestCase
         });
         $this->app->instance(\App\Enterprise\Planning::class, $proxy);
         $this->check('costs')->assertConflict()->assertJsonMissingPath('comparisons');
+    }
+
+    private function joinedBuilding(): array
+    {
+        $this->owner();
+        $building = $this->building();
+        $request = $this->command($this->linkedInput($building))->assertOk()->json();
+        $project = $this->project();
+        $this->command(['action' => 'request.triage', 'id' => $request['id'], 'expected_version' => 1])->assertOk();
+        $assigned = $this->command(['action' => 'request.assign', 'id' => $request['id'], 'expected_version' => 2,
+            'project_id' => $project, 'assignee_id' => $this->coordinator->id])->assertOk()->json();
+        $contractor = $this->planningRecord('contractor', 'Synthetic roofing crew', 'active');
+        $schedule = $this->planningRecord('schedule', 'Synthetic roof date block', 'planned',
+            ['project_id' => $project, 'contractor_id' => $contractor->id]);
+
+        return compact('building', 'request', 'project', 'assigned', 'contractor', 'schedule');
+    }
+
+    private function planningRecord(string $kind, string $title, string $status, array $data = []): TeamOperationRecord
+    {
+        return TeamOperationRecord::query()->create(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenant->id,
+            'area_id' => $this->area, 'kind' => 'ent_'.$kind, 'title' => $title, 'status' => $status, 'visibility' => 'area',
+            'source_key' => Str::random(64), 'version' => 1, 'starts_on' => '2026-11-01', 'ends_on' => '2026-11-03', 'data' => $data]);
+    }
+
+    public function test_building_joins_current_assignment_plans_and_project_costs_once_with_current_citation_authority(): void
+    {
+        extract($this->joinedBuilding());
+        $this->cost($project, 0, 'estimate');
+        $cost = $this->cost($project, 250, 'recorded_cost');
+        $this->cost($project, 90, 'recorded_cost', 'EUR');
+        $this->cost($this->project('Unlinked private cost project'), 999, 'recorded_cost');
+        $duplicate = TeamOperationRecord::query()->findOrFail($request['id'])->replicate();
+        $duplicate->forceFill(['id' => (string) Str::uuid(), 'source_key' => Str::random(64)])->save();
+        $result = $this->check('building', ['building_id' => $building['id']])->assertOk()->json();
+        $this->assertCount(1, $result['jobs']);
+        $this->assertSame(['id' => (string) $this->coordinator->id, 'name' => $this->coordinator->name], $result['jobs'][0]['handler']);
+        $this->assertCount(2, $result['jobs'][0]['request_refs']);
+        $this->assertCount(1, $result['contractors']);
+        $this->assertSame('2026-11-01', $result['contractors'][0]['starts_on']);
+        $this->assertCount(2, $result['comparisons']);
+        $usd = collect($result['comparisons'])->firstWhere('currency', 'USD');
+        $this->assertSame(0, $usd['estimate_minor']);
+        $this->assertSame(250, $usd['difference_minor']);
+        $this->assertSame(['cost:'.$cost['id']], $usd['recorded_cost_refs']);
+        $this->assertNull(collect($result['comparisons'])->firstWhere('currency', 'EUR')['difference_minor']);
+        $this->assertStringNotContainsString($this->coordinator->email, json_encode($result));
+        foreach (['schedule', 'contractor'] as $kind) {
+            $source = collect($result['sources'])->firstWhere('ref', $kind.':'.$$kind->id);
+            $this->get($source['url'])->assertOk()->assertSee($$kind->title);
+        }
+        $scheduleUrl = collect($result['sources'])->firstWhere('ref', 'schedule:'.$schedule->id)['url'];
+        $contractor->forceFill(['status' => 'inactive', 'version' => 2])->save();
+        $this->check('building', ['building_id' => $building['id']])->assertOk()->assertJsonCount(0, 'contractors');
+        $this->get($scheduleUrl)->assertOk()->assertSee('inactive');
+        $payload = json_decode(DB::table('team_projects')->where('id', $project)->value('payload'), true);
+        $payload['privacy'] = 'private';
+        DB::table('team_projects')->where('id', $project)->update(['privacy' => 'private', 'payload' => json_encode($payload)]);
+        DB::table('team_project_members')->where('project_id', $project)->delete();
+        $this->getJson($scheduleUrl)->assertNotFound();
+    }
+
+    public function test_ambiguous_or_stale_project_links_do_not_join_costs_or_contractors_and_membership_loss_removes_names(): void
+    {
+        extract($this->joinedBuilding());
+        $this->cost($project, 250, 'recorded_cost');
+        $second = $this->project('Second authorized project');
+        $membership = (array) DB::table('team_task_projects')->where('task_id', $assigned['task']['id'])->first();
+        $membership['project_id'] = $second;
+        DB::table('team_task_projects')->insert($membership);
+        $row = TeamOperationRecord::query()->findOrFail($request['id']);
+        $data = $row->data;
+        unset($data['project_id']);
+        $row->data = $data;
+        $row->save();
+        $result = $this->check('building', ['building_id' => $building['id']])->assertOk()->assertJsonCount(0, 'comparisons')->assertJsonCount(0, 'contractors')->json();
+        $this->assertSame([], $result['jobs'][0]['project_refs']);
+        $data['project_id'] = (string) Str::uuid();
+        $row->data = $data;
+        $row->save();
+        $this->check('building', ['building_id' => $building['id']])->assertOk()->assertJsonCount(0, 'comparisons')->assertJsonCount(0, 'contractors');
+        DB::table('team_task_projects')->where('task_id', $assigned['task']['id'])->where('project_id', $second)->delete();
+        foreach ([null, 123, ['invalid']] as $invalid) {
+            $data['project_id'] = $invalid;
+            $row->data = $data;
+            $row->save();
+            $this->check('building', ['building_id' => $building['id']])->assertOk()->assertJsonCount(0, 'comparisons')->assertJsonCount(0, 'contractors');
+        }
+        unset($data['project_id']);
+        $row->data = $data;
+        $row->save();
+        $this->check('building', ['building_id' => $building['id']])->assertOk()->assertJsonCount(1, 'comparisons')->assertJsonCount(1, 'contractors');
+        $data['project_id'] = $project;
+        $row->data = $data;
+        $row->save();
+        $this->check('building', ['building_id' => $building['id']])->assertOk()->assertJsonCount(1, 'comparisons')->assertJsonCount(1, 'contractors');
+        $this->tenant->users()->updateExistingPivot($this->coordinator->id, ['role' => 'viewer']);
+        $this->check('building', ['building_id' => $building['id']])->assertOk()->assertJsonPath('jobs.0.handler', null)->assertJsonPath('jobs.0.owner', null)->assertJsonCount(0, 'comparisons');
     }
 }

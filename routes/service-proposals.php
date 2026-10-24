@@ -21,12 +21,22 @@ Route::middleware(['auth', 'verified', \App\Proposals\ResponsePolicy::class])->p
     Route::get('/{draftId}/pdf', [PdfController::class, 'owner'])->middleware('throttle:6,1')->name('pdf');
     Route::post('/{draftId}/financial-planning', [OwnerController::class, 'financial'])->name('financial');
     Route::post('/{draftId}/publish', [OwnerController::class, 'publish'])->middleware('throttle:10,1')->name('publish');
+    Route::get('/versions/{versionId}/activity', [\App\Proposals\ActivityController::class, 'owner'])->name('activity');
     Route::post('/versions/{versionId}/revoke', [OwnerController::class, 'revoke'])->name('revoke');
 });
 
 require __DIR__.'/service-proposals-reviewer-ai.php';
+require __DIR__.'/service-proposals-reviewer-workspace.php';
+require __DIR__.'/service-proposals-reviewer-collaboration.php';
+require __DIR__.'/service-proposals-reviewer-files.php';
+require __DIR__.'/service-proposals-reviewer-images.php';
+require __DIR__.'/service-proposals-reviewer-downloads.php';
+require __DIR__.'/service-proposals-reviewer-maintenance.php';
 
-Route::middleware([\App\Proposals\ResponsePolicy::class, 'throttle:service-proposals-public'])->prefix('service-proposals/{token}')->name('service-proposals.recipient.')->group(function (): void {
+Route::post('service-proposals/{token}/activity', [\App\Proposals\ActivityController::class, 'capture'])
+    ->middleware([\App\Proposals\ResponsePolicy::class, 'throttle:service-proposals-activity'])->name('service-proposals.recipient.activity');
+
+Route::middleware([\App\Proposals\ResponsePolicy::class, \App\Proposals\RecordActivity::class, 'throttle:service-proposals-public'])->prefix('service-proposals/{token}')->name('service-proposals.recipient.')->group(function (): void {
     Route::get('/', [RecipientController::class, 'show'])->name('show');
     Route::get('/pdf', [PdfController::class, 'recipient'])->middleware('throttle:6,1')->name('pdf');
     Route::post('/unlock', [RecipientController::class, 'unlock'])->middleware('throttle:service-proposals-unlock')->name('unlock');
@@ -41,3 +51,11 @@ Route::middleware([\App\Proposals\ResponsePolicy::class, 'throttle:service-propo
     Route::post('/usage-estimate', [RecipientController::class, 'estimate'])->name('estimate');
     Route::post('/request-agreement', [RecipientController::class, 'requestAgreement'])->name('request');
 });
+
+// Activity and foreground name/comment requests share one session. Lock before
+// loading it so a late report cannot overwrite a newer name, grant or cart.
+foreach (Route::getRoutes() as $proposalRoute) {
+    if (str_starts_with((string) $proposalRoute->getName(), 'service-proposals.')) {
+        $proposalRoute->block(10, 10);
+    }
+}

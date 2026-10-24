@@ -89,20 +89,24 @@ try {
   await page.getByRole('button',{name:'Open proposal',exact:true}).click();
   let documentResponse = await page.goto(url+'?section=scope');
   const fixedNavigation=await readFile(resolve('resources/js/service-proposals/mobile-navigation.js'),'utf8');
-  async function assertMenuScriptPolicy(response) {
-    assert.equal(await page.locator('script').count(),1,'Only the fixed local section-menu controller is rendered');
-    assert.equal(await page.locator('script[data-proposal-navigation]').count(),1,'The only script is the marked local navigation controller');
-    const rendered=await page.locator('script[data-proposal-navigation]').textContent();
-    assert.equal(rendered,fixedNavigation,'The rendered controller must equal the reviewed local source byte-for-byte');
+  const fixedActivity=await readFile(resolve('resources/js/service-proposals/activity.js'),'utf8');
+  async function assertMenuAndActivityPolicy(response) {
+    assert.equal(await page.locator('script').count(),2,'Only the exact local menu and activity scripts are rendered');
+    const expected=[];
+    for(const [marker,source] of [['data-proposal-navigation',fixedNavigation],['data-review-activity-script',fixedActivity]]) {
+      assert.equal(await page.locator('script['+marker+']').count(),1);
+      const rendered=await page.locator('script['+marker+']').textContent();
+      assert.equal(rendered,source,'Each controller equals its reviewed source byte-for-byte');
+      expected.push("'sha256-"+createHash('sha256').update(rendered).digest('base64')+"'");
+    }
     const csp=response.headers()['content-security-policy'];
     assert.match(csp,/default-src 'none'/);
-    const source=csp.match(/(?:^|;)\s*script-src\s+([^;]+)/);
-    assert.ok(source,'The exact navigation script hash must be explicitly authorized');
-    assert.equal(source[1].trim(),"'sha256-"+createHash('sha256').update(rendered).digest('base64')+"'",'No self, unsafe-inline, external source or additional script hash is permitted');
-    const attributes=csp.match(/(?:^|;)\s*script-src-attr\s+([^;]+)/);
-    assert.equal(attributes?.[1].trim(),"'none'",'Event-handler attributes remain forbidden');
+    const scripts=csp.match(/(?:^|;)\s*script-src\s+([^;]+)/);
+    assert.deepEqual(scripts?.[1].trim().split(/\s+/).sort(),expected.sort(),'Only both exact hashes; no self, unsafe-inline or external script source');
+    assert.equal(csp.match(/(?:^|;)\s*script-src-attr\s+([^;]+)/)?.[1].trim(),"'none'");
+    assert.equal(csp.match(/(?:^|;)\s*connect-src\s+([^;]+)/)?.[1].trim(),"'self'");
   }
-  await assertMenuScriptPolicy(documentResponse);
+  await assertMenuAndActivityPolicy(documentResponse);
   async function post(button) {
     [documentResponse]=await Promise.all([page.waitForNavigation(),button.click()]);
     assert.equal(new URL(page.url()).searchParams.get('section'),'scope');
@@ -151,7 +155,7 @@ try {
   assert.match(await cards.nth(0).innerText(),/1,000.00 \/month/);
   assert.match(await cards.nth(1).innerText(),/2,500.00 \/month/);
   assert.match(await cards.nth(2).innerText(),/Pending · no matching fully modeled package/);
-  await assertMenuScriptPolicy(documentResponse);
+  await assertMenuAndActivityPolicy(documentResponse);
   assert.equal(await page.locator('[data-financial-prepare]').count(),0);
   await page.reload();assert.equal(await cards.count(),3);
   const sizes=[['desktop',1440,1000],['ipad',834,1194],['mobile',390,844],['zoom-reflow',640,450]];
@@ -189,7 +193,12 @@ try {
   assert.deepEqual(inspect(),before,'Planning must not change any encrypted proposal/access/business row');
   assert.deepEqual(external,[]);assert.deepEqual(errors,[]);
   assert.deepEqual(await page.evaluate(()=>globalThis.financialPolicyViolations),[]);
-  assert.ok(posts.every(p=>p.path.endsWith('/unlock')||p.path.endsWith('/financial-planning')));
+  assert.ok(posts.every(p=>p.path.endsWith('/unlock')||p.path.endsWith('/financial-planning')||p.path.endsWith('/activity')));
+  for(const post of posts.filter(p=>p.path.endsWith('/activity'))){
+    const report=JSON.parse(post.body);
+    assert.deepEqual(Object.keys(report).sort(),['event','event_id','page','scene','version_hash']);
+    assert.equal(report.event,'proposal_section');assert.ok(['overview','approach','scope','terms','review'].includes(report.page));assert.equal(report.scene,null);
+  }
   await writeFile(resolve(evidence,'result.json'),JSON.stringify({engine,status:'pass',synthetic:true,results,comparisonCount:3,persistedReload:true,isolatedSession:true,exactBusinessRowsUnchanged:true,external,errors,posts:posts.length},null,2));
   console.log(JSON.stringify({engine,status:'pass',viewports:results.length,comparisonCount:3,exactBusinessRowsUnchanged:true,external:0},null,2));
 }catch(error){

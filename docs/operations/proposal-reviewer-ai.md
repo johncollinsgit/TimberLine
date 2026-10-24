@@ -12,18 +12,42 @@ Only an unlocked, current private proposal edition in its separately configured
 owner runtime can expose Chats. The normal public sample, signed-in campus
 workspace, native Conversation and older Trial remain separate. A fictional
 perspective or review display name supplies no employee identity or grant.
-Assistants and Voice remain Coming soon. Sending, payments, microphone capture
-and work-changing tools remain unavailable.
+Assistants remain Coming soon. Explicit microphone input and spoken playback use
+the same text client; sending, payments and work-changing tools remain unavailable.
+Any supported computer or phone can unlock the approved edition and start its own
+requests. Session/CSRF/receipt ownership is not a physical-device allowlist.
+Cross-device continuation of short AI history is a separate product choice.
 
 Before a paid question, show the exact selected fictional project/ticket fields,
 question and maximum reservation. The closed snapshot includes bounded titles,
 versions, statuses, assignments, buildings and due dates. It excludes notes,
-files, photos, review comments, contact details, mailboxes and financial records.
-These are reviewer-supplied browser records, not verified campus facts. Responses
+files, photos, review comments, contact details, mailboxes and native financial
+records. Schema2 can include explicitly fictional project-level estimate/recorded
+cost inputs, exact integer currency/basis comparisons, current saved buildings,
+assignments and canonical contractor plans under its current source/persona gates.
+These plans never establish physical attendance or building cost allocation.
+These are explicitly fictional demonstration records, not verified campus facts. Responses
 are plain text with references only to those supplied sources; inspect current
 work before acting. A perspective, scope, source or navigation change withholds
 old answers. No question or answer is persisted in browser storage; only opaque
 request receipt fields are retained for recovery.
+
+The source candidate supports two separately admitted evidence modes. An edition
+without a shared-workspace descriptor retains its fictional browser snapshot.
+An immutable `review_workspace` descriptor selects the encrypted server-held
+fictional workspace and its current scoped projection; malformed or unavailable
+shared admission never falls back to browser data. The browser sends only the
+expected workspace revision and selection for sharing preview. The server reads
+the facts again, rejects supplied browser snapshots and binds the exact server
+selection/revision pin into consent before and after provider IO. Stale status
+reads withhold old content while preserving the original receipt and cost; grant
+revocation still denies access. Neither mode retrieves actual college records.
+The shared store, transport and mounted HTTP/browser source checks are integrated;
+hosted activation, retention scheduling and immutable-edition transition remain
+separate gates. See [shared workspace](proposal-reviewer-workspace.md).
+Native signed-in Conversation already
+retrieves currently authorized server records; never invent a native User or grant
+a reviewer those records to bridge this distinction.
 
 All four actions use the original same-origin session and CSRF token. Admission
 rechecks host, mount, password grant, immutable version/source/build, browser and
@@ -52,6 +76,16 @@ outcomes cannot be acknowledged as settled or released by the browser. Async
 callbacks must still own their exact receipt before changing state or storage.
 
 ## Retention and deactivation
+
+Each follow-up may explicitly include at most two accepted server-owned prior
+receipts from the same session, edition, settings and exact fictional snapshot.
+The sharing preview displays their exact question, answer and source refs. Prior
+answers resolve wording only and never count as evidence. History uses manual
+input with `store: false`, no provider Conversation/previous-response identifier
+or persistent memory. New follow-up content inherits the earliest original
+ten-minute expiry; activity never renews it. A final pure receipt/content read
+after all admission work rejects history that expires before provider HTTP.
+A post-claim refusal retains the original cost hold and reconciliation semantics.
 
 Sharing previews last two minutes; encrypted server question/snapshot/result
 content is withheld after ten minutes. Cost records, digests and content-free
@@ -104,3 +138,23 @@ same ledger, verify actual usage/cost and source references, then recover the
 same receipt without another provider call. Count acceptance spending within
 the existing $5 total. Label AI live only after that evidence, and verify the
 normal website, Fleet and exact `/ready` release separately.
+
+## Speech acceptance boundary
+
+Start voice explicitly requests browser microphone/speech permission. Recognition
+fills the same question and prepares the same exact sharing preview. Each spoken
+turn still needs its own Send once action. Microphone capture stays off during
+playback; Interrupt retires playback before listening again. Stop before sharing
+retires late previews; Stop after dispatch only retires audio and preserves the
+request receipt/cost. Scope changes, navigation and hidden tabs stop local audio.
+Unsupported recognition, denied consent and uncertain outcomes retain typed input
+and saved status. Browser recognition may use the browser vendor's service; no
+server transcription provider or additional paid permission is silently enabled.
+
+Local evidence includes actual private UI/CSP rendering and compiled entry in
+Chromium/WebKit across independent desktop/phone-sized contexts, intercepted
+endpoints and synthetic speech. This is not genuine recipient unlock, native
+workspace retrieval, provider billing, physical microphone or physical mobile
+acceptance. Complete those applicable checks against an approved hosted candidate
+before making live claims. Current immutable review access/comments must survive
+an explicitly reviewed publication transition; do not silently rebind its source.

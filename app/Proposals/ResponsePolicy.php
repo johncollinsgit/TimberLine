@@ -21,12 +21,19 @@ class ResponsePolicy
         if ($request->attributes->get('service_proposal_campus_review') !== true || ! $response->headers->has('Content-Security-Policy')) {
             $artwork = $request->getSchemeAndHttpHost().'/images/proposals/evergrove-mountain-corner.svg';
             $wordmark = $request->getSchemeAndHttpHost().'/images/proposals/evergrove-software-wordmark.jpg';
-            $navigation = file_get_contents(resource_path('js/service-proposals/mobile-navigation.js'));
             $content = $response->getContent();
-            $script = is_string($content) && str_contains($content, '<script data-proposal-navigation>'.$navigation.'</script>')
-                ? " script-src 'sha256-".base64_encode(hash('sha256', $navigation, true))."'; script-src-attr 'none';"
-                : '';
-            $response->headers->set('Content-Security-Policy', "default-src 'none'; img-src {$artwork} {$wordmark}; style-src 'unsafe-inline';{$script} form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
+            $hashes = [];
+            $hasActivity = false;
+            foreach (['proposal-navigation' => 'mobile-navigation.js', 'review-activity-script' => 'activity.js'] as $marker => $file) {
+                $script = file_get_contents(resource_path('js/service-proposals/'.$file));
+                if (is_string($content) && str_contains($content, '<script data-'.$marker.'>'.$script.'</script>')) {
+                    $hashes[] = "'sha256-".base64_encode(hash('sha256', $script, true))."'";
+                    $hasActivity = $hasActivity || $marker === 'review-activity-script';
+                }
+            }
+            $scripts = $hashes ? ' script-src '.implode(' ', $hashes)."; script-src-attr 'none';" : '';
+            $connections = $hasActivity ? " connect-src 'self';" : '';
+            $response->headers->set('Content-Security-Policy', "default-src 'none'; img-src {$artwork} {$wordmark}; style-src 'unsafe-inline';{$scripts}{$connections} form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
         }
 
         return $response;

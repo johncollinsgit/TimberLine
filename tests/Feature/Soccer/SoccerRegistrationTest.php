@@ -238,7 +238,7 @@ it('expires offers without changing original priority or immediately reoffering'
     $this->travel(49)->hours();
     $this->svc->tick($this->t->id, $this->season);
     $r = $this->store->query('registrations', $this->t->id)->first();
-    expect($r->status)->toBe('waitlisted')->and((bool) $r->auto_eligible)->toBeFalse()->and($r->queued_at)->toBe($before);
+    expect($r->status)->toBe('payment_pending')->and((bool) $r->auto_eligible)->toBeFalse()->and($r->queued_at)->toBe($before);
 });
 it('deduplicates reminders and Sarah alerts', function () {
     [$f,$in] = soccerFamily($this, ['2023-01-01']);
@@ -367,7 +367,7 @@ it('flags late payment without taking an expired seat', function () {
     $this->travel(49)->hours();
     $this->svc->tick($this->t->id, $this->season);
     app(SoccerPaymentService::class)->paid($this->t->id, $i->id, 'stripe', 'evt-late', 3000, ['payment_intent' => 'pi_late']);
-    expect($this->store->query('registrations', $this->t->id)->value('status'))->toBe('waitlisted')->and($this->store->query('events', $this->t->id)->where('action', 'payment_needs_review')->count())->toBe(1);
+    expect($this->store->query('registrations', $this->t->id)->value('status'))->toBe('payment_pending')->and($this->store->query('events', $this->t->id)->where('action', 'payment_needs_review')->count())->toBe(1);
 });
 it('keeps player registered after a full manual refund and rejects excess refunds', function () {
     [$f,$in] = soccerFamily($this, ['2023-01-01']);
@@ -386,7 +386,7 @@ it('confirms waived siblings immediately and holds only the unpaid child', funct
     expect($this->store->query('registrations', $this->t->id)->where('status', 'registered')->count())->toBe(2);
     $this->travel(49)->hours();
     $this->svc->tick($this->t->id, $this->season);
-    expect($this->store->query('registrations', $this->t->id)->where('status', 'registered')->count())->toBe(2)->and($this->store->query('registrations', $this->t->id)->where('status', 'waitlisted')->count())->toBe(1);
+    expect($this->store->query('registrations', $this->t->id)->where('status', 'registered')->count())->toBe(2)->and($this->store->query('registrations', $this->t->id)->where('status', 'payment_pending')->count())->toBe(1);
 });
 it('withdraws an unpaid offer without cancelling children or losing priority', function () {
     [$family,$input] = soccerFamily($this, ['2023-01-01']);
@@ -407,7 +407,7 @@ it('refunds a recorded late payment without enrolling its waitlisted child', fun
     $payments->paid($this->t->id, $invoice->id, 'venmo', 'late', 3000, []);
     $payment = $this->store->query('payments', $this->t->id)->first();
     $payments->refund($this->t->id, $invoice->id, 3000, 'Late transfer refunded', 1, true, $payment->id);
-    expect($this->store->query('registrations', $this->t->id)->value('status'))->toBe('waitlisted');
+    expect($this->store->query('registrations', $this->t->id)->value('status'))->toBe('payment_pending');
 });
 it('authenticates Stripe callbacks and deduplicates by the underlying payment intent', function () {
     config()->set('soccer.stripe_webhook_secret', 'whsec_fictional_test_secret');

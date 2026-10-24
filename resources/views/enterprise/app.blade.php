@@ -63,7 +63,7 @@
 </div></main></div>
 @if($enterpriseSample)@includeIf('enterprise.reviewer-tour')@elseif(config('enterprise.runtime') === true && config('enterprise.tour_enabled', false) && config('enterprise.sample_data', false))@include('enterprise.workspace-tour')@endif
 <dialog id="create-dialog"><form id="create-form" class="stack"><h2 id="dialog-title">New request</h2><label>Title<input name="title" maxlength="100" required></label><label id="visibility-field" hidden>Visibility<select name="visibility"><option value="department_only">Department only</option><option value="shared">Shared across organization</option></select></label><div id="request-fields" class="stack"><label>Ticket department<span class="request-select"><select id="request-department"></select></span></label><div id="request-classification-fields" class="field-pair"><label>Request type<span class="request-select"><select name="request_type" id="create-request-type"><option value="general">General request</option><option value="it_support">IT support</option><option value="event_setup">Event setup</option><option value="plumbing">Plumbing</option><option value="lighting">Lighting</option><option value="maintenance">Maintenance</option></select></span></label><label>Intake priority<span class="request-select"><select name="priority" id="create-request-priority"><option value="low">Low</option><option value="normal" selected>Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></span></label></div><label>Work description<textarea name="description" maxlength="5000" rows="4"></textarea></label><label>Due date<input name="due_on" type="date"></label><label>Saved building (optional)<select name="location_id" id="request-building" aria-label="Saved building (optional)"><option value="">No saved building link</option></select></label><p class="caption" id="request-building-coverage"></p><label>Location label<input name="location" maxlength="200"></label><div class="field-pair"><label>Latitude (optional)<input name="latitude" type="number" min="-90" max="90" step="any"></label><label>Longitude (optional)<input name="longitude" type="number" min="-180" max="180" step="any"></label></div></div><p class="caption" id="create-context"></p><div class="actions"><button class="button primary" type="submit" id="create-submit">Save</button><button class="button" type="button" id="cancel-create">Cancel</button></div></form></dialog>
-<script>{!! file_get_contents(resource_path('js/enterprise/transport.js')) !!}</script>
+@unless($enterpriseSample)<script>{!! file_get_contents(resource_path('js/enterprise/transport.js')) !!}</script>@endunless
 <script>{!! file_get_contents(resource_path('js/enterprise/usage.js')) !!}</script>
 @if($enterpriseSample)
 @includeIf('enterprise.reviewer-adapter')
@@ -80,8 +80,9 @@
     tenantSlug = presentation.identity.tenantSlug,
     viewer = presentation.identity.viewer,
     workspace = presentation.identity.workspace;
+  const reviewerMode = ['sample','shared'].includes(transport.mode);
   const allowedSections = presentation.sections || ['home', 'projects', 'contractors', 'ask', 'requests', 'roll_call', 'buildings', 'calendar', 'people', 'assets', 'workflows', 'requester', 'finance', 'usage'];
-  const navigation = new URLSearchParams(transport.mode === 'sample' ? location.hash.slice(1) : location.search);
+  const navigation = new URLSearchParams(reviewerMode ? location.hash.slice(1) : location.search);
   for (const key of ['area_id', 'selected', 'section']) {
     if (!navigation.has(key) && presentation.navigation?.[key]) navigation.set(key, presentation.navigation[key]);
   }
@@ -109,6 +110,7 @@
     pendingUncertain = false,
     createAction = '',
     draft = null,
+    createSharedPin = null,
     busy = false;
   const workSortState = new Map(), workFeedbackHome = new Map();
   let workDetailReturn = null, rollCallReturn = null, catalogReturn = null;
@@ -126,6 +128,7 @@
   const api = (url, body, options) => transport.request(url, body, options);
   let workspaceLoadGeneration = 0, workspaceLoaded = false;
   function clearWorkspaceContext(failed = false) {
+    if(transport.mode==='shared')EverbranchTransport.reviewerAdapter(presentation).invalidate();
     closeWorkDetail({clearSelection:false, restoreFocus:false});
     stashComposer();
     data = {areas: [], requests: [], projects: [], members: []};
@@ -169,7 +172,8 @@
       message(error.message, true);
     }
   }
-  async function command(body) {
+  async function command(body, sharedContext = null) {
+    if (transport.mode === 'shared') return sharedCommand(body, sharedContext);
     if (busy) return;
     busy = true;
     pending = body;
@@ -305,7 +309,8 @@
   }
   function closeWorkDetail({clearSelection=true,restoreFocus=true}={}) {
     const drawer=$('work-drawer'),wasOpen=drawer.open,back=workDetailReturn;
-    stashComposer();discussionGeneration++;activeDiscussionKey=null;
+    clearAttachmentGallery();
+    stashComposer();invalidateSharedDiscussion();discussionGeneration++;activeDiscussionKey=null;
     moveWorkFeedback(false);if(wasOpen)drawer.close();
     $('detail').replaceChildren();
     document.documentElement.classList.remove('work-detail-open');workDetailReturn=null;
@@ -374,8 +379,8 @@
   }
   function render({preserveDetail=false}={}) {
     if(!['requests','projects'].includes(section))closeWorkDetail({clearSelection:false,restoreFocus:false});
-    if(transport.mode==='sample')$('enterprise-main').dataset.demoPage='enterprise-'+section;
-    if(transport.mode==='sample')document.dispatchEvent(new CustomEvent('enterprise:section-rendered',{detail:{section}}));
+    if(reviewerMode)$('enterprise-main').dataset.demoPage='enterprise-'+section;
+    if(reviewerMode)document.dispatchEvent(new CustomEvent('enterprise:section-rendered',{detail:{section}}));
     // An explicit unsaved URL/history view takes precedence over an async saved default.
     if (preserveDetail && navigationViewOverride) ({view, map} = navigationViewOverride);
     $('areas').innerHTML = data.areas.map(a => `<button class="sidebar-project ${a.id === area ? 'active' : ''}" data-area="${esc(a.id)}"><span class="dot"></span>${esc(a.name)}</button>`).join('');
@@ -400,7 +405,7 @@
     $('breadcrumb').textContent = section === 'projects' ? 'Projects' : section === 'contractors' ? 'Contractors' : 'Incoming tickets';
     renderNext();
     renderHome();
-    const contextLabels={home:data.demo_persona==='executive'?'Campus overview':'Campus overview',projects:'Projects',requests:'Incoming tickets',contractors:'Contractors',ask:transport.mode==='sample'?(presentation.reviewerAi?.enabled?'AI tools':'AI tools · Coming soon'):'Ask Everbranch',roll_call:'Roll Call',buildings:'Buildings',calendar:'Calendar',people:'People & contractors',assets:'Assets',workflows:'Workflows',requester:'My service requests',finance:'Invoice & fund packets',usage:'AI & voice usage'};
+    const contextLabels={home:data.demo_persona==='executive'?'Campus overview':'Campus overview',projects:'Projects',requests:'Incoming tickets',contractors:'Contractors',ask:reviewerMode?(presentation.reviewerAi?.enabled?'AI tools':'AI tools · Coming soon'):'Ask Everbranch',roll_call:'Roll Call',buildings:'Buildings',calendar:'Calendar',people:'People & contractors',assets:'Assets',workflows:'Workflows',requester:'My service requests',finance:'Invoice & fund packets',usage:'AI & voice usage'};
     $('heading').textContent=contextLabels[section]||'Workspace';
     $('map').hidden = !map;
     $('request-list').hidden=view==='map';
@@ -442,6 +447,8 @@
     document.dispatchEvent(new CustomEvent('enterprise:workspace-state', {detail: {area, section, features: data.features || {}, loaded: workspaceLoaded, viewer_id: data.viewer_id}}));
   }
   function detail() {
+    const detailSharedContext = transport.mode === 'shared' && data.shared ? {pin:captureSharedPin(),target:data,child_ids:{task_id:crypto.randomUUID()}} : null;
+    clearAttachmentGallery();
     stashComposer();
     discussionGeneration++;
     activeDiscussionKey = null;
@@ -462,7 +469,7 @@
     }
     const classification=canClassifyRequest()&&r.can_coordinate&&['submitted','triaged'].includes(r.status)?`<section aria-labelledby="request-classify-heading"><h3 id="request-classify-heading">Request details</h3><div class="field-pair"><label>Request type<span class="request-select"><select id="request-type"><option value="">Not recorded</option>${Object.entries(data.request_fields.types).map(([value,label])=>`<option value="${esc(value)}"${value===r.request_type?' selected':''}>${esc(label)}</option>`).join('')}</select></span></label><label>Intake priority<span class="request-select"><select id="request-priority"><option value="">Not recorded</option>${data.request_fields.priorities.map(value=>`<option value="${esc(value)}"${value===r.requested_priority?' selected':''}>${esc(value)}</option>`).join('')}</select></span></label></div><p class="caption">Save these details before assignment. After assignment, task controls set priority.</p><button class="button" data-action="request.classify">Save request details</button></section>`:'';
     $('work-drawer').dataset.entityType='request';
-    $('detail').innerHTML = `<section class="work-detail-summary"><span class="badge">${esc(r.status)}</span><h2>${esc(r.title)}</h2><p class="caption">Type: ${esc(requestTypeLabel(r)||'Not recorded')} · Priority: ${esc(requestPriority(r)||'Not recorded')} (${requestPrioritySource(r)==='task'?'linked task':requestPrioritySource(r)==='request'?'intake':'not recorded'})${requestPrioritySource(r)==='task'?` · Intake priority: ${esc(r.requested_priority||'Not recorded')}`:''}</p><p class="work-detail">${esc(r.data.description)}</p><h3>Location</h3><p class="subtle">${esc(r.data.location || 'Not provided')}</p><h3>Progress</h3><p class="work-detail">${esc(r.data.progress_note || r.data.triage_note || 'No update yet.')}</p>${r.data.task_id ? `<p class="caption">Linked task: ${esc(r.task?.title || r.data.task_id)}<br>Assignee: ${esc(data.members.find(m => m.id === r.task?.assignee_id)?.name || 'Existing workspace member')}</p>` : ''}<div class="stack">${classification}${r.can_coordinate && r.status === 'submitted' ? '<label>Triage note<textarea id="action-note" maxlength="2000"></textarea></label><button class="button primary" data-action="request.triage">Triage request</button>' : ''}${r.can_coordinate && r.status === 'triaged' ? `<label>Project<select id="assign-project">${data.projects.filter(p => !p.archived).map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select></label><label>Existing editor<select id="assign-member">${data.members.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')}</select></label><button class="button primary" data-action="request.assign">Assign task</button>` : ''}${r.can_progress && ['assigned', 'in_progress'].includes(r.status) ? '<label>Progress note<textarea id="action-note" maxlength="2000"></textarea></label><button class="button" data-action="request.progress">Save progress</button><button class="button primary" data-action="request.complete">Complete work</button>' : ''}<button class="button" id="show-history">Audit history</button><div id="history"></div></div></section>`;
+    $('detail').innerHTML = `<section class="work-detail-summary"><span class="badge">${esc(r.status)}</span><h2>${esc(r.title)}</h2><p class="caption">Type: ${esc(requestTypeLabel(r)||'Not recorded')} · Priority: ${esc(requestPriority(r)||'Not recorded')} (${requestPrioritySource(r)==='task'?'linked task':requestPrioritySource(r)==='request'?'intake':'not recorded'})${requestPrioritySource(r)==='task'?` · Intake priority: ${esc(r.requested_priority||'Not recorded')}`:''}</p><p class="work-detail">${esc(r.data.description)}</p><h3>Location</h3><p class="subtle">${esc(r.data.location || 'Not provided')}</p><h3>Progress</h3><p class="work-detail">${esc(r.data.progress_note || r.data.triage_note || 'No update yet.')}</p>${r.data.task_id ? `<p class="caption">Linked task: ${esc(r.task?.title || r.data.task_id)}<br>Assignee: ${esc(data.members.find(m => m.id === r.task?.assignee_id)?.name || 'Existing workspace member')}</p>` : ''}<div class="stack">${classification}${r.can_coordinate && r.status === 'submitted' ? (transport.mode==='shared'?'<button class="button primary" data-action="request.triage">Triage ticket</button>':'<label>Triage note<textarea id="action-note" maxlength="2000"></textarea></label><button class="button primary" data-action="request.triage">Triage request</button>') : ''}${r.can_coordinate && r.status === 'triaged' ? `<label>Project<select id="assign-project">${data.projects.filter(p => !p.archived).map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select></label><label>Existing editor<select id="assign-member">${data.members.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')}</select></label><button class="button primary" data-action="request.assign">Assign task</button>` : ''}${r.can_progress && ['assigned', 'in_progress'].includes(r.status) ? (transport.mode==='shared'?'<button class="button" data-action="request.progress">Start work</button><button class="button primary" data-action="request.complete">Complete work</button>':'<label>Progress note<textarea id="action-note" maxlength="2000"></textarea></label><button class="button" data-action="request.progress">Save progress</button><button class="button primary" data-action="request.complete">Complete work</button>') : ''}<button class="button" id="show-history">Audit history</button><div id="history"></div></div></section>`;
     if(r.can_coordinate&&['submitted','triaged'].includes(r.status)){const move=document.createElement('button');move.type='button';move.className='button primary';move.textContent='Move & assign';move.onclick=()=>openJobWizard('request.plan',r);$('detail').querySelector('.work-detail-summary').prepend(move);}
     $('detail').querySelectorAll('[data-action]').forEach(b => b.onclick = () => {
       if (pending) return message('Retry the retained action before making another change.', true);
@@ -480,7 +487,7 @@
         body.project_id = $('assign-project').value;
         body.assignee_id = $('assign-member').value;
       }
-      command(body);
+      command(body, detailSharedContext ? {...detailSharedContext,record:r} : null);
     });
     const actionNote=$('action-note'),actionDraftKey='work-action:'+area+':'+section+':'+r.id;
     if(actionNote){actionNote.value=readDraft(actionDraftKey).body||'';actionNote.oninput=()=>writeDraft(actionDraftKey,{...readDraft(actionDraftKey),body:actionNote.value});}
@@ -502,11 +509,13 @@
   }
   @include('enterprise.home-script')
   let requestBuildingChoices=[],requestCreateArea=null,requestCreateGeneration=0,requestCreateReady=false;
+  let requestCreateData = null;
   function fillRequestBuildings(source){
+    requestCreateData = source;
     requestBuildingChoices=(source.buildings?.items||[]).map(row=>({...row}));
     $('request-building').innerHTML='<option value="">No saved building link</option>'+requestBuildingChoices.map(row=>`<option value="${esc(row.id)}">${esc(row.title)}</option>`).join('');
     $('request-building').disabled=requestBuildingChoices.length===0;
-    $('request-building-coverage').textContent=transport.mode==='sample'?'Saved fictional building links stay in this browser demo.':(source.buildings?.coverage||'No current saved buildings are available.')+(source.buildings?.has_more?' More buildings are outside this result.':'')+' Choose a building to link this request; a typed label alone stays unverified.';
+    $('request-building-coverage').textContent=transport.mode==='shared'?'Saved fictional building links are stored in the shared workspace.':reviewerMode?'Saved fictional building links stay in this browser demo.':(source.buildings?.coverage||'No current saved buildings are available.')+(source.buildings?.has_more?' More buildings are outside this result.':'')+' Choose a building to link this request; a typed label alone stays unverified.';
     syncRequestBuilding();
   }
   async function chooseRequestDepartment(id){
@@ -519,14 +528,25 @@
   }
   $('request-department').onchange=()=>chooseRequestDepartment($('request-department').value);
 
-  function create(action) {
-    if (pending) return message('Retry the retained action before starting another.', true);
+  function create(action, buildingIntake = null) {
+    if (pending) { message('Retry the retained action before starting another.', true); return false; }
+    if(buildingIntake && (transport.mode!=='shared'||action!=='request.create'||buildingIntake.source!==data
+      ||data.selected_area_id!==area||!data.can_submit
+      ||!data.buildings?.items.some(row=>row.id===buildingIntake.building?.id&&row.version===buildingIntake.building.version))){
+      message('Refresh this building before opening a new ticket.',true);return false;
+    }
     createAction = action;
+    createSharedPin = captureSharedPin();
     draft = {
       id: crypto.randomUUID(),
       request_id: crypto.randomUUID()
     };
     $('create-form').reset();
+    if(transport.mode==='shared'){
+      for(const name of ['location','latitude','longitude']){
+        const input=$('create-form').elements[name];input.disabled=true;input.closest('label').hidden=true;
+      }
+    }
     requestCreateArea=area;requestCreateReady=true;requestCreateGeneration++;$('create-submit').disabled=false;
     $('request-department').innerHTML=data.areas.map(row=>`<option value="${esc(row.id)}">${esc(row.name)}</option>`).join('');$('request-department').value=area;
     fillRequestBuildings(data);
@@ -536,7 +556,9 @@
     $('request-classification-fields').hidden=!canClassifyRequest();
     $('create-context').textContent = action === 'workspace.create' ? 'Creating a workspace adds no users or access grants. Department access must already be authorized.' : 'Saved within the selected workspace and its visibility boundary.';
     $('create-dialog').showModal();
-    if(action==='request.create'&&catalogFilters.department!=='all'&&catalogFilters.department!==area&&data.areas.some(row=>row.id===catalogFilters.department)){$('request-department').value=catalogFilters.department;chooseRequestDepartment(catalogFilters.department);}
+    if(buildingIntake){$('request-building').value=buildingIntake.building.id;syncRequestBuilding();}
+    else if(action==='request.create'&&catalogFilters.department!=='all'&&catalogFilters.department!==area&&data.areas.some(row=>row.id===catalogFilters.department)){$('request-department').value=catalogFilters.department;chooseRequestDepartment(catalogFilters.department);}
+    return true;
   }
   function syncRequestBuilding(){
     const form=$('create-form'),building=requestBuildingChoices.find(row=>row.id===$('request-building').value);
@@ -563,7 +585,7 @@
       if(fields.get('location_id')&&!building)return message('That building is unavailable. Close the form and refresh before saving.',true);
       if(building){body.location_id=building.id;body.location_version=building.version;delete body.latitude;delete body.longitude;}
     }
-    command(body);
+    command(body, {pin:createSharedPin,target:requestCreateData || data});
   };
   $('create-workspace').onclick = () => create('workspace.create');
   $('create-project').onclick = () => openJobWizard('job.create');
@@ -583,20 +605,25 @@
     try {
       // Retain the sample adapter's canonical same-origin destination validation.
       const requested = new URL(String(value), location.href);
-      if(transport.mode==='sample' && selected===null){
+      if(transport.mode==='shared'){
+        const state=new URLSearchParams(requested.hash.slice(1));
+        if(state.has('month')&&!EverbranchWorkViews.monthKey(state.get('month')))return;
+        state.delete('month');requested.hash=state.toString();
+      }
+      if(reviewerMode && selected===null){
         const state=new URLSearchParams(requested.hash.slice(1));state.delete('selected');requested.hash=state.toString();
       }
       target = new URL(baseTransport.href(String(requested)), location.href);
     } catch { return; }
     if (target.origin !== location.origin || target.pathname !== location.pathname || target.username || target.password) return;
-    const parameters = new URLSearchParams(transport.mode === 'sample' ? target.hash.slice(1) : target.search);
+    const parameters = new URLSearchParams(reviewerMode ? target.hash.slice(1) : target.search);
     // These fixed presentation fields are intentionally not adapter authority or record data.
     parameters.set('view', ['list', 'calendar', 'map'].includes(view) ? view : 'list');
     parameters.set('map', map ? '1' : '0');
     parameters.set('month',workMonth);
     const query = $('search').value.slice(0, 200);
     query ? parameters.set('q', query) : parameters.delete('q');
-    if (transport.mode === 'sample') { target.search = ''; target.hash = parameters.toString(); }
+    if (reviewerMode) { target.search = ''; target.hash = parameters.toString(); }
     else { parameters.set('tenant', tenantSlug); target.search = parameters.toString(); }
     if (target.href !== location.href) {
       const method = navigationPushPending ? 'pushState' : 'replaceState';
@@ -605,7 +632,7 @@
     navigationPushPending = false;
   }
   function restoreNavigation() {
-    const incoming = new URLSearchParams(transport.mode === 'sample' ? location.hash.slice(1) : location.search);
+    const incoming = new URLSearchParams(reviewerMode ? location.hash.slice(1) : location.search);
     rememberSelection();
     navigationPushPending = false;
     navigationSearchBatch = false;
@@ -663,12 +690,17 @@
   @include('enterprise.work-detail-script')
   @include('enterprise.work-views-script')
   @include('enterprise.work-management-script')
+  @include('enterprise.shared-work-script')
+  @include('enterprise.shared-comments-script')
+  @include('enterprise.shared-comments-bridge')
+  @include('enterprise.shared-files-bridge')
   @includeIf('enterprise.operations-script')
   @include('enterprise.project-detail-script')
   @includeIf('enterprise.procedures-script')
   @includeIf('enterprise.finance-script')
   @include('enterprise.voice-script')
   @include('enterprise.usage-script')
+  @include('enterprise.shared-directory-script')
   document.addEventListener('enterprise:navigate', event => {
     const next = event.detail || {};
     if (next.section && !allowedSections.includes(next.section)) return;

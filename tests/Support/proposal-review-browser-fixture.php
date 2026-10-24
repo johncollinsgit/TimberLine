@@ -16,6 +16,10 @@ if (PHP_SAPI !== 'cli') {
 $app = require __DIR__.'/proposal-review-browser-bootstrap.php';
 $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 $command = $argv[1] ?? 'seed';
+if ($command === 'activity') {
+    echo json_encode(app(\App\Proposals\Activity::class)->read(Version::findOrFail($argv[2] ?? '')), JSON_THROW_ON_ERROR);
+    exit;
+}
 if ($command === 'inspect') {
     echo json_encode(['comments' => Comment::all()->map(fn ($comment) => ['id' => $comment->id, 'payload' => $comment->payload])->all()], JSON_THROW_ON_ERROR);
     exit;

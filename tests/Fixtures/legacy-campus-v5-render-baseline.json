@@ -1,0 +1,181 @@
+{
+    "schema_version": 1,
+    "renderer": "lees-mcrae-v5",
+    "source_commit": "7610979cecc2eae3a8b83c210d08f57f30fef7a5",
+    "source_tree": "5f31879470058a772d4793cffb1b89959fb2e660",
+    "artifact_index_sha256": "b71565febc5f6e65e728a149259ea4b41ffcfbd5e48512e76576c6253d27c5fd",
+    "original_presentation_sha256": "1b3a753fa2e65eb8f8b32e42c88a7e96ca84d7ba5fe854fc8fbf73567d75ebd7",
+    "original_public_inventory_sha256": "a5ef1041570f0b7bb2702e6752aeb81ee8c40b747f179f0224c0db39367e93aa",
+    "context_contract_sha256": "5955cd2486148138a6634279bcd28e3553bdb1789614d271996b8d1ca513af30",
+    "normalization": "exact original withoutNonce regex only; no whitespace, CSRF, IDs, URLs or text normalization",
+    "pages": {
+        "home": {
+            "context_sha256": "45ec54dc31ed1e4268905e0881d9f54edfea08ee20dce081fc2a0b2bc4aecea6",
+            "html_sha256": "a8714bb8913f0e0538e724e965372d91368031072d2a722ad986374720541b39",
+            "headers": {
+                "Content-Security-Policy": "default-src 'none'; script-src 'nonce=REDACTED'; style-src 'nonce=REDACTED'; style-src-attr 'unsafe-inline'; img-src data: blob:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; worker-src 'none'; frame-src 'none'; font-src 'none'; manifest-src 'none'",
+                "Cache-Control": "no-store, private",
+                "Content-Type": "text/html; charset=UTF-8",
+                "Referrer-Policy": "no-referrer",
+                "X-Robots-Tag": "noindex, nofollow, noarchive",
+                "X-Content-Type-Options": "nosniff"
+            }
+        },
+        "requests": {
+            "context_sha256": "6b2d8d1b34baff05dd0a12308fad35917633e2ad341b7e25e12c77f5d04658e1",
+            "html_sha256": "6c0116821c7d87d2b0f6daa5d7bd65afa0e62809ceb78f7953ec63b98ddda950",
+            "headers": {
+                "Content-Security-Policy": "default-src 'none'; script-src 'nonce=REDACTED'; style-src 'nonce=REDACTED'; style-src-attr 'unsafe-inline'; img-src data: blob:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; worker-src 'none'; frame-src 'none'; font-src 'none'; manifest-src 'none'",
+                "Cache-Control": "no-store, private",
+                "Content-Type": "text/html; charset=UTF-8",
+                "Referrer-Policy": "no-referrer",
+                "X-Robots-Tag": "noindex, nofollow, noarchive",
+                "X-Content-Type-Options": "nosniff"
+            }
+        },
+        "projects": {
+            "context_sha256": "299edf886151fdca8c8be2cbc99d518b1938e82e92fe125f39eec75ddb278557",
+            "html_sha256": "fe5ffd778775ade5c80ab68bdc3694670e015b668525eb9249d964b7fd0d30a7",
+            "headers": {
+                "Content-Security-Policy": "default-src 'none'; script-src 'nonce=REDACTED'; style-src 'nonce=REDACTED'; style-src-attr 'unsafe-inline'; img-src data: blob:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; worker-src 'none'; frame-src 'none'; font-src 'none'; manifest-src 'none'",
+                "Cache-Control": "no-store, private",
+                "Content-Type": "text/html; charset=UTF-8",
+                "Referrer-Policy": "no-referrer",
+                "X-Robots-Tag": "noindex, nofollow, noarchive",
+                "X-Content-Type-Options": "nosniff"
+            }
+        },
+        "roll_call": {
+            "context_sha256": "58cb513be126527ded2684a2f85e38cf99d99d9c6b74c84db7d8563990b355cb",
+            "html_sha256": "de65e8c38a0596a313c02c7680a1d493020f96d5d98ba6799b35da92a356221b",
+            "headers": {
+                "Content-Security-Policy": "default-src 'none'; script-src 'nonce=REDACTED'; style-src 'nonce=REDACTED'; style-src-attr 'unsafe-inline'; img-src data: blob:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; worker-src 'none'; frame-src 'none'; font-src 'none'; manifest-src 'none'",
+                "Cache-Control": "no-store, private",
+                "Content-Type": "text/html; charset=UTF-8",
+                "Referrer-Policy": "no-referrer",
+                "X-Robots-Tag": "noindex, nofollow, noarchive",
+                "X-Content-Type-Options": "nosniff"
+            }
+        },
+        "buildings": {
+            "context_sha256": "2b456b89f305564289ff761424cc2f90281adfcd886f0ec468dd68fa4960de5d",
+            "html_sha256": "2baa2f63a6ce83f971ae731d1e9dc9df1d1fbea4ea920a6904ec436cf8e5cf41",
+            "headers": {
+                "Content-Security-Policy": "default-src 'none'; script-src 'nonce=REDACTED'; style-src 'nonce=REDACTED'; style-src-attr 'unsafe-inline'; img-src data: blob:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; worker-src 'none'; frame-src 'none'; font-src 'none'; manifest-src 'none'",
+                "Cache-Control": "no-store, private",
+                "Content-Type": "text/html; charset=UTF-8",
+                "Referrer-Policy": "no-referrer",
+                "X-Robots-Tag": "noindex, nofollow, noarchive",
+                "X-Content-Type-Options": "nosniff"
+            }
+        },
+        "calendar": {
+            "context_sha256": "179fbb3594ba0bc5e906cbe4a1a02efb359bbd3f6e5d26f51e952d69d2c48504",
+            "html_sha256": "3868627b72357d2f2ae0daaac823ae1a7bb5692f35b758794c74c9e62511b4f2",
+            "headers": {
+                "Content-Security-Policy": "default-src 'none'; script-src 'nonce=REDACTED'; style-src 'nonce=REDACTED'; style-src-attr 'unsafe-inline'; img-src data: blob:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; worker-src 'none'; frame-src 'none'; font-src 'none'; manifest-src 'none'",
+                "Cache-Control": "no-store, private",
+                "Content-Type": "text/html; charset=UTF-8",
+                "Referrer-Policy": "no-referrer",
+                "X-Robots-Tag": "noindex, nofollow, noarchive",
+                "X-Content-Type-Options": "nosniff"
+            }
+        },
+        "people": {
+            "context_sha256": "25826555788f8f4f20518c7144a0a16a4417f8186b9567f7f14458be5d9a49d6",
+            "html_sha256": "a1df165942ddd3db13b4002340701f78132ff85e6c06fe2353f61c35ee170632",
+            "headers": {
+                "Content-Security-Policy": "default-src 'none'; script-src 'nonce=REDACTED'; style-src 'nonce=REDACTED'; style-src-attr 'unsafe-inline'; img-src data: blob:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; worker-src 'none'; frame-src 'none'; font-src 'none'; manifest-src 'none'",
+                "Cache-Control": "no-store, private",
+                "Content-Type": "text/html; charset=UTF-8",
+                "Referrer-Policy": "no-referrer",
+                "X-Robots-Tag": "noindex, nofollow, noarchive",
+                "X-Content-Type-Options": "nosniff"
+            }
+        },
+        "assets": {
+            "context_sha256": "2c74f2c70fb23cca830f2835d6573451728fb5f3fb087bb280797ea7ec89beab",
+            "html_sha256": "9a8a091e3cbdc3a07e3c1782ebcc13a3ba0651364f7ab0b882b16440cb7c0767",
+            "headers": {
+                "Content-Security-Policy": "default-src 'none'; script-src 'nonce=REDACTED'; style-src 'nonce=REDACTED'; style-src-attr 'unsafe-inline'; img-src data: blob:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; worker-src 'none'; frame-src 'none'; font-src 'none'; manifest-src 'none'",
+                "Cache-Control": "no-store, private",
+                "Content-Type": "text/html; charset=UTF-8",
+                "Referrer-Policy": "no-referrer",
+                "X-Robots-Tag": "noindex, nofollow, noarchive",
+                "X-Content-Type-Options": "nosniff"
+            }
+        },
+        "workflows": {
+            "context_sha256": "5058700f42d4e97a969a13790e92fafe3ccfe170eb92284997bdda2b27256a0a",
+            "html_sha256": "765d4e736f05a948c9b87b894d130b0f0c45d23b7085bd023865dc04dab22278",
+            "headers": {
+                "Content-Security-Policy": "default-src 'none'; script-src 'nonce=REDACTED'; style-src 'nonce=REDACTED'; style-src-attr 'unsafe-inline'; img-src data: blob:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; worker-src 'none'; frame-src 'none'; font-src 'none'; manifest-src 'none'",
+                "Cache-Control": "no-store, private",
+                "Content-Type": "text/html; charset=UTF-8",
+                "Referrer-Policy": "no-referrer",
+                "X-Robots-Tag": "noindex, nofollow, noarchive",
+                "X-Content-Type-Options": "nosniff"
+            }
+        },
+        "finance": {
+            "context_sha256": "36751b3c479c5ee83d8ab64ab914e014f551083f31a7b3d404c4647be5913e23",
+            "html_sha256": "c29db3b67f2c1093884e4fd1179f0859a82c198860286a1194e1ffc31b4d9859",
+            "headers": {
+                "Content-Security-Policy": "default-src 'none'; script-src 'nonce=REDACTED'; style-src 'nonce=REDACTED'; style-src-attr 'unsafe-inline'; img-src data: blob:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; worker-src 'none'; frame-src 'none'; font-src 'none'; manifest-src 'none'",
+                "Cache-Control": "no-store, private",
+                "Content-Type": "text/html; charset=UTF-8",
+                "Referrer-Policy": "no-referrer",
+                "X-Robots-Tag": "noindex, nofollow, noarchive",
+                "X-Content-Type-Options": "nosniff"
+            }
+        },
+        "usage": {
+            "context_sha256": "b864b296e8042eb1423f4b71df539ad6bfaa31a599edf015ef9871eaa0a5a449",
+            "html_sha256": "82ef699d1f07407aca846ce45bd68ca0febb1de2cc0e2176740037f16c48ed90",
+            "headers": {
+                "Content-Security-Policy": "default-src 'none'; script-src 'nonce=REDACTED'; style-src 'nonce=REDACTED'; style-src-attr 'unsafe-inline'; img-src data: blob:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; worker-src 'none'; frame-src 'none'; font-src 'none'; manifest-src 'none'",
+                "Cache-Control": "no-store, private",
+                "Content-Type": "text/html; charset=UTF-8",
+                "Referrer-Policy": "no-referrer",
+                "X-Robots-Tag": "noindex, nofollow, noarchive",
+                "X-Content-Type-Options": "nosniff"
+            }
+        },
+        "ask": {
+            "context_sha256": "513b0069f9e01342500dc9aa3ec7c506f81be10780ac3b4ba317515687c74325",
+            "html_sha256": "1691a55f40eeee3def8eb47100269c74184255dd159ac2ff9673d01e419cb571",
+            "headers": {
+                "Content-Security-Policy": "default-src 'none'; script-src 'nonce=REDACTED'; style-src 'nonce=REDACTED'; style-src-attr 'unsafe-inline'; img-src data: blob:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; worker-src 'none'; frame-src 'none'; font-src 'none'; manifest-src 'none'",
+                "Cache-Control": "no-store, private",
+                "Content-Type": "text/html; charset=UTF-8",
+                "Referrer-Policy": "no-referrer",
+                "X-Robots-Tag": "noindex, nofollow, noarchive",
+                "X-Content-Type-Options": "nosniff"
+            }
+        },
+        "contractors": {
+            "context_sha256": "13e25bc125514ef9d0b1835d4bc9478ab65876e318ababf0435c0e1c95a9e1be",
+            "html_sha256": "1081e3d883000a644df1f4c10c1e9f7737b0511d5463396b17e87ec955c78855",
+            "headers": {
+                "Content-Security-Policy": "default-src 'none'; script-src 'nonce=REDACTED'; style-src 'nonce=REDACTED'; style-src-attr 'unsafe-inline'; img-src data: blob:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; worker-src 'none'; frame-src 'none'; font-src 'none'; manifest-src 'none'",
+                "Cache-Control": "no-store, private",
+                "Content-Type": "text/html; charset=UTF-8",
+                "Referrer-Policy": "no-referrer",
+                "X-Robots-Tag": "noindex, nofollow, noarchive",
+                "X-Content-Type-Options": "nosniff"
+            }
+        },
+        "requester": {
+            "context_sha256": "9997f1c266df2bd944c6f70df074fca639d30b2ceadf798ad515631aa4b8a3ab",
+            "html_sha256": "85e8b79fc72fd533a51717fb591a79429969b51ac4b31059cb84b512f35d1eb6",
+            "headers": {
+                "Content-Security-Policy": "default-src 'none'; script-src 'nonce=REDACTED'; style-src 'nonce=REDACTED'; style-src-attr 'unsafe-inline'; img-src data: blob:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; worker-src 'none'; frame-src 'none'; font-src 'none'; manifest-src 'none'",
+                "Cache-Control": "no-store, private",
+                "Content-Type": "text/html; charset=UTF-8",
+                "Referrer-Policy": "no-referrer",
+                "X-Robots-Tag": "noindex, nofollow, noarchive",
+                "X-Content-Type-Options": "nosniff"
+            }
+        }
+    }
+}

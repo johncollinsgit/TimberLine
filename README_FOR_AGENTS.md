@@ -1,3 +1,77 @@
+## Shared private fictional workspace (October 24; source integration)
+
+Select shared mode only from the immutable publication descriptor and exact
+owner-silo/policy/build/source/expiry admission. Keep absent-descriptor browser
+mode separate; malformed or unavailable shared mode must never fall back.
+Preserve one adapter, current area/FK projection, captured form versions and the
+original unknown edit identity. Resolve assigned names only from current scoped
+fictional people; unavailable names retain the assignment. AI sharing preview
+retrieves server facts independently and binds their revision/selection pin.
+Reviewer names/personas never grant native employee identity or file access.
+
+Retain both engines' mounted core/directory and fake-provider shared-AI checks,
+plus all existing required lanes. Disposable SQLite or a skipped MySQL fixture is
+not concurrency acceptance. Source tests do not authorize initializing a runtime,
+replacing the current publication, resetting the lifetime campaign, enabling a
+provider/scanner or deleting data. Preserve the active edition and its encrypted
+comments through a reviewed compatible renderer/new-edition transition. Shared
+comments have a separate immutable feature/policy, reviewed backend/client and
+centered-detail composer; actual local mounted two-engine comments checks pass.
+Ticket threads do not require or alias a native task. Keep the comment accepted-projection guard: a
+root bridge may obtain the actual active-selection read after scoped catalog
+reads, never invent a revision or mutate active selection from background work.
+Uploads have separate default-off JPEG/PNG clean-attestation/private-image source
+and target-free descriptor admission; scanner/evidence tests are fake. Root file
+controls share the current thread and ONE adapter; real-HTTP local image/file
+checks pass8 cases in each engine with fake scanner evidence only. Separate
+default-off PDF-original download source is integrated and independently reviewed,
+with its own policy/evidence and exact-target octet-stream attachment contract.
+No inline PDF, public URL, scan route/operator or runtime activation is installed.
+Local PDF-browser checks pass9 cases per engine (Chromium pre-NFC plus verified
+filename-predicate equivalence; WebKit full corrected script), including390x844
+viewports. No physical-device claim. Preserve the exact evidence distinction and
+run both engines on the final normal CI candidate. Resources/manual workflows
+remain design-only. Real-owner maintenance HTTP is preview-first and bounded;
+no operational scheduler/retention or runtime values are installed. The reviewed
+nonsecret runtime metadata seam does not authorize activation or provision an
+anchor; invalid input keeps every independent gate off. See [the workspace contract](docs/operations/proposal-reviewer-workspace.md)
+and [the AI contract](docs/operations/proposal-reviewer-ai.md).
+
+## Enterprise CI performance candidate (October 23, 2026)
+
+Enterprise verification prepares exact-run dependency/public-build inputs once,
+then runs the full native PHP/MySQL suite and isolated browser matrix. Operations
+groups preserve the `all` profile, request pacing and every helper in both engines;
+fixed-port harnesses remain sequential within each fresh runner. The stable
+`enterprise-runtime` aggregate requires every prerequisite and matrix entry.
+No ENV/private storage or database state is shared; no production artifact or
+Forge change is implied. Measure the frozen candidate's actual full CI critical
+path before claiming faster releases. See [Enterprise CI](docs/operations/enterprise-ci.md).
+
+
+## Private review activity (October 23, 2026)
+
+Lees-McRae private review publications now have an owner-only activity view for
+link opens, successful password unlocks, chosen display names, proposal/campus
+pages, PDF downloads, saved-comment actions and browser-reported tour scenes or
+playback completion. Current active owner/admin membership gates each view;
+known owner browser tests are hidden by default. Self-selected names are not
+verified identities, and page opening is not proof of reading.
+
+The private runtime stores a separately encrypted, tenant/version-scoped journal
+under private shared storage, with file locking and fixed event/byte limits. No
+passwords, IP addresses, user agents, form text or sample work content enter the
+journal. A separate rate limiter prevents activity reports from consuming the
+review/comment request budget. Recipient reports require the exact current
+password grant and version; campus/tour reports also require the bound build.
+A small exact-hash script is permitted only on tracked proposal pages; public
+samples have no activity endpoint or additional network authority.
+
+Tracking starts at release; previous visits cannot be reconstructed. Browser
+blocking, expired access or a full/unavailable journal can leave gaps. Campus
+source changes require a fresh immutable publication and review link. See
+[review activity](docs/operations/proposal-review-activity.md).
+
 ## Private reviewer AI (October 23; future source candidate, default off)
 
 Only the exact unlocked, approved private owner-runtime edition may expose
@@ -183,6 +257,21 @@ retains its exact SVG/PNG artwork and proportions. Guided table navigation clear
 selection; opening a native detail drawer temporarily hides outside guide
 controls until Close/Escape. See
 [the header/tour contract](docs/operations/enterprise-workspace-header-tour.md).
+
+## Wren saved-application recovery (October 23; source candidate)
+
+Wren's public family portal is card-only. Expired unpaid checkout reservations
+become `payment_pending`, preserve their saved registration/release/pricing, and
+release capacity only after original provider checkout reconciliation. A signed,
+own-family `resume` action rechecks eligibility, prior receipts, current capacity,
+queue order and sibling reserves under the season lock, reusing a current invoice
+or issuing a fresh short reservation without duplicate players or releases.
+Actual capacity waitlists remain separate. Pending applications do not block the
+queue. Daily email reminders are default-off behind
+`WREN_SOCCER_PAYMENT_REMINDERS_ENABLED` and must only activate after verified old
+receipts are recorded. Delivery rechecks payment, capacity and season state.
+Verified expired Venmo invoices may restore available places through the reviewed
+reconciliation command, without duplicating receipts. See the Wren runbook.
 
 ## Unified Enterprise and proposal review candidate (October 22; not released)
 
@@ -2712,3 +2801,32 @@ review display names, final signature evidence and provider lifecycles separate.
 Lees-McRae has client-only prices and no-markup usage; never copy that offer into
 global rates. Both feature flags and binding/host lists default closed. The
 campus header/tour and payment stack remain under their existing owners.
+
+## Grounded follow-up, reviewer voice and private photos (source only)
+
+Native record-backed answers use current saved building/project/task/member and
+Planning permissions. Conversation sends only selected evidence and deterministic
+integer currency/basis cost comparisons; full evidence changes invalidate history.
+The private reviewer remains a separate closed fictional projection, without a
+native User or real-campus grant. Its shared server-workspace seam is a separate
+required acceptance step; browser snapshots are not authoritative hosted records.
+
+Private reviewer follow-ups include at most two accepted same-session/evidence
+receipts, displayed before each Send. They inherit the earliest ten-minute content
+expiry; the final pre-provider read rechecks it. Speech uses that exact text client,
+explicit per-turn sharing, Stop/Interrupt and typed fallback. Legitimately unlocked
+computers/phones can independently use it; session receipt fences are not a device
+allowlist. Persistent memory and server transcription remain out.
+
+Private photos expose only clean-ready, currently authorized discussion-bound
+JPEG/PNG bytes, preserving quarantine and unchanged attachment downloads. Nested
+viewers retain ticket drafts, placement, focus and scroll; hidden tabs retire bytes
+without false access denial, while real permission loss clears controls. Fictional
+sample uploads remain quarantined metadata, not fabricated ready thumbnails.
+
+All new behavior stays default-off/source-only until normal CI, explicit immutable
+edition/access/comment transition and approved hosted acceptance. Simulated speech,
+intercepted endpoints and phone viewports do not prove physical microphone/mobile,
+real provider calls or live private-image/scanner readiness. See the reviewer AI
+and attachment-gallery runbooks. Keep SES transactional source in its separate
+packet; no provider/key/scanner/mail/global routing activation follows from this.

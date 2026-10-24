@@ -1,15 +1,21 @@
+  {!! file_get_contents(resource_path('js/enterprise/attachment-gallery.js')) !!}
+  let attachmentGallery = null;
+  function clearAttachmentGallery() { attachmentGallery?.destroy(); attachmentGallery = null; if(typeof clearSharedFiles==='function')clearSharedFiles(); }
   @include('enterprise.read-only-assistant-script')
   @include('enterprise.conversation-script')
   @include('enterprise.saved-assistant-script')
   @include('enterprise.private-memory-script')
   const nextBase = urls.enterprise, teamBase = urls.team;
-  const draftPrefix = `everbranch-enterprise-draft:${transport.mode === 'sample' ? 'sample:' : ''}${workspace}:${viewer}:`;
+  const draftPrefix = transport.mode === 'shared'
+    ? `everbranch-enterprise-draft:shared:${presentation.reviewerWorkspace.workspace_id}:${presentation.reviewerWorkspace.binding.version_hash}:${presentation.reviewerWorkspace.browser_context}:`
+    : `everbranch-enterprise-draft:${transport.mode === 'sample' ? 'sample:' : ''}${workspace}:${viewer}:`;
   const selectionMemory = new Map(), noteBusy = new Set(), planningReceipts = new Map(), planningUncertain = new Set();
   let activeDiscussionKey = null, discussionGeneration = 0, planningData = null, planningPending = null, planningBusy = false, askBusy = false, askPending = null, emailPreview = null, emailPending = null, emailGeneration = 0, gmailConnection = null, gmailBusy = false;
   const nextQuery = () => '?tenant=' + encodeURIComponent(tenantSlug);
   function readDraft(key) { try { return JSON.parse(sessionStorage.getItem(draftPrefix + key) || '{}'); } catch { return {}; } }
   function writeDraft(key, value) { try { sessionStorage.setItem(draftPrefix + key, JSON.stringify(value)); } catch {} }
   function stashComposer() {
+    if (transport.mode === 'shared') { stashSharedDiscussion(); return; }
     const input = $('discussion-body');
     if (input && activeDiscussionKey) {
       const old = readDraft(activeDiscussionKey);
@@ -19,14 +25,18 @@
   function rememberSelection() { stashComposer(); selectionMemory.set(area + ':' + section, selected); }
   function rememberUrl() {
     const url = new URL(location.href);
-    for (const [key, value] of Object.entries({area_id: area, section, selected})) value ? url.searchParams.set(key, value) : url.searchParams.delete(key);
+    const parameters = reviewerMode ? new URLSearchParams(url.hash.slice(1)) : url.searchParams;
+    for (const [key, value] of Object.entries({area_id: area, section, selected})) value ? parameters.set(key, value) : parameters.delete(key);
+    if(reviewerMode){url.search='';url.hash=parameters.toString();}
     transport.replace(url);
   }
   function resetNext() {
+    invalidateSharedDiscussion();
     resetReadOnlyAssistant();
     resetConversation();
     if(typeof resetVoice==='function')resetVoice();
     if (typeof resetOperations === 'function') resetOperations();
+    clearAttachmentGallery();
     discussionGeneration++; activeDiscussionKey = null;
     emailGeneration++; emailPending = null; emailPreview = null; $('email-form').reset(); $('email-preview').hidden = true;
     $('mailbox-status').textContent = 'No delivery transport connected. No mailbox messages are read or sent.';
@@ -35,7 +45,7 @@
     $('planning-list').replaceChildren(); planningData = null;
   }
   function renderNext() {
-    const aiComingSoon=transport.mode==='sample';
+    const aiComingSoon=reviewerMode;
     if(aiComingSoon&&section==='usage')section='ask';
     if(!aiComingSoon&&typeof renderVoice==='function')renderVoice();
     if(!aiComingSoon)renderReadOnlyAssistant();
@@ -54,7 +64,9 @@
     rememberUrl();
   }
   async function mountDiscussion(kind, id) {
+    if (transport.mode === 'shared') return mountSharedDiscussion(kind === 'request' ? 'ticket' : kind, id);
     if (!data.features?.collaboration) return;
+    clearAttachmentGallery();
     stashComposer(); $('discussion')?.remove();
     const key = `${area}:${kind}:${id}`, generation = ++discussionGeneration, scopeArea=area, scopeSection=section, scopeSelection=selected;
     activeDiscussionKey = key;
@@ -68,7 +80,10 @@
       const result = await api(`${nextBase}/discussion/${kind}/${id}${nextQuery()}`);
       if (!current()) return;
       const draft = readDraft(key);
-      host.innerHTML = `<h3>Notes & files</h3><div class="discussion-feed" id="discussion-feed">${result.comments.map(c => `<article class="discussion-note"><p class="caption">${esc(c.created_at)} · ${esc(data.members.find(m => m.id === c.author_id)?.name || 'Workspace member')}</p><div>${esc(c.body)}</div></article>`).join('') || '<p class="caption">No notes yet.</p>'}</div><h3 class="discussion-files-heading">Files &amp; photos</h3><div id="discussion-files">${result.files.map(f => `<div class="file-row"><span>${esc(f.filename)} · ${esc(f.status)}</span>${f.downloadable ? `<a class="button" href="${esc(transport.href(teamBase + '/files/' + encodeURIComponent(f.id) + '/download' + nextQuery()))}">Download</a>` : f.can_manage && ['uploading','quarantined'].includes(f.status) ? `<button class="button" data-cancel-upload="${esc(f.id)}">Cancel upload</button>` : ''}</div>`).join('')}</div>${result.can_write ? `<form class="discussion-composer stack" id="discussion-form"><label>Add a note<textarea id="discussion-body" maxlength="5000" placeholder="Write a project update…">${esc(draft.body || '')}</textarea></label><div class="discussion-upload-tools"><label class="button">Attach files<input class="file-picker" id="discussion-files-picker" type="file" multiple accept="image/jpeg,image/png,application/pdf,text/plain,.jpg,.jpeg,.png,.pdf,.txt" aria-label="Attach photos, PDF or text"></label><label class="button">Add photo<input id="discussion-photo-picker" type="file" multiple accept="image/jpeg,image/png,.jpg,.jpeg,.png" capture="environment" aria-label="Add photo"></label></div><details class="discussion-access-help"><summary>File handling &amp; access</summary><p>JPEG, PNG, PDF or text · 10 MB per file. Files attach to this discussion and remain private while awaiting a clean scan. To resume an interrupted upload, select the same file.</p><p>${esc(result.coverage)}</p></details><p id="upload-status" role="status" aria-live="polite"></p><button class="button primary" id="note-submit" type="submit">${draft.pending ? 'Retry the same note' : 'Post note'}</button></form>` : '<p class="caption">Discussion is read only. Requests need an assigned task before notes or files can be added.</p>'}`;
+      host.innerHTML = `<h3>Notes & files</h3><div class="discussion-feed" id="discussion-feed">${result.comments.map(c => `<article class="discussion-note"><p class="caption">${esc(c.created_at)} · ${esc(data.members.find(m => m.id === c.author_id)?.name || 'Workspace member')}</p><div>${esc(c.body)}</div></article>`).join('') || '<p class="caption">No notes yet.</p>'}</div><h3 class="discussion-files-heading">Files &amp; photos</h3><div id="discussion-files">${result.files.map(f => `<div class="file-row" data-discussion-file="${esc(f.id)}"><span>${esc(f.filename)} · ${esc(f.status)}</span>${f.downloadable ? `<a class="button" href="${esc(transport.href(teamBase + '/files/' + encodeURIComponent(f.id) + '/download' + nextQuery()))}">Download</a>` : f.can_manage && ['uploading','quarantined'].includes(f.status) ? `<button class="button" data-cancel-upload="${esc(f.id)}">Cancel upload</button>` : ''}</div>`).join('')}</div>${result.can_write ? `<form class="discussion-composer stack" id="discussion-form"><label>Add a note<textarea id="discussion-body" maxlength="5000" placeholder="Write a project update…">${esc(draft.body || '')}</textarea></label><div class="discussion-upload-tools"><label class="button">Attach files<input class="file-picker" id="discussion-files-picker" type="file" multiple accept="image/jpeg,image/png,application/pdf,text/plain,.jpg,.jpeg,.png,.pdf,.txt" aria-label="Attach photos, PDF or text"></label><label class="button">Add photo<input id="discussion-photo-picker" type="file" multiple accept="image/jpeg,image/png,.jpg,.jpeg,.png" capture="environment" aria-label="Add photo"></label></div><details class="discussion-access-help"><summary>File handling &amp; access</summary><p>JPEG, PNG, PDF or text · 10 MB per file. Files attach to this discussion and remain private while awaiting a clean scan. To resume an interrupted upload, select the same file.</p><p>${esc(result.coverage)}</p></details><p id="upload-status" role="status" aria-live="polite"></p><button class="button primary" id="note-submit" type="submit">${draft.pending ? 'Retry the same note' : 'Post note'}</button></form>` : '<p class="caption">Discussion is read only. Requests need an assigned task before notes or files can be added.</p>'}`;
+      attachmentGallery = EverbranchAttachmentGallery.mount({host, files: result.files,
+        context: {mode: transport.mode, origin: location.origin, base: nextBase, kind, id, tenant: tenantSlug, viewer, workspace}, current,
+        dialog: $('attachment-gallery'), onDenied: () => message('Photo access is unavailable. Refresh current work to check access again.', true)});
       if ($('discussion-body')) {
         $('discussion-body').oninput = stashComposer;
         $('discussion-form').onsubmit = e => {e.preventDefault(); postNote(target);};
@@ -170,23 +185,88 @@
       if (area !== requestedArea || section !== 'contractors') return;
       planningData = result; $('planning-status').textContent = result.basis + (result.partial ? ' Results are partial.' : '');
       planningPending = planningReceipts.get(area) || null; $('planning-retry').hidden = !planningPending;
-      $('planning-form').hidden = !result.can_coordinate; $('cost-option').hidden = !result.can_finance;
+      $('planning-form').hidden = !result.can_coordinate; $('cost-option').hidden = !result.can_finance || result.can_manage_costs === false;
       $('planning-project').innerHTML = data.projects.filter(p => !p.archived).map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
       $('planning-contractor').innerHTML = result.items.filter(r => r.kind === 'contractor' && r.status === 'active').map(r => `<option value="${esc(r.id)}">${esc(r.title)}</option>`).join('');
-      $('planning-list').innerHTML = result.items.map(r => `<article class="planning-record" id="record-${esc(r.id)}"><strong>${esc(r.title)}</strong><p class="caption">${esc(r.kind)} · ${esc(r.status)} · version ${r.version}${r.kind === 'schedule' ? `<br>${esc(r.starts_on)} through ${esc(r.ends_on)} (inclusive)` : ''}${r.kind === 'cost' ? `<br>${esc(r.data.amount_minor)} minor units ${esc(r.data.currency)} · ${esc(r.data.basis)}` : ''}</p>${r.kind === 'schedule' && r.status === 'planned' && result.can_coordinate ? `<button class="button" data-cancel-plan="${esc(r.id)}">Cancel date block</button>` : ''}</article>`).join('') || '<p class="caption">No planning records in the checked sample.</p>';
+      $('planning-list').innerHTML = result.items.map(r => `<article class="planning-record" id="record-${esc(r.id)}"><strong>${esc(r.title)}</strong><p class="caption">${esc(r.kind)} · ${esc(r.status)} · version ${r.version}${r.kind === 'schedule' ? `<br>${esc(r.starts_on)} through ${esc(r.ends_on)} (inclusive)` : ''}${r.kind === 'cost' ? `<br>${esc(r.data.amount_minor)} minor units ${esc(r.data.currency)} · ${esc(r.data.basis)}` : ''}</p>${r.kind === 'schedule' && r.status === 'planned' && result.can_coordinate ? `${transport.mode === 'shared' && r.allowed_actions?.includes('plan.update') ? `<button class="button" data-edit-plan="${esc(r.id)}">Edit date block</button>` : ''}<button class="button" data-cancel-plan="${esc(r.id)}">Cancel date block</button>` : ''}</article>`).join('') || '<p class="caption">No planning records in the checked sample.</p>';
+      $('planning-list').querySelectorAll('[data-edit-plan]').forEach(b => b.onclick = () => openSharedPlanEdit(b.dataset.editPlan));
       $('planning-list').querySelectorAll('[data-cancel-plan]').forEach(b => b.onclick = () => {
         const row = planningData.items.find(r => r.id === b.dataset.cancelPlan);
         savePlanning({kind:row.kind,id:row.id,area_id:area,expected_version:row.version,title:row.title,status:'cancelled',starts_on:row.starts_on,ends_on:row.ends_on,...row.data,request_id:crypto.randomUUID()});
       });
+      if(transport.mode==='shared'){
+        planningSharedPin=captureSharedPin();
+        $('planning-kind').value='schedule';
+        for(const option of $('planning-kind').options)option.hidden=option.value!=='schedule';
+        const title=$('planning-form').querySelector('[name=title]');title.disabled=true;title.closest('label').hidden=true;
+        renderSharedPlanEditor();
+      }
       planningFields();
       if (selected) document.getElementById('record-' + selected)?.scrollIntoView({block:'nearest'});
-    } catch (error) { $('planning-list').replaceChildren(); message(error.message, true); }
+    } catch (error) { $('planning-list').replaceChildren(); if(transport.mode==='shared')$('planning-form').hidden=true; message(error.message, true); }
   }
   function planningFields() {
     const kind = $('planning-kind').value;
     $('planning-project-field').hidden = kind === 'contractor'; $('planning-schedule-fields').hidden = kind !== 'schedule'; $('planning-cost-fields').hidden = kind !== 'cost';
   }
+  let planningSharedPin=null, planningSharedEdit=null;
+  const planningEditCancel = transport.mode === 'shared' ? document.createElement('button') : null;
+  if(planningEditCancel){
+    planningEditCancel.type='button';planningEditCancel.id='planning-edit-cancel';planningEditCancel.className='button';planningEditCancel.textContent='Cancel editing';planningEditCancel.hidden=true;
+    planningEditCancel.onclick=()=>{
+      if(pending||busy)return message('Resolve the original saved edit before changing this form.',true);
+      planningSharedEdit=null;$('planning-form').reset();renderSharedPlanEditor();
+    };
+    $('planning-form').append(planningEditCancel);
+    $('planning-form').addEventListener('input',()=>{
+      if(!planningSharedEdit||planningSharedEdit.area_id!==area||pending||busy||planningSharedEdit.submitting)return;
+      for(const key of ['project_id','contractor_id','starts_on','ends_on'])planningSharedEdit.values[key]=$('planning-form').elements.namedItem(key).value;
+    });
+  }
+  function renderSharedPlanEditor(){
+    if(transport.mode!=='shared'||!planningData)return;
+    $('planning-kind').value='schedule';
+    const edit=planningSharedEdit?.area_id===area?planningSharedEdit:null;
+    const source=edit?.context.target||data, planning=edit?.context.planning||planningData;
+    $('planning-project').innerHTML=source.projects.filter(p=>!p.archived).map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+    $('planning-contractor').innerHTML=planning.items.filter(r=>r.kind==='contractor'&&r.status==='active').map(r=>`<option value="${esc(r.id)}">${esc(r.title)}</option>`).join('');
+    $('planning-form').querySelector('h3').textContent=edit?'Edit date block · reviewed version '+edit.version:'Record a plan';
+    $('planning-save').textContent=edit?'Save date block changes':'Save record';planningEditCancel.hidden=!edit;
+    if(edit)for(const [key,value]of Object.entries(edit.values))$('planning-form').elements.namedItem(key).value=value;
+    syncSharedPlanEditorLock();
+  }
+  function syncSharedPlanEditorLock(){
+    // Shared recovery controls initialize before the planner; no planner DOM means no lock work yet.
+    if(transport.mode!=='shared'||!$('planning-edit-cancel'))return;
+    const edit=planningSharedEdit?.area_id===area?planningSharedEdit:null,locked=!!(pending||busy||edit?.submitting);
+    for(const key of ['project_id','contractor_id','starts_on','ends_on'])$('planning-form').elements.namedItem(key).disabled=locked;
+    $('planning-save').disabled=locked;planningEditCancel.disabled=locked;
+  }
+  function openSharedPlanEdit(id){
+    if(transport.mode!=='shared'||pending||busy)return message('Resolve the original saved edit before changing this form.',true);
+    const row=planningData?.items.find(r=>r.id===id&&r.kind==='schedule'&&r.status==='planned'&&r.allowed_actions?.includes('plan.update'));
+    if(!row||!planningData.can_coordinate)return message('Refresh this date block before editing.',true);
+    if(planningSharedEdit?.area_id===area&&planningSharedEdit.id!==id)return message('Cancel the current unsent date-block edit before opening another.',true);
+    if(!planningSharedEdit||planningSharedEdit.area_id!==area){
+      const target=JSON.parse(JSON.stringify(data)),planning=JSON.parse(JSON.stringify(planningData));
+      const context={pin:captureSharedPin(target),target,planning};
+      planningSharedEdit={id:row.id,version:row.version,area_id:area,request_id:crypto.randomUUID(),context,
+        values:{project_id:row.data.project_id,contractor_id:row.data.contractor_id,starts_on:row.starts_on,ends_on:row.ends_on}};
+      const edit=planningSharedEdit;
+      context.onApplied=value=>{if(value?.receipt?.request_id===edit.request_id&&planningSharedEdit===edit){planningSharedEdit=null;if(!value.stale_context&&area===edit.area_id&&section==='contractors'){$('planning-form').reset();renderSharedPlanEditor();}}};
+    }
+    renderSharedPlanEditor();$('planning-form').elements.namedItem('starts_on').focus({preventScroll:true});
+  }
   async function savePlanning(body) {
+    if(transport.mode==='shared'){
+      if(body.kind!=='schedule')return message('Only contractor date blocks can be changed in this shared workspace. Cost inputs remain read-only.',true);
+      const edit=planningSharedEdit;
+      const context=edit&&body.status!=='cancelled'&&body.id===edit.id&&body.request_id===edit.request_id?edit.context:{pin:planningSharedPin,target:data,planning:planningData};
+      if(edit&&context===edit.context)edit.submitting=true;
+      syncSharedPlanEditorLock();
+      try{return await sharedCommand({...body,action:body.status==='cancelled'?'plan.cancel':body.expected_version===0?'plan.create':'plan.update'},context);}
+      finally{if(edit)edit.submitting=false;syncSharedPlanEditorLock();}
+    }
     if (planningBusy || body.area_id !== area) return; planningBusy = true; planningPending = body; planningReceipts.set(body.area_id, body);
     globalThis.EverbranchTransport.setRefreshBlocker('planning:' + body.area_id, true);
     try { await api(`${nextBase}/planning${nextQuery()}`, body); planningReceipts.delete(body.area_id); planningUncertain.delete(body.request_id); globalThis.EverbranchTransport.setRefreshBlocker('planning:' + body.area_id, false); if (area === body.area_id) { planningPending = null; $('planning-retry').hidden = true; $('planning-form').reset(); await loadPlanning(); message('Planning record saved.'); } }
@@ -206,8 +286,10 @@
   $('planning-retry').onclick = () => planningPending && savePlanning(planningPending);
   $('planning-form').onsubmit = e => {
     e.preventDefault(); if (planningPending) return message('Retry the retained record first.', true);
+    if(transport.mode==='shared'&&(pending||busy))return message('Resolve the original saved edit before preparing another.',true);
     const f = new FormData(e.target), kind = f.get('kind');
-    const body = {kind,id:crypto.randomUUID(),area_id:area,expected_version:0,title:f.get('title'),status:kind === 'schedule' ? 'planned' : kind === 'cost' ? 'recorded' : 'active',request_id:crypto.randomUUID()};
+    const edit=transport.mode==='shared'&&planningSharedEdit?.area_id===area?planningSharedEdit:null;
+    const body = {kind,id:edit?.id||crypto.randomUUID(),area_id:area,expected_version:edit?.version||0,title:f.get('title'),status:kind === 'schedule' ? 'planned' : kind === 'cost' ? 'recorded' : 'active',request_id:edit?.request_id||crypto.randomUUID()};
     const keys = kind === 'contractor' ? [] : kind === 'schedule' ? ['project_id','contractor_id','starts_on','ends_on'] : ['project_id','amount_minor','currency','basis'];
     for (const key of keys) body[key] = f.get(key);
     savePlanning(body);

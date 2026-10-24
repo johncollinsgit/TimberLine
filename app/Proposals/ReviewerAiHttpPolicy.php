@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\RateLimiter;
 /** Same-origin session JSON only. CSRF is deliberately checked even in fixture environments. */
 final class ReviewerAiHttpPolicy
 {
-    public function body(Request $request, array $fields): array
+    public function body(Request $request, array $fields, array $optional = []): array
     {
         abort_unless($request->isMethod('POST') && strtolower(trim(explode(';', $request->header('Content-Type', ''))[0])) === 'application/json'
             && strlen($request->getContent()) <= 65536 && $request->query->count() === 0, 400);
@@ -19,7 +19,7 @@ final class ReviewerAiHttpPolicy
         $keys = array_keys(get_object_vars($value));
         sort($keys);
         sort($fields);
-        abort_unless($keys === $fields, 422);
+        abort_unless(array_diff($fields, $keys) === [] && array_diff($keys, [...$fields, ...$optional]) === [], 422);
 
         return json_decode($request->getContent(), true, 32, JSON_THROW_ON_ERROR);
     }

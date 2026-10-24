@@ -17,8 +17,17 @@ return [
         'prior_spend_verified' => false, 'prior_spend_microusd' => null, 'prior_spend_evidence_hash' => null, 'inventory_evidence_hash' => null],
         $reviewerApproval, ['ui_enabled' => (bool) env('SERVICE_PROPOSALS_REVIEWER_AI_UI_ENABLED', false),
             'enabled' => (bool) env('SERVICE_PROPOSALS_REVIEWER_AI_ENABLED', false), 'api_key' => env('ENTERPRISE_PROPOSAL_REVIEW_AI_API_KEY', '')]),
+    // Explicit reviewed descriptor/policy/anchor only. No inherited AI/Trial/native grants.
+    'reviewer_workspace' => ['enabled' => false, 'writes_enabled' => false, 'initialization_enabled' => false,
+        'financial_enabled' => false, 'maintenance_enabled' => false, 'anchor_area_id' => null, 'anchor_marker_sha256' => null, 'policies' => [],
+        'collaboration' => ['enabled' => false, 'comments_write_enabled' => false, 'policies' => []],
+        'attachments' => ['enabled' => false, 'write_enabled' => false, 'policies' => []],
+        'image_access' => ['enabled' => false, 'scan_enabled' => false, 'policies' => [], 'scanners' => []],
+        'downloads' => ['enabled' => false, 'scan_enabled' => false, 'policies' => [], 'scanners' => []]],
     'campus_review' => [
         'enabled' => (bool) env('SERVICE_PROPOSALS_CAMPUS_REVIEW_ENABLED', false),
         'build_id' => env('SERVICE_PROPOSALS_CAMPUS_REVIEW_BUILD_ID', ''),
+        // Trusted runtime-only exact Version ID => tenant_id/content_hash/renderer. Never request controlled.
+        'legacy_versions' => [],
     ],
 ];

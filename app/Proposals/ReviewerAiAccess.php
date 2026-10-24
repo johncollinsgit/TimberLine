@@ -17,6 +17,7 @@ final class ReviewerAiAccess
         abort_if($request->query->count() !== 0, 400);
         $version = $this->access->recipient($request, $token);
         abort_unless($this->access->unlocked($request, $version), 403, 'Unlock this exact proposal version first.');
+        app(LegacyCampusRegistry::class)->denyAdditionalAuthority($version);
         $manifest = $this->manifests->assertCurrent($version, 'ask');
         if ($expected !== null) {
             $keys = array_keys($expected);
@@ -34,7 +35,7 @@ final class ReviewerAiAccess
             $nonce = bin2hex(random_bytes(32));
             $request->session()->put($key, $nonce);
         }
-        abort_unless(is_string($nonce) && preg_match('/^[a-f0-9]{64}$/D', $nonce), 403, 'The original private demo browser is required.');
+        abort_unless(is_string($nonce) && preg_match('/^[a-f0-9]{64}$/D', $nonce), 403, 'Open Chats in this unlocked review session before checking its requests.');
 
         return ['version' => $version, 'manifest' => $manifest,
             'browser_hash' => hash('sha256', 'proposal-review-ai-v1|'.$version->id.'|'.$version->content_hash.'|'.$manifest['build_id'].'|'.$manifest['source_hash'].'|'.MountUrls::context().'|'.$request->session()->getId().'|'.$nonce)];

@@ -39,6 +39,25 @@ class ReviewerPresentation
             $presentation['navigation']['section'] = $campusReviewContext['page'];
             $presentation['routes']['back'] = $workflow ? ($campusReviewContext['urls']['pages']['projects'] ?? $campusReviewContext['urls']['current']) : $campusReviewContext['urls']['current'];
             $presentation['routes']['workflowWorkspace'] = $campusReviewContext['urls']['pages']['workflows'] ?? $campusReviewContext['urls']['current'];
+            if (array_key_exists('reviewer_workspace', $campusReviewContext)) {
+                $presentation['reviewerWorkspace'] = $campusReviewContext['reviewer_workspace'];
+                $presentation['reviewerPersonas'] = $campusReviewContext['reviewer_personas'];
+                $presentation['defaultPersona'] = $presentation['reviewerWorkspace']['selection']['persona'];
+                $scope['area_id'] = $presentation['reviewerWorkspace']['selection']['area_ids'][0];
+                $presentation['scope'] = $scope;
+                $presentation['navigation']['area_id'] = $scope['area_id'];
+                if ($campusReviewContext['page'] === 'home') {
+                    $presentation['navigation']['section'] = 'projects';
+                }
+                if (array_key_exists('reviewer_collaboration', $campusReviewContext)) {
+                    $presentation['reviewerCollaboration'] = $campusReviewContext['reviewer_collaboration'];
+                }
+                foreach (['reviewer_attachments' => 'reviewerAttachments', 'reviewer_images' => 'reviewerImages', 'reviewer_downloads' => 'reviewerDownloads'] as $key => $field) {
+                    if (array_key_exists($key, $campusReviewContext)) {
+                        $presentation[$field] = $campusReviewContext[$key];
+                    }
+                }
+            }
             if (($campusReviewContext['reviewer_ai']['enabled'] ?? false) === true) {
                 $presentation['reviewerAi'] = $campusReviewContext['reviewer_ai'];
             }
@@ -47,7 +66,7 @@ class ReviewerPresentation
             'can_design' => false, 'can_run' => false, 'items' => [], 'templates' => []];
         $html = view($workflow ? 'enterprise.workspace' : 'enterprise.app', ['presentation' => $presentation, 'enterpriseRole' => 'sample perspective',
             'scope' => $scope, 'bootstrap' => $bootstrap, 'inlineAssets' => $workflow ? $this->assets() : null,
-            'voiceAssets' => null, 'campusReviewContext' => $review ? $campusReviewContext : null])->render();
+            'voiceAssets' => $review && ($presentation['reviewerAi']['enabled'] ?? false) === true ? $this->voiceAssets() : null, 'campusReviewContext' => $review ? $campusReviewContext : null])->render();
         if ($review) {
             $overlay = view('enterprise.campus-review-assets', ['campusReviewContext' => $campusReviewContext, 'campusReviewLayout' => $workflow ? 'canvas' : 'shell'])->render();
             $html = str_replace('</body>', $overlay.'</body>', $html);

@@ -215,6 +215,36 @@ it('requires a verified organizer from the same tenant for direct manual service
     Http::assertNothingSent();
 });
 
+it('restores an expired paid family only against one exact verified receipt without duplicating revenue', function () {
+    $this->store->query('invoices', $this->tenant->id)->where('id', $this->invoice)->update(['status' => 'expired', 'expires_at' => now()->subDay(), 'checkout_id' => null]);
+    $this->store->query('registrations', $this->tenant->id)->where('status', 'offered')->update(['status' => 'payment_pending', 'seat_kind' => null]);
+    expect($this->payments->confirmVenmo($this->tenant->id, $this->invoice, 6000, 'verified-transfer-id', 'Live Venmo transfer matched to this family', $this->actor->id))->toBe('review');
+    expect($this->payments->restoreVenmoPlaces($this->tenant->id, $this->invoice, 6000, 'verified-transfer-id', 'Restore verified paid family', $this->actor->id))->toBe('paid');
+    expect($this->payments->restoreVenmoPlaces($this->tenant->id, $this->invoice, 6000, 'verified-transfer-id', 'Replay', $this->actor->id))->toBe('paid');
+    expect($this->store->query('payments', $this->tenant->id)->count())->toBe(1)
+        ->and((int) $this->store->query('payments', $this->tenant->id)->sum('amount_cents'))->toBe(6000)
+        ->and($this->store->query('registrations', $this->tenant->id)->where('status', 'registered')->count())->toBe(4)
+        ->and($this->store->query('events', $this->tenant->id)->where('action', 'payment_confirmed')->count())->toBe(1);
+    Http::assertNothingSent();
+});
+
+it('retains verified money for review if there is no capacity or another receipt', function (string $failure) {
+    $this->store->query('invoices', $this->tenant->id)->where('id', $this->invoice)->update(['status' => 'expired', 'expires_at' => now()->subDay(), 'checkout_id' => null]);
+    $this->store->query('registrations', $this->tenant->id)->where('status', 'offered')->update(['status' => 'payment_pending', 'seat_kind' => null]);
+    $this->payments->confirmVenmo($this->tenant->id, $this->invoice, 6000, 'verified-transfer-id', 'Verified receipt', $this->actor->id);
+    if ($failure === 'capacity') {
+        $teams = config('soccer.teams');
+        $teams['blue-dragons']['public'] = 0;
+        $teams['blue-dragons']['reserved'] = 0;
+        $this->store->query('seasons', $this->tenant->id)->where('id', $this->season)->update(['teams' => json_encode($teams)]);
+    } else {
+        $this->store->insert('payments', $this->tenant->id, ['invoice_id' => $this->invoice, 'provider' => 'stripe', 'provider_key' => 'competing', 'amount_cents' => 6000, 'evidence' => $this->store->encrypt([])]);
+    }
+    expect($this->payments->restoreVenmoPlaces($this->tenant->id, $this->invoice, 6000, 'verified-transfer-id', 'Review', $this->actor->id))->toBe('review')
+        ->and($this->store->row('invoices', $this->tenant->id, $this->invoice)->status)->toBe('expired')
+        ->and($this->store->query('registrations', $this->tenant->id)->where('status', 'payment_pending')->count())->toBe(2);
+})->with(['capacity', 'competing receipt']);
+
 it('previews the operator command without provider calls or record changes', function () {
     $this->artisan('soccer:reconcile-offline', ['invoice' => $this->invoice, '--actor' => $this->actor->id, '--action' => 'waive', '--amount-cents' => 6000, '--reason' => 'Owner-approved waiver', '--expected-family' => $this->family])->expectsOutput('Preview only. No provider calls, records, or messages were changed.')->assertSuccessful();
     expect($this->store->row('invoices', $this->tenant->id, $this->invoice)->status)->toBe('unpaid')->and($this->store->query('events', $this->tenant->id)->count())->toBe(0);

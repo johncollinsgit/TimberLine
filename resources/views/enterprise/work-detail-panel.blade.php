@@ -50,3 +50,9 @@
     <div id="work-drawer-feedback"></div>
     <div id="detail" aria-label="Selected work details"></div>
 </dialog>
+
+@include('enterprise.attachment-gallery')
+
+@if(array_key_exists('reviewerAttachments', $enterprisePresentation))
+<template id="shared-work-files-template">@include('enterprise.partials.reviewer-workspace-files')</template>
+@endif

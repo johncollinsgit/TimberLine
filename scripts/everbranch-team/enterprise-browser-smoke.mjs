@@ -1,3 +1,4 @@
+import { operationsCheckSelector } from './enterprise-operations-groups.mjs';
 import {checkJobManagement} from './enterprise-jobs-browser.mjs';
 import {createProjectThroughWizard} from './enterprise-job-wizard-browser.mjs';
 import assert from 'node:assert/strict';
@@ -26,6 +27,8 @@ import {closeWorkDetail} from './enterprise-work-detail-browser.mjs';
 const operationsMode = process.env.ENTERPRISE_TEST_OPERATIONS === '1';
 const operationsScenario = process.env.ENTERPRISE_OPERATIONS_SCENARIO || 'all';
 assert.ok(['all', 'jobs', 'mapped', 'roll-call', 'resources', 'work-views', 'task-evidence', 'tour', 'procedures', 'finance', 'roles', 'navigation', 'voice', 'voice-generation'].includes(operationsScenario), 'Unsupported Operations browser scenario');
+const operationsGroup = process.env.ENTERPRISE_OPERATIONS_GROUP || '';
+const checkOperations = operationsCheckSelector({enabled: operationsMode, scenario: operationsScenario, group: operationsGroup});
 const voiceGenerationMode = operationsMode && operationsScenario === 'voice-generation';
 const proceduresMode = operationsMode && ['all', 'procedures', 'roles'].includes(operationsScenario);
 const independentProcedures = proceduresMode && process.env.ENTERPRISE_PROCEDURES_INDEPENDENT === '1';
@@ -177,17 +180,17 @@ try {
   }).click();
   if (operationsMode) {
     if(operationsScenario==='jobs')await checkJobManagement(page,evidence);
-    if (['all', 'mapped'].includes(operationsScenario)) await checkMappedOperationsWorkflow(page,evidence);
-    if (['all', 'roll-call'].includes(operationsScenario)) await checkRollCallWorkspace(page,evidence);
-    if (['all', 'work-views'].includes(operationsScenario)) await checkWorkViews(page,evidence);
-    if (['all', 'resources'].includes(operationsScenario)) await checkResourceWorkspace(page,evidence);
-    if (['all', 'task-evidence'].includes(operationsScenario)) await checkTaskEvidenceWorkflow(page,evidence);
-    if (['all', 'tour'].includes(operationsScenario)) await checkPrivateWorkspaceTour(page,evidence);
-    if (['all', 'procedures'].includes(operationsScenario)) await checkProceduresWorkspace(page,evidence);
-    if (['all', 'finance'].includes(operationsScenario)) await checkFinanceWorkspace(page,evidence);
-    if (['all', 'navigation'].includes(operationsScenario)) await checkShellNavigation(page);
-    if (['all', 'roles'].includes(operationsScenario)) await checkRolePreview(page,evidence);
-    if (['all', 'voice'].includes(operationsScenario)) await checkVoiceShell(page,evidence);
+    if (checkOperations('mapped')) await checkMappedOperationsWorkflow(page,evidence);
+    if (checkOperations('roll-call')) await checkRollCallWorkspace(page,evidence);
+    if (checkOperations('work-views')) await checkWorkViews(page,evidence);
+    if (checkOperations('resources')) await checkResourceWorkspace(page,evidence);
+    if (checkOperations('task-evidence')) await checkTaskEvidenceWorkflow(page,evidence);
+    if (checkOperations('tour')) await checkPrivateWorkspaceTour(page,evidence);
+    if (checkOperations('procedures')) await checkProceduresWorkspace(page,evidence);
+    if (checkOperations('finance')) await checkFinanceWorkspace(page,evidence);
+    if (checkOperations('navigation')) await checkShellNavigation(page);
+    if (checkOperations('roles')) await checkRolePreview(page,evidence);
+    if (checkOperations('voice')) await checkVoiceShell(page,evidence);
     if (voiceGenerationMode) await checkVoiceGeneration(page,evidence);
   } else {
   await page.getByRole('button', {
@@ -407,7 +410,7 @@ try {
   }
   assert.deepEqual(errors, []);
   assert.deepEqual(external, []);
-  console.log(operationsMode ? `PASS (${browserEngine}): Operations browser scenario ${operationsScenario}; zero external requests and JavaScript errors. Viewport simulation only, not physical iPad acceptance.` : `PASS (${browserEngine}): independent runtime intake lifecycle and map; contractor/date planning; larger project details, retained drafts, exact interrupted note retry, resumable private quarantined upload; desktop/phone/iPad portrait/landscape viewport layout and touch targets; user-aware record-backed Ask citations and disconnected mailbox; zero external requests and JavaScript errors. Viewport simulation only, not physical iPad acceptance.`);
+  console.log(operationsMode ? `PASS (${browserEngine}): Operations browser scenario ${operationsScenario}${operationsGroup ? '/' + operationsGroup : ''}; zero external requests and JavaScript errors. Viewport simulation only, not physical iPad acceptance.` : `PASS (${browserEngine}): independent runtime intake lifecycle and map; contractor/date planning; larger project details, retained drafts, exact interrupted note retry, resumable private quarantined upload; desktop/phone/iPad portrait/landscape viewport layout and touch targets; user-aware record-backed Ask citations and disconnected mailbox; zero external requests and JavaScript errors. Viewport simulation only, not physical iPad acceptance.`);
 } catch(error) {
   if(page) {await page.screenshot({path:resolve(evidence,'failure.png'),fullPage:true}).catch(()=>{});await writeFile(resolve(evidence,'failure.txt'),`${error.stack}\n${await page.locator('body').innerText().catch(()=>'Unavailable')}`).catch(()=>{});}
   throw error;

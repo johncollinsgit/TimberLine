@@ -44,7 +44,9 @@ final class ReviewerAiReceipts
             'The private sharing content expired. No new provider request was made.');
 
         return ['id' => $row->id, 'request_id' => $data['request_id'], 'digest' => $data['digest'], 'snapshot_digest' => $data['snapshot_digest'],
-            'question' => $data['question'], 'snapshot' => $data['snapshot'], 'maximum_microusd' => $data['maximum_microusd'], 'expires_at' => $data['preview_expires_at']];
+            'question' => $data['question'], 'snapshot' => $data['snapshot'],
+            ...($data['history'] ?? [] ? ['history' => $data['history']] : []),
+            ...(isset($data['workspace_context']) ? ['workspace' => $data['workspace_context']] : []), 'maximum_microusd' => $data['maximum_microusd'], 'expires_at' => $data['preview_expires_at'], 'content_expires_at' => $data['content_expires_at']];
     }
 
     private function row(array $scope, array $receipt): TeamOperationRecord
@@ -75,7 +77,33 @@ final class ReviewerAiReceipts
         return $row;
     }
 
-    public function prepare(array $scope, string $question, array $snapshot, string $requestId): array
+    /** Resolve only accepted, still-private receipts under this exact browser/edition/settings and evidence digest.
+     * No browser-provided answer text, native-user bridge, new storage lifetime or provider-side memory.
+     */
+    private function history(array $scope, array $receipts, string $snapshotDigest): array
+    {
+        abort_unless(array_is_list($receipts) && count($receipts) <= 2, 422);
+        $turns = [];
+        $ids = [];
+        $expiry = now()->timestamp + self::CONTENT_SECONDS;
+        foreach ($receipts as $receipt) {
+            abort_unless(is_array($receipt), 422);
+            $row = $this->row($scope, $receipt);
+            abort_unless($row->status === 'accepted' && ! in_array($row->id, $ids, true)
+                && hash_equals($row->data['snapshot_digest'], $snapshotDigest)
+                && ($row->data['workspace_context'] ?? null) === ($scope['workspace_context'] ?? null), 409,
+                'Follow-ups require accepted answers for these exact current fictional fields.');
+            $preview = $this->preview($row);
+            $result = $row->data['result'];
+            $turns[] = ['question' => $preview['question'], 'answer' => $result['answer'], 'refs' => $result['refs']];
+            $ids[] = $row->id;
+            $expiry = min($expiry, $row->data['content_expires_at']);
+        }
+
+        return ['turns' => $turns, 'expires_at' => $expiry];
+    }
+
+    public function prepare(array $scope, string $question, array $snapshot, string $requestId, array $historyReceipts = []): array
     {
         abort_unless(Str::isUuid($requestId), 422);
         $settings = $this->connection->settings($scope);
@@ -83,10 +111,16 @@ final class ReviewerAiReceipts
         $payload = $this->provider->payload(trim($question), $snapshot);
         $this->provider->requestBody($payload, $settings['max_output_tokens']); // Actual escaped wire bound BEFORE receipt or reservation.
         $snapshotDigest = hash('sha256', json_encode($payload['snapshot'], JSON_THROW_ON_ERROR));
-        $digest = hash('sha256', json_encode([$scope['version']->id, $binding, $scope['browser_hash'], $settings['settings_sha256'], $requestId, $payload], JSON_THROW_ON_ERROR));
+        $history = $this->history($scope, $historyReceipts, $snapshotDigest);
+        $payload = $this->provider->payload(trim($question), $snapshot, $history['turns']);
+        $this->provider->requestBody($payload, $settings['max_output_tokens']);
+        $digest = hash('sha256', json_encode([$scope['version']->id, $binding, $scope['browser_hash'], $settings['settings_sha256'], $requestId, $payload, ...(isset($scope['workspace_context']) ? [$scope['workspace_context']] : [])], JSON_THROW_ON_ERROR));
         $source = 'proposal-review-ai:'.$scope['version']->id.':'.$scope['browser_hash'].':'.$requestId;
 
-        return $this->locked($scope, function () use ($scope, $settings, $binding, $payload, $requestId, $snapshotDigest, $digest, $source): array {
+        return $this->locked($scope, function () use ($scope, $settings, $binding, $payload, $requestId, $snapshotDigest, $digest, $source, $history, $historyReceipts): array {
+            $freshHistory = $this->history($scope, $historyReceipts, $snapshotDigest);
+            abort_unless($freshHistory['turns'] === $history['turns']
+                && ($historyReceipts === [] || $freshHistory['expires_at'] === $history['expires_at']), 409);
             $existing = TeamOperationRecord::query()->where(['tenant_id' => $this->store->tenant()->id, 'area_id' => $this->store->areaId(),
                 'kind' => self::KIND, 'source_key' => hash('sha256', $source)])->first();
             if ($existing) {
@@ -100,9 +134,11 @@ final class ReviewerAiReceipts
             $row = $this->store->create(self::KIND, $source, ['schema_version' => 1, 'browser_hash' => $scope['browser_hash'],
                 'version_id' => $scope['version']->id, 'binding' => $binding, 'settings_sha256' => $settings['settings_sha256'], 'request_id' => $requestId,
                 'digest' => $digest, 'snapshot_digest' => $snapshotDigest, 'created_at' => now()->timestamp,
-                'preview_expires_at' => now()->timestamp + self::PREVIEW_SECONDS, 'content_expires_at' => now()->timestamp + self::CONTENT_SECONDS,
+                'preview_expires_at' => min(now()->timestamp + self::PREVIEW_SECONDS, $history['expires_at']), 'content_expires_at' => $history['expires_at'],
+                'history' => $history['turns'], 'history_receipts' => $historyReceipts,
+                ...(isset($scope['workspace_context']) ? ['workspace_context' => $scope['workspace_context']] : []),
                 'question' => $payload['question'], 'snapshot' => $payload['snapshot'], 'maximum_microusd' => $settings['maximum_microusd'], 'charge_id' => null], 'prepared');
-            $row->voice_expires_at = now()->addSeconds(self::CONTENT_SECONDS);
+            $row->voice_expires_at = now()->setTimestamp($history['expires_at']);
             $row->save();
             $this->store->audit($row, 'proposal_review_ai.preview_prepared', ['request_id' => $requestId, 'digest' => $digest]);
 
@@ -120,11 +156,36 @@ final class ReviewerAiReceipts
             abort_if(TeamOperationRecord::query()->where(['tenant_id' => $row->tenant_id, 'kind' => self::KIND])
                 ->whereIn('status', ['claimed', 'reserved', 'dispatching', 'uncertain'])->exists(), 409,
                 'An earlier campaign request is pending or uncertain. Reconcile it before another provider request.');
+            $this->history($scope, $row->data['history_receipts'] ?? [], $row->data['snapshot_digest']);
             $this->store->save($row, $row->data + ['claim_at' => now()->timestamp], 'claimed');
             $this->store->audit($row, 'proposal_review_ai.request_claimed', ['request_id' => $row->data['request_id'], 'digest' => $row->data['digest']]);
 
             return ['preview' => $this->preview($row), 'settings_sha256' => $row->data['settings_sha256']];
         });
+    }
+
+    /** Last content/consent read after all admission work and immediately before HTTP. No transaction or paid side effect. */
+    public function dispatchPayload(array $scope, array $receipt): array
+    {
+        $row = $this->row($scope, $receipt);
+        abort_unless($row->status === 'dispatching' && is_string($row->data['charge_id'])
+            && $this->charge($row, $row->data['charge_id'])->status === 'dispatching', 409);
+        $preview = $this->preview($row);
+        $history = $this->history($scope, $row->data['history_receipts'] ?? [], $row->data['snapshot_digest']);
+        abort_unless($history['turns'] === ($row->data['history'] ?? []), 409);
+
+        abort_unless(($row->data['workspace_context'] ?? null) === ($scope['workspace_context'] ?? null), 409);
+        $payload = $this->provider->payload($preview['question'], $preview['snapshot'], $history['turns']);
+        if (isset($scope['workspace_context'])) {
+            abort_unless(is_callable($scope['workspace_recheck'] ?? null), 503);
+            ($scope['workspace_recheck'])(); // Last server revision/permission read before HTTP, outside every lock.
+        }
+        // Authority reads can consume the remainder of consent's lifetime. This
+        // final pure check follows every DB callback and cannot renew old turns.
+        abort_unless(now()->timestamp < min($preview['content_expires_at'], $history['expires_at']), 410,
+            'The private sharing content expired. No new provider request was made.');
+
+        return $payload;
     }
 
     private function charge(TeamOperationRecord $row, string $id): TeamOperationRecord
@@ -183,6 +244,12 @@ final class ReviewerAiReceipts
         });
     }
 
+    /** Exact owned receipt metadata only. Never returns question, snapshot, answer or a token. */
+    public function workspaceContext(array $scope, array $receipt): ?array
+    {
+        return $this->row($scope, $receipt)->data['workspace_context'] ?? null;
+    }
+
     /** Pure recovery read: no lock upsert, expiry cleanup, budget.status(), reservation, settlement or provider call. */
     public function show(array $scope, array $receipt): array
     {
@@ -190,7 +257,7 @@ final class ReviewerAiReceipts
         $row = $this->row($scope, $receipt);
         $value = ['preview_id' => $row->id, 'request_id' => $row->data['request_id'], 'digest' => $row->data['digest'],
             'snapshot_digest' => $row->data['snapshot_digest'], 'status' => $row->status];
-        if (now()->timestamp >= $row->data['content_expires_at'] || isset($row->data['content_scrubbed_at'])) {
+        if (($scope['workspace_stale'] ?? false) === true || now()->timestamp >= $row->data['content_expires_at'] || isset($row->data['content_scrubbed_at'])) {
             return $value + ['content_expired' => true];
         }
 
@@ -209,7 +276,7 @@ final class ReviewerAiReceipts
             abort_unless($row->status === 'prepared' && $row->data['charge_id'] === null, 409,
                 'The original request was claimed and cannot be cancelled or refunded.');
             $data = $row->data;
-            unset($data['question'], $data['snapshot'], $data['result']);
+            unset($data['question'], $data['snapshot'], $data['result'], $data['history'], $data['history_receipts']);
             $row->voice_expires_at = null;
             $this->store->save($row, $data + ['content_scrubbed_at' => now()->timestamp, 'cancelled_at' => now()->timestamp], 'cancelled');
             $this->store->audit($row, 'proposal_review_ai.preview_cancelled', ['request_id' => $data['request_id'], 'digest' => $data['digest']]);
@@ -230,7 +297,7 @@ final class ReviewerAiReceipts
                 ->whereNotNull('voice_expires_at')->where('voice_expires_at', '<=', now())->orderBy('voice_expires_at')->limit($limit)->get();
             foreach ($rows as $row) {
                 $data = $row->data;
-                unset($data['question'], $data['snapshot'], $data['result']);
+                unset($data['question'], $data['snapshot'], $data['result'], $data['history'], $data['history_receipts']);
                 $this->store->save($row, $data + ['content_scrubbed_at' => now()->timestamp]);
                 $row->voice_expires_at = null;
                 $row->save();

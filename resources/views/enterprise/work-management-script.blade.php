@@ -27,6 +27,10 @@
       if(jobWizard!==wizard||generation!==jobTargetGeneration||$('job-department').value!==id)return;
       if(result.selected_area_id!==id||!result.can_coordinate)throw new Error('You cannot coordinate this department.');
       jobTarget=result;
+      if(transport.mode==='shared'){
+        $('job-owner').innerHTML='<option value="">No project owner</option>'+result.members.map(row=>`<option value="${esc(row.id)}">${esc(row.name)}</option>`).join('');
+        $('job-owner').value=wizard.record?.owner_id||wizard.project?.owner_id||'';
+      }
       $('job-project').innerHTML='<option value="">Choose an active project</option>'+result.projects.filter(row=>!row.archived).map(row=>`<option value="${esc(row.id)}">${esc(row.name)}</option>`).join('');
       $('job-person').innerHTML='<option value="">Choose a person</option>'+result.members.map(row=>`<option value="${esc(row.id)}">${esc(row.name)}</option>`).join('');
       $('job-building').innerHTML='<option value="">No saved building link</option>'+(result.buildings?.items||[]).map(row=>`<option value="${esc(row.id)}">${esc(row.title)}</option>`).join('');
@@ -41,13 +45,19 @@
     if(jobWizard&&jobWizard.action===action&&jobWizard.area===area&&jobWizard.record?.id===record?.id&&jobWizard.project?.id===project?.id){jobDialog.showModal();jobLocked(!!pending);return;}
     if(pending||busy)return message('Resolve the retained action before starting another.',true);
     if(!data.can_coordinate||!area)return message('A current coordinating department is required.',true);
-    jobWizard={action,record,project,area,id:['job.create','project.create','task.create'].includes(action)?crypto.randomUUID():record.id,request_id:crypto.randomUUID(),step:0};jobTarget=null;jobForm.reset();jobLocked(false);
+    jobWizard={action,record,project,area,id:['job.create','project.create','task.create'].includes(action)?crypto.randomUUID():record.id,request_id:crypto.randomUUID(),sharedPin:captureSharedPin(),childIds:{task_id:crypto.randomUUID(),ticket_id:crypto.randomUUID()},step:0};jobTarget=null;jobForm.reset();jobLocked(false);
     $('job-wizard-title').textContent=action==='project.archive'&&record?.archived?'Restore project':jobKinds[action];
     $('job-title').value=record?.title||record?.name||'';$('job-description').value=record?.description||record?.data?.description||'';$('job-due').value=record?.due_on||'';$('job-priority').value=record?.priority||record?.requested_priority||'normal';$('job-type').value=record?.request_type||'general';$('job-location').value=record?.data?.location||'';
     jobField('job-ticket-summary',action==='request.plan');$('job-ticket-title').textContent=action==='request.plan'?(record?.title||'Ticket'):'';$('job-ticket-description').textContent=action==='request.plan'?(record?.data?.description||'No description provided.') : '';
+    if(transport.mode==='shared')jobField('job-owner-field',['job.create','project.create','project.update'].includes(action));
     const edit=['job.create','project.create','project.update','task.create','task.update'].includes(action),task=['job.create','task.create','task.update','request.plan'].includes(action),location=['job.create','request.plan'].includes(action);
     jobField('job-title-field',edit);for(const id of ['job-description-field','job-due-field'])jobField(id,edit&&action!=='project.create');
     jobField('job-classification',['job.create','task.create','task.update'].includes(action));jobField('job-project-field',['task.create','request.plan'].includes(action));jobField('job-person-field',task);jobField('job-building-field',location);jobField('job-location-field',location);
+    if(transport.mode==='shared'){
+      $('job-type').closest('label').hidden=action!=='job.create';
+      $('job-type').disabled=action!=='job.create';
+    }
+    if(transport.mode==='shared')jobField('job-location-field',false);
     const choices=data.routing_departments||data.areas.filter(row=>row.id===area);
     $('job-department').innerHTML=choices.map(row=>`<option value="${esc(row.id)}">${esc(row.name)}</option>`).join('');$('job-department').value=area;
     $('job-department').disabled=!['job.create','request.plan'].includes(action);
@@ -77,13 +87,13 @@
     if(['job.create','project.update','task.create','task.update'].includes(action))Object.assign(body,{title:$('job-title').value.trim(),description:$('job-description').value,due_on:$('job-due').value||null});
     if(['job.create','task.create','task.update'].includes(action))body.priority=$('job-priority').value;
     if(action==='job.create')body.request_type=$('job-type').value;
-    if(['job.create','task.create','task.update','request.plan'].includes(action))body.assignee_id=$('job-person').value?Number($('job-person').value):null;
+    if(['job.create','task.create','task.update','request.plan'].includes(action))body.assignee_id=$('job-person').value?(transport.mode==='shared'?$('job-person').value:Number($('job-person').value)):null;
     if(['task.create','request.plan'].includes(action))body.project_id=$('job-project').value;
     if(action==='request.plan'){body.target_area_id=jobTarget.selected_area_id;body.acknowledge_routing=$('job-confirm').checked;}
     if(action==='task.delete')body.acknowledge_removal=$('job-confirm').checked;
     if(action==='project.archive')body.archived=!state.record.archived;
     if(['job.create','request.plan'].includes(action)){
-      const building=jobTarget.buildings?.items?.find(row=>row.id===$('job-building').value);body.location=$('job-location').value;
+      const building=jobTarget.buildings?.items?.find(row=>row.id===$('job-building').value);body.location=transport.mode==='shared'?(building?.title||''):$('job-location').value;
       if(building){body.location_id=building.id;body.location_version=building.version;}
     }
     if(['task.update','task.delete'].includes(action)&&state.record.linked_request){body.related_request_id=state.record.linked_request.id;body.request_version=state.record.linked_request.version;}
@@ -91,7 +101,7 @@
   }
   jobForm.onsubmit=async event=>{event.preventDefault();if(!jobWizard||busy||pending||!jobTarget)return;
     if(!$('job-confirm-field').hidden&&!$('job-confirm').checked)return jobStatus('Confirm the reviewed change before saving.',true);
-    jobLocked(true);await command(jobBody());if(jobDialog.open){jobLocked(!!pending);jobStatus($('status').textContent,true);}
+    jobLocked(true);await command(jobBody(),{pin:jobWizard.sharedPin,record:jobWizard.record,project:jobWizard.project,target:jobTarget,owner_id:transport.mode==='shared'?$('job-owner').value:null,child_ids:jobWizard.childIds});if(jobDialog.open){jobLocked(!!pending);jobStatus($('status').textContent,true);}
   };
   $('job-retry').onclick=async()=>{if(pending&&!busy){await command(pending);if(jobDialog.open){jobLocked(!!pending);jobStatus($('status').textContent,true);}}};
   function renderProjectWorkControls(project){

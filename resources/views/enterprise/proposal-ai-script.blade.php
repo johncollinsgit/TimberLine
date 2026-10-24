@@ -11,7 +11,14 @@
     for (const action of actions) {
       if (endpoints[action] !== askPage.origin + askPage.pathname + '/ai/' + action) throw Error('Invalid private AI endpoint.');
     }
-    const adapter = EverbranchSampleTransport.create(presentation);
+    const base = EverbranchTransport.reviewerAdapter(presentation);
+    const adapter = base.mode === 'shared' ? Object.freeze({...base, async aiFacts(current) {
+      const active = base.snapshot();
+      const selected = {persona:active.persona,person_id:active.person_id,area_ids:[current.area_id]};
+      const view = await base.readSelection(selected);
+      const selection = {...selected, area_ids:current.all_departments ? view.allowed_areas.map(row => row.id).sort() : selected.area_ids};
+      return {...await base.readFacts(selection),selection};
+    }}) : base;
     const key = 'everbranch-proposal-ai-receipt:' + binding.version_hash;
     let ownedReceipt = null, savedReceipt = null;
     try { ownedReceipt = sessionStorage.getItem(key); savedReceipt = ownedReceipt ? JSON.parse(ownedReceipt) : null; } catch {}

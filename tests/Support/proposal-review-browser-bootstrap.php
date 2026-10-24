@@ -37,6 +37,7 @@ $app = Application::configure(basePath: $root)
     ->withExceptions(static function ($exceptions): void {})
     ->create();
 $app->useEnvironmentPath($state);
+$app->useStoragePath($state);
 $packages = new \Illuminate\Foundation\PackageManifest(new \Illuminate\Filesystem\Filesystem, $root, $app->getCachedPackagesPath());
 $packages->manifest = [];
 $app->instance(\Illuminate\Foundation\PackageManifest::class, $packages);

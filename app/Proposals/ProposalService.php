@@ -266,7 +266,7 @@ class ProposalService
 
         return DB::transaction(function () use ($version, $name, $page, $body, $requestKey, $binding): Comment {
             $locked = Version::where('tenant_id', $version->tenant_id)->lockForUpdate()->findOrFail($version->id);
-            $manifest = app(CampusReviewManifest::class)->assertCurrent($locked, $page);
+            $manifest = app(CampusReviewManifest::class)->resolveReviewEdition($locked, $page)['manifest'];
             abort_unless(in_array($name, $locked->payload['reviewer_names'] ?? [], true), 403);
             abort_unless(($binding['version_hash'] ?? null) === $locked->content_hash
                 && ($binding['build_id'] ?? null) === $manifest['build_id']

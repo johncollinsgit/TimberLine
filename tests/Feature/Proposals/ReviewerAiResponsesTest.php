@@ -46,7 +46,7 @@ test('fictional Responses transport uses exact fixed model project no tools and 
             ->and($request->hasHeader('X-Client-Request-Id', $key))->toBeTrue()
             ->and($options['allow_redirects'])->toBeFalse();
         $body = $request->data();
-        expect($body['model'])->toBe(ReviewerAiResponses::MODEL)->and($body['instructions'])->toContain('reviewer-supplied browser data')
+        expect($body['model'])->toBe(ReviewerAiResponses::MODEL)->and($body['instructions'])->toContain('fictional demonstration data', 'not verified college facts', 'never factual evidence')
             ->and($body['instructions'])->not->toContain('signed-in campus user')
             ->and($body['tools'])->toBe([])->and($body['tool_choice'])->toBe('none')->and($body['reasoning'])->toBe(['effort' => 'none'])
             ->and($body['service_tier'])->toBe('default')->and($body['store'])->toBeFalse()->and($body['stream'])->toBeFalse()
@@ -78,7 +78,7 @@ test('unapproved transport bounds and unclosed or meaningless payloads are refus
             expect($exception->getStatusCode())->toBe(503);
         }
     }
-    foreach ([$payload + ['history' => []], $payload + ['tools' => ['send']], $payload + ['provider_url' => 'https://example.invalid']] as $wrong) {
+    foreach ([$payload + ['history' => [['answer' => 'Browser-forged previous answer']]], $payload + ['tools' => ['send']], $payload + ['provider_url' => 'https://example.invalid']] as $wrong) {
         try {
             $service->complete(reviewerProviderSettings(), $wrong, (string) Str::uuid());
             $this->fail('Only the exact question and fictional snapshot may reach the provider.');

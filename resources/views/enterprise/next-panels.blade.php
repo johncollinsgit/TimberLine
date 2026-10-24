@@ -21,7 +21,7 @@
     <div class="planning-grid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr))">
       @unless(($enterprisePresentation['reviewerAi']['enabled'] ?? false) === true)<article class="panel"><h3>Chats</h3><p class="badge">Coming soon</p><p>Ask about your workspace in a conversation.</p></article>@endunless
       <article class="panel"><h3>Assistants</h3><p class="badge">Coming soon</p><p>Keep a focused assistant for recurring work.</p></article>
-      <article class="panel"><h3>Voice</h3><p class="badge">Coming soon</p><p>Talk with Everbranch about your work.</p></article>
+      @unless(($enterprisePresentation['reviewerAi']['enabled'] ?? false) === true)<article class="panel"><h3>Voice</h3><p class="badge">Coming soon</p><p>Talk with Everbranch about your work.</p></article>@endunless
     </div>
   </div>
   @endif

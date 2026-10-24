@@ -3,6 +3,7 @@
     $requestedSection = $forcedSection ?? request()->query('section');
     $activeSection = is_string($requestedSection) && array_key_exists($requestedSection, $sections) ? $requestedSection : $defaultSection;
     if (! array_key_exists($activeSection, $sections)) $activeSection = array_key_first($sections);
+    request()->attributes->set('service_proposal_activity_section', $activeSection);
 @endphp
 <fieldset class="proposal-section-tabs">
     <legend>Proposal sections</legend>

@@ -96,6 +96,93 @@ final class ReviewerAiOrchestrationTest extends ReviewerAiConnectionFixture
         $this->assertSame(0, DB::table('team_area_members')->count());
     }
 
+    public function test_followup_resolves_only_accepted_same_browser_evidence_and_never_extends_history_lifetime(): void
+    {
+        $scope = $this->configuredConnection();
+        $service = app(ReviewerAiOrchestrator::class);
+        $first = $this->prepare($scope);
+        Http::fake(fn () => Http::response($this->envelope()));
+        $answer = $service->confirm($scope, $first, fn () => $scope);
+        $original = TeamOperationRecord::query()->findOrFail($first['preview_id']);
+        $expiry = $original->data['content_expires_at'];
+        $this->travel(60)->seconds();
+        $preview = $service->preview($scope, 'Who owns that?', $this->snapshot(), (string) Str::uuid(), fn () => $scope, [$first])['preview'];
+        $this->assertSame([['question' => 'PRIVATE QUESTION SENTINEL', 'answer' => $answer['answer'], 'refs' => $answer['refs']]], $preview['history']);
+        $this->assertSame($expiry, $preview['content_expires_at']);
+        $second = ['preview_id' => $preview['id'], 'request_id' => $preview['request_id'], 'digest' => $preview['digest'],
+            'snapshot_digest' => $preview['snapshot_digest'], 'binding' => $first['binding']];
+        $this->assertSame(1, TeamOperationRecord::query()->where('kind', 'ent_trial_charge')->count());
+        $result = $service->confirm($scope, $second, fn () => $scope);
+        $this->assertSame('accepted', $result['status']);
+        Http::assertSentCount(2);
+        Http::assertSent(function ($request) use ($preview): bool {
+            $body = $request->data();
+            $payload = json_decode($body['input'][0]['content'], true);
+
+            return $payload['question'] === 'Who owns that?' && $payload['history'] === $preview['history']
+                && $body['store'] === false && ! isset($body['previous_response_id'], $body['conversation']);
+        });
+        $this->assertSame($result, $service->confirm($scope, $second, fn () => $scope));
+        Http::assertSentCount(2);
+        $changed = $this->snapshot();
+        $changed['local_revision']++;
+        $this->denied(fn () => $service->preview($scope, 'Changed records?', $changed, (string) Str::uuid(), fn () => $scope, [$first]), 409);
+        $other = $scope;
+        $other['browser_hash'] = str_repeat('e', 64);
+        $this->denied(fn () => $service->preview($other, 'Other browser?', $this->snapshot(), (string) Str::uuid(), fn () => $other, [$first]), 404);
+        $this->denied(fn () => $service->preview($scope, 'Duplicate?', $this->snapshot(), (string) Str::uuid(), fn () => $scope, [$first, $first]), 409);
+        $this->denied(fn () => $service->preview($scope, 'Too many?', $this->snapshot(), (string) Str::uuid(), fn () => $scope, [$first, $second, $first]), 422);
+        $unsubmitted = $service->preview($scope, 'Not sent', $this->snapshot(), (string) Str::uuid(), fn () => $scope)['preview'];
+        $prepared = ['preview_id' => $unsubmitted['id'], 'request_id' => $unsubmitted['request_id'], 'digest' => $unsubmitted['digest'],
+            'snapshot_digest' => $unsubmitted['snapshot_digest'], 'binding' => $first['binding']];
+        $this->denied(fn () => $service->preview($scope, 'Unaccepted?', $this->snapshot(), (string) Str::uuid(), fn () => $scope, [$prepared]), 409);
+        $this->travel(541)->seconds();
+        $this->assertTrue($service->status($scope, $second, fn () => $scope)['content_expired']);
+        $this->denied(fn () => $service->preview($scope, 'Expired?', $this->snapshot(), (string) Str::uuid(), fn () => $scope, [$first]), 410);
+        app(ReviewerAiReceipts::class)->prune();
+        $scrubbed = TeamOperationRecord::query()->findOrFail($preview['id'])->data;
+        foreach (['history', 'history_receipts', 'question', 'snapshot', 'result'] as $key) {
+            $this->assertArrayNotHasKey($key, $scrubbed);
+        }
+        $this->assertSame(2, TeamOperationRecord::query()->where('kind', 'ent_trial_charge')->count());
+        $this->assertSame(0, DB::table('users')->count());
+        Http::assertSentCount(2);
+    }
+
+    public function test_history_expiring_during_admission_cannot_reach_provider_even_after_dispatch_claim(): void
+    {
+        $scope = $this->configuredConnection();
+        $service = app(ReviewerAiOrchestrator::class);
+        $first = $this->prepare($scope);
+        $calls = 0;
+        Http::fake(function () use (&$calls) {
+            $calls++;
+
+            return Http::response($this->envelope());
+        });
+        $service->confirm($scope, $first, fn () => $scope);
+        $expiry = TeamOperationRecord::query()->findOrFail($first['preview_id'])->data['content_expires_at'];
+        $this->travelTo(now()->setTimestamp($expiry - 1));
+        $preview = $service->preview($scope, 'Who owns that?', $this->snapshot(), (string) Str::uuid(), fn () => $scope, [$first])['preview'];
+        $receipt = ['preview_id' => $preview['id'], 'request_id' => $preview['request_id'], 'digest' => $preview['digest'],
+            'snapshot_digest' => $preview['snapshot_digest'], 'binding' => $first['binding']];
+        $checks = 0;
+        $authority = function () use ($scope, $expiry, &$checks) {
+            if (++$checks === 7) {
+                $this->travelTo(now()->setTimestamp($expiry + 1));
+            }
+
+            return $scope;
+        };
+        $this->denied(fn () => $service->confirm($scope, $receipt, $authority), 503);
+        $this->assertSame(7, $checks);
+        $this->assertSame(1, $calls, 'Expired history must never be shared after the last authority boundary.');
+        $this->assertTrue($this->ledger->fresh()->data['paused']);
+        $this->assertSame('uncertain', TeamOperationRecord::query()->findOrFail($preview['id'])->status);
+        $this->assertArrayNotHasKey('result', TeamOperationRecord::query()->findOrFail($preview['id'])->data);
+        $this->assertSame(0, DB::transactionLevel());
+    }
+
     public function test_timeout_holds_full_maximum_pauses_campaign_and_no_retry_or_next_preview_can_dispatch(): void
     {
         $scope = $this->configuredConnection();

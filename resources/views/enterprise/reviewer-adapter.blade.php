@@ -5,18 +5,47 @@
 <script>{!! file_get_contents(resource_path('js/enterprise/reviewer/job-sample.js')) !!}</script>
 <script>{!! file_get_contents(resource_path('js/enterprise/reviewer/sample-adapter.js')) !!}</script>
 <script>{!! file_get_contents(resource_path('js/enterprise/reviewer/tour.js')) !!}</script>
+@if(array_key_exists('reviewerWorkspace', $enterprisePresentation))<script>{!! file_get_contents(resource_path('js/enterprise/reviewer/shared-work-command-map.js')) !!}</script><script>{!! file_get_contents(resource_path('js/enterprise/reviewer/shared-workspace-map.js')) !!}</script><script>{!! file_get_contents(resource_path('js/enterprise/reviewer/shared-workspace.js')) !!}</script><script>{!! file_get_contents(resource_path('js/enterprise/reviewer/shared-tour-navigation.js')) !!}</script>@endif
+@if(array_key_exists('reviewerCollaboration', $enterprisePresentation))<script>{!! file_get_contents(resource_path('js/enterprise/reviewer/collaboration-client.js')) !!}</script><script>{!! file_get_contents(resource_path('js/enterprise/reviewer/review-name.js')) !!}</script>@endif
+@if(array_key_exists('reviewerAttachments', $enterprisePresentation))<script>{!! file_get_contents(resource_path('js/enterprise/reviewer/workspace-upload-client.js')) !!}</script><script>{!! file_get_contents(resource_path('js/enterprise/reviewer/workspace-file-ui.js')) !!}</script>@endif
+@if(array_key_exists('reviewerImages', $enterprisePresentation))<script>{!! file_get_contents(resource_path('js/enterprise/reviewer/workspace-image-client.js')) !!}</script>@endif
+@if(array_key_exists('reviewerDownloads', $enterprisePresentation))<script>{!! file_get_contents(resource_path('js/enterprise/reviewer/workspace-download-client.js')) !!}</script>@endif
+<script>{!! file_get_contents(resource_path('js/enterprise/transport.js')) !!}</script>
 <script>
 (() => {
     'use strict';
-    const boot = @json($enterprisePresentation), adapter = EverbranchSampleTransport.create(boot);
+    const boot = @json($enterprisePresentation), adapter = EverbranchTransport.reviewerAdapter(boot), shared = adapter.mode === 'shared';
+    const defaultArea = shared ? boot.reviewerWorkspace.selection.area_ids[0] : EverbranchSampleTransport.ids.area;
     document.body.classList.add('enterprise-sample');
+    if (shared) {
+      document.querySelector('.reviewer-boundary').textContent = 'Shared fictional work is saved on the server. Your review name grants no campus account access.';
+      document.getElementById('reviewer-reset-open').hidden = true;
+    }
     function start() {
         const root = document.querySelector('[data-reviewer-tour-root]:not([data-priority-only="true"])');
         if (root && document.querySelector('.content')) document.querySelector('.content').prepend(root);
         const dispatch = detail => document.dispatchEvent(new CustomEvent('enterprise:navigate', {detail}));
+        const sharedTour = shared ? EverbranchSharedTourNavigation.create({adapter, dispatch,
+            currentArea:()=>document.querySelector('#areas [data-area].active')?.dataset.area || null,
+            context:()=>location.href,
+            notify:message=>{const status=document.getElementById('status');if(status)status.textContent=message;},
+        }) : null;
+        if (shared) {
+            const ticketButton = root?.querySelector('[data-tour-email-cta]');
+            if (ticketButton) {
+                ticketButton.textContent = 'Open a current permitted ticket';
+                if (ticketButton.nextElementSibling) ticketButton.nextElementSibling.textContent = 'This illustrative preview is separate from saved work. The button checks a currently permitted ticket; it sends no message.';
+            }
+        }
         const executive = ['executive','demo_manager'].includes(adapter.snapshot().persona);
         EverbranchReviewerTour.mount(root, {
             ...(executive ? {priorityItems:EverbranchReviewerTour.executivePriorities} : {}),
+            ...(boot.reviewerAi?.enabled ? {describeScene(index, base) { return index === 6 ? {
+                ...base, title:'Ask about fictional work', target:'proposal-ai-controls', targets:['proposal-ai-form','proposal-ai-controls'],
+                text:'Type a question or start voice. Review the exact shared fields before each Send once action.',
+                detail:'Answers use selected fictional records. Assistants remain Coming soon; browser voice availability varies.',
+                cards:[['Review first','Inspect the question, current fields and any included prior turns.'],['Send once','One confirmed request uses the existing shared trial allowance.'],['Type or talk','Stop and Interrupt control local audio. Typed input remains available.']],
+            } : base; }} : {}),
             priorityStorageKey:'everbranch-priorities-sample:'+boot.identity.workspace+':'+adapter.snapshot().persona,
             priorityStatus(item) {
                 const manager = ['manager','executive','demo_manager'].includes(adapter.snapshot().persona);
@@ -25,21 +54,31 @@
             },
             onPriority(item) {
                 if (['reports','certificates','invoices','funds'].includes(item.id) && !['manager','executive','demo_manager'].includes(adapter.snapshot().persona)) return {available:false,message:'Unavailable in this sample perspective'};
-                dispatch({section:item.section, area:EverbranchSampleTransport.ids.area, ...(['projects','requests'].includes(item.section)?{selected:null}:{})});
+                dispatch({section:item.section, area:defaultArea, ...(['projects','requests'].includes(item.section)?{selected:null}:{})});
                 return {available:true};
             },
             onNavigate(section) {
+                if (shared && section === 'workflows') return {available:false,message:'Shared workflow editing is not available in this edition.'};
                 if (section === 'workflows') return adapter.navigate(boot.routes.workflowWorkspace + '#area_id=' + EverbranchSampleTransport.ids.area + '&project_id=' + EverbranchSampleTransport.ids.project);
-                dispatch({section, area: EverbranchSampleTransport.ids.area, ...(['projects','requests'].includes(section)?{selected:null}:{})});
+                dispatch({section, area: defaultArea, ...(['projects','requests'].includes(section)?{selected:null}:{})});
             },
-            onSampleRequest() { dispatch({section:'requests', area:EverbranchSampleTransport.ids.area, selected:EverbranchSampleTransport.ids.request}); },
+            onSampleRequest() { if (shared) return sharedTour.open(); dispatch({section:'requests', area:defaultArea, selected:EverbranchSampleTransport.ids.request}); },
             ...(boot.routes.trial ? {onTryIt() { adapter.navigate(boot.routes.trial); }} : {}),
         });
         const chooser = document.getElementById('reviewer-perspective');
         const executiveOption=document.createElement('option');executiveOption.value='executive';executiveOption.textContent='Executive · read-only';chooser.prepend(executiveOption);
         if(boot.defaultPersona==='demo_manager'){const managerOption=document.createElement('option');managerOption.value='demo_manager';managerOption.textContent='Blaine · demo manager';chooser.prepend(managerOption);}
+        if (shared) for (const option of [...chooser.options]) {
+            if (!boot.reviewerPersonas.includes(option.value) || option.value === 'worker') option.remove();
+        }
         chooser.value = adapter.snapshot().persona;
         chooser.onchange = () => {
+            if (shared) {
+                const active = adapter.snapshot();
+                adapter.setSelection({persona:chooser.value,area_ids:active.area_ids,person_id:null});
+                dispatch({section:chooser.value==='requester'?'requests':'projects',area:active.area_ids[0],selected:null});
+                return;
+            }
             adapter.setPersona(chooser.value);
             // Preserve the selected workflow/run and retained draft across perspectives.
             if(document.getElementById('enterprise-workflow')){location.reload();return;}
@@ -48,14 +87,16 @@
         };
         if(executive&&!document.getElementById('enterprise-workflow')){
             const pricing=document.createElement('button');pricing.type='button';pricing.className='nav-item';pricing.textContent='Pricing & billing · proposed';pricing.id='executive-pricing-nav';
-            pricing.onclick=()=>{dispatch({section:'home',area:EverbranchSampleTransport.ids.area});setTimeout(()=>document.getElementById('executive-software')?.scrollIntoView({block:'start',behavior:'instant'}),150);};
+            pricing.onclick=()=>{dispatch({section:'home',area:defaultArea});setTimeout(()=>document.getElementById('executive-software')?.scrollIntoView({block:'start',behavior:'instant'}),150);};
             document.querySelector('[aria-label="Workspace sections"]')?.append(pricing);
         }
+        if (!shared) {
         const reset = document.getElementById('reviewer-reset-dialog'), open = document.getElementById('reviewer-reset-open');
         open.onclick = () => reset.showModal();
         document.getElementById('reviewer-reset-cancel').onclick = () => {reset.close();open.focus();};
         document.getElementById('reviewer-reset-confirm').onclick = () => {adapter.reset();reset.close();adapter.navigate(boot.routes.back);};
         reset.addEventListener('cancel', () => open.focus());
+        }
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, {once:true}); else start();
 })();

@@ -10,7 +10,7 @@ use Throwable;
 
 final class ReviewerAiController
 {
-    public function __construct(private ReviewerAiAccess $access, private ReviewerAiOrchestrator $orchestrator, private ReviewerAiHttpPolicy $http) {}
+    public function __construct(private ReviewerAiAccess $access, private ReviewerAiOrchestrator $orchestrator, private ReviewerAiHttpPolicy $http, private ReviewerAiWorkspace $workspace, private ReviewerAiReceipts $receipts) {}
 
     private function response(callable $operation): JsonResponse
     {
@@ -40,13 +40,18 @@ final class ReviewerAiController
     public function preview(Request $request, string $token): JsonResponse
     {
         return $this->response(function () use ($request, $token): array {
-            $body = $this->http->body($request, ['binding', 'request_id', 'question', 'snapshot']);
-            abort_unless(is_array($body['binding']) && is_string($body['request_id']) && is_string($body['question']) && is_array($body['snapshot']), 422);
+            $body = $this->http->body($request, ['binding', 'request_id', 'question'], ['history', 'snapshot', 'workspace']);
+            abort_unless(is_array($body['binding']) && is_string($body['request_id']) && is_string($body['question']) && (! array_key_exists('history', $body) || is_array($body['history'])), 422);
             $scope = $this->access->scope($request, $token, $body['binding'], true);
             $this->http->rate($request, $scope, 'preview');
 
-            return $this->orchestrator->preview($scope, $body['question'], $body['snapshot'], $body['request_id'],
-                fn () => $this->access->scope($request, $token, $body['binding']))['preview'];
+            $prepared = $this->workspace->prepare($scope, $request, $token, $body);
+            $context = $prepared['scope']['workspace_context'] ?? null;
+            $authority = fn () => $this->workspace->attach($this->access->scope($request, $token, $body['binding']),
+                $request, $token, $body['binding'], $context);
+
+            return $this->orchestrator->preview($prepared['scope'], $body['question'], $prepared['snapshot'], $body['request_id'],
+                $authority, $body['history'] ?? [])['preview'];
         });
     }
 
@@ -73,7 +78,12 @@ final class ReviewerAiController
             $scope = $this->access->scope($request, $token, $receipt['binding']);
             $this->http->rate($request, $scope, $action);
 
-            return $this->orchestrator->{$action}($scope, $receipt, fn () => $this->access->scope($request, $token, $receipt['binding']));
+            $context = $this->receipts->workspaceContext($scope, $receipt); // Principal/browser ownership before any workspace context read.
+            $authority = fn () => $this->workspace->attach($this->access->scope($request, $token, $receipt['binding']),
+                $request, $token, $receipt['binding'], $context, $action === 'confirm');
+            $scope = $authority();
+
+            return $this->orchestrator->{$action}($scope, $receipt, $authority);
         });
     }
 }

@@ -154,6 +154,22 @@ final class ReviewerAiHttpTest extends ReviewerAiConnectionFixture
         $status = $controller->status($next, 'FICTIONAL');
         $this->assertSame('prepared', $status->getData(true)['status']);
         $this->assertSame($receipt['digest'], $status->getData(true)['digest']);
+        // A second independent, legitimately unlocked session can start its own AI request.
+        // Its receipt fence is not a physical computer or User-Agent allowlist.
+        $secondRequest = $this->request(json_encode(['binding' => $binding, 'snapshot' => $snapshot, 'question' => 'Second client question',
+            'request_id' => (string) \Illuminate\Support\Str::uuid()]), ['User-Agent' => 'Synthetic mobile Safari']);
+        $secondResponse = $controller->preview($secondRequest, 'FICTIONAL');
+        $this->assertSame(200, $secondResponse->getStatusCode());
+        $secondPreview = $secondResponse->getData(true);
+        $this->assertNotSame($preview['id'], $secondPreview['id']);
+        $secondReceipt = ['binding' => $binding, 'preview_id' => $secondPreview['id'], 'request_id' => $secondPreview['request_id'],
+            'digest' => $secondPreview['digest'], 'snapshot_digest' => $secondPreview['snapshot_digest']];
+        $secondStatus = $this->request(json_encode($secondReceipt));
+        $secondStatus->setLaravelSession($secondRequest->session());
+        $this->assertSame('prepared', $controller->status($secondStatus, 'FICTIONAL')->getData(true)['status']);
+        $crossed = $this->request(json_encode($receipt));
+        $crossed->setLaravelSession($secondRequest->session());
+        $this->assertSame(404, $controller->status($crossed, 'FICTIONAL')->getStatusCode());
         $cancelled = $controller->cancel($next, 'FICTIONAL')->getData(true);
         $this->assertSame('cancelled', $cancelled['status']);
         $keys = array_keys($cancelled);

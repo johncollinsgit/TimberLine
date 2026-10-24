@@ -21,11 +21,11 @@ final class ReviewerAiOrchestrator
         return $scope;
     }
 
-    public function preview(array $scope, string $question, array $snapshot, string $requestId, callable $authority): array
+    public function preview(array $scope, string $question, array $snapshot, string $requestId, callable $authority, array $history = []): array
     {
         $settings = $this->connection->settings($scope);
         $scope = $this->fresh($scope, $settings, $authority);
-        $preview = $this->receipts->prepare($scope, $question, $snapshot, $requestId);
+        $preview = $this->receipts->prepare($scope, $question, $snapshot, $requestId, $history);
         $this->fresh($scope, $settings, $authority);
 
         return ['status' => 'prepared', 'preview' => $preview];
@@ -36,7 +36,12 @@ final class ReviewerAiOrchestrator
         $settings = $this->connection->settings($scope);
         $scope = $this->fresh($scope, $settings, $authority);
         $value = $this->receipts->show($scope, $receipt);
-        $this->fresh($scope, $settings, $authority);
+        $final = $this->fresh($scope, $settings, $authority);
+        if (($final['workspace_stale'] ?? false) === true
+            || isset($value['preview']['content_expires_at']) && now()->timestamp >= $value['preview']['content_expires_at']) {
+            return array_intersect_key($value, array_flip(['preview_id', 'request_id', 'digest', 'snapshot_digest', 'status']))
+                + ['content_expired' => true];
+        }
 
         return $value;
     }
@@ -80,7 +85,8 @@ final class ReviewerAiOrchestrator
             $this->receipts->markDispatched($scope, $receipt);
             $scope = $this->fresh($scope, $settings, $authority);
             // No lock or DB transaction is open here. Provider must never retry or follow redirects.
-            $result = $this->provider->complete($settings, ['question' => $claimedPreview['question'], 'snapshot' => $claimedPreview['snapshot']], $claimedPreview['request_id']);
+            $payload = $this->receipts->dispatchPayload($scope, $receipt);
+            $result = $this->provider->complete($settings, $payload, $claimedPreview['request_id']);
             $scope = $this->fresh($scope, $settings, $authority);
             $cost = Connection::ceilingCost($result['input_tokens'], $result['output_tokens'], $settings);
             $this->budget->settle($chargeId, 'accepted', ['provider_id' => $result['provider_id']], $cost);

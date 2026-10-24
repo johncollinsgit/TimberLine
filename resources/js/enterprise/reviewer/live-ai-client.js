@@ -6,7 +6,19 @@
     const copy = value => value == null ? value : JSON.parse(JSON.stringify(value));
     function create({adapter, context, request, changed = () => {}, persistReceipt = () => {}}) {
         const projection = globalThis.EverbranchProposalAi;
-        let generation = 0, settledReceipt = null;
+        const shared = adapter.mode === 'shared', workspaceContexts = new WeakMap();
+        const evidenceStamp = snapshot => projection.canonical([projection.stamp(snapshot), workspaceContexts.get(snapshot) || null]);
+        const workspaceContext = (value, current) => {
+            const keys = ['workspace_id','revision','workspace_digest','selection_digest','snapshot_digest','policy_hash','capability_hash','version_hash','build_id','source_hash'];
+            if (!value || Object.keys(value).sort().join() !== 'pin,selection' || !value.pin || Object.keys(value.pin).sort().join() !== keys.sort().join()
+                || !uuid.test(value.pin.workspace_id) || !Number.isSafeInteger(value.pin.revision) || value.pin.revision < 1
+                || keys.filter(key => key.endsWith('_hash') || key.endsWith('_digest')).some(key => !hash.test(value.pin[key]))
+                || value.pin.version_hash !== current.binding.version_hash || value.pin.source_hash !== current.binding.source_hash
+                || value.pin.build_id !== current.binding.build_id || !value.selection || Object.keys(value.selection).sort().join() !== 'area_ids,person_id,persona'
+                || !Array.isArray(value.selection.area_ids) || !value.selection.area_ids.includes(current.area_id)) throw Error('The current server evidence pin could not be verified.');
+            return copy(value);
+        };
+        let generation = 0, settledReceipt = null, history = [];
         let state = {phase: 'idle', question: '', snapshot: null, preview: null, result: null, pending: null, error: ''};
         const emit = () => changed(copy(state));
         const scope = () => {
@@ -19,11 +31,22 @@
         };
         const sameScope = (left, right) => projection.canonical(left) === projection.canonical(right);
         const owns = receipt => !!receipt && !!state.pending && sameScope(receipt, state.pending);
-        const activeSnapshot = async current => projection.capture(adapter, current.area_id, current.all_departments);
+        const activeSnapshot = async current => {
+            if (!shared) return projection.capture(adapter, current.area_id, current.all_departments);
+            if (typeof adapter.aiFacts !== 'function') throw Error('Current hosted workspace facts are unavailable.');
+            const value = await adapter.aiFacts(copy(current));
+            const context = workspaceContext({selection:value?.selection,pin:value?.pin}, current), snapshot = value?.snapshot;
+            if (!snapshot || snapshot.schema_version !== 2 || snapshot.local_revision !== context.pin.revision
+                || projection.canonical(snapshot.area_ids) !== projection.canonical(context.selection.area_ids)
+                || snapshot.persona !== context.selection.persona || !Array.isArray(snapshot.sources)
+                || snapshot.sources.length > projection.limits.sources || new TextEncoder().encode(projection.canonical(snapshot)).byteLength > projection.limits.bytes
+                || !snapshot.coverage?.startsWith('Server-held shared fictional workspace.')) throw Error('Current hosted sharing fields could not be verified.');
+            workspaceContexts.set(snapshot, context); return snapshot;
+        };
         const matches = async (current, snapshot, ownGeneration) => {
             if (generation !== ownGeneration || !sameScope(current, scope())) return false;
             const fresh = await activeSnapshot(current);
-            return generation === ownGeneration && sameScope(current, scope()) && projection.stamp(fresh) === projection.stamp(snapshot);
+            return generation === ownGeneration && sameScope(current, scope()) && evidenceStamp(fresh) === evidenceStamp(snapshot);
         };
         const failure = message => { state.error = message; emit(); };
         const clearReceipt = () => {
@@ -31,10 +54,18 @@
         };
         const cleanupWarning = 'The settled request receipt could not be removed from browser storage. Its saved status remains recoverable; this does not send another model request.';
         const validatePreview = (value, snapshot, question, requestId, recovering = false) => {
+            if (shared) {
+                const current = scope(), returned = workspaceContext(value?.workspace, current), known = workspaceContexts.get(snapshot);
+                if (known && !sameScope(returned, known)) throw Error('The server sharing context changed. Nothing was sent to OpenAI.');
+                if (!known && !recovering) throw Error('Current hosted sharing fields are unavailable.');
+                if (snapshot) workspaceContexts.set(snapshot, returned);
+            } else if (value?.workspace !== undefined) throw Error('This review has no shared workspace.');
             if (!value || !uuid.test(value.id) || !hash.test(value.digest) || !hash.test(value.snapshot_digest)
                 || value.request_id !== requestId || value.question !== question
                 || projection.canonical(value.snapshot) !== projection.canonical(snapshot)
                 || !Number.isSafeInteger(value.maximum_microusd) || value.maximum_microusd < 1 || value.maximum_microusd > 5000000
+                || !Number.isSafeInteger(value.content_expires_at) || value.content_expires_at < value.expires_at
+                || value.content_expires_at * 1000 > Date.now() + 601000
                 || !Number.isSafeInteger(value.expires_at) || !recovering && value.expires_at * 1000 <= Date.now()) throw Error('The exact sharing preview could not be verified. Nothing was sent to OpenAI.');
         };
         const validateResult = (value, identityOnly = false) => {
@@ -65,9 +96,16 @@
                 if (!snapshot.sources.length) throw Error('No fictional work is visible in this scope. Choose a department with visible records.');
                 if (!await matches(current, snapshot, ownGeneration)) throw Error('The fictional records or perspective changed. Review a fresh snapshot.');
                 const requestId = crypto.randomUUID();
-                const preview = await request('preview', {question, snapshot, request_id: requestId, binding: current.binding});
+                history = history.filter(turn => turn.expires_at * 1000 > Date.now() && sameScope(turn.context, current)
+                    && turn.evidence_stamp === evidenceStamp(snapshot)).slice(-2);
+                const sharedHistory = history.map(turn => copy(turn.value));
+                const selected = workspaceContexts.get(snapshot);
+                const evidence = shared ? {workspace:{expected_revision:selected.pin.revision,selection:copy(selected.selection)}} : {snapshot};
+                const preview = await request('preview', {question, ...evidence, request_id: requestId, binding: current.binding,
+                    ...(history.length ? {history: history.map(turn => copy(turn.receipt))} : {})});
                 if (!await matches(current, snapshot, ownGeneration)) throw Error('The fictional records or perspective changed. Review a fresh snapshot.');
                 validatePreview(preview, snapshot, question, requestId);
+                if (projection.canonical(preview.history || []) !== projection.canonical(sharedHistory)) throw Error('The shared follow-up turns changed. Nothing was sent to OpenAI.');
                 state = {...state, phase: 'preview', snapshot, preview: {...copy(preview), context: current}, error: ''}; emit();
             } catch (error) {
                 if (ownGeneration !== generation) return;
@@ -108,6 +146,14 @@
             }
             if (value.status === 'accepted' || value.status === 'rejected') {
                 state.phase = value.status; state.result = value.status === 'accepted' ? copy(value) : null;
+                if (value.status === 'accepted') {
+                    // In-memory only; reload recovery retains opaque receipts, never an automatic conversation replay.
+                    history = history.filter(turn => turn.receipt.preview_id !== receipt.preview_id);
+                    history.push({receipt: copy(receipt), context: copy(current), snapshot: copy(snapshot), evidence_stamp:evidenceStamp(snapshot),
+                        expires_at: state.preview.content_expires_at || 0,
+                        value: {question: state.question, answer: value.answer, refs: copy(value.refs)}});
+                    history = history.slice(-2);
+                }
                 state.pending = null; settledReceipt = null;
                 const cleared = clearReceipt();
                 state.error = [value.status === 'rejected' ? 'The saved request was rejected. No answer is available.' : '', cleared ? '' : cleanupWarning].filter(Boolean).join(' ');
@@ -167,6 +213,7 @@
                         || preview.snapshot_digest !== state.pending.snapshot_digest || typeof preview.question !== 'string'
                         || !preview.question.trim() || preview.question.length > 1500) throw Error('Saved preview receipt changed.');
                     state.snapshot = copy(preview.snapshot); state.question = preview.question;
+                    if (shared) workspaceContexts.set(state.snapshot, workspaceContext(preview.workspace, current));
                     state.preview = {...copy(preview), context: current};
                 }
                 await applyOutcome(value, state.preview.context, state.snapshot, ownGeneration, receipt);
@@ -206,7 +253,15 @@
         async function source(ref) {
             if (state.phase !== 'accepted' || !state.result?.refs.includes(ref)) return null;
             const ownGeneration = generation;
-            const current = await matches(state.preview.context, state.snapshot, ownGeneration);
+            let current;
+            try { current = await matches(state.preview.context, state.snapshot, ownGeneration); }
+            catch {
+                if (generation === ownGeneration) {
+                    invalidate();
+                    failure('Current source access could not be verified. The old answer is withheld. Refresh the saved workspace before another question.');
+                }
+                return null;
+            }
             if (generation !== ownGeneration) return null;
             if (!current) { invalidate(); return null; }
             return copy(state.snapshot.sources.find(value => value.ref === ref) || null);
@@ -220,7 +275,7 @@
             emit();
         }
         function invalidate() {
-            generation++;
+            generation++; history = [];
             state.result = null;
             if (state.pending) {
                 state.phase = 'uncertain'; state.error = 'Context changed. Retain the saved request for status recovery; no old answer is shown.';

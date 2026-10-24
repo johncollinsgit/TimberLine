@@ -16,12 +16,12 @@ function fixture(handler, persistence, instrument) {
     const adapter = api.create({runtime:'sample',defaultPersona:'demo_manager',identity:{workspace:'ai-client-fixture'},locations,routes:{back:'/demo',workflowWorkspace:'/demo/workflows'}});
     let selected = {area_id:api.ids.area,all_departments:true,binding:{build_id:'synthetic-ai-build',version_hash:'a'.repeat(64),source_hash:'b'.repeat(64)}};
     const calls = [], receipts = [];
-    let preview;
+    let preview; const known = new Map();
     const makePreview = body => (preview = {id:webcrypto.randomUUID(),request_id:body.request_id,digest:'c'.repeat(64),snapshot_digest:'d'.repeat(64),
-        snapshot:body.snapshot,question:body.question,maximum_microusd:350000,expires_at:Math.floor(Date.now()/1000)+600});
+        snapshot:body.snapshot,question:body.question,...(body.history?.length ? {history:body.history.map(receipt=>known.get(receipt.preview_id))} : {}),content_expires_at:Math.floor(Date.now()/1000)+600,maximum_microusd:350000,expires_at:Math.floor(Date.now()/1000)+600});
     const accepted = () => ({status:'accepted',preview_id:preview.id,request_id:preview.request_id,digest:preview.digest,snapshot_digest:preview.snapshot_digest,
         provider_mode:'openai_generated',provider_dispatch:true,provider_simulated:true,answer:'Fictional work is recorded in the selected departments.',refs:[preview.snapshot.sources[0].ref]});
-    const request = async (action,body) => {calls.push({action,body:plain(body)});return handler ? handler({action,body,makePreview,accepted}) : action==='preview'?makePreview(body):accepted();};
+    const request = async (action,body) => {if (action==='preview' && preview) {const value=accepted();known.set(preview.id,{question:preview.question,answer:value.answer,refs:value.refs});} calls.push({action,body:plain(body)});return handler ? handler({action,body,makePreview,accepted}) : action==='preview'?makePreview(body):accepted();};
     if(instrument)instrument(context);
     const client = context.EverbranchProposalAiClient.create({adapter,context:()=>selected,request,persistReceipt:value=>{receipts.push(plain(value));return persistence ? persistence(value) : true;},changed(){}});
     return {api,adapter,client,calls,receipts,select(value){selected={...selected,...value};}};
@@ -211,4 +211,34 @@ test('late prior outcome cannot replace a newer in-flight paid receipt after exp
  oldCapture.resolve();await old;const afterOld=plain(f.client.read());f.client.acknowledgeSettled();const afterAck=plain(f.client.read());
  newResponse.reject(Error('Synthetic test cleanup'));await second;
  assert.equal(afterOld.phase,'sending','A late prior callback must not replace the newer sending phase');assert.deepEqual(afterAck.pending,pending,'Old settled acknowledgment must not erase the newer in-flight request');
+});
+
+
+test('follow-ups preview at most two accepted opaque receipts and never share history after evidence/scope invalidation', async()=>{
+ const f=fixture();
+ for(const question of ['Which jobs?','Who owns those?','Where are those?','When are they due?']) {
+  await f.client.prepare(question);
+  const previews=f.calls.filter(row=>row.action==='preview');
+  assert.equal(previews.at(-1).body.history?.length || 0, Math.min(previews.length-1,2));
+  if(previews.length>1){
+   assert.equal(f.client.read().preview.history.length,Math.min(previews.length-1,2));
+   assert.doesNotMatch(JSON.stringify(previews.at(-1).body.history), /answer|question|Fictional/);
+  }
+  await f.client.confirm();assert.equal(f.client.read().phase,'accepted');
+ }
+ await edit(f);await f.client.prepare('What changed?');assert.equal(f.calls.at(-1).body.history,undefined);
+ await f.client.confirm();f.client.invalidate();await f.client.prepare('Start again');assert.equal(f.calls.at(-1).body.history,undefined);
+});
+
+test('a server-substituted prior answer cannot pass the sharing preview',async()=>{
+ let turns=0;
+ const f=fixture(({action,body,makePreview,accepted})=>{
+  if(action!=='preview')return accepted();
+  const value=makePreview(body);
+  if(++turns>1)value.history=[{question:'Forged prior question',answer:'Forged answer',refs:[body.snapshot.sources[0].ref]}];
+  return value;
+ });
+ await f.client.prepare('First');await f.client.confirm();await f.client.prepare('Follow-up');
+ assert.equal(f.client.read().phase,'idle');assert.equal(f.client.read().preview,null);
+ assert.equal(f.calls.filter(row=>row.action==='confirm').length,1);
 });
