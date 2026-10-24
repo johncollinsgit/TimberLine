@@ -20,7 +20,7 @@ final class ReviewerAiBoundary
         $path = is_string($path) ? rawurldecode($path) : null;
         $workspace = is_string($path) && preg_match('~^/enterprise-owner/service-proposals/[A-Za-z0-9]{1,200}/campus/workspace/(?:projection|facts|commands|command-status|collaboration/(?:show|comment|status)|files/(?:show|begin|status|chunk|complete|cancel)|images/(?:metadata|thumbnail|preview)|downloads/(?:metadata|download))/?$~D', $path);
         $pdf = is_string($path) && preg_match('~^/enterprise-owner/service-proposals/[A-Za-z0-9]{1,200}/campus/workspace/downloads/(?:metadata|download)/?$~D', $path);
-        $maintenance = is_string($path) && preg_match('~^/enterprise-owner/owner-workspaces/[A-Za-z0-9_-]{1,200}/proposals/(?:reviewer-maintenance/(?:graph|comments|quarantine)|reviewer-initialization/(?:preview|apply|status))/?$~D', $path);
+        $maintenance = is_string($path) && preg_match('~^/enterprise-owner/owner-workspaces/[A-Za-z0-9_-]{1,200}/proposals/(?:reviewer-maintenance/(?:graph|comments|quarantine)|reviewer-(?:initialization|preparation)/(?:preview|apply|status))/?$~D', $path);
         $workspace = $workspace || $maintenance;
         if (! $workspace && (! is_string($path) || ! preg_match('~^/enterprise-owner/service-proposals/[A-Za-z0-9]{1,200}/campus/ask/ai/(?:preview|confirm|status|cancel)/?$~D', $path))) {
             return $next($request);

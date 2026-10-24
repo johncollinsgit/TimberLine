@@ -45,6 +45,8 @@ class CampusReviewManifest
             'resources/data/enterprise/campus-map-points.json',
             'resources/images/enterprise/Everbranch-Rooted-Peak-Aligned.svg', 'resources/images/enterprise/Everbranch-Rooted-Peak-Aligned.png',
             'resources/js/enterprise/reviewer/assets/lees-mcrae-official-wordmark.png',
+            'app/Proposals/ProposalService.php', 'app/Proposals/OwnerController.php', 'app/Proposals/Draft.php',
+            'resources/views/service-proposals/edit.blade.php', 'routes/service-proposals-reviewer-preparation.php',
             'app/Proposals/Access.php', 'app/Proposals/Version.php', 'app/Proposals/CampusReviewController.php',
             'app/Enterprise/RecordStore.php', 'app/Enterprise/MountUrls.php', 'app/Enterprise/Provisioning/ClientSilo.php',
             'app/Enterprise/Provisioning/RuntimePaths.php', 'app/Enterprise/Trial/TrialBudget.php', 'app/Enterprise/Trial/TrialStore.php',

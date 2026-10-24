@@ -41,12 +41,27 @@ A separate default-off real-owner HTTP initializer now supplies signed preview,
 explicit apply and original-receipt status for an already-published future exact
 Version. It requires reviewed current-edit/seed/import pins and fresh locking
 owner authority; it cannot capture, publish, reset later edits or activate AI.
-Current-browser reconciliation, trusted descriptor publication, recurring
+Current-browser reconciliation, the actual publication transition, recurring
 authenticated retention and actual host acceptance remain separate. See
 [owner initialization](docs/operations/proposal-reviewer-workspace-initialization.md).
 Focused root integration passes 27 tests/545 assertions, including the retained
 independent adversarial cases and current source/asset closure. This is local
 PHP 8.5/SQLite evidence; target PHP 8.4/MySQL and exact-head CI remain required.
+
+A separate default-off real-owner draft-preparation flow now creates one new
+encrypted read-only draft from exact reviewed commercial/source/import pins. It
+adds trusted workspace/comment descriptors before immutable publication hashing;
+the private preparation marker is excluded from recipient content. Normal Publish
+remains a separate actual owner action with recipient password and original request
+key. New publication refuses expired descriptors or a requested lifetime shorter
+than their fixed expiry. Exact original receipt recovery cannot create another
+Version, renew expiry or reset work. The original draft, publication, grants and
+comments remain unchanged. Focused root integration passes29 tests/559 assertions
+on PHP8.5/SQLite, including current source/asset closure. Three retained
+independent authority cases separately pass44 assertions. Actual MySQL lifecycle,
+targetPHP8.4, current-edit capture/reconciliation, host/runtime approval and normal
+exact-head CI remain separate requirements. No actual publication or activation
+occurred. See [draft preparation](docs/operations/proposal-reviewer-workspace-preparation.md).
 
 ## Enterprise CI performance candidate (October 23, 2026)
 

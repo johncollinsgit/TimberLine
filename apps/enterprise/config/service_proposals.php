@@ -61,4 +61,14 @@ if ($workspaceApproval !== null && $initialization !== null && $initialization !
         'enabled' => env('SERVICE_PROPOSALS_REVIEWER_WORKSPACE_OWNER_INITIALIZATION_ENABLED', false) === true];
 }
 
+// Metadata remains available when disabled so prepared drafts cannot silently become browser-mode drafts.
+$preparation = \App\Proposals\ReviewerWorkspacePreparation::parseApprovals(
+    env('SERVICE_PROPOSALS_REVIEWER_WORKSPACE_PREPARATION_APPROVALS_JSON', ''));
+$config['reviewer_workspace']['owner_preparation']['approvals'] = $preparation;
+if ($workspaceApproval !== null && $preparation !== null && $preparation !== []
+    && $config['runtime_purpose'] === 'proposal_owner' && count($config['owner_workspaces']) === 1) {
+    $config['reviewer_workspace']['owner_preparation']['enabled'] =
+        env('SERVICE_PROPOSALS_REVIEWER_WORKSPACE_OWNER_PREPARATION_ENABLED', false) === true;
+}
+
 return $config;
