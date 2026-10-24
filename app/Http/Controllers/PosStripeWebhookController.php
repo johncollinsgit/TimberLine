@@ -10,19 +10,24 @@ final class PosStripeWebhookController extends Controller
 {
     public function __invoke(Request $r, PosStore $store, PosService $service)
     {
-        abort_unless(config('pos_live.enabled') && config('pos_live.servicing_enabled') && is_string(config('pos_live.stripe_webhook_secret')) && strlen($r->getContent()) <= 262144, 403);
+        $require = static function (bool $condition, int $status): void {
+            if (! $condition) {
+                throw new \Illuminate\Http\Exceptions\HttpResponseException(response()->json(['error' => 'webhook_rejected'], $status, ['Cache-Control' => 'no-store']));
+            }
+        };
+        $require(config('pos_live.enabled') && config('pos_live.servicing_enabled') && is_string(config('pos_live.stripe_webhook_secret')) && strlen($r->getContent()) <= 262144, 403);
         $signature = (string) $r->header('Stripe-Signature');
         preg_match_all('/(?:^|,)t=(\d{1,12})(?=,|$)/', $signature, $times);
         preg_match_all('/(?:^|,)v1=([a-f0-9]{64})(?=,|$)/', $signature, $signatures);
-        abort_unless(count($times[1]) === 1 && abs(time() - (int) $times[1][0]) <= 300 && str_starts_with(config('pos_live.stripe_webhook_secret'), 'whsec_'), 403);
+        $require(count($times[1]) === 1 && abs(time() - (int) $times[1][0]) <= 300 && str_starts_with(config('pos_live.stripe_webhook_secret'), 'whsec_'), 403);
         $expected = hash_hmac('sha256', $times[1][0].'.'.$r->getContent(), config('pos_live.stripe_webhook_secret'));
-        abort_unless(collect($signatures[1])->contains(fn ($s) => hash_equals($expected, $s)), 403);
+        $require(collect($signatures[1])->contains(fn ($s) => hash_equals($expected, $s)), 403);
         try {
             $event = json_decode($r->getContent(), true, 64, JSON_THROW_ON_ERROR);
         } catch (\JsonException) {
-            abort(422);
+            $require(false, 422);
         }
-        abort_unless(is_array($event) && is_string($event['id'] ?? null) && strlen($event['id']) <= 255, 422);
+        $require(is_array($event) && is_string($event['id'] ?? null) && strlen($event['id']) <= 255, 422);
         $object = $event['data']['object'] ?? [];
         $id = $object['payment_intent'] ?? $object['action']['process_payment_intent']['payment_intent'] ?? $object['id'] ?? null;
         if (! is_string($id) || ! str_starts_with($id, 'pi_') || ! is_string($event['account'] ?? null) || ! is_bool($event['livemode'] ?? null)) {

@@ -38,6 +38,7 @@ for(const [engine,name] of [[chromium,'chromium'],[webkit,'webkit']]){
     if(path==='/registers/'+reg+'/favorites')return json({favorite:true});
     throw Error('Unhandled fixture request '+r.method()+' '+path);
    });
+   await page.addInitScript(()=>Object.defineProperty(navigator,'share',{configurable:true,value:async data=>{window.__sharedReceipt=data}}));
    await page.goto(base);await page.getByRole('heading',{name:'Fictional candle',exact:true}).waitFor();
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    const header=page.locator('.brandheader');assert.equal(await header.evaluate(e=>getComputedStyle(e).position),'sticky');
@@ -49,6 +50,8 @@ for(const [engine,name] of [[chromium,'chromium'],[webkit,'webkit']]){
    assert.equal(await page.getByRole('button',{name:'Collect $10.70',exact:true}).count(),0);
    await page.getByRole('button',{name:'Check original payment'}).click();
    await page.getByRole('button',{name:'View receipt'}).click();await page.getByText('Receipt EB-FIXTURE').waitFor();
+   await page.getByRole('button',{name:'Share receipt',exact:true}).click();
+   const shared=await page.evaluate(()=>window.__sharedReceipt);assert(shared.text.includes('Sample market')&&shared.text.includes('John Sample')&&shared.text.includes('pi_fixture')&&shared.text.includes('Tax $0.70'));
    await page.getByRole('button',{name:'Next customer'}).click();
    await page.getByRole('button',{name:'Activity',exact:true}).click();
    await page.getByRole('heading',{name:'Sales over time'}).waitFor();

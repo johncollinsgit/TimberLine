@@ -909,7 +909,7 @@ it('verifies connected Stripe signatures and enqueues duplicate or reordered eve
     $send($event)->assertOk();
     expect($this->store->rows('outbox', $this->tenant->id)->where('sale_id', $sale)->where('effect_key', 'reconcile_'.hash('sha256', 'evt_fixture'))->count())->toBe(1);
     expect($this->store->rows('sales', $this->tenant->id)->where('id', $sale)->value('state'))->not->toBe('succeeded');
-    $send($event, 'wrong')->assertForbidden();
+    $send($event, 'wrong')->assertForbidden()->assertJsonPath('error', 'webhook_rejected');
     $send($event, 'whsec_fixture', time() - 301)->assertForbidden();
     $readerEvent = [...$event, 'id' => 'evt_reader_declined', 'type' => 'terminal.reader.action_failed', 'data' => ['object' => ['id' => 'tmr_fixture', 'object' => 'terminal.reader', 'action' => ['process_payment_intent' => ['payment_intent' => 'pi_fixture'], 'status' => 'failed']]]];
     $send($readerEvent)->assertOk();
