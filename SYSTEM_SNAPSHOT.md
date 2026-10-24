@@ -1,3 +1,11 @@
+## Shared AI provider review flags (2026-10-24)
+
+The owner requested persistent reminders for Apple publishing, live Tap to Pay
+prerequisites and Square/Apple data-use limits. Root AGENTS and the AI/POS
+runbooks link [the shared review record](docs/operations/provider-terms-and-publishing.md).
+These are development/release flags; no shared tenant memory, automatic legal
+approval, production rollout or runtime AI-data filter is implied.
+
 ## Native Square POS pilot (2026-10-24; source candidate, disabled)
 
 A dedicated `native/everbranch-pos-ios` target embeds Square Mobile Payments SDK

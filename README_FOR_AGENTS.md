@@ -1,3 +1,12 @@
+## Shared AI provider review flags (2026-10-24)
+
+Read [provider terms and publishing flags](docs/operations/provider-terms-and-publishing.md)
+for Apple publishing, live Tap to Pay or provider-data/AI memory changes. The
+owner requested these reminders across Everbranch AI development. The record
+distinguishes later publishing work from live collection requirements and flags
+Square training/enhancement and revocation/retention restrictions. It does not
+change runtime prompts, import private tenant memory or establish compliance.
+
 ## Native Square POS pilot (2026-10-24; source candidate, disabled)
 
 A dedicated `native/everbranch-pos-ios` target embeds Square Mobile Payments SDK
