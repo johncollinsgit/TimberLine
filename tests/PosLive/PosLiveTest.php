@@ -1030,6 +1030,9 @@ it('requires separate physical Shopify locations for overlapping events even thr
 });
 
 it('shows confirmed refund bookkeeping separately and requires a fresh closing count after a refund', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Requires the durable application journal; exercised by the mandatory POS MySQL job.');
+    }
     $web = posPilotFixture($this);
     posPilotStripe($this);
     $sale = $this->postJson($web.'/quotes', $this->selection)->assertOk()->json('sale_id');
@@ -1058,6 +1061,9 @@ it('blocks a Shopify price change between catalog lookup and calculated tax befo
 });
 
 it('keeps a new Stripe build gated despite an older reader acceptance and permits only its named acceptance session', function (): void {
+    if (DB::connection()->getDriverName() !== 'mysql') {
+        $this->markTestSkipped('Requires the durable application journal; exercised by the mandatory POS MySQL job.');
+    }
     posPilotFixture($this);
     config()->set(['pos_live.stripe_environment' => 'production', 'pos_live.stripe_secret' => 'sk_live_fixture', 'pos_live.stripe_webhooks_verified' => true, 'pos_live.stripe_webhook_secret' => 'whsec_fixture', 'app.release_id' => 'pilot-test-build', 'cache.default' => 'file']);
     $this->store->rows('connections', $this->tenant->id)->update(['environment' => 'production']);
