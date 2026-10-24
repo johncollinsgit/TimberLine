@@ -12,7 +12,7 @@ The owner-runtime configuration seam accepts `SERVICE_PROPOSALS_REVIEWER_WORKSPA
 
 With a valid metadata packet and the exact proposal-owner runtime/one configured local owner tenant, independent boolean flags are `SERVICE_PROPOSALS_REVIEWER_WORKSPACE_ENABLED`, `_WRITES_ENABLED`, `_INITIALIZATION_ENABLED`, `_FINANCIAL_ENABLED`, and `SERVICE_PROPOSALS_REVIEWER_COLLABORATION_ENABLED`, `_COMMENTS_WRITE_ENABLED`. All default false. Missing, malformed, oversized, extra-authority or digest-mismatched metadata closes every gate even if an activation flag is true. Existing real silo/anchor/owner/publication checks remain mandatory on every operation. Metadata may stay installed with all gates off so approved retention can still verify its original anchor; no parser creates an anchor, membership, publication, ledger or provider call. Final activation needs its separately approved exact packet and observed cleanup; this parser does not supply that approval.
 
-Only an actual currently active, verified owner/admin can call the initializer library. It requires initialization and workspace gates, the already-existing marked anchor with no members, exact immutable reviewed seed hash and explicit request/descriptor digest. The first create and exact lost-output replay use the tenant transaction. A different intent cannot reset existing work. There is no recipient initializer, new anchor creation, import, provisioning or runnable operator entry in this leaf.
+Only an actual currently active, verified owner/admin can call the initializer library. It requires initialization and workspace gates, the already-existing marked anchor with no members, exact immutable reviewed seed hash and explicit request/descriptor digest. The first create and exact lost-output replay use the tenant transaction. A different intent cannot reset existing work. There is no recipient initializer, new anchor creation, browser-state capture/import or provisioning. The separate default-off [real-owner HTTP initialization entry](proposal-reviewer-workspace-initialization.md) adds signed preview, explicit apply and exact original-receipt status for an already-published future Version with reviewed current-edit/seed/import evidence pins. It does not supply those prerequisite facts or create a publication.
 
 A session-issued random nonce owns recipient-created tickets/command receipts; its digest is edition/mount-bound. It survives legitimate session ID regeneration. A reviewer name or selected fictional worker never grants ownership or native access. Viewer policy is read-only for every persona, including requester. Worker is restricted to current assigned tasks and own-capability tickets. Manager/editor can coordinate the closed fictional graph.
 
@@ -47,7 +47,7 @@ Full graph cap256KiB:8 departments,100 buildings,100 projects,200 tasks,200 tick
 
 Per-workspace command cap1000 is SQL-counted under the tenant lock; exceeding it rolls back graph mutation. Receipt/audit rows contain only bounded IDs/action/digest/revision, not command text. They remain content-free tombstones to prevent duplicate replay/reset. The graph itself is removed by the owner-only bounded `pruneExpired` library after descriptor/version expiry or actual revocation. It processes at most100 graph rows per call with an explicit UUID cursor, scrubs encrypted graph content to null, preserves immutable initialization/binding/receipt evidence and marks the aggregate expired. Repeating cleanup is safe. Workspace/CRUD gates can be false during cleanup; real current owner authority and exact owner silo/anchor are still mandatory. Unknown metadata fails closed.
 
-**No scheduler/cron/cleanup executor is installed here.** Before any shared-mode activation, root must provide/review an authenticated operational cleanup entry, install a bounded schedule and observe erasure/deactivation behavior. Expiry blocks recipient access immediately; it does not itself prove physical erasure. Without that acceptance, retention readiness remains incomplete.
+The separate [actual-owner maintenance HTTP entry](proposal-reviewer-workspace-maintenance.md) provides bounded manual preview/apply. **No recurring scheduler/cron/cleanup operation is installed.** Before any shared-mode activation, root must provide/review its authenticated recurring execution authority, install a bounded schedule and observe erasure/deactivation behavior. Expiry blocks recipient access immediately; it does not itself prove physical erasure. Without that acceptance, retention readiness remains incomplete.
 
 ## Verification and remaining gates
 
@@ -61,7 +61,7 @@ The separate `reviewer-workspace-ai-browser.mjs` adds one explicitly fictional e
 
 `ReviewerWorkspaceMySqlConcurrencyTest` is registered immediately after the existing provisioning test cleanup in the native disposable MySQL lane. It refuses a nonempty inventory, uses independent processes and observed row-lock waits, and tests conflict, once-only replay, status ownership and current-read revocation. Without the existing approved loopback MySQL service it explicitly skips; that is not passing concurrency evidence. Current source verification still requires real MySQL results and normal final-candidate CI/review.
 
-Remaining gates include preserving current twenty-job edits/plans/comments/access through an explicit immutable-edition transition, reviewed operational cleanup scheduling/erasure and hosted acceptance. Comments/uploads/gallery and resource/workflow parity have separate source stages; their absence must not be described as a complete shared workspace. No source test authorizes runtime initialization, a new publication or provider/scanner activation.
+Remaining gates include preserving current twenty-job edits/plans/comments/access through an explicit immutable-edition transition, reviewed operational cleanup scheduling/erasure and hosted acceptance. Comments/uploads/gallery have separately integrated default-off source stages, while resource/workflow parity remains design-only. Their runtime readiness and hosted acceptance must be reported separately. No source test authorizes runtime initialization, a new publication or provider/scanner activation.
 
 ## Integrated file/detail and source-boundary milestone
 
@@ -82,8 +82,8 @@ newer expectation; the server still checks every upload's expected saved name.
 
 JPEG/PNG private images require approved actual scanner/config/source evidence,
 exact stored-byte identity, current publication/target/revision and scan expiry.
-Quarantine alone confers no read access. General PDF retrieval remains unavailable
-until its separate reviewed stage is integrated. No scanner/operator/scheduler is
+Quarantine alone confers no read access. Private PDF-original downloads are a separate default-off source stage; actual
+scanner/runtime admission and hosted acceptance remain required. No scanner/operator/scheduler is
 installed or activated by these source components.
 
 The publication source manifest retains strict exact-current admission and a

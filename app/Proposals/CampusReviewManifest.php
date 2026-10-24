@@ -58,7 +58,7 @@ class CampusReviewManifest
             'apps/enterprise/config/enterprise.php', 'apps/enterprise/config/session.php', 'apps/enterprise/config/database.php',
             'routes/service-proposals.php', 'routes/service-proposals-reviewer-ai.php', 'routes/service-proposals-reviewer-workspace.php',
             'routes/service-proposals-reviewer-collaboration.php', 'routes/service-proposals-reviewer-files.php',
-            'routes/service-proposals-reviewer-maintenance.php', 'routes/service-proposals-reviewer-images.php',
+            'routes/service-proposals-reviewer-maintenance.php', 'routes/service-proposals-reviewer-initialization.php', 'routes/service-proposals-reviewer-images.php',
             'routes/service-proposals-reviewer-downloads.php',
             'resources/views/enterprise/partials/reviewer-workspace-files.blade.php',
             'app/Services/Team/TeamFileScanner.php', 'config/team_work.php', 'composer.lock'];

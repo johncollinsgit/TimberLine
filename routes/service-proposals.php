@@ -32,6 +32,7 @@ require __DIR__.'/service-proposals-reviewer-files.php';
 require __DIR__.'/service-proposals-reviewer-images.php';
 require __DIR__.'/service-proposals-reviewer-downloads.php';
 require __DIR__.'/service-proposals-reviewer-maintenance.php';
+require __DIR__.'/service-proposals-reviewer-initialization.php';
 
 Route::post('service-proposals/{token}/activity', [\App\Proposals\ActivityController::class, 'capture'])
     ->middleware([\App\Proposals\ResponsePolicy::class, 'throttle:service-proposals-activity'])->name('service-proposals.recipient.activity');

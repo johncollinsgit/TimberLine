@@ -52,4 +52,13 @@ if ($workspaceApproval !== null && $config['runtime_purpose'] === 'proposal_owne
     }
 }
 
+// Restrictive reviewed current-edit evidence only; this never captures/imports/publishes data.
+$initialization = \App\Proposals\ReviewerWorkspaceInitialization::parseApprovals(
+    env('SERVICE_PROPOSALS_REVIEWER_WORKSPACE_INITIALIZATION_APPROVALS_JSON', ''));
+if ($workspaceApproval !== null && $initialization !== null && $initialization !== []
+    && $config['runtime_purpose'] === 'proposal_owner' && count($config['owner_workspaces']) === 1) {
+    $config['reviewer_workspace']['owner_initialization'] = ['approvals' => $initialization,
+        'enabled' => env('SERVICE_PROPOSALS_REVIEWER_WORKSPACE_OWNER_INITIALIZATION_ENABLED', false) === true];
+}
+
 return $config;

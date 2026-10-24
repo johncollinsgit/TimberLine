@@ -37,6 +37,17 @@ nonsecret runtime metadata seam does not authorize activation or provision an
 anchor; invalid input keeps every independent gate off. See [the workspace contract](docs/operations/proposal-reviewer-workspace.md)
 and [the AI contract](docs/operations/proposal-reviewer-ai.md).
 
+A separate default-off real-owner HTTP initializer now supplies signed preview,
+explicit apply and original-receipt status for an already-published future exact
+Version. It requires reviewed current-edit/seed/import pins and fresh locking
+owner authority; it cannot capture, publish, reset later edits or activate AI.
+Current-browser reconciliation, trusted descriptor publication, recurring
+authenticated retention and actual host acceptance remain separate. See
+[owner initialization](docs/operations/proposal-reviewer-workspace-initialization.md).
+Focused root integration passes 27 tests/545 assertions, including the retained
+independent adversarial cases and current source/asset closure. This is local
+PHP 8.5/SQLite evidence; target PHP 8.4/MySQL and exact-head CI remain required.
+
 ## Enterprise CI performance candidate (October 23, 2026)
 
 Enterprise verification prepares exact-run dependency/public-build inputs once,

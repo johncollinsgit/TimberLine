@@ -110,6 +110,12 @@ Cancelling navigation preserves data, pending writes and exact retry receipts;
 a deliberate fresh load still works. Keep strict browser-error assertions and
 the existing request pacing. Do not suppress access-control errors to pass CI.
 
+The immutable-proposal native gate also covers the default-off actual-owner
+initializer and its strict configuration assembly. Those mounted tests exercise
+preview/apply/status, fresh owner authority and original-receipt recovery; they
+do not claim actual current-browser capture, a new hosted publication or MySQL
+concurrency from SQLite.
+
 The dedicated PHPUnit process uses the same `1G` test memory ceiling as the
 primary `phpunit.xml`. This accommodates the complete combined suite, including
 local PDF rendering; it does not change a production PHP limit. Fresh isolated

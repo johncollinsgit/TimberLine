@@ -39,6 +39,16 @@ All runtime/provider gates remain off; the current published review is unchanged
 See [shared workspace](docs/operations/proposal-reviewer-workspace.md) and
 [reviewer AI](docs/operations/proposal-reviewer-ai.md).
 
+The default-off owner initializer adds authenticated preview/apply/status for
+one already-published future exact Version and reviewed current-edit import pins.
+Original-intent recovery preserves later shared edits. It does not capture
+browser work, assemble a publication, provision identities or enable a provider.
+No runtime initialization or new publication occurred in this source milestone.
+See [owner initialization](docs/operations/proposal-reviewer-workspace-initialization.md).
+Focused root integration passes 27 tests/545 assertions, including the retained
+independent adversarial cases and current source/asset closure. This is local
+PHP 8.5/SQLite evidence; target PHP 8.4/MySQL and exact-head CI remain required.
+
 ## Enterprise CI performance candidate (October 23, 2026)
 
 The isolated Enterprise workflow keeps the `enterprise-runtime` required result
