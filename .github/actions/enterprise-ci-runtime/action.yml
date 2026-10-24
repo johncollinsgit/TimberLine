@@ -1,0 +1,21 @@
+name: Enterprise disposable CI runtime
+description: Same verified mirrors, PHP extensions and Node version for isolated jobs
+inputs:
+  npm-cache:
+    description: Set to npm only for the dependency producer
+    default: ''
+runs:
+  using: composite
+  steps:
+    - name: Use official Ubuntu package mirrors
+      shell: bash
+      run: sudo timeout 120s python3 scripts/ci/enterprise-ubuntu-mirrors.py
+    - uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.4'
+        extensions: pdo_mysql, pdo_sqlite, mbstring, fileinfo, gd, zip
+        coverage: none
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: ${{ inputs.npm-cache }}

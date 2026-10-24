@@ -1,3 +1,14 @@
+## Enterprise CI performance candidate (October 23, 2026)
+
+The isolated Enterprise workflow keeps the `enterprise-runtime` required result
+as an always-run aggregate over complete native/MySQL, contracts/build and every
+browser matrix entry. Same-run, exact-commit dependency/public-build reuse excludes
+ENV files and runtime/private state. Operations helpers split across fresh runners
+with unchanged `all` flags and pacing; both engines and all existing guards remain.
+This changes source verification only. Production GitHub-to-Forge authority,
+atomic activation and rollback remain unchanged. Actual candidate CI timings are
+required before acceptance; see [Enterprise CI](docs/operations/enterprise-ci.md).
+
 ## Private review activity (October 23, 2026)
 
 Lees-McRae private review publications now have an owner-only activity view for

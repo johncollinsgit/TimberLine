@@ -1,5 +1,76 @@
 # Enterprise source verification
 
+## Isolated parallel verification (performance candidate)
+
+The workflow keeps the required check named `enterprise-runtime`. It is an
+always-run aggregate: the dependency/contracts/build producer, native PHP/MySQL
+job and **every** browser matrix entry must succeed. Failure, cancellation or a
+skipped prerequisite fails the aggregate. No branch-protection change or deploy
+gate bypass is part of this change; the protected GitHub-to-Forge procedure and
+the independent primary CI/migration gates remain authoritative.
+
+The producer installs locked dependencies once, runs all existing Node contracts
+and compiles Enterprise. Its run-scoped archive contains only `vendor/`,
+`node_modules/` and `apps/enterprise/public/build/`. Restore verifies exact checked
+out commit, run ID, lockfile hashes, OS/architecture, PHP minor, Node major and
+archive checksum; it rejects an existing input root, unsafe archive paths and
+escaping/traversed links. Environment/auth files are excluded. Database files,
+storage, uploads, sessions, keys, caches and prior browser evidence are never
+shared. This is disposable **CI input reuse**, not a deployable production
+artifact or permission to copy CI files into Forge.
+
+After preparation, the native job retains the original MySQL 8.4 service,
+loopback-only disposable database guard and complete PHP commands, including all
+five real MySQL recovery/concurrency/provisioning classes. In parallel, thirteen
+browser entries use independent GitHub-hosted runners/filesystems:
+
+| Entries | Existing checks retained |
+| --- | --- |
+| Operations work × Chromium/WebKit | Mapped workflow, Roll Call, work views, resources, task evidence, in original order. |
+| Operations tour × Chromium/WebKit | Full signed-in tour. |
+| Operations workspace × Chromium/WebKit | Procedures, Finance, navigation, role preview and voice shell, in original order. Procedures must precede roles to supply populated shared-work evidence. |
+| Native × Chromium/WebKit | Original default-off persistent UI, jobs wizard, generated voice with provider-only fake. |
+| Proposal × Chromium/WebKit | Persisted proposal review, activity, Financial planning. |
+| Reviewer × Chromium/WebKit | Tour, shared renderer, priorities, public procedures. |
+| Components (one entry) | Assistant, conversation, Blaine sample and voice-job scripts, each retaining its own internal two-engine loop. |
+
+Operations groups select helper calls only: `ENTERPRISE_OPERATIONS_SCENARIO=all`
+and the complete feature profile, fresh migration/fixture/login, 800ms dynamic
+request queue, child-context pacing, zero-error/external-request assertions and
+cleanup remain intact. `ENTERPRISE_OPERATIONS_GROUP=work|tour|workspace` is valid
+only with enabled `all`; unknown/misapplied groups fail before fixture creation.
+No-group `all` remains available for a continuous accumulated-state manual run.
+The matrix preserves each explicit helper case/configuration, with independent
+fixtures between groups; it does not claim identical accumulated state across
+all eleven helpers. `jobs` and `voice-generation` remain separate required gates.
+
+Never parallelize fixed-port harnesses in one checkout: independent SQLite names
+or ports alone do not isolate file caches, sessions, quarantine storage or login
+rate limits. Each matrix entry runs its applicable harnesses sequentially.
+`fail-fast: false` collects every result; concurrency is bounded to twelve matrix
+entries. Original per-step time bounds remain, and both browser engines install
+using the existing verified official Ubuntu mirror procedure.
+
+For a failed check, inspect that exact job and retry failed jobs on the **same
+frozen head** after understanding the failure. Successful preparation's output
+names its immutable input artifact, including its original attempt; a failed-job
+rerun can reuse it while retained (seven days). Never use another run/commit's
+bundle. If inputs have expired, rerun preparation and all dependents. Do not
+cancel a live production deployment to benchmark. A new source change requires
+a new frozen head and the normal complete check set.
+
+Record actual Actions run/head/merge SHA, attempt, job queued/start/end and step
+start/end timestamps. Compare preparation, artifact transfer/restore, browser
+installation, every engine/group, native MySQL and aggregate elapsed time against
+the baseline; include runner queue time and increased parallel runner-minutes.
+The prior measured Enterprise runs took 46m09s and 46m39s; one Operations step
+took 28m17s, while browser installation took 67s. These are baseline evidence,
+not a promise for this candidate. Only a completed normal candidate CI run can
+establish a new critical path. A prepared browser image is deferred until those
+measurements justify its maintenance; Forge's existing atomic build/rollback is
+unchanged. Rollback is reverting this workflow/helper change through review and
+normal checks, not modifying a live release or required-check settings.
+
 The primary PHP 8.4 and isolated Enterprise workflows verify the known Ubuntu
 `mirror+file:/etc/apt/apt-mirrors.txt` indirection before PHP setup and remove only
 its exact Azure entry. Official HTTPS archive/security entries, source fields,
@@ -61,15 +132,14 @@ through real HTTP, verifies triage/assignment/progress and workflow save/reload,
 and checks retained drafts, current identity, authorized links and zero tour POSTs.
 It also creates a long fictional workspace list and verifies an actual sidebar
 click after returning from the full-screen builder. The desktop sticky rail
-scrolls independently; tablet/phone retain document-flow navigation. The combined
-two-engine scenario has a 45-minute ceiling because it preserves real server
-throttles rather than disabling them for the larger synthetic action sequence. Measured
-partial runs already exceed 23 minutes combined before the final navigation,
-role and voice checks; the bound preserves both complete engine runs.
+scrolls independently; tablet/phone retain document-flow navigation. The original combined two-engine step had a 45-minute ceiling and measured
+partial runs exceeded 23 minutes. Each new Operations entry retains that step
+ceiling while preserving real server throttles. The candidate must be measured
+before claiming a shorter critical path.
 
-Both reviewer browser scripts and the native operations harness run sequentially
-in Chromium and WebKit. Browser steps share the already installed Playwright
-browsers. Each receives `EVERBRANCH_PLAYWRIGHT_MODULE=node_modules/playwright/index.mjs`,
+Within each matrix entry, applicable browser scripts run sequentially. The two
+engines have separate entries except for the four internally dual-engine scripts.
+Each receives `EVERBRANCH_PLAYWRIGHT_MODULE=node_modules/playwright/index.mjs`,
 `ENTERPRISE_BROWSER_ENGINE=chromium|webkit`, and a distinct `ENTERPRISE_EVIDENCE`
 directory. HTTP harnesses also receive `ENTERPRISE_TEST_PHP=php`.
 
