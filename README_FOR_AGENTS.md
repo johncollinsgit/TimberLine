@@ -1,3 +1,14 @@
+## Enterprise CI performance candidate (October 23, 2026)
+
+Enterprise verification prepares exact-run dependency/public-build inputs once,
+then runs the full native PHP/MySQL suite and isolated browser matrix. Operations
+groups preserve the `all` profile, request pacing and every helper in both engines;
+fixed-port harnesses remain sequential within each fresh runner. The stable
+`enterprise-runtime` aggregate requires every prerequisite and matrix entry.
+No ENV/private storage or database state is shared; no production artifact or
+Forge change is implied. Measure the frozen candidate's actual full CI critical
+path before claiming faster releases. See [Enterprise CI](docs/operations/enterprise-ci.md).
+
 ## Private review activity (October 23, 2026)
 
 Lees-McRae private review publications now have an owner-only activity view for
