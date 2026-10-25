@@ -105,6 +105,7 @@ class SoccerFamilyService
             'invoices' => $this->store->query('invoices', $tenant)->where('family_id', $family->id)->latest('created_at')->get()->map(fn ($i) => collect((array) $i)->except(['checkout_id', 'payment_intent_id', 'tenant_id'])->all()),
             'releases' => $this->store->query('releases', $tenant)->where('family_id', $family->id)->get()->map(fn ($r) => ['id' => $r->id, 'player_id' => $r->player_id, 'season_key' => $r->season_key, 'signed_at' => $r->signed_at, 'answers' => $this->store->decrypt($r->answers)]),
             'payment_recovery' => $currentSeason ? app(SoccerRecoveryService::class)->summary($tenant, $currentSeason->id, $family->id) : null,
+            'application_revision' => $currentSeason ? app(SoccerApplicationService::class)->revision($tenant, $currentSeason, $family->id) : null,
             'paypal' => app(SoccerPayPalService::class)->publicReadiness($tenant, $family->id),
             'soccer_group_url' => $this->store->settings($tenant)['soccer_group_url'] ?? null];
     }

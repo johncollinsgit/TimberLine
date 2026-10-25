@@ -92,12 +92,15 @@ class SoccerPortalController extends Controller
 
             return response()->json(['recovery' => $result, ...$this->families->profile($tenant, $this->store->row('families', $tenant, $f->id))]);
         }
-        if ($action === 'quote') {
-            $d = $r->validate(['season_id' => 'required|uuid', 'volunteer' => 'required|boolean',
+        if ($action === 'quote' || $action === 'amend-quote') {
+            abort_unless($r->isMethod('post'), 405);
+            $d = $r->validate(['season_id' => 'required|uuid', 'volunteer' => 'required|boolean', 'expected_application_revision' => 'sometimes|required|string|size:64',
                 'children' => 'required|array|min:1|max:12', 'children.*.player_id' => 'required|uuid',
                 'children.*.needs_jersey' => 'required|boolean']);
 
-            return response()->json(app(SoccerRegistrationService::class)->quote($tenant, $f->id, $d));
+            return response()->json($action === 'amend-quote'
+                ? app(\App\Services\Soccer\SoccerApplicationService::class)->quote($tenant, $f->id, $d)
+                : app(SoccerRegistrationService::class)->quote($tenant, $f->id, $d));
         }
         if ($action === 'profile') {
             $d = $r->validate(['parentName' => 'required|string|max:160', 'phone' => 'required|string|max:40', 'spouseName' => 'nullable|string|max:160', 'spousePhone' => 'nullable|string|max:40', 'address' => 'nullable|string|max:300', 'city' => 'nullable|string|max:160', 'state' => 'nullable|string|max:50', 'zip' => 'nullable|string|max:20', 'motherName' => 'nullable|string|max:160', 'motherPhone' => 'nullable|string|max:40', 'fatherName' => 'nullable|string|max:160', 'fatherPhone' => 'nullable|string|max:40', 'pickupPerson' => 'nullable|string|max:160', 'emergencyContact' => 'nullable|string|max:160', 'emergencyPhone' => 'nullable|string|max:40', 'sms_consent' => 'required|boolean']);
@@ -110,8 +113,17 @@ class SoccerPortalController extends Controller
             $d = $r->validate(['player_id' => 'required|uuid', 'season_id' => 'required|uuid', 'request_id' => 'required|uuid', 'medical_reviewed' => 'required|accepted', 'answers' => 'required|array', 'answers.*' => 'nullable|string|max:1000']);
 
             return response()->json(['id' => $this->families->release($tenant, $f, $d)]);
-        } elseif ($action === 'register') {
+        } elseif ($action === 'register' || $action === 'amend') {
+            abort_unless($r->isMethod('post'), 405);
             $d = $r->validate(['season_id' => 'required|uuid', 'volunteer' => 'required|boolean', 'coach_parent' => 'exclude_unless:volunteer,true|required|in:mother,father', 'coach_name' => 'exclude_unless:volunteer,true|required|string|max:160', 'coach_teams' => 'exclude_unless:volunteer,true|required|array|min:1|max:3', 'coach_teams.*' => 'in:green-bears,blue-dragons,red-falcons', 'coach_available_8_of_10' => 'exclude_unless:volunteer,true|required|accepted', 'coach_jersey_size' => 'nullable|string|max:30', 'children' => 'required|array|min:1|max:12', 'children.*.player_id' => 'required|uuid', 'children.*.needs_jersey' => 'required|boolean', 'children.*.jersey_size' => 'nullable|string|max:30', 'expected_due_today_cents' => 'sometimes|required|integer|min:0', 'expected_available_player_ids' => 'sometimes|array', 'expected_available_player_ids.*' => 'uuid']);
+            if ($action === 'amend') {
+                $d = [...$d, ...$r->validate(['expected_application_revision' => 'required|string|size:64',
+                    'expected_due_today_cents' => 'required|integer|min:0', 'expected_available_player_ids' => 'present|array',
+                    'expected_available_player_ids.*' => 'uuid'])];
+                $amendment = app(\App\Services\Soccer\SoccerApplicationService::class)->amend($tenant, $f->id, $d);
+
+                return response()->json(['amendment' => $amendment, ...$this->families->profile($tenant, $this->store->row('families', $tenant, $f->id))]);
+            }
             app(SoccerRegistrationService::class)->register($tenant, $f->id, $d);
         } elseif ($action === 'paypal-create') {
             abort_unless($r->isMethod('post'), 405);
