@@ -1,0 +1,19 @@
+{
+  "source": "johncollinsgit/TimberLine",
+  "assets_sha256": {
+    "resources/js/pos-register.js": "cdb0417267b4fe3d15c0250343a6afddc0a05b384b4ee8d4136b605a99a1bdd0",
+    "resources/js/pos-browser-demo-engine.js": "eb9495009ab305c6fdc2b70bd1946da50904635e587ff2c01915737e7d26ca71",
+    "resources/js/pos-browser-demo.js": "c8e277adcb4f8b9f7619ce32181f4dbc045f1586f0df14db3ab77097b40179a1",
+    "resources/css/pos-browser-demo.css": "ca53dd3c92627a4c35d6424ff2a5f450756898b9c0181d15f38d87dbe1d2203c",
+    "public/brand/everbranch-mark.svg": "17594fabc199baba39d7aa2be42c2ccfddb0e6a33848f827f21aa66dc7d000b1",
+    "public/images/pos/counter-illustration.webp": "a35902947582d25953d54c7773e6f3bc30fc27612411bfb14f21f9007d9e77ba",
+    "resources/views/pos/browser-demo.blade.php": "262baded5220b67453ea8c87669aa61e3cd92ab68d918c844d7f702e26a62193"
+  },
+  "changes": [
+    "Resolved server template to bundled local files",
+    "Evergrove Payments shell branding",
+    "No-network Content Security Policy",
+    "Receipt preview only; native printing unavailable"
+  ],
+  "payment_bridge": false
+}
