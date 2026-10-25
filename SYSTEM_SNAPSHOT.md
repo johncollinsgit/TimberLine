@@ -1,3 +1,13 @@
+## Wren editable saved applications (October 25, 2026; source candidate)
+
+The family portal can reopen unsettled registrations through Edit application &
+coaching. Signed own-family amendment quotes preserve current holds and recheck
+expired applications against capacity and queue order. Saving reviews the revised
+amount, preserves confirmed siblings and existing receipts, retires prior Stripe
+checkout before replacing an unpaid invoice, and reuses exact retry results.
+A racing paid or uncertain provider outcome prevents repricing; the payment stays
+recorded. Draft edits survive leaving and signing in again. See the Wren runbook.
+
 ## Enterprise CI performance candidate (October 23, 2026)
 
 The isolated Enterprise workflow keeps the `enterprise-runtime` required result
