@@ -43,6 +43,7 @@ class SoccerRegistrationSummaryService
             'headline' => match ($event->action) {
                 'payment_confirmed' => 'Payment received',
                 'organizer_fee_waived' => 'Registration fees waived',
+                'application_amended' => 'Family application updated',
                 default => 'New family registration',
             },
             'season' => $season->name,

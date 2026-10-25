@@ -1,3 +1,35 @@
+# Editing a saved unpaid application — October 25, 2026
+
+- The family account exposes **Edit application & coaching** beside payment
+  recovery. It restores all unsettled players, jersey choices, saved medical
+  details and the season's coaching preference; confirmed siblings remain in
+  their existing places. Parents review shared details and sign the reviewed
+  medical permissions before saving an amendment.
+- Signed POST `amend-quote` and `amend` use only the authenticated family's
+  complete unsettled player set. A profile revision prevents overwriting another
+  session's submitted edits. Draft edits preserve their original revision and
+  survive Save & leave/sign-in.
+- Quotes keep still-current held spots and recheck expired applications against
+  current capacity, earlier queue entries and sibling reserve rules. Up to two
+  coaching waivers are available after existing confirmed waivers; organizer
+  waivers and paid/confirmed siblings are never repriced. A request to withdraw
+  coaching after confirmed waived places requires Sarah's review.
+- Saving serializes on the season row, verifies the reviewed amount and available
+  players, preserves signed release history, and retires/reconciles every prior
+  checkout for the edited rows before replacing the unpaid invoice. Unknown or
+  recorded provider activity blocks an edit. A racing actual payment commits its
+  receipt even when it blocks repricing. Exact retries reuse one saved result.
+- The amendment creates no duplicate registrations and preserves queue sequence.
+  Only available children enter the replacement invoice; actual shortages wait
+  without collection. A fully waived invoice confirms places without payment.
+  A payable replacement opens card checkout directly; failure keeps a retryable
+  saved invoice. Amendment audit and organizer summaries identify an update.
+- Release the backend through reviewed PR/CI/Forge and verify `/ready` before
+  publishing the matching Sites allowlist and edit UI. Test with fictional local
+  families; inspect Collins and Gerber read-only without changing their choices.
+  Rollback keeps old invoices, receipts and amended registration records intact;
+  hide the edit entry point if the matching API is unavailable.
+
 # Saved application and card-only recovery — October 23, 2026
 
 The public Sites checkout is card-only. The backend retains old provider evidence,

@@ -18,7 +18,7 @@ class SoccerEvents
             $data['summary'] = $parent.': '.($data['summary'] ?? 'Review in Everbranch.');
         }
         $id = $this->store->insert('events', $tenant, ['season_id' => $season, 'family_id' => $family, 'actor_id' => $actor, 'action' => $action, 'event_key' => $key, 'data' => $this->store->encrypt($data)]);
-        if ($season && $family && ! empty($data['registration_ids']) && in_array($action, ['family_registration_submitted', 'payment_confirmed', 'organizer_fee_waived'], true)) {
+        if ($season && $family && ! empty($data['registration_ids']) && in_array($action, ['family_registration_submitted', 'application_amended', 'payment_confirmed', 'organizer_fee_waived'], true)) {
             foreach (array_unique(config('soccer.admin_notification_emails', [])) as $recipient) {
                 $email = strtolower(trim($recipient));
                 if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -42,7 +42,7 @@ class SoccerEvents
         if ($familyText && $family) {
             $f = $this->store->row('families', $tenant, $family);
             $p = $this->store->decrypt($f->profile);
-            $invoiceId = in_array($action, ['initial_registration', 'waitlist_offer', 'manual_waitlist_offer', 'resumed_registration', 'payment_reminder'], true) ? ($data['invoice_id'] ?? null) : null;
+            $invoiceId = in_array($action, ['initial_registration', 'waitlist_offer', 'manual_waitlist_offer', 'resumed_registration', 'amended_registration', 'payment_reminder'], true) ? ($data['invoice_id'] ?? null) : null;
             if ($invoiceId && $this->store->query('invoices', $tenant)->where('id', $invoiceId)->value('status') === 'waived') {
                 $invoiceId = null;
             }
