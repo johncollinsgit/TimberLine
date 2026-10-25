@@ -17,6 +17,7 @@ on:
       - codex/enterprise-executive-visibility
       - codex/enterprise-voice-finale
       - 'codex/evergrove-payments-iphone-*'
+      - 'codex/evergrove-payments-production-*'
   workflow_dispatch:
 
 concurrency:
@@ -248,6 +249,7 @@ jobs:
       - name: Verify payment journal and quote recovery and concurrency
         env:
           PAYMENTS_CORE_DISPOSABLE_MYSQL: '1'
+          PAYMENTS_INVENTORY_DISPOSABLE_MYSQL: '1'
           APP_ENV: testing
           APP_KEY: 'base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI='
           CACHE_STORE: array
@@ -255,8 +257,9 @@ jobs:
           MAIL_MAILER: array
           LOG_CHANNEL: 'null'
         run: |
-          php ./vendor/bin/pest tests/Integration/PaymentsCoreMySqlRecoveryTest.php tests/Integration/PaymentsCoreQuotesMySqlRecoveryTest.php tests/Integration/PaymentsCoreMySqlConcurrencyTest.php --compact
+          php ./vendor/bin/pest tests/Integration/PaymentsCoreMySqlRecoveryTest.php tests/Integration/PaymentsCoreQuotesMySqlRecoveryTest.php tests/Integration/PaymentsCoreMySqlConcurrencyTest.php tests/Integration/PaymentsCoreInventoryMySqlRecoveryTest.php tests/Integration/PaymentsCoreInventoryMySqlConcurrencyTest.php tests/Integration/MobileInventoryMySqlTest.php --compact
           php tests/PaymentsCore/security-mysql-integrity.php
+          php tests/PaymentsCore/security-inventory.php
 
       - name: Rehearse prior production schema upgrade
         run: scripts/ci/rehearse-migrations.sh "${{ steps.migration-base.outputs.sha }}"

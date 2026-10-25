@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\PaymentsCore\Mobile;
 
+use App\Services\PaymentsCore\Inventory\InventoryUnavailableException;
 use App\Services\PaymentsCore\MerchantBinding;
 use App\Services\PaymentsCore\PaymentCore;
 use App\Services\PaymentsCore\PaymentJournal;
@@ -105,7 +106,11 @@ final class MobilePaymentService
         $this->access->assertAllowed($binding, 'collect');
         $quote = $this->quotes->loadForAttempt($binding, $scope['actor_id'], $scope['site_id'], $input['quote_id'], $input['quote_version']);
         try {
-            $row = $this->core->start($binding, $quote->toSaleSnapshot(), $input['request_id']);
+            // The quote is a server-owned typed value. The journal creates its
+            // stock holds and intent together before any provider dispatch.
+            $row = $this->core->startQuoted($quote, $input['request_id']);
+        } catch (InventoryUnavailableException) {
+            throw new MobilePaymentException('stock_commit_unavailable', 503);
         } catch (ProviderUnavailableException) {
             throw new MobilePaymentException('provider_unavailable', 503);
         } catch (DomainException) {

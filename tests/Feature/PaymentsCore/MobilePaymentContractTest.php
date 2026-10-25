@@ -6,6 +6,7 @@ use App\Models\TenantSite;
 use App\Models\User;
 use App\Models\WebsiteProduct;
 use App\Models\WebsiteProductVariant;
+use App\Services\PaymentsCore\Inventory\QuotedPaymentJournal;
 use App\Services\PaymentsCore\MerchantBinding;
 use App\Services\PaymentsCore\Mobile\MobilePaymentAccess;
 use App\Services\PaymentsCore\Mobile\MobilePaymentService;
@@ -25,6 +26,7 @@ use App\Services\PaymentsCore\SqlitePaymentJournal;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
+use Tests\Support\PaymentsCore\QuotedRehearsalJournal;
 
 /** Explicit synthetic provider, available only through this test's container binding. */
 final class MobileContractFixtureProvider implements PaymentProvider
@@ -78,13 +80,18 @@ final class MobileContractFixtureProvider implements PaymentProvider
 }
 
 /** Simulates an authorization change while the durable claim was waiting. */
-final class MobileContractClaimBarrier implements PaymentJournal
+final class MobileContractClaimBarrier implements QuotedPaymentJournal
 {
     public function __construct(private PaymentJournal $inner, private Closure $afterClaim) {}
 
     public function reservePayment(MerchantBinding $binding, SaleSnapshot $sale, string $requestId): array
     {
         return $this->inner->reservePayment($binding, $sale, $requestId);
+    }
+
+    public function reserveQuotedPayment(\App\Services\PaymentsCore\Quotes\TrustedQuote $quote, string $requestId): array
+    {
+        return $this->inner->reserveQuotedPayment($quote, $requestId);
     }
 
     public function reserveRefund(int $tenantId, string $paymentId, string $requestId, int $amountMinor, string $reason): array
@@ -143,8 +150,9 @@ beforeEach(function (): void {
     $this->withToken($this->token);
     $this->base = '/api/mobile/v1/workspaces/'.$this->tenant->slug.'/payments/registers';
     $this->registerPath = $this->base.'/fixture_register';
-    $this->journal = new SqlitePaymentJournal(new PDO('sqlite::memory:'));
-    $this->journal->installForTesting();
+    $reference = new SqlitePaymentJournal(new PDO('sqlite::memory:'));
+    $reference->installForTesting();
+    $this->journal = new QuotedRehearsalJournal($reference);
     $this->provider = new MobileContractFixtureProvider;
     $this->tax = new UnavailableTaxPolicy;
     $fixture = $this;

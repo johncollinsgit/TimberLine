@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services\PaymentsCore;
 
+use App\Services\PaymentsCore\Inventory\InventoryUnavailableException;
+use App\Services\PaymentsCore\Inventory\QuotedPaymentJournal;
+use App\Services\PaymentsCore\Quotes\TrustedQuote;
 use DomainException;
 use Throwable;
 
@@ -32,6 +35,22 @@ final class PaymentCore
         $this->access->assertAllowed($binding, 'collect');
         $provider = $this->provider($binding);
         $row = $this->journal->reservePayment($binding, $sale, $requestId);
+        if (! $this->journal->claim($binding->tenantId, $row['id'])) {
+            return $this->journal->get($binding->tenantId, $row['id']);
+        }
+
+        return $this->dispatch($provider, $this->journal->get($binding->tenantId, $row['id']));
+    }
+
+    public function startQuoted(TrustedQuote $quote, string $requestId): array
+    {
+        $binding = $quote->binding;
+        $this->access->assertAllowed($binding, 'collect');
+        $provider = $this->provider($binding);
+        if (! $this->journal instanceof QuotedPaymentJournal) {
+            throw new InventoryUnavailableException('Atomic inventory journal is unavailable.');
+        }
+        $row = $this->journal->reserveQuotedPayment($quote, $requestId);
         if (! $this->journal->claim($binding->tenantId, $row['id'])) {
             return $this->journal->get($binding->tenantId, $row['id']);
         }

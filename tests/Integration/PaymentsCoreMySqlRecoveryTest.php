@@ -14,6 +14,10 @@ beforeEach(function (): void {
     }
     MySqlFixture::guard();
     $this->journalMigration = require database_path('migrations/2026_10_22_190000_create_payment_core_journal_tables.php');
+    $this->hasInventoryOwner = Schema::hasColumn('website_inventory_reservations', 'payment_core_operation_id');
+    if ($this->hasInventoryOwner && collect(Schema::getForeignKeys('website_inventory_reservations'))->contains(fn ($key) => $key['name'] === 'website_reservation_payment_fk')) {
+        Schema::table('website_inventory_reservations', fn ($table) => $table->dropForeign('website_reservation_payment_fk'));
+    }
     $this->journalMigration->down();
     $this->journalMigration->up();
     $this->fixtureTenant = MySqlFixture::tenant();
@@ -22,6 +26,9 @@ beforeEach(function (): void {
 afterEach(function (): void {
     if (isset($this->fixtureTenant)) {
         MySqlFixture::purgeTenant($this->fixtureTenant->id);
+        if ($this->hasInventoryOwner) {
+            (require database_path('migrations/2026_10_22_200000_add_payment_core_inventory_ownership.php'))->up();
+        }
     }
 });
 

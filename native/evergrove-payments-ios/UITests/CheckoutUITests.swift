@@ -20,20 +20,24 @@ final class CheckoutUITests: XCTestCase {
 
     func testUnknownRecoverySurvivesRelaunchAndBlocksNewSale() {
         let app = launch()
-        app.tabBars.buttons["Recovery lab"].tap()
-        app.switches["Rehearse connection interruption"].tap()
-        app.buttons["runTestCheckout"].tap()
-        let recover = app.buttons["recoverOriginalAttempt"]
+        app.tabBars.buttons["Native checkout"].tap()
+        app.buttons["prepareServerFixtureQuote"].tap()
+        XCTAssertTrue(app.buttons["confirmServerFixtureQuote"].waitForExistence(timeout: 5))
+        app.switches["Rehearse lost payment response"].tap()
+        app.buttons["confirmServerFixtureQuote"].tap()
+        let recover = app.buttons["recoverServerFixtureRequest"]
         XCTAssertTrue(recover.waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["runTestCheckout"].isEnabled)
+        XCTAssertFalse(app.buttons["prepareServerFixtureQuote"].isEnabled)
         app.terminate()
         app.launch()
-        app.tabBars.buttons["Recovery lab"].tap()
+        app.tabBars.buttons["Native checkout"].tap()
         XCTAssertTrue(recover.waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["runTestCheckout"].isEnabled)
+        XCTAssertFalse(app.buttons["prepareServerFixtureQuote"].isEnabled)
         recover.tap()
-        XCTAssertTrue(app.staticTexts["Test checkout complete"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["runTestCheckout"].isEnabled)
+        XCTAssertTrue(app.staticTexts["Fixture status: unknown"].waitForExistence(timeout: 5))
+        recover.tap()
+        XCTAssertTrue(app.staticTexts["Fixture checkout confirmed"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["prepareServerFixtureQuote"].isEnabled)
     }
 
     func testBundledRegisterGuestCardRehearsalProducesSimulationReceipt() {
