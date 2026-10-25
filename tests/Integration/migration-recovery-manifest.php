@@ -38,6 +38,7 @@ return [
     '2026_10_22_150000_create_service_proposal_tables.php' => [
         'test' => 'tests/Integration/ServiceProposalMySqlRecoveryTest.php',
         'scenarios' => ['retained encrypted client/catalog/draft/version/request/comment evidence before named index and foreign-key DDL', 'repeated completed DDL before migration bookkeeping', 'publication replay unique index recovered without replacing tokens'],
+    ],
     '2026_10_22_190100_create_payment_core_quotes_table.php' => [
         'test' => 'tests/Integration/PaymentsCoreQuotesMySqlRecoveryTest.php',
         'scenarios' => ['encrypted immutable quote rows survive interrupted named-index repair and completed DDL replay', 'duplicate request evidence and changed named index definitions stop without deleting evidence'],
