@@ -485,7 +485,7 @@ class PosService
             $variant = WebsiteProductVariant::query()->forTenantId($tenant->id)->lockForUpdate()->find($line->website_product_variant_id);
             $hold = WebsiteInventoryReservation::query()->forTenantId($tenant->id)->where('website_order_id', $order->id)->where('website_product_variant_id', $line->website_product_variant_id)->lockForUpdate()->first();
             $others = (int) WebsiteInventoryReservation::query()->forTenantId($tenant->id)->where('website_product_variant_id', $line->website_product_variant_id)
-                ->where('website_order_id', '!=', $order->id)->where('status', 'active')->lockForUpdate()->get()->sum('quantity');
+                ->excludingWebsiteOrder($order->id)->where('status', 'active')->lockForUpdate()->get()->sum('quantity');
             if (! $variant || $variant->inventory_quantity === null || ! $hold || $hold->status !== 'active'
                 || $hold->quantity !== $line->quantity || $variant->inventory_quantity - $others < $line->quantity) {
                 return false;

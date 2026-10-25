@@ -3,6 +3,9 @@
 namespace App\Providers;
 
 use App\Services\PaymentsCore\ClosedPaymentAccess;
+use App\Services\PaymentsCore\Inventory\InventoryReservationAuthority;
+use App\Services\PaymentsCore\Inventory\UnavailableInventoryAuthority;
+use App\Services\PaymentsCore\Inventory\WebsitePaymentInventory;
 use App\Services\PaymentsCore\Mobile\MobilePaymentAccess;
 use App\Services\PaymentsCore\Mobile\MobilePaymentService;
 use App\Services\PaymentsCore\Mobile\MobileRegisterDirectory;
@@ -26,11 +29,16 @@ final class EvergrovePaymentsServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->app->bind(InventoryReservationAuthority::class, UnavailableInventoryAuthority::class);
+        $this->app->bind(WebsitePaymentInventory::class, fn ($app) => new WebsitePaymentInventory(
+            $app['db']->connection(), $app->make(WebsitePaymentCatalog::class), $app['encrypter'],
+            $app->make(InventoryReservationAuthority::class),
+        ));
         $this->app->bind(PaymentJournal::class, function ($app): PaymentJournal {
             $database = $app['db']->connection();
 
             return $database->getDriverName() === 'mysql'
-                ? new MySqlPaymentJournal($database, $app['encrypter'])
+                ? new MySqlPaymentJournal($database, $app['encrypter'], $app->make(WebsitePaymentInventory::class))
                 : new UnavailablePaymentJournal;
         });
         $this->app->bind(PaymentAccess::class, ClosedPaymentAccess::class);

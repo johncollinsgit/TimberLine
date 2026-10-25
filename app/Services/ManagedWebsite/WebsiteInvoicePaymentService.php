@@ -395,7 +395,7 @@ class WebsiteInvoicePaymentService
             // The locked variant is the shared stock authority; use a current
             // read so a pre-existing RR snapshot cannot hide a POS/web hold.
             $others = WebsiteInventoryReservation::forTenantId($order->tenant_id)->where('website_product_variant_id', $id)
-                ->where('website_order_id', '!=', $order->id)->where('status', 'active')->lockForUpdate()->get()->sum('quantity');
+                ->excludingWebsiteOrder($order->id)->where('status', 'active')->lockForUpdate()->get()->sum('quantity');
             abort_unless($variant->inventory_quantity !== null && $variant->inventory_quantity - $others >= $quantity, 422, 'An invoice item no longer has enough stock.');
             WebsiteInventoryReservation::updateOrCreate(['tenant_id' => $order->tenant_id, 'website_order_id' => $order->id, 'website_product_variant_id' => $id],
                 ['quantity' => $quantity, 'status' => 'active', 'expires_at' => $expires->copy()->addMinutes(5)]);

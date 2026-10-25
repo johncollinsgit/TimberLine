@@ -1,3 +1,14 @@
+## Native API and atomic inventory rehearsal (2026-10-25; simulated source candidate)
+
+The native fixture checkout uses typed server contracts and durable original request
+identity. MySQL quoted checkout atomically reserves shared Website holds and intent,
+then applies canonical provider evidence and stock together. Unknown holds have no
+TTL; refunds never implicitly restock. Existing Website/POS/Marketplace stock reads
+include these holds. No financial Website order is fabricated. Provider registries
+are empty, reservation authority defaults unavailable and real collection remains
+hard-denied. Native networking, physical/device UI, signing and live PSP acceptance
+remain unverified/unavailable. See `docs/operations/evergrove-payments-native-inventory.md`.
+
 ## Evergrove Payments durable server contracts (2026-10-22; disabled source candidate)
 
 The follow-up adds an encrypted MySQL journal, migration recovery/concurrency,

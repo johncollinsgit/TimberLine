@@ -1,0 +1,50 @@
+{
+  "fixture_notice": "FICTIONAL local/test contract example only. No Alpha configuration, credentials, real tax determination or payment evidence.",
+  "contract_version": 1,
+  "mode": "fixture",
+  "register_id": "fixture_register",
+  "catalog_response": {
+    "contract_version": 1,
+    "mode": "fixture",
+    "items": [{"variant_id": 101, "title": "Fictional retail kit", "sku": "FICTIONAL-RETAIL-KIT", "kind": "merchandise", "currency": "usd", "unit_amount_minor": 1250, "expected_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "available_quantity": 5, "quoteable": true}],
+    "next_cursor": null,
+    "blockers": []
+  },
+  "quote_request": {
+    "request_id": "10000000-0000-4000-8000-000000000001",
+    "items": [{"variant_id": 101, "quantity": 2, "expected_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]
+  },
+  "quote_response": {
+    "contract_version": 1,
+    "mode": "fixture",
+    "quote": {
+      "quote_id": "20000000-0000-4000-8000-000000000002",
+      "version": 1,
+      "request_id": "10000000-0000-4000-8000-000000000001",
+      "sale_id": "30000000-0000-4000-8000-000000000003",
+      "currency": "usd",
+      "amount_minor": 2600,
+      "lines": [{"line_id": "website_variant_101", "variant_id": 101, "quantity": 2, "kind": "merchandise", "currency": "usd", "unit_amount_minor": 1250, "catalog_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "inventory_tracked": true, "tax_amount_minor": 100}],
+      "created_at": "2026-10-22T12:00:00+00:00",
+      "expires_at": "2026-10-22T12:05:00+00:00",
+      "tax_policy_revision": "fictional_fixture_v1",
+      "tax_treatment": "exclusive",
+      "tax_rounding": "per_line_half_up"
+    }
+  },
+  "attempt_request": {"request_id": "40000000-0000-4000-8000-000000000004", "quote_id": "20000000-0000-4000-8000-000000000002", "quote_version": 1},
+  "attempt_unknown_response": {
+    "contract_version": 1, "mode": "fixture",
+    "attempt": {"attempt_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "request_id": "40000000-0000-4000-8000-000000000004", "sale_id": "30000000-0000-4000-8000-000000000003", "kind": "payment", "state": "unknown", "amount_minor": 2600, "currency": "usd", "version": 0, "canonical_confirmation": false, "allowed_next_actions": ["reconcile"]}
+  },
+  "attempt_succeeded_response": {
+    "contract_version": 1, "mode": "fixture",
+    "attempt": {"attempt_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "request_id": "40000000-0000-4000-8000-000000000004", "sale_id": "30000000-0000-4000-8000-000000000003", "kind": "payment", "state": "succeeded", "amount_minor": 2600, "currency": "usd", "version": 1, "canonical_confirmation": true, "allowed_next_actions": []}
+  },
+  "refund_request": {"request_id": "50000000-0000-4000-8000-000000000005", "amount_minor": 600, "reason": "requested_by_customer"},
+  "refund_succeeded_response": {
+    "contract_version": 1, "mode": "fixture",
+    "attempt": {"attempt_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "request_id": "50000000-0000-4000-8000-000000000005", "sale_id": "30000000-0000-4000-8000-000000000003", "kind": "refund", "state": "succeeded", "amount_minor": 600, "currency": "usd", "version": 1, "canonical_confirmation": true, "allowed_next_actions": []}
+  },
+  "inventory_expectations": {"initial_stock": 5, "unknown_stock": 5, "unknown_held": 2, "paid_stock": 3, "paid_active_held": 0, "after_refund_stock": 3}
+}

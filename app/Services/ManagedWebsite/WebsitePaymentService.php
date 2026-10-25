@@ -250,7 +250,7 @@ class WebsitePaymentService
             // Match checkout's current read under the shared variant lock,
             // including holds committed after this RR transaction first read.
             $others = WebsiteInventoryReservation::query()->forTenantId($order->tenant_id)->where('website_product_variant_id', $line->website_product_variant_id)
-                ->where('website_order_id', '!=', $order->id)->where('status', 'active')->lockForUpdate()->get()->sum('quantity');
+                ->excludingWebsiteOrder($order->id)->where('status', 'active')->lockForUpdate()->get()->sum('quantity');
             if (! $variant || $variant->inventory_quantity === null || ! $reservation || ! in_array($reservation->status, ['active', 'released'], true)
                 || $reservation->quantity !== $line->quantity || $variant->inventory_quantity - $others < $line->quantity) {
                 return false;

@@ -82,7 +82,8 @@ final class MobilePaymentAccess implements PaymentAccess
             throw new MobilePaymentException('operation_unavailable', 404);
         }
         if ($operation === 'collect') {
-            // No production stock hold/commit adapter exists. Flags cannot open it.
+            // Only explicit local/testing composition may rehearse collection.
+            // Inventory support cannot open production or register a real provider.
             if (! $this->fixtureMode() || config('evergrove_payments.collection_enabled') !== true
                 || config('evergrove_payments.fixture_collection_enabled') !== true
                 || $binding->environment !== 'test' || ! str_starts_with($binding->provider, 'fixture_')) {

@@ -64,10 +64,11 @@ outputs["PROVENANCE.json"] = (json.dumps({
     "payment_bridge": False,
 }, indent=2) + "\n").encode()
 if args.check:
-    shared_fixture = "tests/PaymentsCore/fixtures/native-checkout.json"
-    native_fixture = base / "Tests/EvergrovePaymentsCoreTests/Fixtures/native-checkout.json"
-    if (repo / shared_fixture).read_bytes() != native_fixture.read_bytes():
-        raise SystemExit("Shared backend/native checkout fixture mismatch")
+    for filename in ["native-checkout.json", "mobile-inventory-checkout.json"]:
+        shared_fixture = repo / "tests/PaymentsCore/fixtures" / filename
+        native_fixture = base / "Tests/EvergrovePaymentsCoreTests/Fixtures" / filename
+        if shared_fixture.read_bytes() != native_fixture.read_bytes():
+            raise SystemExit("Shared backend/native checkout fixture mismatch: " + filename)
     mismatches = [relative for relative, expected in outputs.items()
                   if not (destination / relative).is_file() or (destination / relative).read_bytes() != expected]
     actual = {str(path.relative_to(destination)) for path in destination.rglob("*") if path.is_file()}

@@ -13,12 +13,16 @@ final class WebsitePaymentCatalog implements PaymentCatalog
 {
     public function __construct(private Connection $database, private ServiceItemPolicy $servicePolicy = new UnavailableServiceItemPolicy) {}
 
-    public function item(int $tenantId, int $siteId, int $variantId, int $quantity = 1): CatalogLine
+    public function item(int $tenantId, int $siteId, int $variantId, int $quantity = 1, bool $lock = false): CatalogLine
     {
         if ($tenantId < 1 || $siteId < 1 || $variantId < 1 || $quantity < 1 || $quantity > 99) {
             throw new QuoteException('invalid_selection');
         }
-        $row = $this->query($tenantId, $siteId)->where('v.id', $variantId)->first();
+        if ($lock && $this->database->transactionLevel() < 1) {
+            throw new QuoteException('inventory_transaction_required', 503);
+        }
+        $row = $this->query($tenantId, $siteId)->where('v.id', $variantId)
+            ->when($lock, fn ($query) => $query->lockForUpdate())->first();
         if (! $row || $row->product_status !== 'active' || ! $row->is_available) {
             throw new QuoteException('catalog_item_not_found', 404);
         }
@@ -45,8 +49,10 @@ final class WebsitePaymentCatalog implements PaymentCatalog
             }
             // Conservatively count all retained active Website holds, including expired ones
             // awaiting the Website lane's own release. A quote never creates/deletes a hold.
-            $held = (int) $this->database->table('website_inventory_reservations')->where('tenant_id', $tenantId)
-                ->where('website_product_variant_id', $variantId)->where('status', 'active')->sum('quantity');
+            $holds = $this->database->table('website_inventory_reservations')->where('tenant_id', $tenantId)
+                ->where('website_product_variant_id', $variantId)->where('status', 'active');
+            // Materialize locking rows instead of an aggregate snapshot under MySQL RR.
+            $held = (int) ($lock ? $holds->orderBy('id')->lockForUpdate()->get(['quantity'])->sum('quantity') : $holds->sum('quantity'));
             $available = max(0, (int) $row->inventory_quantity - $held);
             if ($available < $quantity) {
                 throw new QuoteException('inventory_unavailable', 409);

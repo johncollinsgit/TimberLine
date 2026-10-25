@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace App\Services\PaymentsCore;
 
+use App\Services\PaymentsCore\Inventory\InventoryUnavailableException;
+use App\Services\PaymentsCore\Inventory\PaymentInventoryContext;
+use App\Services\PaymentsCore\Inventory\QuotedPaymentJournal;
+use App\Services\PaymentsCore\Inventory\WebsitePaymentInventory;
+use App\Services\PaymentsCore\Quotes\TrustedQuote;
 use DomainException;
 use Illuminate\Contracts\Encryption\Encrypter;
 use Illuminate\Database\Connection;
@@ -13,9 +18,9 @@ use Illuminate\Database\QueryException;
  * Schema is installed exclusively by reviewed migrations. No network/HTTP runs
  * in these transactions, including their bounded deadlock retries.
  */
-final class MySqlPaymentJournal implements PaymentJournal
+final class MySqlPaymentJournal implements QuotedPaymentJournal
 {
-    public function __construct(private Connection $db, private Encrypter $crypt)
+    public function __construct(private Connection $db, private Encrypter $crypt, private ?WebsitePaymentInventory $inventory = null)
     {
         if ($db->getDriverName() !== 'mysql') {
             throw new DomainException('The MySQL payment journal requires MySQL.');
@@ -24,9 +29,23 @@ final class MySqlPaymentJournal implements PaymentJournal
 
     public function reservePayment(MerchantBinding $binding, SaleSnapshot $sale, string $requestId): array
     {
+        return $this->reserve($binding, $sale, $requestId, null);
+    }
+
+    public function reserveQuotedPayment(TrustedQuote $quote, string $requestId): array
+    {
+        if (! $this->inventory) {
+            throw new InventoryUnavailableException('Atomic inventory participant is unavailable.');
+        }
+
+        return $this->reserve($quote->binding, $quote->toSaleSnapshot(), $requestId, PaymentInventoryContext::fromQuote($quote));
+    }
+
+    private function reserve(MerchantBinding $binding, SaleSnapshot $sale, string $requestId, ?PaymentInventoryContext $context): array
+    {
         Contract::id($requestId);
 
-        return $this->locked($binding->tenantId, function () use ($binding, $sale, $requestId): array {
+        return $this->locked($binding->tenantId, function () use ($binding, $sale, $requestId, $context): array {
             $hash = Contract::hash([$binding->snapshot(), $sale->snapshot()]);
             // Insert/upsert immutable identities BEFORE any absent-key locking
             // reads: RR gap locks on different tenants must not form cycles.
@@ -40,12 +59,24 @@ final class MySqlPaymentJournal implements PaymentJournal
             [$row, $created] = $this->insert($binding, (int) $register->id, $requestId, $sale->saleId, 'payment', $hash,
                 $sale->snapshot(), $sale->amountMinor, $sale->currency);
             if (! $created) {
+                if (($row['inventory_hash'] ?? null) !== $context?->fingerprint()) {
+                    throw new DomainException('Inventory request already has different immutable quote terms.');
+                }
+
                 return $row;
             }
             if ($this->db->table('payment_core_operations')->where('tenant_id', $binding->tenantId)
                 ->where('register_id', $binding->registerId)->where('id', '<>', $row['id'])
                 ->whereIn('state', ['reserved', 'processing', 'unknown', 'review'])->lockForUpdate()->first()) {
                 throw new DomainException('Resolve the register operation before another sale.');
+            }
+            if ($context) {
+                $this->inventory->reserve($row, $context);
+                $this->db->table('payment_core_operations')->where('id', $row['id'])->update([
+                    'inventory_snapshot' => $this->encrypt($context->snapshot()), 'inventory_hash' => $context->fingerprint(),
+                    'inventory_state' => 'held', 'inventory_payment_state' => null,
+                ]);
+                $row = $this->load($binding->tenantId, $row['id']);
             }
             $this->event($row['id'], 'reserved', 0);
 
@@ -163,7 +194,14 @@ final class MySqlPaymentJournal implements PaymentJournal
             if (! $valid) {
                 return $this->review($row, 'evidence_mismatch', $evidence->version);
             }
-            if ($evidence->version <= $row['version']) {
+            $canonicalInventory = $row['inventory_payment_state'] ?? null;
+            if (in_array($canonicalInventory, ['succeeded', 'failed', 'cancelled'], true) && $canonicalInventory !== $evidence->state) {
+                $this->event($id, 'terminal_evidence_conflict', $evidence->version);
+
+                return $row;
+            }
+            $repair = ($row['inventory_state'] ?? null) === 'review' && $canonicalInventory === $evidence->state;
+            if ($evidence->version < $row['version'] || ($evidence->version === $row['version'] && ! $repair)) {
                 return $row;
             }
             // Exact effect uniqueness spans tenant/register/location. Current
@@ -181,9 +219,19 @@ final class MySqlPaymentJournal implements PaymentJournal
 
                 return $row;
             }
+            $changes = ['state' => $evidence->state, 'provider_id' => $evidence->providerId, 'version' => $evidence->version];
+            if ($row['kind'] === 'payment' && ($row['inventory_hash'] ?? null) !== null) {
+                $inventoryState = $this->inventory ? $this->inventory->settle($row, $evidence->state)
+                    : (in_array($evidence->state, ['succeeded', 'failed', 'cancelled'], true) ? 'review' : $row['inventory_state']);
+                $changes['inventory_state'] = $inventoryState;
+                $changes['inventory_payment_state'] = $evidence->state;
+                if ($inventoryState === 'review') {
+                    $changes['state'] = 'review';
+                    $this->event($id, 'inventory_settlement_review', $evidence->version);
+                }
+            }
             $this->event($id, 'verified_'.$evidence->state, $evidence->version);
-            $this->db->table('payment_core_operations')->where('tenant_id', $tenantId)->where('id', $id)
-                ->update(['state' => $evidence->state, 'provider_id' => $evidence->providerId, 'version' => $evidence->version]);
+            $this->db->table('payment_core_operations')->where('tenant_id', $tenantId)->where('id', $id)->update($changes);
 
             return $this->load($tenantId, $id);
         });
@@ -291,6 +339,34 @@ final class MySqlPaymentJournal implements PaymentJournal
             }
         } else {
             throw new DomainException('Stored payment operation kind requires integrity review.');
+        }
+
+        $inventoryHash = $row['inventory_hash'] ?? null;
+        if ($inventoryHash !== null) {
+            if ($row['kind'] !== 'payment' || ! is_string($row['inventory_snapshot'] ?? null)
+                || ! in_array($row['inventory_state'] ?? null, ['held', 'committed', 'released', 'review'], true)
+                || ! in_array($row['inventory_payment_state'] ?? null, [null, 'processing', 'succeeded', 'failed', 'cancelled'], true)) {
+                throw new DomainException('Stored inventory context requires integrity review.');
+            }
+            $snapshot = json_decode($this->crypt->decrypt($row['inventory_snapshot'], false), true, 64, JSON_THROW_ON_ERROR);
+            $context = PaymentInventoryContext::restore($snapshot);
+            if (! hash_equals($inventoryHash, $context->fingerprint()) || $context->quote->binding->snapshot() !== $row['binding']
+                || $context->quote->toSaleSnapshot()->snapshot() !== $row['terms']
+                || (($row['inventory_state'] === 'committed') && $row['state'] !== 'succeeded')
+                || ($row['inventory_state'] === 'committed' && $row['inventory_payment_state'] !== 'succeeded')
+                || ($row['inventory_state'] === 'released' && $row['inventory_payment_state'] !== $row['state'])
+                || ($row['state'] === 'succeeded' && $row['inventory_state'] !== 'committed')
+                || (in_array($row['state'], ['failed', 'cancelled'], true) && $row['inventory_state'] !== 'released')
+                || (($row['inventory_state'] === 'released') && ! in_array($row['state'], ['failed', 'cancelled'], true))) {
+                throw new DomainException('Stored inventory identity requires integrity review.');
+            }
+            $row['inventory_snapshot'] = $snapshot;
+        } elseif (($row['inventory_snapshot'] ?? null) !== null || ($row['inventory_state'] ?? null) !== null
+            || ($row['inventory_payment_state'] ?? null) !== null) {
+            throw new DomainException('Partial inventory context requires integrity review.');
+        } elseif ($this->db->getSchemaBuilder()->hasColumn('website_inventory_reservations', 'payment_core_operation_id')
+            && $this->db->table('website_inventory_reservations')->where('payment_core_operation_id', $row['id'])->exists()) {
+            throw new DomainException('Inventory hold has lost its immutable quote context.');
         }
 
         return $row;

@@ -123,7 +123,14 @@ class MarketplaceCatalog
                 $tenant = app(MarketplaceAccess::class)->assertWorkspaceManager($actor, (int) $listing->maker->tenant_id);
                 $source = WebsiteProductVariant::query()->where('tenant_id', $tenant->id)->lockForUpdate()->findOrFail($listing->source_variant_id);
                 abort_unless($source->product?->track_inventory && $source->inventory_quantity !== null, 422, 'Native inventory must be tracked before allocation.');
-                $reserved = (int) WebsiteInventoryReservation::query()->where('tenant_id', $tenant->id)->where('website_product_variant_id', $source->id)->where('expires_at', '>', now())->sum('quantity');
+                // Core unknown-outcome holds have no TTL. Retain the existing
+                // Website expiry rule and include every active Core-owned hold.
+                // A current read after the variant lock cannot miss a competing
+                // hold committed while this allocation waited under MySQL RR.
+                $reserved = (int) WebsiteInventoryReservation::query()->where('tenant_id', $tenant->id)->where('website_product_variant_id', $source->id)
+                    ->where(fn ($holds) => $holds->where('expires_at', '>', now())
+                        ->orWhere(fn ($core) => $core->whereNotNull('payment_core_operation_id')->where('status', 'active')))
+                    ->lockForUpdate()->get()->sum('quantity');
                 abort_unless($quantity < 0 || $quantity <= $source->inventory_quantity - $reserved, 422, 'The available native stock is already sold or reserved.');
                 // A reduction is held in the marketplace until Shopify confirms withdrawal.
                 if ($quantity > 0) {

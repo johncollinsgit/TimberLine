@@ -2,7 +2,7 @@ name: Evergrove payment foundation
 
 on:
   pull_request:
-    branches: [main, 'codex/evergrove-payments-iphone-*']
+    branches: [main, 'codex/evergrove-payments-iphone-*', 'codex/evergrove-payments-production-*']
     paths:
       - '.github/workflows/evergrove-payments.yml'
       - 'app/Services/PaymentsCore/**'
@@ -57,8 +57,12 @@ jobs:
         run: php tests/PaymentsCore/security-boundaries.php
       - name: Verify existing register contracts
         run: npm run test:pos
+      - name: Verify native selection handoff against the canonical renderer
+        run: node --test native/evergrove-payments-ios/scripts/basket-selection.test.mjs
       - name: Verify shared native/backend fixture bytes
-        run: cmp tests/PaymentsCore/fixtures/native-checkout.json native/evergrove-payments-ios/Tests/EvergrovePaymentsCoreTests/Fixtures/native-checkout.json
+        run: |
+          cmp tests/PaymentsCore/fixtures/native-checkout.json native/evergrove-payments-ios/Tests/EvergrovePaymentsCoreTests/Fixtures/native-checkout.json
+          cmp tests/PaymentsCore/fixtures/mobile-inventory-checkout.json native/evergrove-payments-ios/Tests/EvergrovePaymentsCoreTests/Fixtures/mobile-inventory-checkout.json
       - name: Verify offline native bundle and canonical source identity
         run: python3 scripts/qa/evergrove-payments-bundle.py --repo-root . --native-root native/evergrove-payments-ios
 

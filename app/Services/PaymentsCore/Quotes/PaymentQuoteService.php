@@ -82,13 +82,23 @@ final class PaymentQuoteService
         if (TaxAssessment::terms($lines) !== TaxAssessment::terms($quote->catalogLines)) {
             throw new QuoteException('catalog_changed', 409);
         }
-        $tax = $this->taxPolicy->assess($binding, $siteId, $lines, $now);
-        $tax->validate($binding, $siteId, $lines, $now);
+        $this->assertCurrentTaxPolicy($quote);
+
+        return $quote;
+    }
+
+    /** A reservation authority must recheck its current PURE LOCAL policy after
+     * journal lock waits. Never inject a network tax provider into this method's
+     * transaction-time authority; production reservation stays unavailable.
+     */
+    public function assertCurrentTaxPolicy(TrustedQuote $quote): void
+    {
+        $now = $this->now();
+        $tax = $this->taxPolicy->assess($quote->binding, $quote->siteId, $quote->catalogLines, $now);
+        $tax->validate($quote->binding, $quote->siteId, $quote->catalogLines, $now);
         if ($tax->fingerprint() !== $quote->tax->fingerprint()) {
             throw new QuoteException('tax_policy_changed', 409);
         }
-
-        return $quote;
     }
 
     private function resolve(MerchantBinding $binding, int $siteId, array $items): array

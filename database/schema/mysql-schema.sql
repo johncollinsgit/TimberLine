@@ -7288,7 +7288,7 @@ CREATE TABLE `payment_core_bindings` (
   `tenant_id` bigint unsigned NOT NULL,
   `register_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `fingerprint` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
-  `binding` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `binding` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `pc_bind_register_uq` (`tenant_id`,`register_id`),
   CONSTRAINT `pc_bind_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE RESTRICT
@@ -7321,8 +7321,8 @@ CREATE TABLE `payment_core_operations` (
   `kind` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `original_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
   `terms_hash` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
-  `binding` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
-  `terms` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `binding` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `terms` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `amount_minor` int unsigned NOT NULL,
   `currency` varchar(3) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
   `state` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
@@ -7331,6 +7331,10 @@ CREATE TABLE `payment_core_operations` (
   `version` bigint unsigned NOT NULL DEFAULT '0',
   `original_provider_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
   `effect_scope` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  `inventory_snapshot` longtext COLLATE utf8mb4_unicode_ci,
+  `inventory_hash` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
+  `inventory_state` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
+  `inventory_payment_state` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `pc_op_request_uq` (`tenant_id`,`request_id`),
   UNIQUE KEY `pc_op_sale_uq` (`tenant_id`,`payment_sale_key`),
@@ -7348,19 +7352,19 @@ DROP TABLE IF EXISTS `payment_core_quotes`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `payment_core_quotes` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
-  `quote_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `sale_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `quote_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `sale_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
-  `register_id` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `register_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `actor_id` bigint unsigned NOT NULL,
   `site_id` bigint unsigned NOT NULL,
-  `request_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `request_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `version` int unsigned NOT NULL,
-  `binding_fingerprint` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `scope_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `selection_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `payload_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `snapshot` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `binding_fingerprint` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `scope_hash` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `selection_hash` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload_hash` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `snapshot` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` timestamp NOT NULL,
   `expires_at` timestamp NOT NULL,
   PRIMARY KEY (`id`),
@@ -12211,21 +12215,25 @@ CREATE TABLE `website_inventory_reservations` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `tenant_id` bigint unsigned NOT NULL,
   `website_product_variant_id` bigint unsigned NOT NULL,
-  `website_order_id` bigint unsigned NOT NULL,
+  `website_order_id` bigint unsigned DEFAULT NULL,
   `quantity` int unsigned NOT NULL,
   `status` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'active',
-  `expires_at` timestamp NOT NULL,
+  `expires_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
+  `payment_core_operation_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `website_reservation_order_variant_uq` (`website_order_id`,`website_product_variant_id`),
+  UNIQUE KEY `website_reservation_payment_variant_uq` (`payment_core_operation_id`,`website_product_variant_id`),
   KEY `website_reservations_variant_fk` (`website_product_variant_id`),
   KEY `website_reservation_variant_status_idx` (`tenant_id`,`website_product_variant_id`,`status`),
   KEY `website_inventory_reservations_status_index` (`status`),
   KEY `website_inventory_reservations_expires_at_index` (`expires_at`),
+  CONSTRAINT `website_reservation_payment_fk` FOREIGN KEY (`payment_core_operation_id`) REFERENCES `payment_core_operations` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `website_reservations_order_fk` FOREIGN KEY (`website_order_id`) REFERENCES `website_orders` (`id`) ON DELETE CASCADE,
   CONSTRAINT `website_reservations_tenant_fk` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `website_reservations_variant_fk` FOREIGN KEY (`website_product_variant_id`) REFERENCES `website_product_variants` (`id`) ON DELETE CASCADE
+  CONSTRAINT `website_reservations_variant_fk` FOREIGN KEY (`website_product_variant_id`) REFERENCES `website_product_variants` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `website_reservation_owner_ck` CHECK ((((`website_order_id` is not null) and (`payment_core_operation_id` is null) and (`expires_at` is not null)) or ((`website_order_id` is null) and (`payment_core_operation_id` is not null) and (`expires_at` is null))))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `website_order_events`;
@@ -13340,3 +13348,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (310,'2026_10_22_19
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (311,'2026_10_22_150000_create_service_proposal_tables',35);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (312,'2026_10_22_190000_create_payment_core_journal_tables',36);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (313,'2026_10_22_190100_create_payment_core_quotes_table',36);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (314,'2026_10_22_200000_add_payment_core_inventory_ownership',37);

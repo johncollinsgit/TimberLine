@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_22_200000_add_payment_core_inventory_ownership.php' => [
+        'test' => 'tests/Integration/PaymentsCoreInventoryMySqlRecoveryTest.php',
+        'scenarios' => ['retained nullable ownership columns and encrypted quote context before constraints', 'lost named owner foreign key, unique index and XOR check are repaired without rewriting rows', 'duplicate, cross-tenant or weakened retained ownership is rejected'],
+    ],
     '2026_10_22_000700_create_enterprise_service_proposals.php' => [
         'test' => 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php',
         'scenarios' => ['checksum-pinned proposal schema repairs missing named comment index and version constraint while preserving encrypted publication and comment evidence; code rollback retains all five tables'],
