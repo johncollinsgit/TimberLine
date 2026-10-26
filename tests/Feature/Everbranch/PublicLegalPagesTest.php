@@ -13,6 +13,12 @@ test('everbranch legal pages are public and disclose the quickbooks integration 
         ->assertSee('Terms of Use and End-User License Agreement')
         ->assertSee('read/import only')
         ->assertSee('does not process payments');
+
+    $this->get('http://theeverbranch.com/sms-terms')
+        ->assertOk()
+        ->assertSee('Evergrove Software LLC')
+        ->assertSee('Reply STOP')
+        ->assertSee('Reply HELP');
 });
 
 test('everbranch support page is public and provides app and account help', function () {

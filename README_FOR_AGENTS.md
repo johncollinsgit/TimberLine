@@ -1,3 +1,18 @@
+## SMS disclosures and consent evidence (2026-10-26)
+
+Evergrove/Everbranch public privacy and terms now link `/sms-terms` and identify
+Evergrove Software LLC. Wren's matching Sites release adds public `/privacy`,
+`/terms` and `/sms` pages and an optional, sender-specific registration choice.
+New affirmative Wren choices must carry `wren-operational-sms-2026-10-26`;
+server-owned wording, normalized phone, purpose, source and time are retained in
+encrypted append-only soccer events. Repeated unchanged saves do not renew
+consent. Outbound soccer SMS identifies Wren and includes STOP/HELP.
+STOP works without an existing conversation; HELP returns program
+support, deferring keyword replies to Advanced Opt-Out when present.
+This release does not activate SMS, alter sender registrations, migrate Modern
+Forestry resources or change the working email notification mode. Deploy backend
+first, then matching Sites source. See `docs/operations/wren-soccer.md`.
+
 ## Wren editable saved applications (October 25, 2026; source candidate)
 
 The family portal can reopen unsettled registrations through Edit application &

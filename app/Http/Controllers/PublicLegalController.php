@@ -22,6 +22,11 @@ class PublicLegalController extends Controller
         return $this->page($request, 'support');
     }
 
+    public function sms(Request $request): View
+    {
+        return $this->page($request, 'sms');
+    }
+
     protected function page(Request $request, string $document): View
     {
         $host = strtolower($request->getHost());
