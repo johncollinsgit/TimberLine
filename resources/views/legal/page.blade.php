@@ -2,12 +2,14 @@
     $document = $document ?? 'privacy';
     $isPrivacy = $document === 'privacy';
     $isSupport = $document === 'support';
+    $isSms = $document === 'sms';
     $title = match ($document) {
         'support' => 'Everbranch Support',
         'terms' => 'Terms of Use and End-User License Agreement',
+        'sms' => 'SMS Messaging Terms',
         default => 'Privacy Policy',
     };
-    $effectiveDate = 'July 11, 2026';
+    $effectiveDate = 'October 26, 2026';
     $brandAssets = is_array($brandAssets ?? null) ? $brandAssets : [];
     $assetVersion = (string) ($brandAssets['cache_tag'] ?? 'eb1');
     $lockup = asset((string) ($brandAssets['lockup'] ?? 'brand/everbranch-lockup.svg')).'?v='.$assetVersion;
@@ -30,14 +32,15 @@
         <nav aria-label="Support and legal pages">
             <a href="{{ route('legal.support') }}" @if($isSupport) aria-current="page" @endif>Support</a>
             <a href="{{ route('legal.privacy') }}" @if($isPrivacy) aria-current="page" @endif>Privacy</a>
-            <a href="{{ route('legal.terms') }}" @if(!$isPrivacy && !$isSupport) aria-current="page" @endif>Terms</a>
+            <a href="{{ route('legal.terms') }}" @if(!$isPrivacy && !$isSupport && !$isSms) aria-current="page" @endif>Terms</a>
+            <a href="{{ route('legal.sms') }}" @if($isSms) aria-current="page" @endif>SMS terms</a>
             <a href="{{ $homeUrl }}">Home</a>
         </nav>
     </header>
 
     <main class="eg-legal-main">
         <header class="eg-legal-intro">
-            <p class="eg-kicker">Everbranch by Evergrove Software</p>
+            <p class="eg-kicker">Everbranch by Evergrove Software LLC</p>
             <h1>{{ $title }}</h1>
             @if($isSupport)
                 <p>Help for Everbranch workspace owners, managers, and field teams.</p>
@@ -49,7 +52,7 @@
         @if($isPrivacy)
             <section>
                 <h2>Our privacy commitment</h2>
-                <p>Evergrove Software operates Everbranch, a tenant-scoped workspace for customers, jobs, field activity, communication, reporting, and connected business tools. This policy explains what we collect, why we use it, and the choices available to workspace owners and users.</p>
+                <p>Evergrove Software LLC operates Everbranch, a tenant-scoped workspace for customers, jobs, field activity, communication, reporting, and connected business tools. This policy also covers our corporate website at evergrovesoftware.com. This policy explains what we collect, why we use it, and the choices available to workspace owners and users.</p>
             </section>
 
             <section>
@@ -79,6 +82,13 @@
             </section>
 
             <section>
+                <h2>SMS information and consent</h2>
+                <p>When you choose text updates, the sending business collects your mobile number and a record of your choice, including the consent wording, purpose, source and time. Consent applies only to the identified sender and message purpose. Providing a phone number for account, billing, emergency-contact or service purposes does not by itself authorize texts or marketing. Text enrollment is optional and is not a condition of purchase or service. Marketing requires a separate express written opt-in.</p>
+                <p>We do not sell, rent, trade or share mobile numbers or SMS consent with other businesses for their marketing. All the above categories exclude text messaging originator opt-in data and consent; this information won’t be shared with any third parties. The general sharing and business-transfer provisions above do not authorize transferring SMS consent. Delivery providers process the minimum information needed to carry out the identified sender’s messaging instructions, not for independent marketing.</p>
+                <p>Reply STOP to stop a sender’s texts or HELP for assistance. You may also contact the sending business or <a href="mailto:{{ $contactEmail }}">{{ $contactEmail }}</a>. See our <a href="{{ route('legal.sms') }}">SMS Messaging Terms</a>. Each customer business using Everbranch must provide its own sender-specific privacy and messaging disclosures.</p>
+            </section>
+
+            <section>
                 <h2>Tenant separation and security</h2>
                 <p>Workspace records are scoped by tenant and access role. We use encryption in transit, encrypted integration credentials, access controls, audit records, backups, and operational monitoring. No system is perfectly secure, but we work to prevent unauthorized access, disclosure, alteration, and loss.</p>
             </section>
@@ -91,6 +101,24 @@
             <section>
                 <h2>Children and policy changes</h2>
                 <p>Everbranch is a business service and is not directed to children under 13. We may update this policy as the product or applicable requirements change. Material changes will be identified by a revised effective date and, when appropriate, an in-product or email notice.</p>
+            </section>
+        @elseif($isSms)
+            <section>
+                <h2>Who sends the messages</h2>
+                <p>Evergrove Software LLC provides Everbranch. Our own optional text program covers requested account, appointment, project and service updates. When a customer business uses Everbranch, that business is the sender and must identify itself in its consent form and messages. Its consent does not enroll you in Evergrove’s program or another business’s program.</p>
+            </section>
+            <section>
+                <h2>Your choice to enroll</h2>
+                <p>You enroll only by an affirmative, optional choice that identifies the sender, the mobile number, and the type of texts you want. Checkboxes must start unchecked. Agreeing to general terms, registering, supplying an emergency number or making a purchase is not SMS consent. You may use the service without subscribing to texts. Consent is specific to the sender and purpose and cannot be sold or transferred. Marketing and promotional messages require a separate express written opt-in and the applicable sender registration.</p>
+            </section>
+            <section>
+                <h2>Frequency, rates and delivery</h2>
+                <p>Message frequency varies with the account or service activity you requested. Message and data rates may apply. Carriers are not liable for delayed or undelivered messages. Texts are not an emergency service. Program availability remains subject to provider verification and the sending business’s approved use case.</p>
+            </section>
+            <section>
+                <h2>STOP, HELP and support</h2>
+                <p>Reply STOP to the sending number to cancel that program at any time. You may receive one confirmation of your opt-out, after which messages stop unless you expressly opt in again. Reply HELP for assistance, or email <a href="mailto:{{ $contactEmail }}">{{ $contactEmail }}</a>. Contact the identified customer business for its program; Evergrove can help route a request if the sender is unclear. Tell the sender if you change or give up your mobile number.</p>
+                <p>Our <a href="{{ route('legal.privacy') }}">Privacy Policy</a> explains how mobile information and consent records are protected. Our <a href="{{ route('legal.terms') }}">Terms of Use</a> also apply.</p>
             </section>
         @elseif($isSupport)
             <section>
@@ -142,6 +170,7 @@
             <section>
                 <h2>Acceptable use</h2>
                 <p>You may not use the service to violate law or another person's rights; access another tenant without authorization; distribute malware; probe or bypass security; overload the service; scrape or resell the service; or send unlawful, deceptive, or non-consensual communications. Messaging features must be used with appropriate consent and in compliance with applicable email and telephone laws.</p>
+                <p>The <a href="{{ route('legal.sms') }}">SMS Messaging Terms</a> apply to optional texts. Customer businesses must obtain and retain sender- and purpose-specific consent, honor opt-outs, and complete applicable business, brand, campaign and sender verification before sending. Buying, importing or possessing a contact list does not establish SMS consent. Operational consent cannot be reused for marketing or a different business.</p>
             </section>
 
             <section>
@@ -172,10 +201,11 @@
     </main>
 
     <footer class="eg-legal-footer">
-        <span>&copy; {{ now()->year }} Evergrove Software</span>
+        <span>&copy; {{ now()->year }} Evergrove Software LLC</span>
         <a href="{{ route('legal.support') }}">Support</a>
         <a href="{{ route('legal.privacy') }}">Privacy</a>
         <a href="{{ route('legal.terms') }}">Terms</a>
+        <a href="{{ route('legal.sms') }}">SMS terms</a>
     </footer>
 </body>
 </html>

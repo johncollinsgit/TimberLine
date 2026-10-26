@@ -66,16 +66,23 @@ class SoccerWebhookController extends Controller
             \App\Models\MessagingConversationMessage::query()->forTenantId($t->id)->where('provider_message_id', $r->input('MessageSid'))->update(['delivery_status' => $status]);
         } elseif ($r->filled('Body')) {
             $svc = app(\App\Services\Marketing\MessagingConversationService::class);
-            $phone = $r->input('From');
+            $phone = app(\App\Support\Marketing\MarketingIdentityNormalizer::class)->toE164((string) $r->input('From'));
+            abort_unless($phone, 422);
             $existing = \App\Models\MessagingConversation::query()->forTenantId($t->id)->where('phone', $phone)->where('source_type', 'soccer_waitlist')->first();
-            abort_unless($existing, 404);
-            $svc->appendMessage($existing, ['channel' => 'sms', 'direction' => 'inbound', 'provider' => 'twilio', 'provider_message_id' => $r->input('MessageSid'), 'dedupe_hash' => hash('sha256', 'wren-inbound:'.$r->input('MessageSid')), 'body' => $r->input('Body'), 'from_identity' => $phone, 'received_at' => now()]);
-            if (in_array(strtoupper(trim($r->input('Body'))), ['STOP', 'STOPALL', 'UNSUBSCRIBE', 'CANCEL', 'END', 'QUIT'], true)) {
-                foreach ($store->query('families', $t->id)->get() as $f) {
-                    if (app(\App\Support\Marketing\MarketingIdentityNormalizer::class)->toE164($store->decrypt($f->profile)['phone'] ?? '') === $phone) {
-                        $store->query('families', $t->id)->where('id', $f->id)->update(['sms_consent_at' => null]);
-                    }
-                }
+            if ($existing) {
+                $svc->appendMessage($existing, ['channel' => 'sms', 'direction' => 'inbound', 'provider' => 'twilio', 'provider_message_id' => $r->input('MessageSid'), 'dedupe_hash' => hash('sha256', 'wren-inbound:'.$r->input('MessageSid')), 'body' => $r->input('Body'), 'from_identity' => $phone, 'received_at' => now()]);
+            }
+            $keyword = strtoupper(trim((string) $r->input('Body')));
+            $reply = null;
+            if (in_array($keyword, \App\Services\Soccer\SoccerSmsConsent::STOP_KEYWORDS, true)) {
+                app(\App\Services\Soccer\SoccerSmsConsent::class)->revokePhone($t->id, $phone, (string) $r->input('MessageSid'));
+                $reply = 'Wren Family Soccer: you have been unsubscribed. No more program texts will be sent. Help: john@evergrovesoftware.com.';
+            } elseif ($keyword === 'HELP') {
+                $reply = 'Wren Family Soccer / Watershed Fellowship Upstate LLC: registration and season updates. Help: john@evergrovesoftware.com. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out.';
+            }
+            // Advanced Opt-Out already sends its own keyword response.
+            if ($reply && ! $r->filled('OptOutType')) {
+                return response('<?xml version="1.0" encoding="UTF-8"?><Response><Message>'.htmlspecialchars($reply, ENT_XML1 | ENT_QUOTES, 'UTF-8').'</Message></Response>', 200)->header('Content-Type', 'text/xml; charset=UTF-8');
             }
         }
 
