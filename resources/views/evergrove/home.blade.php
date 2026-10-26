@@ -549,5 +549,6 @@
             </div>
         </section>
     </main>
+    @include('evergrove.partials.footer')
 </body>
 </html>
