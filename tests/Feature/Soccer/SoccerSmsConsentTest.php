@@ -48,6 +48,7 @@ it('handles signed STOP without a conversation and returns HELP without enrollin
     $input = ['AccountSid' => 'AC'.str_repeat('a', 32), 'MessageSid' => 'SM'.str_repeat('b', 32), 'From' => '+18645550100', 'Body' => 'STOP'];
     $this->post('/api/soccer/sms', $input)->assertOk()->assertSee('unsubscribed');
     $this->post('/api/soccer/sms', $input)->assertOk();
+    $this->post('/api/soccer/sms', [...$input, 'Body' => 'ARRET', 'OptOutType' => 'STOP'])->assertNoContent();
     expect($this->store->row('families', $this->tenant->id, $this->familyId)->sms_consent_at)->toBeNull()
         ->and($this->store->query('events', $this->tenant->id)->where('action', 'sms_consent_revoked')->count())->toBe(1);
     $this->post('/api/soccer/sms', [...$input, 'Body' => 'HELP'])->assertOk()->assertSee('john@evergrovesoftware.com')->assertSee('Reply STOP');
@@ -59,4 +60,17 @@ it('does not change family consent for an unverified callback', function () {
     $this->mock(TenantMessagingGateway::class)->shouldReceive('validateTwilioCallback')->andReturn(null);
     $this->post('/api/soccer/sms', ['Body' => 'STOP', 'From' => '+18645550100'])->assertForbidden();
     expect($this->store->query('events', $this->tenant->id)->count())->toBe(0);
+});
+
+it('sends and records sender identity and opt-out instructions once', function () {
+    \Carbon\Carbon::setTestNow('2026-10-26 14:00:00 UTC');
+    config()->set(['soccer.sms_enabled' => true, 'soccer.notification_mode' => 'sms']);
+    app(SoccerFamilyService::class)->saveProfile($this->tenant->id, $this->store->row('families', $this->tenant->id, $this->familyId), [...$this->details, 'sms_consent' => true, 'sms_consent_version' => SoccerSmsConsent::VERSION]);
+    $this->mock(TenantMessagingGateway::class)->shouldReceive('sendSms')->once()->with($this->tenant->id, '+18645550100', \Mockery::on(fn ($body) => str_starts_with($body, 'Wren Family Soccer:') && str_contains($body, 'Reply STOP to unsubscribe.') && str_contains($body, 'HELP for help.')), \Mockery::type('array'))->andReturn(['success' => true, 'provider_message_id' => 'SM'.str_repeat('c', 32)]);
+    app(\App\Services\Soccer\SoccerEvents::class)->record($this->tenant->id, null, $this->familyId, 'test_update', [], familyText: 'Wren Soccer: your registration has an update.');
+    app(\App\Services\Soccer\SoccerDeliveryService::class)->run($this->tenant->id);
+    expect($this->store->query('deliveries', $this->tenant->id)->value('status'))->toBe('accepted');
+    $body = \App\Models\MessagingConversationMessage::query()->forTenantId($this->tenant->id)->value('body');
+    expect($body)->toContain('Reply STOP to unsubscribe.');
+    expect(app(SoccerSmsConsent::class)->message($body))->toBe($body);
 });

@@ -9,7 +9,9 @@ new affirmative choices without the current version. Store consent evidence only
 in encrypted family profiles and append-only soccer events; never put families,
 phones, medical details, EINs or registration exports in PRs or public screenshots.
 
-The signed SMS webhook honors standard STOP keywords without requiring a prior
+Outbound soccer SMS receives the Wren Family Soccer identity and STOP/HELP
+instructions before provider dispatch and conversation recording. Email bodies
+remain unchanged. The signed SMS webhook honors standard STOP keywords without requiring a prior
 conversation and returns program HELP. When Twilio supplies OptOutType, defer its
 keyword response to Advanced Opt-Out to avoid two replies. START does not restore
 local consent; a fresh affirmative portal choice is required. Keep SMS disabled

@@ -12,6 +12,19 @@ class SoccerSmsConsent
 
     public function __construct(private SoccerStore $store) {}
 
+    public function message(string $body): string
+    {
+        $body = 'Wren Family Soccer: '.preg_replace('/^Wren(?: Family)?(?: Soccer| waitlist)?\s*:\s*/i', '', trim($body));
+        if (! preg_match('/\bReply STOP\b/i', $body)) {
+            $body .= "\nReply STOP to unsubscribe.";
+        }
+        if (! preg_match('/\bHELP\b/', $body)) {
+            $body .= ' HELP for help.';
+        }
+
+        return $body;
+    }
+
     public function record(int $tenant, string $familyId, string $phone, bool $consented, string $source, ?string $providerId = null): array
     {
         if ($providerId && ($existing = $this->store->query('events', $tenant)->where('event_key', 'sms-consent:'.$providerId.':'.$familyId)->first())) {

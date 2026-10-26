@@ -72,7 +72,7 @@ class SoccerWebhookController extends Controller
             if ($existing) {
                 $svc->appendMessage($existing, ['channel' => 'sms', 'direction' => 'inbound', 'provider' => 'twilio', 'provider_message_id' => $r->input('MessageSid'), 'dedupe_hash' => hash('sha256', 'wren-inbound:'.$r->input('MessageSid')), 'body' => $r->input('Body'), 'from_identity' => $phone, 'received_at' => now()]);
             }
-            $keyword = strtoupper(trim((string) $r->input('Body')));
+            $keyword = strtoupper(trim((string) ($r->input('OptOutType') ?: $r->input('Body'))));
             $reply = null;
             if (in_array($keyword, \App\Services\Soccer\SoccerSmsConsent::STOP_KEYWORDS, true)) {
                 app(\App\Services\Soccer\SoccerSmsConsent::class)->revokePhone($t->id, $phone, (string) $r->input('MessageSid'));
