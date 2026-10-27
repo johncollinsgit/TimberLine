@@ -10,6 +10,9 @@
 <label for="client">Prepared for</label><select name="client_id" id="client" required><option value="">Choose a client</option>@foreach($assets->where('kind','client') as $client)<option value="{{ $client->id }}" @selected(old('client_id', $draft?->client_id) === $client->id)>{{ $client->payload['name'] }}</option>@endforeach</select>
 <label for="title">Proposal title</label><input id="title" name="title" value="{{ old('title', $draft?->payload['title'] ?? '') }}" maxlength="220" required>
 <label for="intro">The problem and proposed outcome</label><textarea id="intro" name="intro" rows="8">{{ old('intro', $draft?->payload['intro'] ?? '') }}</textarea>
+@if(config('service_proposals.owner_workspaces.'.$tenant->id) === 'enterprise')
+<label><input type="checkbox" name="include_personal_letter" value="1" @checked(old('include_personal_letter', isset($draft?->payload['personal_letter'])))>Include John's approved personal letter as the first tab for Lees-McRae</label>
+@endif
 <label for="scope-notes">Included and separately scoped work</label><textarea id="scope-notes" name="scope_notes" rows="6">{{ old('scope_notes', $draft?->payload['scope_notes'] ?? '') }}</textarea>
 <label for="reviewer-names">Review display names · comma separated</label><input id="reviewer-names" name="reviewer_names_text" value="{{ old('reviewer_names_text', implode(', ', $draft?->payload['reviewer_names'] ?? [])) }}"><p class="muted">Named review comments only. These names do not create seats, accounts, staff access or verified identities.</p>
 <label><input type="checkbox" name="approach_key" value="evergrove_department_journey" @checked(old('approach_key', $draft?->payload['approach_key']) === 'evergrove_department_journey')>Include the six-phase Evergrove department partnership journey</label>

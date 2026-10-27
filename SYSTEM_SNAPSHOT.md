@@ -1,3 +1,12 @@
+## Personal letter as the first proposal tab (October 26; source candidate)
+
+An explicit owner draft choice snapshots the approved Lees-McRae personal letter,
+Everbranch Enterprise logo and Free Range Humanity family image into a future
+immutable review edition. From John is its first/default panel; all other panels
+remain available. Existing editions without this descriptor retain their original
+presentation and data. No hosted draft, publication, deployment or provider has
+been changed by this source milestone.
+
 ## Wren editable saved applications (October 25, 2026; source candidate)
 
 The family portal can reopen unsettled registrations through Edit application &

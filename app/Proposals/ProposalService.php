@@ -87,11 +87,15 @@ class ProposalService
             'catalog_ids.*' => ['required', 'uuid', 'distinct'], 'template_id' => ['nullable', 'uuid'],
             'source' => ['nullable', Rule::in(['manual', 'ai_draft', 'voice_draft'])],
             'scope_notes' => ['nullable', 'string', 'max:8000'],
+            'include_personal_letter' => ['nullable', 'boolean'],
             'usage_plan' => ['nullable', Rule::in(['unconfirmed', 'separately_billed', 'workspace_allowance', 'pooled_bundle_allowance'])],
             'approach_key' => ['nullable', Rule::in(['evergrove_department_journey'])],
             'reviewer_names' => ['nullable', 'array', 'max:20'], 'reviewer_names.*' => ['required', 'string', 'distinct', 'max:80'],
         ])->validate();
         $client = $this->asset($tenant, $data['client_id'], 'client');
+        $includeLetter = (bool) ($data['include_personal_letter'] ?? false);
+        abort_if($includeLetter && (($client->payload['reference'] ?? null) !== CampusReviewManifest::CLIENT_REFERENCE
+            || config('service_proposals.owner_workspaces.'.$tenant->id) !== 'enterprise'), 422, 'This personal letter is for the Lees-McRae proposal.');
         $items = [];
         foreach ($data['catalog_ids'] as $assetId) {
             $asset = $this->asset($tenant, $assetId, 'catalog');
@@ -112,6 +116,9 @@ class ProposalService
             'client_details' => $client->payload['reference'] === 'lees-mcrae-college' && config('service_proposals.owner_workspaces.'.$tenant->id) === 'enterprise' ? LeesMcRaeDetails::content() : [],
             'unresolved' => ['Additional terms, discounts, usage charges and renewal are not finalized.', 'Contract duration is separate from billing cadence.'],
         ];
+        if ($includeLetter) {
+            $payload['personal_letter'] = PersonalLetter::snapshot();
+        }
 
         return DB::transaction(function () use ($tenant, $actor, $input, $id, $client, $payload): Draft {
             if ($id) {

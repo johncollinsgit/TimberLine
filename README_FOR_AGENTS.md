@@ -1,3 +1,14 @@
+## Personal letter as the first proposal tab (October 26; source candidate)
+
+Lees-McRae drafts can explicitly include John's approved personal letter. Saving
+snapshots its fixed copy and approved logo/family image references into the draft;
+only editions containing that descriptor show From John first and selected by
+default. Preserve the old edition, URL, grant and comments: absence means no new
+tab, never a presentation-time retrofit. The v1 copy/assets are immutable; future
+copy changes need a new snapshot identity. Only the two fixed same-origin image
+paths are added to CSP on letter responses. No provider or runtime activation is
+implied. The separately exported one-page letter PDF is unchanged.
+
 ## Wren editable saved applications (October 25, 2026; source candidate)
 
 The family portal can reopen unsettled registrations through Edit application &

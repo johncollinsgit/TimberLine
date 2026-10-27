@@ -18,6 +18,7 @@
 @media print{.proposal-menu-toggle,.proposal-menu-close{display:none!important}}
 .proposal-section-panels{margin-top:16px;min-width:0}.proposal-section-panel{display:none}.proposal-print-section,.proposal-print-copy{display:none}
 .proposal-section-tabs:has(>.proposal-section-controls>[data-proposal-section="overview"]:checked)>.proposal-section-panels>[data-proposal-panel="overview"]{display:block}
+.proposal-section-tabs:has(>.proposal-section-controls>[data-proposal-section="letter"]:checked)>.proposal-section-panels>[data-proposal-panel="letter"]{display:block}
 .proposal-section-tabs:has(>.proposal-section-controls>[data-proposal-section="approach"]:checked)>.proposal-section-panels>[data-proposal-panel="approach"]{display:block}
 .proposal-section-tabs:has(>.proposal-section-controls>[data-proposal-section="scope"]:checked)>.proposal-section-panels>[data-proposal-panel="scope"]{display:block}
 .proposal-section-tabs:has(>.proposal-section-controls>[data-proposal-section="terms"]:checked)>.proposal-section-panels>[data-proposal-panel="terms"]{display:block}

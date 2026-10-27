@@ -23,6 +23,11 @@ class ResponsePolicy
             $artwork = $request->getSchemeAndHttpHost().'/images/proposals/evergrove-mountain-corner.svg';
             $wordmark = $request->getSchemeAndHttpHost().'/images/proposals/evergrove-software-wordmark.jpg';
             $content = $response->getContent();
+            $letterImages = '';
+            if (is_string($content) && str_contains($content, '<article class="proposal-personal-letter"')) {
+                $letterImages = ' '.$request->getSchemeAndHttpHost().'/images/proposals/everbranch-enterprise-e57d8900.png'
+                    .' '.$request->getSchemeAndHttpHost().'/images/proposals/collins-family-318e656c.png';
+            }
             $hashes = [];
             $hasActivity = false;
             foreach (['proposal-navigation' => 'mobile-navigation.js', 'review-activity-script' => 'activity.js'] as $marker => $file) {
@@ -34,7 +39,7 @@ class ResponsePolicy
             }
             $scripts = $hashes ? ' script-src '.implode(' ', $hashes)."; script-src-attr 'none';" : '';
             $connections = $hasActivity ? " connect-src 'self';" : '';
-            $response->headers->set('Content-Security-Policy', "default-src 'none'; img-src {$artwork} {$wordmark}; style-src 'unsafe-inline';{$scripts}{$connections} form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
+            $response->headers->set('Content-Security-Policy', "default-src 'none'; img-src {$artwork} {$wordmark}{$letterImages}; style-src 'unsafe-inline';{$scripts}{$connections} form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
         }
 
         return $response;

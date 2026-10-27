@@ -1,5 +1,19 @@
 # Unified campus and proposal review release
 
+## Personal letter edition
+
+The owner may explicitly include John's approved personal letter when saving a
+Lees-McRae draft. `include_personal_letter` accepts a boolean only; caller-supplied
+copy or asset descriptors are not accepted. The saved `personal_letter` snapshot
+is part of the immutable publication hash. Its From John panel is first and
+selected by default; explicit Financial/Review redirects still select their
+original panels. Older editions without the snapshot receive no new tab or
+family-image CSP permission. Never rewrite a published payload to add this copy.
+The v1 snapshot JSON and its two public branding assets must remain unchanged;
+use a new identity for later approved copy. Source review, normal exact-head CI,
+release permission and an explicit owner publication transition still precede
+hosted use. This does not activate any AI/shared/upload/scanner capability.
+
 Prepared October 22, 2026. Source integration is reversible and default-off.
 No production provisioning, publication, invitation, provider call or access
 grant has occurred during this integration.
