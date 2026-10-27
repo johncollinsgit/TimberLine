@@ -257,6 +257,7 @@ Route::get('/', function (
 
 Route::get('/privacy', [PublicLegalController::class, 'privacy'])->name('legal.privacy');
 Route::get('/terms', [PublicLegalController::class, 'terms'])->name('legal.terms');
+Route::get('/sms-terms', [PublicLegalController::class, 'sms'])->name('legal.sms');
 Route::get('/support', [PublicLegalController::class, 'support'])->name('legal.support');
 Route::prefix('jarvis')->name('evergrove.jarvis.')->group(function (): void {
     Route::get('/', [JarvisPublicPagesController::class, 'home'])->name('home');

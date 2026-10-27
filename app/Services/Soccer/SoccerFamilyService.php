@@ -98,7 +98,7 @@ class SoccerFamilyService
         $seasons = $this->store->query('seasons', $tenant)->orderByDesc('season_key')->get();
         $currentSeason = $seasons->firstWhere('season_key', 'spring-2027');
 
-        return ['family' => ['id' => $family->id, 'email' => $family->email, 'profile' => $this->store->decrypt($family->profile), 'sms_consent' => (bool) $family->sms_consent_at],
+        return ['family' => ['id' => $family->id, 'email' => $family->email, 'profile' => $this->store->decrypt($family->profile), 'sms_consent' => (bool) $family->sms_consent_at, 'sms_consent_version' => data_get($this->store->decrypt($family->profile), 'sms_consent_evidence.version')],
             'players' => $this->store->query('players', $tenant)->where('family_id', $family->id)->orderBy('name')->get()->map(fn ($p) => ['id' => $p->id, 'name' => $p->name, 'birthday' => $p->birthday, 'profile' => $this->store->decrypt($p->profile), 'eligibility' => $currentSeason ? app(SoccerEligibilityService::class)->assess($tenant, $p, $currentSeason) : null]),
             'seasons' => $seasons->map(fn ($s) => ['id' => $s->id, 'key' => $s->season_key, 'name' => $s->name, 'starts_on' => $s->starts_on, 'age_as_of' => $s->age_as_of ?? $s->starts_on, 'registration_opens_at' => $s->registration_opens_at, 'open' => (bool) $s->registration_open, 'teams' => app(SoccerRegistrationService::class)->capacities($s)]),
             'registrations' => $this->store->query('registrations', $tenant)->where('family_id', $family->id)->get(),
@@ -112,15 +112,30 @@ class SoccerFamilyService
 
     public function saveProfile(int $tenant, object $family, array $data): void
     {
-        $profile = $this->store->decrypt($family->profile);
         $normalizer = app(\App\Support\Marketing\MarketingIdentityNormalizer::class);
         if (! $normalizer->toE164($data['phone'] ?? '') || ! $normalizer->toE164($data['emergencyPhone'] ?? '') || empty($data['emergencyContact'])) {
             throw \Illuminate\Validation\ValidationException::withMessages(['phone' => 'Enter valid primary and emergency phone numbers and an emergency contact.']);
         }
-        unset($data['email']);
-        $consent = $data['sms_consent'] ?? false;
-        unset($data['sms_consent']);
-        $this->store->query('families', $tenant)->where('id', $family->id)->update(['profile' => $this->store->encrypt([...$profile, ...$data]), 'sms_consent_at' => $consent ? ($family->sms_consent_at ?? now()) : null, 'updated_at' => now()]);
+        $consent = (bool) ($data['sms_consent'] ?? false);
+        if ($consent && ($data['sms_consent_version'] ?? null) !== SoccerSmsConsent::VERSION) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['sms_consent' => 'Review the current optional SMS choice before subscribing. You can continue without texts.']);
+        }
+        unset($data['email'], $data['sms_consent'], $data['sms_consent_version'], $data['sms_consent_evidence']);
+        DB::transaction(function () use ($tenant, $family, $data, $consent, $normalizer) {
+            $current = $this->store->query('families', $tenant)->where('id', $family->id)->lockForUpdate()->firstOrFail();
+            $profile = $this->store->decrypt($current->profile);
+            $phone = $normalizer->toE164($data['phone']);
+            $phoneChanged = $normalizer->toE164($profile['phone'] ?? '') !== $phone;
+            if ($phoneChanged && $current->sms_consent_at && ($previousPhone = $normalizer->toE164($profile['phone'] ?? ''))) {
+                app(SoccerSmsConsent::class)->record($tenant, $current->id, $previousPhone, false, 'primary_number_changed');
+            }
+            $changed = (bool) $current->sms_consent_at !== $consent || $phoneChanged
+                || ($consent && data_get($profile, 'sms_consent_evidence.version') !== SoccerSmsConsent::VERSION);
+            if ($changed) {
+                $profile['sms_consent_evidence'] = app(SoccerSmsConsent::class)->record($tenant, $current->id, $phone, $consent, 'verified_family_portal');
+            }
+            $this->store->query('families', $tenant)->where('id', $current->id)->update(['profile' => $this->store->encrypt([...$profile, ...$data]), 'sms_consent_at' => $consent ? ($changed ? now() : $current->sms_consent_at) : null, 'updated_at' => now()]);
+        });
     }
 
     public function player(int $tenant, object $family, array $data): string

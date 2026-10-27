@@ -1,3 +1,26 @@
+## SMS account-review preparation (2026-10-26)
+
+Public Wren policies are `/privacy`, `/terms` and `/sms`; the latter presents
+an explicitly non-submitting example of the same checkbox used in Family details.
+It names Watershed Fellowship Upstate LLC / Wren Family Soccer, excludes marketing,
+starts unchecked for new or unversioned enrollment, and allows registration without
+SMS. Changing the primary number clears the browser choice. Backend rejects
+new affirmative choices without the current version. Store consent evidence only
+in encrypted family profiles and append-only soccer events; never put families,
+phones, medical details, EINs or registration exports in PRs or public screenshots.
+
+Outbound soccer SMS receives the Wren Family Soccer identity and STOP/HELP
+instructions before provider dispatch and conversation recording. Email bodies
+remain unchanged. The signed SMS webhook honors standard STOP keywords without requiring a prior
+conversation and returns program HELP. When Twilio supplies OptOutType, defer its
+keyword response to Advanced Opt-Out to avoid two replies. START does not restore
+local consent; a fresh affirmative portal choice is required. Keep SMS disabled
+and email mode active until Twilio clears the account, the specific Wren sender
+and use case are registered, and a controlled delivery/STOP/HELP check passes.
+Account clearance alone is not sender/campaign approval. Preserve all Modern
+Forestry resources and opt-outs. Deploy backend through protected CI/Forge before
+publishing the matching Wren Sites version.
+
 # Editing a saved unpaid application — October 25, 2026
 
 - The family account exposes **Edit application & coaching** beside payment

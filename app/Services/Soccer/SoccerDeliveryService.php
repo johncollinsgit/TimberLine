@@ -59,6 +59,7 @@ class SoccerDeliveryService
                     continue;
                 }
             }
+            $p['body'] = app(SoccerSmsConsent::class)->message($p['body']);
             $svc = app(\App\Services\Marketing\MessagingConversationService::class);
             $c = $svc->findOrCreateSmsConversation($tenant, null, null, $p['phone'], ['source_type' => 'soccer_waitlist', 'source_context' => ['event_id' => $d->event_id]]);
             try {

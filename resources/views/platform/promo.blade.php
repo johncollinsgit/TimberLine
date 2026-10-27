@@ -143,9 +143,9 @@
 
     <footer class="eb-studio-footer">
         <div class="eb-studio-container eb-studio-footer__grid">
-            <div><img src="{{ asset($brandLockupPath) }}?v={{ $brandAssetVersion }}" alt="{{ $productName }}" /><p>One place to run the work that matters.</p></div>
+            <div><img src="{{ asset($brandLockupPath) }}?v={{ $brandAssetVersion }}" alt="{{ $productName }}" /><p>One place to run the work that matters.</p><p>Everbranch is operated by <a href="https://evergrovesoftware.com">Evergrove Software LLC</a>.</p></div>
             <div><a href="#how-it-works">How it works</a><a href="{{ route('platform.modules.explore') }}">Branches</a><a href="{{ route('platform.plans') }}">Plans</a></div>
-            <div><a href="{{ route('platform.contact') }}">Contact</a><a href="{{ route('legal.privacy') }}">Privacy</a><a href="{{ route('legal.terms') }}">Terms</a></div>
+            <div><a href="{{ route('platform.contact') }}">Contact</a><a href="{{ route('legal.privacy') }}">Privacy</a><a href="{{ route('legal.terms') }}">Terms</a><a href="{{ route('legal.sms') }}">SMS terms</a></div>
         </div>
     </footer>
 
