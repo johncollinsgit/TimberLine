@@ -55,6 +55,7 @@ name: Enterprise isolated runtime
     - tests/Support/proposal-legacy-capture-browser-fixture.php
     - tests/Support/proposal-legacy-capture-browser-router.php
     - scripts/proposals/build-legacy-campus-v5.py
+    - scripts/proposals/prepare-legacy-campus-v5.py
     - tests/Support/proposal-reviewer-workspace*.php
     - tests/Feature/Enterprise/**
     - tests/Feature/Proposals/**
@@ -89,6 +90,7 @@ name: Enterprise isolated runtime
     - tests/Unit/Proposals/IndependentWorkspaceRuntimeConfigurationTest.php
     - tests/Unit/Proposals/LegacyCampusConfigurationTest.php
     - tests/Unit/test_legacy_campus_generator.py
+    - tests/Unit/test_legacy_campus_permissions.py
     - tests/Fixtures/legacy-campus-*
     - tests/browser/enterprise-voice-jobs.smoke.mjs
     - tests/browser/enterprise-read-only-assistant.smoke.mjs
@@ -147,6 +149,8 @@ jobs:
         python3 -m unittest discover -s tests/ci -p "test_enterprise_ci_bundle.py" -v
     - name: Check the pinned public legacy campus builder without runtime access
       run: python3 -m unittest discover -s tests/Unit -p "test_legacy_campus_generator.py" -v
+    - name: Check signed public legacy artifact metadata preparation without runtime access
+      run: python3 -B -m unittest discover -s tests/Unit -p "test_legacy_campus_permissions.py" -v
     - name: Find Composer download cache
       id: composer-cache
       run: echo "directory=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
@@ -167,7 +171,7 @@ jobs:
         tests/e2e/enterprise-work-table-drawer.test.mjs tests/e2e/enterprise-detail-placement.test.mjs tests/e2e/enterprise-project-detail-generation.test.mjs tests/e2e/enterprise-work-views.test.mjs
         tests/e2e/enterprise-roll-call-projects.test.mjs tests/e2e/enterprise-shell-navigation.test.mjs tests/e2e/enterprise-preference-lifecycle.test.mjs tests/e2e/enterprise-theme.test.mjs
         tests/e2e/enterprise-executive.test.mjs tests/e2e/enterprise-role-preview.test.mjs tests/js/enterprise-sample-voice.test.mjs tests/js/enterprise-usage.test.mjs
-        tests/e2e/ai-voice-conversation.test.mjs tests/e2e/enterprise-voice-jobs.test.mjs tests/e2e/enterprise-request-classification-draft.test.mjs
+        tests/e2e/ai-voice-conversation.test.mjs tests/e2e/enterprise-voice-jobs.test.mjs tests/e2e/enterprise-request-classification-draft.test.mjs tests/e2e/enterprise-work-map-geometry.test.mjs tests/e2e/enterprise-mobile-navigation-sync.test.mjs
     - name: Check private reviewer AI snapshot, receipts, voice and gallery without providers
       run: node --test tests/e2e/proposal-reviewer-*.test.mjs tests/e2e/enterprise-attachment-gallery.test.mjs tests/e2e/independent-shared-files-bridge.test.mjs tests/js/reviewer-workspace-*.test.mjs tests/js/reviewer-shared-*.test.mjs
     - name: Check voice shell scope without providers

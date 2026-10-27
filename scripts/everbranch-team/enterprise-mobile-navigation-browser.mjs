@@ -4,7 +4,14 @@ import assert from 'node:assert/strict';
 async function showMenu(page) {
   const toggle=page.locator('#enterprise-navigation-toggle'),menu=page.locator('#enterprise-mobile-navigation');
   assert.equal(await toggle.isVisible(),true,'A hidden navigation target requires the visible mobile menu');
-  if(await toggle.getAttribute('aria-expanded')!=='true')await toggle.click();
+  // Native toggle events update ARIA asynchronously after a menu item hides the popover.
+  await page.waitForFunction(()=>{
+    const toggle=document.getElementById('enterprise-navigation-toggle'),menu=document.getElementById('enterprise-mobile-navigation');
+    return toggle&&menu&&typeof menu.showPopover==='function'&&menu.hasAttribute('popover')
+      &&toggle.getAttribute('popovertarget')===menu.id
+      &&toggle.getAttribute('aria-expanded')===String(menu.matches(':popover-open'));
+  });
+  if(!await menu.isVisible())await toggle.click();
   await menu.waitFor({state:'visible'});
   await page.waitForFunction(()=>document.getElementById('enterprise-navigation-toggle')?.getAttribute('aria-expanded')==='true');
   assert.equal(await toggle.getAttribute('aria-expanded'),'true');

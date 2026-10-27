@@ -20,8 +20,8 @@ class ResponsePolicy
         $response->headers->set('X-Robots-Tag', 'noindex, nofollow');
         if (($request->attributes->get('service_proposal_campus_review') !== true
             && $request->attributes->get('service_proposal_legacy_capture_response') !== true) || ! $response->headers->has('Content-Security-Policy')) {
-            $artwork = $request->getSchemeAndHttpHost().'/images/proposals/evergrove-mountain-corner.svg';
-            $wordmark = $request->getSchemeAndHttpHost().'/images/proposals/evergrove-software-wordmark.jpg';
+            $artwork = $request->getSchemeAndHttpHost().'/images/proposals/evergrove-mountain-corner-v2.svg';
+            $wordmark = $request->getSchemeAndHttpHost().'/brand/evergrove-logo.png';
             $content = $response->getContent();
             $letterImages = '';
             if (is_string($content) && str_contains($content, '<article class="proposal-personal-letter"')) {

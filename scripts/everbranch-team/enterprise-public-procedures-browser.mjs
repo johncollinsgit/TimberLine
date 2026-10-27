@@ -54,7 +54,8 @@ const server = spawn(
 const exited = once(server, "exit");
 let log = "",
     browser,
-    page;
+    page,
+    failed = false;
 const errors = [],
     requests = [];
 server.stdout.on("data", (b) => {
@@ -108,7 +109,15 @@ try {
     assert.equal(response.status(), 200);
     assert.equal(response.headers()["x-reviewer-fixture-sql"], "0");
     assert.equal(response.headers()["set-cookie"], undefined);
-    await page.locator('#reviewer-perspective').selectOption('manager');
+    // A hidden phone sidebar is not a perspective-navigation signal. Register
+    // the new document load before dispatching the existing onchange action.
+    const selectPerspective = async (persona) => {
+        await Promise.all([
+            page.waitForEvent("load"),
+            page.locator("#reviewer-perspective").selectOption(persona),
+        ]);
+    };
+    await selectPerspective('manager');
     await page.waitForFunction(()=>document.getElementById('reviewer-perspective')?.value==='manager');
     await page.locator('#home-nav').click();
     await page.locator("#briefing-body .briefing-hero").waitFor();
@@ -264,11 +273,11 @@ try {
             .querySelector("#finance-detail")
             ?.textContent.includes("externally_completed"),
     );
-    await page.locator("#reviewer-perspective").selectOption("worker");
+    await selectPerspective("worker");
     await page.locator("#finance-nav").waitFor({ state: "hidden" });
     assert.equal(await page.locator("#finance-body").isVisible(), false);
     assert.equal(await page.locator("#finance-detail").innerText(), "");
-    await page.locator("#reviewer-perspective").selectOption("requester");
+    await selectPerspective("requester");
     assert.equal(await page.locator("#finance-nav").isVisible(), false);
     assert.equal(await page.locator("#certificate-body").isVisible(), false);
     assert.deepEqual(errors, []);
@@ -286,7 +295,7 @@ try {
     // Validate the complete interaction sequence before separate image capture:
     // Playwright/WebKit screenshots inject an inline reset stylesheet even with
     // caret='initial'. Keep that automation artifact outside application CSP checks.
-    await page.locator("#reviewer-perspective").selectOption("manager");
+    await selectPerspective("manager");
     await clickEnterpriseNavigation(page,page.locator("#finance-nav"));
     await page.locator("[data-finance-record]").first().click();
     await page.locator("#finance-detail h3").waitFor();
@@ -304,30 +313,43 @@ try {
         `PASS (${engine}): public shared report/certificate/invoice interfaces, fictional review lifecycles, labeled downloads, retained drafts, hostile text, manager perspective filtering, desktop/phone/iPad touch layouts; zero operational SQL/cookies/API/provider calls and CSP/JS errors before separate screenshots. Viewport simulation only.`,
     );
 } catch (error) {
-    if (page) {
-        await page
-            .screenshot({
-                path: resolve(evidence, "failure.png"),
-                fullPage: true,
-                caret: "initial",
-            })
-            .catch(() => {});
-        await writeFile(
-            resolve(evidence, "failure.txt"),
-            error.stack +
-                "\n" +
-                JSON.stringify({
-                    errors,
-                    requests,
-                    csp: await page.evaluate(() => sampleCspDetails),
-                }) +
-                "\n" +
-                (await page.locator("body").innerText()),
-        ).catch(() => {});
+    failed = true;
+    try {
+        const original = error?.stack || String(error);
+        console.error("PUBLIC_PROCEDURES_ORIGINAL_FAILURE", original);
+        // Save the original before any page diagnostic can lose its context.
+        await writeFile(resolve(evidence, "failure.txt"), original + "\n").catch(() => {});
+        if (page) {
+            const [capture, csp, body] = await Promise.allSettled([
+                page.screenshot({path: resolve(evidence, "failure.png"), fullPage: true, caret: "initial"}),
+                page.evaluate(() => sampleCspDetails),
+                page.locator("body").innerText(),
+            ]);
+            await writeFile(
+                resolve(evidence, "failure.txt"),
+                original + "\n" + JSON.stringify({
+                    errors, requests,
+                    screenshot_available: capture.status === "fulfilled",
+                    csp: csp.status === "fulfilled" ? csp.value : {unavailable: true},
+                }) + "\n" + (body.status === "fulfilled" ? body.value : "Body unavailable during navigation."),
+            ).catch(() => {});
+        }
+    } catch {
+        // Diagnostics cannot replace or suppress the original test failure.
     }
     throw error;
 } finally {
-    if (browser) await browser.close();
-    server.kill();
-    await exited.catch(() => {});
+    let cleanupError;
+    try {
+        if (browser) await browser.close();
+    } catch (error) {
+        cleanupError = error;
+    }
+    try {
+        server.kill();
+        await exited.catch(() => {});
+    } catch (error) {
+        cleanupError ||= error;
+    }
+    if (cleanupError && !failed) throw cleanupError;
 }

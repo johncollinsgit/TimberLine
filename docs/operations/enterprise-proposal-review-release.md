@@ -18,6 +18,28 @@ Prepared October 22, 2026. Source integration is reversible and default-off.
 No production provisioning, publication, invitation, provider call or access
 grant has occurred during this integration.
 
+## Signed v5 archive permissions before activation
+
+Forge checkout may create the signed public v5 archive with group-write enabled.
+The legacy renderer intentionally requires its files to be 0644 and directories
+to have no group/world-write. Preserve that guard and every signed byte. Before
+preparing candidate runtime caches, the approved private release hook invokes
+`python3 -I -B scripts/proposals/prepare-legacy-campus-v5.py` from that candidate.
+The helper accepts no path/options, refuses the active release, verifies the
+complete fixed 126-file/25-directory inventory and content before its first
+metadata change, and only removes group-write. Already-correct candidates verify
+with zero changes. Unknown modes, changed content, links, aliases, hardlinks,
+foreign owners or unexpected inventory refuse activation.
+
+Source installation does not authorize a private-hook write or an active-release
+permission correction. Those require concrete independently reviewed operator
+packets and specific host permission. Never replace the strict renderer with a
+permissive fallback, broadly chmod a release, rewrite the archived content or
+remove the compatibility registry to work around a refusal. A partial/unknown
+metadata change stops for readback without automatic retry or rollback. A source
+rollback lacking this helper also needs a coordinated, separately approved hook
+transition. The helper performs no database, ENV, key, cache or provider action.
+
 ## Two durable responsibilities
 
 The client runtime holds fictional client work in the real Enterprise

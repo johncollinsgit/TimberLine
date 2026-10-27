@@ -12,12 +12,35 @@ import {pathToFileURL} from 'node:url';
 const {chromium,webkit}=await import(pathToFileURL(resolve(process.env.EVERBRANCH_PLAYWRIGHT_MODULE||'node_modules/playwright/index.mjs')).href);
 const php=process.env.ENTERPRISE_TEST_PHP||'php',evidence=resolve(process.env.ENTERPRISE_EVIDENCE||'test-results/enterprise/conversation');
 await mkdir(evidence,{recursive:true});
+// Explicit navigation readiness and closed failure metadata only. No transcript or receipt values are exported.
+async function waitForConversationSection(page,expected) {
+  await page.waitForURL(url=>url.pathname==='/enterprise-campus/teams'&&url.searchParams.get('section')===expected);
+  await page.waitForFunction(expected=>{
+    const nav=document.querySelector('[data-section="'+expected+'"]'),panel=document.getElementById(expected==='ask'?'ask':'work');
+    return nav?.classList.contains('active')===true&&panel?.hidden===false;
+  },expected);
+}
+async function conversationFailureState(page) {
+  if(!page)return {state:'page_unavailable'};
+  try{return await page.evaluate(()=>{
+    const section=new URL(location.href).searchParams.get('section'),status=document.getElementById('conversation-status')?.textContent||'';
+    const known=[['restore','A short conversation may be available.'],['restored','Restored from the current authorized short conversation.'],['unconfirmed','This turn is unconfirmed'],['waiting','Waiting for'],['stopped','Stopped waiting.'],['denied','This conversation cannot be restored']];
+    let receiptPresent=false,receiptShapeValid=false;
+    try{for(let i=0;i<Math.min(sessionStorage.length,128);i++){const key=sessionStorage.key(i);if(!key?.startsWith('everbranch-conversation-v1:'))continue;receiptPresent=true;const text=sessionStorage.getItem(key);if(typeof text==='string'&&text.length<=1024){const value=JSON.parse(text),uuid=/^[a-f0-9-]{36}$/i;receiptShapeValid=uuid.test(value?.session_id)&&uuid.test(value?.request_id);}break;}}catch{}
+    return {state:'captured',section:['ask','requests'].includes(section)?section:'other',active_sections:[...document.querySelectorAll('[data-section].active')].map(node=>node.dataset.section).filter(value=>['ask','requests'].includes(value)),status_category:known.find(([,prefix])=>status.startsWith(prefix))?.[0]||'other',ask_hidden:document.getElementById('ask')?.hidden!==false,controls_hidden:document.getElementById('conversation-controls')?.hidden!==false,send_disabled:document.getElementById('ask-submit')?.disabled!==false,transcript_empty:document.getElementById('chat-log')?.textContent==='',receipt_present:receiptPresent,receipt_shape_valid:receiptShapeValid};
+  });}catch{return {state:'snapshot_unavailable'};}
+}
+async function boundedConversationDiagnostics(report) {
+  let timer;
+  try{await Promise.race([Promise.resolve().then(report).catch(()=>{}),new Promise(resolve=>{timer=setTimeout(resolve,2000);})]);}
+  finally{clearTimeout(timer);}
+}
 const records=[];
 for(const [engine,launcher] of Object.entries({chromium,webkit})){
   const scratch=await mkdtemp(join(tmpdir(),'enterprise-conversation-browser-')),db=join(scratch,'fixture.sqlite'),origin='https://127.0.0.1:8893';
   await writeFile(db,'');
   let env={...process.env,ENTERPRISE_APP_ENV:'testing',ENTERPRISE_RUNTIME_ISOLATED:'true',ENTERPRISE_APP_KEY:'base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=',ENTERPRISE_APP_URL:origin,ENTERPRISE_TEST_CONVERSATION_PROVIDER:'1',ENTERPRISE_TEST_CONVERSATION_DATABASE:db};
-  let server,proxy,browser,runtime,exited;
+  let server,proxy,browser,runtime,exited,diagnosticPage,diagnosticErrors,diagnosticRequests,diagnosticCalls,scenarioFailed=false;
   try{
     const seeded=spawnSync(php,['tests/Support/enterprise-conversation-browser-fixture.php'],{env,encoding:'utf8'});assert.equal(seeded.status,0,seeded.stdout+seeded.stderr);
     assert.ok(seeded.stdout.trim().startsWith('{'),seeded.stdout+seeded.stderr);const fixture=JSON.parse(seeded.stdout);runtime=fixture.runtime;env={...env,ENTERPRISE_RUNTIME_ROOT:runtime,ENTERPRISE_TEST_CONVERSATION_DATABASE:fixture.database};
@@ -32,7 +55,7 @@ for(const [engine,launcher] of Object.entries({chromium,webkit})){
     let ready=false,lastStatus,lastBody;for(let i=0;i<40&&!ready;i++){ready=await new Promise(done=>{const req=httpsRequest(origin+'/enterprise-campus/login',{ca:cert},res=>{lastStatus=res.statusCode;lastBody='';res.on('data',chunk=>lastBody+=chunk);res.on('end',()=>done(res.statusCode===200));});req.on('error',()=>done(false));req.end();});if(!ready)await new Promise(done=>setTimeout(done,100));}assert.ok(ready,JSON.stringify({lastStatus,lastBody,runtime})+' '+serverErrors);
     browser=await launcher.launch({headless:true});const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1440,height:1000}}),external=[],errors=[],requests=[];
     await context.route('**/*',route=>new URL(route.request().url()).origin===origin?route.continue():(external.push(route.request().url()),route.abort()));
-    const page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.method()==='POST'&&request.url().includes('/conversation/turns'))requests.push(JSON.parse(request.postData()));});
+    const page=await context.newPage();diagnosticPage=page;diagnosticErrors=errors;diagnosticRequests=requests;diagnosticCalls=calls;page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.method()==='POST'&&request.url().includes('/conversation/turns'))requests.push(JSON.parse(request.postData()));});
     await page.goto(origin+'/enterprise-campus/login');await page.getByLabel('Email',{exact:true}).fill('conversation@example.invalid');await page.getByLabel('Password',{exact:true}).fill('Fictional-conversation-browser-only!');
     const login=page.waitForResponse(response=>response.request().method()==='POST'&&response.url().endsWith('/login'));await page.getByRole('button',{name:'Sign in',exact:true}).click();assert.equal((await login).status(),200);
     const askUrl=origin+'/enterprise-campus/teams?tenant='+fixture.tenant+'&area_id='+fixture.area+'&section=ask';
@@ -67,7 +90,7 @@ for(const [engine,launcher] of Object.entries({chromium,webkit})){
     await page.locator('#ask-question').fill('And what about that same project?');await page.locator('#ask-submit').click();await holding;assert.equal((await calls()).length,2);
     await page.locator('#conversation-stop').focus();await page.keyboard.press('Enter');assert.equal(await page.locator('#ask-submit').isDisabled(),true);assert.equal(await page.locator('#conversation-check').evaluate(node=>document.activeElement===node),true);release();await completed;await page.unroute('**/conversation/turns?*',hold);
     await page.locator('#conversation-check').click();await page.getByText('Restored from the current authorized short conversation.',{exact:false}).waitFor();assert.equal((await calls()).length,2);assert.equal(requests.length,3);assert.equal(requests[2].session_id,first.session_id);assert.notEqual(requests[2].request_id,first.request_id);
-    await page.getByRole('button',{name:'Requests',exact:true}).click();await page.locator('#ask-nav').click();await page.getByText('A short conversation may be available.',{exact:false}).waitFor();assert.equal(await page.locator('#chat-log').textContent(),'');assert.equal((await calls()).length,2);
+    await page.getByRole('button',{name:'Requests',exact:true}).click();await waitForConversationSection(page,'requests');await page.locator('#ask-nav').click();await waitForConversationSection(page,'ask');await page.getByText('A short conversation may be available.',{exact:false}).waitFor();assert.equal(await page.locator('#chat-log').textContent(),'');assert.equal((await calls()).length,2);
     await page.locator('#conversation-clear').click();assert.equal(await page.locator('#conversation-clear-yes').evaluate(node=>document.activeElement===node),true);await page.locator('#conversation-clear-no').click();assert.equal(await page.locator('#conversation-clear').evaluate(node=>document.activeElement===node),true);
     await page.locator('#conversation-clear').click();await page.locator('#conversation-clear-yes').click();await page.getByText('Conversation content cleared. Existing reservations and metering evidence remain.',{exact:true}).waitFor();assert.equal(await page.evaluate(()=>Object.keys(sessionStorage).filter(key=>key.startsWith('everbranch-conversation-v1:')).length),0);assert.equal((await calls()).length,2);
     assert.equal(await page.locator('#memory-use').isChecked(),false,'A new conversation needs explicit memory opt-in');
@@ -128,10 +151,16 @@ for(const [engine,launcher] of Object.entries({chromium,webkit})){
     await page.reload();await page.locator('#conversation-check').click();await page.getByText('This turn is pending or uncertain.',{exact:false}).waitFor();assert.equal((await calls()).length,5);
     assert.deepEqual(errors,[]);assert.deepEqual(external,[]);await context.close();
     await writeFile(resolve(evidence,engine+'-requests.json'),JSON.stringify({provider:'fake HTTP only',turnRequests:requests,providerReceipts:await calls(),externalRequests:external,errors},null,2));
+  }catch(error){
+    scenarioFailed=true;
+    await boundedConversationDiagnostics(async()=>{const state=await conversationFailureState(diagnosticPage),observed=diagnosticCalls?await diagnosticCalls():null;await writeFile(resolve(evidence,engine+'-failure.json'),JSON.stringify({engine,state,turn_request_count:diagnosticRequests?.length??null,provider_receipts_observed:observed?.length??null,page_error_count:diagnosticErrors?.length??null},null,2));});
+    throw error;
   }finally{
+    try{
     if(browser)await browser.close();if(proxy)await new Promise(done=>proxy.close(done));if(server){server.kill();await exited;}
     if(runtime){try{await writeFile(resolve(evidence,engine+'-server.log'),await readFile(join(runtime,'storage/logs/enterprise.log')));}catch{}}
     if(runtime?.startsWith(join(tmpdir(),'enterprise-conversation-test-')))await rm(runtime,{recursive:true,force:true});await rm(scratch,{recursive:true,force:true});
+    }catch(cleanupError){if(!scenarioFailed)throw cleanupError;console.error('Conversation fixture cleanup also failed; original scenario failure is retained.');}
   }
 }
 await writeFile(resolve(evidence,'results.json'),JSON.stringify(records,null,2));console.log(JSON.stringify({cases:records.length,engines:['chromium','webkit'],actualRuntime:true,provider:'fake HTTP only',activation:false,evidence}));

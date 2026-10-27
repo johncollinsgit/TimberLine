@@ -21,14 +21,28 @@ This release does not activate SMS, alter sender registrations, migrate Modern
 Forestry resources or change the working email notification mode. Deploy backend
 first, then matching Sites source. See `docs/operations/wren-soccer.md`.
 
-## Personal letter as the first proposal tab (October 26; source candidate)
+## Signed legacy campus archive preparation (October 26; source candidate)
+
+The fixed v5 archive keeps its exact signed bytes and strict renderer checks.
+Forge candidates must run `scripts/proposals/prepare-legacy-campus-v5.py` before
+runtime cache preparation and activation. The helper validates all 126 files and
+25 directories before removing group-write only; unknown bytes, modes, aliases,
+links, ownership or inventory fail closed. It derives its own candidate, refuses
+the active release and performs no runtime, database, provider or content writes.
+The private release hook installation and any one-time correction of an active
+archive require separately reviewed, specifically approved host operations.
+Partial or uncertain outcomes stop for readback without automatic retry/rollback.
+The existing native renderer refusal remains unchanged. See the proposal review
+release runbook for this deployment prerequisite.
+
+## Personal letter as the first proposal tab (October 26)
 
 An explicit owner draft choice snapshots the approved Lees-McRae personal letter,
 Everbranch Enterprise logo and Free Range Humanity family image into a future
 immutable review edition. From John is its first/default panel; all other panels
 remain available. Existing editions without this descriptor retain their original
-presentation and data. No hosted draft, publication, deployment or provider has
-been changed by this source milestone.
+content and data. Publication remains an explicit owner action; installing
+source does not retrofit old snapshots or activate providers.
 
 ## Wren editable saved applications (October 25, 2026; source candidate)
 
