@@ -1,3 +1,11 @@
+## Modern Forestry mobile catalog and website presentation (2026-10-27; release candidate)
+
+- Retail browsing includes Winter, Room Sprays, and Sale. Room Sprays can use the active product catalog when Shopify has no dedicated collection. Product search accepts bounded scent tokens, including variant titles, and preserves customer-visible retail filtering.
+- ModernForestryStorefrontPresentationService reads the fixed published retail homepage, preserving banner order and collection order. It caches for 120 seconds, uses an Eastern-calendar quarter key, and retains a last-good snapshot for one day during brief outages. MOBILE_CATALOG_WEBSITE_SYNC_ENABLED disables this sync for rollback.
+- Release the catalog service, controller, presentation service, and configuration together through the existing GitHub/Forge gate. The native app update adds server search, refresh, scroll cues, and source-order rendering. No Shopify catalog, checkout, customer, or reward writes are included.
+
+# SYSTEM SNAPSHOT
+
 ## SMS disclosures and consent evidence (2026-10-26)
 
 Evergrove/Everbranch public privacy and terms now link `/sms-terms` and identify
