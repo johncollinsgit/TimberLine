@@ -56,3 +56,39 @@ test('sample workflow remains unavailable by default and preserves existing fict
     $this->get('https://app.theeverbranch.com/platform/demos/lees-mcrae')->assertOk()->assertSee('lees-mcrae-fictional-hosted-v3', false);
     Http::assertNothingSent();
 });
+
+test('unpublished public workflow keeps its 404 with an isolated path back to the available demo', function (): void {
+    config(['enterprise.reviewer_demo_enabled' => false]);
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+    try {
+        $response = $this->get('https://app.theeverbranch.com/platform/demos/lees-mcrae/workflows')->assertNotFound()
+            ->assertSeeText('This workflow preview is not published.')
+            ->assertSee('href="/platform/demos/lees-mcrae"', false)
+            ->assertDontSee('enterprise-workflow', false)->assertDontSee('<script', false);
+        $queries = DB::getQueryLog();
+    } finally {
+        DB::disableQueryLog();
+        DB::flushQueryLog();
+    }
+    expect($queries)->toBe([])->and($response->headers->getCookies())->toBe([]);
+    $csp = $response->headers->get('Content-Security-Policy');
+    expect($csp)->toContain("default-src 'none'", "script-src 'none'", "connect-src 'none'", "form-action 'none'", "frame-ancestors 'none'");
+    preg_match("/style-src 'nonce-([^']+)'/", $csp, $nonce);
+    expect($response->getContent())->toContain('style nonce="'.$nonce[1].'"')
+        ->not->toContain('/enterprise-campus', '/enterprise-owner', 'john@evergrovesoftware.com');
+    $this->head('https://app.theeverbranch.com/platform/demos/lees-mcrae/workflows')->assertNotFound();
+    $this->postJson('https://app.theeverbranch.com/platform/demos/lees-mcrae/workflows', ['action' => 'run'])->assertStatus(405);
+    Http::assertNothingSent();
+});
+
+test('workflow availability help never replaces host or query authority denials', function (): void {
+    config(['enterprise.reviewer_demo_enabled' => false]);
+    foreach (['?tenant=college', '?project_id=anything', '?runtime=private'] as $query) {
+        $this->get('https://app.theeverbranch.com/platform/demos/lees-mcrae/workflows'.$query)
+            ->assertNotFound()->assertDontSeeText('This workflow preview is not published.');
+    }
+    $this->get('https://theeverbranch.com/platform/demos/lees-mcrae/workflows')
+        ->assertNotFound()->assertDontSeeText('This workflow preview is not published.');
+    Http::assertNothingSent();
+});
