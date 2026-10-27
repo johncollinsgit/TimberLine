@@ -41,6 +41,25 @@ class LeesMcRaeCampusDemoController extends Controller
 
     public function workflow(Request $request): Response
     {
+        if (! config('enterprise.reviewer_demo_enabled')) {
+            $host = strtolower($request->getHost());
+            $canonical = strtolower((string) config('tenancy.domains.canonical.landlord_host'));
+            $localPreview = app()->environment(['local', 'testing']) && in_array($host, ['localhost', '127.0.0.1'], true);
+            abort_unless(($canonical !== '' && $host === $canonical) || $localPreview, 404);
+            abort_if($request->query->count() !== 0 || (string) $request->server('QUERY_STRING', '') !== '', 404);
+
+            // Keep the unpublished workflow unavailable, with a safe path back
+            // to the existing fictional demo. No renderer or feature is enabled.
+            $nonce = base64_encode(random_bytes(24));
+
+            return response()->view('enterprise.workflow-preview-unavailable', ['nonce' => $nonce], 404)->withHeaders([
+                'Content-Type' => 'text/html; charset=UTF-8', 'Cache-Control' => 'no-store, private',
+                'Referrer-Policy' => 'no-referrer', 'X-Robots-Tag' => 'noindex, nofollow, noarchive',
+                'X-Content-Type-Options' => 'nosniff',
+                'Content-Security-Policy' => "default-src 'none'; script-src 'none'; style-src 'nonce-{$nonce}'; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'",
+            ]);
+        }
+
         return app(\App\Enterprise\ReviewerPresentation::class)->respond($request, true);
     }
 }

@@ -11,6 +11,7 @@
     : `everbranch-enterprise-draft:${transport.mode === 'sample' ? 'sample:' : ''}${workspace}:${viewer}:`;
   const selectionMemory = new Map(), noteBusy = new Set(), planningReceipts = new Map(), planningUncertain = new Set();
   let activeDiscussionKey = null, discussionGeneration = 0, planningData = null, planningPending = null, planningBusy = false, askBusy = false, askPending = null, emailPreview = null, emailPending = null, emailGeneration = 0, gmailConnection = null, gmailBusy = false;
+  let notificationGeneration = 0;
   const nextQuery = () => '?tenant=' + encodeURIComponent(tenantSlug);
   function readDraft(key) { try { return JSON.parse(sessionStorage.getItem(draftPrefix + key) || '{}'); } catch { return {}; } }
   function writeDraft(key, value) { try { sessionStorage.setItem(draftPrefix + key, JSON.stringify(value)); } catch {} }
@@ -38,6 +39,7 @@
     if (typeof resetOperations === 'function') resetOperations();
     clearAttachmentGallery();
     discussionGeneration++; activeDiscussionKey = null;
+    notificationGeneration++; $('notification-readiness').textContent = 'Work updates stay in this workspace. Email and SMS readiness has not been checked.';
     emailGeneration++; emailPending = null; emailPreview = null; $('email-form').reset(); $('email-preview').hidden = true;
     $('mailbox-status').textContent = 'No delivery transport connected. No mailbox messages are read or sent.';
     gmailConnection=null; $('gmail-connect').disabled=true; $('gmail-disconnect').hidden=true; $('gmail-status').textContent='Choose an authorized workspace to check your Gmail connection.';
@@ -59,7 +61,7 @@
     $('ask').hidden = section !== 'ask';
     $('work').hidden = ['ask', 'contractors'].includes(section);
     document.querySelectorAll('[data-section]').forEach(b => b.classList.toggle('active', b.dataset.section === section));
-    if (section === 'ask') { $('heading').textContent=aiComingSoon?(presentation.reviewerAi?.enabled?'AI tools':'AI tools · Coming soon'):'Ask with the right context.'; $('breadcrumb').textContent=aiComingSoon?'AI tools':'Ask Everbranch'; if(!aiComingSoon){if(!conversationMode()&&!$('ask-question').value) $('ask-question').value=readDraft('ask:'+area).pending?.question||''; loadMailboxes();} }
+    if (section === 'ask') { loadNotificationReadiness(); $('heading').textContent=aiComingSoon?(presentation.reviewerAi?.enabled?'AI tools':'AI tools · Coming soon'):'Ask with the right context.'; $('breadcrumb').textContent=aiComingSoon?'AI tools':'Ask Everbranch'; if(!aiComingSoon){if(!conversationMode()&&!$('ask-question').value) $('ask-question').value=readDraft('ask:'+area).pending?.question||''; loadMailboxes();} }
     if (section === 'contractors') loadPlanning();
     rememberUrl();
   }
@@ -322,6 +324,34 @@
     } catch (error) { if (area === requestedArea) { $('chat-log').replaceChildren(); chatMessage(error.message); $('ask-question').value = question; } }
     finally { askBusy = false; $('ask-submit').disabled = false; }
   };
+  function notificationReadinessText(value) {
+    const email=value?.email,sms=value?.sms;
+    if(value?.in_app?.mode!=='native_workspace'||value.in_app.available!==true||email?.mode!=='own_mailbox'||sms?.mode!=='unavailable'
+      ||typeof email.configured!=='boolean'||typeof email.dispatch_enabled!=='boolean'||email.automatic_notifications!==false
+      ||email.requires_confirmation!==true||email.live_delivery_verified!==false||sms.configured!==false||sms.dispatch_enabled!==false
+      ||sms.automatic_notifications!==false||sms.requires_confirmation!==true||sms.live_delivery_verified!==false
+      ||(email.dispatch_enabled&&!email.configured))return 'Delivery readiness is unavailable. No message was sent.';
+    const reason={drafts_disabled:'Manual email drafts are disabled.',read_only_scope:'Email drafting is unavailable in your current role or while changes are paused.',
+      own_mailbox_required:'Connect your own authorized mailbox before drafting email.',sender_dispatch_disabled:'Your mailbox is connected; sending is disabled.',
+      exact_confirmation_required:'Your own mailbox is ready for an exact email preview and separate confirmation. Provider delivery is unverified.'}[email.reason_code];
+    return reason?'In-app work updates are available. '+reason+' Automatic work email and SMS notifications are not connected. Existing pending or uncertain sends still require their original recovery.':'Delivery readiness is unavailable. No message was sent.';
+  }
+  async function loadNotificationReadiness() {
+    const generation=++notificationGeneration,requestedArea=area;
+    if(transport.mode==='sample'||transport.mode==='shared'){
+      $('notification-readiness').textContent='Fictional work updates only. No email or SMS is sent by work changes.';return;
+    }
+    $('notification-readiness').textContent='Checking delivery readiness for your current workspace…';
+    if(!requestedArea)return;
+    try{
+      const result=await api(`${nextBase}/integrations${nextQuery()}&area_id=${encodeURIComponent(requestedArea)}`);
+      if(generation!==notificationGeneration||area!==requestedArea||section!=='ask')return;
+      $('notification-readiness').textContent=notificationReadinessText(result.notifications);
+    }catch{
+      if(generation!==notificationGeneration||area!==requestedArea||section!=='ask')return;
+      $('notification-readiness').textContent='Delivery readiness is unavailable. No message was sent.';
+    }
+  }
   async function loadMailboxes() {
     const generation = ++emailGeneration;
     $('email-form').hidden = true; $('email-confirm').hidden = true; emailPreview = null;
@@ -351,14 +381,14 @@
       if(url.origin!=='https://accounts.google.com'||url.pathname!=='/o/oauth2/v2/auth'||url.username||url.password||url.hash)throw new Error('An unsupported Google consent destination was returned.');
       transport.navigate(url.href);
     }catch(error){if(area===requestedArea&&generation===emailGeneration)message(error.message,true);}
-    finally{gmailBusy=false;if(area===requestedArea&&section==='ask')loadMailboxes();}
+    finally{gmailBusy=false;if(area===requestedArea&&section==='ask'){loadNotificationReadiness();loadMailboxes();}}
   };
   $('gmail-disconnect').onclick=async()=>{
     if(gmailBusy||!gmailConnection||!area)return;
     const exact=gmailConnection,requestedArea=area,generation=emailGeneration;gmailBusy=true;$('gmail-disconnect').disabled=true;
     try {const result=await api(`${nextBase}/gmail/${encodeURIComponent(exact.connection_id)}/disconnect${nextQuery()}`,{area_id:requestedArea});if(area!==requestedArea||section!=='ask'||generation!==emailGeneration)return;emailPreview=null;emailPending=null;$('email-preview').replaceChildren();$('email-preview').hidden=true;$('email-confirm').hidden=true;message(result.provider_revocation==='uncertain'?'Gmail is disconnected here. Google revocation could not be confirmed; review access in your Google account.':'Gmail disconnected. Existing approvals can no longer send.');}
     catch(error){if(area===requestedArea&&generation===emailGeneration)message(error.message,true);}
-    finally{gmailBusy=false;if(area===requestedArea&&section==='ask')loadMailboxes();}
+    finally{gmailBusy=false;if(area===requestedArea&&section==='ask'){loadNotificationReadiness();loadMailboxes();}}
   };
   $('email-form').oninput = () => {emailGeneration++; emailPreview = null; emailPending = null; $('email-confirm').hidden = true; $('email-preview').hidden = true;};
   $('email-form').onsubmit = async e => {

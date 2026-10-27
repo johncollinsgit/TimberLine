@@ -8,10 +8,26 @@ Keep the restrictions in `forge-atomic-release-runbook.md`.
 
 ## Publish the isolated public demonstration
 
-The public routes remain in the retail application:
+The public routes remain in the retail application, with different availability:
 
-- GET/HEAD `/platform/demos/lees-mcrae`
-- GET/HEAD `/platform/demos/lees-mcrae/workflows`
+- GET/HEAD `/platform/demos/lees-mcrae` is the supported entrypoint for the
+  currently published static fictional campus prototype. Use its Operations &
+  projects or Task board controls for the available in-page views.
+- GET/HEAD `/platform/demos/lees-mcrae/workflows` belongs to the separately gated
+  shared reviewer renderer. With its publication flag off, this URL returns HTTP 404.
+  A canonical request without queries receives an availability page linking to
+  the working campus root. This is a return path, not restored workflow-builder
+  functionality. Unknown hosts, queries and mutations keep their denials.
+
+Do not advertise the workflows URL as available while that renderer is off.
+The static prototype has no supported hash or query router for individual views, and its UI
+does not link to the unpublished workflow URL. Do not substitute a native campus
+or private recipient URL. A supplied direct deep link returning HTTP 404 is separate
+from a broken clicked UI link and from the private v5 signed archive HTTP 503 guard.
+
+The publication procedure below is a source plan for a separately approved
+future renderer release. It is not authority to enable that flag during the
+current copy, Requests or responsive source follow-up.
 
 The full campus restoration plan authorizes publishing this fictional experience
 through the normal reviewed GitHub-to-Forge release. Complete the reviewed

@@ -1,3 +1,31 @@
+## Public fictional Requests follow-up (October 27; source candidate)
+
+The separate public static sample retains its v3 session and current fictional
+record access. Requesters create requests; only Demo admin can edit submitted
+title/details, priority, building or assignment, with actual changed-field audit.
+Restricted linked tasks remain denied and missing jobs are not manufactured.
+Request-only comments and local JPEG/PNG/PDF references retain their separate
+capabilities. Center/Side uses one dialog; mobile cards share the same permitted
+rows. File bytes stay in tab memory, unscanned and unshared; reload may require
+reselection. This does not change native campus authority or the private immutable
+review edition. Preserve all normal CI, release and publication gates. See
+[the public Requests contract](docs/operations/enterprise-public-requests.md).
+
+## Notification readiness and institution-wide prototype copy (source follow-up)
+
+Keep in-app updates, current-user mailbox email and controlled-trial delivery
+separate. Readiness is current-user/department scoped and never sends or proves
+live delivery. Root SES approval/configuration does not grant Enterprise sender
+authority. Public prototype actions remain simulations; departmental AI and
+student recruitment attribution/follow-up are phased future scope. See
+`docs/operations/enterprise-notification-readiness.md`. This isolated follow-up
+is not deployed and does not modify existing immutable proposal editions.
+
+Campus copy uses a single concrete section title. Omit decorative kickers,
+taglines and redundant introduction paragraphs. Preserve the top fictional-demo
+banner, functional controls/data and essential permission, error and field
+guidance. New copy and reports use no em dashes.
+
 ## Modern Forestry mobile catalog and website presentation (2026-10-27; release candidate)
 
 - Retail browsing includes Winter, Room Sprays, and Sale. Room Sprays can use the active product catalog when Shopify has no dedicated collection. Product search accepts bounded scent tokens, including variant titles, and preserves customer-visible retail filtering.
