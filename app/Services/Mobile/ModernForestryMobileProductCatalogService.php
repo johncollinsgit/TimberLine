@@ -77,14 +77,14 @@ class ModernForestryMobileProductCatalogService
             'title' => 'Spring',
             'description' => 'Fresh florals, bright greens, and softer daylight scents.',
             'aliases' => ['spring', 'spring-collection', 'wholesale-spring-collection'],
-            'fallback_image' => 'https://theforestrystudio.com/cdn/shop/files/bright-fuschia-spring-blossoms_638cad68-df20-4a7b-b482-68abb3beb3bf_1000x.jpg?v=1772645457',
+            'fallback_image' => 'https://cdn.shopify.com/s/files/1/2081/2479/collections/bright-fuschia-spring-blossoms_638cad68-df20-4a7b-b482-68abb3beb3bf.jpg?v=1787746578&width=900',
         ],
         [
             'handle' => 'classic',
             'title' => 'Classic',
             'description' => 'The everyday candles people keep coming back for.',
             'aliases' => ['classic', 'classic-collection-1', 'candle-collection', 'wholesale-year-round-collection'],
-            'fallback_image' => 'https://theforestrystudio.com/cdn/shop/files/magnolia-bloom-opening_1000x.jpg?v=1772646113',
+            'fallback_image' => 'https://cdn.shopify.com/s/files/1/2081/2479/files/Coffeehouse16oz.png?v=1787666288&width=900',
         ],
         [
             'handle' => 'summer',
@@ -92,7 +92,7 @@ class ModernForestryMobileProductCatalogService
             'description' => 'Sunlit, airy, and easygoing favorites for warm days.',
             'aliases' => ['summer', 'summer-collection', 'wholesale-summer-collection'],
             'preferred_titles' => ['Summer Collection'],
-            'fallback_image' => 'https://theforestrystudio.com/cdn/shop/files/easter-mini-eggs_1000x.jpg?v=1772646038',
+            'fallback_image' => 'https://cdn.shopify.com/s/files/1/2081/2479/collections/Screen_Shot_2022-06-01_at_12.06.18_PM.png?v=1741701079&width=900',
         ],
         [
             'handle' => 'holiday',
@@ -100,7 +100,7 @@ class ModernForestryMobileProductCatalogService
             'description' => 'Seasonal candles for gatherings, gifts, and winter moods.',
             'aliases' => ['holiday', 'holiday-collection', 'wholesale-holiday-collection'],
             'preferred_titles' => ['Holiday Collection'],
-            'fallback_image' => 'https://theforestrystudio.com/cdn/shop/files/bright-fuschia-spring-blossoms_638cad68-df20-4a7b-b482-68abb3beb3bf_1000x.jpg?v=1772645457',
+            'fallback_image' => 'https://cdn.shopify.com/s/files/1/2081/2479/collections/bear-and-gifts-under-christmas-tree.jpg?v=1782618489&width=900',
         ],
         [
             'handle' => 'autumn',
@@ -108,26 +108,60 @@ class ModernForestryMobileProductCatalogService
             'description' => 'Warm spices, woods, and deeper comfort notes.',
             'aliases' => ['autumn', 'autumn-collection', 'fall', 'fall-collection', 'wholesale-fall-candle-collection'],
             'preferred_titles' => ['Autumn Collection'],
-            'fallback_image' => 'https://theforestrystudio.com/cdn/shop/files/magnolia-bloom-opening_1000x.jpg?v=1772646113',
+            'fallback_image' => 'https://cdn.shopify.com/s/files/1/2081/2479/collections/autumn_leaves_hdr.png?v=1741704665&width=900',
         ],
         [
             'handle' => 'bundles',
             'title' => 'Bundles',
             'description' => 'Curated sets and giftable groupings with a little extra value.',
-            'aliases' => ['bundles', 'candle-bundles', 'bundle-collection', 'sale-items'],
+            'aliases' => ['bundles', 'candle-bundles', 'bundle-collection'],
             'fallback_image' => 'https://theforestrystudio.com/cdn/shop/files/easter-mini-eggs_1000x.jpg?v=1772646038',
+        ],
+        [
+            'handle' => 'winter',
+            'title' => 'Winter',
+            'description' => 'Cozy scents for crisp days and quiet winter evenings.',
+            'aliases' => ['winter', 'winter-collection'],
+            'preferred_titles' => ['Winter Collection'],
+            'fallback_image' => 'https://cdn.shopify.com/s/files/1/2081/2479/collections/snowy_day.jpg?v=1705945890',
+        ],
+        [
+            'handle' => 'room-sprays',
+            'title' => 'Room Sprays',
+            'description' => 'Freshen your space with your favorite scents.',
+            'aliases' => ['room-sprays', 'room-spray'],
+            'preferred_titles' => ['Room Sprays', 'Room Spray'],
+            'fallback_image' => 'https://cdn.shopify.com/s/files/1/2081/2479/files/IMG_1856.jpg?v=1710769900',
+        ],
+        [
+            'handle' => 'sale-items',
+            'title' => 'Sale',
+            'description' => 'Limited-time markdowns on customer-favorite scents.',
+            'aliases' => ['sale-items', 'sale', 'sale-collection', 'clearance'],
+            'preferred_titles' => ['Sale Items'],
+            'fallback_image' => null,
         ],
     ];
 
     /**
      * @return array<int,array<string,mixed>>
      */
-    public function products(int $limit = self::DEFAULT_LIMIT): array
+    public function products(int $limit = self::DEFAULT_LIMIT, string $search = ''): array
     {
         $limit = $this->normalizeLimit($limit);
+        $tokens = $this->searchTokens($search);
 
         if ($this->fakeCatalogEnabled()) {
-            return $this->fakeProducts($limit);
+            $products = $this->fakeProducts(self::MAX_LIMIT);
+            if ($tokens !== []) {
+                $products = array_values(array_filter($products, static function (array $product) use ($tokens): bool {
+                    $text = Str::lower(implode(' ', [$product['title'], $product['handle'], implode(' ', $product['tags'] ?? [])]));
+
+                    return collect($tokens)->every(fn (string $token): bool => Str::contains($text, Str::lower($token)));
+                }));
+            }
+
+            return array_slice($products, 0, $limit);
         }
 
         $client = $this->client();
@@ -138,6 +172,7 @@ class ModernForestryMobileProductCatalogService
         do {
             $variables = [
                 'first' => self::MAX_LIMIT,
+                'query' => $this->productSearchQuery($tokens),
             ];
 
             if ($after !== null) {
@@ -168,6 +203,25 @@ class ModernForestryMobileProductCatalogService
         } while ($hasNextPage && count($products) < $limit && $after !== null);
 
         return array_slice($products, 0, $limit);
+    }
+
+    /** @return array<int,string> */
+    protected function searchTokens(string $search): array
+    {
+        preg_match_all('/[\p{L}\p{N}]+/u', mb_substr(trim($search), 0, 100), $matches);
+
+        return array_slice($matches[0], 0, 10);
+    }
+
+    /** @param array<int,string> $tokens */
+    protected function productSearchQuery(array $tokens): string
+    {
+        $query = 'status:active';
+        foreach ($tokens as $token) {
+            $query .= ' AND (title:'.$token.'* OR handle:'.$token.'* OR tag:'.$token.'* OR variant_title:'.$token.'*)';
+        }
+
+        return $query;
     }
 
     /**
@@ -270,11 +324,11 @@ class ModernForestryMobileProductCatalogService
             return $this->fakeCollections();
         }
 
-        return $this->rememberCatalogPayload('collections:v1', self::COLLECTIONS_CACHE_SECONDS, function (): array {
+        return $this->websiteOrderedCollections($this->rememberCatalogPayload('collections:v2', self::COLLECTIONS_CACHE_SECONDS, function (): array {
             $client = $this->client();
 
             return $this->seasonalCollectionsFromNodes($this->collectionNodes($client));
-        });
+        }));
     }
 
     /**
@@ -296,13 +350,21 @@ class ModernForestryMobileProductCatalogService
         }
 
         return $this->rememberCatalogPayload(
-            sprintf('collection-products:v2:%s:%s:%d', $handle, $sort, $limit),
+            sprintf('collection-products:v3:%s:%s:%d', $handle, $sort, $limit),
             self::COLLECTION_PRODUCTS_CACHE_SECONDS,
             function () use ($handle, $limit, $sort): ?array {
                 $client = $this->client();
                 $collectionNodes = $this->collectionNodes($client);
                 $resolvedCollection = $this->resolveSeasonalCollectionNode($handle, $collectionNodes);
                 $targetHandle = trim((string) ($resolvedCollection['handle'] ?? $handle));
+
+                // Room Spray is a retail product with scent variants; a dedicated Shopify collection is optional.
+                if ($resolvedCollection === null && ($this->seasonalDefinitionForHandle($handle)['handle'] ?? null) === 'room-sprays') {
+                    return [
+                        'collection' => collect($this->fallbackCollections())->firstWhere('handle', 'room-sprays'),
+                        'products' => array_slice($this->sortProducts($this->products(self::MAX_LIMIT, 'Room Spray'), $sort), 0, $limit),
+                    ];
+                }
 
                 $sortArguments = $this->collectionSortArguments($sort);
 
@@ -386,7 +448,7 @@ class ModernForestryMobileProductCatalogService
     {
         $this->modernForestryTenant();
 
-        $key = $this->catalogCacheKey('home:v3');
+        $key = $this->catalogCacheKey('home:v4');
         $cached = Cache::get($key);
 
         if ($this->isHomeCacheEntry($cached)) {
@@ -487,7 +549,7 @@ class ModernForestryMobileProductCatalogService
      */
     protected function cachedCollectionsForHomeShell(): array
     {
-        $collections = Cache::get($this->catalogCacheKey('collections:v1'));
+        $collections = Cache::get($this->catalogCacheKey('collections:v2'));
 
         return is_array($collections) ? $collections : $this->fallbackCollections();
     }
@@ -500,6 +562,8 @@ class ModernForestryMobileProductCatalogService
      */
     protected function buildHomePayload(array $collections, array $content, array $featuredProducts): array
     {
+        $website = app(ModernForestryStorefrontPresentationService::class)->snapshot();
+
         return [
             'brand' => [
                 'wordmark' => $this->mobileContentValue($content, 'brand_name', 'Modern Forestry'),
@@ -513,11 +577,11 @@ class ModernForestryMobileProductCatalogService
                 'logoUrl' => null,
                 'wordmark' => $this->mobileContentValue($content, 'brand_name', 'Modern Forestry'),
                 'tagline' => 'Soy candles',
-                'slides' => ($content['__has_published_app_content'] ?? false)
+                'slides' => ($website['slides'] ?? []) ?: (($content['__has_published_app_content'] ?? false)
                     ? ($this->mobileContentHeroSlides($content) ?: $this->homeHeroSlides())
-                    : $this->homeHeroSlides(),
+                    : $this->homeHeroSlides()),
             ],
-            'featuredCollections' => $collections,
+            'featuredCollections' => $this->websiteOrderedCollections($collections),
             'featuredProducts' => $featuredProducts,
             'cards' => $this->homeCards(),
         ];
@@ -755,8 +819,8 @@ class ModernForestryMobileProductCatalogService
     protected function productsQuery(): string
     {
         return <<<'GRAPHQL'
-query MobileCatalogProducts($first: Int!, $after: String) {
-  products(first: $first, after: $after, sortKey: UPDATED_AT, reverse: true, query: "status:active") {
+query MobileCatalogProducts($first: Int!, $after: String, $query: String = "status:active") {
+  products(first: $first, after: $after, sortKey: UPDATED_AT, reverse: true, query: $query) {
     nodes {
       id
       title
@@ -922,8 +986,8 @@ GRAPHQL;
     protected function collectionsQuery(): string
     {
         return <<<'GRAPHQL'
-query MobileCatalogCollections {
-  collections(first: 40, sortKey: UPDATED_AT, reverse: true) {
+query MobileCatalogCollections($after: String) {
+  collections(first: 50, after: $after, sortKey: UPDATED_AT, reverse: true) {
     nodes {
       handle
       title
@@ -949,6 +1013,7 @@ query MobileCatalogCollections {
         }
       }
     }
+    pageInfo { hasNextPage endCursor }
   }
 }
 GRAPHQL;
@@ -1858,12 +1923,40 @@ GRAPHQL;
      */
     protected function collectionNodes(ShopifyGraphqlClient $client): array
     {
-        return $this->rememberCatalogPayload('collection-nodes:v1', self::COLLECTION_NODES_CACHE_SECONDS, function () use ($client): array {
-            $data = $client->query($this->collectionsQuery());
-            $nodes = $data['collections']['nodes'] ?? [];
+        return $this->rememberCatalogPayload('collection-nodes:v2', self::COLLECTION_NODES_CACHE_SECONDS, function () use ($client): array {
+            $nodes = [];
+            $after = null;
+            do {
+                $data = $client->query($this->collectionsQuery(), ['after' => $after]);
+                $connection = $data['collections'] ?? [];
+                $nodes = array_merge($nodes, (array) ($connection['nodes'] ?? []));
+                $next = $this->nullableString($connection['pageInfo']['endCursor'] ?? null);
+                $hasNext = (bool) ($connection['pageInfo']['hasNextPage'] ?? false);
+                if ($next === $after) {
+                    break;
+                }
+                $after = $next;
+            } while ($hasNext && $after !== null);
 
-            return is_array($nodes) ? $nodes : [];
+            return $nodes;
         });
+    }
+
+    protected function websiteOrderedCollections(array $collections): array
+    {
+        $snapshot = app(ModernForestryStorefrontPresentationService::class)->snapshot();
+        $order = [];
+        foreach ($snapshot['collectionHandles'] ?? [] as $handle) {
+            $canonical = $this->seasonalDefinitionForHandle($handle)['handle'] ?? $handle;
+            $order[] = $canonical;
+        }
+        foreach ($collections as $collection) {
+            $order[] = $collection['handle'];
+        }
+        $order = array_values(array_unique($order));
+        usort($collections, static fn (array $a, array $b): int => array_search($a['handle'], $order, true) <=> array_search($b['handle'], $order, true));
+
+        return $collections;
     }
 
     protected function rememberCatalogPayload(string $suffix, int $seconds, callable $resolver): mixed
@@ -1877,7 +1970,7 @@ GRAPHQL;
 
     protected function catalogCacheKey(string $suffix): string
     {
-        return 'modern_forestry_mobile_catalog:'.$suffix;
+        return 'modern_forestry_mobile_catalog:'.$suffix.':'.now('America/New_York')->format('Y').'-'.now('America/New_York')->quarter;
     }
 
     /**
@@ -1950,6 +2043,9 @@ GRAPHQL;
 
             $nodeHandle = Str::lower(trim((string) ($node['handle'] ?? '')));
             $nodeTitle = Str::lower(trim((string) ($node['title'] ?? '')));
+            if (Str::contains($nodeHandle.' '.$nodeTitle, 'wholesale')) {
+                continue;
+            }
 
             $score = null;
 
