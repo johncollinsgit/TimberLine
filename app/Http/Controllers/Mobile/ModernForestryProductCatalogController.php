@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Mobile;
 
 use App\Http\Controllers\Controller;
 use App\Models\MobilePushDevice;
-use App\Services\Marketing\ProductReviewService;
 use App\Services\Marketing\ModernForestrySocialShareRewardService;
+use App\Services\Marketing\ProductReviewService;
 use App\Services\Mobile\ModernForestryMobileAccountService;
 use App\Services\Mobile\ModernForestryMobileBagReminderService;
 use App\Services\Mobile\ModernForestryMobileCheckoutException;
@@ -15,8 +15,8 @@ use App\Services\Mobile\ModernForestryMobileCustomerSessionService;
 use App\Services\Mobile\ModernForestryMobileProductCatalogService;
 use App\Services\Mobile\ModernForestryMobileScentQuizService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -94,10 +94,11 @@ class ModernForestryProductCatalogController extends Controller
         Request $request,
         ModernForestryMobileProductCatalogService $catalog
     ): JsonResponse {
+        $validated = $request->validate(['q' => ['nullable', 'string', 'max:100']]);
         $limit = $catalog->normalizeLimit((int) $request->query('limit', ModernForestryMobileProductCatalogService::DEFAULT_LIMIT));
 
         try {
-            $products = $catalog->products($limit);
+            $products = $catalog->products($limit, $validated['q'] ?? '');
         } catch (Throwable) {
             return response()->json([
                 'data' => [],
@@ -1135,8 +1136,7 @@ class ModernForestryProductCatalogController extends Controller
     public function sessionStatus(
         Request $request,
         ModernForestryMobileCustomerSessionService $sessions
-    ): JsonResponse
-    {
+    ): JsonResponse {
         return response()->json($sessions->sessionPayload($sessions->resolveFromRequest($request)));
     }
 

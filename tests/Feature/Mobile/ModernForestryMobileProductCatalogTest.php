@@ -30,6 +30,7 @@ use Illuminate\Support\Facades\Storage;
 
 beforeEach(function (): void {
     Cache::flush();
+    config()->set('mobile_catalog.website_sync_enabled', false);
     config()->set('mobile_catalog.fake_enabled', false);
     config()->set('services.shopify.api_version', '2026-01');
     config()->set('services.shopify.stores.retail.shop', 'modernforestry-test.myshopify.com');
@@ -314,7 +315,7 @@ test('fake mobile home response references valid known collection and product ha
         ->assertOk()
         ->json();
 
-    $knownCollectionHandles = ['spring', 'classic', 'summer', 'holiday', 'autumn', 'bundles'];
+    $knownCollectionHandles = ['spring', 'classic', 'summer', 'holiday', 'autumn', 'bundles', 'winter', 'room-sprays', 'sale-items'];
     $knownProductHandles = ['fraser-fir', 'oakmoss-amber', 'lavender-woods', 'hearthside', 'citrus-grove', 'vanilla-birch'];
 
     foreach ($payload['featuredCollections'] as $collection) {
@@ -1885,7 +1886,7 @@ test('real mobile collections use a collection or hero product image when availa
 
     $this->getJson('/api/mobile/v1/modern-forestry/collections')
         ->assertOk()
-        ->assertJsonCount(6, 'collections')
+        ->assertJsonCount(9, 'collections')
         ->assertJsonPath('collections.0.handle', 'spring')
         ->assertJsonPath('collections.0.title', 'Spring')
         ->assertJsonPath('collections.0.imageUrl', 'https://cdn.shopify.com/s/files/spring-hero.png?width=900')
@@ -1929,14 +1930,16 @@ test('real mobile home always returns canonical seasonal collections with image 
 
     $payload = $this->getJson('/api/mobile/v1/modern-forestry/home')
         ->assertOk()
-        ->assertJsonCount(6, 'featuredCollections')
+        ->assertJsonCount(9, 'featuredCollections')
         ->json();
 
     expect(collect($payload['featuredCollections'])->pluck('handle')->all())
-        ->toBe(['spring', 'classic', 'summer', 'holiday', 'autumn', 'bundles']);
+        ->toBe(['spring', 'classic', 'summer', 'holiday', 'autumn', 'bundles', 'winter', 'room-sprays', 'sale-items']);
 
     foreach ($payload['featuredCollections'] as $collection) {
-        expect($collection['imageUrl'] ?? null)->toBeString()->not->toBe('');
+        if ($collection['handle'] !== 'sale-items') {
+            expect($collection['imageUrl'] ?? null)->toBeString()->not->toBe('');
+        }
     }
 });
 
@@ -2002,7 +2005,7 @@ test('real mobile home returns a shell first and warms featured products from pu
         ->assertOk()
         ->json();
 
-    expect($coldPayload['featuredCollections'])->toHaveCount(6);
+    expect($coldPayload['featuredCollections'])->toHaveCount(9);
     expect($coldPayload['featuredProducts'])->toBe([]);
     expect($coldPayload['diagnostics']['mode'] ?? null)->toBe('shell');
     expect($coldPayload['diagnostics']['refreshQueued'] ?? null)->toBeTrue();
@@ -2023,7 +2026,7 @@ test('real mobile home returns a shell first and warms featured products from pu
 test('real mobile home serves stale cached payload while a refresh is already queued', function (): void {
     config()->set('mobile_catalog.fake_enabled', false);
 
-    Cache::put('modern_forestry_mobile_catalog:home:v3', [
+    Cache::put('modern_forestry_mobile_catalog:home:v4'.':'.now('America/New_York')->format('Y').'-'.now('America/New_York')->quarter, [
         'payload' => [
             'brand' => [
                 'wordmark' => 'Modern Forestry',
@@ -2038,7 +2041,7 @@ test('real mobile home serves stale cached payload while a refresh is already qu
         'cached_at' => now()->subHour()->getTimestamp(),
     ], now()->addMinutes(10));
 
-    Cache::put('modern_forestry_mobile_catalog:home:v3:refreshing', true, now()->addMinutes(1));
+    Cache::put('modern_forestry_mobile_catalog:home:v4'.':'.now('America/New_York')->format('Y').'-'.now('America/New_York')->quarter.':refreshing', true, now()->addMinutes(1));
 
     $payload = $this->getJson('/api/mobile/v1/modern-forestry/home')
         ->assertOk()
@@ -4304,3 +4307,39 @@ function shopifyStorefrontCartCheckoutUrlPayload(
         ],
     ];
 }
+
+test('mobile search forwards scent tokens across the active catalog', function (): void {
+    Http::fake(['*' => Http::response(shopifyMobileCatalogPayload(), 200)]);
+    $this->getJson('/api/mobile/v1/modern-forestry/products?q=Coffeehouse')->assertOk();
+    Http::assertSent(fn (Request $request): bool => str_contains($request['variables']['query'] ?? '', 'status:active AND (title:Coffeehouse*')
+        && str_contains($request['variables']['query'] ?? '', 'variant_title:Coffeehouse*'));
+});
+
+test('room sprays remain browsable without a dedicated shopify collection', function (): void {
+    Http::fake(['*' => function (Request $request) {
+        if (str_contains($request['query'] ?? '', 'MobileCatalogCollections')) {
+            return Http::response(['data' => ['collections' => ['nodes' => []]]]);
+        }
+
+        return Http::response(shopifyMobileCatalogPayload());
+    }]);
+    $this->getJson('/api/mobile/v1/modern-forestry/collections/room-sprays/products')
+        ->assertOk()->assertJsonPath('collection.handle', 'room-sprays')->assertJsonCount(2, 'products');
+    Http::assertSent(fn (Request $request): bool => str_contains($request['variables']['query'] ?? '', 'title:Room*')
+        && str_contains($request['variables']['query'] ?? '', 'title:Spray*'));
+});
+
+test('mobile homepage follows published website banner and seasonal collection order', function (): void {
+    config()->set('mobile_catalog.website_sync_enabled', true);
+    $html = '<div class="Slideshow__Slide" id="Slidefall"><img data-src="//theforestrystudio.com/fall_x800.jpg?v=2"><h2>Shop our Fall Collection</h2><a href="/collections/autumn-collection">Shop Fall</a></div><a class="CollectionItem" href="/collections/autumn-collection"></a><a class="CollectionItem" href="/collections/winter-collection"></a><a class="CollectionItem" href="/collections/holiday-collection"></a>';
+    Http::fake([
+        'https://theforestrystudio.com/' => Http::response($html),
+        '*' => Http::response(shopifyMobileCollectionsPayload()),
+    ]);
+    $this->getJson('/api/mobile/v1/modern-forestry/collections')->assertOk()
+        ->assertJsonPath('collections.0.handle', 'autumn')->assertJsonPath('collections.1.handle', 'winter');
+    $this->getJson('/api/mobile/v1/modern-forestry/home')->assertOk()
+        ->assertJsonPath('hero.slides.0.title', 'Shop our Fall Collection')
+        ->assertJsonPath('hero.slides.0.imageUrl', 'https://theforestrystudio.com/fall_x800.jpg?v=2')
+        ->assertJsonPath('featuredCollections.0.handle', 'autumn');
+});
