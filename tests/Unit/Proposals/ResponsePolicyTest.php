@@ -49,7 +49,7 @@ final class ResponsePolicyTest extends TestCase
         $this->assertSame($original, $response);
         $this->assertSame('Unchanged private proposal body', $response->getContent());
         $directives = $this->directives($response);
-        $this->assertSame(['https://proposal.example.invalid:8443/images/proposals/evergrove-mountain-corner.svg', 'https://proposal.example.invalid:8443/images/proposals/evergrove-software-wordmark.jpg'], $directives['img-src']);
+        $this->assertSame(['https://proposal.example.invalid:8443/images/proposals/evergrove-mountain-corner-v2.svg', 'https://proposal.example.invalid:8443/brand/evergrove-logo.png'], $directives['img-src']);
         $this->assertSame(["'none'"], $directives['default-src']);
         $this->assertSame(["'unsafe-inline'"], $directives['style-src']);
         $this->assertSame(["'self'"], $directives['form-action']);
@@ -106,7 +106,7 @@ final class ResponsePolicyTest extends TestCase
         $response = (new ResponsePolicy)->handle(Request::create('/service-proposals/synthetic'), fn () => $original);
         $directives = $this->directives($response);
         $this->assertSame(["'none'"], $directives['default-src']);
-        $this->assertSame(['http://localhost/images/proposals/evergrove-mountain-corner.svg', 'http://localhost/images/proposals/evergrove-software-wordmark.jpg'], $directives['img-src']);
+        $this->assertSame(['http://localhost/images/proposals/evergrove-mountain-corner-v2.svg', 'http://localhost/brand/evergrove-logo.png'], $directives['img-src']);
         $this->assertArrayNotHasKey('script-src', $directives);
         $this->assertArrayNotHasKey('connect-src', $directives);
     }
@@ -117,7 +117,7 @@ final class ResponsePolicyTest extends TestCase
         $request->attributes->set('service_proposal_campus_review', true);
         $response = (new ResponsePolicy)->handle($request, fn () => new Response('Proposal'));
         $directives = $this->directives($response);
-        $this->assertSame(['http://localhost/images/proposals/evergrove-mountain-corner.svg', 'http://localhost/images/proposals/evergrove-software-wordmark.jpg'], $directives['img-src']);
+        $this->assertSame(['http://localhost/images/proposals/evergrove-mountain-corner-v2.svg', 'http://localhost/brand/evergrove-logo.png'], $directives['img-src']);
         $this->assertSame(["'none'"], $directives['default-src']);
         $this->assertArrayNotHasKey('script-src', $directives);
     }

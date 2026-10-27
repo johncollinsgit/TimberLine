@@ -6,7 +6,7 @@
 @php
     $personalLetter = \App\Proposals\PersonalLetter::from($payload);
 @endphp
-<header class="proposal-hero"><img class="proposal-corner" src="/images/proposals/evergrove-mountain-corner.svg" alt="" aria-hidden="true" width="218" height="168"><div class="topline"><span class="brand"><img class="proposal-company-wordmark" src="/images/proposals/evergrove-software-wordmark.jpg" alt="Evergrove Software" width="899" height="458"></span><span class="pill">{{ $preview ? 'Owner preview · draft' : 'Private · version '.$version->number }}</span></div><p class="eyebrow">A thoughtful starting point</p><h1>{{ $payload['title'] }}</h1><p class="muted">Prepared by {{ $payload['prepared_by'] }}</p></header>
+<header class="proposal-hero"><img class="proposal-corner" src="/images/proposals/evergrove-mountain-corner-v2.svg" alt="" aria-hidden="true" width="218" height="168"><div class="topline"><span class="brand"><img class="proposal-company-wordmark" src="/brand/evergrove-logo.png" alt="Evergrove Software" width="1290" height="615"></span><span class="pill">{{ $preview ? 'Owner preview · draft' : 'Private · version '.$version->number }}</span></div><h1>{{ $payload['title'] }}</h1><p class="muted">Prepared by {{ $payload['prepared_by'] }}</p></header>
 @include('service-proposals.pdf-download')
 @unless($preview)@include('service-proposals.activity-bridge')@endunless
 @php
