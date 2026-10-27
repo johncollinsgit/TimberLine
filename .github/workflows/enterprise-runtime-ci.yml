@@ -55,6 +55,7 @@ name: Enterprise isolated runtime
     - tests/Support/proposal-legacy-capture-browser-fixture.php
     - tests/Support/proposal-legacy-capture-browser-router.php
     - scripts/proposals/build-legacy-campus-v5.py
+    - scripts/proposals/prepare-legacy-campus-v5.py
     - tests/Support/proposal-reviewer-workspace*.php
     - tests/Feature/Enterprise/**
     - tests/Feature/Proposals/**
@@ -89,6 +90,7 @@ name: Enterprise isolated runtime
     - tests/Unit/Proposals/IndependentWorkspaceRuntimeConfigurationTest.php
     - tests/Unit/Proposals/LegacyCampusConfigurationTest.php
     - tests/Unit/test_legacy_campus_generator.py
+    - tests/Unit/test_legacy_campus_permissions.py
     - tests/Fixtures/legacy-campus-*
     - tests/browser/enterprise-voice-jobs.smoke.mjs
     - tests/browser/enterprise-read-only-assistant.smoke.mjs
@@ -147,6 +149,8 @@ jobs:
         python3 -m unittest discover -s tests/ci -p "test_enterprise_ci_bundle.py" -v
     - name: Check the pinned public legacy campus builder without runtime access
       run: python3 -m unittest discover -s tests/Unit -p "test_legacy_campus_generator.py" -v
+    - name: Check signed public legacy artifact metadata preparation without runtime access
+      run: python3 -B -m unittest discover -s tests/Unit -p "test_legacy_campus_permissions.py" -v
     - name: Find Composer download cache
       id: composer-cache
       run: echo "directory=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
