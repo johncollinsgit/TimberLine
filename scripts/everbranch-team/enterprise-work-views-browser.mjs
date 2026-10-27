@@ -2,6 +2,21 @@ import assert from 'node:assert/strict';
 import {resolve} from 'node:path';
 import {writeFile} from 'node:fs/promises';
 
+/** Resolve and measure the current marker in one page task, without retaining a remounted node. */
+export async function readCurrentWorkMapMarkerBox(page,width) {
+  const snapshot=await page.waitForFunction(expectedWidth=>{
+    if(innerWidth!==expectedWidth)return null;
+    const markers=document.querySelectorAll('#map-markers [data-map-building="52"]');
+    if(markers.length!==1)return null;
+    const marker=markers[0];
+    if(!marker.isConnected||marker.getClientRects().length===0)return null;
+    const box=marker.getBoundingClientRect();
+    if(!Number.isFinite(box.width)||!Number.isFinite(box.height)||box.width<=0||box.height<=0)return null;
+    return {count:markers.length,x:box.x,y:box.y,width:box.width,height:box.height};
+  },width);
+  try{return await snapshot.jsonValue();}finally{await snapshot.dispose();}
+}
+
 /** Real isolated native HTTP; saved-building links, calendar dates and bookings remain distinct. */
 export async function checkWorkViews(page,evidence) {
   const tenant='synthetic-enterprise';
@@ -37,7 +52,7 @@ export async function checkWorkViews(page,evidence) {
   assert.equal(await page.locator('#campus-work-plan').evaluate(image=>image.complete&&image.naturalWidth===1700),true);
   await page.locator('#campus-map-tickets [data-open]').first().click();await page.locator('#work-drawer[open]').waitFor();await page.getByRole('button',{name:'Close',exact:true}).click();
   await page.screenshot({path:resolve(evidence,'work-campus-map-desktop.png'),fullPage:true});
-  for(const [label,width,height]of[['tablet',820,1180],['phone',390,844]]){await page.setViewportSize({width,height});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,label+' map overflow');const pin=await page.locator('#map-markers [data-map-building="52"]').boundingBox();assert.ok(pin.width>=44&&pin.height>=44);await page.screenshot({path:resolve(evidence,'work-campus-map-'+label+'.png'),fullPage:true});}
+  for(const [label,width,height]of[['tablet',820,1180],['phone',390,844]]){await page.setViewportSize({width,height});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,label+' map overflow');const pin=await readCurrentWorkMapMarkerBox(page,width);assert.equal(pin.count,1);assert.ok(pin.width>=44&&pin.height>=44);await page.screenshot({path:resolve(evidence,'work-campus-map-'+label+'.png'),fullPage:true});}
   await page.setViewportSize({width:1440,height:1000});
   const other=(await api('/enterprise/commands',{action:'workspace.create',id:crypto.randomUUID(),request_id:crypto.randomUUID(),expected_version:0,title:'Synthetic other map workspace',visibility:'department_only'})).body.id;
   const crossStatus=await page.evaluate(async({other,facility,tenant})=>{const response=await fetch('/enterprise/commands?tenant='+tenant,{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','Content-Type':'application/json','X-CSRF-TOKEN':document.querySelector('meta[name=csrf-token]').content},body:JSON.stringify({action:'request.create',area_id:other,id:crypto.randomUUID(),request_id:crypto.randomUUID(),expected_version:0,title:'Forbidden cross-scope relation',location_id:facility.id,location_version:facility.version})});return response.status;},{other,facility,tenant});assert.ok([403,404,422].includes(crossStatus),'Cross-workspace building rebinding must refuse');
