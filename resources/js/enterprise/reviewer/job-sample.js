@@ -2,21 +2,39 @@
 (() => {
   'use strict';
   const revision='campus-jobs-20-v1';
+  const plansRevision='campus-job-plans-v2';
   const workers=[['2','Alex Morgan'],['4','Casey Rivera'],['5','Jordan Lee'],['6','Sam Carter'],['7','Taylor Brooks'],['8','Jamie Reed'],['9','Avery Quinn'],['10','Riley Parker'],['11','Cameron Ellis'],['12','Morgan Hayes']].map(([id,name])=>({id,name,can_approve:false,field_worker:true}));
   const members=()=>[{id:'1',name:'Blaine · demo manager',can_approve:true},...workers,{id:'3',name:'Student requester',can_approve:false}];
   const uuid=(prefix,n)=>`${prefix}000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
   const sourceUrl='https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf';
   const jobs=['Classroom lighting checks','Network cabinet inspection','Visitor event setup','Residence door adjustment','Public-space plumbing checks','Lecture-room AV inspection','Athletic event safety checks','Grounds drainage review','Library workstation preparation','Campus room signage refresh','Accessible route inspection','Department equipment checks','Meeting-room setup','Weather readiness inspection','Walkway lighting review','Laboratory fixture inspection','Office move preparation','Annual safety walkthrough'];
+  function nameUntouchedContractor(state,ids) {
+    const row=state.plans.find(item=>item.id===ids.contractor);
+    if(row?.kind==='contractor'&&row.area_id===ids.area&&row.version===1&&row.status==='active'&&row.title==='Sample campus contractor'&&Object.keys(row.data||{}).length===0)row.title='Appalachian Facility Services';
+  }
+  function repairPlans(state,ids) {
+    if(state.sample_migrations[plansRevision])return false;
+    state.plans??=[];
+    const orphaned=Array.isArray(state.planning)?state.planning:[];
+    const contractorIds=new Set([2,3,4,5].map(n=>uuid('51',n))),scheduleIds=new Set(jobs.map((_,i)=>uuid('53',i+1)));
+    // Existing canonical rows win. Never re-create the original contractor if it was removed.
+    for(const row of orphaned)if(row.kind==='contractor'&&contractorIds.has(row.id)&&!state.plans.some(item=>item.id===row.id))state.plans.push(JSON.parse(JSON.stringify(row)));
+    for(const row of orphaned)if(row.kind==='schedule'&&scheduleIds.has(row.id)&&!state.plans.some(item=>item.id===row.id)&&state.projects.some(project=>project.id===row.data?.project_id)&&state.plans.some(contractor=>contractor.kind==='contractor'&&contractor.id===row.data?.contractor_id))state.plans.push(JSON.parse(JSON.stringify(row)));
+    nameUntouchedContractor(state,ids);
+    // Keep the orphaned array and all unrelated work intact; this repair never replays the job seed.
+    state.sample_migrations[plansRevision]={applied_at:'2026-10-23T08:00:00.000Z'};
+    return true;
+  }
   function upgrade(state,boot,ids) {
     state.sample_migrations??={};
-    if(state.sample_migrations[revision])return false;
+    if(state.sample_migrations[revision])return repairPlans(state,ids);
     const entries=Array.isArray(boot.locations)?boot.locations:(boot.locations?.entries||[]),byNumber=new Map(entries.map(row=>[String(row.map_number),row]));
     const areas=[ids.area,ids.it,ids.events,ids.projects],timestamp='2026-10-23T08:00:00.000Z';
     const contractorDefs=[['Appalachian Facility Services',areas[0]],['Blue Ridge Mechanical',areas[0]],['Summit Network Services',areas[1]],['High Country Event Crew',areas[2]],['Valley Building Services',areas[3]]];
     const contractors=contractorDefs.map(([title,area_id],i)=>({id:i===0?ids.contractor:uuid('51',i+1),kind:'contractor',area_id,title,status:'active',version:1,data:{contact_name:`Fictional contact ${i+1}`,fictional:true},updated_at:timestamp}));
-    state.planning??=[];state.resources??=[];state.requests??=[];state.tasks??=[];state.projects??=[];
-    for(const contractor of contractors)if(!state.planning.some(row=>row.id===contractor.id))state.planning.push(contractor);
-    const existingContractor=state.planning.find(row=>row.id===ids.contractor);if(existingContractor?.version===1&&existingContractor.title==='Sample campus contractor')existingContractor.title=contractors[0].title;
+    state.plans??=[];state.resources??=[];state.requests??=[];state.tasks??=[];state.projects??=[];
+    for(const contractor of contractors)if(contractor.id!==ids.contractor&&!state.plans.some(row=>row.id===contractor.id))state.plans.push(contractor);
+    nameUntouchedContractor(state,ids);
     const location=(areaId,mapNumber)=>{
       const entry=byNumber.get(String(mapNumber));if(!entry)return null;
       const id=areaId===ids.area&&String(mapNumber)==='52'?ids.building:uuid('61',Number(areaId.slice(-1))*1000+Number(mapNumber));
@@ -45,14 +63,15 @@
       if(!state.projects.some(row=>row.id===id))state.projects.push({id,name,description:'Fictional campus work for this demonstration.',enterprise_area_id:areaId,owner_id:'1',version:1,archived:false,tasks:[taskId],current_status:{code:i===7?'on_hold':i===11?'at_risk':'on_track'},updated_at:timestamp});
       if(!state.tasks.some(row=>row.id===taskId))state.tasks.push({id:taskId,title:name,description:'Review the saved location, carry out the assigned check, and record the result.',version:1,assignee_id:assignee,completed_at:completed?timestamp:null,due_on:due,enterprise_area_id:areaId,project_id:id,status,priority:i%6===0?'high':'normal',accountable_owner_id:'1',owner_user_id:'1',ball_user_id:assignee,next_action:completed?'Review the retained completion record.':'Carry out the assigned check and add a work note.',blockers:status==='interrupted'?['Waiting for safe access']:[],checkpoint:'',checklist:[{id:'inspect',key:'inspect',label:'Check the assigned work',weight:1,completed}],approved:completed,created_at:timestamp,updated_at:timestamp});
       if(!state.requests.some(row=>row.id===ticketId)){const request={id:ticketId,area_id:areaId,title:name,version:1,status:completed?'completed':'assigned',due_on:due,task_id:taskId,data:{description:'Fictional assignment created for the campus demonstration.',created_by:'1',task_id:taskId,project_id:id,request_type:['maintenance','it_support','event_setup','general'][i%4],priority:i%6===0?'high':'normal',progress_note:''}};attach(request,building);state.requests.push(request);}
-      const contractor=contractors.find(row=>row.area_id===areaId);
+      const contractor=state.plans.find(row=>row.kind==='contractor'&&row.area_id===areaId&&row.status==='active'&&contractors.some(seed=>seed.id===row.id));
       const scheduleId=uuid('53',n);
-      if(contractor&&!state.planning.some(row=>row.id===scheduleId))state.planning.push({id:scheduleId,kind:'schedule',area_id:areaId,title:`${name} · contractor support`,status:'planned',version:1,starts_on:due,ends_on:due,data:{project_id:id,contractor_id:contractor.id},updated_at:timestamp});
+      if(contractor&&!state.plans.some(row=>row.id===scheduleId))state.plans.push({id:scheduleId,kind:'schedule',area_id:areaId,title:`${name} · contractor support`,status:'planned',version:1,starts_on:due,ends_on:due,data:{project_id:id,contractor_id:contractor.id},updated_at:timestamp});
     });
     // Incoming tickets are not jobs or assigned tasks and remain separate in the queue.
     for(let i=0;i<5;i++){const id=uuid('33',i+1),areaId=areas[i%4],entry=entries[(i*5+2)%Math.max(1,entries.length)];if(state.requests.some(row=>row.id===id))continue;const request={id,area_id:areaId,title:['Corridor light needs review','Printer connection check','Meeting setup request','Door closer adjustment','Water fixture inspection'][i],version:1,status:i%2?'triaged':'submitted',due_on:`2026-10-${String(24+i).padStart(2,'0')}`,task_id:null,data:{description:'Fictional incoming ticket awaiting routing and assignment.',created_by:'3',request_type:['lighting','it_support','event_setup','maintenance','plumbing'][i],priority:i===4?'high':'normal',location:'',progress_note:''}};attach(request,entry?location(areaId,entry.map_number):null);state.requests.push(request);}
     for(const project of state.projects){project.owner_id??='1';project.updated_at??=timestamp;}
     state.sample_migrations[revision]={applied_at:timestamp,seeded_project_ids:jobs.map((_,i)=>uuid('22',i+1))};
+    state.sample_migrations[plansRevision]={applied_at:timestamp};
     return true;
   }
   function projectProjection(state,project,people,canManage) {
@@ -70,5 +89,5 @@
     return {...JSON.parse(JSON.stringify(project)),tasks,locations,owner:person(project.owner_id||'1'),can_edit:canManage,can_add_task:canManage&&!project.archived,
       last_visible_work_at:[project.updated_at,...tasks.map(row=>row.updated_at)].filter(Boolean).sort().at(-1)||null,tasks_has_more:false,tasks_coverage:'Returned fictional tasks in this browser.'};
   }
-  globalThis.EverbranchJobSample=Object.freeze({upgrade,members,revision,projectProjection});
+  globalThis.EverbranchJobSample=Object.freeze({upgrade,members,revision,plansRevision,projectProjection});
 })();

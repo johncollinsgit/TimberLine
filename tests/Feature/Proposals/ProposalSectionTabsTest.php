@@ -62,6 +62,15 @@ function proposalTabsDom(string $html): DOMXPath
 
 function proposalTabsCapture(string $name, $response): void
 {
+    $document = proposalTabsDom($response->getContent());
+    if ($document->query('//fieldset[contains(@class,"proposal-section-tabs")]')->length > 0) {
+        $scripts = $document->query('//script');
+        expect($scripts->length)->toBe(1)
+            ->and($scripts->item(0)->hasAttribute('data-proposal-navigation'))->toBeTrue()
+            ->and($scripts->item(0)->hasAttribute('src'))->toBeFalse()
+            ->and($scripts->item(0)->textContent)->toBe(file_get_contents(resource_path('js/service-proposals/mobile-navigation.js')))
+            ->and($response->headers->get('Content-Security-Policy'))->toContain("script-src 'sha256-".base64_encode(hash_file('sha256', resource_path('js/service-proposals/mobile-navigation.js'), true))."'", "script-src-attr 'none'");
+    }
     if (getenv('PROPOSAL_TABS_CAPTURE') !== '1') {
         return;
     }
@@ -69,6 +78,95 @@ function proposalTabsCapture(string $name, $response): void
     file_put_contents(base_path('.tmp/proposal-tabs/'.$name.'.html'), $response->getContent());
     file_put_contents(base_path('.tmp/proposal-tabs/'.$name.'-headers.json'), json_encode($response->headers->all(), JSON_THROW_ON_ERROR));
 }
+
+function proposalTabsSavePersonalLetter($test): \App\Proposals\Draft
+{
+    $test->tabDraft->refresh();
+    $payload = $test->tabDraft->payload;
+
+    return $test->tabService->saveDraft($test->tabTenant, $test->tabOwner->id, [
+        'client_id' => $test->tabDraft->client_id, 'title' => $payload['title'], 'intro' => $payload['intro'],
+        'catalog_ids' => array_column($payload['items'], 'id'), 'template_id' => $payload['template']['id'] ?? null,
+        'scope_notes' => $payload['scope_notes'], 'usage_plan' => $payload['usage_plan'],
+        'approach_key' => $payload['approach_key'], 'reviewer_names' => $payload['reviewer_names'],
+        'include_personal_letter' => 1, 'revision' => $test->tabDraft->revision,
+    ], $test->tabDraft->id);
+}
+
+test('the approved personal letter is the first selected real tab only after explicit owner draft opt in', function (): void {
+    $path = 'https://evergrove.test/owner-workspaces/'.$this->tabTenant->slug.'/proposals/'.$this->tabDraft->id.'/preview';
+    $old = $this->actingAs($this->tabOwner)->get($path)->assertOk();
+    expect(proposalTabsDom($old->getContent())->query('//input[@data-proposal-section="letter"]')->length)->toBe(0);
+    $old->assertHeader('Content-Security-Policy');
+    expect($old->headers->get('Content-Security-Policy'))->not->toContain('collins-family', 'everbranch-enterprise-e57d8900');
+
+    $saved = proposalTabsSavePersonalLetter($this);
+    $letter = \App\Proposals\PersonalLetter::snapshot();
+    expect($saved->payload['personal_letter'])->toBe($letter);
+    $response = $this->get($path)->assertOk();
+    $xpath = proposalTabsDom($response->getContent());
+    expect($xpath->query('//input[@data-proposal-section]')->item(0)->getAttribute('data-proposal-section'))->toBe('letter')
+        ->and($xpath->query('//input[@data-proposal-section="letter"][@checked]')->length)->toBe(1)
+        ->and($xpath->query('//input[@data-proposal-section="overview"][@checked]')->length)->toBe(0)
+        ->and($xpath->query('//article[@class="proposal-personal-letter"]')->length)->toBe(1)
+        ->and($xpath->query('//article[@class="proposal-personal-letter"]//img')->length)->toBe(2);
+    foreach ([$letter['salutation'], ...$letter['paragraphs'], $letter['signer'], $letter['role'], $letter['caption']] as $copy) {
+        $response->assertSee(e($copy), false);
+    }
+    expect($response->headers->get('Content-Security-Policy'))->toContain('https://evergrove.test'.$letter['logo_asset'], 'https://evergrove.test'.$letter['family_asset'])
+        ->not->toContain("img-src 'self'", 'https://external.test');
+    proposalTabsCapture('personal-letter', $response);
+    $selected = $this->get($path.'?section=scope')->assertOk();
+    expect(proposalTabsDom($selected->getContent())->query('//input[@data-proposal-section="scope"][@checked]')->length)->toBe(1);
+    Http::assertNothingSent();
+    Mail::assertNothingSent();
+});
+
+test('adding the letter creates a new immutable review without rewriting the old edition or bypassing its password', function (): void {
+    ['version' => $old, 'token' => $oldToken] = proposalTabsPublish($this, 'reviewer');
+    $oldCipher = $old->getRawOriginal('payload');
+    $oldHash = $old->content_hash;
+    $this->tabDraft->refresh();
+    $saved = proposalTabsSavePersonalLetter($this);
+    ['version' => $version, 'token' => $token] = $this->tabService->publish($this->tabTenant, $this->tabOwner->id, $saved->id,
+        $saved->revision, 'Synthetic personal letter password', 7, Str::uuid()->toString(), 'reviewer');
+    $url = 'https://evergrove.test/service-proposals/'.$token;
+    $locked = $this->get($url)->assertOk();
+    $locked->assertDontSee('Dear Andrew and Blaine,')->assertDontSee('proposal-personal-letter', false);
+    expect($locked->headers->get('Content-Security-Policy'))->not->toContain('collins-family');
+    $this->post($url.'/unlock', ['password' => 'Synthetic personal letter password'])->assertRedirect();
+    $newPage = $this->get($url)->assertOk();
+    expect(proposalTabsDom($newPage->getContent())->query('//input[@data-proposal-section="letter"][@checked]')->length)->toBe(1);
+    $this->post('https://evergrove.test/service-proposals/'.$oldToken.'/unlock', ['password' => 'Synthetic proposal tabs password'])->assertRedirect();
+    $oldPage = $this->get('https://evergrove.test/service-proposals/'.$oldToken)->assertOk();
+    expect(proposalTabsDom($oldPage->getContent())->query('//input[@data-proposal-section="letter"]')->length)->toBe(0)
+        ->and($old->fresh()->getRawOriginal('payload'))->toBe($oldCipher)
+        ->and($old->fresh()->content_hash)->toBe($oldHash)
+        ->and($version->content_hash)->not->toBe($oldHash)
+        ->and(\App\Proposals\CommercialSnapshot::hash($version->payload))->toBe(\App\Proposals\CommercialSnapshot::hash($old->payload));
+});
+
+test('personal letter content and images cannot be substituted through raw draft input or another client', function (): void {
+    $payload = $this->tabDraft->payload;
+    $input = ['client_id' => $this->tabDraft->client_id, 'title' => $payload['title'], 'catalog_ids' => array_column($payload['items'], 'id'),
+        'revision' => 1, 'include_personal_letter' => 1, 'personal_letter' => ['family_asset' => 'https://external.test/private-photo']];
+    $saved = $this->tabService->saveDraft($this->tabTenant, $this->tabOwner->id, $input, $this->tabDraft->id);
+    expect($saved->payload['personal_letter'])->toBe(\App\Proposals\PersonalLetter::snapshot());
+    $client = $this->tabService->asset($this->tabTenant, $this->tabDraft->client_id, 'client');
+    $client->update(['payload' => [...$client->payload, 'reference' => 'another-client']]);
+    expect(fn () => $this->tabService->saveDraft($this->tabTenant, $this->tabOwner->id, [...$input, 'revision' => 2], $this->tabDraft->id))
+        ->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+    expect($saved->fresh()->revision)->toBe(2);
+});
+
+test('an unknown personal letter snapshot refuses rather than injecting an external image or changing the approved copy', function (): void {
+    $saved = proposalTabsSavePersonalLetter($this);
+    $payload = $saved->payload;
+    $payload['personal_letter']['family_asset'] = 'https://external.test/private-photo';
+    $saved->update(['payload' => $payload]);
+    $this->actingAs($this->tabOwner)->get('https://evergrove.test/owner-workspaces/'.$this->tabTenant->slug.'/proposals/'.$saved->id.'/preview')->assertStatus(503);
+    Http::assertNothingSent();
+});
 
 test('private password gate shows only the exact college graphic without exposing the saved proposal', function (bool $college, bool $debug): void {
     config(['app.debug' => $debug]);
@@ -122,7 +220,7 @@ test('owner preview renders native section controls with the exact approved grap
         ->and($xpath->query('//input[@data-proposal-section="overview"][@checked]')->length)->toBe(1)
         ->and($xpath->query('//input[@data-proposal-section][@aria-selected]')->length)->toBe(0)
         ->and($xpath->query('//div[@role="img"][@aria-label="Lees-McRae College"]')->length)->toBe(1)
-        ->and($xpath->query('//script | //video | //iframe')->length)->toBe(0);
+        ->and($xpath->query('//script[not(@data-proposal-navigation)] | //video | //iframe')->length)->toBe(0);
     proposalTabsCapture('owner-preview', $response);
     $payload = $this->tabDraft->payload;
     $payload['client']['reference'] = 'another-client';
@@ -137,8 +235,9 @@ test('proposal documents clear retained Livewire assets without disabling a late
     try {
         app('livewire')->forceAssetInjection();
         $preview = $this->actingAs($this->tabOwner)->get('https://evergrove.test/owner-workspaces/'.$this->tabTenant->slug.'/proposals/'.$this->tabDraft->id.'/preview')->assertOk();
-        expect(proposalTabsDom($preview->getContent())->query('//script | //video | //iframe')->length)->toBe(0)
+        expect(proposalTabsDom($preview->getContent())->query('//script[not(@data-proposal-navigation)] | //video | //iframe')->length)->toBe(0)
             ->and($preview->headers->get('Content-Security-Policy'))->toContain("default-src 'none'", "form-action 'self'");
+        proposalTabsCapture('owner-preview', $preview);
         app('livewire')->forceAssetInjection();
         $next = $this->get('https://evergrove.test/fixture-proposal-livewire-next')->assertOk();
         expect(proposalTabsDom($next->getContent())->query('//script[@src][@data-update-uri]')->length)->toBe(1);

@@ -1,3 +1,4 @@
+import {clickEnterpriseNavigation} from './enterprise-mobile-navigation-browser.mjs';
 import {openProjectWizard} from './enterprise-job-wizard-browser.mjs';
 import assert from 'node:assert/strict';
 import {resolve} from 'node:path';
@@ -25,7 +26,7 @@ export async function checkEnterpriseApp(page,evidence,packet,tenant) {
     // A committed command with a dropped response must retain its original key
     // and block refresh even after the HTTP counter returns to zero.
     const coreBodies=[];
-    await page.locator('[data-section=projects]').click();
+    await clickEnterpriseNavigation(page,page.locator('[data-section=projects]'));
     await page.route('**/enterprise/commands?*',async route=>{coreBodies.push(route.request().postDataJSON());if(coreBodies.length===1){await route.fetch();return route.abort();}return route.continue();});
     await openProjectWizard(page,'Synthetic update safety project');
     await page.locator('#job-save').click();
@@ -44,7 +45,7 @@ export async function checkEnterpriseApp(page,evidence,packet,tenant) {
     assert.equal(await page.evaluate(()=>EverbranchTransport.refreshBlockers),0,'A first-attempt definitive rejection must permit correction');
     assert.equal(await page.locator('#retry').isHidden(),true);await page.locator('#job-wizard-close').click();await page.unroute('**/enterprise/commands?*');
     const planningBodies=[];
-    await page.locator('[data-section=contractors]').click();
+    await clickEnterpriseNavigation(page,page.locator('[data-section=contractors]'));
     await page.locator('#planning-form [name=title]').fill('Synthetic update safety contractor');
     await page.route('**/enterprise/planning?*',async route=>{if(route.request().method()!=='POST')return route.continue();planningBodies.push(route.request().postDataJSON());if(planningBodies.length===1){await route.fetch();return route.abort();}return route.continue();});
     await page.locator('#planning-save').click();await page.locator('#planning-retry').waitFor({state:'visible'});
@@ -59,7 +60,7 @@ export async function checkEnterpriseApp(page,evidence,packet,tenant) {
     await page.locator('#planning-form [name=title]').fill('Rejected synthetic contractor');await page.locator('#planning-save').click();
     await page.locator('#status').filter({hasText:'The server rejected this action'}).waitFor();
     assert.equal(await page.evaluate(()=>EverbranchTransport.refreshBlockers),0);assert.equal(await page.locator('#planning-retry').isHidden(),true);await page.unroute('**/enterprise/planning?*');
-    await page.locator('[data-section=finance]').click();await page.locator('[data-finance-record="'+packet.id+'"]').click();
+    await clickEnterpriseNavigation(page,page.locator('[data-section=finance]'));await page.locator('[data-finance-record="'+packet.id+'"]').click();
     await page.locator('#enterprise-install-open').click();await page.locator('#enterprise-update-confirm').check();
     let release;const held=new Promise(resolve=>{release=resolve;});
     await page.route('**/enterprise/finance/commands?*',async route=>{const response=await route.fetch();await held;await route.fulfill({response});});

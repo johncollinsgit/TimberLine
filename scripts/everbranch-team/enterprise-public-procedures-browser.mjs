@@ -1,3 +1,4 @@
+import {clickEnterpriseNavigation} from './enterprise-mobile-navigation-browser.mjs';
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -173,7 +174,7 @@ try {
     await page.locator("#quarterly-json").click();
     const artifact = await download;
     await artifact.saveAs(resolve(evidence, "fictional-period.json"));
-    await page.locator("#finance-nav").click();
+    await clickEnterpriseNavigation(page,page.locator("#finance-nav"));
     await page.locator("#finance-body").waitFor({ state: "visible" });
     await page.locator("[data-finance-record]").first().click();
     await page.locator("#finance-detail h3").waitFor();
@@ -184,7 +185,7 @@ try {
         .locator("#finance-title")
         .fill("Retained fictional invoice draft");
     await page.locator("#people-nav").click();
-    await page.locator("#finance-nav").click();
+    await clickEnterpriseNavigation(page,page.locator("#finance-nav"));
     await page.locator("#finance-form").waitFor({ state: "visible" });
     assert.equal(
         await page.locator("#finance-title").inputValue(),
@@ -286,7 +287,7 @@ try {
     // Playwright/WebKit screenshots inject an inline reset stylesheet even with
     // caret='initial'. Keep that automation artifact outside application CSP checks.
     await page.locator("#reviewer-perspective").selectOption("manager");
-    await page.locator("#finance-nav").click();
+    await clickEnterpriseNavigation(page,page.locator("#finance-nav"));
     await page.locator("[data-finance-record]").first().click();
     await page.locator("#finance-detail h3").waitFor();
     assert.deepEqual(errors, []);

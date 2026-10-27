@@ -1,5 +1,5 @@
-import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import assert from 'node:assert/strict';
 import {spawn, spawnSync} from 'node:child_process';
 import {createServer} from 'node:https';
 import {request as httpRequest} from 'node:http';
@@ -88,20 +88,25 @@ try {
   await page.goto(url);await page.getByLabel('Proposal password').fill(seed.password);
   await page.getByRole('button',{name:'Open proposal',exact:true}).click();
   let documentResponse = await page.goto(url+'?section=scope');
+  const fixedNavigation=await readFile(resolve('resources/js/service-proposals/mobile-navigation.js'),'utf8');
   const fixedActivity=await readFile(resolve('resources/js/service-proposals/activity.js'),'utf8');
-  async function assertActivityPolicy(response){
-    assert.equal(await page.locator('script').count(),1,'Only the fixed local activity reporter is rendered');
-    assert.equal(await page.locator('script[data-review-activity-script]').count(),1);
-    const rendered=await page.locator('script[data-review-activity-script]').textContent();
-    assert.equal(rendered,fixedActivity,'The activity script must equal its reviewed source byte-for-byte');
+  async function assertMenuAndActivityPolicy(response) {
+    assert.equal(await page.locator('script').count(),2,'Only the exact local menu and activity scripts are rendered');
+    const expected=[];
+    for(const [marker,source] of [['data-proposal-navigation',fixedNavigation],['data-review-activity-script',fixedActivity]]) {
+      assert.equal(await page.locator('script['+marker+']').count(),1);
+      const rendered=await page.locator('script['+marker+']').textContent();
+      assert.equal(rendered,source,'Each controller equals its reviewed source byte-for-byte');
+      expected.push("'sha256-"+createHash('sha256').update(rendered).digest('base64')+"'");
+    }
     const csp=response.headers()['content-security-policy'];
     assert.match(csp,/default-src 'none'/);
     const scripts=csp.match(/(?:^|;)\s*script-src\s+([^;]+)/);
-    assert.equal(scripts?.[1].trim(),"'sha256-"+createHash('sha256').update(rendered).digest('base64')+"'",'No extra script, origin or unsafe-inline permission');
+    assert.deepEqual(scripts?.[1].trim().split(/\s+/).sort(),expected.sort(),'Only both exact hashes; no self, unsafe-inline or external script source');
     assert.equal(csp.match(/(?:^|;)\s*script-src-attr\s+([^;]+)/)?.[1].trim(),"'none'");
     assert.equal(csp.match(/(?:^|;)\s*connect-src\s+([^;]+)/)?.[1].trim(),"'self'");
   }
-  await assertActivityPolicy(documentResponse);
+  await assertMenuAndActivityPolicy(documentResponse);
   async function post(button) {
     [documentResponse]=await Promise.all([page.waitForNavigation(),button.click()]);
     assert.equal(new URL(page.url()).searchParams.get('section'),'scope');
@@ -150,7 +155,7 @@ try {
   assert.match(await cards.nth(0).innerText(),/1,000.00 \/month/);
   assert.match(await cards.nth(1).innerText(),/2,500.00 \/month/);
   assert.match(await cards.nth(2).innerText(),/Pending · no matching fully modeled package/);
-  await assertActivityPolicy(documentResponse);
+  await assertMenuAndActivityPolicy(documentResponse);
   assert.equal(await page.locator('[data-financial-prepare]').count(),0);
   await page.reload();assert.equal(await cards.count(),3);
   const sizes=[['desktop',1440,1000],['ipad',834,1194],['mobile',390,844],['zoom-reflow',640,450]];
@@ -165,7 +170,12 @@ try {
     results.push({name,width,height,oneFinancialPanel:true,buttons,overflow:false});
   }
   // Native radio arrows and the real POST controls remain keyboard reachable.
+  const proposalMenu=page.locator('.proposal-menu-toggle');
+  assert.equal(await proposalMenu.isVisible(),true,'Reflow section controls require the visible proposal menu');
+  await proposalMenu.click();
+  await page.locator('.proposal-section-controls').waitFor({state:'visible'});
   await page.locator('[data-proposal-section="overview"]').focus();
+  assert.equal(await page.locator('[data-proposal-section="overview"]').evaluate(node=>node===document.activeElement),true,'Native section-radio focus inside the opened menu');
   await page.keyboard.press('ArrowRight');await page.keyboard.press('ArrowRight');
   assert.equal(await page.locator('[data-proposal-section="scope"]').isChecked(),true);
   await cards.nth(0).getByRole('button',{name:/Remove One workspace/}).focus();

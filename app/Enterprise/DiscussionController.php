@@ -12,6 +12,11 @@ class DiscussionController
         return response()->json($discussion->show($request->attributes->get('current_tenant'), $request->user(), $kind, $id))->header('Cache-Control', 'private, no-store');
     }
 
+    public function preview(Request $request, string $kind, string $id, string $upload, Discussion $discussion)
+    {
+        return $discussion->preview($request->attributes->get('current_tenant'), $request->user(), $kind, $id, $upload);
+    }
+
     public function open(Request $request, string $kind, string $id, Discussion $discussion)
     {
         $result = $discussion->open($request->attributes->get('current_tenant'), $request->user(), $kind, $id);

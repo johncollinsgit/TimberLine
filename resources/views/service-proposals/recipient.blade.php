@@ -3,16 +3,19 @@
 @section('body-class', 'proposal-reader')
 @section('presentation-styles')@include('service-proposals.presentation-styles')@endsection
 @section('content')
+@php
+    $personalLetter = \App\Proposals\PersonalLetter::from($payload);
+@endphp
 <header class="proposal-hero"><img class="proposal-corner" src="/images/proposals/evergrove-mountain-corner.svg" alt="" aria-hidden="true" width="218" height="168"><div class="topline"><span class="brand"><img class="proposal-company-wordmark" src="/images/proposals/evergrove-software-wordmark.jpg" alt="Evergrove Software" width="899" height="458"></span><span class="pill">{{ $preview ? 'Owner preview · draft' : 'Private · version '.$version->number }}</span></div><p class="eyebrow">A thoughtful starting point</p><h1>{{ $payload['title'] }}</h1><p class="muted">Prepared by {{ $payload['prepared_by'] }}</p></header>
 @include('service-proposals.pdf-download')
 @unless($preview)@include('service-proposals.activity-bridge')@endunless
 @php
-    $proposalSections = ['overview' => 'Overview'];
+    $proposalSections = $personalLetter ? ['letter' => 'From John', 'overview' => 'Overview'] : ['overview' => 'Overview'];
     if (!empty($payload['journey'])) $proposalSections['approach'] = 'Our approach';
     $proposalSections['scope'] = 'Financial';
     $proposalSections['terms'] = 'Terms & support';
     if (!$preview && !empty($payload['reviewer_names'])) $proposalSections['review'] = 'Review & comments';
-    $defaultSection = 'overview';
+    $defaultSection = $personalLetter ? 'letter' : 'overview';
     foreach (array_keys($errors->messages()) as $errorField) {
         if ($errorField === 'selected' || str_starts_with($errorField, 'selected.') || $errorField === 'terms' || str_starts_with($errorField, 'terms.')) $defaultSection = 'scope';
         if ($errorField === 'financial' || in_array($errorField, ['departments', 'low', 'high'], true)) $defaultSection = 'scope';
@@ -20,6 +23,11 @@
     }
 @endphp
 @component('service-proposals.section-tabs', ['sections' => $proposalSections, 'defaultSection' => $defaultSection, 'forcedSection' => $errors->any() ? $defaultSection : null])
+@if($personalLetter)
+@slot('letter')
+@include('service-proposals.personal-letter', ['letter' => $personalLetter])
+@endslot
+@endif
 @slot('overview')
 @if(($payload['client']['reference'] ?? null) === 'lees-mcrae-college')<div class="proposal-college-reveal">@include('service-proposals.branding.lees-mcrae-reveal')</div>@endif
 @if(!$preview && $version && app(\App\Proposals\CampusReviewManifest::class)->available($version))

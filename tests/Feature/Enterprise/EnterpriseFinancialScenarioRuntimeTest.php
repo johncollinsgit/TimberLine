@@ -183,7 +183,12 @@ final class EnterpriseFinancialScenarioRuntimeTest extends TestCase
         $this->postWithToken($url.'/request-agreement', [])->assertForbidden();
         $this->assertSame($before, $this->protectedRows());
         $this->assertStringContainsString("default-src 'none'", $page->headers->get('Content-Security-Policy'));
-        $this->assertStringNotContainsString('script-src', $page->headers->get('Content-Security-Policy'));
+        preg_match_all('~<script data-proposal-navigation>(.*?)</script>~s', $page->getContent(), $scripts);
+        $this->assertCount(1, $scripts[1]);
+        $this->assertSame(file_get_contents(resource_path('js/service-proposals/mobile-navigation.js')), $scripts[1][0]);
+        preg_match('~(?:^|;)\\s*script-src\\s+([^;]+)~', $page->headers->get('Content-Security-Policy'), $policy);
+        $this->assertSame("'sha256-".base64_encode(hash('sha256', $scripts[1][0], true))."'", $policy[1]);
+        $this->assertStringContainsString("script-src-attr 'none'", $page->headers->get('Content-Security-Policy'));
         $this->assertStringContainsString('no-store', $page->headers->get('Cache-Control'));
         Http::assertNothingSent();
         Mail::assertNothingSent();

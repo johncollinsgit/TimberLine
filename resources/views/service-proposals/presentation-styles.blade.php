@@ -10,6 +10,14 @@
 .proposal-reader .proposal-hero h1{max-width:1050px;font-size:clamp(34px,4.5vw,62px);margin-bottom:18px}
 .proposal-reader .proposal-hero .muted{color:#43594b}
 .proposal-reader .proposal-introduction{max-width:92ch}
+.proposal-reader .proposal-personal-letter{max-width:820px;margin:0 auto;padding:28px clamp(20px,4vw,44px);background:white;font:17px/1.7 Georgia,serif;color:#26352f}
+.proposal-reader .proposal-letter-logo{display:block;width:283px;max-width:100%;height:auto;margin:0 0 24px}
+.proposal-reader .proposal-personal-letter p{margin:0 0 18px}
+.proposal-reader .proposal-letter-signature strong{display:inline-block;margin-top:12px}
+.proposal-reader .proposal-letter-signature span{font:14px/1.6 ui-sans-serif,system-ui,sans-serif;color:#66736b}
+.proposal-reader .proposal-personal-letter figure{margin:12px 0 0;width:280px;max-width:100%}
+.proposal-reader .proposal-personal-letter figure img{display:block;width:100%;height:auto}
+.proposal-reader .proposal-personal-letter figcaption{font:12px/1.6 ui-sans-serif,system-ui,sans-serif;color:#66736b}
 .proposal-reader .body-copy{max-width:92ch}
 .proposal-reader .campus-review-entry{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:28px;align-items:center;padding:20px 24px}
 .proposal-reader .campus-review-entry h2{grid-column:1;font-size:20px;margin:0 0 8px}

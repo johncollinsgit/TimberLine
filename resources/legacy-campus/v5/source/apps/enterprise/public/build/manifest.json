@@ -1,0 +1,17 @@
+{
+  "resources/js/enterprise/voice-jobs-entry.js": {
+    "file": "assets/voice-jobs-entry-CI-oK47m.js",
+    "name": "voice-jobs-entry",
+    "src": "resources/js/enterprise/voice-jobs-entry.js",
+    "isEntry": true
+  },
+  "resources/js/enterprise/workspace.tsx": {
+    "file": "assets/workspace-DyBZPYb_.js",
+    "name": "workspace",
+    "src": "resources/js/enterprise/workspace.tsx",
+    "isEntry": true,
+    "css": [
+      "assets/workspace-CX6uujIm.css"
+    ]
+  }
+}

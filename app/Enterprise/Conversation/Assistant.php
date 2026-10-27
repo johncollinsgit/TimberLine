@@ -3,6 +3,7 @@
 namespace App\Enterprise\Conversation;
 
 use App\Enterprise\AskEverbranch;
+use App\Enterprise\GroundedEvidence;
 use App\Enterprise\ReadOnlyAssistant;
 use App\Enterprise\RecordStore;
 use App\Enterprise\Trial\TrialBudget;
@@ -33,23 +34,10 @@ class Assistant
         $authority = $this->connection->authority($tenant, $user, $area);
         $profile = $assistantId !== null ? app(SavedAssistants::class)->context($tenant, $user, $area, $assistantId, $intent) : null;
         $records = $this->records->answer($tenant, $user, $area, $intent, $building);
-        $sources = array_slice($records['sources'], 0, 8);
-        $byRef = array_column($sources, null, 'ref');
-        $calculations = [];
-        foreach ($records['comparisons'] as $group) {
-            $estimate = array_values(array_intersect($group['estimate_refs'], array_keys($byRef)));
-            $recorded = array_values(array_intersect($group['recorded_cost_refs'], array_keys($byRef)));
-            if ($estimate === [] && $recorded === []) {
-                continue;
-            }
-            $sum = fn (array $refs) => array_sum(array_map(fn ($ref) => $byRef[$ref]['facts']['amount_minor'], $refs));
-            $calculations[] = ['project' => $group['project_title'], 'currency' => $group['currency'], 'estimate_minor' => $estimate !== [] ? $sum($estimate) : null,
-                'recorded_cost_minor' => $recorded !== [] ? $sum($recorded) : null, 'difference_minor' => $estimate !== [] && $recorded !== [] ? $sum($recorded) - $sum($estimate) : null,
-                'input_refs' => [...$estimate, ...$recorded], 'basis' => 'Checked selected inputs only; no approved budget.'];
-        }
+        ['sources' => $sources, 'calculations' => $calculations] = GroundedEvidence::selected($records);
         $memory = $useMemory ? app(PrivateMemory::class)->context($tenant, $user, $area, $sources) : [];
         $stamp = AskEverbranch::digest(['actor' => $authority['actor'], 'intent' => $intent, 'building' => $building,
-            'sources' => $sources, 'calculations' => $calculations, 'connection' => $authority['settings']['settings_sha256']]
+            'sources' => $sources, 'calculations' => $calculations, 'bounded_evidence' => GroundedEvidence::stamp($records), 'connection' => $authority['settings']['settings_sha256']]
             + ($profile !== null ? ['assistant_configuration' => $profile] : []) + ($useMemory ? ['private_memory' => $memory] : []));
 
         return ['sources' => $sources, 'calculations' => $calculations, 'stamp' => $stamp, 'settings' => $authority['settings'], 'assistant_configuration' => $profile, 'private_memory' => $memory];

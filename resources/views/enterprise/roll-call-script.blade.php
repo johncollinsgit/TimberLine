@@ -263,6 +263,8 @@
     $('work').hidden=true;$('heading').textContent='Projects & people';$('breadcrumb').textContent='Roll Call';
     $('roll-project-create').hidden=!data.can_coordinate&&!data.can_manage;
     if(rollProjectSource!==data)rollLoadProjects();
+    $('roll-meeting-tools').hidden=transport.mode==='shared';
+    if(transport.mode==='shared')return;
     $('roll-work-mode').textContent='Check priorities, then keep private meeting notes. Task changes require review and confirmation.';
     $('roll-my-work').hidden=!rollOwners().some(row=>String(row.id)===String(data.viewer_id||viewer));
     if(!['campus','workspace','project','team'].includes(rollScope))rollScope='workspace';

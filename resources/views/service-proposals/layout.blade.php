@@ -3,4 +3,4 @@
 <body class="@yield('body-class')"><main>@if(session('status'))<div class="notice" role="status">{{ session('status') }}</div>@endif
 @if($errors->any())<div class="notice" role="alert"><strong>Please review:</strong><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 @yield('content')
-<footer>Prepared with care by Evergrove Software.</footer></main></body></html>
+<footer>Prepared with care by Evergrove Software.</footer></main>@stack('proposal-navigation-script')</body></html>

@@ -88,7 +88,10 @@ try {
   }
   async function open(page){
     currentPage=page;
-    if(!await page.locator('#review-dialog').evaluate(node=>node.open))await page.locator('#review-open').click();
+    if(!await page.locator('#review-dialog').evaluate(node=>node.open)){
+      if(await page.locator('#review-open').isVisible())await page.locator('#review-open').click();
+      else{await page.locator('#enterprise-navigation-toggle').click();await page.locator('#enterprise-mobile-navigation').getByRole('button',{name:'Review this page',exact:true}).click();}
+    }
     await page.waitForFunction(()=>!document.querySelector('[data-campus-review-status]').textContent.startsWith('Loading'));
   }
   async function setName(page,name){
@@ -108,6 +111,26 @@ try {
     await page.waitForFunction(()=>/refreshed|bounded/.test(document.querySelector('[data-campus-review-status]').textContent));
   }
   const ross=await reviewer('Ross'),sarah=await reviewer('Sarah'),paul=await reviewer('Paul');
+  // Native mobile navigation must retain the exact reviewer/page draft context.
+  await ross.page.locator('#review-close').click();await ross.page.setViewportSize({width:390,height:844});
+  const mobileMenu=ross.page.locator('#enterprise-navigation-toggle');await mobileMenu.focus();await ross.page.keyboard.press('Enter');
+  await ross.page.waitForFunction(()=>document.getElementById('enterprise-navigation-toggle').getAttribute('aria-expanded')==='true');
+  await ross.page.keyboard.press('Escape');assert.equal(await mobileMenu.evaluate(node=>node===document.activeElement),true);
+  await mobileMenu.click();await ross.page.locator('#enterprise-mobile-navigation [data-section="requests"]').click();
+  await mobileMenu.click();await ross.page.locator('#enterprise-mobile-navigation').getByRole('button',{name:'Review this page',exact:true}).click();
+  await open(ross.page);assert.equal(await ross.page.locator('[data-campus-review-page]').inputValue(),'requests');
+  assert.equal(await ross.page.getByLabel('Your review display name').inputValue(),'Ross');
+  await ross.page.locator('#review-body').fill('Unsent mobile navigation draft');await ross.page.locator('#review-close').click();
+  await mobileMenu.click();await ross.page.locator('#enterprise-mobile-navigation [data-section="projects"]').click();
+  await mobileMenu.click();await ross.page.locator('#enterprise-mobile-navigation [data-section="requests"]').click();
+  await mobileMenu.click();await ross.page.locator('#enterprise-mobile-navigation').getByRole('button',{name:'Review this page',exact:true}).click();
+  await open(ross.page);assert.equal(await ross.page.locator('#review-body').inputValue(),'Unsent mobile navigation draft');
+  await ross.page.locator('#review-body').fill('');await ross.page.locator('#review-close').click();
+  await mobileMenu.click();const mobileProposal=ross.page.locator('#enterprise-mobile-navigation').getByRole('link',{name:'Open proposal',exact:true});
+  assert.equal(new URL(await mobileProposal.getAttribute('href')).pathname,new URL(ross.url).pathname);
+  await ross.page.keyboard.press('Escape');await ross.page.setViewportSize({width:1440,height:1000});
+  await ross.page.locator('[data-section="home"]').click();await open(ross.page);
+
   console.log(`${engine}: three actual password-unlocked contexts ready`);
   // Aborting a queued refresh must leave the following authenticated request usable.
   await ross.page.evaluate(async()=>{
@@ -224,8 +247,9 @@ try {
     await paul.page.keyboard.press('Escape');assert.equal(await paul.page.locator('#review-dialog').evaluate(node=>node.open),false);
     // Native dialog close events are queued in WebKit. Require the actual
     // event-driven focus return, rather than sampling before that event runs.
-    await paul.page.waitForFunction(()=>document.activeElement?.id==='review-open');
-    assert.equal(await paul.page.evaluate(()=>document.activeElement.id),'review-open');await open(paul.page);
+    const returnTarget=width<=800?'enterprise-navigation-toggle':'review-open';
+    await paul.page.waitForFunction(id=>document.activeElement?.id===id,returnTarget);
+    assert.equal(await paul.page.evaluate(()=>document.activeElement.id),returnTarget);await open(paul.page);
     assert.equal(await paul.page.locator('#review-body').inputValue(),'Retained unsent '+label+' draft');
   }
   await paul.page.goto(boot.urls.pages.workflows);await open(paul.page);

@@ -16,7 +16,7 @@ function formFixture(mode='private',items=[building]) {
   const context=vm.createContext({$:element,data:{areas:[{id:'synthetic-area',name:'Synthetic department'}],buildings:{items,has_more:false,coverage:'Current authorized saved buildings.'}},catalogFilters:{department:'all'},transport:{mode},area:'synthetic-area',pending:null,createAction:null,draft:null,
     crypto:{randomUUID:()=>String(Math.random())},esc:value=>String(value).replaceAll('<','&lt;').replaceAll('>','&gt;'),
     FormData:class{constructor(form){this.elements=form.elements;}get(name){const input=this.elements[name];return input?.disabled?null:input?.value??null;}},
-    command:body=>result.bodies.push(body),message:(...args)=>result.messages.push(args)});
+    reviewerMode:mode==='sample',captureSharedPin:()=>null,command:body=>result.bodies.push(body),message:(...args)=>result.messages.push(args)});
   const start=view.indexOf('  let requestBuildingChoices='),end=view.indexOf("  $('create-workspace').onclick",start);
   assert.ok(start>=0&&end>start,'Actual create handler exists');
   vm.runInContext(view.slice(view.indexOf('  const requestTypeLabels='),view.indexOf('  function workColumns()')),context);

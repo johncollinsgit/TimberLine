@@ -17,7 +17,9 @@ class CampusReviewController
         abort_if($request->query->count() !== 0, 400);
         $version = $this->access->recipient($request, $token);
         abort_unless($this->access->unlocked($request, $version), 403, 'Unlock this exact proposal version first.');
-        $this->manifests->assertCurrent($version, $page);
+        $edition = $this->manifests->resolveReviewEdition($version, $page);
+        abort_if($page === 'workflows' && $edition['kind'] === 'current' && array_key_exists('review_workspace', $version->payload), 404,
+            'Workflows are unavailable in this shared review workspace.');
 
         return $version;
     }
@@ -30,9 +32,73 @@ class CampusReviewController
         }
         $version = $this->version($request, $token, $page);
         $context = $this->context($request, $version, $token, $page);
+        $edition = $this->manifests->resolveReviewEdition($version, $page);
+        if ($edition['kind'] === 'current' && array_key_exists('review_workspace', $version->payload)) {
+            // Descriptor presence is an immutable mode choice. Disabled, missing
+            // or invalid shared state must never become a browser-local demo.
+            $binding = array_intersect_key($context, array_flip(['version_hash', 'build_id', 'source_hash']));
+            $scope = app(ReviewerWorkspaceAccess::class)->scope($request, $token, $binding);
+            $persona = collect(['demo_manager', 'manager', 'executive', 'requester'])
+                ->first(fn ($value) => in_array($value, $scope['policy']['personas'], true));
+            abort_unless(is_string($persona), 503, 'The reviewed initial perspective is unavailable.');
+            $selection = ['persona' => $persona, 'area_ids' => $scope['policy']['area_ids'], 'person_id' => null];
+            app(ReviewerWorkspace::class)->projection($request, $token, $binding, $selection);
+            $context['reviewer_workspace'] = ['enabled' => true, ...$scope['descriptor'], 'binding' => $binding,
+                'selection' => $selection, 'browser_context' => $scope['capability_hash'],
+                'csrf' => $context['csrf_token'], 'endpoints' => []];
+            foreach (['projection', 'facts', 'commands', 'status' => 'command-status'] as $key => $action) {
+                $context['reviewer_workspace']['endpoints'][is_int($key) ? $action : $key] = route('service-proposals.recipient.workspace.'.$action, $token);
+            }
+            $context['reviewer_personas'] = $scope['policy']['personas'];
+            if (array_key_exists('review_workspace_collaboration', $version->payload)
+                && config('service_proposals.reviewer_workspace.collaboration.enabled') === true) {
+                $context['reviewer_collaboration'] = app(ReviewerWorkspaceCollaborationAccess::class)
+                    ->clientDescriptor($request, $token, $binding, $selection);
+            }
+            if (array_key_exists('review_workspace_attachments', $version->payload)
+                && config('service_proposals.reviewer_workspace.attachments.enabled') === true) {
+                abort_unless(array_key_exists('reviewer_collaboration', $context), 503);
+                $context['reviewer_attachments'] = app(ReviewerWorkspaceAttachmentsAccess::class)
+                    ->publicationDescriptor($request, $token, $binding, $selection);
+            }
+            if (array_key_exists('review_workspace_images', $version->payload)
+                && config('service_proposals.reviewer_workspace.image_access.enabled') === true) {
+                abort_unless(array_key_exists('reviewer_attachments', $context), 503);
+                $context['reviewer_images'] = app(ReviewerWorkspaceImagesAccess::class)
+                    ->publicationDescriptor($request, $token, $binding, $selection);
+            }
+            if (array_key_exists('review_workspace_downloads', $version->payload)
+                && config('service_proposals.reviewer_workspace.downloads.enabled') === true) {
+                abort_unless(array_key_exists('reviewer_attachments', $context), 503);
+                $context['reviewer_downloads'] = app(ReviewerWorkspaceDownloadsAccess::class)
+                    ->publicationDescriptor($request, $token, $binding, $selection);
+            }
+        }
+        if ($edition['kind'] === 'current' && config('service_proposals.reviewer_ai.ui_enabled') === true && config('service_proposals.reviewer_ai.enabled') === true) {
+            try {
+                $scope = app(ReviewerAiAccess::class)->scope($request, $token, startBrowser: true);
+                app(ReviewerAiConnection::class)->settings($scope);
+                $context['reviewer_ai'] = ['enabled' => true, 'endpoints' => []];
+                foreach (['preview', 'confirm', 'status', 'cancel'] as $action) {
+                    $context['reviewer_ai']['endpoints'][$action] = route('service-proposals.recipient.ai.'.$action, $token);
+                }
+            } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $error) {
+                // Optional AI admission never changes the proposal or native workspace grant.
+                if (! in_array($error->getStatusCode(), [403, 404, 409, 410, 503], true)) {
+                    throw $error;
+                }
+            }
+        }
         $request->attributes->set('service_proposal_campus_review', true);
 
-        return app(ReviewerPresentation::class)->respond($request, $page === 'workflows', $context);
+        $renderer = $edition['kind'] === 'legacy_browser_only' ? LegacyCampusRenderer::class : ReviewerPresentation::class;
+        $response = app($renderer)->respond($request, $page === 'workflows', $context);
+        // Rendering is buffered: repeat real access/edition checks before returning any content.
+        $fresh = $this->version($request, $token, $page);
+        abort_unless($fresh->id === $version->id && hash_equals($fresh->content_hash, $context['version_hash'])
+            && $this->manifests->resolveReviewEdition($fresh, $page)['kind'] === $edition['kind'], 409);
+
+        return $response;
     }
 
     public function review(Request $request, string $token, string $page)
@@ -95,7 +161,10 @@ class CampusReviewController
     {
         // Fresh access is checked even for the projection following a command.
         $version = $this->version($request, $token, $page);
-        $manifest = $this->manifests->assertCurrent($version, $page);
+        $edition = $this->manifests->resolveReviewEdition($version, $page);
+        $manifest = $edition['manifest'];
+        $pages = $edition['kind'] === 'current' && array_key_exists('review_workspace', $version->payload)
+            ? array_values(array_filter($manifest['pages'], fn ($entry) => $entry['id'] !== 'workflows')) : $manifest['pages'];
         $rows = Comment::where('tenant_id', $version->tenant_id)->where('version_id', $version->id)
             ->latest()->orderByDesc('id')->limit(2001)->get();
         $comments = $rows->take(2000)->filter(function ($comment) use ($manifest, $version, $page): bool {
@@ -109,7 +178,7 @@ class CampusReviewController
         $visible = $comments->take(200)->reverse()->map(fn ($comment) => ['name' => $comment->payload['name'],
             'page' => $page, 'body' => $comment->payload['body'], 'created_at' => $comment->created_at->utc()->toIso8601String()])->values()->all();
         $urls = ['proposal' => route('service-proposals.recipient.show', $token)];
-        foreach ($manifest['pages'] as $entry) {
+        foreach ($pages as $entry) {
             $args = [$token, $entry['id']];
             $urls['pages'][$entry['id']] = route('service-proposals.recipient.campus', $args);
             $urls['data_pages'][$entry['id']] = route('service-proposals.recipient.campus.review', $args);
@@ -122,7 +191,7 @@ class CampusReviewController
         $name = $request->session()->get('service_proposal_name.'.$version->id);
 
         return ['activity_url' => route('service-proposals.recipient.activity', $token), 'version_id' => $version->id, 'version_hash' => $version->content_hash, 'build_id' => $manifest['build_id'],
-            'source_hash' => $manifest['source_hash'], 'client_reference' => $manifest['client_reference'], 'page' => $page, 'pages' => $manifest['pages'],
+            'source_hash' => $manifest['source_hash'], 'client_reference' => $manifest['client_reference'], 'page' => $page, 'pages' => $pages,
             'reviewer_name' => in_array($name, $version->payload['reviewer_names'] ?? [], true) ? $name : null,
             'reviewer_names' => $version->payload['reviewer_names'] ?? [], 'comments' => $visible,
             'comment_key' => (string) Str::uuid(), 'csrf_token' => csrf_token(), 'writes_enabled' => (bool) config('service_proposals.writes_enabled'), 'urls' => $urls,

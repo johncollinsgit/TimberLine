@@ -1,0 +1,573 @@
+{
+  "catalog": "lees-mcrae-official-map-v1",
+  "source_url": "https://www.lmc.edu/campus-life/campus-safety/campus-operations/files/campus-parking-map.pdf",
+  "source_page": 2,
+  "verified_on": "2026-10-22",
+  "basis": "Official map legend only. Ownership, campus-area assignments, placement, inventory and combined-facility boundaries remain unverified.",
+  "entries": [
+    {
+      "map_number": "1",
+      "name": "Robb Center",
+      "official_function_details": "Campus Police and Security",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "2",
+      "name": "May School of Natural and Health Sciences",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "3",
+      "name": "Maple House",
+      "official_function_details": "Faculty Offices",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "4",
+      "name": "Hayes Auditorium",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "5",
+      "name": "The Summit",
+      "official_function_details": "Dining Hall",
+      "related_spaces": "Miller Commons",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "6",
+      "name": "Cannon Welcome Center",
+      "official_function_details": "Office of Admission; Office of Financial Aid",
+      "aliases": "Cannon Student Center",
+      "related_spaces": "Evans Auditorium",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "7",
+      "name": "Lauritsen Building",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "8",
+      "name": "Lauritsen Technical Theatre and Design Studio",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "9",
+      "name": "Avery Hall",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "10",
+      "name": "Theatre Arts Building",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "11",
+      "name": "Tate Hall",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "12",
+      "name": "Chaffee Center",
+      "official_function_details": "Office of Business Affairs; Office of Human Resources; Office of Student Accounts; Office of the Registrar",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "13",
+      "name": "Shelton Learning Commons",
+      "official_function_details": "Burton Center for Student Success; Career and Life Planning",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "14",
+      "name": "Bowman Building",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "15",
+      "name": "Rock House",
+      "official_function_details": "Office of the President",
+      "historic_commons": "True",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "16",
+      "name": "McRae House",
+      "official_function_details": "Faculty Offices",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "17",
+      "name": "Tennessee Hall",
+      "historic_commons": "True",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "18",
+      "name": "Pinnacle Room/Deck",
+      "historic_commons": "True",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "19",
+      "name": "North Carolina Building",
+      "historic_commons": "True",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "20",
+      "name": "Virginia Hall",
+      "official_function_details": "Office of Student Affairs",
+      "historic_commons": "True",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "21",
+      "name": "Tufts Tower",
+      "historic_commons": "True",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "22",
+      "name": "Banner Elk Presbyterian Church",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "23",
+      "name": "Banner Elk Methodist Church",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "24",
+      "name": "Needham Alumni House",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "25",
+      "name": "Kiln Building",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "26",
+      "name": "Whitesell Art Building and Costume Shop",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "27",
+      "name": "Carriage House",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "28",
+      "name": "McMillan Hall",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "29",
+      "name": "Bentley Hall",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "30",
+      "name": "Baldwin Hall",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "31",
+      "name": "Cycling Team Training Space",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "32",
+      "name": "Stephenson Center for Appalachia",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "33",
+      "name": "Daniel Boone VI Cottage",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "34",
+      "name": "Hemlock Village",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "35",
+      "name": "Cannon Cottage",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "36",
+      "name": "Elk River Apartments",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "37",
+      "name": "Arthur Student Recreation Complex",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "38",
+      "name": "Facilities Complex",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "39",
+      "name": "May Wildlife Rehabilitation Center",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "40",
+      "name": "Cheese House",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "41",
+      "name": "Haigler Athletic Center",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "42",
+      "name": "Williams Physical Education Center",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "43",
+      "name": "Rhea-Lyons Indoor Swimming Pool",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "44",
+      "name": "Chesley Indoor Tennis Courts",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "45",
+      "name": "Tate Field",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "46",
+      "name": "Arthur-Lauritsen-Sanders Track",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "47",
+      "name": "Outdoor Tennis Courts",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "48",
+      "name": "Softball Field",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "49",
+      "name": "Alumni House",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "50",
+      "name": "Green House",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "51",
+      "name": "Annie L. Cannon Cottage",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "52",
+      "name": "Bryan Gym",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "53",
+      "name": "Barnhardt Building",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "54",
+      "name": "Hodges Amphitheater",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "55",
+      "name": "Poteat Vocational/Maintenance Building",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "56",
+      "name": "East Wing",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "57",
+      "name": "Cannon Administration Building",
+      "official_function_details": "South Campus Dining Room",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "58",
+      "name": "West Wing",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "59",
+      "name": "Keener Hall",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "60",
+      "name": "Douglass Cottage",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "61",
+      "name": "Harris Cottage",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "62",
+      "name": "McKowen Cottage",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "63",
+      "name": "Hickory Cottage",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "64",
+      "name": "Campbell Hall",
+      "official_function_details": "School of Business and Management",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "65",
+      "name": "Neale Cottage",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "66",
+      "name": "Lakeside Apartments",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "67",
+      "name": "Wildcat Lake Rentals",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    },
+    {
+      "map_number": "68",
+      "name": "Townhouse",
+      "latitude": null,
+      "longitude": null,
+      "ownership": null,
+      "campus_area": null
+    }
+  ]
+}

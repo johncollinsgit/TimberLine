@@ -3,6 +3,20 @@
 (() => {
     'use strict';
     const root = globalThis;
+    if (root.EverbranchTransport) return;
+    let sharedAdapter = null, sharedDescriptor = null;
+    const reviewerAdapter = boot => {
+        if (!Object.hasOwn(boot, 'reviewerWorkspace')) return root.EverbranchSampleTransport?.create(boot);
+        const descriptor = JSON.stringify(boot.reviewerWorkspace);
+        if (sharedAdapter) {
+            if (descriptor !== sharedDescriptor) throw Error('The shared review context changed. Reload this page.');
+            return sharedAdapter;
+        }
+        const value = root.EverbranchSharedWorkspace?.create(boot);
+        if (!value || value.mode !== 'shared') throw Error('The hosted review workspace is unavailable.');
+        sharedDescriptor = descriptor; sharedAdapter = value;
+        return value;
+    };
     let pendingWrites = 0;
     const refreshBlockers = new Set();
     const notify = () => {
@@ -13,6 +27,7 @@
         notify();
     };
     root.EverbranchTransport = Object.freeze({
+        reviewerAdapter,
         get pendingWrites() { return pendingWrites; },
         get refreshBlockers() { return refreshBlockers.size; },
         setRefreshBlocker(key, blocked) {
@@ -23,13 +38,13 @@
             const mode = boot.runtime ?? 'private';
             if (!['private', 'sample'].includes(mode)) throw new Error('Unsupported Enterprise runtime.');
             if (mode === 'sample') {
-                const adapter = root.EverbranchSampleTransport?.create(boot);
-                if (!adapter || adapter.mode !== 'sample' || !['request', 'href', 'navigate', 'replace'].every(name => typeof adapter[name] === 'function')) {
+                const adapter = reviewerAdapter(boot);
+                if (!adapter || !['sample', 'shared'].includes(adapter.mode) || !['request', 'href', 'navigate', 'replace'].every(name => typeof adapter[name] === 'function')) {
                     throw new Error('The isolated sample adapter is unavailable.');
                 }
                 const href = url => adapter.href(String(url));
                 return Object.freeze({
-                    mode,
+                    mode: adapter.mode,
                     request: (url, body, options = {}) => adapter.request(String(url), body, options),
                     href,
                     navigate: url => adapter.navigate(String(url)),

@@ -16,7 +16,7 @@ class Activity
 
     public const MAX_EVENTS = 4000;
 
-    public const SECTIONS = ['overview', 'approach', 'scope', 'terms', 'review'];
+    public const SECTIONS = ['letter', 'overview', 'approach', 'scope', 'terms', 'review'];
 
     public function enabled(Version $version): bool
     {

@@ -1,3 +1,4 @@
+import {clickEnterpriseNavigation} from './enterprise-mobile-navigation-browser.mjs';
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
 import { readFile } from "node:fs/promises";
@@ -71,9 +72,7 @@ export async function checkWorkflowWorkspace(page, evidence) {
             fullPage: true,
         });
     }
-    await page
-        .getByRole("button", { name: "Projects", exact: true })
-        .click();
+    await clickEnterpriseNavigation(page, page.getByRole("button", {name: "Projects", exact: true}));
     await page.locator('#work-status').selectOption('all');
     await page.locator('[data-view="list"]').click();
     await page
@@ -88,15 +87,8 @@ export async function checkWorkflowWorkspace(page, evidence) {
             exact: true,
         })
         .waitFor();
-    await page
-        .getByRole("button", {
-            name: "Use Illustrative maintenance workflow",
-            exact: true,
-        })
-        .click();
-    await page
-        .getByRole("button", { name: "▤ Screens & forms", exact: true })
-        .click();
+    await clickEnterpriseNavigation(page, page.getByRole("button", {name: "Use Illustrative maintenance workflow", exact: true}));
+    await clickEnterpriseNavigation(page, page.getByRole("button", {name: "▤ Screens & forms", exact: true}));
     await page
         .getByLabel("Connected step", { exact: true })
         .selectOption("intake");
@@ -104,9 +96,7 @@ export async function checkWorkflowWorkspace(page, evidence) {
         .getByLabel("Screen title", { exact: true })
         .fill("Campus work intake");
     // Switch away and reload to verify current-authority-gated local draft restoration.
-    await page
-        .getByRole("button", { name: "⚙ Settings", exact: true })
-        .click();
+    await clickEnterpriseNavigation(page, page.getByRole("button", {name: "⚙ Settings", exact: true}));
     await page
         .getByLabel("Workflow name", { exact: true })
         .fill("Synthetic campus operating workflow");
@@ -155,7 +145,7 @@ export async function checkWorkflowWorkspace(page, evidence) {
         .locator(".ew-badge")
         .filter({ hasText: /^active/ })
         .waitFor();
-    await page.getByRole("button", { name: "◇ Canvas", exact: true }).click();
+    await clickEnterpriseNavigation(page, page.getByRole("button", {name: "◇ Canvas", exact: true}));
     await page
         .getByRole("button", { name: "Accessible list", exact: true })
         .click();

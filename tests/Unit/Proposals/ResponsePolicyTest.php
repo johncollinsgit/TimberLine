@@ -76,6 +76,30 @@ final class ResponsePolicyTest extends TestCase
         $this->assertSame($policy, $response->headers->get('Content-Security-Policy'));
     }
 
+    public function test_only_the_exact_rendered_local_menu_script_receives_a_hash_exception(): void
+    {
+        $script = file_get_contents(resource_path('js/service-proposals/mobile-navigation.js'));
+        $html = '<script data-proposal-navigation>'.$script.'</script>';
+        $request = Request::create('https://proposal.example.invalid/service-proposals/synthetic');
+        $response = (new ResponsePolicy)->handle($request, fn () => new Response($html));
+        $directives = $this->directives($response);
+        $this->assertSame(["'sha256-".base64_encode(hash('sha256', $script, true))."'"], $directives['script-src']);
+        $this->assertSame(["'none'"], $directives['script-src-attr']);
+        $this->assertSame(["'none'"], $directives['default-src']);
+        $this->assertSame(["'self'"], $directives['form-action']);
+        $this->assertSame(["'none'"], $directives['base-uri']);
+        $this->assertSame(["'none'"], $directives['frame-ancestors']);
+        $this->assertSame($html, $response->getContent());
+        foreach (['connect-src', 'frame-src', 'object-src', 'font-src', 'media-src'] as $name) {
+            $this->assertArrayNotHasKey($name, $directives);
+        }
+        foreach (['<script data-proposal-navigation>'.$script.'/* altered */</script>', '<script>'.$script.'</script>', '<p>No section menu</p>'] as $other) {
+            $unapproved = (new ResponsePolicy)->handle($request, fn () => new Response($other));
+            $this->assertArrayNotHasKey('script-src', $this->directives($unapproved));
+            $this->assertSame($other, $unapproved->getContent());
+        }
+    }
+
     public function test_an_untrusted_existing_policy_cannot_broaden_generic_access(): void
     {
         $original = new Response('Proposal', 200, ['Content-Security-Policy' => 'default-src *; img-src *; script-src *; connect-src *']);
