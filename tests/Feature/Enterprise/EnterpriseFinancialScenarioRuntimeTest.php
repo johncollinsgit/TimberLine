@@ -158,7 +158,7 @@ final class EnterpriseFinancialScenarioRuntimeTest extends TestCase
         ['version' => $version, 'token' => $token] = $this->publication($tenant, $owner);
         $url = $this->url('/service-proposals/'.$token);
         $this->postWithToken($url.'/unlock', ['password' => 'Synthetic reviewer password'])->assertRedirect($url);
-        $page = $this->get($url.'?section=scope')->assertOk()->assertSee('Your planning cart')->assertSee('Reviewer access');
+        $page = $this->get($url.'?section=scope')->assertOk()->assertSee('Monthly usage example')->assertSee('Reviewer access');
         $hash = $page->viewData('financial')['binding'];
         $data = ['action' => 'prepare', 'planning_hash' => $hash, 'name' => 'Fictional mounted cart', 'service_id' => $version->payload['items'][1]['id'],
             'department_count' => 3, 'profile' => 'moderate', 'management' => 'department'];

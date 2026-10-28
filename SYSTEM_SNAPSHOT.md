@@ -1,3 +1,18 @@
+## Campus shell reconciliation (source follow-up)
+
+Persistent header search and the retained bottom-right Campus assistant reuse
+the existing surface-specific adapters. Public lookup and guided intake remain
+fictional and provider-free; native and shared reviewer authority stays separate.
+Known map building names are distinct from job IDs; J05/custom associations remain
+unspecified. Existing drafts, file references, receipts, comments and history are
+retained. Financial leads with the existing usage example and collapsed
+adjustments without changing prices, terms, calculations or selections.
+
+This source does not upgrade archived private v5, publish a replacement, activate
+AI/scanning or initialize a budget. Exact-head checks, protected release and
+actual hosted acceptance remain separate. See
+`docs/operations/enterprise-campus-shell-reconciliation.md`.
+
 ## Everbranch Field installable web standard (2026-10-28; source candidate)
 
 The shared Field client now has an installable `/field/` web package using existing mobile sign-in, tenant/resource guards and operational data. Personal job order, high-quality checked photo chunks, multiline message/gallery improvements, task photos and My Hours charts are included. The read-only crew assistant has a separate per-workspace rollout with a shared monthly reservation cap and the existing provider transport; Collins alone has user approval for $25/month. Physical phone installation and production activation require the recorded release checks. See `docs/operations/everbranch-field-web.md`. Field web.3 adds bounded conversational browser voice, current-scope explicit job/page navigation, three-column document previews, persistent bottom navigation in chat and a four-second permitted-job-photo banner; broader redesign and durable assistant history remain paused.

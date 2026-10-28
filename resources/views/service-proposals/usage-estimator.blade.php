@@ -7,12 +7,12 @@
 <style>
 .financial-planning{min-width:0}.financial-planning fieldset{min-width:0;margin:20px 0;padding:18px;border:1px solid #bac7bb;border-radius:10px}.financial-planning legend{font-weight:700;padding:0 8px}.financial-planning .financial-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 20px}.financial-planning label{display:block}.financial-planning input:not([type=checkbox]):not([type=hidden]),.financial-planning select{width:100%;min-height:44px}.financial-planning input[type=checkbox]{width:20px;height:20px;vertical-align:middle;margin-right:8px}.financial-planning button{min-height:44px}.financial-planning .financial-choice{display:flex;align-items:center;gap:8px;min-height:44px}.financial-planning .financial-choice input{flex:none}.financial-planning small{display:block;font-size:13px;line-height:1.5;color:#475b4e}.financial-planning .financial-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:18px}.financial-planning .financial-results{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:16px}.financial-planning .financial-result{min-width:0;border:1px solid #afc0b3;border-radius:10px;padding:18px;overflow-wrap:anywhere}.financial-planning dl{margin:12px 0}.financial-planning dt{font-weight:650;margin-top:12px}.financial-planning dd{margin:4px 0}.financial-planning summary{min-height:44px;cursor:pointer;padding:12px 0;font-weight:650}.financial-planning .financial-dept{margin:16px 0;border-top:1px solid #d8ded3;padding-top:12px}.financial-planning .financial-price{font-size:24px;font-weight:700;line-height:1.4}.financial-planning .financial-tag{font-size:13px;color:#475b4e}.financial-planning ul{padding-left:22px}.financial-planning .financial-assumption{font-weight:400}.financial-planning [type=number]{font-variant-numeric:tabular-nums}@media(max-width:600px){.financial-planning .financial-fields{grid-template-columns:1fr}.financial-planning fieldset{padding:12px}.financial-planning .financial-result{padding:14px}}@media print{.financial-planning{display:none!important}}
 </style>
-<h2 id="financial-planning-title">Your planning cart</h2>
-<p>Compare software options and monthly AI, voice, text and email usage. These are private, session-only scenarios. They do not select services, change this proposal or activate anything.</p>
-<p class="notice"><strong>Illustrative · adjustable · not measured Lees-McRae usage.</strong> Light, Moderate and Busy are starting assumptions, not statistical “typical” usage. Set each department’s volumes separately. All amounts are USD; usage has $0.00 Evergrove markup.</p>
+<h2 id="financial-planning-title">Monthly usage example</h2>
+@include('service-proposals.usage-example')
 @if(!empty($financial))
 @if(count($financial['scenarios']) < 3)
-<details @if(!$financial['draft']) open @endif><summary>Add a scenario</summary>
+<details data-financial-setup @if(old('name') !== null || ($errors->has('financial') && old('scenario') === null)) open @endif><summary>Adjust this example</summary>
+<p>Choose a saved software option and starting volumes to prepare a private comparison. Your service selections stay unchanged. Light, Moderate and Busy are illustrative assumptions, not measured campus usage.</p>
 <form method="post" action="{{ $financial['post_url'] }}" data-financial-prepare>@csrf
 <input type="hidden" name="planning_hash" value="{{ $financial['binding'] }}">
 <div class="financial-fields">
@@ -26,6 +26,7 @@
 @endif
 @if($financial['draft'])
 @php($scenario = old('scenario', $financial['draft']['input']))
+<details data-financial-adjustments open><summary>Your scenario assumptions</summary>
 <form method="post" action="{{ $financial['post_url'] }}" data-financial-edit>@csrf
 <input type="hidden" name="planning_hash" value="{{ $financial['binding'] }}"><input type="hidden" name="scenario_id" value="{{ $financial['draft']['id'] }}"><input type="hidden" name="scenario[service_id]" value="{{ $financial['draft']['input']['service_id'] }}">
 @php($draftItem = app(\App\Proposals\FinancialScenario::class)->item($payload, $financial['draft']['input']['service_id']))
@@ -54,7 +55,7 @@
 </fieldset>
 @endforeach
 <p><button name="action" value="save">Add to comparison</button></p>
-</form>
+</form></details>
 @endif
 @if($financial['scenarios'])
 <h3>Compare your scenarios</h3><div class="financial-results">

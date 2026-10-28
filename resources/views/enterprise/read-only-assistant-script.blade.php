@@ -77,12 +77,12 @@
   $('read-only-intent').onchange = () => { readOnlyGeneration++; $('read-only-answer').replaceChildren(); $('read-only-status').textContent = ''; $('read-only-submit').disabled = false; readOnlyFields(); };
   $('read-only-building').onchange = () => { readOnlyGeneration++; $('read-only-answer').replaceChildren(); $('read-only-status').textContent = ''; $('read-only-submit').disabled = false; };
   $('read-only-form').onsubmit = async event => {
-    event.preventDefault(); if (!area || !data.features?.read_only_assistant || transport.mode !== 'private') return;
+    event.preventDefault(); if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return; if (!area || !data.features?.read_only_assistant || transport.mode !== 'private') return;
     const generation = ++readOnlyGeneration, requestedArea = area, intent = $('read-only-intent').value;
     const body = {area_id: requestedArea, intent};
     if (intent === 'building') body.building_id = $('read-only-building').value;
     $('read-only-answer').replaceChildren(); $('read-only-submit').disabled = true; $('read-only-status').textContent = 'Checking your current authorized records…';
-    const current = () => generation === readOnlyGeneration && area === requestedArea && section === 'ask'
+    const current = () => generation === readOnlyGeneration && area === requestedArea && (section==='ask'||typeof campusAssistantActive==='function'&&campusAssistantActive())
       && data.features?.read_only_assistant === true && (intent !== 'costs' || data.features?.read_only_costs === true);
     try {
       const result = await api(`${nextBase}/read-only-assistant${nextQuery()}`, body);

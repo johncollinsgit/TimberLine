@@ -27,7 +27,10 @@ async function conversationFailureState(page) {
     const known=[['restore','A short conversation may be available.'],['restored','Restored from the current authorized short conversation.'],['unconfirmed','This turn is unconfirmed'],['waiting','Waiting for'],['stopped','Stopped waiting.'],['denied','This conversation cannot be restored']];
     let receiptPresent=false,receiptShapeValid=false;
     try{for(let i=0;i<Math.min(sessionStorage.length,128);i++){const key=sessionStorage.key(i);if(!key?.startsWith('everbranch-conversation-v1:'))continue;receiptPresent=true;const text=sessionStorage.getItem(key);if(typeof text==='string'&&text.length<=1024){const value=JSON.parse(text),uuid=/^[a-f0-9-]{36}$/i;receiptShapeValid=uuid.test(value?.session_id)&&uuid.test(value?.request_id);}break;}}catch{}
-    return {state:'captured',section:['ask','requests'].includes(section)?section:'other',active_sections:[...document.querySelectorAll('[data-section].active')].map(node=>node.dataset.section).filter(value=>['ask','requests'].includes(value)),status_category:known.find(([,prefix])=>status.startsWith(prefix))?.[0]||'other',ask_hidden:document.getElementById('ask')?.hidden!==false,controls_hidden:document.getElementById('conversation-controls')?.hidden!==false,send_disabled:document.getElementById('ask-submit')?.disabled!==false,transcript_empty:document.getElementById('chat-log')?.textContent==='',receipt_present:receiptPresent,receipt_shape_valid:receiptShapeValid};
+    const savedStatus=document.getElementById('saved-assistant-status')?.textContent||'',savedForm=document.getElementById('saved-assistant-form');
+    const savedKnown=[['saved','Private assistant saved.'],['deleted','Assistant configuration deleted.'],['unconfirmed','The outcome is unconfirmed.'],['conflict','Close configuration, refresh saved assistants'],['unavailable','Saved assistants are unavailable under current access.'],['review','Review this private configuration before saving.']];
+    const savedAssistant={status_category:savedKnown.find(([,prefix])=>savedStatus.startsWith(prefix))?.[0]||'other',container_hidden:document.getElementById('saved-assistants')?.hidden!==false,form_hidden:savedForm?.hidden!==false,save_disabled:document.getElementById('saved-assistant-save')?.disabled!==false,confirmed:document.getElementById('saved-assistant-confirm')?.checked===true,exact_retry_label:document.getElementById('saved-assistant-save')?.textContent==='Retry this exact configuration',invalid_field_count:[...(savedForm?.querySelectorAll('input,textarea,select')||[])].filter(node=>node.willValidate&&!node.validity.valid).length};
+    return {state:'captured',saved_assistant:savedAssistant,section:['ask','requests'].includes(section)?section:'other',active_sections:[...document.querySelectorAll('[data-section].active')].map(node=>node.dataset.section).filter(value=>['ask','requests'].includes(value)),status_category:known.find(([,prefix])=>status.startsWith(prefix))?.[0]||'other',ask_hidden:document.getElementById('ask')?.hidden!==false,controls_hidden:document.getElementById('conversation-controls')?.hidden!==false,send_disabled:document.getElementById('ask-submit')?.disabled!==false,transcript_empty:document.getElementById('chat-log')?.textContent==='',receipt_present:receiptPresent,receipt_shape_valid:receiptShapeValid};
   });}catch{return {state:'snapshot_unavailable'};}
 }
 async function boundedConversationDiagnostics(report) {
@@ -35,12 +38,23 @@ async function boundedConversationDiagnostics(report) {
   try{await Promise.race([Promise.resolve().then(report).catch(()=>{}),new Promise(resolve=>{timer=setTimeout(resolve,2000);})]);}
   finally{clearTimeout(timer);}
 }
+// Fixed loopback saved-configuration metadata only; never retain URLs or bodies.
+function recordSavedAssistantHttp(target,phase,kind,request,status=null) {
+  try {
+    if(!['setup','first_assistant_save','second_assistant_save','remaining_scenarios'].includes(phase)||!['request','response','request_failed'].includes(kind))return;
+    const url=new URL(request.url()),method=request.method();
+    if(url.origin!=='https://127.0.0.1:8893'||url.username||url.password||url.pathname!=='/enterprise-campus/enterprise/conversation/assistants'||!['GET','POST'].includes(method))return;
+    const event={phase,kind,operation:method==='POST'?'save':'list',status:Number.isInteger(status)&&status>=100&&status<=599?status:null};
+    if(target.events.length<24)target.events.push(event);else target.dropped++;
+  } catch {}
+}
 const records=[];
 for(const [engine,launcher] of Object.entries({chromium,webkit})){
   const scratch=await mkdtemp(join(tmpdir(),'enterprise-conversation-browser-')),db=join(scratch,'fixture.sqlite'),origin='https://127.0.0.1:8893';
   await writeFile(db,'');
   let env={...process.env,ENTERPRISE_APP_ENV:'testing',ENTERPRISE_RUNTIME_ISOLATED:'true',ENTERPRISE_APP_KEY:'base64:MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=',ENTERPRISE_APP_URL:origin,ENTERPRISE_TEST_CONVERSATION_PROVIDER:'1',ENTERPRISE_TEST_CONVERSATION_DATABASE:db};
   let server,proxy,browser,runtime,exited,diagnosticPage,diagnosticErrors,diagnosticRequests,diagnosticCalls,scenarioFailed=false;
+  let diagnosticPhase='setup';const diagnosticSavedHttp={events:[],dropped:0};
   try{
     const seeded=spawnSync(php,['tests/Support/enterprise-conversation-browser-fixture.php'],{env,encoding:'utf8'});assert.equal(seeded.status,0,seeded.stdout+seeded.stderr);
     assert.ok(seeded.stdout.trim().startsWith('{'),seeded.stdout+seeded.stderr);const fixture=JSON.parse(seeded.stdout);runtime=fixture.runtime;env={...env,ENTERPRISE_RUNTIME_ROOT:runtime,ENTERPRISE_TEST_CONVERSATION_DATABASE:fixture.database};
@@ -58,15 +72,19 @@ for(const [engine,launcher] of Object.entries({chromium,webkit})){
     const page=await context.newPage();diagnosticPage=page;diagnosticErrors=errors;diagnosticRequests=requests;diagnosticCalls=calls;page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(request.method()==='POST'&&request.url().includes('/conversation/turns'))requests.push(JSON.parse(request.postData()));});
     await page.goto(origin+'/enterprise-campus/login');await page.getByLabel('Email',{exact:true}).fill('conversation@example.invalid');await page.getByLabel('Password',{exact:true}).fill('Fictional-conversation-browser-only!');
     const login=page.waitForResponse(response=>response.request().method()==='POST'&&response.url().endsWith('/login'));await page.getByRole('button',{name:'Sign in',exact:true}).click();assert.equal((await login).status(),200);
+    page.on('request',request=>recordSavedAssistantHttp(diagnosticSavedHttp,diagnosticPhase,'request',request));
+    page.on('response',response=>recordSavedAssistantHttp(diagnosticSavedHttp,diagnosticPhase,'response',response.request(),response.status()));
+    page.on('requestfailed',request=>recordSavedAssistantHttp(diagnosticSavedHttp,diagnosticPhase,'request_failed',request));
     const askUrl=origin+'/enterprise-campus/teams?tenant='+fixture.tenant+'&area_id='+fixture.area+'&section=ask';
     await change(value=>value.config['enterprise.conversation'].enabled=false);
     await page.goto(askUrl);await page.locator('#conversation-controls').waitFor({state:'visible'});assert.equal(await page.locator('#ask-submit').isDisabled(),true);assert.match(await page.locator('#conversation-status').textContent(),/setup is unavailable/);assert.equal((await calls()).length,0);
     // Saving private configuration works independently of provider activation and never calls it.
     await page.locator('#saved-assistant-new').click();await page.locator('#saved-assistant-name').fill('Fictional repair reader');await page.locator('#saved-assistant-purpose').fill('Review current authorized repairs');await page.locator('#saved-assistant-instructions').fill('Use short sentences and identify missing facts.');
     for(const value of ['building','costs'])await page.locator('[data-saved-assistant-check][value="'+value+'"]').check();
-    assert.equal(await page.locator('#saved-assistant-save').isDisabled(),true);await page.locator('#saved-assistant-confirm').check();await page.locator('#saved-assistant-save').click();await page.getByText('Private assistant saved.',{exact:false}).waitFor();assert.equal((await calls()).length,0);
+    assert.equal(await page.locator('#saved-assistant-save').isDisabled(),true);await page.locator('#saved-assistant-confirm').check();diagnosticPhase='first_assistant_save';await page.locator('#saved-assistant-save').click();await page.getByText('Private assistant saved.',{exact:false}).waitFor();assert.equal((await calls()).length,0);
     const assistantId=await page.locator('#saved-assistant-choice').inputValue();assert.match(assistantId,/^[a-f0-9-]{36}$/i);
-    await page.locator('#saved-assistant-edit').click();assert.equal(await page.locator('#saved-assistant-instructions').inputValue(),'Use short sentences and identify missing facts.');await page.locator('#saved-assistant-instructions').fill('Explain briefly and show current linked sources.');await page.locator('#saved-assistant-confirm').check();await page.locator('#saved-assistant-save').click();await page.getByText('Private assistant saved.',{exact:false}).waitFor();
+    await page.locator('#saved-assistant-edit').click();assert.equal(await page.locator('#saved-assistant-instructions').inputValue(),'Use short sentences and identify missing facts.');await page.locator('#saved-assistant-instructions').fill('Explain briefly and show current linked sources.');await page.locator('#saved-assistant-confirm').check();diagnosticPhase='second_assistant_save';await page.locator('#saved-assistant-save').click();await page.getByText('Private assistant saved.',{exact:false}).waitFor();
+    diagnosticPhase='remaining_scenarios';
     // Typed memory is explicit and private; these actions never activate or call a model.
     assert.equal(await page.locator('#memory-use').isChecked(),false);await page.locator('#memory-manager summary').click();
     await page.locator('#memory-new').click();assert.equal(await page.locator('#memory-save').isDisabled(),true);await page.locator('#memory-key').selectOption('reply_length');await page.locator('#memory-value').selectOption('brief');await page.locator('#memory-retention').selectOption('7');await page.locator('#memory-confirm').check();await page.locator('#memory-save').click();await page.getByText('Private typed memory saved.',{exact:false}).waitFor();assert.equal(await page.locator('#memory-refresh').evaluate(node=>document.activeElement===node),true);
@@ -153,7 +171,7 @@ for(const [engine,launcher] of Object.entries({chromium,webkit})){
     await writeFile(resolve(evidence,engine+'-requests.json'),JSON.stringify({provider:'fake HTTP only',turnRequests:requests,providerReceipts:await calls(),externalRequests:external,errors},null,2));
   }catch(error){
     scenarioFailed=true;
-    await boundedConversationDiagnostics(async()=>{const state=await conversationFailureState(diagnosticPage),observed=diagnosticCalls?await diagnosticCalls():null;await writeFile(resolve(evidence,engine+'-failure.json'),JSON.stringify({engine,state,turn_request_count:diagnosticRequests?.length??null,provider_receipts_observed:observed?.length??null,page_error_count:diagnosticErrors?.length??null},null,2));});
+    await boundedConversationDiagnostics(async()=>{const state=await conversationFailureState(diagnosticPage),observed=diagnosticCalls?await diagnosticCalls():null;await writeFile(resolve(evidence,engine+'-failure.json'),JSON.stringify({engine,phase:diagnosticPhase,state,saved_assistant_http:diagnosticSavedHttp,turn_request_count:diagnosticRequests?.length??null,provider_receipts_observed:observed?.length??null,page_error_count:diagnosticErrors?.length??null},null,2));});
     throw error;
   }finally{
     try{

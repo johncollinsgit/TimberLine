@@ -11,13 +11,13 @@ const stepStart=s.indexOf('const steps=['),stepEnd=s.indexOf('\n];',stepStart);a
 const steps=JSON.parse(vm.runInNewContext(s.slice(stepStart,stepEnd+3)+';JSON.stringify(steps)'));
 function deferred(){let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};}
 function fixture(){
- const calls=[],pending=[],renders=[],frames=[],scrolls=[],toasts=[];
+ const calls=[],pending=[],renders=[],frames=[],scrolls=[],toasts=[],shell=[];
  const context={data:{persona:'leader',sms_simulated:false},steps,
-  tourGeneration:0,tourStep:-1,modal:{open:false},view:'home',project:'original',query:'unsaved-filter',layout:'map',smsDone:false,
+  tourGeneration:0,campusScopeGeneration:0,campusScopePending:false,campusAssistantActionGeneration:0,tourStep:-1,modal:{open:false},view:'home',project:'original',query:'unsaved-filter',layout:'map',smsDone:false,
   api:(name,body)=>{assert(['persona','state'].includes(name));const d=deferred();calls.push({name,body});pending.push(d);return d.promise;},
   document:{querySelector:()=>null,getElementById:()=>null},window:{scrollY:0,scrollTo:value=>scrolls.push(value)},render:()=>renders.push(context.view),renderTour:()=>{},
-  toast:(...v)=>toasts.push(v),requestAnimationFrame:fn=>frames.push(fn)};
- vm.createContext(context);vm.runInContext(source+'\n'+go,context);return {context,calls,pending,renders,frames,scrolls,toasts};
+  toast:(...v)=>toasts.push(v),requestAnimationFrame:fn=>frames.push(fn),closeCampusAssistant:restore=>shell.push(['close',restore]),campusNavigation:push=>shell.push(['navigation',push]),openCampusAssistant:()=>shell.push(['open'])};
+ vm.createContext(context);vm.runInContext(source+'\n'+go,context);return {context,calls,pending,renders,frames,scrolls,toasts,shell};
 }
 test('latest step owns the eventual persona/state projection; old entry cannot render',async()=>{
  const f=fixture(),old=f.context.setTour(1),latest=f.context.setTour(2);
@@ -56,3 +56,6 @@ test('Update a task explicitly restores Board after a retained Timeline choice',
  f.context.layout='timeline';const clicks=[];f.context.document.querySelector=selector=>selector==='[data-layout="board"]'?{click(){clicks.push(selector);f.context.layout='board';}}:null;
  f.context.enterTourSubview(step);assert.equal(f.context.layout,'board');assert.deepEqual(clicks,['[data-layout="board"]']);assert.deepEqual(f.calls,[]);
 });
+
+test('tour closes only the assistant while legacy assistant navigation opens the portal without work navigation',async()=>{const f=fixture();await f.context.setTour(-1);assert.deepEqual(f.shell,[['close',false]]);const g=fixture();g.context.go('assistant');assert.deepEqual(g.shell,[['open']]);assert.deepEqual(g.renders,[]);assert.deepEqual(g.calls,[]);const ordinary=fixture();ordinary.context.go('files');assert.deepEqual(ordinary.shell,[['navigation',true]]);assert.deepEqual(ordinary.renders,['files']);});
+test('tour scope becomes pending immediately and only the newest transition may clear it',async()=>{const f=fixture(),old=f.context.setTour(1);assert.equal(f.context.campusScopePending,true);assert.equal(f.context.campusScopeGeneration,1);const latest=f.context.setTour(2);f.pending[0].resolve({});await old;assert.equal(f.context.campusScopePending,true);f.pending[1].resolve({});await new Promise(setImmediate);f.pending[2].resolve({persona:'admin',sms_simulated:false});await latest;assert.equal(f.context.campusScopePending,false);assert.equal(f.context.data.persona,'admin');});

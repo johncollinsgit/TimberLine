@@ -9,7 +9,7 @@
     memoryGeneration++;memoryScope=null;memoryEditing=null;memoryPending=null;memoryBusy=false;memorySource=null;memoryPreview=null;memoryDeleting=null;
     $('private-memory').hidden=true;$('memory-use').checked=false;$('memory-manager').open=false;$('memory-list').replaceChildren();$('memory-form').hidden=true;$('memory-form').reset();$('memory-delete-confirm').hidden=true;$('memory-status').textContent='';$('memory-preview').textContent='';$('memory-source-title').textContent='';
   }
-  const memoryCurrent=(generation,scope)=>generation===memoryGeneration&&scope===memoryScope&&scope===conversationScope&&scope===conversationScopeValue()&&memoryEnabled()&&section==='ask';
+  const memoryCurrent=(generation,scope)=>generation===memoryGeneration&&scope===memoryScope&&scope===conversationScope&&scope===conversationScopeValue()&&memoryEnabled()&&(section==='ask'||typeof campusAssistantActive==='function'&&campusAssistantActive());
   function memoryFields(){
     const manage=data.private_memory?.can_manage===true,locked=memoryBusy||!!memoryPending,conversationLocked=conversationBusy||!!conversationState;
     $('memory-use').disabled=conversationLocked||locked||!$('memory-form').hidden||!$('memory-delete-confirm').hidden;
@@ -39,12 +39,13 @@
       if(item.source_ref&&conversationSource({ref:item.source_ref,url:item.source_url})){const link=conversationText(card,'a','Inspect current source');link.href=transport.href(item.source_url);}
       const actions=document.createElement('div');actions.className='actions';
       if(item.type==='preference'||item.source_ref){const edit=conversationText(actions,'button',item.type==='preference'?'Edit preference':'Review current observation','button');edit.type='button';edit.dataset.memoryAction='edit';edit.onclick=()=>openMemory(item);}
-      const remove=conversationText(actions,'button','Delete memory','button');remove.type='button';remove.dataset.memoryAction='delete';remove.onclick=()=>{if(memoryBusy||memoryPending||conversationBusy||conversationState||data.private_memory?.can_delete!==true)return;memoryDeleting=item;$('memory-delete-confirm').hidden=false;memoryFields();conversationFields();$('memory-delete-yes').focus();};card.append(actions);$('memory-list').append(card);
+      const remove=conversationText(actions,'button','Delete memory','button');remove.type='button';remove.dataset.memoryAction='delete';remove.onclick=()=>{if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;if(memoryBusy||memoryPending||conversationBusy||conversationState||data.private_memory?.can_delete!==true)return;memoryDeleting=item;$('memory-delete-confirm').hidden=false;memoryFields();conversationFields();$('memory-delete-yes').focus();};card.append(actions);$('memory-list').append(card);
     }
     if(!memoryList().length)conversationText($('memory-list'),'p','No private memory is saved in this department.','caption');
     memoryFields();
   }
   function openMemory(item=null,source=null){
+    if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;
     if(memoryBusy||memoryPending||conversationBusy||conversationState||data.private_memory?.can_manage!==true)return;
     memoryEditing=item;memorySource=source||(item?.source_ref?{ref:item.source_ref,title:item.source_title,url:item.source_url}:null);memoryPreview=null;memoryDeleting=null;
     $('memory-manager').open=true;$('memory-form').reset();$('memory-form').hidden=false;$('memory-delete-confirm').hidden=true;$('memory-preview').textContent='';
@@ -63,6 +64,7 @@
     const button=conversationText(host,'button','Save observation','button');button.type='button';button.dataset.memorySourceAction='true';button.disabled=memoryBusy||!!memoryPending||conversationBusy||!!conversationState;button.onclick=()=>openMemory(null,source);
   }
   async function previewMemory(){
+    if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;
     if(!memorySource||memoryPending)return;
     if(document.activeElement===$('memory-field'))$('memory-status').focus();
     const generation=++memoryGeneration,scope=memoryScope,ref=memorySource.ref,field=$('memory-field').value;memoryBusy=true;memoryPreview=null;$('memory-confirm').checked=false;memoryFields();conversationFields();
@@ -75,12 +77,14 @@
     finally{if(memoryCurrent(generation,scope)){memoryBusy=false;memoryFields();conversationFields();if(document.activeElement===$('memory-status'))$('memory-field').focus();}}
   }
   async function refreshMemory(generation,scope){
+    if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;
     const result=await api(`${nextBase}/conversation/memories${nextQuery()}&area_id=${encodeURIComponent(area)}`);
     if(!memoryCurrent(generation,scope))return false;
     if(!conversationScoped(result)||result.provider_dispatch!==false||!Array.isArray(result.items))throw new Error('Memory scope changed.');
     data.private_memory=result;renderPrivateMemory();conversationFields();return true;
   }
   async function mutateMemory(){
+    if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;
     if(memoryBusy||!memoryPending||conversationBusy||conversationState)return;
     const exact=memoryPending,generation=++memoryGeneration,scope=memoryScope;memoryBusy=true;memoryFields();conversationFields();
     try{
@@ -97,18 +101,18 @@
     }finally{if(memoryCurrent(generation,scope)){memoryBusy=false;memoryFields();conversationFields();$(memoryPending?(memoryPending.action==='delete'?'memory-delete-yes':'memory-save'):$('memory-form').hidden?'memory-refresh':'memory-status').focus();}}
   }
   $('memory-new').onclick=()=>openMemory();$('memory-field').onchange=previewMemory;
-  $('memory-key').onchange=()=>{memoryPreferenceChoices();$('memory-confirm').checked=false;memoryFields();};
-  $('memory-use').onchange=()=>{if(conversationState||conversationBusy)return;conversationGeneration++;$('chat-log').replaceChildren();$('ask-question').value='';conversationFields();};
-  $('memory-cancel').onclick=()=>{if(memoryPending||memoryBusy)return;$('memory-form').hidden=true;$('memory-form').reset();memoryEditing=null;memorySource=null;memoryPreview=null;memoryFields();conversationFields();$('memory-new').focus();};
-  $('memory-form').oninput=event=>{if(memoryPending||memoryBusy)return;if(event.target!==$('memory-confirm'))$('memory-confirm').checked=false;memoryFields();};
+  $('memory-key').onchange=()=>{if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;memoryPreferenceChoices();$('memory-confirm').checked=false;memoryFields();};
+  $('memory-use').onchange=()=>{if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;if(conversationState||conversationBusy)return;conversationGeneration++;$('chat-log').replaceChildren();$('ask-question').value='';conversationFields();};
+  $('memory-cancel').onclick=()=>{if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;if(memoryPending||memoryBusy)return;$('memory-form').hidden=true;$('memory-form').reset();memoryEditing=null;memorySource=null;memoryPreview=null;memoryFields();conversationFields();$('memory-new').focus();};
+  $('memory-form').oninput=event=>{if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;if(memoryPending||memoryBusy)return;if(event.target!==$('memory-confirm'))$('memory-confirm').checked=false;memoryFields();};
   $('memory-form').onsubmit=event=>{
-    event.preventDefault();if(memoryBusy||conversationBusy||conversationState)return;if(memoryPending)return memoryPending.action==='save'?mutateMemory():undefined;
+    event.preventDefault();if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;if(memoryBusy||conversationBusy||conversationState)return;if(memoryPending)return memoryPending.action==='save'?mutateMemory():undefined;
     if(!$('memory-confirm').checked||data.private_memory?.can_manage!==true||memorySource&&!memoryPreview)return;
     const id=memoryEditing?.id||crypto.randomUUID(),body={id,request_id:crypto.randomUUID(),area_id:area,expected_version:memoryEditing?.version||0,confirmed:true,retention_days:Number($('memory-retention').value)};
     if(memorySource)Object.assign(body,{type:'source_observation',source_ref:memoryPreview.source_ref,field:memoryPreview.field,source_sha256:memoryPreview.source_sha256});
     else Object.assign(body,{type:'preference',key:$('memory-key').value,value:$('memory-value').value});
     memoryPending={action:'save',id,body};return mutateMemory();
   };
-  $('memory-refresh').onclick=async()=>{if(memoryBusy||memoryPending)return;const generation=++memoryGeneration,scope=memoryScope;memoryBusy=true;memoryFields();try{await refreshMemory(generation,scope);}catch(error){if(memoryCurrent(generation,scope)){$('memory-list').replaceChildren();$('memory-status').textContent='Private memory could not be read under current access.';data.private_memory=null;$('memory-form').reset();$('memory-form').hidden=true;}}finally{if(memoryCurrent(generation,scope)){memoryBusy=false;memoryFields();conversationFields();$('memory-refresh').focus();}}};
-  $('memory-delete-no').onclick=()=>{if(memoryPending||memoryBusy)return;memoryDeleting=null;$('memory-delete-confirm').hidden=true;memoryFields();conversationFields();$('memory-refresh').focus();};
-  $('memory-delete-yes').onclick=()=>{if(memoryBusy||conversationBusy||conversationState)return;if(!memoryPending){if(!memoryDeleting||data.private_memory?.can_delete!==true)return;memoryPending={action:'delete',id:memoryDeleting.id,body:{area_id:area,expected_version:memoryDeleting.version,request_id:crypto.randomUUID(),confirmed:true}};}return mutateMemory();};
+  $('memory-refresh').onclick=async()=>{if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;if(memoryBusy||memoryPending)return;const generation=++memoryGeneration,scope=memoryScope;memoryBusy=true;memoryFields();try{await refreshMemory(generation,scope);}catch(error){if(memoryCurrent(generation,scope)){$('memory-list').replaceChildren();$('memory-status').textContent='Private memory could not be read under current access.';data.private_memory=null;$('memory-form').reset();$('memory-form').hidden=true;}}finally{if(memoryCurrent(generation,scope)){memoryBusy=false;memoryFields();conversationFields();$('memory-refresh').focus();}}};
+  $('memory-delete-no').onclick=()=>{if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;if(memoryPending||memoryBusy)return;memoryDeleting=null;$('memory-delete-confirm').hidden=true;memoryFields();conversationFields();$('memory-refresh').focus();};
+  $('memory-delete-yes').onclick=()=>{if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;if(memoryBusy||conversationBusy||conversationState)return;if(!memoryPending){if(!memoryDeleting||data.private_memory?.can_delete!==true)return;memoryPending={action:'delete',id:memoryDeleting.id,body:{area_id:area,expected_version:memoryDeleting.version,request_id:crypto.randomUUID(),confirmed:true}};}return mutateMemory();};
