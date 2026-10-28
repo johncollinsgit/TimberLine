@@ -862,10 +862,18 @@ svg.leaflet-image-layer.leaflet-interactive path {
   function denied(session) {
     if (!current(session)) return;
     save(session); revoke(session);
+    session.placementEpoch++;
     session.node.replaceChildren();
     const p = document.createElement('p'); p.className = 'notice';
     p.textContent = 'This request is unavailable in the current perspective. Its local draft is retained. Close this panel and choose a currently visible request.';
     session.node.append(p);
+  }
+  function bindInteractions(session) {
+    for (const type of ['pointerdown', 'keydown', 'focusin', 'input']) session.node.addEventListener(type, event => {
+      if (!current(session)) return;
+      session.interactionEpoch++;
+      if (type === 'focusin' && event.target.matches('input,textarea,select')) session.lastFocused = event.target;
+    });
   }
   function applyPlacement(session, mode) {
     if (!current(session) || !EverbranchDetailPlacement.valid(mode)) return;
@@ -874,8 +882,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
     session.preference.save(mode);
     dialog.classList.toggle('public-request-side', mode === 'side'); dialog.dataset.requestPlacement = mode;
     session.node.querySelectorAll('[data-request-placement]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.requestPlacement === mode)));
+    const placementEpoch = ++session.placementEpoch, interactionEpoch = session.interactionEpoch;
     requestAnimationFrame(() => {
-      if (!current(session)) return;
+      if (!current(session) || document.querySelector('#modal') !== dialog || !dialog.isConnected || !dialog.open
+        || !session.node.isConnected || !dialog.contains(session.node) || session.placementEpoch !== placementEpoch || session.interactionEpoch !== interactionEpoch) return;
       dialog.scrollTop = scroll;
       if (focused?.isConnected) { focused.focus({preventScroll:true}); if (selection) focused.setSelectionRange(...selection); }
     });
@@ -884,10 +894,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
     const persona = currentData.persona, key = keyFor(persona, id), draft = drafts.get(key);
     environment.showModal(`<section class="public-request-body" data-public-request-body>${html}</section>`, null, {requestUi:true});
     const node = document.querySelector('[data-public-request-body]');
-    const session = {kind, id, persona, key, draft, node, generation:++generation, payload, request:payload?.request || null, urls:new Set(), busy:false};
+    const session = {kind, id, persona, key, draft, node, generation:++generation, payload, request:payload?.request || null, urls:new Set(), busy:false, interactionEpoch:0, placementEpoch:0};
     const preferenceKey = EverbranchDetailPlacement.preferenceKey('sample', 'lees-mcrae-public', persona, 'legacy-sample');
     session.preference = EverbranchDetailPlacement.create(storage, preferenceKey);
     active = session;
+    bindInteractions(session);
     const dialog = document.querySelector('#modal');
     dialog.addEventListener('close', () => { if (active === session && !dialog.open) retire(); }, {once:true});
     applyPlacement(session, session.preference.read());
@@ -926,7 +937,6 @@ svg.leaflet-image-layer.leaflet-interactive path {
   }
   function bindSession(session) {
     bindPlacement(session);
-    session.node.addEventListener('focusin', event => { if (event.target.matches('input,textarea,select')) session.lastFocused = event.target; });
     session.node.querySelectorAll('[data-request-field]').forEach(input => { input.addEventListener('input', () => { session.draft.dirty[input.dataset.group || 'detail'] = true; save(session); }); input.addEventListener('change', () => save(session)); });
     find(session, '[data-request-retry]')?.addEventListener('click', () => { if (session.draft.pending) perform(session, session.draft.pending.action, null); });
     find(session, '[data-request-ack]')?.addEventListener('click', async () => {

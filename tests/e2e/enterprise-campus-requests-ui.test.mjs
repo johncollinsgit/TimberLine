@@ -54,8 +54,8 @@ test('detail and assignment drafts keep independent values and dirty captured ve
   assert.equal(session.draft.versions.settings,1); assert.equal(session.draft.versions.comment,1); assert.equal(session.draft.versions.assign,5);
 });
 test('placement changes keep the form node and restore the prior editor caret and scroll', () => {
-  const frames=[], focus=[], selections=[], modes=[], node={querySelectorAll:()=>[]}, editor={isConnected:true,selectionStart:7,selectionEnd:19,selectionDirection:'forward',focus:value=>focus.push(value),setSelectionRange:(...value)=>selections.push(value)};
-  const dialog={scrollTop:40,dataset:{},classList:{toggle:(name,value)=>modes.push([name,value])}}, session={node,lastFocused:editor,preference:{save:value=>modes.push(value)}};
+  const frames=[], focus=[], selections=[], modes=[], node={isConnected:true,querySelectorAll:()=>[]}, editor={isConnected:true,selectionStart:7,selectionEnd:19,selectionDirection:'forward',focus:value=>focus.push(value),setSelectionRange:(...value)=>selections.push(value)};
+  const dialog={isConnected:true,open:true,contains:value=>value===node,scrollTop:40,dataset:{},classList:{toggle:(name,value)=>modes.push([name,value])}}, session={node,interactionEpoch:0,placementEpoch:0,lastFocused:editor,preference:{save:value=>modes.push(value)}};
   const c=context({current:()=>true,document:{querySelector:()=>dialog,activeElement:{isConnected:true}},EverbranchDetailPlacement:{valid:value=>['center','side'].includes(value)},requestAnimationFrame:fn=>frames.push(fn)});
   vm.runInContext(between('  function applyPlacement(', '  function begin('),c);c.applyPlacement(session,'side');frames[0]();
   assert.equal(session.node,node);assert.equal(session.lastFocused,editor);assert.equal(dialog.scrollTop,40);assert.equal(dialog.dataset.requestPlacement,'side');assert.equal(focus.length,1);assert.deepEqual(plain(selections),[[7,19,'forward']]);
@@ -143,4 +143,53 @@ test('Admin audit rendering escapes actual before and after fields without inven
   session.request.change_history=[{actor_label:'Demo admin',recorded_at:'fictional time',changes:[{field:'title',before:'Old <title>',after:'New & title'}]}];
   const result=c.changeHistory(session);assert.match(result,/Old &lt;title&gt;/);assert.match(result,/New &amp; title/);assert.match(result,/Before/);assert.match(result,/After/);
   session.persona='staff';assert.equal(c.changeHistory(session),'');
+});
+
+
+function placementFixture() {
+  const frames = [], listeners = {}, restored = [], selections = [], stored = [], node = {isConnected:true,querySelectorAll:()=>[],addEventListener:(type,fn)=>{assert.equal(listeners[type],undefined);listeners[type]=fn;}};
+  const editor = {isConnected:true,selectionStart:6,selectionEnd:17,selectionDirection:'backward',matches:()=>true,focus:()=>restored.push('editor'),setSelectionRange:(...v)=>selections.push(v)};
+  const close = {isConnected:true,focus:()=>restored.push('close')};
+  const dialog = {isConnected:true,open:true,contains:value=>value===node,scrollTop:35,dataset:{},classList:{toggle:()=>{}}};
+  const session = {node,interactionEpoch:0,placementEpoch:0,preference:{save:mode=>stored.push(mode)}};
+  const c = context({current:()=>true,document:{querySelector:()=>dialog,activeElement:close},EverbranchDetailPlacement:{valid:mode=>['center','side'].includes(mode)},requestAnimationFrame:fn=>frames.push(fn)});
+  vm.runInContext(between('  function bindInteractions(', '  function begin('),c);
+  c.bindInteractions(session);
+  return {c,session,node,editor,close,dialog,frames,listeners,restored,selections,stored};
+}
+for (const type of ['pointerdown','keydown','focusin','input']) test('new owned '+type+' cancels queued focus and scroll restoration', () => {
+  const f=placementFixture(); f.c.applyPlacement(f.session,'side');
+  f.listeners[type]({target:f.editor}); f.dialog.scrollTop=91; f.frames[0]();
+  assert.equal(f.session.interactionEpoch,1); assert.equal(f.dialog.scrollTop,91); assert.deepEqual(f.restored,[]); assert.deepEqual(f.selections,[]);
+  if(type==='focusin') assert.equal(f.session.lastFocused,f.editor);
+});
+test('latest placement alone restores its exact editor selection and scroll when callbacks arrive out of order', () => {
+  const f=placementFixture(); f.c.applyPlacement(f.session,'side');
+  f.listeners.focusin({target:f.editor}); f.dialog.scrollTop=73; f.c.applyPlacement(f.session,'center');
+  f.dialog.scrollTop=120; f.frames[1](); f.frames[0]();
+  assert.deepEqual(f.restored,['editor']); assert.deepEqual(f.selections,[[6,17,'backward']]); assert.equal(f.dialog.scrollTop,73);
+  assert.equal(f.dialog.dataset.requestPlacement,'center'); assert.equal(f.session.placementEpoch,2); assert.deepEqual(f.stored,['side','center']);
+});
+for (const kind of ['retired','closed','detached dialog','detached body','other modal','replaced body']) test('queued placement is inert for '+kind, () => {
+  const f=placementFixture(); f.session.lastFocused=f.editor; f.c.applyPlacement(f.session,'side'); f.dialog.scrollTop=91;
+  if(kind==='retired') f.c.current=()=>false;
+  if(kind==='closed') f.dialog.open=false;
+  if(kind==='detached dialog') f.dialog.isConnected=false;
+  if(kind==='detached body') f.node.isConnected=false;
+  if(kind==='other modal') f.c.document.querySelector=()=>({...f.dialog});
+  if(kind==='replaced body') f.dialog.contains=()=>false;
+  f.frames[0](); assert.equal(f.dialog.scrollTop,91); assert.deepEqual(f.restored,[]); assert.deepEqual(f.selections,[]);
+});
+test('denied replacement invalidates queued Close restoration without changing draft save or URL retirement', () => {
+  const f=placementFixture(), steps=[];
+  f.node.replaceChildren=()=>steps.push('replace'); f.node.append=()=>steps.push('append');
+  f.c.save=()=>steps.push('save'); f.c.revoke=()=>steps.push('revoke'); f.c.document.createElement=()=>({});
+  vm.runInContext(between('  function denied(', '  function bindInteractions('),f.c);
+  f.c.applyPlacement(f.session,'side'); f.c.denied(f.session); f.dialog.scrollTop=91; f.frames[0]();
+  assert.deepEqual(steps,['save','revoke','replace','append']); assert.equal(f.session.placementEpoch,2); assert.deepEqual(f.restored,[]); assert.equal(f.dialog.scrollTop,91);
+});
+test('retired owned events cannot change the current focus record or interaction epoch', () => {
+  const f=placementFixture(); f.c.current=()=>false;
+  for(const fn of Object.values(f.listeners)) fn({target:f.editor});
+  assert.equal(f.session.interactionEpoch,0); assert.equal(f.session.lastFocused,undefined);
 });
