@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_27_223000_create_subscription_pilot_execution.php' => [
+        'test' => 'tests/Integration/SubscriptionPilotExecutionMySqlRecoveryTest.php',
+        'scenarios' => ['encrypted authorizations and frozen provider requests survive parent-only creation, missing constraints, repeated recovery and code rollback; composite tenant ownership rejects foreign cycles; changed indexes fail without deleting evidence'],
+    ],
     '2026_10_27_210000_create_subscription_pilot_evidence.php' => [
         'test' => 'tests/Integration/SubscriptionPilotMySqlRecoveryTest.php',
         'scenarios' => ['encrypted member retained before event creation and trailing named constraints; repeated recovery preserves payments; composite tenant ownership rejects foreign members; conflicting indexes stop without deleting evidence'],

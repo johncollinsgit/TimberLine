@@ -82,6 +82,21 @@ class SubscriptionRechargeTransport
 
     private function route(string $operation, array $variables): array
     {
+        if ($operation === 'pilot_charges') {
+            if (array_diff(array_keys($variables), ['customer_id','status','processed_at_min','limit','cursor'])
+                || !isset($variables['customer_id'],$variables['status'])
+                || !in_array($variables['status'],['queued,error,pending,pending_manual_payment','success,refunded,partially_refunded'],true)) $this->fail('recharge_invalid_query');
+            $query=['customer_id'=>self::id($variables['customer_id']),'status'=>$variables['status'],'limit'=>250];
+            if(isset($variables['processed_at_min'])) {
+                if(!preg_match('/^\d{4}-\d{2}-\d{2}$/D',$variables['processed_at_min'])) $this->fail('recharge_invalid_query');
+                $query['processed_at_min']=$variables['processed_at_min'];
+            }
+            if(isset($variables['cursor'])) {
+                if(!is_string($variables['cursor']) || strlen($variables['cursor'])>4096 || preg_match('/[\x00-\x1f]/',$variables['cursor'])) $this->fail('recharge_invalid_query');
+                $query['cursor']=$variables['cursor'];
+            }
+            return ['/charges',$query];
+        }
         if (in_array($operation, ['store', 'token_information'], true)) {
             if ($variables) {
                 $this->fail('recharge_invalid_query');
