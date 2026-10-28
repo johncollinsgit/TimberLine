@@ -45,6 +45,7 @@ class SubscriptionWorkspaceController extends Controller
         }
 
         return view('subscriptions.workspace', [
+            'pilot' => app(\App\Services\Subscriptions\SubscriptionPilotService::class)->dashboard((int) $tenant->id, $request->user()),
             'tenant' => $tenant, 'installations' => $installations, 'installation' => $installation,
             'readiness' => $readiness, 'filters' => $filters, 'status' => $status,
             'contracts' => $contracts->orderByDesc('observed_at')->orderByDesc('id')->paginate(25)->withQueryString(),

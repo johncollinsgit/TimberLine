@@ -41,7 +41,7 @@ class TenantStripeConnectionService
                 ['status' => 'pending', 'connected_by_user_id' => $actor->id, 'external_account_secret' => json_encode([
                     'key' => (string) Str::uuid(),
                     'payload' => ['type' => $express ? 'express' : 'standard', 'country' => 'US', 'email' => $email,
-                        'capabilities' => $express ? ['card_payments' => ['requested' => 'true'], 'transfers' => ['requested' => 'true']] : ['card_payments' => ['requested' => 'true']],
+                        'capabilities' => ['card_payments' => ['requested' => 'true'], 'transfers' => ['requested' => 'true']],
                         'business_profile' => ['name' => $tenant->name, 'product_description' => 'Customer payments for '.$tenant->name],
                         'metadata' => ['tenant_id' => (string) $tenant->id, 'tenant_slug' => $tenant->slug]],
                 ], JSON_THROW_ON_ERROR)]
@@ -53,10 +53,37 @@ class TenantStripeConnectionService
             return $attempt;
         }
 
+        if ($attempt->status === 'rejected' && data_get($attempt->metadata, 'rejection') === 'stripe_missing_transfers_capability') {
+            $attempt = $this->capabilityReplacement($tenant, $actor, $attempt);
+        }
+
         abort_if($attempt->created_at->lt(now()->subHours(23)), 409, 'This payment setup attempt needs support review before retrying. This prevents creating a duplicate account.');
 
         $frozen = json_decode($attempt->external_account_secret, true, flags: JSON_THROW_ON_ERROR);
         $response = $this->stripe()->withHeaders(['Idempotency-Key' => $frozen['key']])->post('https://api.stripe.com/v1/accounts', $frozen['payload']);
+        // This specific validation rejection proves the old request did not create
+        // an account. Retain its immutable payload/key and reserve a separate,
+        // auditable corrected request. Timeouts and other failures never qualify.
+        if ($response->status() === 400 && $response->json('error.type') === 'invalid_request_error'
+            && str_starts_with((string) $response->json('error.message'), 'Accounts do not currently support `card_payments` without `transfers`.')
+            && data_get($frozen, 'payload.type') === 'standard'
+            && data_get($frozen, 'payload.capabilities') === ['card_payments' => ['requested' => 'true']]) {
+            DB::transaction(function () use ($tenant, $actor, $attempt): void {
+                Tenant::whereKey($tenant->id)->lockForUpdate()->firstOrFail();
+                $original = IntegrationConnection::query()->forTenant($tenant)->findOrFail($attempt->id);
+                if ($original->status !== 'rejected') {
+                    $original->update(['status' => 'rejected', 'metadata' => array_merge($original->metadata ?? [],
+                        ['rejection' => 'stripe_missing_transfers_capability', 'rejected_at' => now()->toIso8601String()])]);
+                    app(\App\Services\Tenancy\LandlordOperatorActionAuditService::class)->record($tenant->id, $actor->id,
+                        'tenant_payments.stripe.account_request_rejected', targetType: 'integration_connection', targetId: $original->id,
+                        result: ['provider_status' => 400, 'reason' => 'stripe_missing_transfers_capability', 'account_created' => false]);
+                }
+            });
+            $attempt = $this->capabilityReplacement($tenant, $actor, $attempt->fresh());
+            abort_if($attempt->created_at->lt(now()->subHours(23)), 409, 'This corrected payment setup attempt needs support review before retrying.');
+            $frozen = json_decode($attempt->external_account_secret, true, flags: JSON_THROW_ON_ERROR);
+            $response = $this->stripe()->withHeaders(['Idempotency-Key' => $frozen['key']])->post('https://api.stripe.com/v1/accounts', $frozen['payload']);
+        }
         $this->assertSuccess($response);
         $id = (string) $response->json('id');
         abort_unless(preg_match('/^acct_[A-Za-z0-9]+$/D', $id), 502, 'Stripe returned an invalid payment account.');
@@ -77,6 +104,28 @@ class TenantStripeConnectionService
             app(\App\Services\Tenancy\LandlordOperatorActionAuditService::class)->record($tenant->id, $actor->id, 'tenant_payments.stripe.connected', targetType: 'tenant_payment_account', targetId: $account->id);
 
             return $account;
+        });
+    }
+
+    private function capabilityReplacement(Tenant $tenant, User $actor, IntegrationConnection $original): IntegrationConnection
+    {
+        $frozen = json_decode($original->external_account_secret, true, flags: JSON_THROW_ON_ERROR);
+        abort_unless($original->status === 'rejected' && data_get($original->metadata, 'rejection') === 'stripe_missing_transfers_capability'
+            && $original->external_account_id === $this->fingerprint() && data_get($frozen, 'payload.type') === 'standard'
+            && data_get($frozen, 'payload.metadata.tenant_id') === (string) $tenant->id
+            && data_get($frozen, 'payload.capabilities') === ['card_payments' => ['requested' => 'true']], 409);
+
+        return DB::transaction(function () use ($tenant, $actor, $original, $frozen): IntegrationConnection {
+            Tenant::whereKey($tenant->id)->lockForUpdate()->firstOrFail();
+            $payload = $frozen['payload'];
+            $payload['capabilities']['transfers'] = ['requested' => 'true'];
+
+            return IntegrationConnection::query()->forTenant($tenant)->firstOrCreate(
+                ['tenant_id' => $tenant->id, 'provider' => 'tenant_stripe_onboarding', 'external_account_id' => $this->fingerprint().':standard-capabilities-v2'],
+                ['status' => 'pending', 'connected_by_user_id' => $actor->id,
+                    'external_account_secret' => json_encode(['key' => (string) Str::uuid(), 'payload' => $payload], JSON_THROW_ON_ERROR),
+                    'metadata' => ['replaces_rejected_attempt_id' => $original->id]]
+            );
         });
     }
 

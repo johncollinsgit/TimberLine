@@ -73,6 +73,8 @@ class ShopifyEmbeddedSubscriptionsController extends Controller
             ],
             'subscriptionsPayload' => $payload,
             'workspaceSubscriptionsUrl' => $enabled ? route('subscriptions.workspace.index', ['tenant' => $tenantId]) : null,
+            'pilot' => $enabled ? app(\App\Services\Subscriptions\SubscriptionPilotService::class)->dashboard($tenantId, $request->user()) : null,
+            'pilotTenant' => $enabled ? \App\Models\Tenant::query()->findOrFail($tenantId) : null,
         ], $enabled ? 200 : 403);
     }
 

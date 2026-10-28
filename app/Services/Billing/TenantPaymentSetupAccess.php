@@ -12,7 +12,7 @@ class TenantPaymentSetupAccess
     {
         return (bool) config('tenant_payments.setup_enabled')
             && in_array($tenant->slug, (array) config('tenant_payments.tenant_slugs', []), true)
-            && collect(['soccer', 'managed_website', 'everbranch_billing', 'markets_and_makers'])->contains(
+            && collect(['soccer', 'managed_website', 'everbranch_billing', 'markets_and_makers', 'subscriptions'])->contains(
                 fn (string $module) => app(TenantModuleAccessResolver::class)->canAccess($tenant->id, $module)
             );
     }
