@@ -271,9 +271,62 @@ it('creates a full-dashboard business account and freezes direct routing for new
     Http::fake(['https://api.stripe.com/v1/accounts' => Http::response(['id' => 'acct_newbusiness']),
         'https://api.stripe.com/v1/account_links' => Http::response(['url' => 'https://connect.stripe.com/setup/business'])]);
     $this->actingAs($this->owner)->post(paymentSetupUrl($this, '/stripe/start'), ['email' => 'owner@example.com'])->assertRedirect();
-    Http::assertSent(fn ($request) => $request->url() === 'https://api.stripe.com/v1/accounts' && $request['type'] === 'standard');
+    Http::assertSent(fn ($request) => $request->url() === 'https://api.stripe.com/v1/accounts' && $request['type'] === 'standard'
+        && $request['capabilities'] === ['card_payments' => ['requested' => 'true'], 'transfers' => ['requested' => 'true']]);
     expect($this->tenant->paymentAccount()->sole()->routingMode())->toBe('direct');
 });
+
+function legacyCardOnlyAttempt($test): IntegrationConnection
+{
+    return IntegrationConnection::create(['tenant_id' => $test->tenant->id, 'provider' => 'tenant_stripe_onboarding',
+        'external_account_id' => hash('sha256', 'acct_platformfictional|test'), 'status' => 'pending',
+        'connected_by_user_id' => $test->owner->id, 'external_account_secret' => json_encode([
+            'key' => 'fictional-original-key', 'payload' => ['type' => 'standard', 'country' => 'US', 'email' => 'original@example.test',
+                'capabilities' => ['card_payments' => ['requested' => 'true']],
+                'metadata' => ['tenant_id' => (string) $test->tenant->id, 'tenant_slug' => $test->tenant->slug]],
+        ], JSON_THROW_ON_ERROR)]);
+}
+
+it('retains a conclusively rejected card-only request and retries one corrected immutable reservation', function () {
+    $original = legacyCardOnlyAttempt($this);
+    $ciphertext = $original->getRawOriginal('external_account_secret');
+    $calls = [];
+    Http::fake(['https://api.stripe.com/v1/accounts' => function ($request) use (&$calls) {
+        $calls[] = ['key' => $request->header('Idempotency-Key')[0], 'payload' => $request->data()];
+        if (count($calls) === 1) {
+            return Http::response(['error' => ['type' => 'invalid_request_error',
+                'message' => 'Accounts do not currently support `card_payments` without `transfers`.']], 400);
+        }
+        if (count($calls) === 2) {
+            return Http::failedConnection();
+        }
+
+        return Http::response(['id' => 'acct_corrected']);
+    }, 'https://api.stripe.com/v1/account_links' => Http::response(['url' => 'https://connect.stripe.com/setup/corrected'])]);
+    $this->actingAs($this->owner)->postJson(paymentSetupUrl($this, '/stripe/start'), ['email' => 'changed@example.test'])->assertStatus(502);
+    $replacement = IntegrationConnection::where('provider', 'tenant_stripe_onboarding')->whereKeyNot($original->id)->sole();
+    $frozen = json_decode($replacement->external_account_secret, true);
+    expect($original->fresh()->status)->toBe('rejected')->and($original->fresh()->getRawOriginal('external_account_secret'))->toBe($ciphertext)
+        ->and($replacement->metadata['replaces_rejected_attempt_id'])->toBe($original->id)
+        ->and($calls[1]['key'])->toBe($frozen['key'])->not->toBe($calls[0]['key'])
+        ->and($frozen['payload']['email'])->toBe('original@example.test')
+        ->and($frozen['payload']['capabilities']['transfers']['requested'])->toBe('true')
+        ->and($this->tenant->paymentAccount()->exists())->toBeFalse();
+    $this->post(paymentSetupUrl($this, '/stripe/start'), ['email' => 'another@example.test'])->assertRedirect('https://connect.stripe.com/setup/corrected');
+    Http::assertSent(fn ($request) => $request->url() === 'https://api.stripe.com/v1/accounts'
+        && $request->header('Idempotency-Key')[0] === $frozen['key'] && $request->data() === $frozen['payload']);
+    expect(IntegrationConnection::where('provider', 'tenant_stripe_onboarding')->count())->toBe(2)
+        ->and($this->tenant->paymentAccount()->sole()->routingMode())->toBe('direct');
+});
+
+it('does not replace a legacy account request for an uncertain or different rejection', function (int $status) {
+    $original = legacyCardOnlyAttempt($this);
+    Http::fake(['https://api.stripe.com/v1/accounts' => Http::response(['error' => ['type' => 'invalid_request_error',
+        'message' => $status === 500 ? 'Accounts do not currently support `card_payments` without `transfers`.' : 'A different validation error']], $status)]);
+    $this->actingAs($this->owner)->postJson(paymentSetupUrl($this, '/stripe/start'), ['email' => 'owner@example.test'])->assertStatus(502);
+    expect(IntegrationConnection::where('provider', 'tenant_stripe_onboarding')->count())->toBe(1)
+        ->and($original->fresh()->status)->toBe('pending')->and($this->tenant->paymentAccount()->exists())->toBeFalse();
+})->with([400, 500]);
 
 it('keeps a legacy Express reservation Express even when the default policy changes', function () {
     config()->set('tenant_payments.legacy_express_tenants', [$this->tenant->slug]);

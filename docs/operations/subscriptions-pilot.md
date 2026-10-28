@@ -48,6 +48,11 @@ the preparation command or report.
   payments setup, with the same exact tenant rollout allowlists. Account creation
   is separate from collection readiness. The owner requested a new Modern Forestry
   Standard Stripe account; preserve other merchants, frozen attempts and routing.
+  Stripe requires both card_payments and transfers capabilities even for Standard
+  direct-charge accounts. Only its exact HTTP 400 card-without-transfers validation
+  rejection permits a separate corrected reservation. The rejected payload/key
+  stays unchanged; timeouts, ambiguous failures and old attempts cannot create
+  another reservation. This does not change charge routing or move any money.
 - The member's Refresh Shopify order evidence button performs bounded fixed
   GraphQL queries against the original tenant-owned persisted store, checks the
   returned domain/customer and rechecks credentials and membership after I/O.
