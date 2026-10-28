@@ -108,6 +108,27 @@ it('does not grant artwork management to application reviewers or inactive membe
     $user->tenants()->updateExistingPivot($this->tenant->id, ['membership_active' => false]);
     expect(app(WholesaleLabelContext::class)->canManage($user, $this->tenant->id))->toBeFalse();
 });
+it('allows an explicit scoped artwork assignment without replacing application-review access', function () {
+    $user = User::factory()->create(['role' => 'pouring', 'is_active' => true]);
+    $user->tenants()->attach($this->tenant->id, ['role' => 'wholesale_reviewer', 'membership_active' => true]);
+    $access = app(WholesaleLabelContext::class);
+    $grant = ['tenant_id' => $this->tenant->id, 'shop_domain' => 's2vscq-rf.myshopify.com', 'user_id' => (int) $user->id];
+    config(['wholesale_labels.manager_assignments' => [$grant]]);
+    expect($access->canManage($user, $this->tenant->id))->toBeTrue()
+        ->and(app(App\Services\Onboarding\WholesaleApplicationReviewerAccess::class)->allows($user, $this->tenant->id))->toBeTrue();
+    config(['wholesale_labels.manager_assignments' => [array_replace($grant, ['shop_domain' => 'other.myshopify.com'])]]);
+    expect($access->canManage($user, $this->tenant->id))->toBeFalse();
+    config(['wholesale_labels.manager_assignments' => [array_replace($grant, ['tenant_id' => $this->tenant->id + 1])]]);
+    expect($access->canManage($user, $this->tenant->id))->toBeFalse();
+    config(['wholesale_labels.manager_assignments' => [array_replace($grant, ['user_id' => $user->id + 1])]]);
+    expect($access->canManage($user, $this->tenant->id))->toBeFalse();
+    config(['wholesale_labels.manager_assignments' => [$grant]]);
+    $user->tenants()->updateExistingPivot($this->tenant->id, ['membership_active' => false]);
+    expect($access->canManage($user, $this->tenant->id))->toBeFalse();
+    $user->tenants()->updateExistingPivot($this->tenant->id, ['membership_active' => true]);
+    $user->forceFill(['is_active' => false])->save();
+    expect($access->canManage($user, $this->tenant->id))->toBeFalse();
+});
 it('renders an authorized label manager workspace with import and review tools', function () {
     $user = User::factory()->create(['role' => 'admin', 'is_active' => true]);
     $user->tenants()->attach($this->tenant->id, ['role' => 'admin', 'membership_active' => true]);

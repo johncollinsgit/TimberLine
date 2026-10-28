@@ -3,7 +3,13 @@
 This is the Shopify wholesale lane, separate from retail and native Website Commerce.
 Buyer submissions default off (`WHOLESALE_LABELS_ENABLED=false`). Artwork management
 requires an active tenant owner/admin or an explicitly assigned `wholesale_label_manager`.
-Application-review permission does not grant artwork access.
+Application-review permission does not grant artwork access. To add artwork access
+without replacing an existing review role, an authorized operator can set
+`WHOLESALE_LABEL_MANAGERS` to a JSON array of explicit integer `tenant_id`, integer
+`user_id`, and exact `shop_domain` assignments, then rebuild config. Confirm the
+staff assignment with the owner first and record the grant in the staff audit.
+Inactive users or tenant memberships remain denied. An empty array revokes these
+additional grants; it does not change existing tenant roles.
 
 ## Ordering and private evidence
 

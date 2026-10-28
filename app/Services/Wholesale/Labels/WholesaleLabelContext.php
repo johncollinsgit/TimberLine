@@ -60,7 +60,20 @@ class WholesaleLabelContext
         }
         $membership = $user->tenants()->whereKey($tenant)->wherePivot('membership_active', true)->first();
 
-        return $membership && (in_array($membership->pivot->role, ['owner', 'admin', 'wholesale_label_manager'], true)
-            || $user->role === 'admin');
+        if (! $membership) {
+            return false;
+        }
+        if (in_array($membership->pivot->role, ['owner', 'admin', 'wholesale_label_manager'], true) || $user->role === 'admin') {
+            return true;
+        }
+        $assigned = collect((array) config('wholesale_labels.manager_assignments', []))->contains(
+            fn ($grant) => is_array($grant)
+                && ($grant['tenant_id'] ?? null) === $tenant
+                && ($grant['user_id'] ?? null) === (int) $user->id
+                && ($grant['shop_domain'] ?? null) === config('wholesale_labels.shop')
+        );
+
+        return $assigned && ShopifyStore::query()->where('tenant_id', $tenant)
+            ->where('shop_domain', config('wholesale_labels.shop'))->where('store_role', 'wholesale')->exists();
     }
 }
