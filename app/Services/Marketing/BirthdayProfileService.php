@@ -37,7 +37,7 @@ class BirthdayProfileService
             ->where('marketing_profile_id', $profile->id)
             ->first();
 
-        if (! $clear && $existing?->birth_year && empty($payload['birth_year']) && empty($payload['birthday_full_date'])) {
+        if (app(BirthdayClubService::class)->enabled((int) $profile->tenant_id) && ! $clear && $existing?->birth_year && empty($payload['birth_year']) && empty($payload['birthday_full_date'])) {
             $normalized = $this->normalizeBirthday([...$payload, 'birth_year' => (int) $existing->birth_year]);
         }
 

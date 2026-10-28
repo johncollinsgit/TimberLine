@@ -28,7 +28,9 @@
     return date && !Number.isNaN(date.getTime()) ? new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' }).format(date) : '';
   }
   function expired(gift) {
-    return gift.is_expired === true || gift.status === 'expired' || (gift.status !== 'redeemed' && gift.expires_at && new Date(gift.expires_at).getTime() < Date.now());
+    if (gift.status === 'expired') return true;
+    if (typeof gift.is_expired === 'boolean') return gift.is_expired;
+    return gift.status !== 'redeemed' && gift.expires_at && new Date(gift.expires_at).getTime() < Date.now();
   }
   function claimable(gift) {
     return gift && ['issued', 'claimed'].indexOf(gift.status) >= 0 && !expired(gift) && gift.reward_type !== 'candle_cash';

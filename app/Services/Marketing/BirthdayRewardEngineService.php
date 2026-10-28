@@ -69,7 +69,7 @@ class BirthdayRewardEngineService
             ];
         }
 
-        if ($issuance && ($issuance->isExpired() || (string) $issuance->status === 'cancelled')) {
+        if ($issuance && ((string) $issuance->status === 'expired' || ($club->enabled($tenantId) && ($issuance->isExpired() || (string) $issuance->status === 'cancelled')))) {
             return [
                 'state' => 'birthday_reward_expired',
                 'eligible' => false,
@@ -321,7 +321,7 @@ class BirthdayRewardEngineService
     protected function dispatchResultEmail(array $result, array $options): array
     {
         $issued = $result['issuance'] ?? null;
-        if ($issued instanceof BirthdayRewardIssuance && ! $issued->isExpired() && ! in_array($issued->status, ['redeemed', 'cancelled'], true) && (bool) ($options['send_email'] ?? true)) {
+        if ($issued instanceof BirthdayRewardIssuance && (bool) ($options['send_email'] ?? true) && (! app(BirthdayClubService::class)->enabled((int) $issued->marketingProfile?->tenant_id) || (! $issued->isExpired() && ! in_array($issued->status, ['redeemed', 'cancelled'], true)))) {
             try {
                 $result['email_delivery'] = $this->birthdayEmailDispatchService->sendIssuanceEmail(
                     $issued,
