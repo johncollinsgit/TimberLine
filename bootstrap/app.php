@@ -47,6 +47,8 @@ return Application::configure(basePath: dirname(__DIR__))
             return HomeRedirect::pathFor($request->user());
         });
 
+        $middleware->api(prepend: [\App\Http\Middleware\FieldWebSession::class]);
+
         $middleware->alias([
             'role' => \App\Http\Middleware\EnsureUserRole::class,
             'landlord.operator' => \App\Http\Middleware\EnsureLandlordOperator::class,

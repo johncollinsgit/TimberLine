@@ -13,6 +13,10 @@ AI/scanning or initialize a budget. Exact-head checks, protected release and
 actual hosted acceptance remain separate. See
 `docs/operations/enterprise-campus-shell-reconciliation.md`.
 
+## Everbranch Field installable web standard (2026-10-28; source candidate)
+
+The shared Field client now has an installable `/field/` web package using existing mobile sign-in, tenant/resource guards and operational data. Personal job order, high-quality checked photo chunks, multiline message/gallery improvements, task photos and My Hours charts are included. The read-only crew assistant has a separate per-workspace rollout with a shared monthly reservation cap and the existing provider transport; Collins alone has user approval for $25/month. Physical phone installation and production activation require the recorded release checks. See `docs/operations/everbranch-field-web.md`.
+
 ## Public guided campus assistant (source follow-up)
 
 The separate public sample can find/open current fictional jobs, projects,

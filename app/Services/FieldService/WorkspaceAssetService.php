@@ -292,7 +292,7 @@ class WorkspaceAssetService
         $maximumBytes = $this->byteLimitForMime($mime);
         abort_if($fileSize < 1 || $fileSize > $maximumBytes, 422, 'This file exceeds the workspace upload limit.');
         $disk = (string) config('filesystems.workspace_asset_disk', 'local');
-        abort_if($disk === 'local' && $mime !== 'application/pdf', 422, 'Resumable local uploads currently accept PDF documents.');
+        abort_if($disk === 'local' && ! in_array($mime, ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'], true), 422, 'Choose a PDF, JPEG, PNG or WebP file.');
         $fileName = Str::limit(basename($fileName), 255, '');
         $visibility = $visibility === 'owner' ? 'owner' : 'team';
         $caption = $caption ? Str::limit(trim($caption), 255, '') : null;
@@ -381,7 +381,7 @@ class WorkspaceAssetService
     public function storeChunk(Tenant $tenant, User $user, int $uploadId, int $index, int $offset, string $token, string $contentsBase64, string $checksumSha256): array
     {
         $upload = $this->authorizedUpload($tenant, $user, $uploadId, $token);
-        abort_unless($upload->storage_disk === 'local' && $upload->mime_type === 'application/pdf', 409, 'This upload does not accept resumable chunks.');
+        abort_unless($upload->storage_disk === 'local' && in_array($upload->mime_type, ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'], true), 409, 'This upload does not accept resumable chunks.');
         abort_unless($upload->status === 'initialized' && $upload->expires_at->isFuture(), 409, 'This upload is expired or already completed.');
         $contents = base64_decode($contentsBase64, true);
         abort_unless(is_string($contents) && $contents !== '', 422, 'The upload chunk could not be decoded.');
@@ -463,6 +463,11 @@ class WorkspaceAssetService
                     if ($upload->mime_type === 'application/pdf') {
                         $this->assertValidPdfPath($temporaryPdfPath ?: $storage->path($validationPath));
                     }
+                    if ($upload->storage_disk === 'local' && str_starts_with($upload->mime_type, 'image/')) {
+                        $image = @getimagesize($storage->path($validationPath));
+                        abort_unless(is_array($image) && ($image['mime'] ?? '') === $upload->mime_type
+                            && $image[0] > 0 && $image[1] > 0 && $image[0] * $image[1] <= 100000000, 422, 'The uploaded photo is invalid or too large to display.');
+                    }
                 } finally {
                     if ($temporaryPdfPath !== null) {
                         @unlink($temporaryPdfPath);
@@ -498,6 +503,7 @@ class WorkspaceAssetService
                         'file_size' => $size,
                         'checksum' => $actualChecksum,
                         'caption' => $lockedUpload->caption,
+                        'captured_at' => str_starts_with($lockedUpload->mime_type, 'image/') ? now() : null,
                         'tags' => $lockedUpload->mime_type === 'application/pdf' ? ['drawing', 'pdf', $source] : ['direct-upload'],
                         'search_text' => trim($lockedUpload->file_name.' '.$lockedUpload->caption),
                         'metadata' => ['upload_id' => (int) $lockedUpload->id],
