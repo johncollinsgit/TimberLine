@@ -3,7 +3,7 @@
   const jobKinds={ 'job.create':'New job','project.create':'Create project','project.update':'Edit project','project.archive':'Archive project','task.create':'Add task','task.update':'Edit task','task.delete':'Remove task','request.plan':'Move & assign ticket'};
   function jobField(id,show){$(id).hidden=!show;}
   function jobStatus(text,error=false){$('job-wizard-status').textContent=text;$('job-wizard-status').classList.toggle('notice-error',error);}
-  function jobLocked(locked){for(const input of jobForm.querySelectorAll('input,select,textarea'))input.disabled=locked;for(const id of ['job-next','job-back','job-save'])$(id).disabled=locked;$('job-retry').hidden=!pendingUncertain;if(!locked&&jobWizard)$('job-department').disabled=!['job.create','request.plan'].includes(jobWizard.action);}
+  function jobLocked(locked){for(const input of jobForm.querySelectorAll('input,select,textarea'))input.disabled=locked;for(const id of ['job-next','job-back','job-save'])$(id).disabled=locked;$('job-retry').hidden=!pendingUncertain;if(!locked&&jobWizard){$('job-department').disabled=!['job.create','request.plan'].includes(jobWizard.action);if(transport.mode==='shared'&&jobWizard.action==='task.update'&&jobWizard.record?.shared_ticket_fields_readonly)for(const id of ['job-priority','job-person','job-building','job-location'])$(id).disabled=true;}}
   function jobStep(step){
     if(!jobWizard)return;jobWizard.step=step;
     jobForm.querySelectorAll('[data-job-step]').forEach(node=>node.hidden=Number(node.dataset.jobStep)!==step);
@@ -88,6 +88,7 @@
     if(['job.create','task.create','task.update'].includes(action))body.priority=$('job-priority').value;
     if(action==='job.create')body.request_type=$('job-type').value;
     if(['job.create','task.create','task.update','request.plan'].includes(action))body.assignee_id=$('job-person').value?(transport.mode==='shared'?$('job-person').value:Number($('job-person').value)):null;
+    if(transport.mode==='shared'&&action==='task.update'&&state.record.shared_ticket_fields_readonly){body.priority=state.record.priority;body.assignee_id=state.record.assignee_id;}
     if(['task.create','request.plan'].includes(action))body.project_id=$('job-project').value;
     if(action==='request.plan'){body.target_area_id=jobTarget.selected_area_id;body.acknowledge_routing=$('job-confirm').checked;}
     if(action==='task.delete')body.acknowledge_removal=$('job-confirm').checked;

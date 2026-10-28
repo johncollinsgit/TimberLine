@@ -287,3 +287,19 @@ test('comment bridge first admits an actual full active-selection projection aft
     assert.deepEqual(f.calls.at(-1).body.selection,active);
     assert.equal(f.writes,0);
 });
+
+test('shared ticket DTO distinguishes admin editing from ordinary manager linked-task restrictions without changing source records', async () => {
+    for (const persona of ['demo_manager', 'manager']) {
+        const f = fixture(), selected = {...selection, persona};
+        f.setHandler(() => { const value = f.project(selected); if (persona !== 'demo_manager') { value.permitted_actions = value.permitted_actions.filter(a => !a.startsWith('ticket.') || a === 'ticket.create'); value.graph.tickets.forEach(t => t.allowed_actions = []); } return response(value); });
+        const view = await f.adapter.readSelection(selected), before = JSON.stringify(view), d = f.adapter.data(view, A);
+        assert.equal(d.requests[0].can_edit, persona === 'demo_manager');
+        assert.equal(d.requests[0].can_coordinate, persona === 'demo_manager');
+        assert.equal(d.tasks[0].shared_ticket_fields_readonly, persona !== 'demo_manager');
+        assert.equal(d.tasks[0].can_edit, true, 'Manager retains unrelated task edits');
+        assert.equal(d.can_submit, true); assert.equal(d.can_coordinate, true, 'Unrelated project authority remains separate');
+        assert.equal(JSON.stringify(view), before); assert.equal(f.writes, 0); assert.equal(f.values.size, 0);
+        const unlinked = plain(view); unlinked.graph.tickets = [];
+        assert.equal(f.adapter.data(unlinked, A).tasks[0].shared_ticket_fields_readonly, false);
+    }
+});

@@ -6,3 +6,16 @@ test('wizard retains opening revision and atomic child IDs through target read a
 test('new job uses one submit with unchanged opening pin and fictional string assignee',async()=>{const f=fixture();f.c.hooks.openJobWizard('job.create');await f.ready();f.$('job-title').value='Fictional job';f.$('job-description').value='Exact unsent details';f.$('job-person').value='worker-2';f.$('job-priority').value='high';f.$('job-type').value='maintenance';await f.$('job-wizard-form').onsubmit({preventDefault(){}});assert.equal(f.commands.length,1);const {body,context}=f.commands[0];assert.equal(body.assignee_id,'worker-2');assert.equal(body.description,'Exact unsent details');assert.equal(body.request_type,'maintenance');assert.equal(context.pin.revision,1);assert.ok(context.child_ids.task_id);assert.ok(context.child_ids.ticket_id);assert.notEqual(context.child_ids.task_id,context.child_ids.ticket_id);});
 
 test('shared task form hides unsupported type while preserving visible editable priority',async()=>{const f=fixture();f.c.hooks.openJobWizard('task.update',{id:'task',version:1,title:'Fictional task',assignee_id:'worker-2'}, {id:'project',version:7});await f.ready();assert.equal(f.$('job-type').label.hidden,true);assert.equal(f.$('job-type').disabled,true);assert.equal(f.$('job-classification').hidden,false);assert.equal(f.$('job-priority').disabled,false);});
+
+test('ordinary shared manager linked-task form preserves sensitive fields through unlock reopen and attempted control tampering',async()=>{
+ const f=fixture(),record={id:'task',version:3,title:'Existing task',priority:'low',assignee_id:'worker-2',shared_ticket_fields_readonly:true};
+ f.c.hooks.openJobWizard('task.update',record,{id:'project',version:7});await f.ready();
+ for(const id of ['job-priority','job-person','job-building','job-location'])assert.equal(f.$(id).disabled,true,id);
+ f.$('job-title').value='Allowed unrelated task title';f.$('job-due').value='2026-11-12';f.c.hooks.closeJobWizard();f.c.hooks.openJobWizard('task.update',record,{id:'project',version:7});
+ assert.equal(f.$('job-priority').disabled,true);assert.equal(f.$('job-person').disabled,true);
+ f.$('job-priority').value='urgent';f.$('job-person').value='tampered-person';
+ const body=f.c.hooks.jobBody();assert.equal(body.priority,'low');assert.equal(body.assignee_id,'worker-2');assert.equal(body.title,'Allowed unrelated task title');assert.equal(body.due_on,'2026-11-12');assert.equal(body.expected_version,3);assert.equal(f.commands.length,0);
+});
+test('shared admin unlinked task and native forms retain their original editable fields',async()=>{
+ for(const [mode,restricted]of [['shared',false],['private',true]]){const f=fixture();f.c.transport.mode=mode;f.c.hooks.openJobWizard('task.update',{id:'task',version:1,title:'Task',priority:'high',assignee_id:'worker-2',shared_ticket_fields_readonly:restricted},{id:'project',version:7});await f.ready();assert.equal(f.$('job-priority').disabled,false);assert.equal(f.$('job-person').disabled,false);f.$('job-priority').value='urgent';f.$('job-person').value='worker-2';assert.equal(f.c.hooks.jobBody().priority,'urgent');}
+});

@@ -1,3 +1,25 @@
+## Public guided campus assistant (source follow-up)
+
+The separate public sample can find/open current fictional jobs, projects,
+tasks and requests, report recorded status/rank and guide a new ticket draft.
+It is explicitly simulated and provider-free. Missing facts remain unknown;
+event work is not a separate event schedule. Fresh projection and mounted
+persona checks fence navigation. A bounded persona draft leads to a summary
+and the existing form's explicit Submit; prior files/drafts/unknown intents
+are preserved. No native/private bridge, provider or edition change. See
+`docs/operations/enterprise-public-requests.md`.
+
+## Shared fictional ticket policy (source follow-up)
+
+The existing Demo admin perspective alone edits submitted ticket fields,
+classification and assignment. Requester and Worker keep ticket creation;
+ordinary Manager keeps unrelated task/project/plan authority. Actual linked
+task priority, assignee and building changes cannot bypass this boundary.
+Unchanged values preserve otherwise permitted task edits and independent
+conversation/task-status permissions. No native identity, grant, provider,
+runtime activation or immutable edition changes. See
+`docs/operations/proposal-reviewer-workspace.md`.
+
 ## Public campus identity and map controls (October 28 source follow-up)
 
 The separate public sample uses the official college SVG and displays the
