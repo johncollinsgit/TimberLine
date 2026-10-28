@@ -13,6 +13,9 @@ class FieldCrewNavigation
     public function resolve(Tenant $tenant, User $user, string $question, ?int $contextJob = null): ?array
     {
         $authority = app(FieldCrewAssistant::class)->authorize($tenant, $user);
+        if ($clock = app(FieldCrewClockStatus::class)->answer($tenant, $user, $question)) {
+            return $clock;
+        }
         $access = app(FieldServiceAccessService::class);
         $admin = in_array($authority['role'], ['admin', 'owner', 'tenant_owner'], true)
             && $access->canViewCustomerContact($user, $tenant);
@@ -24,6 +27,11 @@ class FieldCrewNavigation
             return null;
         }
         $target = trim(preg_replace('/\s+please$/u', '', $match[1]) ?? '');
+        if (in_array($target, ['materials requested', 'material requests', 'materials list'], true)) {
+            return in_array($authority['role'], ['admin', 'owner', 'tenant_owner'], true)
+                ? $this->reply('Opening material requests.', ['kind' => 'page', 'page' => 'material_requests', 'label' => 'Materials requested'])
+                : $this->reply('The full material request list is admin-only. Open your job to see its materials.');
+        }
         $pages = ['home' => 'home', 'jobs' => 'work', 'work' => 'work', 'clock' => 'clock', 'time clock' => 'clock',
             'my hours' => 'hours', 'hours' => 'hours', 'messages' => 'messages', 'team messages' => 'messages', 'account' => 'account'];
         if (isset($pages[$target])) {

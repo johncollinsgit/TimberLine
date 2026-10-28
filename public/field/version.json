@@ -1,8 +1,8 @@
 {
   "version": "2.3.30-web.3",
-  "build": "868cf4498feee3b3",
+  "build": "b13744b408907259",
   "baseline": "Everbranch Field Showcase 2.3.29 + workspace assistant",
-  "built_at": "2026-10-28T17:13:07.918Z",
+  "built_at": "2026-10-28T17:23:07.976Z",
   "source_repository": "johncollinsgit/everbranch-mobile",
-  "source_commit": "e836938"
+  "source_commit": "1df3dfe"
 }
