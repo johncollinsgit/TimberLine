@@ -45,7 +45,15 @@ class EnforceCanonicalRuntimeHost
             || $request->is('forgot-password', 'reset-password', 'reset-password/*')
             || $request->is('email/confirm/*')
             || ($request->is('login') && $request->boolean('mobile_email'))
-            || ($mobileAuthCookiePresent && $request->is('login', 'logout', 'two-factor-challenge', 'email/verify*', 'email/verification-notification'));
+            || ($mobileAuthCookiePresent && $request->is(
+                'auth/google/redirect',
+                'auth/google/callback',
+                'login',
+                'logout',
+                'two-factor-challenge',
+                'email/verify*',
+                'email/verification-notification',
+            ));
         if ($canonicalAuthHost && $mobileAuthRoute) {
             config([
                 'session.cookie' => 'everbranch-mobile-auth-session',

@@ -126,7 +126,11 @@ class FieldWebController extends Controller
     public function liveAssistant(Request $request, \App\Services\FieldService\FieldCrewLiveVoice $voice)
     {
         [$tenant, $user] = $this->context($request);
-        $data = $request->validate(['sdp' => ['required', 'string', 'max:180000']]);
+        $data = $request->validate(['sdp' => ['required', 'string', 'max:180000', static function (string $attribute, mixed $value, \Closure $fail): void {
+            if (! is_string($value) || ! str_starts_with($value, "v=0\r\n") || ! str_ends_with($value, "\r\n")) {
+                $fail('A complete WebRTC offer is required.');
+            }
+        }]]);
 
         return response()->json($voice->start($tenant, $user, $data['sdp']))->header('Cache-Control', 'no-store, private');
     }
