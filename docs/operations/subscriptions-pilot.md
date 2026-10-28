@@ -85,7 +85,7 @@ price and included Modern Forestry entitlement are unchanged.
 requires existing merchant setup/read rollout. Collection requires current
 canonical Stripe readiness, a genuine signed setup callback bound to this
 merchant, and `SUBSCRIPTIONS_PILOT_LIVE_WEBHOOKS_VERIFIED`. The separate
-`SUBSCRIPTIONS_PILOT_WEBHOOK_SECRET` signs connected-account events at
+`SUBSCRIPTIONS_PILOT_STRIPE_WEBHOOK_SECRET` signs connected-account events at
 `/webhooks/subscriptions/stripe` (Stripe API 2024-06-20). Configure Checkout
 completion, PaymentIntent and charge/refund events; preserve other endpoints.
 Never mark callback proof from a synthetic event or redirect.
