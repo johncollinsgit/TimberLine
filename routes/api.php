@@ -115,7 +115,7 @@ Route::prefix('mobile/v1')->name('mobile.v1.')->group(function (): void {
                 Route::get('/field-service/web/job-order', [\App\Http\Controllers\Mobile\FieldWebController::class, 'order'])->middleware('abilities:mobile:read');
                 Route::get('/field-service/web/materials', [\App\Http\Controllers\Mobile\FieldWebController::class, 'materials'])->middleware('abilities:mobile:read');
                 Route::put('/field-service/web/job-order', [\App\Http\Controllers\Mobile\FieldWebController::class, 'saveOrder'])->middleware('abilities:mobile:write');
-                Route::post('/field-service/web/assistant', [\App\Http\Controllers\Mobile\FieldWebController::class, 'assistant'])->middleware(['abilities:mobile:write', 'throttle:10,1']);
+                Route::post('/field-service/web/assistant', [\App\Http\Controllers\Mobile\FieldWebController::class, 'assistant'])->middleware(['abilities:mobile:write', 'throttle:10,1,field-crew-assistant:']);
                 Route::get('/field-service/my-day', [EverbranchMobileFieldServiceController::class, 'myDay'])->middleware('abilities:mobile:read')->name('workspace.field-service.my-day');
                 Route::get('/field-service/tasks', [EverbranchMobileFieldServiceController::class, 'tasks'])->middleware('abilities:mobile:read')->name('workspace.field-service.tasks.index');
                 Route::get('/field-service/clock/current', [EverbranchMobileTimeClockController::class, 'current'])->middleware('abilities:mobile:read')->name('workspace.field-service.clock.current');
