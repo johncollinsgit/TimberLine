@@ -10,6 +10,11 @@
   {% render 'quick-order-list', product: product %}
 {% endcomment %}
 
+{% assign mf_quick_label_service = false %}
+{% if settings.mf_custom_labels_enabled %}{% if product.handle == 'custom-label-set-up' or product.handle == 'use-my-custom-label' %}{% assign mf_quick_label_service = true %}{% endif %}{% endif %}
+{% if mf_quick_label_service %}
+  {% render 'mf-custom-label-entry', product: product %}
+{% else %}
 {% comment %} TODO: enable theme-check once `line_items_for` is accepted as valid filter {% endcomment %}
 {% # theme-check-disable %}
 {%- assign items_in_cart = cart | line_items_for: product | sum: 'quantity' -%}
@@ -291,3 +296,5 @@
     <span class="quick-order-list-error-message caption-large" role="alert"></span>
   </template>
 </div>
+
+{% endif %}

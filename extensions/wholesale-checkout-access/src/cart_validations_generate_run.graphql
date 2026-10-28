@@ -1,4 +1,5 @@
 query CartValidationsGenerateRunInput {
+  buyerJourney { step }
   shop { labelProgram: metafield(namespace: "forestry", key: "custom_labels_enabled") { value } }
   cart {
     labelChoice: attribute(key: "Custom labels") { value }

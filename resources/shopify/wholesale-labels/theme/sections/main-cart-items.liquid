@@ -365,6 +365,9 @@
 
                     <!-- Quantity -->
                     <td class="cart-item__quantity cart-item__quantity--info">
+                      {% if settings.mf_custom_labels_enabled and item.product.handle == 'custom-label-set-up' or settings.mf_custom_labels_enabled and item.product.handle == 'use-my-custom-label' %}
+                        <div class="mf-label-cart-service"><span>1 · {{ 'wholesale.labels.per_order' | t }}</span><button type="button" class="button button--secondary" data-mf-label-open="reuse">{{ 'wholesale.labels.edit' | t }}</button><button type="button" class="button button--secondary" data-mf-label-remove>{{ 'wholesale.labels.remove' | t }}</button></div>
+                      {% else %}
                       <quantity-popover>
                         <div class="cart-item__quantity-wrapper quantity-popover-wrapper">
                           <label class="visually-hidden" for="Quantity-{{ item.index | plus: 1 }}">
@@ -384,7 +387,7 @@
                               class="quantity cart-quantity"
                               data-line-item-key="{{ item.key }}"
                               data-variant-id="{{ item.variant.id }}"
-                              data-properties='{{ item.properties | json }}'
+                              data-properties="{{ item.properties | json | escape }}"
                             >
                               <button class="quantity__button" name="minus" type="button">
                                 <span class="visually-hidden">{{ 'products.product.quantity.decrease' | t: product: item.product.title | escape }}</span>
@@ -449,6 +452,7 @@
                           <span class="svg-wrapper">{{- 'icon-error.svg' | inline_asset_content -}}</span>
                         </div>
                       </quantity-popover>
+                      {% endif %}
                     </td>
 
                     <!-- Desktop Totals -->

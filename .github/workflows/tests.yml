@@ -116,6 +116,14 @@ jobs:
       - name: Verify Team preservation and work contracts with synthetic data
         run: npm run test:team-work-local
 
+      - name: Prepare safe PDF conversion
+        run: |
+          if ! command -v gs >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends ghostscript
+          fi
+          echo "WHOLESALE_LABEL_GS=$(command -v gs)" >> "$GITHUB_ENV"
+
       - name: Build pinned custom-label vector tracer
         run: |
           rustup target add x86_64-unknown-linux-musl
@@ -149,6 +157,7 @@ jobs:
         run: |
           node tests/e2e/wholesale-quantity-browser.mjs
           node tests/e2e/wholesale-labels-browser.mjs
+          node tests/e2e/wholesale-reorder-browser.mjs
           node --test scripts/labels/batch-import.test.mjs
           npx tsc --noEmit -p extensions/wholesale-order-notes/tsconfig.json
 

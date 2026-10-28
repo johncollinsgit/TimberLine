@@ -10,7 +10,7 @@ function OrderRequest() {
     setBusy(true);setError('');
     try {
       const token=await shopify.sessionToken.get();
-      const response=await fetch('https://app.theeverbranch.com/shopify/wholesale/order-note',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({order_id:shopify.orderConfirmation.value.order.id,note})});
+      const response=await fetch(`https://${shopify.shop.myshopifyDomain}/apps/forestry/wholesale/order-note`,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({order_id:shopify.orderConfirmation.value.order.id,note})});
       const result=await response.json();if(!response.ok)throw new Error(result.message||copy('retry'));
       setSaved(true);
     }catch(error){setError(error.message||copy('retry'));}finally{setBusy(false);}

@@ -60,6 +60,9 @@
       },
       "shop": {
         "labelProgram": null
+      },
+      "buyerJourney": {
+        "step": "CHECKOUT_COMPLETION"
       }
     },
     "output": {

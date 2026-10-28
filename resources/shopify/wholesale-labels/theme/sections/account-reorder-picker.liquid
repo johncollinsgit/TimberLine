@@ -1,0 +1,732 @@
+{%- if customer -%}
+  {%- style -%}
+    .section-{{ section.id }}-padding {
+      padding-top: {{ section.settings.padding_top | times: 0.75 | round: 0 }}px;
+      padding-bottom: {{ section.settings.padding_bottom | times: 0.75 | round: 0 }}px;
+    }
+
+    @media screen and (min-width: 750px) {
+      .section-{{ section.id }}-padding {
+        padding-top: {{ section.settings.padding_top }}px;
+        padding-bottom: {{ section.settings.padding_bottom }}px;
+      }
+    }
+
+    .mf-reorder-section {
+      margin: 0 auto;
+      max-width: var(--page-width);
+      padding-left: 2rem;
+      padding-right: 2rem;
+    }
+
+    @media screen and (min-width: 750px) {
+      .mf-reorder-section {
+        padding-left: 5rem;
+        padding-right: 5rem;
+      }
+    }
+
+    .mf-reorder-wrap {
+      border: 1px solid rgba(var(--color-foreground), 0.12);
+      border-radius: 2rem;
+      padding: clamp(1.6rem, 2.4vw, 2.6rem);
+      background:
+        radial-gradient(42rem 22rem at 8% -8%, rgba(var(--color-foreground), 0.08), transparent 72%),
+        linear-gradient(180deg, rgba(var(--color-background), 0.98), rgba(var(--color-background), 0.94));
+      box-shadow: 0 1.2rem 3rem rgba(0, 0, 0, 0.08);
+    }
+
+    .mf-reorder-head { margin-bottom: 1.8rem; }
+
+    .mf-reorder-kicker {
+      margin: 0;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 1.1rem;
+      font-weight: 700;
+      opacity: 0.72;
+    }
+
+    .mf-reorder-title {
+      margin: 0.6rem 0 0.5rem;
+      font-size: clamp(2.2rem, 3vw, 3rem);
+      line-height: 1.1;
+    }
+
+    .mf-reorder-subtitle {
+      margin: 0;
+      max-width: 66ch;
+      opacity: 0.78;
+      line-height: 1.5;
+    }
+
+    .mf-reorder-grid {
+      display: grid;
+      gap: 1.2rem;
+      grid-template-columns: repeat(1, minmax(0, 1fr));
+    }
+
+    .mf-reorder-card-input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .mf-reorder-card-wrap {
+      position: relative;
+    }
+
+    .mf-reorder-card {
+      border: 1px solid rgba(var(--color-foreground), 0.16);
+      border-radius: 1.6rem;
+      background: rgba(var(--color-background), 0.92);
+      padding: 1.5rem;
+      cursor: pointer;
+      display: grid;
+      gap: 1rem;
+      width: 100%;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    }
+
+    .mf-reorder-card:hover {
+      border-color: rgba(var(--color-foreground), 0.36);
+      transform: translateY(-1px);
+    }
+
+    .mf-reorder-card-input:focus-visible + .mf-reorder-card {
+      box-shadow: 0 0 0 0.2rem rgba(var(--color-foreground), 0.18);
+    }
+
+    .mf-reorder-card-input:checked + .mf-reorder-card {
+      border-color: rgba(var(--color-foreground), 0.62);
+      box-shadow: 0 0 0 0.2rem rgba(var(--color-foreground), 0.15);
+      background: rgba(var(--color-background), 1);
+    }
+
+    .mf-reorder-card--unavailable {
+      opacity: 0.75;
+    }
+
+    .mf-reorder-card-top {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.8rem;
+      flex-wrap: wrap;
+    }
+
+    .mf-reorder-order-name {
+      margin: 0;
+      font-size: 1.6rem;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .mf-reorder-date {
+      margin: 0;
+      opacity: 0.72;
+      font-size: 1.2rem;
+    }
+
+    .mf-reorder-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.55rem;
+      margin: 0;
+      padding: 0 !important;
+      padding-inline-start: 0 !important;
+      list-style: none;
+    }
+
+    .mf-reorder-meta li {
+      font-size: 1.1rem;
+      border: 1px solid rgba(var(--color-foreground), 0.18);
+      border-radius: 999px;
+      padding: 0.35rem 0.75rem;
+      background: rgba(var(--color-foreground), 0.04);
+    }
+
+    .mf-reorder-lines {
+      margin: 0 !important;
+      padding: 0 !important;
+      padding-inline-start: 0 !important;
+      list-style: none;
+      display: grid;
+      gap: 0.45rem;
+      max-height: 22rem;
+      overflow-y: auto;
+      padding-right: 0.4rem;
+    }
+
+    .mf-reorder-lines li {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      font-size: 1.28rem;
+      line-height: 1.35;
+    }
+
+    .mf-reorder-line-title {
+      flex: 1;
+      min-width: 0;
+      text-align: left;
+      text-wrap: pretty;
+    }
+
+    .mf-reorder-line-qty {
+      font-weight: 700;
+      opacity: 0.82;
+      white-space: nowrap;
+    }
+
+    .mf-reorder-actions {
+      margin-top: 1.4rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .mf-reorder-submit {
+      min-width: 24rem;
+      border-radius: 999px !important;
+      box-shadow: none !important;
+      border: 0 !important;
+      outline: 0 !important;
+      min-height: 4.8rem;
+      padding-inline: 2.2rem;
+    }
+
+    .mf-reorder-submit::before,
+    .mf-reorder-submit::after {
+      display: none !important;
+    }
+
+    .mf-reorder-submit[disabled] {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    .mf-reorder-status {
+      margin: 0;
+      min-height: 2rem;
+      font-size: 1.25rem;
+      line-height: 1.3;
+    }
+
+    .mf-reorder-status.is-error {
+      color: rgb(176, 46, 46);
+    }
+
+    .mf-reorder-status.is-success {
+      color: rgb(36, 118, 48);
+    }
+
+    .mf-reorder-empty {
+      margin: 0;
+      opacity: 0.76;
+    }
+
+    @media screen and (min-width: 990px) {
+      .mf-reorder-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+  {%- endstyle -%}
+
+  <section id="reorder-previous-order" class="mf-reorder-section section-{{ section.id }}-padding">
+    <div>
+      <div class="mf-reorder-wrap">
+        <header class="mf-reorder-head">
+          <p class="mf-reorder-kicker">Reorder Previous Order</p>
+          <h2 class="mf-reorder-title">Choose an order to refill your cart</h2>
+          <p class="mf-reorder-subtitle">
+            Select one previous order to replace your current cart. Candles and wax melts order in multiples of 3; custom labels are chosen again before checkout.
+          </p>
+        </header>
+
+        {%- if customer.orders.size > 0 -%}
+          <form id="MFReorderForm-{{ section.id }}" novalidate>
+            <div class="mf-reorder-grid">
+              {%- for order in customer.orders limit: section.settings.orders_to_show -%}
+                {%- assign valid_line_count = 0 -%}
+                {%- capture order_items_json -%}
+                  [
+                    {%- for line_item in order.line_items -%}
+                      {%- assign mf_reorder_service = false -%}
+                      {%- if line_item.product.handle == 'custom-label-set-up' or line_item.product.handle == 'use-my-custom-label' -%}{%- assign mf_reorder_service = true -%}{%- endif -%}
+                      {%- if line_item.quantity > 0 and mf_reorder_service == false -%}
+                        {%- assign scent_name = line_item.title | split: ' - ' | first | strip -%}
+                        {%- assign wholesale_scent_name = 'Wholesale ' | append: scent_name -%}
+                        {%- if valid_line_count > 0 -%},{%- endif -%}
+                        {
+                          "legacy_variant_id": {% if line_item.variant_id %}{{ line_item.variant_id }}{% else %}null{% endif %},
+                          "quantity": {{ line_item.quantity }},
+                          "increment": {% render 'mf-order-increment', product: line_item.product, variant: line_item.variant %},
+                          "properties": {{ line_item.properties | json }},
+                          "title": {{ line_item.title | json }},
+                          "scent": {{ scent_name | json }},
+                          "wholesale_title": {{ wholesale_scent_name | json }},
+                          "variant_title": {{ line_item.variant_title | default: '' | json }}
+                        }
+                        {%- assign valid_line_count = valid_line_count | plus: 1 -%}
+                      {%- endif -%}
+                    {%- endfor -%}
+                  ]
+                {%- endcapture -%}
+                {%- assign card_input_id = 'MFReorderOrder-' | append: section.id | append: '-' | append: order.id -%}
+
+                <div class="mf-reorder-card-wrap">
+                  <input
+                    class="mf-reorder-card-input"
+                    type="radio"
+                    name="reorder_order"
+                    id="{{ card_input_id }}"
+                    value="{{ order.id }}"
+                    data-order-items='{{ order_items_json | strip | escape }}'
+                    data-order-item-count="{{ valid_line_count }}"
+                    data-order-name="{{ order.name | escape }}"
+                  >
+                  <label class="mf-reorder-card{% if valid_line_count == 0 %} mf-reorder-card--unavailable{% endif %}" for="{{ card_input_id }}">
+                    <div class="mf-reorder-card-top">
+                      <p class="mf-reorder-order-name">{{ order.name }}</p>
+                      <p class="mf-reorder-date">{{ order.created_at | date: '%b %d, %Y' }}</p>
+                    </div>
+
+                    <ul class="mf-reorder-meta">
+                      <li>{{ order.line_items.size }} items</li>
+                      <li>{{ order.financial_status_label }}</li>
+                      <li>{{ order.total_price | money_with_currency }}</li>
+                      {%- if valid_line_count == 0 -%}
+                        <li>Unavailable to reorder</li>
+                      {%- endif -%}
+                    </ul>
+
+                    <ul class="mf-reorder-lines" role="list">
+                      {%- for line_item in order.line_items -%}
+                        {%- assign scent_name = line_item.title | split: ' - ' | first | strip -%}
+                        {%- assign wholesale_scent_name = 'Wholesale ' | append: scent_name -%}
+                        <li>
+                          <span class="mf-reorder-line-title">
+                            {{ wholesale_scent_name | escape }}
+                            {%- if line_item.variant_title != blank and line_item.variant_title != 'Default Title' -%}
+                              - {{ line_item.variant_title | escape }}
+                            {%- endif -%}
+                          </span>
+                          <span class="mf-reorder-line-qty">x{{ line_item.quantity }}</span>
+                        </li>
+                      {%- endfor -%}
+                    </ul>
+                  </label>
+                </div>
+              {%- endfor -%}
+            </div>
+
+            <div class="mf-reorder-actions">
+              <button class="button mf-reorder-submit" type="submit" disabled>
+                Load selected order into cart
+              </button>
+              <p class="mf-reorder-status" role="status" aria-live="polite"></p>
+            </div>
+          </form>
+        {%- else -%}
+          <p class="mf-reorder-empty">No previous orders found yet.</p>
+        {%- endif -%}
+      </div>
+    </div>
+  </section>
+
+  <script>
+    (() => {
+      const form = document.getElementById('MFReorderForm-{{ section.id }}');
+      if (!form) return;
+
+      const status = form.querySelector('.mf-reorder-status');
+      const submitButton = form.querySelector('.mf-reorder-submit');
+      const radios = Array.from(form.querySelectorAll('input[name="reorder_order"]'));
+      const productCache = new Map();
+      const wholesaleByScentCache = new Map();
+      let busy = false;
+
+      function setStatus(message, type) {
+        if (!status) return;
+        status.textContent = message || '';
+        status.classList.remove('is-error', 'is-success');
+        if (type) status.classList.add(type);
+      }
+
+      function getSelectedRadio() {
+        return form.querySelector('input[name="reorder_order"]:checked');
+      }
+
+      function selectedHasItems() {
+        const selected = getSelectedRadio();
+        if (!selected) return false;
+        return Number(selected.dataset.orderItemCount || '0') > 0;
+      }
+
+      function syncSubmitState() {
+        submitButton.disabled = busy || !selectedHasItems();
+      }
+
+      function handleSelectionChange() {
+        if (busy) return;
+        if (!getSelectedRadio()) {
+          setStatus('', '');
+        } else if (!selectedHasItems()) {
+          setStatus('This order can’t be reordered because its variants are no longer available.', 'is-error');
+        } else {
+          setStatus('', '');
+        }
+        syncSubmitState();
+      }
+
+      async function requestJSON(url, payload) {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          credentials: 'same-origin',
+          body: payload ? JSON.stringify(payload) : '{}'
+        });
+
+        if (!response.ok) {
+          let detail = '';
+          try {
+            const json = await response.json();
+            detail = json.description || json.message || '';
+          } catch (error) {
+            detail = '';
+          }
+          throw new Error(detail || 'Request failed');
+        }
+
+        return response.json();
+      }
+
+      function handleize(value) {
+        return String(value || '')
+          .normalize('NFKD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+          .replace(/&/g, ' and ')
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+      }
+
+      function normalizeLabel(value) {
+        return String(value || '')
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, ' ');
+      }
+
+      async function fetchProductByHandle(root, handle) {
+        if (!handle) return null;
+        if (productCache.has(handle)) return productCache.get(handle);
+
+        const request = fetch(`${root}products/${handle}.js`, {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+          credentials: 'same-origin'
+        })
+          .then((response) => (response.ok ? response.json() : null))
+          .catch(() => null);
+
+        productCache.set(handle, request);
+        return request;
+      }
+
+      async function searchWholesaleProducts(root, query) {
+        const response = await fetch(
+          `${root}search/suggest.json?q=${encodeURIComponent(query)}&resources[type]=product&resources[limit]=10`,
+          {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' },
+            credentials: 'same-origin'
+          }
+        ).catch(() => null);
+
+        if (!response || !response.ok) return [];
+
+        const json = await response.json().catch(() => null);
+        const products = json && json.resources && json.resources.results && json.resources.results.products;
+        return Array.isArray(products) ? products : [];
+      }
+
+      function scoreWholesaleCandidate(product, scentLabel, scentHandle) {
+        const title = normalizeLabel(product && product.title);
+        const handle = String((product && product.handle) || '').toLowerCase();
+        const productType = normalizeLabel(product && product.type);
+        const tags = Array.isArray(product && product.tags)
+          ? product.tags.map((tag) => normalizeLabel(tag))
+          : [];
+
+        let score = 0;
+        if (title.includes('wholesale')) score += 2;
+        if (title.includes(scentLabel)) score += 5;
+        if (title === `wholesale ${scentLabel}`) score += 5;
+        if (title.startsWith(`wholesale ${scentLabel}`)) score += 3;
+        if (handle.startsWith('wholesale')) score += 2;
+        if (handle.includes(scentHandle)) score += 3;
+        if (productType.includes('wholesale')) score += 1;
+        if (tags.includes('wholesale')) score += 1;
+        return score;
+      }
+
+      async function findWholesaleProductForScent(root, scent) {
+        const scentLabel = normalizeLabel(scent);
+        if (!scentLabel) return null;
+
+        if (wholesaleByScentCache.has(scentLabel)) {
+          return wholesaleByScentCache.get(scentLabel);
+        }
+
+        const lookup = (async () => {
+          const scentHandle = handleize(scentLabel);
+          const directHandles = [
+            `wholesale-${scentHandle}`,
+            `wholesale-new-${scentHandle}`,
+            `wholesale-${scentHandle}-new`
+          ];
+
+          for (const handle of directHandles) {
+            const directProduct = await fetchProductByHandle(root, handle);
+            if (directProduct) return directProduct;
+          }
+
+          const searchProducts = await searchWholesaleProducts(root, `wholesale ${scentLabel}`);
+          const ranked = searchProducts
+            .map((product) => ({ product, score: scoreWholesaleCandidate(product, scentLabel, scentHandle) }))
+            .filter((entry) => entry.score > 0)
+            .sort((a, b) => b.score - a.score);
+
+          for (const entry of ranked) {
+            const candidate = await fetchProductByHandle(root, entry.product.handle);
+            if (candidate) return candidate;
+          }
+
+          return null;
+        })();
+
+        wholesaleByScentCache.set(scentLabel, lookup);
+        return lookup;
+      }
+
+      function pickWholesaleVariant(product, variantTitle) {
+        if (!product || !Array.isArray(product.variants) || !product.variants.length) return null;
+
+        const normalizedTarget = normalizeLabel(variantTitle);
+        if (!normalizedTarget || normalizedTarget === 'default title') {
+          return product.variants.find((variant) => variant.available) || product.variants[0] || null;
+        }
+
+        const exact = product.variants.find((variant) => normalizeLabel(variant.title) === normalizedTarget);
+        if (exact) return exact;
+
+        const loose = product.variants.find((variant) => {
+          const variantLabel = normalizeLabel(variant.title);
+          return variantLabel.includes(normalizedTarget) || normalizedTarget.includes(variantLabel);
+        });
+        if (loose) return loose;
+
+        return product.variants.find((variant) => variant.available) || product.variants[0] || null;
+      }
+
+      function reorderQuantity(item, product, variant) {
+        const regular = /wax\s?melt|candle|cotton wick|cedar wick|wood wick/i.test(`${product?.title || item.title} ${variant?.title || item.variantTitle}`);
+        const increment = regular ? 3 : Number(item.increment) || 3;
+        return Math.max(increment, Math.ceil(item.quantity / increment) * increment);
+      }
+      function reorderProperties(properties) {
+        const pairs = Array.isArray(properties) ? properties.map(p => Array.isArray(p) ? p : [p.name,p.value]) : Object.entries(properties || {});
+        return Object.fromEntries(pairs.filter(([name]) => !['_MF label request','_MF label revision','_MF label mode','Custom label'].includes(name)));
+      }
+      async function resolveWholesaleItems(items, root) {
+        const resolved = [];
+        const unresolved = [];
+
+        for (const item of items) {
+          const scent = item.scent || String(item.title || '').split(' - ')[0] || '';
+          const product = await findWholesaleProductForScent(root, scent);
+          const variant = pickWholesaleVariant(product, item.variantTitle);
+
+          if (variant && Number.isFinite(Number(variant.id))) {
+            resolved.push({
+              id: Number(variant.id),
+              quantity: reorderQuantity(item, product, variant),
+              properties: item.properties,
+              title: item.wholesaleTitle || item.title || `Wholesale ${scent}`
+            });
+            continue;
+          }
+
+          if (Number.isFinite(item.legacyVariantId) && item.legacyVariantId > 0) {
+            resolved.push({
+              id: item.legacyVariantId,
+              quantity: reorderQuantity(item, product, variant),
+              properties: item.properties,
+              title: item.wholesaleTitle || item.title || `Wholesale ${scent}`
+            });
+            continue;
+          }
+
+          unresolved.push(item.wholesaleTitle || item.title || `Wholesale ${scent}`);
+        }
+
+        return { resolved, unresolved };
+      }
+
+      async function refillCart(items, root) {
+        await requestJSON(`${root}cart/clear.js`);
+
+        try {
+          await requestJSON(`${root}cart/add.js`, {
+            items: items.map((item) => ({ id: item.id, quantity: item.quantity, properties: item.properties }))
+          });
+          return [];
+        } catch (bulkError) {
+          const failed = [];
+          for (const item of items) {
+            try {
+              await requestJSON(`${root}cart/add.js`, { id: item.id, quantity: item.quantity, properties: item.properties });
+            } catch (lineError) {
+              failed.push(item.title || `Variant ${item.id}`);
+            }
+          }
+          return failed;
+        }
+      }
+
+      radios.forEach((radio) => {
+        radio.addEventListener('change', handleSelectionChange);
+      });
+
+      if (!getSelectedRadio() && radios.length) {
+        const firstWithItems = radios.find((radio) => Number(radio.dataset.orderItemCount || '0') > 0);
+        (firstWithItems || radios[0]).checked = true;
+      }
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (busy) return;
+
+        const selected = getSelectedRadio();
+        if (!selected) {
+          setStatus('Choose an order first.', 'is-error');
+          return;
+        }
+
+        if (!selectedHasItems()) {
+          setStatus('This order can’t be reordered because its variants are no longer available.', 'is-error');
+          return;
+        }
+
+        let items = [];
+        try {
+          items = JSON.parse(selected.dataset.orderItems || '[]');
+        } catch (error) {
+          setStatus('Could not read that order. Please choose another.', 'is-error');
+          return;
+        }
+
+        items = items
+          .map((item) => ({
+            legacyVariantId: Number(item.legacy_variant_id),
+            quantity: Number(item.quantity),
+            increment: Number(item.increment) || 3,
+            properties: reorderProperties(item.properties),
+            title: item.title,
+            scent: item.scent,
+            wholesaleTitle: item.wholesale_title,
+            variantTitle: item.variant_title
+          }))
+          .filter((item) => Number.isFinite(item.quantity) && item.quantity > 0);
+
+        if (!items.length) {
+          setStatus('That order has no currently reorderable items.', 'is-error');
+          return;
+        }
+
+        busy = true;
+        syncSubmitState();
+        setStatus('Refilling cart from ' + (selected.dataset.orderName || 'selected order') + '...', '');
+
+        const root = (window.Shopify && window.Shopify.routes && window.Shopify.routes.root) || '/';
+
+        try {
+          const { resolved, unresolved } = await resolveWholesaleItems(items, root);
+          if (!resolved.length) {
+            setStatus('No matching wholesale variants were found for this order.', 'is-error');
+            busy = false;
+            syncSubmitState();
+            return;
+          }
+
+          const failedItems = await refillCart(resolved, root);
+          const unavailableItems = Array.from(new Set([].concat(unresolved, failedItems)));
+
+          if (unavailableItems.length === resolved.length + unresolved.length) {
+            setStatus('None of the items from this order are currently available.', 'is-error');
+            busy = false;
+            syncSubmitState();
+            return;
+          }
+
+          if (unavailableItems.length > 0) {
+            setStatus('Some items were unavailable and were skipped. Redirecting to cart...', 'is-success');
+          } else {
+            setStatus('Cart ready. Redirecting...', 'is-success');
+          }
+
+          window.location.assign(root + 'cart');
+        } catch (error) {
+          setStatus('Could not build cart right now. Please try again.', 'is-error');
+          busy = false;
+          syncSubmitState();
+        }
+      });
+
+      handleSelectionChange();
+    })();
+  </script>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "Account Reorder Picker",
+  "settings": [
+    {
+      "type": "range",
+      "id": "orders_to_show",
+      "min": 1,
+      "max": 20,
+      "step": 1,
+      "label": "Orders to show",
+      "default": 8
+    },
+    {
+      "type": "range",
+      "id": "padding_top",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "label": "Padding top",
+      "default": 36
+    },
+    {
+      "type": "range",
+      "id": "padding_bottom",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "label": "Padding bottom",
+      "default": 12
+    }
+  ]
+}
+{% endschema %}

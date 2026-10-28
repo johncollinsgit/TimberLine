@@ -82,6 +82,9 @@
         "labelProgram": {
           "value": "true"
         }
+      },
+      "buyerJourney": {
+        "step": "CHECKOUT_COMPLETION"
       }
     },
     "output": {

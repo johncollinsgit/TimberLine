@@ -17,4 +17,11 @@ for(const [step,value,expected] of [[3,'1',null],[3,'4',null],[3,'3','3'],[3,nul
  await page.evaluate(({step,value})=>{document.querySelector('product-form')?.remove();const node=document.createElement('div');node.innerHTML=`<product-form data-hide-errors="false"><div class="product-form__error-message-wrapper" hidden><span class="product-form__error-message"></span></div><form data-mf-order-increment="${step}"><input name="id" value="101" class="product-variant-id">${value===null?'':`<input name="quantity" value="${value}">`}<button type="submit"><span>Add</span><span class="loading__spinner hidden"></span></button></form></product-form>`;document.body.append(node.firstElementChild);}, {step,value});
  const before=await page.evaluate(()=>window.added.length);await page.locator('product-form button').click();await page.waitForTimeout(30);const added=await page.evaluate(()=>window.added);assert.equal(added.length,before+(expected===null?0:1));if(expected)assert.equal(added.at(-1).quantity,expected);
 }
+// Resolve current keys before bulk edits; duplicate variants need the cart's separate controls.
+const bulkStart=global.indexOf('class BulkAdd extends HTMLElement');
+await page.addScriptTag({content:global.slice(bulkStart)});
+await page.evaluate(()=>{window.cartStrings={error:'Cart unavailable'};window.fixtureCart={items:[{variant_id:101,key:'101:fresh',properties:{gift:'Retain'}}]};window.fetch=async()=>({ok:true,json:async()=>window.fixtureCart});document.body.append(document.createElement('bulk-add'));});
+assert.deepEqual(await page.locator('bulk-add').evaluate(node=>node.currentLineUpdates({'101':6,'102':3})),{'101:fresh':6,'102':3});
+await page.evaluate(()=>window.fixtureCart.items.push({variant_id:101,key:'101:other',properties:{gift:'Other'}}));
+assert.match(await page.locator('bulk-add').evaluate(async node=>{try{await node.currentLineUpdates({'101':6});return '';}catch(e){return e.message;}}),/preserve its separate selections/);
 assert.deepEqual(errors,[]);await browser.close();console.log('PASS: existing quantity 1 stays untouched and blocks checkout; nested +/- buttons step 3; invalid additions rejected; regular additions 3; service additions 1.');

@@ -413,10 +413,22 @@ function initDiscountProgress() {
   }
 
   // ---------------- Network ----------------
-  async function changeLine(lineIndex, quantity, input) {
+  let mutationQueue = Promise.resolve();
+  function changeLine(lineIndex, quantity, input) {
+    const work = mutationQueue.then(() => changeCurrentLine(lineIndex, quantity, input));
+    mutationQueue = work.catch(() => {});
+    return work;
+  }
+  async function changeCurrentLine(lineIndex, quantity, input) {
     const current = await fetch(CART_JSON_URL, {credentials:'same-origin'}).then(r=>r.json());
     const key = input?.dataset.lineKey || input?.closest('quantity-input')?.dataset.lineItemKey;
     let item = current.items.find(item=>item.key===key);
+    if (!item && input?.dataset.quantityVariantId) {
+      const properties = JSON.parse(input.closest('quantity-input')?.dataset.properties || '{}');
+      const normalize = value => JSON.stringify(Object.entries(value || {}).sort(([a],[b])=>a.localeCompare(b)));
+      const matches = current.items.filter(line => String(line.variant_id) === input.dataset.quantityVariantId && normalize(line.properties) === normalize(properties));
+      if (matches.length === 1) item = matches[0];
+    }
     if (!item) throw new Error('Your cart changed. Refresh before editing this item.');
     const resp = await fetch(CART_CHANGE_URL, {
       method: 'POST',
@@ -544,7 +556,7 @@ function initDiscountProgress() {
   // ---------------- Handlers ----------------
   function onQtyChange(e) {
     const input = e.target.closest?.('input.quantity__input');
-    if (!input) return;
+    if (!input || !input.closest('#main-cart-items, cart-drawer')) return;
     commitFromInput(input);
   }
 
@@ -581,6 +593,7 @@ function initDiscountProgress() {
 
     document.addEventListener('change', onQtyChange);
     document.addEventListener('click', onRemove);
+    document.addEventListener('mf:cart-changed', () => { refreshSections().then(scheduleDiscountInit).catch(error => console.error('[cart] refresh failed', error)); });
 
     observeDiscountProgress();
     scheduleDiscountInit();

@@ -615,6 +615,7 @@
       "preview_failed": "Your original upload is saved, but its preview could not be prepared. Choose another file or contact us for help."
     },
     "quantity_message": "Order each candle size and wax melt scent in multiples of 3 (3, 6, 9…). Please update this quantity before checkout.",
-    "home_link": "Home"
+    "home_link": "Home",
+    "quantity_duplicates": "Edit this size in your cart to preserve its separate selections."
   }
 }

@@ -1221,6 +1221,18 @@ class BulkAdd extends HTMLElement {
     quickBulkElement.updateMultipleQty(items);
   }
 
+  async currentLineUpdates(items) {
+    const response = await fetch((window.Shopify?.routes?.root || '/') + 'cart.js', {credentials:'same-origin'});
+    if (!response.ok) throw new Error(window.cartStrings.error);
+    const cart = await response.json(), updates = {};
+    for (const [variantId, quantity] of Object.entries(items)) {
+      const lines = cart.items.filter(item => String(item.variant_id) === String(variantId));
+      if (lines.length > 1) throw new Error(document.getElementById('mf-quantity-config') ? (JSON.parse(document.getElementById('mf-quantity-config').textContent).duplicates || 'Edit this size in your cart to preserve its separate selections.') : 'Edit this size in your cart to preserve its separate selections.');
+      updates[lines[0]?.key || variantId] = quantity;
+    }
+    return updates;
+  }
+
   resetQuantityInput(id) {
     const input = this.querySelector(`#Quantity-${id}`);
     input.value = input.getAttribute('value');

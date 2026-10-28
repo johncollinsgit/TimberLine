@@ -16,7 +16,7 @@ export function cartValidationsGenerateRun(input:CartValidationsGenerateRunInput
       if((regular||!variant.product.singleQuantity)&&(line.quantity<3||line.quantity%3!==0))reject("Order each candle size and wax melt scent in multiples of 3 (3, 6, 9). Update your cart before checkout.");
     }
   }
-  if(input.shop?.labelProgram?.value==="true"&&input.cart.lines.length>0){
+  if(input.buyerJourney.step!=="CART_INTERACTION"&&input.shop?.labelProgram?.value==="true"&&input.cart.lines.length>0){
     const setup="custom-label-set-up",reuse="use-my-custom-label";
     const id=(line:typeof input.cart.lines[number])=>line.merchandise.__typename==="ProductVariant"?line.merchandise.product.handle:"";
     const fees=input.cart.lines.filter(line=>[setup,reuse].includes(id(line)));
