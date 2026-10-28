@@ -1,0 +1,15 @@
+{
+  "id": "/field/",
+  "name": "Everbranch Field",
+  "short_name": "Field",
+  "description": "Your team's jobs, messages, photos and time clock, connected to your existing Everbranch workspace.",
+  "start_url": "/field/",
+  "scope": "/field/",
+  "display": "standalone",
+  "background_color": "#f4f7f5",
+  "theme_color": "#174f46",
+  "icons": [
+    {"src":"/field/brand/field-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
+    {"src":"/field/brand/field-512.png","sizes":"512x512","type":"image/png","purpose":"any"}
+  ]
+}

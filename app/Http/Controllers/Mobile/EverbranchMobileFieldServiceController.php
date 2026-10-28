@@ -93,6 +93,8 @@ class EverbranchMobileFieldServiceController extends Controller
             ->notGeneratedQuickBooksInvoice()
             ->with([
                 'assignedUser:id,name', 'participants:id,name', 'vehicles:id,tenant_id,name,identifier,status',
+                'tenant:id,slug',
+                'assets' => fn ($assets) => $assets->where('visibility', 'team')->where('mime_type', 'like', 'image/%')->latest('id')->limit(1),
                 'equipment:id,tenant_id,equipment_type,name,manufacturer,model_number,installed_at,last_serviced_at,next_service_due_at,maintenance_interval_days,status',
                 'materials:id,tenant_id,field_service_job_id,quantity,pulled_quantity,loaded_quantity,used_quantity,status',
                 'timeSessions' => fn ($sessions) => $sessions->whereIn('status', ['running', 'paused'])->select(['id', 'tenant_id', 'field_service_job_id', 'user_id', 'status', 'clocked_in_at', 'break_seconds']),
@@ -1521,6 +1523,7 @@ class EverbranchMobileFieldServiceController extends Controller
 
         return [
             'id' => (int) $job->id, 'title' => (string) $job->title, 'customer' => (string) $job->customer_name,
+            'cover_photo' => $job->relationLoaded('assets') && $job->assets->first() ? $this->assetPayload($job->assets->first(), $job->tenant) : null,
             'status' => (string) ($job->operational_status ?: $job->status), 'priority' => (string) ($job->priority ?: 'normal'),
             'scheduled_for' => $job->scheduled_for?->toIso8601String(), 'scheduled_end_at' => $job->scheduled_end_at?->toIso8601String(),
             'last_activity_at' => $job->last_financial_activity_at?->toIso8601String() ?: $job->updated_at?->toIso8601String(),
