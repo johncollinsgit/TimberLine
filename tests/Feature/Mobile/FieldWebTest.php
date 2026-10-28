@@ -92,6 +92,29 @@ function fieldWebAiReady(Tenant $tenant, User $user): void
     Http::fake(['api.openai.com/v1/responses' => Http::response(['id' => 'resp_test', 'status' => 'completed', 'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => 'Panel installation is scheduled. [job:1]']]]], 'usage' => ['input_tokens' => 400, 'output_tokens' => 30, 'input_tokens_details' => ['cached_tokens' => 0]]])]);
 }
 
+test('startup reads do not consume assistant turns and its ten turn limit remains per user', function (): void {
+    [$tenant, $user, $base] = fieldWebFixture();
+    fieldWebAiReady($tenant, $user);
+    for ($i = 0; $i < 12; $i++) {
+        $this->getJson('/api/mobile/v1/workspaces')->assertOk();
+    }
+    $ask = fn () => $this->postJson($base.'/web/assistant', ['question' => 'Who is clocked in?', 'request_id' => (string) Str::uuid()]);
+    $first = $ask();
+    $first->assertOk()->assertHeader('X-RateLimit-Limit', '10')->assertHeader('X-RateLimit-Remaining', '9');
+    for ($i = 1; $i < 10; $i++) {
+        $ask()->assertOk();
+    }
+    $limited = $ask()->assertStatus(429)->assertJsonPath('message', 'Too Many Attempts.');
+    expect((int) $limited->headers->get('Retry-After'))->toBeGreaterThan(0);
+    $this->getJson('/api/mobile/v1/workspaces')->assertOk();
+    $other = User::factory()->create(['is_active' => true, 'email_verified_at' => now()]);
+    $other->tenants()->attach($tenant->id, ['role' => 'member', 'membership_active' => true]);
+    Sanctum::actingAs($other, ['mobile:read', 'mobile:write']);
+    $ask()->assertOk()->assertHeader('X-RateLimit-Remaining', '9');
+    Http::assertNothingSent();
+    expect(TenantAiUsageEvent::count())->toBe(0);
+});
+
 test('crew AI uses current team records without private notes or other tenants and retries once only', function (): void {
     [$tenant, $user, $base] = fieldWebFixture();
     fieldWebAiReady($tenant, $user);

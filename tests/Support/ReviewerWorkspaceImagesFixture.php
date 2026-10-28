@@ -39,8 +39,10 @@ abstract class ReviewerWorkspaceImagesFixture extends ReviewerWorkspaceFixture
         $draft = app(ProposalService::class)->leesMcRaeDraft($this->tenant, $this->owner->id);
         $payload = $draft->payload;
         $payload['review_workspace'] = $this->version->payload['review_workspace'];
+        // All three descriptors share one expiry, even across a wall-clock second.
+        $featureExpiresAt = now()->addDays(4)->utc()->format('Y-m-d\TH:i:s\Z');
         foreach (['collaboration' => $comments, 'attachments' => $attachments, 'images' => $images] as $kind => $policy) {
-            $payload['review_workspace_'.$kind] = ['schema_version' => 1, 'policy_sha256' => ReviewerWorkspaceSchema::digest($policy), 'expires_at' => now()->addDays(4)->utc()->format('Y-m-d\TH:i:s\Z')];
+            $payload['review_workspace_'.$kind] = ['schema_version' => 1, 'policy_sha256' => ReviewerWorkspaceSchema::digest($policy), 'expires_at' => $featureExpiresAt];
         }
         $draft->payload = $payload;
         $draft->save();
