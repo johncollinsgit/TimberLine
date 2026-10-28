@@ -1,3 +1,21 @@
+## Public campus identity and map controls (October 28 source follow-up)
+
+The separate public sample uses the official college SVG and displays the
+existing Admin perspective as Blaine · Demo admin. Facilities Manager and
+read-only Leadership retain their separate permissions; no real account or
+saved identity changes. Demo details is reachable on desktop and phone.
+Map labels use exact currently projected IDs and explicit known locations;
+unknown/custom locations stay unspecified. Per-instance immediate zoom fixes
+the reproduced delayed callback after rapid perspective changes. Selection,
+keyboard access, drag preview and explicit save remain.
+
+Existing Requests interaction/placement guards and all fictional saved records
+remain intact. This changes neither native persisted work nor the immutable
+private review edition, providers, credentials or runtime flags. The full local
+comparator, final-source tour, new exact-head CI and source-bound hosted checks
+are separate required evidence. See
+docs/operations/enterprise-public-campus-identity-map.md.
+
 ## Controlled Stripe subscription pilot (2026-10-28; source candidate)
 
 - Selected members can authorize a new Stripe card without charging. Independent
