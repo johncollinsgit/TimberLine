@@ -12,7 +12,7 @@
 <a class="skip-link" href="#main">Skip to register</a>
 <div class="app-shell">
     <aside class="sidebar" aria-label="Demo workspace">
-        <a class="brand" href="#main"><img src="/brand/everbranch-mark.svg" width="32" height="32" alt="">Everbranch<span>DEMO</span></a>
+        <a class="brand" href="#main"><img src="/brand/everbranch-mark.svg" width="32" height="32" alt=""><span class="brand-name">Everbranch</span><span class="brand-demo">DEMO</span></a>
         <div class="workspace"><span class="workspace-icon" aria-hidden="true">A</span><div><strong>Alpha Printing</strong><small>Fictional practice workspace</small></div></div>
         <p class="nav-label">YOUR COUNTER</p>
         <nav class="tabs" role="tablist" aria-label="Demo views">
