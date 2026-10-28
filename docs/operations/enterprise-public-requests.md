@@ -31,3 +31,26 @@ Run the actual-source model/UI contracts, focused route-only Chromium and WebKit
 ## Local source verification
 
 The assembled Requests code passed 31 model contracts and 17 UI contracts, plus the prior tour/calculator/notification contracts (68 total). The unchanged request model/UI functions were exercised in Chromium and WebKit at desktop and 390px, including real local image previews/PDF downloads, Admin audit and role-switch refusal. A final one-string restoration retained the mandatory native-engine disclaimer; final public route tests pass 13 cases/268 assertions and the complete 11-scene tour passes all four engine/viewport contexts. These are local source fixtures, not normal CI or hosted/native persistence acceptance. Immutable review editions and their access/comments were not changed. Exact receipts stay in the private release handoff, outside the product.
+
+
+## Placement callback ownership correction (October 28 source follow-up)
+
+A controlled local browser case on the previous source demonstrates a queued
+placement callback restoring the connected modal Close button after newer
+composer focus and typing. Subsequent keyboard input then misses the editor.
+This proves the stale-focus mechanism, not the cause of either hosted phone
+acceptance failure. Both original failed attempts remain recorded.
+
+Each new Requests session now owns ephemeral interaction and placement epochs.
+One set of listeners on the owned body observes pointer, keyboard, focus and
+input intent before initial placement scheduling. Only the latest placement,
+with unchanged interaction intent and the same current connected open dialog
+and body, may restore scroll, focus and selection. Denied body replacement
+invalidates older restoration too. Retired listeners cannot change focus intent.
+Uninterrupted Center/Side actions still preserve the same editor, picker, File,
+caret and scroll. This does not redesign wheel-only scrolling.
+
+Counters remain in memory and do not change drafts, saved records, permissions,
+receipts, private editions, providers or runtime configuration. Normal exact-head
+CI, protected deployment and fresh hosted phone/tour acceptance remain required;
+local passing checks alone are not a hosted repair claim.

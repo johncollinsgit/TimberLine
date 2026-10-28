@@ -12,6 +12,18 @@
   Stripe subscriptions; other Recharge customers retain their existing behavior.
   Prepaid, general Branch purchasing and native management-link UI remain gated
   future work. Follow `docs/operations/subscriptions-pilot.md`.
+## Public Requests placement ownership (October 28 source follow-up)
+
+Queued layout restoration now respects newer input, focus, pointer and keyboard
+intent within the same Requests body. Session-local interaction/latest-placement
+epochs and exact connected/open dialog ownership fence scroll, focus and caret
+restoration; denial also invalidates pending placement. Center/Side retains the
+same editor and local File objects. Drafts, simulated records, permissions,
+private editions and provider/runtime configuration are unchanged. Controlled
+local source scheduling demonstrates the old stale-Close focus defect; it does
+not establish the cause of either earlier hosted phone failure. Normal new-head
+CI, protected release and hosted phone/tour acceptance remain separate gates.
+See docs/operations/enterprise-public-requests.md.
 
 ## Public reports, material examples and task Timeline (source candidate)
 
