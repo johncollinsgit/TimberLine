@@ -368,8 +368,11 @@ class SubscriptionPilotExecutionService
             abort_unless($payments->count() === 1 && $extra->isEmpty() && $payments->first()['status'] === 'succeeded', 409);
             $coverage = ['status' => 'observed_clear', 'checked_at' => now()->toIso8601String(), 'source' => $proof,
                 'stripe_payment_id' => $cycle->payment_intent_id, 'shopify_order_id' => $cycle->shopify_order_id];
-        } catch (\Throwable) {
+        } catch (\Throwable $error) {
             $coverage = ['status' => 'not_verified', 'checked_at' => now()->toIso8601String()];
+            if ($error instanceof \App\Exceptions\SubscriptionPilotCoverageException) {
+                $coverage['possible_duplicate_reason'] = $error->reason;
+            }
             if (isset($extra) && $extra->isNotEmpty()) {
                 $coverage['additional_stripe_payment_ids'] = $extra->pluck('id')->all();
             }
@@ -378,7 +381,7 @@ class SubscriptionPilotExecutionService
             $locked = SubscriptionPilotCycle::query()->forTenantId($cycle->tenant_id)->whereKey($cycle->id)->lockForUpdate()->firstOrFail();
             $current = $locked->reconciliation ?? [];
             $current['coverage'] = $coverage;
-            if (! empty($coverage['additional_stripe_payment_ids'])) {
+            if (! empty($coverage['additional_stripe_payment_ids']) || ! empty($coverage['possible_duplicate_reason'])) {
                 $current['possible_duplicate'] = true;
             }
             $locked->update(['reconciliation' => $current]);
@@ -588,9 +591,14 @@ class SubscriptionPilotExecutionService
 
     private function event(SubscriptionPilotMember $member, string $kind, string $reference, string $status, ?int $amount, ?string $date, array $evidence, ?int $actorId = null): void
     {
+        $verification = match ($kind) {
+            'payment' => 'stripe_read',
+            'customer_action' => 'customer_request',
+            default => 'reviewed_activation',
+        };
         $key = SubscriptionEvidence::digest(SubscriptionEvidence::canonical([$kind, $reference, $status, $amount, $date, $evidence]));
         SubscriptionPilotEvent::firstOrCreate(['tenant_id' => $member->tenant_id, 'member_id' => $member->id, 'event_key' => $key],
-            ['provider' => 'stripe', 'kind' => $kind, 'provider_reference' => $reference, 'status' => $status, 'verification' => 'stripe_read',
+            ['provider' => 'stripe', 'kind' => $kind, 'provider_reference' => $reference, 'status' => $status, 'verification' => $verification,
                 'currency' => $member->currency, 'amount_cents' => $amount, 'cycle_date' => $date, 'occurred_at' => now(), 'observed_at' => now(), 'evidence' => $evidence, 'actor_user_id' => $actorId]);
     }
 }

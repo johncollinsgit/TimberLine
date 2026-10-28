@@ -51,6 +51,9 @@ class SubscriptionPilotSourceGuard
                 $parameters['processed_at_min'] = $date->utc()->toDateString();
             }
             $page = $transport->read($connection, $revision, 'pilot_charges', $parameters);
+            if (str_starts_with($statuses, 'success') && ! empty($page['charges'])) {
+                throw new \App\Exceptions\SubscriptionPilotCoverageException('recharge_collected_cycle_charge', 'Recharge reports a collected or refunded charge in this billing window.');
+            }
             abort_unless(isset($page['charges']) && is_array($page['charges']) && array_is_list($page['charges'])
                 && array_key_exists('next_cursor', $page) && ! $page['next_cursor'] && $page['charges'] === [], 409, 'Recharge charge history is not clear or complete for this pilot cycle.');
         }

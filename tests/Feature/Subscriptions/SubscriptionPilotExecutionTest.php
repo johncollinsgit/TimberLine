@@ -564,3 +564,19 @@ test('an unlabelled Shopify Payments collection cannot become a clean pilot bill
     expect(fn () => $guard->stopped($this->member, $this->connection->id, '2026-11-02', $this->actor))->toThrow(\Exception::class, 'Shopify Payments collection');
     expect($this->paymentCreates)->toBe([])->and($this->orderCreates)->toBe([]);
 });
+
+test('additional Shopify collection after a Stripe handoff stays flagged in the readout and blocks later billing', function () {
+    $row = enrollmentForPilot($this);
+    $this->travelTo(\Carbon\CarbonImmutable::parse('2026-11-02 09:01', 'America/New_York'));
+    $cycle = $this->execution->collect($row);
+    enableRealPilotSourceGuard($this);
+    $this->sourceShopifyOrders = [['id' => 'gid://shopify/Order/777', 'customer' => ['id' => 'gid://shopify/Customer/456'],
+        'processedAt' => '2026-11-02T15:00:00Z', 'createdAt' => '2026-11-02T15:00:00Z', 'updatedAt' => '2026-11-02T15:00:00Z',
+        'transactions' => [['id' => 'gid://shopify/OrderTransaction/777', 'gateway' => 'shopify_payments', 'kind' => 'SALE', 'status' => 'SUCCESS']]]];
+    $current = $this->execution->verifyCycleCoverage($cycle);
+    $report = app(SubscriptionPilotService::class)->dashboard($this->tenant->id, $this->actor);
+    expect(data_get($current->reconciliation, 'possible_duplicate'))->toBeTrue()
+        ->and(data_get($current->reconciliation, 'coverage.possible_duplicate_reason'))->toBe('shopify_collection_in_window')
+        ->and($report['members'][0]['duplicate_status'])->toBe('Possible duplicate')
+        ->and($this->paymentCreates)->toHaveCount(1)->and($this->orderCreates)->toHaveCount(1);
+});

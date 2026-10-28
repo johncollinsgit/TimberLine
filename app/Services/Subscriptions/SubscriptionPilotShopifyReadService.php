@@ -71,9 +71,11 @@ GRAPHQL;
                     // Any real collection for this customer is conservative review,
                     // including an order without Recharge or pilot attributes.
                     // The external Stripe mirror is never a Shopify collection.
-                    abort_if(collect($row['transactions'])->contains(fn ($transaction) => strtolower((string) ($transaction['gateway'] ?? '')) === 'shopify_payments'
+                    if (collect($row['transactions'])->contains(fn ($transaction) => strtolower((string) ($transaction['gateway'] ?? '')) === 'shopify_payments'
                         && strtoupper((string) ($transaction['status'] ?? '')) === 'SUCCESS'
-                        && in_array(strtoupper((string) ($transaction['kind'] ?? '')), ['SALE', 'CAPTURE'], true)), 409, 'A Shopify Payments collection already exists in this customer billing window.');
+                        && in_array(strtoupper((string) ($transaction['kind'] ?? '')), ['SALE', 'CAPTURE'], true))) {
+                        throw new \App\Exceptions\SubscriptionPilotCoverageException('shopify_collection_in_window', 'A Shopify Payments collection already exists in this customer billing window.');
+                    }
                 }
             }
             $money = data_get($row, 'totalPriceSet.shopMoney');
