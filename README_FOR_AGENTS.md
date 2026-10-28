@@ -1,3 +1,18 @@
+## Campus shell reconciliation (source follow-up)
+
+Persistent header search and the retained bottom-right Campus assistant reuse
+the existing surface-specific adapters. Public lookup and guided intake remain
+fictional and provider-free; native and shared reviewer authority stays separate.
+Known map building names are distinct from job IDs; J05/custom associations remain
+unspecified. Existing drafts, file references, receipts, comments and history are
+retained. Financial leads with the existing usage example and collapsed
+adjustments without changing prices, terms, calculations or selections.
+
+This source does not upgrade archived private v5, publish a replacement, activate
+AI/scanning or initialize a budget. Exact-head checks, protected release and
+actual hosted acceptance remain separate. See
+`docs/operations/enterprise-campus-shell-reconciliation.md`.
+
 ## Public guided campus assistant (source follow-up)
 
 The separate public sample can find/open current fictional jobs, projects,

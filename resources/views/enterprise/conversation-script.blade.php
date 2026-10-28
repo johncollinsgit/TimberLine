@@ -12,7 +12,7 @@
     return value?.scope?.tenant_id===String(workspace)&&value.scope.user_id===String(viewer)&&value.scope.area_id===area;
   }
   function conversationText(host,tag,text,className='') {const node=document.createElement(tag);node.textContent=text;node.className=className;host.append(node);return node;}
-  function conversationCurrent(generation,scope) {return generation===conversationGeneration&&scope===conversationScope&&scope===conversationScopeValue()&&conversationMode()&&section==='ask';}
+  function conversationCurrent(generation,scope) {return generation===conversationGeneration&&scope===conversationScope&&scope===conversationScopeValue()&&conversationMode()&&(section==='ask'||typeof campusAssistantActive==='function'&&campusAssistantActive());}
   function resetConversation() {
     conversationGeneration++;conversationScope=null;conversationState=null;conversationBusy=false;conversationAvailability=null;conversationOperation=null;conversationRenderedReady=false;
     if(typeof resetSavedAssistants==='function')resetSavedAssistants();
@@ -39,7 +39,7 @@
   }
   function renderConversation() {
     if(!conversationMode()){if(conversationScope!==null)resetConversation();return false;}
-    if(section!=='ask'){resetConversation();return false;}
+    if(!(section==='ask'||typeof campusAssistantContextValid==='function'&&campusAssistantContextValid())){resetConversation();return false;}
     if(conversationScope!==conversationScopeValue()||conversationRenderedReady&&data.conversation?.ready!==true){
       resetConversation();conversationScope=conversationScopeValue();
       const saved=conversationSaved();if(saved)conversationState={...saved,phase:'restore'};
@@ -113,7 +113,7 @@
     answer.scrollIntoView({block:'nearest'});return true;
   }
   async function conversationSend(event) {
-    event.preventDefault();if(!conversationMode()||conversationBusy||conversationAvailability?.ready!==true||!conversationScoped(conversationAvailability)||conversationState&&conversationState.phase!=='active')return;
+    event.preventDefault();if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;if(!conversationMode()||conversationBusy||conversationAvailability?.ready!==true||!conversationScoped(conversationAvailability)||conversationState&&conversationState.phase!=='active')return;
     if(typeof savedAssistantCanSend==='function'&&!savedAssistantCanSend())return;
     if(typeof memoryCanSend==='function'&&!memoryCanSend())return;
     const question=$('ask-question').value.trim(),intent=$('conversation-intent').value;if(!question||conversationAvailability.intents?.[intent]!==true||(typeof savedAssistantAllows==='function'&&!savedAssistantAllows(intent)))return;
@@ -140,11 +140,11 @@
       $('conversation-status').textContent='This turn is unconfirmed or unavailable. Check this conversation; it will not be sent again automatically.';
     }finally{if(conversationCurrent(generation,scope)){conversationBusy=false;conversationOperation=null;conversationFields();}}
   }
-  $('conversation-stop').onclick=()=>{
+  $('conversation-stop').onclick=()=>{if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;
     if(!conversationBusy)return;conversationGeneration++;conversationBusy=false;if(conversationState)conversationState.phase='unconfirmed';
     $('ask-question').value='';$('conversation-status').textContent='Stopped waiting. A reply may still incur its reserved cost. Check this conversation before continuing.';conversationFields();$('conversation-check').focus();
   };
-  $('conversation-check').onclick=async()=>{
+  $('conversation-check').onclick=async()=>{if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;
     if(!conversationMode()||conversationBusy)return;
     const generation=++conversationGeneration,scope=conversationScope;conversationBusy=true;conversationOperation='check';conversationFields();
     try{
@@ -171,9 +171,9 @@
     }catch(error){if(conversationCurrent(generation,scope)){$('chat-log').replaceChildren();$('ask-question').value='';if(conversationState)conversationState.phase='unconfirmed';$('conversation-status').textContent='This conversation cannot be restored under current access or source records. Clear it to continue; any existing cost exposure remains.';}}
     finally{if(conversationCurrent(generation,scope)){conversationBusy=false;conversationOperation=null;conversationFields();}}
   };
-  $('conversation-clear').onclick=()=>{$('conversation-clear-confirm').hidden=false;$('conversation-clear-yes').focus();};
-  $('conversation-clear-no').onclick=()=>{$('conversation-clear-confirm').hidden=true;$('conversation-clear').focus();};
-  $('conversation-clear-yes').onclick=async()=>{
+  $('conversation-clear').onclick=()=>{if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;$('conversation-clear-confirm').hidden=false;$('conversation-clear-yes').focus();};
+  $('conversation-clear-no').onclick=()=>{if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;$('conversation-clear-confirm').hidden=true;$('conversation-clear').focus();};
+  $('conversation-clear-yes').onclick=async()=>{if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;
     if(!conversationMode()||conversationBusy||!conversationState)return;
     const generation=++conversationGeneration,scope=conversationScope,id=conversationState.session_id;conversationBusy=true;conversationOperation='clear';conversationFields();
     try{
@@ -188,7 +188,7 @@
     }}
     finally{if(conversationCurrent(generation,scope)){conversationBusy=false;conversationOperation=null;conversationFields();$('conversation-check').focus();}}
   };
-  $('conversation-forget').onclick=()=>{
+  $('conversation-forget').onclick=()=>{if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed())return;
     if(conversationBusy||$('conversation-forget').hidden||!conversationReceipt(null))return;
     conversationGeneration++;conversationState=null;conversationAvailability=null;data.conversation={...data.conversation,ready:false};
     if(typeof memoryEnabled==='function'&&memoryEnabled())$('memory-use').checked=false;
