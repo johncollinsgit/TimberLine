@@ -91,6 +91,7 @@ class EverbranchMobileController extends Controller
                 'role' => $role,
             ],
             'branding' => $branding,
+            'field_crew_assistant' => ['available' => (bool) data_get(\App\Models\TenantAccessProfile::where('tenant_id', $tenant->id)->value('metadata'), 'field_crew_assistant.enabled', false), 'monthly_cap_cents' => (int) data_get(\App\Models\TenantAccessProfile::where('tenant_id', $tenant->id)->value('metadata'), 'field_crew_assistant.monthly_cap_cents', 0)],
             'ai_assistant' => ['available' => app(\App\Services\AiBranch\AiAssistantAccess::class)->allows($tenant, $user), 'context_available' => app(\App\Services\AiBranch\AiWorkspaceContext::class)->enabled($tenant)],
             'voice_navigation' => app(\App\Services\Navigation\VoiceNavigationRegistry::class)->mobile($request, $user, $primaryNavigation, $manifest, $branding),
             'experience_profile' => $experienceProfiles->forTenant((int) $tenant->id, $user, $tenant),

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Everbranch</title>
+  <desc id="desc">Everbranch leaf app icon.</desc>
+  <rect width="128" height="128" rx="30" fill="#f4f7f5"/>
+  <rect x="10" y="10" width="108" height="108" rx="24" fill="#ffffff"/>
+  <path d="M92 25C61.8 29.4 39.2 47 31.6 72.1c-4.8 15.9-.3 27.8-.1 28.3 13.9-27.7 33.6-43.8 50.8-51.9-18.8 13.3-31.9 30.3-40.5 50.1 22.8-2.3 41.8-17.1 48.7-39.2C94.2 47.6 94 35.7 92 25Z" fill="#0f1c1f"/>
+  <path d="M43.2 92.5c13.9-20.4 29.8-32.2 46.7-39.2" fill="none" stroke="#f4f7f5" stroke-width="5.5" stroke-linecap="round"/>
+</svg>

@@ -121,6 +121,7 @@ class AiBranchChat
                 abort_if(strlen(json_encode($input, JSON_THROW_ON_ERROR)) + strlen(AiBranchProvider::INSTRUCTIONS) + 2048 > $settings['max_input'], 422, 'Start a new chat or shorten the question and memory.');
                 $usage = $this->usage($tenant);
                 $reservedMicros = $this->provider->cost($settings['max_input'], $settings['max_output'], $settings);
+                app(\App\Services\FieldService\FieldCrewAssistant::class)->assertMonthlyBudget($tenant, $reservedMicros);
                 $cap = min($account->budget_cents, (int) $tier['ai_limits']['provider_budget_cents']) * 10000;
                 if (isset($settings['pilot_budget_cents'])) {
                     $cap = min($cap, $settings['pilot_budget_cents'] * 10000);
