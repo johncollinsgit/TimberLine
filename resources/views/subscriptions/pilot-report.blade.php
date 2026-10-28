@@ -29,7 +29,7 @@
     @else
         <div class="grid gap-3 sm:grid-cols-3" aria-label="Pilot overview">
             <div class="border-l-2 border-emerald-800 pl-4"><p class="text-xs text-zinc-500">Prepared members</p><p class="mt-1 text-2xl font-semibold">{{ $pilot['total_prepared'] }}</p></div>
-            <div class="border-l-2 border-zinc-300 pl-4"><p class="text-xs text-zinc-500">Stripe collection</p><p class="mt-1 text-base font-semibold">{{ $pilot['payment_ready'] ? 'Account ready, member approval required' : 'Setup required' }}</p></div>
+            <div class="border-l-2 border-zinc-300 pl-4"><p class="text-xs text-zinc-500">Stripe merchant account</p><p class="mt-1 text-base font-semibold">{{ $pilot['payment_ready'] ? 'Account ready, member approval required' : 'Setup required' }}</p></div>
             <div class="border-l-2 border-amber-400 pl-4"><p class="text-xs text-zinc-500">Double-charge verification</p><p class="mt-1 text-base font-semibold">{{ collect($pilot['members'])->contains('duplicate_alert', true) ? 'Review required' : 'Incomplete provider coverage' }}</p></div>
         </div>
         <div class="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
@@ -75,11 +75,12 @@
                 <div class="grid gap-3 p-4 md:grid-cols-2">
                     <div><p class="font-medium">{{ $member['name'] }}</p>
                         @foreach($member['lines'] as $line)<p class="mt-1 text-sm text-zinc-600">{{ $line['quantity'] }} × {{ $line['label'] }} · {{ $member['currency'] }} {{ number_format($line['unit_price_cents'] / 100, 2) }} · bills every {{ $line['billing_months'] }} month(s), ships every {{ $line['delivery_months'] }} month(s)</p>@endforeach
+                        @if(isset($pilotTenant) && ($member['can_review_execution'] ?? false))<a class="mt-2 inline-block text-sm font-medium text-emerald-900" href="{{ route('subscriptions.pilot.enrollment.review',['member'=>$member['id'],'tenant'=>$pilotTenant->slug]) }}">Review Stripe pilot setup</a><br>@endif
                         <a href="{{ $member['source_url'] }}" target="_blank" rel="noopener noreferrer" class="mt-2 inline-block text-sm font-medium text-emerald-900">Review in Recharge ↗</a>
                         @if(isset($pilotTenant))<form method="POST" action="{{ route('subscriptions.pilot.refresh-orders', ['member' => $member['id'], 'tenant' => $pilotTenant->slug]) }}" class="mt-2">@csrf<button class="text-sm font-medium text-emerald-900">Refresh Shopify order evidence</button></form>@endif
                         <p class="mt-1 text-xs text-zinc-500">Merchant-portal observation: {{ \Carbon\CarbonImmutable::parse($member['source_observed_at'])->format('M j, Y g:i a T') }}</p>
                     </div>
-                    <div><p class="text-sm font-medium text-zinc-800">Before Stripe activation</p><ul class="mt-1 list-disc space-y-1 pl-4 text-xs text-zinc-600">@foreach($member['activation_blockers'] as $blocker)<li>{{ $blocker }}</li>@endforeach</ul></div>
+                    <div><p class="text-sm font-medium text-zinc-800">{{ empty($member['activation_blockers']) ? 'Activation complete' : 'Subscription readiness' }}</p><ul class="mt-1 list-disc space-y-1 pl-4 text-xs text-zinc-600">@foreach($member['activation_blockers'] as $blocker)<li>{{ $blocker }}</li>@endforeach</ul></div>
                 </div>
             @endforeach
             </div>
@@ -92,7 +93,7 @@
                 @if(Route::has('tenant-payments.index'))<a href="{{ route('tenant-payments.index', ['tenant' => $pilotTenant->slug ?? request('tenant')]) }}" class="inline-block font-medium text-emerald-900">Open Accept payments</a>@endif
             </div>
             <div class="mt-4 overflow-x-auto"><table class="w-full text-left text-xs"><thead><tr><th class="py-2">Date</th><th>Provider</th><th>Type</th><th>Reference</th><th>Status</th><th>Amount</th><th>Evidence</th></tr></thead><tbody>
-                @foreach($pilot['events'] as $event)<tr class="border-t border-zinc-100"><td class="py-2">{{ $event->occurred_at->format('M j, Y') }}</td><td>{{ ucfirst($event->provider) }}</td><td>{{ ucfirst($event->kind) }}</td><td>{{ $event->provider_reference }}</td><td>{{ ucfirst($event->status) }}</td><td>{{ $event->amount_cents !== null ? $event->currency.' '.number_format($event->amount_cents / 100, 2) : 'Not recorded' }}</td><td>{{ $event->verification === 'merchant_portal' ? 'Merchant portal observation' : 'Shopify order evidence' }}</td></tr>@endforeach
+                @foreach($pilot['events'] as $event)<tr class="border-t border-zinc-100"><td class="py-2">{{ $event->occurred_at->format('M j, Y') }}</td><td>{{ ucfirst($event->provider) }}</td><td>{{ ucfirst($event->kind) }}</td><td>{{ $event->provider_reference }}</td><td>{{ ucfirst($event->status) }}</td><td>{{ $event->amount_cents !== null ? $event->currency.' '.number_format($event->amount_cents / 100, 2) : 'Not recorded' }}</td><td>{{ match($event->verification){'merchant_portal'=>'Merchant portal observation','stripe_read'=>'Current Stripe read','stripe_signature'=>'Signed Stripe receipt','customer_request'=>'Customer request','reviewed_activation'=>'Reviewed activation',default=>'Shopify order evidence'} }}</td></tr>@endforeach
             </tbody></table></div>
         </details>
         <script type="application/json" data-pilot-chart-data>{!! json_encode(['payments' => $pilot['chart'], 'members' => array_values(array_filter($pilot['members'], fn ($m) => !($pilot['selected'] ?? null) || $m['id'] === $pilot['selected']))], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR) !!}</script>

@@ -16,6 +16,7 @@ export default defineConfig(() => ({
         'resources/js/wholesale-label-admin.js',
         'resources/js/wholesale-label-bootstrap.js',
         'resources/js/subscriptions-pilot.js',
+        'resources/js/subscriptions-pilot-customer.js',
         'resources/js/enterprise/voice-jobs-entry.js',
         'resources/js/workspace-settings.js',
         'resources/js/workspace-draft.js',

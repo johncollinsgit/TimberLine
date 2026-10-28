@@ -306,6 +306,9 @@ Schedule::command('soccer:process')->everyMinute()->withoutOverlapping(5)->runIn
 
 // Reconciles only explicitly versioned native Website attempts. Never enables commerce.
 Schedule::command('website:reconcile-payments')->everyFiveMinutes()->withoutOverlapping(10)->runInBackground();
+// Rollout gates and customer/source proof remain mandatory for each due pilot charge.
+// Existing accepted provider objects are reconciled independently of new collection.
+Schedule::command('subscriptions:pilot-process --collect --reconcile')->everyFiveMinutes()->withoutOverlapping(10)->runInBackground();
 Schedule::command('payments:health')->everyFifteenMinutes()->withoutOverlapping(10)->runInBackground();
 Schedule::command('website:reconcile-shipments')->everyFiveMinutes()->withoutOverlapping(10)->runInBackground();
 Schedule::command('website:dispatch-order-notifications')->everyMinute()->withoutOverlapping(10)->runInBackground();

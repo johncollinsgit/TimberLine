@@ -796,6 +796,21 @@ Route::prefix('signup/classes/{tenant:slug}')
             ->name('store');
     });
 
+Route::get('/subscriptions/manage/{token}', [\App\Http\Controllers\SubscriptionPilotCustomerController::class, 'show'])
+    ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:60,1')->name('subscriptions.pilot.customer');
+Route::post('/api/mobile/v1/modern-forestry/account/subscriptions/manage', [\App\Http\Controllers\SubscriptionPilotCustomerController::class, 'mobileManage'])
+    ->withoutMiddleware([VerifyCsrfToken::class])->middleware('throttle:10,1')->name('subscriptions.pilot.mobile-manage');
+Route::post('/subscriptions/manage/{token}/authorize', [\App\Http\Controllers\SubscriptionPilotCustomerController::class, 'authorizePayment'])
+    ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:6,1')->name('subscriptions.pilot.customer.authorize');
+Route::post('/subscriptions/manage/{token}/stop', [\App\Http\Controllers\SubscriptionPilotCustomerController::class, 'stop'])
+    ->where('token', '[A-Za-z0-9]{64}')->middleware('throttle:10,1')->name('subscriptions.pilot.customer.stop');
+Route::post('/subscriptions/manage/{token}/payments/{cycle}/authenticate', [\App\Http\Controllers\SubscriptionPilotCustomerController::class, 'authentication'])
+    ->where('token', '[A-Za-z0-9]{64}')->whereNumber('cycle')->middleware('throttle:6,1')->name('subscriptions.pilot.customer.authentication');
+Route::post('/subscriptions/manage/{token}/payments/{cycle}/confirm', [\App\Http\Controllers\SubscriptionPilotCustomerController::class, 'confirmPayment'])
+    ->where('token', '[A-Za-z0-9]{64}')->whereNumber('cycle')->middleware('throttle:10,1')->name('subscriptions.pilot.customer.confirm');
+Route::post('/webhooks/subscriptions/stripe', [\App\Http\Controllers\SubscriptionPilotWebhookController::class, 'receive'])
+    ->withoutMiddleware([VerifyCsrfToken::class])->name('subscriptions.pilot.stripe-webhook');
+
 Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::middleware(['tenant.access', 'module:subscriptions'])
@@ -804,6 +819,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware(['tenant.access', 'module:subscriptions', 'throttle:6,1'])
         ->post('/subscriptions/pilot/{member}/refresh-orders', [\App\Http\Controllers\SubscriptionPilotController::class, 'refresh'])
         ->whereNumber('member')->name('subscriptions.pilot.refresh-orders');
+    Route::middleware(['tenant.access', 'module:subscriptions'])->prefix('subscriptions/pilot')->name('subscriptions.pilot.')->group(function (): void {
+        Route::post('/recharge-connect', [\App\Http\Controllers\SubscriptionPilotEnrollmentController::class, 'connectRecharge'])->middleware('throttle:6,1')->name('recharge-connect');
+        Route::get('/{member}/enrollment', [\App\Http\Controllers\SubscriptionPilotEnrollmentController::class, 'review'])->whereNumber('member')->name('enrollment.review');
+        Route::post('/{member}/enrollment/quote', [\App\Http\Controllers\SubscriptionPilotEnrollmentController::class, 'quote'])->whereNumber('member')->middleware('throttle:10,1')->name('enrollment.quote');
+        Route::post('/{member}/enrollment/prepare', [\App\Http\Controllers\SubscriptionPilotEnrollmentController::class, 'prepare'])->whereNumber('member')->middleware('throttle:10,1')->name('enrollment.prepare');
+        Route::post('/{member}/enrollment/access', [\App\Http\Controllers\SubscriptionPilotEnrollmentController::class, 'access'])->whereNumber('member')->middleware('throttle:6,1')->name('enrollment.access');
+        Route::post('/{member}/enrollment/activate', [\App\Http\Controllers\SubscriptionPilotEnrollmentController::class, 'activate'])->whereNumber('member')->middleware('throttle:6,1')->name('enrollment.activate');
+    });
 
     Route::middleware(['tenant.access', 'module:subscriptions'])
         ->get('/subscriptions', [\App\Http\Controllers\SubscriptionWorkspaceController::class, 'index'])

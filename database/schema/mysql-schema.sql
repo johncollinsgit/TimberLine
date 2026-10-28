@@ -9181,6 +9181,77 @@ CREATE TABLE `subscription_payment_methods` (
   CONSTRAINT `subscription_payment_methods_tenant_id_foreign` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `subscription_pilot_cycles`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `subscription_pilot_cycles` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `enrollment_id` bigint unsigned NOT NULL,
+  `public_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `cycle_date` date NOT NULL,
+  `amount_cents` bigint unsigned NOT NULL,
+  `currency` char(3) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `terms` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `source_evidence` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `reconciliation` longtext COLLATE utf8mb4_unicode_ci,
+  `stripe_key` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `stripe_payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payment_intent_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `payment_status` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'prepared',
+  `payment_started_at` timestamp NULL DEFAULT NULL,
+  `paid_at` timestamp NULL DEFAULT NULL,
+  `cancellation_started_at` timestamp NULL DEFAULT NULL,
+  `shopify_payload` longtext COLLATE utf8mb4_unicode_ci,
+  `shopify_order_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `handoff_status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'prepared',
+  `handoff_started_at` timestamp NULL DEFAULT NULL,
+  `last_error_code` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp(6) NULL DEFAULT NULL,
+  `updated_at` timestamp(6) NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `spcy_cycle_uq` (`tenant_id`,`enrollment_id`,`cycle_date`),
+  UNIQUE KEY `spcy_public_uq` (`public_id`),
+  UNIQUE KEY `spcy_payment_uq` (`tenant_id`,`payment_intent_id`),
+  UNIQUE KEY `spcy_order_uq` (`tenant_id`,`shopify_order_id`),
+  KEY `spcy_enrollment_fk` (`enrollment_id`,`tenant_id`),
+  CONSTRAINT `spcy_enrollment_fk` FOREIGN KEY (`enrollment_id`, `tenant_id`) REFERENCES `subscription_pilot_enrollments` (`id`, `tenant_id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `subscription_pilot_enrollments`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `subscription_pilot_enrollments` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `member_id` bigint unsigned NOT NULL,
+  `public_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'draft',
+  `terms` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `terms_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `access_hash` char(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `access_expires_at` timestamp NULL DEFAULT NULL,
+  `requests` longtext COLLATE utf8mb4_unicode_ci,
+  `stripe_customer_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `setup_session_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `setup_intent_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `payment_method_id` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `authorized_at` timestamp NULL DEFAULT NULL,
+  `activated_at` timestamp NULL DEFAULT NULL,
+  `activated_by` bigint unsigned DEFAULT NULL,
+  `next_billing_date` date DEFAULT NULL,
+  `paused_until` date DEFAULT NULL,
+  `created_at` timestamp(6) NULL DEFAULT NULL,
+  `updated_at` timestamp(6) NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `spen_member_uq` (`tenant_id`,`member_id`),
+  UNIQUE KEY `spen_public_uq` (`public_id`),
+  UNIQUE KEY `spen_scope_uq` (`id`,`tenant_id`),
+  UNIQUE KEY `spen_access_uq` (`access_hash`),
+  KEY `spen_member_fk` (`member_id`,`tenant_id`),
+  CONSTRAINT `spen_member_fk` FOREIGN KEY (`member_id`, `tenant_id`) REFERENCES `subscription_pilot_members` (`id`, `tenant_id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `subscription_pilot_events`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -12666,17 +12737,17 @@ DROP TABLE IF EXISTS `wholesale_label_assignments`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `wholesale_label_assignments` (
-  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
-  `shop_domain` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `customer_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `request_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `revision_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `production_revision_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `shop_domain` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `customer_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `request_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `revision_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `production_revision_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `order_id` bigint unsigned NOT NULL,
-  `shopify_order_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `shopify_line_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'needs_review',
+  `shopify_order_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `shopify_line_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'needs_review',
   `snapshot` json NOT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -12688,12 +12759,12 @@ DROP TABLE IF EXISTS `wholesale_label_designs`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `wholesale_label_designs` (
-  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
-  `shop_domain` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `customer_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `name` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `approved_revision_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `shop_domain` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `customer_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `approved_revision_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `archived_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -12705,15 +12776,15 @@ DROP TABLE IF EXISTS `wholesale_label_events`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `wholesale_label_events` (
-  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
-  `shop_domain` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `customer_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `design_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `request_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `revision_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `shop_domain` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `customer_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `design_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `request_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `revision_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `actor_id` bigint unsigned DEFAULT NULL,
-  `action` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `action` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `details` json DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -12725,20 +12796,20 @@ DROP TABLE IF EXISTS `wholesale_label_requests`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `wholesale_label_requests` (
-  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
-  `shop_domain` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `customer_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `idempotency_key` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `payload_sha256` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `design_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `revision_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `mode` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'prepared',
+  `shop_domain` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `customer_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `idempotency_key` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload_sha256` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `design_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `revision_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `mode` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'prepared',
   `groups` json NOT NULL,
-  `instructions` text COLLATE utf8mb4_unicode_ci,
+  `instructions` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `fee_cents` int unsigned NOT NULL,
-  `shopify_order_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `shopify_order_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `bound_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -12751,24 +12822,24 @@ DROP TABLE IF EXISTS `wholesale_label_revisions`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `wholesale_label_revisions` (
-  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
-  `shop_domain` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `customer_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `design_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `source` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `original_name` varchar(200) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `mime` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `original_path` varchar(240) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `sha256` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `shop_domain` varchar(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `customer_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `design_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `source` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `original_name` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `mime` varchar(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `original_path` varchar(240) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `sha256` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `byte_size` bigint unsigned NOT NULL,
-  `preview_path` varchar(240) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `vector_path` varchar(240) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `vector_preview_path` varchar(240) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `vector_sha256` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'queued',
+  `preview_path` varchar(240) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `vector_path` varchar(240) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `vector_preview_path` varchar(240) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `vector_sha256` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'queued',
   `settings` json DEFAULT NULL,
-  `failure` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `failure` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_by` bigint unsigned DEFAULT NULL,
   `approved_by` bigint unsigned DEFAULT NULL,
   `approved_at` timestamp NULL DEFAULT NULL,
@@ -13413,3 +13484,4 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (310,'2026_10_22_19
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (311,'2026_10_22_150000_create_service_proposal_tables',35);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (312,'2026_10_27_210000_create_subscription_pilot_evidence',36);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (313,'2026_10_27_220000_create_wholesale_label_library',37);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (314,'2026_10_27_223000_create_subscription_pilot_execution',38);

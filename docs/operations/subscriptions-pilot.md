@@ -67,14 +67,96 @@ the preparation command or report.
   webhook cannot replace newer refund evidence. Reports retain older evidence.
   Payment charts preserve missing-feed gaps and never sum mixed currencies.
 
+## Controlled monthly execution
+
+The separately gated executor uses Stripe Checkout in setup mode to obtain a
+new customer-present card authorization; it neither copies the Recharge vault
+nor charges during setup. An owner reviews the exact product, shipping address,
+shipping amount, tax rate and tax basis. Their total must match the prepared
+amount. Monthly delivery and billing intervals must match; prepaid execution,
+term changes and card/address changes require later implementation/review.
+Candle Cash and discounts have no execution path. Retailer Branch purchase
+remains disabled while provider acceptance is incomplete; the existing catalog
+price and included Modern Forestry entitlement are unchanged.
+
+`SUBSCRIPTIONS_PILOT_SETUP_ENABLED`, `SUBSCRIPTIONS_PILOT_COLLECTION_ENABLED`,
+`SUBSCRIPTIONS_PILOT_HANDOFF_ENABLED` and exact
+`SUBSCRIPTIONS_PILOT_TENANT_IDS` are independent, default-off gates. Setup also
+requires existing merchant setup/read rollout. Collection requires current
+canonical Stripe readiness, a genuine signed setup callback bound to this
+merchant, and `SUBSCRIPTIONS_PILOT_LIVE_WEBHOOKS_VERIFIED`. The separate
+`SUBSCRIPTIONS_PILOT_WEBHOOK_SECRET` signs connected-account events at
+`/webhooks/subscriptions/stripe` (Stripe API 2024-06-20). Configure Checkout
+completion, PaymentIntent and charge/refund events; preserve other endpoints.
+Never mark callback proof from a synthetic event or redirect.
+
+Owner review is available from each pilot member. Recharge read setup accepts
+only a private read-only token for the original owned store, with read_store,
+read_customers, read_subscriptions and read_orders. It does not send a source
+cancellation. Customer links are opaque, hashed for lookup, encrypted in retained
+requests and session flashes, private/no-store and expire after seven days.
+Owners can retrieve a link; selected authenticated Shopify customers can obtain
+a current management link. No customer invitation is sent by these routes.
+
+Activation requires actual Stripe SetupIntent/payment-method reads and fresh
+Recharge store/customer/subscription/charge reads proving stopped source billing,
+no active subscriptions, no queued/pending/error charges, and no collected cycle
+charge. Complete owned Shopify reads must show no prior subscription order.
+Only an individual explicit owner activation switches that member's authority.
+Other customers remain with Recharge. No automatic cancellation is implemented.
+
+Everbranch owns the schedule and creates an off-session PaymentIntent on the
+current authorized date at/after 9 am in the customer's timezone. It does not
+create an automatically charging Stripe Subscription. Each cycle reserves one
+immutable encrypted request/key before HTTP; concurrent retries reuse it. Lost
+responses recover the original by exact customer/day/cycle/request identity.
+After 23 hours no create is retried; uncertainty needs operator reconciliation.
+Early and overdue cycles cannot silently collect. Actual amount/customer/card/
+account/environment/capture/refund checks precede fulfillment. Authentication
+uses Stripe.js against the original PaymentIntent, never a replacement charge.
+
+A captured payment hands the exact Shopify variant/customer/shipping/tax terms
+to orderCreate as a PAID external `everbranch_stripe` transaction. This records
+the Stripe receipt and does not collect with Shopify. Inventory obeys Shopify
+policy. The request/in-flight marker is durable before the mutation. No automatic
+orderCreate retry exists: timeout/5xx recovers by the original unique cycle tag;
+an unresolved or conflicting result requires review. Customer receipts are not
+sent by the pilot bridge. Existing Shopify fulfillment remains authoritative.
+Confirmed orders and later ingestion project only the exact persisted order,
+cycle/payment/account/terms mapping; attributes alone cannot authorize a new map.
+Refunds/disputes block a new handoff and require review of an already handed-off
+order. No automatic refunds or shipping cancellations are performed.
+
+`subscriptions:pilot-process` without options is an offline summary.
+`--collect --reconcile` runs every five minutes behind the gates, recovers original
+requests, processes retained signed receipts and rechecks recent cycles. One
+confirmed cycle advances the original billing anchor once. Unknown outcomes,
+refunds and handoff errors stay visible. Public pause stops future billing until
+review; native whole-month pauses skip intervals and resume on the original
+anchor. Cancellation prevents future billing and retires a known unconfirmed
+original PaymentIntent where Stripe permits. A payment already processing may
+need support reconciliation. Existing native app pause/cancel payloads remain
+compatible; opening the new management endpoint requires future native UI work.
+
+Reports are offline. Stripe reads take precedence over older manual observations;
+refunded payments leave the success chart. Imported external Shopify transactions
+are never added as payment revenue. Cross-provider coverage is time stamped,
+bounded to the reviewed customer/cycle and expires in the readout after 15
+minutes. Missing/stale/failed coverage remains Not verified. Additional Stripe
+objects set a durable possible-duplicate flag and block future collection.
+A clean observation is not a guarantee about future external provider changes.
+
 ## Launch prerequisites still required
 
-This release prepares and monitors the pilot. It contains no Stripe collection
-executor or customer payment link. The production inspection found Modern
-Forestry's included Subscriptions entitlement enabled, no merchant payment
-account and no Recharge read credential. Complete merchant-owned Stripe setup,
-fresh Recharge read coverage and customer-present authorization before a later
-collection release. Existing Recharge billing stays primary throughout.
+Production preparation recorded both selected members and historical source
+orders, and created a new Standard/direct Modern Forestry merchant account.
+The owner's business verification and payouts, a read-only Recharge credential,
+reviewed delivery/tax terms, genuine signed callbacks, individual customer
+consent, controlled provider acceptance and explicit source stop are still
+required before collection. Never infer completion from an owner's intention
+to finish setup. Keep all collection/handoff flags off until those checks pass.
+The November 2, 2026 target is conditional on readiness; otherwise Recharge
+continues primary and the pilot date needs a fresh review.
 
 The two named pilot members are stored only in the private encrypted operator
 records, with exact existing Shopify and Recharge identities. They are not

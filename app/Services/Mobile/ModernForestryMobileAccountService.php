@@ -126,7 +126,7 @@ class ModernForestryMobileAccountService
             section: 'candleClub',
             profile: $profile,
             tenantId: $tenantId,
-            resolver: fn (): array => $this->subscriptions->customerCandleClubPayload($profile, ($session->identity['source_type'] ?? '') === 'app_review_demo'),
+            resolver: fn (): array => $this->candleClub($session),
             fallback: [
                 'status' => 'unknown',
                 'subscription' => null,
@@ -159,7 +159,9 @@ class ModernForestryMobileAccountService
      */
     public function candleClub(ModernForestryMobileCustomerSession $session): array
     {
-        return $this->subscriptions->customerCandleClubPayload($session->profile, ($session->identity['source_type'] ?? '') === 'app_review_demo');
+        $legacy = $this->subscriptions->customerCandleClubPayload($session->profile, ($session->identity['source_type'] ?? '') === 'app_review_demo');
+
+        return app(\App\Services\Subscriptions\SubscriptionPilotMobileAccess::class)->payload($session, $legacy);
     }
 
     /**
@@ -168,6 +170,11 @@ class ModernForestryMobileAccountService
      */
     public function candleClubAction(ModernForestryMobileCustomerSession $session, array $payload): array
     {
+        $pilot = app(\App\Services\Subscriptions\SubscriptionPilotMobileAccess::class)->action($session, $payload);
+        if ($pilot !== null) {
+            return $pilot;
+        }
+
         return $this->subscriptions->recordCustomerCandleClubAction(
             $session->profile,
             (string) ($payload['action'] ?? ''),
