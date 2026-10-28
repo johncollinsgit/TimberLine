@@ -1,0 +1,11 @@
+{
+  "sections": {
+    "main": {
+      "type": "forestry-birthday-club",
+      "settings": {}
+    }
+  },
+  "order": [
+    "main"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "asset": "assets/forestry-rewards.js",
+  "replacements": [
+    ["Birthday Candle Cash", "Birthday reward"],
+    ["Add your birthday once and we will keep your yearly reward waiting inside your account.", "Save your birthday for your annual $10 coupon."],
+    ["Save your birthday once and we will add Candle Cash when it is complete.", "Save your birthday for your annual $10 coupon. There is no separate signup bonus."],
+    ["Your birthday reward card handles this for you.", "Your Birthday Club page shows your annual coupon."],
+    ["Your birthday reward will appear here as soon as it is available.", "Your annual birthday coupon will appear here when it is available."],
+    ["birthdayFormMarkup(model, uiState) +", "birthdayFormMarkup(model, uiState) + '<p><a class=\"Link Link--underline\" href=\"/pages/birthday-club\">View all birthday gifts</a></p>' +"]
+  ]
+}

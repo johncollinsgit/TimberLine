@@ -33,10 +33,34 @@ class BirthdayEmailDispatchService
         $templateKey = $this->nullableString($options['template_key'] ?? null) ?: 'birthday_email_primary';
         $campaignType = 'birthday';
         $eventCampaignType = 'birthday_email';
+        $club = app(BirthdayClubService::class);
+        $clubEnabled = $club->enabled((int) $issuance->marketingProfile?->tenant_id);
+        $primary = $templateKey !== 'birthday_email_followup';
         $eventKey = $this->eventKey($issuance, $templateKey);
+        if ($clubEnabled) {
+            $identity = $club->identity($issuance->marketingProfile);
+            $eventKey = 'birthday_club_email:'.$identity['tenant_id'].':'.$identity['canonical_profile_id'].':'.$issuance->cycle_year.':'.($primary ? 'primary' : 'followup');
+        }
         $force = (bool) ($options['force'] ?? false);
 
         $existingEvent = BirthdayMessageEvent::query()->where('event_key', $eventKey)->first();
+        if ($clubEnabled) {
+            $ids = $club->issuances($issuance->marketingProfile)->where('cycle_year', $issuance->cycle_year)->pluck('id');
+            $events = BirthdayMessageEvent::query()->whereIn('birthday_reward_issuance_id', $ids)
+                ->where('channel', 'email')->where(function ($q) use ($primary, $eventKey) {
+                    $q->where('event_key', $eventKey);
+                    if ($primary) {
+                        $q->orWhere('event_key', 'like', '%:birthday_email_primary')->orWhere('event_key', 'like', '%:birthday_email_catchup_2026')->orWhere('event_key', 'like', 'birthday-email:%');
+                    } else {
+                        $q->orWhere('event_key', 'like', '%:birthday_email_followup');
+                    }
+                })->orderBy('id')->get();
+            $existingEvent = $events->first(fn ($event) => $event->status !== 'failed') ?: $existingEvent ?: $events->first();
+            // Unknown outcomes and successful sends cannot be forced into a second primary message.
+            if ($existingEvent && $existingEvent->status !== 'failed') {
+                $force = false;
+            }
+        }
         if ($existingEvent && ! $force) {
             return [
                 'ok' => in_array((string) $existingEvent->status, ['sent', 'delivered', 'opened', 'clicked'], true),
@@ -51,6 +75,21 @@ class BirthdayEmailDispatchService
                 'error_code' => $this->nullableString(data_get($existingEvent->metadata, 'error_code')),
                 'error_message' => $this->nullableString(data_get($existingEvent->metadata, 'error_message')),
             ];
+        }
+
+        if ($clubEnabled) {
+            if ($existingEvent && $existingEvent->event_key === $eventKey && $force) {
+                $reserved = \Illuminate\Support\Facades\DB::table('birthday_message_events')->where('id', $existingEvent->id)->where('status', 'failed')->update(['status' => 'sending', 'updated_at' => now()]);
+            } else {
+                $reserved = \Illuminate\Support\Facades\DB::table('birthday_message_events')->insertOrIgnore([
+                    'event_key' => $eventKey, 'customer_birthday_profile_id' => $issuance->customer_birthday_profile_id,
+                    'marketing_profile_id' => $issuance->marketing_profile_id, 'birthday_reward_issuance_id' => $issuance->id,
+                    'campaign_type' => 'birthday_email', 'channel' => 'email', 'status' => 'sending', 'created_at' => now(), 'updated_at' => now(),
+                ]);
+            }
+            if (! $reserved) {
+                return $this->sendIssuanceEmail($issuance, [...$options, 'force' => false]);
+            }
         }
 
         $profile = $issuance->marketingProfile;
@@ -81,6 +120,11 @@ class BirthdayEmailDispatchService
         $bodyTemplate = $this->nullableString($options['body_template'] ?? null)
             ?: $this->nullableString($config[$isFollowup ? 'followup_email_body' : 'birthday_email_body'] ?? null)
             ?: ($isFollowup ? 'Your birthday reward is still available if you want to use it.' : 'Activate your birthday reward and use it on your next order.');
+
+        if ($clubEnabled) {
+            $canonicalUrl = $this->storefrontUrl($club->pagePath($tenantId));
+            $bodyTemplate = str_replace(['https://theforestrystudio.com/pages/birthday-gift', 'https://theforestrystudio.com/pages/birthday-celebration'], $canonicalUrl, $bodyTemplate);
+        }
 
         $couponCode = $this->nullableString($issuance->reward_code);
         $birthdayDate = $birthdayProfile
@@ -318,6 +362,10 @@ class BirthdayEmailDispatchService
                     ? '/pages/birthday-gift'
                     : '/pages/birthday-celebration'
             );
+
+        if (app(BirthdayClubService::class)->enabled((int) $issuance->marketingProfile?->tenant_id)) {
+            $rewardApplyUrl = $this->storefrontUrl(app(BirthdayClubService::class)->pagePath((int) $issuance->marketingProfile->tenant_id));
+        }
 
         return [
             'coupon_code' => $metadata['coupon_code'] ?? '',

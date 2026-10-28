@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 return [
+    '2026_10_28_210000_create_birthday_cycle_coverage.php' => [
+        'test' => 'tests/Integration/BirthdayClubMySqlRecoveryTest.php',
+        'scenarios' => ['retained coverage before unique-index DDL, repeated recovery and code rollback preserve annual evidence; real concurrent issuance shares one entitlement'],
+    ],
     '2026_10_27_223000_create_subscription_pilot_execution.php' => [
         'test' => 'tests/Integration/SubscriptionPilotExecutionMySqlRecoveryTest.php',
         'scenarios' => ['encrypted authorizations and frozen provider requests survive parent-only creation, missing constraints, repeated recovery and code rollback; composite tenant ownership rejects foreign cycles; changed indexes fail without deleting evidence'],
