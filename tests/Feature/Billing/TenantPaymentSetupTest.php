@@ -82,6 +82,22 @@ it('requires the tenant allowlist and a canonical enabled Branch', function () {
     Http::assertNothingSent();
 });
 
+it('allows an entitled subscriptions workspace to prepare its own merchant account without collection', function () {
+    TenantModuleState::where('tenant_id', $this->tenant->id)->delete();
+    TenantAccessProfile::where('tenant_id', $this->tenant->id)->update(['operating_mode' => 'shopify']);
+    \App\Models\ShopifyStore::create(['tenant_id' => $this->tenant->id, 'store_key' => 'retail',
+        'shop_domain' => 'fictional-subscriptions.myshopify.com', 'access_token' => 'fictional-unused']);
+    \App\Models\TenantModuleEntitlement::create(['tenant_id' => $this->tenant->id, 'module_key' => 'subscriptions',
+        'availability_status' => 'available', 'enabled_status' => 'enabled', 'billing_status' => 'add_on_comped',
+        'entitlement_source' => 'test_explicit', 'price_source' => 'test']);
+    $this->actingAs($this->owner)->get(paymentSetupUrl($this))->assertOk()->assertSeeText('Accept payments');
+    expect(TenantPaymentAccount::count())->toBe(0)
+        ->and(app(\App\Services\Billing\TenantPaymentsReadinessService::class)->canCollectCustomerPayments($this->tenant))->toBeFalse();
+    config()->set('tenant_payments.tenant_slugs', []);
+    $this->get(paymentSetupUrl($this))->assertNotFound();
+    Http::assertNothingSent();
+});
+
 it('requires explicit sharing consent and protects callback state', function () {
     $this->actingAs($this->owner)->post(paymentSetupUrl($this, '/paypal/start'))->assertSessionHasErrors('share_data_consent');
     $this->get(paymentSetupUrl($this, '/paypal/return').'&setup_state=forged&permissionsGranted=true&merchantIdInPayPal=ATTACKER')->assertForbidden();
