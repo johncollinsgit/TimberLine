@@ -11,6 +11,33 @@ This changes no native campus authority, immutable private edition, inventory,
 purchasing or provider. Normal CI/release and any new owner publication remain
 separate gates. See docs/operations/enterprise-public-reports-timeline.md.
 
+## Wholesale custom labels (October 27; additive release candidate)
+
+The Shopify wholesale lane adds a private customer artwork library, buyer wizard,
+Backstage import/proof approval, immutable purchase references and production holds.
+New setup/reuse fees are one per order; regular candles and wax melts remain in
+multiples of three. Customer artwork never becomes public Shopify media. Buyer
+submissions and the separate Thank you request form remain default off until the
+complete development-store flow passes. Preserve protected deployment, private
+shared storage and pinned VTracer 0.6.5. See `docs/operations/wholesale-custom-labels.md`.
+
+## Subscription pilot reporting (2026-10-27; release candidate)
+
+- `/subscriptions/pilot` and the existing Subscriptions/Backstage screens share
+  tenant-scoped pilot payment, order, fulfillment and duplicate-charge readouts.
+  Attributed merchant observations are encrypted, append-only and distinct from
+  owned Shopify reads. Missing Stripe/Recharge coverage is never a verified zero.
+- Explicit manager-triggered Shopify queries and the existing order ingestor
+  update only reviewed pilot customer/subscription identities. Imported external
+  payment records do not become additional charges; stale provider revisions do
+  not replace newer evidence. Preparation keeps Recharge primary and sends no
+  messages, cancels nothing and cannot charge a card.
+- Modern Forestry's production Subscriptions entitlement was already enabled and
+  included. Production has no recorded merchant Stripe account or Recharge API
+  source at inspection. Jennifer DeWeil and Rynda Baker were selected for the
+  November 2 cycle. Follow `docs/operations/subscriptions-pilot.md`; source
+  reconciliation and customer authorization still gate any future Stripe billing.
+
 ## Public fictional Requests follow-up (October 27; source candidate)
 
 The separate public static sample retains its v3 session and current fictional

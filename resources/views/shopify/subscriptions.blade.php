@@ -13,20 +13,11 @@
         $access = is_array($subscriptionsAccess ?? null) ? $subscriptionsAccess : [];
         $payload = is_array($subscriptionsPayload ?? null) ? $subscriptionsPayload : [];
         $metrics = is_array($payload['metrics'] ?? null) ? $payload['metrics'] : [];
-        $tabs = [
-            'Home',
-            'Revenue',
-            'Upcoming orders',
-            'Order errors',
-            'Subscriptions',
-            'Customers',
-            'Products & Plans',
-            'Discounts & Gifts',
-            'Churn Tools',
-            'Settings',
-            'Migration',
-        ];
     @endphp
+
+    @if($access['enabled'] ?? false)
+        @include('subscriptions.pilot-report', ['pilot' => $pilot ?? null, 'pilotTenant' => $pilotTenant ?? null])
+    @endif
 
     <style>
         .eg-subscriptions {
@@ -194,6 +185,8 @@
                 <p class="eg-subscriptions-muted">{{ $access['message'] ?? 'This tenant does not have the Subscriptions module enabled.' }}</p>
             </article>
         @else
+            <details>
+            <summary class="cursor-pointer py-3 text-sm font-semibold">Saved setup records and requests</summary>
             <article class="eg-subscriptions-card" role="status">
                 <h2>Setup and review mode</h2>
                 <p>{{ data_get($payload, 'readiness.message') }}</p>
@@ -202,11 +195,6 @@
                     <p><a href="{{ $workspaceSubscriptionsUrl }}" target="_blank" rel="noopener" style="text-decoration: underline;">View verified contract history in Everbranch</a></p>
                 @endif
             </article>
-            <nav class="eg-subscriptions-tabs" aria-label="Subscription sections">
-                @foreach($tabs as $tab)
-                    <span>{{ $tab }}</span>
-                @endforeach
-            </nav>
 
             <div class="eg-subscriptions-grid">
                 <article class="eg-subscriptions-card">
@@ -374,6 +362,7 @@
                     @endforelse
                 </article>
             </div>
+            </details>
         @endif
     </section>
 </x-shopify-embedded-shell>

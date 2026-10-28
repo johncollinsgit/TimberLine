@@ -16,6 +16,11 @@ describe("Default Integration Test", () => {
     functionDir = path.dirname(__dirname);
     await buildFunction(functionDir);
     functionInfo = await getFunctionInfo(functionDir);
+    // CLI 5 wraps the function metadata and exposes targets as an array.
+    if (functionInfo.function) {
+      const info = functionInfo.function;
+      functionInfo = {...info, targeting:Object.fromEntries(info.targets.map(target=>[target.target,target]))};
+    }
     ({ schemaPath, functionRunnerPath, wasmPath, targeting } = functionInfo);
     schema = await loadSchema(schemaPath);
   }, 45000);

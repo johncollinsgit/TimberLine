@@ -1,3 +1,15 @@
+## 2026-10-27 — Subscription pilot readouts
+
+- Added one shared, permission-checked report in Everbranch and Shopify Backstage
+  with member filtering, observed payment charts, target-cycle outcomes, evidence
+  provenance and distinct payment/order/fulfillment/double-charge statuses.
+- Missing provider coverage displays Not verified, not zero success. Shopify
+  mirrors are not additional payments. Existing local setup/history remains in
+  progressive disclosure, and inactive decorative navigation tabs were removed.
+- Reused shared Inter, white surfaces and forest accents. Charts have accessible
+  data tables and reduced-motion behavior. Customer preparation and report views
+  perform no payment, Recharge mutation, notification or automatic API read.
+
 ## 2026-10-23 — Reviewer AI Coming soon placeholders (source candidate)
 
 Leaving a native page stops obsolete workspace/catalog read batches before the
@@ -3120,4 +3132,3 @@ Projects and Requests use the full work canvas. Sort headers for fields present 
   current recipient checks, missing-field protection and retained drafts.
 - Internal reminder options include schedules, quiet hours, previews and paused
   state. External sequences and real provider acceptance remain separate gates.
-

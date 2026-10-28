@@ -2153,6 +2153,7 @@ class ShopifyEmbeddedAppController extends Controller
             'messaging' => ['Email Messenger', 'shopify.app.wholesale.messaging'],
             'suggestions' => ['Suggestions', 'shopify.app.wholesale.suggestions'],
             'customers' => ['Customers', 'shopify.app.wholesale.customers'],
+            'labels' => ['Custom Labels', 'shopify.app.wholesale.labels'],
             'orders' => ['Orders', 'shopify.app.wholesale.orders'],
             'follow_ups' => ['Follow-Ups', 'shopify.app.wholesale.follow-ups'],
             'prospects' => ['Prospects', 'shopify.app.wholesale.prospects'],
@@ -2204,6 +2205,7 @@ class ShopifyEmbeddedAppController extends Controller
             'appNavigation' => $this->wholesaleEmbeddedNavigation($tenantId, $activeSection),
             'pageActions' => [],
             'pageSubnav' => [],
+            'embeddedUrl' => fn (string $url): string => app(\App\Services\Shopify\ShopifyEmbeddedUrlGenerator::class)->append($url, request(), $resolved['host'] ?? null),
         ], $viewData)), $workspaceState['httpStatus']);
     }
 

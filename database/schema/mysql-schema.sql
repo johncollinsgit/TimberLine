@@ -7976,11 +7976,11 @@ DROP TABLE IF EXISTS `service_proposal_assets`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `service_proposal_assets` (
-  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
-  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_by` bigint unsigned DEFAULT NULL,
-  `kind` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `kind` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `revision` int unsigned NOT NULL DEFAULT '1',
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -7993,12 +7993,12 @@ DROP TABLE IF EXISTS `service_proposal_comments`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `service_proposal_comments` (
-  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
-  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_by` bigint unsigned DEFAULT NULL,
-  `version_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `request_key` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `version_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `request_key` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -8012,11 +8012,11 @@ DROP TABLE IF EXISTS `service_proposal_drafts`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `service_proposal_drafts` (
-  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
-  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_by` bigint unsigned DEFAULT NULL,
-  `client_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `client_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `revision` int unsigned NOT NULL DEFAULT '1',
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -8031,13 +8031,13 @@ DROP TABLE IF EXISTS `service_proposal_reviews`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `service_proposal_reviews` (
-  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
-  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_by` bigint unsigned DEFAULT NULL,
-  `version_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `selection_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `request_key` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `version_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `selection_hash` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `request_key` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
@@ -8051,17 +8051,17 @@ DROP TABLE IF EXISTS `service_proposal_versions`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `service_proposal_versions` (
-  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `tenant_id` bigint unsigned NOT NULL,
-  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `created_by` bigint unsigned DEFAULT NULL,
-  `draft_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `draft_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `number` int unsigned NOT NULL,
-  `content_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `token_hash` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `password_hash` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `publish_key` char(64) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `access_result` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `content_hash` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `token_hash` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `password_hash` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `publish_key` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `access_result` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `expires_at` timestamp NOT NULL,
   `revoked_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
@@ -9179,6 +9179,62 @@ CREATE TABLE `subscription_payment_methods` (
   KEY `subscription_payment_methods_status_idx` (`tenant_id`,`status`),
   CONSTRAINT `subscription_payment_methods_subscription_customer_id_foreign` FOREIGN KEY (`subscription_customer_id`) REFERENCES `subscription_customers` (`id`) ON DELETE SET NULL,
   CONSTRAINT `subscription_payment_methods_tenant_id_foreign` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `subscription_pilot_events`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `subscription_pilot_events` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `member_id` bigint unsigned NOT NULL,
+  `event_key` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `kind` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider_reference` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `verification` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `currency` char(3) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `amount_cents` bigint unsigned DEFAULT NULL,
+  `cycle_date` date DEFAULT NULL,
+  `occurred_at` timestamp(6) NOT NULL,
+  `observed_at` timestamp(6) NOT NULL,
+  `evidence` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `actor_user_id` bigint unsigned DEFAULT NULL,
+  `created_at` timestamp(6) NULL DEFAULT NULL,
+  `updated_at` timestamp(6) NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `spe_event_uq` (`tenant_id`,`member_id`,`event_key`),
+  KEY `spe_cycle_idx` (`tenant_id`,`member_id`,`cycle_date`),
+  KEY `spe_member_fk` (`member_id`,`tenant_id`),
+  CONSTRAINT `spe_member_fk` FOREIGN KEY (`member_id`, `tenant_id`) REFERENCES `subscription_pilot_members` (`id`, `tenant_id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `subscription_pilot_members`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `subscription_pilot_members` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `public_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `marketing_profile_id` bigint unsigned DEFAULT NULL,
+  `shopify_store_id` bigint unsigned NOT NULL,
+  `recharge_customer_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `shopify_customer_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `billing_owner` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'recharge',
+  `status` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'prepared',
+  `target_date` date NOT NULL,
+  `timezone` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'America/New_York',
+  `currency` char(3) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `expected_amount_cents` bigint unsigned DEFAULT NULL,
+  `details` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `prepared_by` bigint unsigned NOT NULL,
+  `created_at` timestamp(6) NULL DEFAULT NULL,
+  `updated_at` timestamp(6) NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `spm_tenant_source_uq` (`tenant_id`,`shopify_store_id`,`recharge_customer_id`),
+  UNIQUE KEY `spm_public_uq` (`public_id`),
+  UNIQUE KEY `spm_scope_uq` (`id`,`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `subscription_poll_options`;
@@ -12606,6 +12662,122 @@ CREATE TABLE `wholesale_follow_ups` (
   CONSTRAINT `wholesale_follow_ups_wholesale_suggestion_id_foreign` FOREIGN KEY (`wholesale_suggestion_id`) REFERENCES `wholesale_suggestions` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `wholesale_label_assignments`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `wholesale_label_assignments` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `shop_domain` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `customer_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `request_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `revision_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `production_revision_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `order_id` bigint unsigned NOT NULL,
+  `shopify_order_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `shopify_line_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'needs_review',
+  `snapshot` json NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `wl_order_line_once` (`tenant_id`,`shop_domain`,`shopify_order_id`,`shopify_line_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `wholesale_label_designs`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `wholesale_label_designs` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `shop_domain` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `customer_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `approved_revision_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `archived_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `wl_design_owner` (`tenant_id`,`shop_domain`,`customer_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `wholesale_label_events`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `wholesale_label_events` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `shop_domain` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `customer_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `design_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `request_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `revision_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `actor_id` bigint unsigned DEFAULT NULL,
+  `action` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `details` json DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `wl_event_design` (`tenant_id`,`design_id`,`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `wholesale_label_requests`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `wholesale_label_requests` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `shop_domain` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `customer_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `idempotency_key` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload_sha256` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `design_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `revision_id` char(36) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `mode` varchar(16) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'prepared',
+  `groups` json NOT NULL,
+  `instructions` text COLLATE utf8mb4_unicode_ci,
+  `fee_cents` int unsigned NOT NULL,
+  `shopify_order_id` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `bound_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `wl_request_once` (`tenant_id`,`shop_domain`,`customer_id`,`idempotency_key`),
+  KEY `wl_request_order` (`tenant_id`,`shopify_order_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `wholesale_label_revisions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `wholesale_label_revisions` (
+  `id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tenant_id` bigint unsigned NOT NULL,
+  `shop_domain` varchar(120) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `customer_id` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `design_id` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `source` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `original_name` varchar(200) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `mime` varchar(80) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `original_path` varchar(240) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `sha256` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `byte_size` bigint unsigned NOT NULL,
+  `preview_path` varchar(240) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `vector_path` varchar(240) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `vector_preview_path` varchar(240) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `vector_sha256` varchar(64) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` varchar(24) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'queued',
+  `settings` json DEFAULT NULL,
+  `failure` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_by` bigint unsigned DEFAULT NULL,
+  `approved_by` bigint unsigned DEFAULT NULL,
+  `approved_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `wl_revision_design` (`tenant_id`,`design_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `wholesale_order_classifications`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -13239,3 +13411,5 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (308,'2026_10_20_20
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (309,'2026_10_21_160000_create_pos_simulation_tables',33);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (310,'2026_10_22_190000_add_private_voice_retention',34);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (311,'2026_10_22_150000_create_service_proposal_tables',35);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (312,'2026_10_27_210000_create_subscription_pilot_evidence',36);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (313,'2026_10_27_220000_create_wholesale_label_library',37);

@@ -1,6 +1,7 @@
 <x-shopify-embedded-shell :authorized="$authorized" :shopify-api-key="$shopifyApiKey" :shop-domain="$shopDomain" :host="$host" :store-label="$storeLabel" :headline="$headline" :subheadline="$subheadline" :app-navigation="$appNavigation" :page-subnav="$pageSubnav ?? []" :page-actions="$pageActions">
     @if ($authorized && is_array($customer))
         <div class="space-y-6">
+            <a class="fb-page-surface p-4 font-semibold underline" href="{{ $embeddedUrl(route('shopify.app.wholesale.labels', ['customer_id' => $customer['orders']->first()?->shopify_customer_id], false)) }}">View customer labels and original artwork →</a>
             <section class="fb-page-surface p-6">
                 <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto]">
                     <div>
