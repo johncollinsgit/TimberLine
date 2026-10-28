@@ -75,7 +75,7 @@ class EverbranchMobileAuthController extends Controller
     {
         $validated = $request->validate([
             'client_id' => ['required', 'in:everbranch-mobile'],
-            'redirect_uri' => ['required', 'in:everbranch://auth/callback'],
+            'redirect_uri' => ['required', 'in:everbranch://auth/callback,https://app.theeverbranch.com/field/'],
             'code' => ['required', 'string', 'max:255'],
             'code_verifier' => ['required', 'string', 'min:43', 'max:128', 'regex:/^[A-Za-z0-9._~-]+$/'],
             'device_name' => ['nullable', 'string', 'max:160'],
