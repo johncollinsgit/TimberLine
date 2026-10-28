@@ -20,7 +20,7 @@ function receipt(){return cart?.items.find(isService)?.properties?.['_MF label r
 function title(){return cart?.items.find(isService)?.properties?.['Custom label'];}
 function body(html){dialog.innerHTML=`<div class="mf-label-body"><div class="mf-label-top"><div><p class="mf-label-kicker">${t('eyebrow')}</p><h2 id="mf-label-title">${t('title')}</h2></div><button class="mf-label-close" type="button" data-close aria-label="${t('close')}">×</button></div><div id="mf-label-content">${html}</div><p class="mf-label-error" role="alert"></p></div>`;dialog.querySelector('[data-close]').onclick=()=>dialog.close();}
 function fail(error){const box=dialog.querySelector('[role=alert]');if(box)box.textContent=error.message||copy.unavailable;}
-function setBusy(value){busy=value;dialog.querySelectorAll('button,input,select,textarea').forEach(el=>el.disabled=value);}
+function setBusy(value){busy=value;dialog.querySelectorAll('button,input,select,textarea').forEach(el=>{if(value){el.dataset.mfWasDisabled=String(el.disabled);el.disabled=true;}else if(el.dataset.mfWasDisabled!==undefined){el.disabled=el.dataset.mfWasDisabled==='true';delete el.dataset.mfWasDisabled;}});}
 function show(){if(!dialog.open)dialog.showModal();dialog.querySelector('button,input,select')?.focus();}
 async function open(requested='reuse',checkout=false){
  opener=document.activeElement;checkoutPending=checkout;generation++;const run=generation;body(`<p>${t('loading')}</p>`);show();
@@ -38,10 +38,10 @@ function selection(){
  dialog.querySelector('[name=saved]')?.addEventListener('change',e=>{revision=labels.find(label=>label.id===e.target.value);dialog.querySelector('.mf-label-preview').src=revision.preview;});
  dialog.querySelector('[name=logo]')?.addEventListener('change',e=>{const file=e.target.files[0];if(file&&file.type.startsWith('image/')&&!file.type.includes('svg')){const url=URL.createObjectURL(file),box=dialog.querySelector('[data-upload-preview]');box.innerHTML='';const image=document.createElement('img');image.className='mf-label-preview';image.alt=copy.preview;image.src=url;image.onload=()=>URL.revokeObjectURL(url);box.append(image);}});
  dialog.querySelector('[data-continue]').onclick=async()=>{
-  if(mode!=='new'){review();return;}
+  if(mode!=='new'){try{await review();}catch(error){fail(error);}return;}
   const file=dialog.querySelector('[name=logo]').files[0],name=dialog.querySelector('[name=label_name]').value.trim();
-  if(!file&&uploaded){setBusy(true);try{revision=await readyPreview(uploaded);review();}catch(error){fail(error);}finally{setBusy(false);}return;}if(!file||!name){fail(new Error(copy.file_required));return;}if(file.size>20*1024*1024){fail(new Error(copy.file_size));return;}
-  setBusy(true);try{const data=new FormData();data.append('file',file);data.append('name',name);const result=await request(base+'/uploads',{method:'POST',body:data});revision=result.label;uploaded=revision;revision=await readyPreview(revision);uploaded=revision;review();}catch(e){fail(e);}finally{setBusy(false);}
+  if(!file&&uploaded){setBusy(true);try{revision=await readyPreview(uploaded);await review();}catch(error){fail(error);}finally{setBusy(false);}return;}if(!file||!name){fail(new Error(copy.file_required));return;}if(file.size>20*1024*1024){fail(new Error(copy.file_size));return;}
+  setBusy(true);try{const data=new FormData();data.append('file',file);data.append('name',name);const result=await request(base+'/uploads',{method:'POST',body:data});revision=result.label;uploaded=revision;revision=await readyPreview(revision);uploaded=revision;await review();}catch(e){fail(e);}finally{setBusy(false);}
  };
 }
 async function readyPreview(label){
@@ -53,7 +53,8 @@ async function readyPreview(label){
  }
  throw new Error(copy.preview_pending||copy.unavailable);
 }
-function review(){
+async function review(){
+ const previouslyEmpty=eligibleLines().length===0;await getCart();if(previouslyEmpty)selected=new Set(eligibleLines().map(line=>line.key));
  const lines=eligibleLines();const fee=mode==='new'?20:5;
  body(`<p>${mode==='legacy'?t('legacy'):escape(revision?.name)}</p>${revision?.preview?`<img class="mf-label-preview" src="${escape(revision.preview)}" alt="${t('preview')}">`:''}<p class="mf-label-note">${t('single_label')}</p><details ${lines.length===0?'open':''}><summary>${t('groups')} (${lines.length})</summary>${lines.length?lines.map((line,index)=>`<label class="mf-label-group"><input type="checkbox" data-group="${index}" ${selected.has(line.key)?'checked':''}><span>${escape(line.product_title.replace(/^Wholesale\s+/i,''))}<br>${escape(line.variant_title)} · ${line.quantity}</span></label>`).join(''):`<p>${t('add_candles')}</p>`}</details><details><summary>${t('notes')}</summary><label>${t('notes')}<textarea name="instructions" rows="3" maxlength="2000">${escape(instructions)}</textarea></label></details><div class="mf-label-fee"><span>${mode==='new'?t('setup_fee'):t('reuse_fee')}</span><span>$${fee.toFixed(2)}</span></div><p class="mf-label-note">${t('staff_review')}</p><div class="mf-label-actions"><button type="button" data-confirm ${lines.length?'':'disabled'}>${checkoutPending?t('save_checkout'):t('save')}</button><button class="mf-label-secondary" type="button" data-back>${t('back')}</button></div>`);
  dialog.querySelectorAll('[data-group]').forEach(input=>input.onchange=()=>{const key=lines[Number(input.dataset.group)].key;if(input.checked)selected.add(key);else selected.delete(key);requestKey=uuid();});

@@ -1,6 +1,6 @@
 /* Modern Forestry — Cart (Trade theme)
    ✅ Features
-   - Line-based cart updates via /cart/change.js (line=<1-based index>)
+   - Cart updates by fresh line keys via /cart/change.js
    - Uses REAL section instance IDs from:
        #main-cart-items[data-id] and #main-cart-footer[data-id]
    - Smooth refresh (no blink) using HTMLUpdateUtility.viewTransition when available
@@ -462,12 +462,12 @@ function initDiscountProgress() {
       }
     }
 
-    // Footer (.js-contents)
+    // Refresh totals and checkout eligibility together; retain the separate note input.
     if (footerInstanceId && map[footerInstanceId]) {
-      const current = document.querySelector('#main-cart-footer .js-contents');
+      const current = document.querySelector('#main-cart-footer .cart__blocks');
       if (current) {
         const tmp = parseHTML(map[footerInstanceId]);
-        const fresh = tmp.querySelector('#main-cart-footer .js-contents');
+        const fresh = tmp.querySelector('#main-cart-footer .cart__blocks');
         if (fresh) smoothSwap(current, fresh);
       }
     }

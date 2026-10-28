@@ -214,27 +214,43 @@ it('resolves a legacy file without replacing an order source revision or changin
 
 function labelPdfBytes(int $pages): string
 {
-    $objects=[1=>'<< /Type /Catalog /Pages 2 0 R >>'];
-    $kids=[];
-    for($page=0;$page<$pages;$page++){
-        $pageId=3+$page*2;$contentId=$pageId+1;$kids[]="$pageId 0 R";
-        $stream="0 0 0 rg 20 20 60 40 re f\n";
-        $objects[$pageId]="<< /Type /Page /Parent 2 0 R /MediaBox [0 0 120 90] /Resources << >> /Contents $contentId 0 R >>";
-        $objects[$contentId]='<< /Length '.strlen($stream)." >>\nstream\n".$stream."endstream";
+    $objects = [1 => '<< /Type /Catalog /Pages 2 0 R >>'];
+    $kids = [];
+    for ($page = 0; $page < $pages; $page++) {
+        $pageId = 3 + $page * 2;
+        $contentId = $pageId + 1;
+        $kids[] = "$pageId 0 R";
+        $stream = "0 0 0 rg 20 20 60 40 re f\n";
+        $objects[$pageId] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 120 90] /Resources << >> /Contents $contentId 0 R >>";
+        $objects[$contentId] = '<< /Length '.strlen($stream)." >>\nstream\n".$stream.'endstream';
     }
-    $objects[2]='<< /Type /Pages /Count '.$pages.' /Kids ['.implode(' ',$kids).'] >>';ksort($objects);
-    $pdf="%PDF-1.4\n";$offsets=[0];foreach($objects as $id=>$object){$offsets[$id]=strlen($pdf);$pdf.="$id 0 obj\n$object\nendobj\n";}
-    $xref=strlen($pdf);$count=count($objects)+1;$pdf.="xref\n0 $count\n0000000000 65535 f \n";
-    for($id=1;$id<$count;$id++)$pdf.=sprintf("%010d 00000 n \n",$offsets[$id]);
+    $objects[2] = '<< /Type /Pages /Count '.$pages.' /Kids ['.implode(' ', $kids).'] >>';
+    ksort($objects);
+    $pdf = "%PDF-1.4\n";
+    $offsets = [0];
+    foreach ($objects as $id => $object) {
+        $offsets[$id] = strlen($pdf);
+        $pdf .= "$id 0 obj\n$object\nendobj\n";
+    }
+    $xref = strlen($pdf);
+    $count = count($objects) + 1;
+    $pdf .= "xref\n0 $count\n0000000000 65535 f \n";
+    for ($id = 1; $id < $count; $id++) {
+        $pdf .= sprintf("%010d 00000 n \n", $offsets[$id]);
+    }
+
     return $pdf."trailer\n<< /Size $count /Root 1 0 R >>\nstartxref\n$xref\n%%EOF\n";
 }
-it('converts a real single-page PDF and retains but rejects a multi-page PDF',function(){
-    $binary=getenv('WHOLESALE_LABEL_VTRACER')?:dirname(base_path()).'/label-tools/bin/vtracer';
-    $gs=getenv('WHOLESALE_LABEL_GS')?:'/opt/homebrew/bin/gs';
-    if(!is_file($binary)||!is_file($gs))$this->markTestSkipped('Pinned tracer and Ghostscript are required.');
-    config(['wholesale_labels.vtracer'=>$binary,'wholesale_labels.ghostscript'=>$gs]);
-    foreach([1=>'draft',2=>'failed'] as $pages=>$status){
-        $bytes=labelPdfBytes($pages);$revision=$this->library->upload($this->owner,UploadedFile::fake()->createWithContent("fictional-$pages.pdf",$bytes),'Fictional PDF');
+it('converts a real single-page PDF and retains but rejects a multi-page PDF', function () {
+    $binary = getenv('WHOLESALE_LABEL_VTRACER') ?: dirname(base_path()).'/label-tools/bin/vtracer';
+    $gs = getenv('WHOLESALE_LABEL_GS') ?: '/opt/homebrew/bin/gs';
+    if (! is_file($binary) || ! is_file($gs)) {
+        $this->markTestSkipped('Pinned tracer and Ghostscript are required.');
+    }
+    config(['wholesale_labels.vtracer' => $binary, 'wholesale_labels.ghostscript' => $gs]);
+    foreach ([1 => 'draft', 2 => 'failed'] as $pages => $status) {
+        $bytes = labelPdfBytes($pages);
+        $revision = $this->library->upload($this->owner, UploadedFile::fake()->createWithContent("fictional-$pages.pdf", $bytes), 'Fictional PDF');
         app(WholesaleLabelProcessor::class)->process($revision->id);
         expect($revision->fresh()->status)->toBe($status)->and(Storage::disk('team_private')->get($revision->original_path))->toBe($bytes);
     }
