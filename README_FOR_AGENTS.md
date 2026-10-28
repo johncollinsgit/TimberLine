@@ -1,3 +1,16 @@
+## Private proposal conversation simulation (source candidate)
+
+Current private browser-sample editions can demonstrate context-aware job
+conversation, optional browser voice, editable department email drafts and an
+explicit simulated outbox. This mode is separate from paid AI and shared-server
+workspace mode. Drafts and simulated deliveries stay in page memory; existing
+proposal review names and page comments retain their server persistence. Nothing
+is actually sent. Native/public authority and provider gates remain unchanged.
+Normal source checks, independent review, deployment and a separately published
+new private edition remain required; old links and editions are preserved.
+See `docs/operations/proposal-reviewer-ai.md`. Physical microphone and mobile
+acceptance are separate from synthetic speech and viewport checks.
+
 ## Reviewed comparison and new fictional edition basis (source candidate)
 
 A saved, compatible Lees-McRae proposal can explicitly include a far-left

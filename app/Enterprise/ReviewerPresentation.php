@@ -62,11 +62,14 @@ class ReviewerPresentation
                 $presentation['reviewerAi'] = $campusReviewContext['reviewer_ai'];
             }
         }
+        if ($review && ! array_key_exists('reviewerWorkspace', $presentation) && ($presentation['reviewerAi']['enabled'] ?? false) !== true) {
+            $presentation['reviewerSimulation'] = true;
+        }
         $bootstrap = ['project' => ['id' => $scope['project_id'], 'name' => 'Campus event readiness - sample'], 'members' => [],
             'can_design' => false, 'can_run' => false, 'items' => [], 'templates' => []];
         $html = view($workflow ? 'enterprise.workspace' : 'enterprise.app', ['presentation' => $presentation, 'enterpriseRole' => 'sample perspective',
             'scope' => $scope, 'bootstrap' => $bootstrap, 'inlineAssets' => $workflow ? $this->assets() : null,
-            'voiceAssets' => $review && ($presentation['reviewerAi']['enabled'] ?? false) === true ? $this->voiceAssets() : null, 'campusReviewContext' => $review ? $campusReviewContext : null])->render();
+            'voiceAssets' => $review && (($presentation['reviewerSimulation'] ?? false) === true || ($presentation['reviewerAi']['enabled'] ?? false) === true) ? $this->voiceAssets() : null, 'campusReviewContext' => $review ? $campusReviewContext : null])->render();
         if ($review) {
             $overlay = view('enterprise.campus-review-assets', ['campusReviewContext' => $campusReviewContext, 'campusReviewLayout' => $workflow ? 'canvas' : 'shell'])->render();
             $html = str_replace('</body>', $overlay.'</body>', $html);

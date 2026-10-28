@@ -2016,6 +2016,7 @@
             }
             const job = Object.fromEntries(["id", "project_id", "area_id", "title", "status", "priority", "next_action", "due_on", "blockers", "version", "task_version"]
                 .map(key => [key, view[key] ?? null]));
+            job.priority = ['low', 'normal', 'high', 'urgent'].includes(raw.priority) ? raw.priority : null;
             job.updated_at = raw.updated_at ?? null; // An absent source timestamp stays unknown.
             job.owner = members.find(member => member.id === String(view.owner_user_id))?.name ?? null;
             job.handler = view.ball_team ? "Department team" : (members.find(member => member.id === String(view.ball_user_id))?.name ?? null);
@@ -2023,9 +2024,56 @@
             job.source_url = recordUrl("projects", view.project_id, chosen.id) + "&task=" + encodeURIComponent(view.id);
             job.cost_coverage = "Costs are outside this voice projection. Use currently authorized Planning for recorded project costs; no job total is inferred.";
             const reply = job.title + ". Status: " + String(job.status).replaceAll("_", " ") + ". Location: " + (location?.label ?? "not recorded in the checked sources")
-                + ". Current handler: " + (job.handler ?? "not available") + ". Due date: " + (job.due_on ?? "not recorded")
+                + ". Priority: " + (job.priority ?? "not recorded") + ". Current handler: " + (job.handler ?? "not available") + ". Due date: " + (job.due_on ?? "not recorded")
                 + ". Next action: " + (job.next_action || "not recorded") + ". Blockers: " + (job.blockers?.length ? job.blockers.join("; ") : "none recorded in this task") + ".";
             return {...base, outcome: "matched", job: clone(job), reply};
+        }
+        // Demo-only drafts and outbox stay in RAM. Never mailbox, graph or receipt storage.
+        let demoEpoch = 0;
+        const demoPreviews = new Map(), demoSent = new Map(), demoListeners = new Set();
+        function retireDemo() {
+            demoEpoch++; demoPreviews.clear(); demoSent.clear();
+            for (const fn of demoListeners) fn();
+        }
+        function demoContext(areaId) {
+            if (boot.reviewerSimulation !== true || Object.hasOwn(boot, "reviewerWorkspace")) error("Simulated conversation is unavailable in this presentation.", 403);
+            area(areaId);
+            const departments = state.areas.filter(row => {
+                try { area(row.id); return true; } catch (failure) { if (failure.status === 404) return false; throw failure; }
+            }).map(row => ({id: row.id, name: row.name}));
+            return clone({stamp: JSON.stringify([demoEpoch, state.persona, currentId(), areaId]), user_id: currentId(), departments});
+        }
+        function demoEmail(input) {
+            if (!input || Object.keys(input).sort().join(',') !== 'area_id,body,department_id,job_id,subject'
+                || typeof input.subject !== 'string' || !input.subject.trim() || input.subject.length > 200
+                || typeof input.body !== 'string' || !input.body.trim() || input.body.length > 3000
+                || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(input.subject + input.body))
+                error('Review a subject up to 200 characters and a message up to 3,000 characters.', 422);
+            const context = demoContext(input.area_id), destination = area(input.department_id);
+            const result = voiceJobs({area_id: input.area_id, question: 'Show this job', focus: input.job_id});
+            if (result.outcome !== 'matched') error('Choose a currently permitted job before preparing this demo message.', 404);
+            if (demoPreviews.size >= 32) error('This page has reached its demo preview limit. Nothing was sent.', 409);
+            const id = crypto.randomUUID();
+            const preview = {id, simulated: true, status: 'preview', area_id: input.area_id, department_id: destination.id,
+                department: destination.name, subject: input.subject, body: input.body};
+            demoPreviews.set(id, {preview, stamp: context.stamp, job: JSON.stringify(result.job), job_id: input.job_id, expires: Date.now() + 600000});
+            return clone(preview);
+        }
+        function demoDeliver(input) {
+            if (!input || Object.keys(input).sort().join(',') !== 'confirmed,preview_id' || input.confirmed !== true || typeof input.preview_id !== 'string')
+                error('Confirm the exact simulated preview.', 422);
+            const saved = demoPreviews.get(input.preview_id);
+            if (!saved || saved.expires <= Date.now() || demoContext(saved.preview.area_id).stamp !== saved.stamp)
+                error('This demo preview expired or its perspective changed. Review it again.', 409);
+            area(saved.preview.department_id);
+            const result = voiceJobs({area_id: saved.preview.area_id, question: 'Show this job', focus: saved.job_id});
+            if (result.outcome !== 'matched' || JSON.stringify(result.job) !== saved.job)
+                error('The source job changed. Keep your draft and review current facts.', 409);
+            if (demoSent.has(input.preview_id)) return clone({...demoSent.get(input.preview_id), replayed: true});
+            if (demoSent.size >= 20) error('This page has reached its demo outbox limit. Nothing was sent.', 409);
+            const receipt = {...saved.preview, status: 'simulated_delivery', delivered_to_provider: false, replayed: false};
+            demoSent.set(input.preview_id, receipt);
+            return clone(receipt);
         }
         function sampleUsage(query) {
             if (!manager()) error("Sample usage is available only to the manager or executive perspective.", 404);
@@ -4414,6 +4462,9 @@
         const adapter = Object.freeze({
             mode: "sample",
             request,
+            demoContext, demoEmail, demoDeliver,
+            demoOutbox() { demoContext(IDS.area); return clone([...demoSent.values()]); },
+            subscribeDemo(fn) { if (typeof fn !== "function") error("Invalid demo observer."); demoListeners.add(fn); return () => demoListeners.delete(fn); },
             href,
             navigate,
             replace,
@@ -4425,10 +4476,12 @@
                     )
                 )
                     error("Choose a sample perspective.");
+                retireDemo();
                 state.persona = value;
                 save();
             },
             reset() {
+                retireDemo();
                 // Clear only this sample workspace's retained UI drafts. Private
                 // runtime drafts and the separate controlled trial are untouched.
                 const workspace = String(boot.identity?.workspace ?? "campus");

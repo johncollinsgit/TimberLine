@@ -14,14 +14,26 @@
 <section id="ask" class="next-panel" hidden>
   @if($enterpriseSample)
   <div id="reviewer-ai-coming-soon" aria-labelledby="reviewer-ai-heading">
-    <h2 id="reviewer-ai-heading">AI tools</h2>@unless(($enterprisePresentation['reviewerAi']['enabled'] ?? false) === true)<p class="subtle">Coming soon. Continue exploring projects, tickets and team updates in this demo.</p>@endunless
+    <h2 id="reviewer-ai-heading">AI tools</h2>@if(($enterprisePresentation['reviewerSimulation'] ?? false) !== true && ($enterprisePresentation['reviewerAi']['enabled'] ?? false) !== true)<p class="subtle">Coming soon. Continue exploring projects, tickets and team updates in this demo.</p>@endif
+    @if(($enterprisePresentation['reviewerSimulation'] ?? false) === true)
+    <section id="reviewer-simulation" class="panel stack" aria-label="Simulated campus assistant">
+      <h3>Demo assistant</h3><p class="caption">Fictional records. No paid AI or real email. Drafts and demo outbox last only on this page; they are not shared or delivered.</p>
+      <label>Department<select id="demo-conversation-area"></select></label>
+      <div id="demo-voice-controls"></div><p id="demo-conversation-status" role="status">Type a job question. Voice is optional.</p>
+      <div id="demo-conversation-log" class="chat-log" role="log" aria-live="polite"></div>
+      <form id="demo-conversation-form" class="stack"><label>Message<textarea id="demo-conversation-question" maxlength="1500" required></textarea></label><button class="button" id="demo-conversation-submit" type="submit">Ask demo</button></form>
+      <form id="demo-email-form" class="stack"><h3>Draft a demo email</h3><label>To department<select id="demo-email-department"></select></label><label>Subject<input id="demo-email-subject" maxlength="200" required></label><label>Message<textarea id="demo-email-body" maxlength="3000" rows="5" required></textarea></label><button class="button" id="demo-email-preview-button" type="submit" disabled>Preview demo email</button></form>
+      <pre id="demo-email-preview" style="white-space:pre-wrap;overflow-wrap:anywhere" hidden></pre><button class="button" type="button" id="demo-email-confirm" hidden>Simulate send</button>
+      <section aria-label="Demo outbox"><h3>Demo outbox</h3><div id="demo-email-outbox" role="status">No simulated deliveries.</div></section>
+    </section>
+    @endif
     @if(($enterprisePresentation['reviewerAi']['enabled'] ?? false) === true)
     @include('enterprise.proposal-ai-chat')
     @endif
     <div class="planning-grid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr))">
-      @unless(($enterprisePresentation['reviewerAi']['enabled'] ?? false) === true)<article class="panel"><h3>Chats</h3><p class="badge">Coming soon</p><p>Ask about your workspace in a conversation.</p></article>@endunless
+      @if(($enterprisePresentation['reviewerSimulation'] ?? false) !== true && ($enterprisePresentation['reviewerAi']['enabled'] ?? false) !== true)<article class="panel"><h3>Chats</h3><p class="badge">Coming soon</p><p>Ask about your workspace in a conversation.</p></article>@endif
       <article class="panel"><h3>Assistants</h3><p class="badge">Coming soon</p><p>Keep a focused assistant for recurring work.</p></article>
-      @unless(($enterprisePresentation['reviewerAi']['enabled'] ?? false) === true)<article class="panel"><h3>Voice</h3><p class="badge">Coming soon</p><p>Talk with Everbranch about your work.</p></article>@endunless
+      @if(($enterprisePresentation['reviewerSimulation'] ?? false) !== true && ($enterprisePresentation['reviewerAi']['enabled'] ?? false) !== true)<article class="panel"><h3>Voice</h3><p class="badge">Coming soon</p><p>Talk with Everbranch about your work.</p></article>@endif
     </div>
   </div>
   @endif
