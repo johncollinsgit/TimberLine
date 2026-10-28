@@ -1060,6 +1060,7 @@ class MarketingShopifyIntegrationController extends Controller
             'reward' => [
                 'state' => (string) ($status['state'] ?? 'birthday_saved'),
                 'issuance' => $this->birthdayIssuancePayload($status['issuance'] ?? null),
+                'issuances' => $this->birthdayCollectionPayload($profile),
             ],
         ], $this->contractMeta($request), $stateList);
     }
@@ -1181,6 +1182,7 @@ class MarketingShopifyIntegrationController extends Controller
             'reward' => [
                 'state' => (string) ($status['state'] ?? 'birthday_saved'),
                 'issuance' => $this->birthdayIssuancePayload($status['issuance'] ?? null),
+                'issuances' => $this->birthdayCollectionPayload($profile),
             ],
             'shopify_sync' => [
                 'updated' => (int) ($syncResult['updated'] ?? 0),
@@ -1219,7 +1221,7 @@ class MarketingShopifyIntegrationController extends Controller
         }
         $tenantId = $this->runtimeTenantId($storeContext, $profile);
         $birthdayProfile = $profile->birthdayProfile;
-        if (! $birthdayProfile) {
+        if (! $birthdayProfile && ! $request->filled('issuance_id')) {
             return MarketingStorefrontContract::error(
                 code: 'missing_birthday',
                 message: 'Birthday is required before claiming a birthday reward.',
@@ -1231,13 +1233,23 @@ class MarketingShopifyIntegrationController extends Controller
         }
 
         $status = $rewardEngine->statusForProfile($birthdayProfile, ['tenant_id' => $tenantId]);
-        if (($status['state'] ?? '') === 'birthday_reward_eligible') {
+        if (! $request->filled('issuance_id') && ($status['state'] ?? '') === 'birthday_reward_eligible') {
             $rewardEngine->issueAnnualReward($birthdayProfile, ['tenant_id' => $tenantId]);
             $birthdayProfile = $birthdayProfile->fresh();
             $status = $rewardEngine->statusForProfile($birthdayProfile, ['tenant_id' => $tenantId]);
         }
 
         $issuance = $status['issuance'] ?? null;
+        $requested = $request->validate(['issuance_id' => ['nullable', 'integer', 'min:1']])['issuance_id'] ?? null;
+        $club = app(\App\Services\Marketing\BirthdayClubService::class);
+        if ($requested !== null) {
+            $issuance = $club->enabled($tenantId)
+                ? $club->issuances($profile)->firstWhere('id', (int) $requested)
+                : null;
+            if (! $issuance) {
+                return MarketingStorefrontContract::error(code: 'birthday_reward_not_found', message: 'Birthday gift could not be found for this account.', status: 404);
+            }
+        }
         if (! $issuance) {
             return MarketingStorefrontContract::error(
                 code: 'birthday_reward_not_ready',
@@ -1289,6 +1301,7 @@ class MarketingShopifyIntegrationController extends Controller
             'reward' => [
                 'state' => 'already_claimed',
                 'issuance' => $issuancePayload,
+                'issuances' => $this->birthdayCollectionPayload($profile),
             ],
         ], $this->contractMeta($request), $states);
     }
@@ -1332,6 +1345,7 @@ class MarketingShopifyIntegrationController extends Controller
         $googleReviewMode = (string) ($googleReview['effective_mode'] ?? 'unavailable');
         $googleReviewUrl = trim((string) ($googleReview['review_url'] ?? '')) ?: null;
         $taskRows = $taskService->storefrontTasks($profile)
+            ->reject(fn (array $row): bool => (string) data_get($row, 'task.handle') === 'birthday-signup' && ! app(\App\Services\Marketing\BirthdayClubService::class)->signupEnabled($tenantId))
             ->reject(fn (array $row): bool => (string) data_get($row, 'task.handle') === 'google-review' && $googleReviewMode === 'unavailable')
             ->values();
         $taskHistory = $profile
@@ -1621,6 +1635,7 @@ class MarketingShopifyIntegrationController extends Controller
             'birthday' => [
                 'state' => (string) ($birthdayStatus['state'] ?? 'add_birthday_unlock_reward'),
                 'issuance' => $this->birthdayIssuancePayload($birthdayStatus['issuance'] ?? null),
+                'issuances' => $profile ? $this->birthdayCollectionPayload($profile) : [],
             ],
         ], $this->contractMeta($request), $states);
 
@@ -2747,6 +2762,7 @@ class MarketingShopifyIntegrationController extends Controller
                 'state' => (string) ($birthdayStatus['state'] ?? 'birthday_saved'),
                 'birthday' => $birthdayProfile ? $this->birthdayPayload($birthdayProfile) : null,
                 'issuance' => $this->birthdayIssuancePayload($birthdayStatus['issuance'] ?? null),
+                'issuances' => $profile ? $this->birthdayCollectionPayload($profile) : [],
             ],
         ], $this->contractMeta($request), $states);
     }
@@ -3413,6 +3429,15 @@ class MarketingShopifyIntegrationController extends Controller
     /**
      * @return array<string,mixed>|null
      */
+    protected function birthdayCollectionPayload(\App\Models\MarketingProfile $profile): array
+    {
+        $club = app(\App\Services\Marketing\BirthdayClubService::class);
+
+        return $club->enabled((int) $profile->tenant_id)
+            ? $club->issuances($profile)->map(fn ($reward) => $this->birthdayIssuancePayload($reward))->all()
+            : [];
+    }
+
     protected function birthdayIssuancePayload(mixed $issuance): ?array
     {
         if (! is_object($issuance)) {
@@ -3426,6 +3451,7 @@ class MarketingShopifyIntegrationController extends Controller
         return [
             'id' => isset($issuance->id) ? (int) $issuance->id : null,
             'cycle_year' => isset($issuance->cycle_year) ? (int) $issuance->cycle_year : null,
+            'presentation' => data_get($issuance->metadata, 'catchup_campaign_key') ? 'belated' : 'regular',
             'reward_type' => isset($issuance->reward_type) ? (string) $issuance->reward_type : null,
             'reward_name' => isset($issuance->reward_name) && $issuance->reward_name !== null
                 ? (string) $issuance->reward_name
@@ -3486,6 +3512,7 @@ class MarketingShopifyIntegrationController extends Controller
             'is_activated' => method_exists($issuance, 'isActivated') ? (bool) $issuance->isActivated() : in_array((string) ($issuance->status ?? ''), ['claimed', 'redeemed'], true),
             'is_redeemed' => method_exists($issuance, 'isRedeemed') ? (bool) $issuance->isRedeemed() : (string) ($issuance->status ?? '') === 'redeemed',
             'is_usable' => method_exists($issuance, 'isUsable') ? (bool) $issuance->isUsable() : false,
+            'is_expired' => method_exists($issuance, 'isExpired') ? (bool) $issuance->isExpired() : false,
         ];
     }
 

@@ -153,6 +153,9 @@ jobs:
         timeout-minutes: 45
         run: npx playwright install --with-deps chromium webkit
 
+      - name: Verify Birthday Club desktop and mobile states
+        run: node tests/e2e/birthday-club-browser.mjs
+
       - name: Verify wholesale cart and private-label buyer workflows
         run: |
           node tests/e2e/wholesale-quantity-browser.mjs
@@ -286,7 +289,7 @@ jobs:
         run: php ./vendor/bin/pest tests/Integration/WholesaleLabelsMySqlRecoveryTest.php tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php tests/Integration/HighLevelFleetMySqlMigrationRecoveryTest.php tests/Integration/TenantMailMySqlMigrationRecoveryTest.php tests/Integration/FleetOperationsMySqlMigrationRecoveryTest.php tests/Integration/SoccerMySqlMigrationRecoveryTest.php tests/Integration/SoccerAllocationConcurrencyTest.php tests/Integration/MarketingDeskMySqlRecoveryTest.php tests/Integration/ReviewedSchemaDriftRecoveryTest.php tests/Integration/AiBranchMySqlMigrationRecoveryTest.php tests/Integration/TeamWorkMySqlMigrationRecoveryTest.php tests/Integration/MarketplaceMySqlRecoveryTest.php tests/Integration/PlatformMailMySqlRecoveryTest.php tests/Integration/ServiceProposalMySqlRecoveryTest.php --compact
 
       - name: Verify subscription pilot evidence partial-DDL recovery
-        run: php ./vendor/bin/pest tests/Integration/SubscriptionPilotMySqlRecoveryTest.php tests/Integration/SubscriptionPilotExecutionMySqlRecoveryTest.php --compact
+        run: php ./vendor/bin/pest tests/Integration/BirthdayClubMySqlRecoveryTest.php tests/Integration/SubscriptionPilotMySqlRecoveryTest.php tests/Integration/SubscriptionPilotExecutionMySqlRecoveryTest.php --compact
 
       - name: Verify POS simulation partial-DDL recovery
         env:

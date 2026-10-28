@@ -12,8 +12,8 @@ use RuntimeException;
 class BirthdayProfileService
 {
     /**
-     * @param array<string,mixed> $payload
-     * @param array<string,mixed> $options
+     * @param  array<string,mixed>  $payload
+     * @param  array<string,mixed>  $options
      */
     public function captureForProfile(MarketingProfile $profile, array $payload, array $options = []): CustomerBirthdayProfile
     {
@@ -36,6 +36,10 @@ class BirthdayProfileService
         $existing = CustomerBirthdayProfile::query()
             ->where('marketing_profile_id', $profile->id)
             ->first();
+
+        if (! $clear && $existing?->birth_year && empty($payload['birth_year']) && empty($payload['birthday_full_date'])) {
+            $normalized = $this->normalizeBirthday([...$payload, 'birth_year' => (int) $existing->birth_year]);
+        }
 
         $sourceToPersist = $source;
         $sourceCapturedAtToPersist = $sourceCapturedAt;
@@ -106,7 +110,7 @@ class BirthdayProfileService
     }
 
     /**
-     * @param array<string,mixed> $payload
+     * @param  array<string,mixed>  $payload
      * @return array{birth_month:?int,birth_day:?int,birth_year:?int,birthday_full_date:?string}
      */
     public function normalizeBirthday(array $payload): array
@@ -170,7 +174,7 @@ class BirthdayProfileService
     }
 
     /**
-     * @param array<string,mixed> $payload
+     * @param  array<string,mixed>  $payload
      */
     public function writeAudit(
         CustomerBirthdayProfile $profile,
