@@ -1,3 +1,18 @@
+## Controlled Stripe subscription pilot (2026-10-28; source candidate)
+
+- Selected members can authorize a new Stripe card without charging. Independent
+  default-off setup/collection/handoff and tenant gates preserve Recharge primary.
+  Fresh source-stop, queued/collected charge checks, real callback proof and
+  individual owner activation precede current-day collection.
+- Each monthly cycle retains one original PaymentIntent request and one paid
+  external-payment Shopify handoff. Unknown results reconcile original objects;
+  no replacement charge/order is created. Shopify still owns shipping/fulfillment.
+- Offline readouts distinguish payments, orders, fulfillment and time-bounded
+  duplicate coverage. Native original Shopify identities can pause/cancel selected
+  Stripe subscriptions; other Recharge customers retain their existing behavior.
+  Prepaid, general Branch purchasing and native management-link UI remain gated
+  future work. Follow `docs/operations/subscriptions-pilot.md`.
+
 ## Public reports, material examples and task Timeline (source candidate)
 
 The separate public fictional sample adds projected phase/estimate charts, with

@@ -1,3 +1,13 @@
+## 2026-10-28 — Controlled subscription enrollment
+
+- Added private customer terms and Stripe card setup, separate owner activation,
+  pause/cancel and original-payment authentication. Setup cannot collect payment.
+- Owner review links accompany current Stripe evidence and time-stamped coverage.
+  Existing charts keep payment, Shopify order and fulfillment outcomes separate.
+- Native selected customers retain existing pause/cancel action shapes; other
+  Recharge customers keep their current behavior. General Branch purchase and
+  prepaid execution remain disabled.
+
 ## 2026-10-27 — Subscription pilot readouts
 
 - Added one shared, permission-checked report in Everbranch and Shopify Backstage

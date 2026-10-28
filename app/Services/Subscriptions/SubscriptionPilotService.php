@@ -187,20 +187,30 @@ class SubscriptionPilotService
         $excess = $member->expected_amount_cents !== null && $unique->sum('amount_cents') > $member->expected_amount_cents;
         $orders = $current->where('kind', 'order')->where('provider', 'shopify')->where('status', 'success');
         $observed = $events->max('observed_at');
-        $enrollment=\Illuminate\Support\Facades\Schema::hasTable('subscription_pilot_enrollments')
-            ?\App\Models\SubscriptionPilotEnrollment::query()->forTenantId($member->tenant_id)->where('member_id',$member->id)->first():null;
-        $executionCycle=$enrollment?\App\Models\SubscriptionPilotCycle::query()->forTenantId($member->tenant_id)->where('enrollment_id',$enrollment->id)
-            ->whereDate('cycle_date',$member->target_date->toDateString())->first():null;
-        $possible=$duplicate||$excess||data_get($executionCycle?->reconciliation,'possible_duplicate')===true;
-        $coverage=data_get($executionCycle?->reconciliation,'coverage');
-        $clear=$coverage && ($coverage['status']??null)==='observed_clear'
+        $enrollment = \Illuminate\Support\Facades\Schema::hasTable('subscription_pilot_enrollments')
+            ? \App\Models\SubscriptionPilotEnrollment::query()->forTenantId($member->tenant_id)->where('member_id', $member->id)->first() : null;
+        $executionCycle = $enrollment ? \App\Models\SubscriptionPilotCycle::query()->forTenantId($member->tenant_id)->where('enrollment_id', $enrollment->id)
+            ->whereDate('cycle_date', $member->target_date->toDateString())->first() : null;
+        $possible = $duplicate || $excess || data_get($executionCycle?->reconciliation, 'possible_duplicate') === true;
+        $coverage = data_get($executionCycle?->reconciliation, 'coverage');
+        $clear = $coverage && ($coverage['status'] ?? null) === 'observed_clear'
             && CarbonImmutable::parse($coverage['checked_at'])->gt(now()->subMinutes(15));
-        $blockers=[];
-        if($member->billing_owner==='recharge')$blockers[]='Recharge billing remains primary';
-        if(!$enrollment?->authorized_at)$blockers[]='Customer Stripe authorization required';
-        if(!$enrollment?->activated_at)$blockers[]='Fresh Recharge billing-stop and charge checks required before activation';
-        if($executionCycle?->last_error_code)$blockers[]='Operator review: '.str_replace('_',' ',$executionCycle->last_error_code);
-        if(!$enrollment?->activated_at)$blockers[]='Stripe merchant, signed callback and Shopify bridge readiness required';
+        $blockers = [];
+        if ($member->billing_owner === 'recharge') {
+            $blockers[] = 'Recharge billing remains primary';
+        }
+        if (! $enrollment?->authorized_at) {
+            $blockers[] = 'Customer Stripe authorization required';
+        }
+        if (! $enrollment?->activated_at) {
+            $blockers[] = 'Fresh Recharge billing-stop and charge checks required before activation';
+        }
+        if ($executionCycle?->last_error_code) {
+            $blockers[] = 'Operator review: '.str_replace('_', ' ', $executionCycle->last_error_code);
+        }
+        if (! $enrollment?->activated_at) {
+            $blockers[] = 'Stripe merchant, signed callback and Shopify bridge readiness required';
+        }
 
         return ['id' => $member->id, 'name' => $member->details['name'], 'email' => $member->details['email'],
             'status' => $member->status, 'billing_owner' => $member->billing_owner,
@@ -211,10 +221,10 @@ class SubscriptionPilotService
             'payment_status' => $unique->isNotEmpty() ? 'Observed payment' : (now($member->timezone)->toDateString() < $member->target_date->toDateString() ? 'Awaiting cycle' : 'Not verified'),
             'shopify_status' => $orders->isNotEmpty() ? 'Observed order' : 'Not verified',
             'fulfillment_status' => $current->where('kind', 'fulfillment')->where('status', 'fulfilled')->isNotEmpty() ? 'Observed fulfillment' : 'Not verified',
-            'duplicate_status' => $possible?'Possible duplicate':($clear?'No additional payment observed at '.CarbonImmutable::parse($coverage['checked_at'])->setTimezone($member->timezone)->format('g:i a T'):'Not verified'),
-            'duplicate_alert' => $possible, 'execution_status'=>$enrollment?->status,
-            'can_review_execution'=>config('subscriptions.pilot_setup_enabled') && in_array($member->tenant_id,config('subscriptions.pilot_tenant_ids',[]),true),
-            'coverage_checked_at'=>$coverage['checked_at']??null, 'candle_cash_allowed' => false,
+            'duplicate_status' => $possible ? 'Possible duplicate' : ($clear ? 'No additional payment observed at '.CarbonImmutable::parse($coverage['checked_at'])->setTimezone($member->timezone)->format('g:i a T') : 'Not verified'),
+            'duplicate_alert' => $possible, 'execution_status' => $enrollment?->status,
+            'can_review_execution' => config('subscriptions.pilot_setup_enabled') && in_array($member->tenant_id, config('subscriptions.pilot_tenant_ids', []), true),
+            'coverage_checked_at' => $coverage['checked_at'] ?? null, 'candle_cash_allowed' => false,
             'activation_blockers' => $blockers,
         ];
     }
@@ -224,7 +234,7 @@ class SubscriptionPilotService
         return $events->groupBy(fn ($e) => $e->provider.'|'.$e->kind.'|'.$e->provider_reference)->map(function ($group) {
             $provider = $group->filter(fn ($event) => in_array($event->verification, ['shopify_read', 'shopify_ingest', 'stripe_read'], true));
             if ($provider->isNotEmpty()) {
-                return $provider->sortByDesc('id')->sortByDesc(fn ($event) => $event->provider==='stripe' ? $event->observed_at->toIso8601String() : (string) data_get($event->evidence, 'shopify_updated_at'))->first();
+                return $provider->sortByDesc('id')->sortByDesc(fn ($event) => $event->provider === 'stripe' ? $event->observed_at->toIso8601String() : (string) data_get($event->evidence, 'shopify_updated_at'))->first();
             }
 
             return $group->sortByDesc('id')->sortByDesc('observed_at')->first();
@@ -249,25 +259,27 @@ class SubscriptionPilotService
         $count = 0;
         foreach ($members as $member) {
             $expected = array_filter(array_column($member->details['lines'], 'subscription_id'));
-            $pilotCycle=null;
-            if(!$subscriptionIds && \Illuminate\Support\Facades\Schema::hasTable('subscription_pilot_cycles')) {
-                $pilotCycle=\App\Models\SubscriptionPilotCycle::query()->forTenantId($tenantId)->where('shopify_order_id',(string)$order['id'])
-                    ->where('public_id',$attributes->get('everbranch_pilot_cycle'))->first();
-                if($pilotCycle) {
-                    $enrollment=\App\Models\SubscriptionPilotEnrollment::query()->forTenantId($tenantId)->find($pilotCycle->enrollment_id);
-                    if(!$enrollment || !$pilotCycle->paid_at || !$pilotCycle->terms['merchant']['livemode'] || $enrollment->member_id!==$member->id || $pilotCycle->terms['shopify_store_id']!==$store->id
-                        || $pilotCycle->terms['shop_domain']!==$store->shop_domain
-                        || $pilotCycle->payment_intent_id!==$attributes->get('everbranch_stripe_payment_intent')
-                        || $pilotCycle->terms['merchant']['account_id']!==$attributes->get('everbranch_stripe_account')
-                        || $pilotCycle->terms['terms_hash']!==$attributes->get('everbranch_terms_hash'))$pilotCycle=null;
+            $pilotCycle = null;
+            if (! $subscriptionIds && \Illuminate\Support\Facades\Schema::hasTable('subscription_pilot_cycles')) {
+                $pilotCycle = \App\Models\SubscriptionPilotCycle::query()->forTenantId($tenantId)->where('shopify_order_id', (string) $order['id'])
+                    ->where('public_id', $attributes->get('everbranch_pilot_cycle'))->first();
+                if ($pilotCycle) {
+                    $enrollment = \App\Models\SubscriptionPilotEnrollment::query()->forTenantId($tenantId)->find($pilotCycle->enrollment_id);
+                    if (! $enrollment || ! $pilotCycle->paid_at || ! $pilotCycle->terms['merchant']['livemode'] || $enrollment->member_id !== $member->id || $pilotCycle->terms['shopify_store_id'] !== $store->id
+                        || $pilotCycle->terms['shop_domain'] !== $store->shop_domain
+                        || $pilotCycle->payment_intent_id !== $attributes->get('everbranch_stripe_payment_intent')
+                        || $pilotCycle->terms['merchant']['account_id'] !== $attributes->get('everbranch_stripe_account')
+                        || $pilotCycle->terms['terms_hash'] !== $attributes->get('everbranch_terms_hash')) {
+                        $pilotCycle = null;
+                    }
                 }
             }
-            if ((!$pilotCycle && (!$expected || !$subscriptionIds || array_diff($subscriptionIds,$expected))) || $member->details['shop_domain'] !== $store->shop_domain) {
+            if ((! $pilotCycle && (! $expected || ! $subscriptionIds || array_diff($subscriptionIds, $expected))) || $member->details['shop_domain'] !== $store->shop_domain) {
                 continue;
             }
             $at = CarbonImmutable::parse($order['processed_at'] ?? $order['created_at']);
             $updated = CarbonImmutable::parse($order['updated_at'] ?? $order['processed_at'] ?? $order['created_at']);
-            $cycle = $pilotCycle?$pilotCycle->cycle_date->toDateString():$at->setTimezone($member->timezone)->toDateString();
+            $cycle = $pilotCycle ? $pilotCycle->cycle_date->toDateString() : $at->setTimezone($member->timezone)->toDateString();
             $financial = strtolower((string) ($order['financial_status'] ?? ''));
             $status = $financial === 'paid' && empty($order['cancelled_at']) ? 'success' : ($financial === 'refunded' ? 'refunded' : 'pending');
             $currency = (string) ($order['currency'] ?? '');
