@@ -172,7 +172,13 @@ class ShopifyOrderIngestor
                 $order->status = 'new';
             }
 
+            if (($store['key'] ?? '') === 'wholesale' && str_contains((string) ($orderData['note'] ?? ''), "[Wholesale order request]\n")) {
+                $meta = $order->attribution_meta ?? [];
+                $meta['buyer_order_request'] = substr(\Illuminate\Support\Str::afterLast($orderData['note'], "[Wholesale order request]\n"), 0, 8000);
+                $order->attribution_meta = $meta;
+            }
             $order->save();
+            app(\App\Services\Wholesale\Labels\WholesaleLabelOrderService::class)->capture($order, $orderData);
             $syncedOrderId = (int) $order->id;
             $summary['order_id'] = $syncedOrderId;
             $identityContext = $this->buildMarketingIdentityContext(
@@ -400,6 +406,7 @@ class ShopifyOrderIngestor
                 (string) ($title ?? ''),
                 (string) ($variant ?? ''),
                 (string) ($lineWick ?? ''),
+                (string) \App\Services\Wholesale\Labels\WholesaleLabelOrderService::property($line, '_MF label request'),
             ]);
             $lineFinancials = $this->extractLineFinancials($line);
             $isNew = ! isset($merged[$key]);

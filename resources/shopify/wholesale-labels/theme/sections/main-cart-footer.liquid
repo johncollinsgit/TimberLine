@@ -1,0 +1,198 @@
+{{ 'component-cart.css' | asset_url | stylesheet_tag }}
+{{ 'component-totals.css' | asset_url | stylesheet_tag }}
+{{ 'component-price.css' | asset_url | stylesheet_tag }}
+{{ 'component-discounts.css' | asset_url | stylesheet_tag }}
+
+{%- style -%}
+  .section-{{ section.id }}-padding {
+    padding-top: {{ section.settings.padding_top | times: 0.75 | round: 0 }}px;
+    padding-bottom: {{ section.settings.padding_bottom | times: 0.75 | round: 0 }}px;
+  }
+  @media screen and (min-width: 750px) {
+    .section-{{ section.id }}-padding {
+      padding-top: {{ section.settings.padding_top }}px;
+      padding-bottom: {{ section.settings.padding_bottom }}px;
+    }
+  }
+
+  .mf-more-payments {
+    margin-top: 1rem;
+    border: 0.1rem solid rgba(var(--color-foreground), 0.14);
+    border-radius: 1rem;
+    background: rgba(var(--color-background), 0.9);
+    overflow: hidden;
+  }
+
+  .mf-more-payments__summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 1.05rem 1.2rem;
+    text-align: center;
+    font-size: 1.3rem;
+    font-weight: 600;
+    line-height: 1.3;
+    color: rgb(var(--color-foreground));
+    user-select: none;
+  }
+
+  .mf-more-payments__summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .mf-more-payments__summary::after {
+    content: '+';
+    margin-left: 0.65rem;
+    font-weight: 700;
+  }
+
+  .mf-more-payments[open] .mf-more-payments__summary::after {
+    content: '-';
+  }
+
+  .mf-more-payments .cart__dynamic-checkout-buttons {
+    margin: 0 auto 1rem;
+    padding: 0 1rem;
+  }
+
+  .mf-order-minimum {
+    margin: 0 0 1rem;
+    font-size: 1.4rem;
+    line-height: 1.5;
+  }
+{%- endstyle -%}
+
+<div
+  class="gradient color-{{ section.settings.color_scheme }}{% if cart == empty %} is-empty{% endif %}"
+  id="main-cart-footer"
+  data-id="{{ section.id }}"
+>
+  <div class="page-width">
+    <div class="cart__footer isolate section-{{ section.id }}-padding">
+
+      {% unless settings.mf_post_checkout_notes_enabled %}
+      <cart-note class="cart__note field mf-cart-note-card">
+        <label for="Cart-note" class="cart__note-heading">Order notes</label>
+        <textarea
+          class="text-area field__input"
+          name="note"
+          form="cart"
+          id="Cart-note"
+          data-cart-note-input
+          placeholder="Leave a note for Modern Forestry"
+        >{{ cart.note }}</textarea>
+        <button type="button" class="button cart__note-save" data-cart-note-save>Save note</button>
+      </cart-note>
+      {% endunless %}
+
+      <div class="cart__blocks">
+        {%- for block in section.blocks -%}
+          {%- case block.type -%}
+
+            {%- when '@app' -%}
+              {% render block %}
+
+            {%- when 'subtotal' -%}
+              <div class="js-contents" {{ block.shopify_attributes }}>
+                {%- if cart.cart_level_discount_applications.size > 0 -%}
+                  <ul class="discounts list-unstyled" role="list" aria-label="{{ 'customer.order.discount' | t }}">
+                    {%- for discount in cart.cart_level_discount_applications -%}
+                      <li class="discounts__discount discounts__discount--position">
+                        {{- 'icon-discount.svg' | inline_asset_content -}}
+                        {{ discount.title | escape }}
+                        (-{{ discount.total_allocated_amount | money }})
+                      </li>
+                    {%- endfor -%}
+                  </ul>
+                {%- endif -%}
+
+                <div class="totals">
+                  <h2 class="totals__total">{{ 'sections.cart.estimated_total' | t }}</h2>
+                  <p class="totals__total-value">{{ cart.total_price | money_with_currency }}</p>
+                </div>
+
+                <small class="tax-note caption-large rte">
+                  {%- if cart.duties_included and cart.taxes_included -%}
+                    {%- if shop.shipping_policy.body == blank -%}
+                      {{ 'sections.cart.duties_and_taxes_included_shipping_at_checkout_without_policy' | t }}
+                    {%- else -%}
+                      {{ 'sections.cart.duties_and_taxes_included_shipping_at_checkout_with_policy_html' | t: link: shop.shipping_policy.url }}
+                    {%- endif -%}
+                  {%- elsif cart.duties_included == false and cart.taxes_included -%}
+                    {%- if shop.shipping_policy.body == blank -%}
+                      {{ 'sections.cart.taxes_included_shipping_at_checkout_without_policy' | t }}
+                    {%- else -%}
+                      {{ 'sections.cart.taxes_included_shipping_at_checkout_with_policy_html' | t: link: shop.shipping_policy.url }}
+                    {%- endif -%}
+                  {%- elsif cart.duties_included and cart.taxes_included == false -%}
+                    {%- if shop.shipping_policy.body == blank -%}
+                      {{ 'sections.cart.duties_included_taxes_at_checkout_shipping_at_checkout_without_policy' | t }}
+                    {%- else -%}
+                      {{ 'sections.cart.duties_included_taxes_at_checkout_shipping_at_checkout_with_policy_html' | t: link: shop.shipping_policy.url }}
+                    {%- endif -%}
+                  {%- else -%}
+                    {%- if shop.shipping_policy.body == blank -%}
+                      {{ 'sections.cart.taxes_at_checkout_shipping_at_checkout_without_policy' | t }}
+                    {%- else -%}
+                      {{ 'sections.cart.taxes_at_checkout_shipping_at_checkout_with_policy_html' | t: link: shop.shipping_policy.url }}
+                    {%- endif -%}
+                  {%- endif -%}
+                </small>
+              </div>
+
+            {%- when 'buttons' -%}
+              {%- assign mf_minimum_remaining = 15000 | minus: cart.total_price -%}
+              <p class="mf-order-minimum" role="status">
+                {%- if mf_minimum_remaining > 0 -%}
+                  Wholesale minimum: $150 after discounts, before shipping and taxes. Add {{ mf_minimum_remaining | money }} more to checkout.
+                {%- else -%}
+                  $150 wholesale minimum met.
+                {%- endif -%}
+              </p>
+              <div class="cart__ctas" {{ block.shopify_attributes }}>
+                <button
+                  type="submit"
+                  id="checkout"
+                  class="cart__checkout-button button"
+                  name="checkout"
+                  {% if cart == empty or mf_minimum_remaining > 0 %} disabled {% endif %}
+                  form="cart"
+                >
+                  {{ 'sections.cart.checkout' | t }}
+                </button>
+              </div>
+
+              {%- if additional_checkout_buttons and mf_minimum_remaining <= 0 -%}
+                <details class="mf-more-payments">
+                  <summary class="mf-more-payments__summary">Click for more ways to pay</summary>
+                  <div class="cart__dynamic-checkout-buttons additional-checkout-buttons">
+                    {{ content_for_additional_checkout_buttons }}
+                  </div>
+                </details>
+              {%- endif -%}
+
+          {%- endcase -%}
+        {%- endfor -%}
+
+        <div id="cart-errors"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+{% schema %}
+{
+  "name": "t:sections.main-cart-footer.name",
+  "class": "cart__footer-wrapper",
+  "settings": [
+    { "type": "color_scheme", "id": "color_scheme", "label": "t:sections.all.colors.label", "default": "scheme-1" },
+    { "type": "range", "id": "padding_top", "min": 0, "max": 100, "step": 4, "unit": "px", "label": "t:sections.all.padding.padding_top", "default": 40 },
+    { "type": "range", "id": "padding_bottom", "min": 0, "max": 100, "step": 4, "unit": "px", "label": "t:sections.all.padding.padding_bottom", "default": 40 }
+  ],
+  "blocks": [
+    { "type": "subtotal", "name": "t:sections.main-cart-footer.blocks.subtotal.name", "limit": 1 },
+    { "type": "buttons", "name": "t:sections.main-cart-footer.blocks.buttons.name", "limit": 1 },
+    { "type": "@app" }
+  ]
+}
+{% endschema %}

@@ -116,6 +116,11 @@ jobs:
       - name: Verify Team preservation and work contracts with synthetic data
         run: npm run test:team-work-local
 
+      - name: Build pinned custom-label vector tracer
+        run: |
+          scripts/labels/install-vtracer.sh "$RUNNER_TEMP/label-tools"
+          echo "WHOLESALE_LABEL_VTRACER=$RUNNER_TEMP/label-tools/vtracer-0.6.5" >> "$GITHUB_ENV"
+
       - name: Prepare application key
         run: |
           cp .env.example .env
@@ -127,6 +132,18 @@ jobs:
       - name: Install browsers for Fleet embedding checks
         timeout-minutes: 45
         run: npx playwright install --with-deps chromium webkit
+
+      - name: Verify wholesale cart and private-label buyer workflows
+        run: |
+          node tests/e2e/wholesale-quantity-browser.mjs
+          node tests/e2e/wholesale-labels-browser.mjs
+          node --test scripts/labels/batch-import.test.mjs
+          npx tsc --noEmit -p extensions/wholesale-order-notes/tsconfig.json
+
+      - name: Verify wholesale checkout validation Function
+        run: |
+          npm ci --prefix extensions/wholesale-checkout-access
+          npm exec --yes --package=@shopify/cli@5.0.0 -- npm --prefix extensions/wholesale-checkout-access test -- --run
 
       - name: Verify Fleet embedding and allowance in Chromium and WebKit
         run: npm run test:highlevel-fleet
@@ -213,6 +230,11 @@ jobs:
       - name: Install PHP dependencies
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
+      - name: Build pinned custom-label vector tracer
+        run: |
+          scripts/labels/install-vtracer.sh "$RUNNER_TEMP/label-tools"
+          echo "WHOLESALE_LABEL_VTRACER=$RUNNER_TEMP/label-tools/vtracer-0.6.5" >> "$GITHUB_ENV"
+
       - name: Prepare application key
         run: |
           cp .env.example .env
@@ -237,7 +259,8 @@ jobs:
         env:
           TEAM_WORK_DISPOSABLE_MYSQL: '1'
           SES_PLATFORM_DISPOSABLE_MYSQL: '1'
-        run: php ./vendor/bin/pest tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php tests/Integration/HighLevelFleetMySqlMigrationRecoveryTest.php tests/Integration/TenantMailMySqlMigrationRecoveryTest.php tests/Integration/FleetOperationsMySqlMigrationRecoveryTest.php tests/Integration/SoccerMySqlMigrationRecoveryTest.php tests/Integration/SoccerAllocationConcurrencyTest.php tests/Integration/MarketingDeskMySqlRecoveryTest.php tests/Integration/ReviewedSchemaDriftRecoveryTest.php tests/Integration/AiBranchMySqlMigrationRecoveryTest.php tests/Integration/TeamWorkMySqlMigrationRecoveryTest.php tests/Integration/MarketplaceMySqlRecoveryTest.php tests/Integration/PlatformMailMySqlRecoveryTest.php tests/Integration/ServiceProposalMySqlRecoveryTest.php --compact
+          WHOLESALE_LABELS_DISPOSABLE_MYSQL: '1'
+        run: php ./vendor/bin/pest tests/Integration/WholesaleLabelsMySqlRecoveryTest.php tests/Integration/WorkflowStudioMySqlMigrationRecoveryTest.php tests/Integration/HighLevelFleetMySqlMigrationRecoveryTest.php tests/Integration/TenantMailMySqlMigrationRecoveryTest.php tests/Integration/FleetOperationsMySqlMigrationRecoveryTest.php tests/Integration/SoccerMySqlMigrationRecoveryTest.php tests/Integration/SoccerAllocationConcurrencyTest.php tests/Integration/MarketingDeskMySqlRecoveryTest.php tests/Integration/ReviewedSchemaDriftRecoveryTest.php tests/Integration/AiBranchMySqlMigrationRecoveryTest.php tests/Integration/TeamWorkMySqlMigrationRecoveryTest.php tests/Integration/MarketplaceMySqlRecoveryTest.php tests/Integration/PlatformMailMySqlRecoveryTest.php tests/Integration/ServiceProposalMySqlRecoveryTest.php --compact
 
       - name: Verify POS simulation partial-DDL recovery
         env:

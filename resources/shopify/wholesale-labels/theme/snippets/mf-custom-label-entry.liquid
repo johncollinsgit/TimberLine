@@ -1,0 +1,7 @@
+{% doc %}
+  Renders a single-fee custom label action.
+  @param {product} product - The custom-label service product.
+{% enddoc %}
+{%- assign label_mode = 'reuse' -%}
+{%- if product.handle == 'custom-label-set-up' -%}{%- assign label_mode = 'new' -%}{%- endif -%}
+<div class="mf-label-entry"><button type="button" class="button button--secondary button--full-width" data-mf-label-open="{{ label_mode }}">{% if label_mode == 'new' %}{{ 'wholesale.labels.setup_action' | t }}{% else %}{{ 'wholesale.labels.reuse_action' | t }}{% endif %}</button><p>{{ 'wholesale.labels.per_order' | t }}</p><a href="mailto:info@theforestrystudio.com?subject=Multiple%20custom%20labels">{{ 'wholesale.labels.multiple_link' | t }}</a></div>

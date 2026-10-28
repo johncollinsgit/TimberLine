@@ -13,6 +13,8 @@ export default defineConfig(() => ({
         'resources/js/marketplace-wallet.js',
         'resources/js/marketplace-management.js',
         'resources/js/app.js',
+        'resources/js/wholesale-label-admin.js',
+        'resources/js/wholesale-label-bootstrap.js',
         'resources/js/enterprise/voice-jobs-entry.js',
         'resources/js/workspace-settings.js',
         'resources/js/workspace-draft.js',

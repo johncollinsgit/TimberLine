@@ -1,5 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
+extension_directories = ["extensions/wholesale-checkout-access", "extensions/wholesale-order-notes"]
+
 client_id = "1ec941453c4df97bb2402f696839b786"
 name = "MF Wholesale Backstage"
 application_url = "https://app.theeverbranch.com/shopify/app/wholesale"

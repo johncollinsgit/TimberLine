@@ -7,9 +7,25 @@
         "buyerIdentity": null,
         "lines": [
           {
-            "quantity": 1
+            "quantity": 3,
+            "receipt": null,
+            "revision": null,
+            "mode": null,
+            "merchandise": {
+              "__typename": "ProductVariant",
+              "id": "gid://shopify/ProductVariant/101",
+              "title": "Wax Melt",
+              "product": {
+                "handle": "wholesale-fictional",
+                "singleQuantity": false
+              }
+            }
           }
-        ]
+        ],
+        "labelChoice": null
+      },
+      "shop": {
+        "labelProgram": null
       }
     },
     "output": {

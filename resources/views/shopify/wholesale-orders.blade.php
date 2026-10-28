@@ -4,7 +4,9 @@
             <div class="border-b border-emerald-200 bg-emerald-50 px-6 py-4 text-sm text-emerald-800">Retail-only and ambiguous legacy orders are excluded server-side.</div>
             @forelse ($orders as $order)
                 <div class="grid gap-3 border-b border-zinc-100 px-6 py-4 last:border-0 md:grid-cols-[minmax(0,1fr)_120px_130px_120px] md:items-center">
-                    <div><div class="font-semibold text-zinc-950">{{ $order->display_name }}</div><div class="mt-1 text-sm text-zinc-600">{{ $order->order_number ?: $order->shopify_name ?: 'Order' }} · {{ optional($order->ordered_at)->format('M j, Y') ?: 'Date unavailable' }}</div></div>
+                    <div><div class="font-semibold text-zinc-950">{{ $order->display_name }}</div>
+                    @if(data_get($order->attribution_meta, 'buyer_order_request'))<p class="mt-2 text-sm text-zinc-700"><strong>Buyer request:</strong> {{ data_get($order->attribution_meta, 'buyer_order_request') }}</p>@endif
+                    @if(data_get($order->attribution_meta, 'custom_labels'))<a class="text-xs font-semibold underline" href="{{ $embeddedUrl(route('shopify.app.wholesale.labels', ['customer_id' => $order->shopify_customer_id], false)) }}">{{ data_get($order->attribution_meta, 'custom_labels.hold') ? 'Artwork review required' : 'Custom label approved' }} →</a>@endif<div class="mt-1 text-sm text-zinc-600">{{ $order->order_number ?: $order->shopify_name ?: 'Order' }} · {{ optional($order->ordered_at)->format('M j, Y') ?: 'Date unavailable' }}</div></div>
                     <div><div class="text-xs uppercase text-zinc-500">Source</div><div class="font-semibold uppercase">{{ $order->shopify_store_key ?: $order->shopify_store ?: 'legacy' }}</div></div>
                     <div><div class="text-xs uppercase text-zinc-500">Status</div><div class="font-semibold capitalize">{{ str_replace('_', ' ', $order->status) }}</div></div>
                     <div><div class="text-xs uppercase text-zinc-500">Revenue</div><div class="font-semibold">${{ number_format(max(0, (float) $order->total_price - (float) $order->refund_total), 2) }}</div></div>
