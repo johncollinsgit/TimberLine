@@ -123,6 +123,23 @@ class FieldWebController extends Controller
             ->header('Cache-Control', 'no-store, private');
     }
 
+    public function liveAssistant(Request $request, \App\Services\FieldService\FieldCrewLiveVoice $voice)
+    {
+        [$tenant, $user] = $this->context($request);
+        $data = $request->validate(['sdp' => ['required', 'string', 'max:180000']]);
+
+        return response()->json($voice->start($tenant, $user, $data['sdp']))->header('Cache-Control', 'no-store, private');
+    }
+
+    public function closeLiveAssistant(Request $request, \App\Services\FieldService\FieldCrewLiveVoice $voice)
+    {
+        [$tenant, $user] = $this->context($request);
+        $data = $request->validate(['reservation_id' => ['required', 'uuid'], 'seconds' => ['required', 'numeric', 'min:0', 'max:600']]);
+        $voice->close($tenant, $user, $data['reservation_id'], (float) $data['seconds']);
+
+        return response()->json(['ok' => true])->header('Cache-Control', 'no-store, private');
+    }
+
     private function context(Request $request): array
     {
         $tenant = $request->attributes->get('current_tenant');
