@@ -1,3 +1,16 @@
+## Public reports, material examples and task Timeline (source candidate)
+
+The separate public fictional sample adds projected phase/estimate charts, with
+selected job sums separate from whole-project totals and absent fields retained.
+Timeline uses authorized recorded dates/dependencies; due-only tasks are
+milestones, with missing/invalid dates visible and no invented scheduling.
+Demo admin can explicitly review and confirm fixed example material lines on an
+empty permitted job. Strict local receipts and a retained application marker
+preserve retries, edits and removals; no automatic saved-session upgrade occurs.
+This changes no native campus authority, immutable private edition, inventory,
+purchasing or provider. Normal CI/release and any new owner publication remain
+separate gates. See docs/operations/enterprise-public-reports-timeline.md.
+
 ## Wholesale custom labels (October 27; additive release candidate)
 
 The Shopify wholesale lane adds a private customer artwork library, buyer wizard,
