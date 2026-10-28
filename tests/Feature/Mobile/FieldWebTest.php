@@ -92,6 +92,29 @@ function fieldWebAiReady(Tenant $tenant, User $user): void
     Http::fake(['api.openai.com/v1/responses' => Http::response(['id' => 'resp_test', 'status' => 'completed', 'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => 'Panel installation is scheduled. [job:1]']]]], 'usage' => ['input_tokens' => 400, 'output_tokens' => 30, 'input_tokens_details' => ['cached_tokens' => 0]]])]);
 }
 
+test('startup reads do not consume assistant turns and its ten turn limit remains per user', function (): void {
+    [$tenant, $user, $base] = fieldWebFixture();
+    fieldWebAiReady($tenant, $user);
+    for ($i = 0; $i < 12; $i++) {
+        $this->getJson('/api/mobile/v1/workspaces')->assertOk();
+    }
+    $ask = fn () => $this->postJson($base.'/web/assistant', ['question' => 'Who is clocked in?', 'request_id' => (string) Str::uuid()]);
+    $first = $ask();
+    $first->assertOk()->assertHeader('X-RateLimit-Limit', '10')->assertHeader('X-RateLimit-Remaining', '9');
+    for ($i = 1; $i < 10; $i++) {
+        $ask()->assertOk();
+    }
+    $limited = $ask()->assertStatus(429)->assertJsonPath('message', 'Too Many Attempts.');
+    expect((int) $limited->headers->get('Retry-After'))->toBeGreaterThan(0);
+    $this->getJson('/api/mobile/v1/workspaces')->assertOk();
+    $other = User::factory()->create(['is_active' => true, 'email_verified_at' => now()]);
+    $other->tenants()->attach($tenant->id, ['role' => 'member', 'membership_active' => true]);
+    Sanctum::actingAs($other, ['mobile:read', 'mobile:write']);
+    $ask()->assertOk()->assertHeader('X-RateLimit-Remaining', '9');
+    Http::assertNothingSent();
+    expect(TenantAiUsageEvent::count())->toBe(0);
+});
+
 test('crew AI uses current team records without private notes or other tenants and retries once only', function (): void {
     [$tenant, $user, $base] = fieldWebFixture();
     fieldWebAiReady($tenant, $user);
@@ -113,6 +136,124 @@ test('shared monthly crew AI budget refuses a reservation before dispatch', func
     fieldWebAiReady($tenant, $user);
     TenantAiUsageEvent::create(['tenant_id' => $tenant->id, 'user_id' => $user->id, 'client_uuid' => (string) Str::uuid(), 'feature' => 'ai_branch_chat', 'context' => 'workspace', 'model' => 'gpt-6-luna', 'status' => 'uncertain', 'duration_seconds' => 0, 'provider_cost_micros' => 25000000, 'buyer_charge_micros' => 0, 'occurred_at' => now()]);
     $this->postJson($base.'/web/assistant', ['question' => 'What is next?', 'request_id' => (string) Str::uuid()])->assertStatus(429);
+    Http::assertNothingSent();
+});
+
+test('crew navigation opens only current scoped jobs and fixed pages without a provider dispatch', function (): void {
+    $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
+    [$tenant, $user, $base] = fieldWebFixture();
+    fieldWebAiReady($tenant, $user);
+    $job = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'DB-Keys', 'status' => 'open']);
+    $foreign = Tenant::create(['name' => 'Other crew', 'slug' => 'navigation-other']);
+    $foreignJob = FieldServiceJob::create(['tenant_id' => $foreign->id, 'title' => 'Private school', 'status' => 'open']);
+    $ask = fn ($question, $context = null) => $this->postJson($base.'/web/assistant', ['question' => $question, 'request_id' => (string) Str::uuid(), 'context_job_id' => $context]);
+    $ask('Open Keys')->assertOk()->assertJsonPath('navigation.id', $job->id)->assertJsonPath('navigation.kind', 'job');
+    $ask('Show materials for Keys')->assertOk()->assertJsonPath('navigation.tab', 'materials');
+    $ask('Open that job', $job->id)->assertOk()->assertJsonPath('navigation.id', $job->id);
+    $ask('Open that job', $foreignJob->id)->assertOk()->assertJsonPath('navigation', null)->assertDontSee('Private school');
+    $ask('Open job '.$foreignJob->id)->assertOk()->assertJsonPath('navigation', null);
+    $ask('What is scheduled here?', $foreignJob->id)->assertNotFound();
+    $ask('Open messages')->assertOk()->assertJsonPath('navigation.page', 'messages');
+    $ask('Open Fleet Tracker')->assertOk()->assertJsonPath('navigation', null);
+    $ask('Open https://evil.test')->assertOk()->assertJsonPath('navigation', null);
+    expect(TenantAiUsageEvent::count())->toBe(0);
+    Http::assertNothingSent();
+    $tenant->users()->updateExistingPivot($user->id, ['membership_active' => false]);
+    $ask('Open Keys')->assertNotFound();
+});
+
+test('ambiguous job names need a choice and customer navigation requires current admin authority', function (): void {
+    $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
+    [$tenant, $user, $base] = fieldWebFixture();
+    fieldWebAiReady($tenant, $user);
+    foreach (['Keys phase one', 'Keys phase two'] as $title) {
+        FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => $title, 'status' => 'open']);
+    }
+    $ask = fn ($question) => $this->postJson($base.'/web/assistant', ['question' => $question, 'request_id' => (string) Str::uuid()]);
+    $ask('Open Keys')->assertOk()->assertJsonPath('navigation', null)->assertJsonCount(2, 'sources');
+    foreach (['member', 'manager'] as $role) {
+        $tenant->users()->updateExistingPivot($user->id, ['role' => $role]);
+        $ask('Open customers')->assertOk()->assertJsonPath('navigation', null)->assertJsonPath('text', 'Customer records and contact details are admin-only.');
+        $ask('What are the customer phone numbers?')->assertOk()->assertJsonCount(0, 'sources');
+    }
+    $tenant->users()->updateExistingPivot($user->id, ['role' => 'admin']);
+    $ask('Open customers')->assertOk()->assertJsonPath('navigation.page', 'customers');
+    $tenant->users()->updateExistingPivot($user->id, ['role' => 'member']);
+    $ask('Open customers')->assertOk()->assertJsonPath('navigation', null);
+    Http::assertNothingSent();
+});
+
+test('admin material queue spans jobs and pages with permitted material photos and no foreign requests', function (): void {
+    [$tenant, $user, $base] = fieldWebFixture();
+    $job = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'Materials one', 'status' => 'open']);
+    $oldJob = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'Older job', 'status' => 'open', 'archived_at' => now()]);
+    for ($i = 0; $i < 55; $i++) {
+        $material = \App\Models\FieldServiceMaterial::create(['tenant_id' => $tenant->id, 'field_service_job_id' => $i === 0 ? $oldJob->id : $job->id, 'requested_by_user_id' => $user->id, 'name' => 'Request '.$i, 'quantity' => 2, 'status' => 'needed']);
+    }
+    $photo = \App\Models\WorkspaceAsset::create(['tenant_id' => $tenant->id, 'uploaded_by_user_id' => $user->id, 'source' => 'test', 'visibility' => 'team', 'storage_disk' => 'local', 'storage_path' => 'material.jpg', 'file_name' => 'Material photo.jpg', 'mime_type' => 'image/jpeg', 'file_size' => 100, 'metadata' => ['field_service_material_id' => $material->id]]);
+    $photo->jobs()->attach($job->id, ['tenant_id' => $tenant->id, 'linked_by_user_id' => $user->id]);
+    \App\Models\FieldServiceMaterial::create(['tenant_id' => $tenant->id, 'field_service_job_id' => $job->id, 'name' => 'Already purchased', 'quantity' => 1, 'status' => 'purchased']);
+    $foreign = Tenant::create(['name' => 'Private material tenant', 'slug' => 'foreign-material-queue']);
+    $foreignJob = FieldServiceJob::create(['tenant_id' => $foreign->id, 'title' => 'Private materials job', 'status' => 'open']);
+    \App\Models\FieldServiceMaterial::create(['tenant_id' => $foreign->id, 'field_service_job_id' => $foreignJob->id, 'name' => 'Private request', 'quantity' => 1, 'status' => 'needed']);
+    $this->getJson($base.'/web/materials')->assertForbidden();
+    $tenant->users()->updateExistingPivot($user->id, ['role' => 'manager']);
+    $this->getJson($base.'/web/materials')->assertForbidden();
+    $tenant->users()->updateExistingPivot($user->id, ['role' => 'admin']);
+    $page = $this->getJson($base.'/web/materials')->assertOk()->assertJsonPath('total', 55)->assertJsonCount(50, 'materials')
+        ->assertJsonPath('materials.0.photo.id', $photo->id)->assertDontSee('Private request')->assertDontSee('Already purchased')->json();
+    $this->getJson($base.'/web/materials?before_id='.$page['next_cursor'])->assertOk()->assertJsonCount(5, 'materials')->assertJsonPath('next_cursor', null)->assertSee('Older job');
+    $tenant->users()->updateExistingPivot($user->id, ['role' => 'member']);
+    $this->getJson($base.'/web/materials')->assertForbidden();
+});
+
+test('AI clock answers use fresh active crew status for managers and self-only status for members', function (): void {
+    $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
+    [$tenant, $user, $base] = fieldWebFixture();
+    fieldWebAiReady($tenant, $user);
+    $user->update(['name' => 'Signed-in worker']);
+    $colleague = User::factory()->create(['name' => 'Other active worker', 'is_active' => true]);
+    $inactive = User::factory()->create(['name' => 'Removed person', 'is_active' => true]);
+    $tenant->users()->attach($colleague->id, ['role' => 'member', 'membership_active' => true]);
+    $tenant->users()->attach($inactive->id, ['role' => 'member', 'membership_active' => false]);
+    foreach ([[$user, 'running'], [$colleague, 'paused'], [$inactive, 'running']] as [$person, $status]) {
+        \App\Models\FieldServiceTimeSession::create(['tenant_id' => $tenant->id, 'user_id' => $person->id, 'status' => $status, 'clocked_in_at' => now()->subHour(), 'client_uuid' => (string) Str::uuid(), 'active_user_key' => $person->id]);
+    }
+    $ask = fn () => $this->postJson($base.'/web/assistant', ['question' => 'Who is clocked in?', 'request_id' => (string) Str::uuid()]);
+    $ask()->assertOk()->assertSee('You are clocked in.')->assertDontSee('Other active worker')->assertDontSee('Removed person');
+    $tenant->users()->updateExistingPivot($user->id, ['role' => 'admin']);
+    $ask()->assertOk()->assertSee('Clocked in: Signed-in worker.')->assertSee('On break: Other active worker.')->assertDontSee('Removed person');
+    \App\Models\FieldServiceTimeSession::where('user_id', $user->id)->update(['status' => 'submitted', 'clocked_out_at' => now()]);
+    $ask()->assertOk()->assertSee('No one is clocked in and working right now.');
+    Http::assertNothingSent();
+});
+
+test('AI hours reuse canonical totals, explicit periods and self-only employee scope', function (): void {
+    $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
+    $this->travelTo(\Carbon\CarbonImmutable::parse('2026-10-28 12:00:00', 'America/New_York'));
+    [$tenant, $user, $base] = fieldWebFixture();
+    fieldWebAiReady($tenant, $user);
+    TenantModuleEntitlement::create(['tenant_id' => $tenant->id, 'module_key' => 'time_tracking', 'availability_status' => 'available', 'enabled_status' => 'enabled', 'entitlement_source' => 'test']);
+    \App\Models\FieldServiceReminderSetting::create(['tenant_id' => $tenant->id, 'timezone' => 'America/New_York']);
+    $person = User::factory()->create(['name' => 'Andrew Smith', 'is_active' => true]);
+    $tenant->users()->attach($person->id, ['role' => 'member', 'membership_active' => true]);
+    foreach ([[$user, 120, 'approved'], [$person, 90, 'submitted'], [$person, 600, 'rejected']] as [$worker, $minutes, $status]) {
+        \App\Models\FieldServiceTimeEntry::create(['tenant_id' => $tenant->id, 'user_id' => $worker->id, 'work_date' => '2026-10-27', 'started_at' => '08:00:00', 'ended_at' => '10:00:00', 'duration_minutes' => $minutes, 'status' => $status]);
+    }
+    \App\Models\FieldServiceTimeSession::create(['tenant_id' => $tenant->id, 'user_id' => $person->id, 'status' => 'running', 'clocked_in_at' => now()->subHour(), 'duration_seconds' => 3600, 'client_uuid' => (string) Str::uuid(), 'active_user_key' => $person->id]);
+    $foreign = Tenant::create(['name' => 'Other hours', 'slug' => 'other-hours-answer']);
+    \App\Models\FieldServiceTimeEntry::create(['tenant_id' => $foreign->id, 'user_id' => $person->id, 'work_date' => '2026-10-27', 'started_at' => '08:00:00', 'ended_at' => '10:00:00', 'duration_minutes' => 999, 'status' => 'approved']);
+    $ask = fn ($question, $history = []) => $this->postJson($base.'/web/assistant', ['question' => $question, 'request_id' => (string) Str::uuid(), 'history' => $history]);
+    $ask('How many hours did I work this week?')->assertOk()->assertSee('2 hours recorded')->assertDontSee('Andrew');
+    $ask('How many hours did Andrew work this week?')->assertOk()->assertSee('own hours')->assertDontSee('1 hour');
+    $ask('How many hours were worked by all this week?')->assertOk()->assertSee('own hours');
+    $tenant->users()->updateExistingPivot($user->id, ['role' => 'admin']);
+    $ask('How many hours did Andrew work this week?')->assertOk()->assertSee('Andrew Smith has 1 hour 30 minutes')->assertSee('2026-10-26 through 2026-11-01')->assertJsonPath('text', fn ($text) => str_contains($text, 'America/New_York'));
+    $ask('How many hours were worked by all this week?')->assertOk()->assertSee('3 hours 30 minutes')->assertSee('Active timers are not included.');
+    $ask('How many hours did Andrew work?')->assertOk()->assertSee('Which period');
+    $ask('this week', [['role' => 'user', 'text' => 'How many hours did Andrew work?'], ['role' => 'assistant', 'text' => 'Which period?']])->assertOk()->assertSee('1 hour 30 minutes');
+    $ask('How many hours did Andrew work last week?')->assertOk()->assertSee('0 hours recorded');
+    $ask('How many hours did Andrew work from 2026-02-30 through 2026-03-01?')->assertOk()->assertSee('valid start and end dates');
     Http::assertNothingSent();
 });
 
