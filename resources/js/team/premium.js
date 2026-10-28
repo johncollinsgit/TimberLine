@@ -205,6 +205,7 @@ export function installPremium(root) {
   function ctxCreate() { if (context?.data.can_create_task) context.createTask(); }
   return {
     get context() { return context; },
+    closeMenu() { setMenu(false); },
     navigate() { asana?.clearProject(); $('source-filter').value = 'all'; setMenu(false); },
     reset() { asana?.reset(); for (const id of ['teams-project-list', 'teams-favorite-list']) document.getElementById(id)?.replaceChildren(); $('selection-bar')?.remove(); selectedIds.clear(); selectionMode = false; $('page-title').textContent = 'Verify your work access'; favorites.clear(); views = []; $('saved-views').replaceChildren(new Option('Saved views', '')); $('view-name').value = ''; $('view-dialog').close(); loadedPreferences = false; context = null; },
     render(ctx) {

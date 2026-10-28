@@ -878,6 +878,12 @@ current instruction to replay an old source branch or reprice a customer.
 
 ## Premium Teams workspace and per-user Asana (local, 2026-10-19)
 
+The contained-settings candidate keeps profile, connection and reminder entry
+points inside both Teams surfaces. It embeds the existing profile component with
+locked viewer/tenant context; the platform profile screen remains canonical.
+See `docs/operations/everbranch-team-contained-settings.md` for scoped evidence
+and coordinated-release requirements. This source note is not deployment proof.
+
 Read docs/architecture/everbranch-team-premium-workspace.md and
 docs/operations/everbranch-team-premium-verification.md. Independent default-off
 premium/Asana flags retain the shared graph and legacy fallback. Vite modules add
