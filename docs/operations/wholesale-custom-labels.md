@@ -83,7 +83,9 @@ or fixture commands at production. Keep the customer's live cart untouched.
 The Thank you app block asks: "Is there anything we can do to make this order just
 right for you?" It is optional. Session tokens are checked with Shopify's official
 PHP package; Shopify order ownership is rechecked against the verified customer.
-The request is stored on the Shopify order and in its dedicated metafield, while
+Thank-you `OrderIdentity` GIDs are normalized to Admin `Order` GIDs before that
+ownership check. CORS headers cover validation/authentication failures so buyers
+can retry with their text preserved. The request is stored on the Shopify order and in its dedicated metafield, while
 preserving prior staff notes. Retries do not duplicate it. Order-creation delays
 retain the buyer's text and invite retry. Cancelled/older orders direct to staff.
 

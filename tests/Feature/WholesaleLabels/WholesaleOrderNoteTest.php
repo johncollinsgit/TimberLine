@@ -22,14 +22,15 @@ it('allows CORS preflight but requires a verified signed-in buyer to write', fun
 });
 it('checks ownership with Shopify and does not trust a customer supplied in the body', function () {
     Http::fake(['*' => Http::response(['data' => ['order' => ['id' => 'gid://shopify/Order/9001', 'customer' => ['id' => 'gid://shopify/Customer/202'], 'note' => 'Private', 'cancelledAt' => null, 'createdAt' => now()->toIso8601String(), 'buyerNote' => null]]])]);
-    $this->withToken(buyerNoteToken())->postJson('/shopify/wholesale/order-note', ['order_id' => 'gid://shopify/Order/9001', 'customer_id' => '202', 'note' => 'Test'])->assertNotFound();
+    $this->withHeader('Origin', 'https://extensions.shopifycdn.com')->withToken(buyerNoteToken())->postJson('/shopify/wholesale/order-note', ['order_id' => 'gid://shopify/Order/9001', 'customer_id' => '202', 'note' => 'Test'])->assertNotFound()->assertHeader('Access-Control-Allow-Origin', '*');
     Http::assertSentCount(1);
 });
-it('preserves existing staff notes and safely deduplicates a retry', function () {
+it('preserves existing staff notes and safely deduplicates a retry', function (string $orderId) {
     $saved = false;
     $calls = 0;
     Http::fake(function ($request) use (&$saved, &$calls) {
         $calls++;
+        expect($request['variables']['id'] ?? $request['variables']['input']['id'])->toBe('gid://shopify/Order/9001');
         if (str_starts_with($request['query'], 'mutation')) {
             expect($request['variables']['input']['note'])->toBe("Existing staff instructions\n\n[Wholesale order request]\nPlease include a display card.");
             $saved = true;
@@ -39,11 +40,11 @@ it('preserves existing staff notes and safely deduplicates a retry', function ()
 
         return Http::response(['data' => ['order' => ['id' => 'gid://shopify/Order/9001', 'customer' => ['id' => 'gid://shopify/Customer/101'], 'note' => 'Existing staff instructions', 'cancelledAt' => null, 'createdAt' => now()->toIso8601String(), 'buyerNote' => $saved ? ['value' => 'Please include a display card.'] : null]]]);
     });
-    $data = ['order_id' => 'gid://shopify/Order/9001', 'note' => 'Please include a display card.'];
+    $data = ['order_id' => $orderId, 'note' => 'Please include a display card.'];
     $this->withToken(buyerNoteToken())->postJson('/shopify/wholesale/order-note', $data)->assertOk()->assertJsonPath('ok', true);
     $this->postJson('/shopify/wholesale/order-note', $data)->assertOk();
     expect($calls)->toBe(3);
-});
+})->with(['gid://shopify/Order/9001', 'gid://shopify/OrderIdentity/9001']);
 it('retains buyer text through recoverable order creation delays and rejects old requests', function () {
     Http::fake(['*' => Http::response(['data' => ['order' => null]])]);
     $this->withToken(buyerNoteToken())->postJson('/shopify/wholesale/order-note', ['order_id' => 'gid://shopify/Order/9001', 'note' => 'A saved browser draft'])->assertStatus(409)->assertHeader('Retry-After', '3');

@@ -39,7 +39,10 @@ class WholesaleOrderNoteController extends Controller
         $customer = $match[1];
         $mapping = ShopifyStore::query()->where('shop_domain', config('wholesale_labels.shop'))->where('store_role', 'wholesale')->firstOrFail();
         abort_unless(TenantWholesaleSetting::query()->where('tenant_id', $mapping->tenant_id)->where('shopify_store_id', $mapping->id)->whereNotNull('confirmed_at')->exists(), 403);
-        $data = $request->validate(['order_id' => ['required', 'regex:~^gid://shopify/Order/[0-9]+$~'], 'note' => ['required', 'string', 'max:2000']]);
+        $data = $request->validate(['order_id' => ['required', 'regex:~^gid://shopify/(?:Order|OrderIdentity)/[0-9]+$~'], 'note' => ['required', 'string', 'max:2000']]);
+        // Thank-you pages can supply OrderIdentity GIDs; Admin API uses Order GIDs.
+        // Ownership is still verified against Shopify's order customer below.
+        $data['order_id'] = 'gid://shopify/Order/'.basename($data['order_id']);
         $note = trim($data['note']);
         abort_if($note === '', 422, 'Enter your request before saving.');
 
