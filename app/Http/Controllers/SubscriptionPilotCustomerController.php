@@ -84,7 +84,7 @@ class SubscriptionPilotCustomerController extends Controller
 
     private function private($response)
     {
-        return $response->header('Cache-Control', 'no-store, private')->header('Referrer-Policy','no-referrer')
-            ->header('X-Robots-Tag','noindex, nofollow')->header('X-Frame-Options','DENY');
+        return $response->header('Cache-Control', 'no-store, private')->header('Referrer-Policy', 'no-referrer')
+            ->header('X-Robots-Tag', 'noindex, nofollow')->header('X-Frame-Options', 'DENY');
     }
 }

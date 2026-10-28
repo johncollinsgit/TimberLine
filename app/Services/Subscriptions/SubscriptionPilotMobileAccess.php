@@ -78,6 +78,6 @@ class SubscriptionPilotMobileAccess
         $current = $action === 'pause' ? $execution->skipCycles($row, (int) ($input['duration_months'] ?? 0)) : $execution->stop($row, 'cancel');
 
         return ['ok' => true, 'status' => 'completed', 'action' => $action, 'message' => $action === 'pause' ? 'Subscription paused until '.$current->next_billing_date->format('F j, Y').'.' : 'Future subscription charges are cancelled.',
-            'shopify_mode' => 'fulfillment', 'shopify_mutation' => null, 'candle_club' => $this->payload($session,[])];
+            'shopify_mode' => 'fulfillment', 'shopify_mutation' => null, 'candle_club' => $this->payload($session, [])];
     }
 }

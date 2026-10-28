@@ -89,7 +89,7 @@ return new class extends Migration
             throw new RuntimeException('Pilot execution ownership requires review.');
         }
         if (! $existing) {
-            Schema::table($table,fn (Blueprint $t) => $t->foreign($columns,$name)->references($references)->on($parent)->restrictOnDelete());
+            Schema::table($table, fn (Blueprint $t) => $t->foreign($columns, $name)->references($references)->on($parent)->restrictOnDelete());
         }
     }
 

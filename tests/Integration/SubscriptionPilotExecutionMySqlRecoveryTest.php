@@ -90,5 +90,5 @@ test('execution changed named index fails without changing original encrypted re
     Schema::table('subscription_pilot_cycles', fn (Blueprint $t) => $t->dropUnique('spcy_payment_uq'));
     Schema::table('subscription_pilot_cycles', fn (Blueprint $t) => $t->index(['payment_status'], 'spcy_payment_uq'));
     expect(fn () => $migration->up())->toThrow(RuntimeException::class);
-    expect(DB::table('subscription_pilot_enrollments')->where('id',$enrollment)->value('requests'))->toBe($cipher);
+    expect(DB::table('subscription_pilot_enrollments')->where('id', $enrollment)->value('requests'))->toBe($cipher);
 });

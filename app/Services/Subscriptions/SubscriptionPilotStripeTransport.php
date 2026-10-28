@@ -116,10 +116,10 @@ class SubscriptionPilotStripeTransport
         $data = $response->json();
         // Card errors can carry the original intent. Return only that object so
         // required authentication/declines cannot create a replacement payment.
-        if (! $response->successful() && is_array(data_get($data,'error.payment_intent'))) {
+        if (! $response->successful() && is_array(data_get($data, 'error.payment_intent'))) {
             return $data['error']['payment_intent'];
         }
-        abort_unless($response->successful() && is_array($data) && ! isset($data['error']),502,'Stripe request needs reconciliation.');
+        abort_unless($response->successful() && is_array($data) && ! isset($data['error']), 502, 'Stripe request needs reconciliation.');
 
         return $data;
     }

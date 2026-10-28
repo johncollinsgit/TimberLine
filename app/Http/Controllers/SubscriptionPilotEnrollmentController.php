@@ -94,7 +94,7 @@ class SubscriptionPilotEnrollmentController extends Controller
     {
         $tenant = $request->attributes->get('current_tenant');
         abort_unless($tenant instanceof Tenant && app(\App\Services\Billing\TenantPaymentSetupAccess::class)->allows($tenant, $request->user()), 403);
-        app(\App\Services\Subscriptions\SubscriptionAccessService::class)->assertManager($tenant->id,$request->user());
+        app(\App\Services\Subscriptions\SubscriptionAccessService::class)->assertManager($tenant->id, $request->user());
 
         return $tenant;
     }
