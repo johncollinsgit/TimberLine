@@ -20,8 +20,7 @@ class CandleCashTaskService
         protected MarketingStorefrontEventLogger $eventLogger,
         protected CandleCashTaskEventService $taskEventService,
         protected TenantMarketingSettingsResolver $marketingSettingsResolver
-    ) {
-    }
+    ) {}
 
     /**
      * @return Collection<int,CandleCashTask>
@@ -117,6 +116,10 @@ class CandleCashTaskService
             return ['ok' => false, 'state' => 'task_not_found', 'completion' => null, 'event' => null, 'error' => 'task_not_found'];
         }
 
+        if ($taskModel->handle === 'birthday-signup' && ! app(BirthdayClubService::class)->signupEnabled((int) $profile->tenant_id)) {
+            return ['ok' => false, 'state' => 'disabled', 'completion' => null, 'event' => null, 'error' => 'birthday_signup_retired'];
+        }
+
         $effectiveVerificationMode = trim((string) ($context['effective_verification_mode'] ?? $taskModel->verification_mode ?: 'manual_review_fallback'));
         $effectiveAutoAward = array_key_exists('effective_auto_award', $context) && $context['effective_auto_award'] !== null
             ? (bool) $context['effective_auto_award']
@@ -173,6 +176,12 @@ class CandleCashTaskService
             $completion->refresh();
             $task = $completion->task()->firstOrFail();
             $profile = $completion->profile()->firstOrFail();
+            if ($task->handle === 'birthday-signup' && ! app(BirthdayClubService::class)->signupEnabled((int) $profile->tenant_id)) {
+                $cutover = data_get($this->marketingSettingsResolver->array('birthday_club_config', (int) $profile->tenant_id), 'cutover_at');
+                if ($completion->status !== 'approved' || ! $completion->reviewed_at || ($cutover && $completion->reviewed_at->gt(\Carbon\Carbon::parse($cutover)))) {
+                    throw new \RuntimeException('New birthday signup bonuses have been retired.');
+                }
+            }
             $points = $completion->reward_candle_cash > 0
                 ? (int) $completion->reward_candle_cash
                 : $this->candleCashService->pointsFromAmount((float) $completion->reward_amount);
@@ -182,8 +191,8 @@ class CandleCashTaskService
                 points: $points,
                 type: 'earn',
                 source: 'candle_cash_task',
-                sourceId: $completion->completion_key ?: ('task-completion:' . $completion->id),
-                description: trim((string) ($task->title ?: 'Rewards task')) . ' reward'
+                sourceId: $completion->completion_key ?: ('task-completion:'.$completion->id),
+                description: trim((string) ($task->title ?: 'Rewards task')).' reward'
             );
 
             $completion->forceFill([
@@ -286,6 +295,10 @@ class CandleCashTaskService
 
     protected function createOrResolveCompletion(MarketingProfile $profile, CandleCashTask $task, array $payload, bool $autoApprove, bool $logBlocked): array
     {
+        if ($task->handle === 'birthday-signup' && ! app(BirthdayClubService::class)->signupEnabled((int) $profile->tenant_id)) {
+            return ['ok' => false, 'state' => 'disabled', 'completion' => null, 'event' => null, 'error' => 'birthday_signup_retired'];
+        }
+
         $effectiveVerificationMode = trim((string) ($payload['effective_verification_mode'] ?? $task->verification_mode ?: 'manual_review_fallback'));
 
         $eventRecord = $this->taskEventService->record($task, $profile, [
@@ -461,8 +474,8 @@ class CandleCashTaskService
                 points: $rewardPoints,
                 type: 'earn',
                 source: 'candle_cash_task',
-                sourceId: $completionKey !== '' ? $completionKey : ('task-completion:' . $completion->id),
-                description: trim((string) $task->title) . ' reward'
+                sourceId: $completionKey !== '' ? $completionKey : ('task-completion:'.$completion->id),
+                description: trim((string) $task->title).' reward'
             );
 
             $completion->forceFill([
@@ -480,7 +493,7 @@ class CandleCashTaskService
                 'completion_key' => $completion->completion_key,
                 'reward_candle_cash' => $rewardPoints,
                 'transaction_id' => (int) ($result['transaction_id'] ?? 0),
-                'source_id' => $completionKey !== '' ? $completionKey : ('task-completion:' . $completion->id),
+                'source_id' => $completionKey !== '' ? $completionKey : ('task-completion:'.$completion->id),
             ]);
 
             $this->taskEventService->markAwarded($event, $completion, [
@@ -557,7 +570,7 @@ class CandleCashTaskService
             $sourceId = $this->sourceEventKey($task, $profile, $payload);
         }
 
-        return Str::lower('task:' . $task->handle . '|profile:' . $profile->id . '|source:' . $sourceType . ':' . $sourceId);
+        return Str::lower('task:'.$task->handle.'|profile:'.$profile->id.'|source:'.$sourceType.':'.$sourceId);
     }
 
     protected function sourceEventKey(CandleCashTask $task, MarketingProfile $profile, array $payload): string
@@ -574,13 +587,13 @@ class CandleCashTaskService
 
         $campaignKey = trim((string) ($task->campaign_key ?? ''));
         if ($campaignKey !== '') {
-            return $task->handle . ':profile:' . $profile->id . ':campaign:' . $campaignKey;
+            return $task->handle.':profile:'.$profile->id.':campaign:'.$campaignKey;
         }
 
         return match ((string) ($payload['effective_verification_mode'] ?? $task->verification_mode)) {
-            'onsite_action' => $task->handle . ':profile:' . $profile->id . ':onsite',
-            'google_business_review', 'product_review_platform_event', 'subscription_event', 'referral_conversion', 'system_event' => $task->handle . ':profile:' . $profile->id,
-            default => $task->handle . ':profile:' . $profile->id . ':manual',
+            'onsite_action' => $task->handle.':profile:'.$profile->id.':onsite',
+            'google_business_review', 'product_review_platform_event', 'subscription_event', 'referral_conversion', 'system_event' => $task->handle.':profile:'.$profile->id,
+            default => $task->handle.':profile:'.$profile->id.':manual',
         };
     }
 }

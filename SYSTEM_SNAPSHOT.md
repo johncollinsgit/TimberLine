@@ -28,6 +28,16 @@ publish, initialize, activate providers or create a budget. See
 initialization runbooks. Normal exact-head CI/review and explicit runtime stages
 remain required.
 
+## Birthday Club consolidation (2026-10-28; source candidate)
+
+Modern Forestry's prospective tenant policy can publish one Birthday Club page,
+retire new signup bonuses and preserve all original gifts and balances. Durable
+annual coverage spans reward types and verified aliases; owned history includes
+previous-year usable coupons. Optional issuance selection, effective expiry,
+canonical email links and once-only primary/belated sends remain compatible with
+existing proxy routes. Follow `docs/operations/birthday-club-consolidation.md`;
+normal schema/CI/release and live acceptance are required before activation.
+
 ## Campus shell reconciliation (source follow-up)
 
 Persistent header search and the retained bottom-right Campus assistant reuse

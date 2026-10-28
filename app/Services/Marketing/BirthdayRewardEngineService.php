@@ -44,12 +44,15 @@ class BirthdayRewardEngineService
         $window = $this->claimWindow($birthdayProfile, $cycleYear, $config);
         $now = now()->toImmutable();
 
-        $issuance = BirthdayRewardIssuance::query()
-            ->where('customer_birthday_profile_id', $birthdayProfile->id)
-            ->where('cycle_year', $cycleYear)
-            ->where('reward_type', $rewardType)
-            ->orderByDesc('id')
-            ->first();
+        $club = app(BirthdayClubService::class);
+        $issuance = $club->enabled($tenantId)
+            ? $club->issuances($birthdayProfile->marketingProfile)->first(fn ($reward) => (in_array($reward->status, ['issued', 'claimed'], true) && ! $reward->isExpired() && $reward->reward_type !== 'candle_cash')
+                || (int) $reward->cycle_year === $cycleYear)
+            : BirthdayRewardIssuance::query()
+                ->where('customer_birthday_profile_id', $birthdayProfile->id)
+                ->where('cycle_year', $cycleYear)
+                ->where('reward_type', $rewardType)
+                ->orderByDesc('id')->first();
         if ($issuance && $issuance->claim_window_starts_at && $issuance->claim_window_ends_at) {
             $window['starts_at'] = $issuance->claim_window_starts_at;
             $window['ends_at'] = $issuance->claim_window_ends_at;
@@ -66,7 +69,7 @@ class BirthdayRewardEngineService
             ];
         }
 
-        if ($issuance && (string) $issuance->status === 'expired') {
+        if ($issuance && ((string) $issuance->status === 'expired' || ($club->enabled($tenantId) && ($issuance->isExpired() || (string) $issuance->status === 'cancelled')))) {
             return [
                 'state' => 'birthday_reward_expired',
                 'eligible' => false,
@@ -145,6 +148,22 @@ class BirthdayRewardEngineService
         }
 
         $cycleYear = (int) ($options['cycle_year'] ?? now()->year);
+        $club = app(BirthdayClubService::class);
+        if ($club->enabled($tenantId) && ! ($options['birthday_cycle_locked'] ?? false)) {
+            $identity = $club->identity($birthdayProfile->marketingProfile);
+            if ((int) $identity['tenant_id'] !== (int) $tenantId) {
+                throw new RuntimeException('Birthday tenant context does not match its customer.');
+            }
+            $canonicalBirthday = CustomerBirthdayProfile::query()->where('marketing_profile_id', $identity['canonical_profile_id'])->first();
+            if ($canonicalBirthday && $canonicalBirthday->birth_month && $canonicalBirthday->birth_day) {
+                $birthdayProfile = $canonicalBirthday;
+            }
+            $result = $club->withCycleLock($birthdayProfile, $cycleYear, fn () => $this->issueAnnualReward($birthdayProfile, [
+                ...$options, 'birthday_cycle_locked' => true, 'send_email' => false,
+            ]));
+
+            return $this->dispatchResultEmail($result, $options);
+        }
         $rewardType = $this->normalizeRewardType((string) ($config['reward_type'] ?? 'candle_cash'));
         $window = $this->claimWindow($birthdayProfile, $cycleYear, $config);
         if (array_key_exists('claim_window_override', $options)) {
@@ -304,8 +323,13 @@ class BirthdayRewardEngineService
             ];
         });
 
+        return $this->dispatchResultEmail($result, $options);
+    }
+
+    protected function dispatchResultEmail(array $result, array $options): array
+    {
         $issued = $result['issuance'] ?? null;
-        if ($issued instanceof BirthdayRewardIssuance && (bool) ($options['send_email'] ?? true)) {
+        if ($issued instanceof BirthdayRewardIssuance && (bool) ($options['send_email'] ?? true) && (! app(BirthdayClubService::class)->enabled((int) $issued->marketingProfile?->tenant_id) || (! $issued->isExpired() && ! in_array($issued->status, ['redeemed', 'cancelled'], true)))) {
             try {
                 $result['email_delivery'] = $this->birthdayEmailDispatchService->sendIssuanceEmail(
                     $issued,

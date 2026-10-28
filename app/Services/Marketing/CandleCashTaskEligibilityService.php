@@ -11,8 +11,7 @@ class CandleCashTaskEligibilityService
 {
     public function __construct(
         protected CandleClubMembershipService $membershipService
-    ) {
-    }
+    ) {}
 
     /**
      * @return array{
@@ -34,6 +33,10 @@ class CandleCashTaskEligibilityService
     {
         $now = $context['now'] ?? now();
         $date = method_exists($now, 'toDateString') ? $now->toDateString() : now()->toDateString();
+
+        if ($profile && $task->handle === 'birthday-signup' && ! app(BirthdayClubService::class)->signupEnabled((int) $profile->tenant_id)) {
+            return $this->result(false, false, false, 'disabled', 'birthday_signup_retired', $task, 0, 0, 0, null);
+        }
 
         if ($task->archived_at || ! $task->enabled) {
             return $this->result(false, false, false, 'disabled', 'disabled', $task, 0, 0, 0, null);
@@ -99,7 +102,7 @@ class CandleCashTaskEligibilityService
     }
 
     /**
-     * @param Collection<int,CandleCashTask> $tasks
+     * @param  Collection<int,CandleCashTask>  $tasks
      * @return Collection<int,array{task:CandleCashTask,eligibility:array<string,mixed>}>
      */
     public function decorate(Collection $tasks, ?MarketingProfile $profile, array $context = []): Collection
