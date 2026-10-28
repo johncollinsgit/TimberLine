@@ -16,6 +16,8 @@ class FieldCrewClockStatus
             ->when(! $crew, fn ($q) => $q->where('users.id', $user->id))->orderBy('users.name')->get(['users.id', 'users.name']);
         $sessions = FieldServiceTimeSession::where('tenant_id', $tenant->id)->whereIn('user_id', $members->pluck('id'))
             ->whereIn('status', ['running', 'paused'])->whereNull('clocked_out_at')->latest('clocked_in_at')->get()->unique('user_id')->keyBy('user_id');
+        app(FieldCrewAssistant::class)->authorize($tenant, $user);
+        abort_unless($crew === app(FieldServiceAccessService::class)->canManageJobs($user, $tenant), 403);
 
         return ['scope' => $crew ? 'crew' : 'self', 'captured_at' => now()->toIso8601String(),
             'people' => $members->map(fn ($member) => ['name' => $member->name, 'status' => $sessions->get($member->id)?->status ?? 'clocked_out'])->all()];
