@@ -9181,6 +9181,62 @@ CREATE TABLE `subscription_payment_methods` (
   CONSTRAINT `subscription_payment_methods_tenant_id_foreign` FOREIGN KEY (`tenant_id`) REFERENCES `tenants` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `subscription_pilot_events`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `subscription_pilot_events` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `member_id` bigint unsigned NOT NULL,
+  `event_key` char(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `kind` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider_reference` varchar(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `verification` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `currency` char(3) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `amount_cents` bigint unsigned DEFAULT NULL,
+  `cycle_date` date DEFAULT NULL,
+  `occurred_at` timestamp(6) NOT NULL,
+  `observed_at` timestamp(6) NOT NULL,
+  `evidence` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `actor_user_id` bigint unsigned DEFAULT NULL,
+  `created_at` timestamp(6) NULL DEFAULT NULL,
+  `updated_at` timestamp(6) NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `spe_event_uq` (`tenant_id`,`member_id`,`event_key`),
+  KEY `spe_cycle_idx` (`tenant_id`,`member_id`,`cycle_date`),
+  KEY `spe_member_fk` (`member_id`,`tenant_id`),
+  CONSTRAINT `spe_member_fk` FOREIGN KEY (`member_id`, `tenant_id`) REFERENCES `subscription_pilot_members` (`id`, `tenant_id`) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+DROP TABLE IF EXISTS `subscription_pilot_members`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `subscription_pilot_members` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `tenant_id` bigint unsigned NOT NULL,
+  `public_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `marketing_profile_id` bigint unsigned DEFAULT NULL,
+  `shopify_store_id` bigint unsigned NOT NULL,
+  `recharge_customer_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `shopify_customer_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `billing_owner` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'recharge',
+  `status` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'prepared',
+  `target_date` date NOT NULL,
+  `timezone` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'America/New_York',
+  `currency` char(3) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `expected_amount_cents` bigint unsigned DEFAULT NULL,
+  `details` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `prepared_by` bigint unsigned NOT NULL,
+  `created_at` timestamp(6) NULL DEFAULT NULL,
+  `updated_at` timestamp(6) NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `spm_tenant_source_uq` (`tenant_id`,`shopify_store_id`,`recharge_customer_id`),
+  UNIQUE KEY `spm_public_uq` (`public_id`),
+  UNIQUE KEY `spm_scope_uq` (`id`,`tenant_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `subscription_poll_options`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -13355,4 +13411,5 @@ INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (308,'2026_10_20_20
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (309,'2026_10_21_160000_create_pos_simulation_tables',33);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (310,'2026_10_22_190000_add_private_voice_retention',34);
 INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (311,'2026_10_22_150000_create_service_proposal_tables',35);
-INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (312,'2026_10_27_220000_create_wholesale_label_library',36);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (312,'2026_10_27_210000_create_subscription_pilot_evidence',36);
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES (313,'2026_10_27_220000_create_wholesale_label_library',37);

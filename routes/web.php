@@ -799,6 +799,13 @@ Route::prefix('signup/classes/{tenant:slug}')
 Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::middleware(['tenant.access', 'module:subscriptions'])
+        ->get('/subscriptions/pilot', [\App\Http\Controllers\SubscriptionPilotController::class, 'index'])
+        ->name('subscriptions.pilot.index');
+    Route::middleware(['tenant.access', 'module:subscriptions', 'throttle:6,1'])
+        ->post('/subscriptions/pilot/{member}/refresh-orders', [\App\Http\Controllers\SubscriptionPilotController::class, 'refresh'])
+        ->whereNumber('member')->name('subscriptions.pilot.refresh-orders');
+
+    Route::middleware(['tenant.access', 'module:subscriptions'])
         ->get('/subscriptions', [\App\Http\Controllers\SubscriptionWorkspaceController::class, 'index'])
         ->name('subscriptions.workspace.index');
 

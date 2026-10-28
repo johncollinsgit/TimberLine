@@ -7,6 +7,8 @@
             <a href="{{ route('subscriptions.recharge.index', ['tenant' => $tenant->id]) }}" class="mt-3 inline-flex rounded-xl bg-emerald-900 px-4 py-2 text-sm font-semibold text-white">Prepare Recharge customers and settings</a>
         </header>
 
+        @include('subscriptions.pilot-report', ['pilotTenant' => $tenant])
+
         <section class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950" aria-label="Subscription availability">
             <h2 class="font-semibold">History and setup review</h2>
             <p class="mt-2 leading-6">Card retries, payment-update emails and contract changes are not available yet. Existing subscription billing continues with its current provider.</p>

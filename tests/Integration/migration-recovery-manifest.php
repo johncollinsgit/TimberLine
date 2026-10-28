@@ -7,6 +7,10 @@ return [
         'test' => 'tests/Integration/WholesaleLabelsMySqlRecoveryTest.php',
         'scenarios' => ['retained private artwork before assignments/events creation', 'request deduplication index missing after partial DDL', 'replayed completed migration preserves originals and receipts'],
     ],
+    '2026_10_27_210000_create_subscription_pilot_evidence.php' => [
+        'test' => 'tests/Integration/SubscriptionPilotMySqlRecoveryTest.php',
+        'scenarios' => ['encrypted member retained before event creation and trailing named constraints; repeated recovery preserves payments; composite tenant ownership rejects foreign members; conflicting indexes stop without deleting evidence'],
+    ],
     '2026_10_22_000700_create_enterprise_service_proposals.php' => [
         'test' => 'tests/Integration/EnterpriseMySqlMigrationRecoveryTest.php',
         'scenarios' => ['checksum-pinned proposal schema repairs missing named comment index and version constraint while preserving encrypted publication and comment evidence; code rollback retains all five tables'],

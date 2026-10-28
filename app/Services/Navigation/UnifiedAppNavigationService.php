@@ -124,7 +124,7 @@ class UnifiedAppNavigationService
             && app(\App\Services\Subscriptions\SubscriptionAccessService::class)->canManage($tenantId, $user)) {
             $branchChildren[] = ['key' => 'branch-subscriptions', 'icon' => 'arrow-path',
                 'href' => route('subscriptions.workspace.index', ['tenant' => $tenantId]), 'label' => 'Subscriptions',
-                'current' => $request->routeIs('subscriptions.workspace.*')];
+                'current' => $request->routeIs('subscriptions.workspace.*', 'subscriptions.pilot.*', 'subscriptions.recharge.*')];
         }
         if ($emailEnabled && $tenantId !== null && Route::has('mail.index')) {
             $branchChildren[] = ['key' => 'branch-mail', 'icon' => 'envelope', 'href' => route('mail.index'), 'label' => 'Mail', 'current' => request()->routeIs('mail.*')];

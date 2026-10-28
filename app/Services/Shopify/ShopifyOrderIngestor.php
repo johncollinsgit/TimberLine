@@ -264,6 +264,14 @@ class ShopifyOrderIngestor
             );
         }
 
+        if ($syncedOrderId && $resolvedTenantId !== null) {
+            try {
+                app(\App\Services\Subscriptions\SubscriptionPilotService::class)->projectShopifyOrder($resolvedTenantId, (string) $store['key'], $orderData);
+            } catch (\Throwable) {
+                \Illuminate\Support\Facades\Log::warning('subscriptions.pilot.order_projection_incomplete', ['tenant_id' => $resolvedTenantId, 'shopify_order_id' => $shopifyOrderId]);
+            }
+        }
+
         return $summary;
     }
 

@@ -8,6 +8,18 @@ submissions and the separate Thank you request form remain default off until the
 complete development-store flow passes. Preserve protected deployment, private
 shared storage and pinned VTracer 0.6.5. See `docs/operations/wholesale-custom-labels.md`.
 
+## Subscriptions pilot (2026-10-27; source candidate)
+
+Read `docs/operations/subscriptions-pilot.md`. The Subscriptions Branch retains
+its existing Modern Forestry included grant. The owner selected Jennifer DeWeil
+and Rynda Baker for a November 2 Stripe-to-Shopify pilot while Recharge remains
+primary during preparation. Use exact provider/customer/subscription identities,
+never a first-name or email-only merge. Pilot reports are offline; explicit
+Shopify reads and existing ingestion provide separately attributed order evidence.
+Unknown coverage must never display a passed double-charge check. Do not execute
+old intents, pause Recharge globally, reuse legacy payment tokens, or charge from
+the preparation command. Candle Cash cannot fund subscriptions.
+
 ## Public fictional Requests follow-up (October 27; source candidate)
 
 The separate public static sample retains its v3 session and current fictional
