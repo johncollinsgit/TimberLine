@@ -80,6 +80,7 @@ test('resumable photos retain full pixels and exact bytes and reject disguised i
         $asset = App\Models\WorkspaceAsset::findOrFail($response->json('asset_id'));
         expect(Storage::disk('local')->get($asset->storage_path))->toBe($contents);
         expect(getimagesize(Storage::disk('local')->path($asset->storage_path))[0])->toBe(4000);
+        expect($asset->captured_at)->not->toBeNull();
         $this->withHeaders(['X-Everbranch-Field-Web' => '1', 'Origin' => 'http://localhost'])->get($base.'/assets/'.$asset->id)->assertOk()->assertHeader('Cache-Control', 'no-store, private');
     }
 });

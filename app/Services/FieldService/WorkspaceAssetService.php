@@ -503,6 +503,7 @@ class WorkspaceAssetService
                         'file_size' => $size,
                         'checksum' => $actualChecksum,
                         'caption' => $lockedUpload->caption,
+                        'captured_at' => str_starts_with($lockedUpload->mime_type, 'image/') ? now() : null,
                         'tags' => $lockedUpload->mime_type === 'application/pdf' ? ['drawing', 'pdf', $source] : ['direct-upload'],
                         'search_text' => trim($lockedUpload->file_name.' '.$lockedUpload->caption),
                         'metadata' => ['upload_id' => (int) $lockedUpload->id],
