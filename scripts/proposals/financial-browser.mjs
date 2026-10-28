@@ -115,6 +115,7 @@ try {
     assert.equal(await page.locator('.proposal-section-panel:visible').count(),1);
   }
   for (const [index,count] of [[0,1],[1,3],[2,2]]) {
+    await page.locator('[data-financial-setup] > summary').click();
     await page.locator('#financial-name').fill(['One workspace comparison','Full bundle comparison','Two departments · scope pending'][index]);
     const offer=await page.locator('#financial-offer option').nth(index===0?1:2).getAttribute('value');
     await page.locator('#financial-offer').selectOption(offer);

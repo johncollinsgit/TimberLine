@@ -58,7 +58,7 @@
     $('ask-nav').textContent=aiComingSoon?'AI tools': 'Ask Everbranch';
     $('ask-nav').hidden = !aiComingSoon && !data.features?.ask && !data.features?.read_only_assistant && !data.features?.conversation_ui;
     if (section === 'ask' && !aiComingSoon && !data.features?.ask && !data.features?.read_only_assistant && !data.features?.conversation_ui) section = 'requests';
-    $('ask').hidden = section !== 'ask';
+    $('ask').hidden = section !== 'ask' && !(typeof campusAssistantVisible==='function'&&campusAssistantVisible());
     $('work').hidden = ['ask', 'contractors'].includes(section);
     document.querySelectorAll('[data-section]').forEach(b => b.classList.toggle('active', b.dataset.section === section));
     if (section === 'ask') { loadNotificationReadiness(); $('heading').textContent=aiComingSoon?(presentation.reviewerAi?.enabled?'AI tools':'AI tools · Coming soon'):'Ask with the right context.'; $('breadcrumb').textContent=aiComingSoon?'AI tools':'Ask Everbranch'; if(!aiComingSoon){if(!conversationMode()&&!$('ask-question').value) $('ask-question').value=readDraft('ask:'+area).pending?.question||''; loadMailboxes();} }
@@ -298,6 +298,7 @@
   };
   function chatMessage(text, className) { const node = document.createElement('div'); node.className = 'chat-turn ' + (className || ''); node.textContent = text; $('chat-log').append(node); return node; }
   $('ask-form').onsubmit = async e => {
+    if(typeof campusAskActionAllowed==='function'&&!campusAskActionAllowed()){e.preventDefault();return;}
     if(transport.mode==='sample'){e.preventDefault();return;}
     if(conversationMode())return conversationSend(e);
     e.preventDefault(); if (askBusy || !area) return; const question = $('ask-question').value.trim(); if (!question) return;
@@ -305,11 +306,12 @@
     if (askPending && askPending.question !== question) return message('The previous Ask request is retained. Retry its exact text to check the outcome before asking a different question.', true);
     askPending ||= {area_id:area,question,request_id:crypto.randomUUID()};
     writeDraft('ask:' + area, {pending:askPending});
-    askBusy = true; $('ask-submit').disabled = true; const requestedArea = area;
+    askBusy = true; $('ask-submit').disabled = true; const requestedArea = area,askedEpoch=typeof campusAskEpoch==='function'?campusAskEpoch():0;
+    const currentAsk=()=>area===requestedArea&&(typeof campusAskActionAllowed!=='function'||campusAskActionAllowed())&&(typeof campusAskEpoch!=='function'||campusAskEpoch()===askedEpoch);
     chatMessage(question,'question'); $('ask-question').value = '';
     try {
       const result = await api(`${nextBase}/ask${nextQuery()}`, askPending);
-      if (area !== requestedArea) return;
+      if (!currentAsk()) return;
       askPending = null;
       writeDraft('ask:' + requestedArea, {});
       const answer = chatMessage(result.reply);
@@ -321,8 +323,8 @@
       }
       const coverage = document.createElement('p'); coverage.className = 'caption'; coverage.textContent = `${result.model_status} As of ${result.as_of}. ${result.coverage}`; answer.append(coverage);
       answer.scrollIntoView({block:'nearest'});
-    } catch (error) { if (area === requestedArea) { $('chat-log').replaceChildren(); chatMessage(error.message); $('ask-question').value = question; } }
-    finally { askBusy = false; $('ask-submit').disabled = false; }
+    } catch (error) { if (currentAsk()) { $('chat-log').replaceChildren(); chatMessage(error.message); $('ask-question').value = question; } }
+    finally { if(currentAsk()){askBusy = false; $('ask-submit').disabled = false;} }
   };
   function notificationReadinessText(value) {
     const email=value?.email,sms=value?.sms;
