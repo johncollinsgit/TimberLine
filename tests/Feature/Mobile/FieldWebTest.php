@@ -116,6 +116,50 @@ test('shared monthly crew AI budget refuses a reservation before dispatch', func
     Http::assertNothingSent();
 });
 
+test('crew navigation opens only current scoped jobs and fixed pages without a provider dispatch', function (): void {
+    $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
+    [$tenant, $user, $base] = fieldWebFixture();
+    fieldWebAiReady($tenant, $user);
+    $job = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'DB-Keys', 'status' => 'open']);
+    $foreign = Tenant::create(['name' => 'Other crew', 'slug' => 'navigation-other']);
+    $foreignJob = FieldServiceJob::create(['tenant_id' => $foreign->id, 'title' => 'Private school', 'status' => 'open']);
+    $ask = fn ($question, $context = null) => $this->postJson($base.'/web/assistant', ['question' => $question, 'request_id' => (string) Str::uuid(), 'context_job_id' => $context]);
+    $ask('Open Keys')->assertOk()->assertJsonPath('navigation.id', $job->id)->assertJsonPath('navigation.kind', 'job');
+    $ask('Show materials for Keys')->assertOk()->assertJsonPath('navigation.tab', 'materials');
+    $ask('Open that job', $job->id)->assertOk()->assertJsonPath('navigation.id', $job->id);
+    $ask('Open that job', $foreignJob->id)->assertOk()->assertJsonPath('navigation', null)->assertDontSee('Private school');
+    $ask('Open job '.$foreignJob->id)->assertOk()->assertJsonPath('navigation', null);
+    $ask('What is scheduled here?', $foreignJob->id)->assertNotFound();
+    $ask('Open messages')->assertOk()->assertJsonPath('navigation.page', 'messages');
+    $ask('Open Fleet Tracker')->assertOk()->assertJsonPath('navigation', null);
+    $ask('Open https://evil.test')->assertOk()->assertJsonPath('navigation', null);
+    expect(TenantAiUsageEvent::count())->toBe(0);
+    Http::assertNothingSent();
+    $tenant->users()->updateExistingPivot($user->id, ['membership_active' => false]);
+    $ask('Open Keys')->assertNotFound();
+});
+
+test('ambiguous job names need a choice and customer navigation requires current admin authority', function (): void {
+    $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
+    [$tenant, $user, $base] = fieldWebFixture();
+    fieldWebAiReady($tenant, $user);
+    foreach (['Keys phase one', 'Keys phase two'] as $title) {
+        FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => $title, 'status' => 'open']);
+    }
+    $ask = fn ($question) => $this->postJson($base.'/web/assistant', ['question' => $question, 'request_id' => (string) Str::uuid()]);
+    $ask('Open Keys')->assertOk()->assertJsonPath('navigation', null)->assertJsonCount(2, 'sources');
+    foreach (['member', 'manager'] as $role) {
+        $tenant->users()->updateExistingPivot($user->id, ['role' => $role]);
+        $ask('Open customers')->assertOk()->assertJsonPath('navigation', null)->assertJsonPath('text', 'Customer records and contact details are admin-only.');
+        $ask('What are the customer phone numbers?')->assertOk()->assertJsonCount(0, 'sources');
+    }
+    $tenant->users()->updateExistingPivot($user->id, ['role' => 'admin']);
+    $ask('Open customers')->assertOk()->assertJsonPath('navigation.page', 'customers');
+    $tenant->users()->updateExistingPivot($user->id, ['role' => 'member']);
+    $ask('Open customers')->assertOk()->assertJsonPath('navigation', null);
+    Http::assertNothingSent();
+});
+
 test('chunked photo work links cannot move a photo to another tenant or another work item', function (): void {
     [$tenant, $user, $base] = fieldWebFixture();
     $job = FieldServiceJob::create(['tenant_id' => $tenant->id, 'title' => 'Photo links', 'status' => 'open']);
