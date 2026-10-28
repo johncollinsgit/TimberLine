@@ -2191,8 +2191,8 @@ Route::prefix('shopify/marketing/v1/wholesale/labels')->middleware('throttle:60,
 
 Route::prefix('shopify')->middleware(['web', 'shopify.embedded.surface'])->group(function () {
     Route::get('/app/wholesale/labels', [\App\Http\Controllers\Wholesale\WholesaleLabelAdminController::class, 'index'])->name('shopify.app.wholesale.labels');
-    Route::post('/app/wholesale/labels/import', [\App\Http\Controllers\Wholesale\WholesaleLabelAdminController::class, 'import'])->name('shopify.app.wholesale.labels.import');
-    Route::post('/app/wholesale/labels/{revision}', [\App\Http\Controllers\Wholesale\WholesaleLabelAdminController::class, 'action'])->whereUuid('revision')->name('shopify.app.wholesale.labels.action');
+    Route::post('/app/wholesale/labels/import', [\App\Http\Controllers\Wholesale\WholesaleLabelAdminController::class, 'import'])->withoutMiddleware([VerifyCsrfToken::class])->name('shopify.app.wholesale.labels.import');
+    Route::post('/app/wholesale/labels/{revision}', [\App\Http\Controllers\Wholesale\WholesaleLabelAdminController::class, 'action'])->whereUuid('revision')->withoutMiddleware([VerifyCsrfToken::class])->name('shopify.app.wholesale.labels.action');
     Route::get('/app/wholesale/labels/{revision}/{kind}', [\App\Http\Controllers\Wholesale\WholesaleLabelAdminController::class, 'asset'])->whereUuid('revision')->name('shopify.app.wholesale.labels.asset');
 
     Route::get('/app', [ShopifyEmbeddedAppController::class, 'show'])->name('shopify.app');

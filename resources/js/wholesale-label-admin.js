@@ -8,7 +8,8 @@ if(root)root.addEventListener('submit',async event=>{
   if(file){data.delete('files[]');data.append('files[]',file);}
   data.set('context_token',root.dataset.context);
   const helper=window.ForestryEmbeddedApp?.getShopifySessionToken;if(helper){const token=await helper();if(token)data.set('shopify_session_token',token);}
-  const response=await fetch(form.action,{method:'POST',body:data,headers:{Accept:'application/json'}});
+  const token=data.get('shopify_session_token');
+  const response=await fetch(form.getAttribute('action'),{method:'POST',body:data,headers:{Accept:'application/json',...(token?{Authorization:`Bearer ${token}`}:{})}});
   const json=await response.json();if(!response.ok)throw new Error(json.message||'Unable to save. Your selections are retained.');return json;
  };
  try{
