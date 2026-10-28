@@ -8,6 +8,7 @@ use App\Models\TenantAiUsageEvent;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -57,9 +58,38 @@ class FieldCrewLiveVoice
         }
 
         if (! $response->successful()) {
-            $event->forceFill(['status' => 'failed', 'provider_cost_micros' => 0, 'duration_seconds' => 0])->save();
+            $status = $response->status();
+            $providerErrorCode = $response->json('error.code');
+            $providerErrorType = $response->json('error.type');
+            $providerRequestId = $response->header('x-request-id');
+            $safeCode = is_string($providerErrorCode) && preg_match('/^[a-z0-9_.-]{1,64}$/i', $providerErrorCode)
+                ? $providerErrorCode : null;
+            $metadata = [...(array) $event->metadata, 'provider_http_status' => $status,
+                'provider_error_code' => $safeCode,
+                'provider_error_type' => is_string($providerErrorType) ? substr($providerErrorType, 0, 64) : null,
+                'provider_request_id' => is_string($providerRequestId) ? substr($providerRequestId, 0, 128) : null];
+            $event->forceFill(['status' => 'failed', 'provider_cost_micros' => 0, 'duration_seconds' => 0, 'metadata' => $metadata])->save();
 
-            return abort(503, 'OpenAI live voice is not available for this workspace right now.');
+            Log::warning('Field GPT-Live session creation rejected by provider', [
+                'tenant_id' => $tenant->id, 'user_id' => $user->id, 'reservation_id' => $reservationId,
+                'provider_http_status' => $status, 'provider_error_code' => $safeCode,
+                'provider_error_type' => $metadata['provider_error_type'], 'provider_request_id' => $metadata['provider_request_id'],
+            ]);
+
+            if ($status === 401 || in_array($safeCode, ['invalid_api_key', 'permission_denied'], true)) {
+                $message = 'Everbranch’s OpenAI key or permissions do not allow live voice. Tell your workspace admin.';
+            } elseif ($status === 403 || $status === 404 || in_array($safeCode, ['model_not_found', 'model_not_available', 'unsupported_model'], true)) {
+                $message = 'Live voice is not enabled for the OpenAI project connected to Everbranch.';
+            } elseif ($status === 429 || in_array($safeCode, ['insufficient_quota', 'rate_limit_exceeded'], true)) {
+                $message = 'OpenAI blocked live voice because of a project usage or rate limit. Try again later.';
+            } else {
+                $message = 'OpenAI rejected the live voice setup (HTTP '.$status.($safeCode ? ', '.$safeCode : '').').';
+                if (is_string($providerRequestId) && $providerRequestId !== '') {
+                    $message .= ' Reference: '.substr($providerRequestId, 0, 48).'.';
+                }
+            }
+
+            abort(503, $message);
         }
 
         $sessionId = $response->json('session.id');
