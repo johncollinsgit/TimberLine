@@ -171,7 +171,7 @@ test('wholesale app navigation puts email messenger before suggestions', functio
     $html = $this->get(route('shopify.app.wholesale', wholesaleEmbeddedSignedQuery()))->assertOk()->getContent();
     preg_match_all('/<s-link\b([^>]*)>(.*?)<\/s-link>/s', $html, $matches, PREG_SET_ORDER);
 
-    expect($matches)->toHaveCount(9)
+    expect($matches)->toHaveCount(10)
         ->and($matches[0][1])->toContain('rel="home"')
         ->and(trim(strip_tags($matches[0][2])))->toBe('Overview');
 
@@ -179,7 +179,7 @@ test('wholesale app navigation puts email messenger before suggestions', functio
         ->map(fn (array $match): string => trim(strip_tags($match[2])))
         ->values()
         ->all();
-    expect($visibleLabels)->toBe(['Email Messenger', 'Suggestions', 'Customers', 'Orders', 'Follow-Ups', 'Prospects', 'Discover', 'Applications']);
+    expect($visibleLabels)->toBe(['Email Messenger', 'Suggestions', 'Customers', 'Custom Labels', 'Orders', 'Follow-Ups', 'Prospects', 'Discover', 'Applications']);
     foreach ($matches as $match) {
         expect($match[1])->toContain('href="/shopify/app/wholesale');
     }

@@ -1,0 +1,13 @@
+{% doc %}
+  Renders the private wholesale label wizard for approved signed-in buyers.
+{% enddoc %}
+{%- if settings.mf_custom_labels_enabled and has_wholesale_access -%}
+{{ 'mf-custom-labels.css' | asset_url | stylesheet_tag }}
+<script id="mf-label-config" type="application/json">
+{"setupVariant":{{ all_products['custom-label-set-up'].selected_or_first_available_variant.id | append: '' | json }},"reuseVariant":{{ all_products['use-my-custom-label'].selected_or_first_available_variant.id | append: '' | json }},"shopName":{{ customer.default_address.company | default: customer.name | json }},"setupPhoto":{{ 'mf-custom-label-setup.webp' | asset_url | json }},"placeholder":{{ 'mf-label-placeholder.svg' | asset_url | json }},"copy":{
+{%- assign keys = 'eyebrow,title,close,loading,checkout_question,single_label,yes,no,label_name,upload,formats,preview,saved_label,legacy,use_previous,new_logo,continue,multiple_link,file_required,file_size,groups,add_candles,notes,setup_fee,reuse_fee,staff_review,save_checkout,save,back,choose_groups,previous_label,cart_changed,custom_label,edit,remove,setup_photo,choose_label,setup_action,reuse_action,per_order,unavailable,manage_in_cart,preview_pending,preview_failed' | split: ',' -%}
+{%- for key in keys -%}{%- assign path = 'wholesale.labels.' | append: key -%}{{ key | json }}:{{ path | t | json }}{% unless forloop.last %},{% endunless %}{%- endfor -%}
+}}
+</script>
+<script src="{{ 'mf-custom-labels.js' | asset_url }}" defer></script>
+{%- endif -%}

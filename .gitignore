@@ -34,3 +34,11 @@ yarn-error.log
 
 # Private customer audit evidence and isolated fleet preview output
 /artifacts/collins-fleet/
+
+# Local wholesale label acceptance environment (contains private credentials).
+/.env.wholesale-label-qa
+/shopify.app.wholesale-qa.toml
+
+/extensions/wholesale-order-notes/dist/
+
+/extensions/forestry-marketing-pixel/dist/

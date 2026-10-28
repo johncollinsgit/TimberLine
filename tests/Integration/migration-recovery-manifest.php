@@ -7,6 +7,10 @@ return [
         'test' => 'tests/Integration/SubscriptionPilotExecutionMySqlRecoveryTest.php',
         'scenarios' => ['encrypted authorizations and frozen provider requests survive parent-only creation, missing constraints, repeated recovery and code rollback; composite tenant ownership rejects foreign cycles; changed indexes fail without deleting evidence'],
     ],
+    '2026_10_27_220000_create_wholesale_label_library.php' => [
+        'test' => 'tests/Integration/WholesaleLabelsMySqlRecoveryTest.php',
+        'scenarios' => ['retained private artwork before assignments/events creation', 'request deduplication index missing after partial DDL', 'replayed completed migration preserves originals and receipts'],
+    ],
     '2026_10_27_210000_create_subscription_pilot_evidence.php' => [
         'test' => 'tests/Integration/SubscriptionPilotMySqlRecoveryTest.php',
         'scenarios' => ['encrypted member retained before event creation and trailing named constraints; repeated recovery preserves payments; composite tenant ownership rejects foreign members; conflicting indexes stop without deleting evidence'],

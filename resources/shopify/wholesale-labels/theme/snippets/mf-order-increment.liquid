@@ -1,0 +1,11 @@
+{%- liquid
+  assign mf_increment = 3
+  assign mf_quantity_text = product.title | append: ' ' | append: variant.title | downcase
+  if product.handle == 'custom-label-set-up' or product.handle == 'use-my-custom-label'
+    assign mf_increment = 1
+  elsif mf_quantity_text contains 'wax melt' or mf_quantity_text contains 'candle' or mf_quantity_text contains 'cotton wick' or mf_quantity_text contains 'cedar wick' or mf_quantity_text contains 'wood wick'
+    assign mf_increment = 3
+  elsif product.tags contains 'SingleQuantity'
+    assign mf_increment = 1
+  endif
+-%}{{- mf_increment -}}

@@ -482,6 +482,12 @@ class Orders extends Component
 
         $order = $this->ownedOrders()->findOrFail($orderId);
 
+        if (data_get($order->attribution_meta, 'custom_labels.hold') && in_array($validated['status'], ['verified', 'complete'], true)) {
+            $this->dispatch('toast', ['type' => 'warning', 'message' => 'Approve the custom label artwork in MF Wholesale Backstage before verifying or completing this order.']);
+
+            return;
+        }
+
         $hasOpenExceptions = $order->mappingExceptions()
             ->whereNull('resolved_at')
             ->exists();
