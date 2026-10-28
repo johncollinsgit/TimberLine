@@ -118,8 +118,20 @@ jobs:
 
       - name: Build pinned custom-label vector tracer
         run: |
-          scripts/labels/install-vtracer.sh "$RUNNER_TEMP/label-tools"
+          rustup target add x86_64-unknown-linux-musl
+          CARGO_BUILD_TARGET=x86_64-unknown-linux-musl CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=rust-lld scripts/labels/install-vtracer.sh "$RUNNER_TEMP/label-tools"
+          sha256sum "$RUNNER_TEMP/label-tools/vtracer-0.6.5" > "$RUNNER_TEMP/label-tools/vtracer-0.6.5.sha256"
           echo "WHOLESALE_LABEL_VTRACER=$RUNNER_TEMP/label-tools/vtracer-0.6.5" >> "$GITHUB_ENV"
+
+      - name: Retain pinned Linux label tracer
+        uses: actions/upload-artifact@v4
+        with:
+          name: wholesale-label-tracer-linux
+          path: |
+            ${{ runner.temp }}/label-tools/vtracer-0.6.5
+            ${{ runner.temp }}/label-tools/vtracer-0.6.5.sha256
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Prepare application key
         run: |
@@ -232,8 +244,20 @@ jobs:
 
       - name: Build pinned custom-label vector tracer
         run: |
-          scripts/labels/install-vtracer.sh "$RUNNER_TEMP/label-tools"
+          rustup target add x86_64-unknown-linux-musl
+          CARGO_BUILD_TARGET=x86_64-unknown-linux-musl CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=rust-lld scripts/labels/install-vtracer.sh "$RUNNER_TEMP/label-tools"
+          sha256sum "$RUNNER_TEMP/label-tools/vtracer-0.6.5" > "$RUNNER_TEMP/label-tools/vtracer-0.6.5.sha256"
           echo "WHOLESALE_LABEL_VTRACER=$RUNNER_TEMP/label-tools/vtracer-0.6.5" >> "$GITHUB_ENV"
+
+      - name: Retain pinned Linux label tracer
+        uses: actions/upload-artifact@v4
+        with:
+          name: wholesale-label-tracer-linux
+          path: |
+            ${{ runner.temp }}/label-tools/vtracer-0.6.5
+            ${{ runner.temp }}/label-tools/vtracer-0.6.5.sha256
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Prepare application key
         run: |
