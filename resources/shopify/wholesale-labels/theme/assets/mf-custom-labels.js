@@ -25,8 +25,8 @@ function show(){if(!dialog.open)dialog.showModal();dialog.querySelector('button,
 async function open(requested='reuse',checkout=false){
  opener=document.activeElement;checkoutPending=checkout;generation++;const run=generation;body(`<p>${t('loading')}</p>`);show();
  try{
-  const [library]=await Promise.all([request(base),getCart()]);if(run!==generation)return;labels=library.labels||[];mode=requested==='new'?'new':labels.length?'reuse':'legacy';revision=mode==='reuse'?labels[0]:null;
-  const existing=cart.items.find(isService)?.properties;const current=labels.find(label=>label.id===existing?.['_MF label revision']);if(requested!=='new'&&current)revision=current;if(requested!=='new'&&receipt()){const saved=await request(base+'/requests/'+encodeURIComponent(receipt()));if(!saved.bound){mode=saved.mode;revision=saved.label||null;uploaded=mode==='new'?revision:null;}}selected=new Set(eligibleLines().filter(item=>!receipt()||item.properties?.['_MF label request']===receipt()).map(item=>item.key));requestKey=uuid();instructions='';if(requested==='new')uploaded=null;
+  const [library]=await Promise.all([request(base),getCart()]);if(run!==generation)return;labels=library.labels||[];instructions='';mode=requested==='new'?'new':labels.length?'reuse':'legacy';revision=mode==='reuse'?labels[0]:null;
+  const existing=cart.items.find(isService)?.properties;const current=labels.find(label=>label.id===existing?.['_MF label revision']);if(requested!=='new'&&current)revision=current;if(requested!=='new'&&receipt()){const saved=await request(base+'/requests/'+encodeURIComponent(receipt()));if(!saved.bound){mode=saved.mode;revision=saved.label||null;uploaded=mode==='new'?revision:null;instructions=saved.instructions||'';}}selected=new Set(eligibleLines().filter(item=>!receipt()||item.properties?.['_MF label request']===receipt()).map(item=>item.key));requestKey=uuid();if(requested==='new')uploaded=null;
   if(checkout&&!receipt()&&cart.attributes?.['Custom labels']!=='No')question();else selection();
  }catch(error){fail(error);}
 }

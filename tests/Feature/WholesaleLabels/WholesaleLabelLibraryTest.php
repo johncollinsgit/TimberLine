@@ -99,6 +99,13 @@ it('prepares a $5 legacy request without inventing an existing asset', function 
     $request = $this->library->prepare($this->owner, ['mode' => 'legacy', 'groups' => [['variant_id' => '101', 'line_key' => '101:key', 'quantity' => 3]], 'idempotency_key' => (string) Str::uuid()]);
     expect($request->fee_cents)->toBe(500)->and($request->revision_id)->toBeNull();
 });
+it('returns saved label instructions only to the request owner for editing', function () {
+    $revision = $this->library->upload($this->owner, labelLogoFile(), 'Saved logo');
+    $receipt = $this->library->prepare($this->owner, ['mode' => 'new', 'revision_id' => $revision->id, 'groups' => [['variant_id' => '101', 'line_key' => '101:key', 'quantity' => 3]], 'instructions' => 'Keep these label instructions.', 'idempotency_key' => (string) Str::uuid()]);
+    $url = '/shopify/marketing/v1/wholesale/labels/requests/'.$receipt->id;
+    $this->getJson($url.'?'.http_build_query(labelProxyQuery()))->assertOk()->assertJsonPath('instructions', 'Keep these label instructions.');
+    $this->getJson($url.'?'.http_build_query(labelProxyQuery('202')))->assertNotFound();
+});
 it('does not grant artwork management to application reviewers or inactive members', function () {
     $user = User::factory()->create(['role' => 'pouring', 'is_active' => true]);
     $user->tenants()->attach($this->tenant->id, ['role' => 'wholesale_reviewer', 'membership_active' => true]);
