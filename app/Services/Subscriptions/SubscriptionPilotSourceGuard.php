@@ -54,7 +54,7 @@ class SubscriptionPilotSourceGuard
             abort_unless(isset($page['charges']) && is_array($page['charges']) && array_is_list($page['charges'])
                 && array_key_exists('next_cursor', $page) && ! $page['next_cursor'] && $page['charges'] === [], 409, 'Recharge charge history is not clear or complete for this pilot cycle.');
         }
-        app(SubscriptionPilotShopifyReadService::class)->refresh($member->tenant_id, $actor, $member->id);
+        app(SubscriptionPilotShopifyReadService::class)->refresh($member->tenant_id, $actor, $member->id, $cycleDate);
         abort_if(SubscriptionPilotEvent::query()->forTenantId($member->tenant_id)->where('member_id', $member->id)
             ->where('provider', 'shopify')->where('kind', 'order')->where('status', 'success')->whereDate('cycle_date', $cycleDate)
             ->when($ownOrderId, fn ($query) => $query->where('provider_reference', '!=', $ownOrderId))->exists(), 409, 'A paid Shopify subscription order already exists for this cycle.');

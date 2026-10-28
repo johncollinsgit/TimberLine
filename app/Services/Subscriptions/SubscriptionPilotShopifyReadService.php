@@ -26,7 +26,7 @@ query PilotShopifyOrders($query: String!, $after: String) {
 }
 GRAPHQL;
 
-    public function refresh(int $tenantId, User $actor, int $memberId): int
+    public function refresh(int $tenantId, User $actor, int $memberId, ?string $guardCycleDate = null): int
     {
         $access = app(SubscriptionAccessService::class);
         $access->assertManager($tenantId, $actor);
@@ -64,6 +64,18 @@ GRAPHQL;
         abort_unless($fresh->shop_domain === $store->shop_domain && hash_equals($fingerprint, SubscriptionEvidence::digest($fresh->access_token)), 409, 'The original Shopify credential changed during capture.');
         $count = 0;
         foreach ($orders as $row) {
+            if ($guardCycleDate !== null) {
+                $date = \Carbon\CarbonImmutable::parse($row['processedAt'] ?? $row['createdAt'])->setTimezone($member->timezone)->toDateString();
+                if ($date === $guardCycleDate) {
+                    abort_unless(is_array($row['transactions'] ?? null) && count($row['transactions']) < 50, 409, 'Shopify transaction coverage needs review.');
+                    // Any real collection for this customer is conservative review,
+                    // including an order without Recharge or pilot attributes.
+                    // The external Stripe mirror is never a Shopify collection.
+                    abort_if(collect($row['transactions'])->contains(fn ($transaction) => strtolower((string) ($transaction['gateway'] ?? '')) === 'shopify_payments'
+                        && strtoupper((string) ($transaction['status'] ?? '')) === 'SUCCESS'
+                        && in_array(strtoupper((string) ($transaction['kind'] ?? '')), ['SALE', 'CAPTURE'], true)), 409, 'A Shopify Payments collection already exists in this customer billing window.');
+                }
+            }
             $money = data_get($row, 'totalPriceSet.shopMoney');
             abort_unless(is_array($money), 409, 'Shopify order totals require review.');
             $payload = ['id' => basename($row['id']), 'customer' => ['id' => $member->shopify_customer_id], 'test' => $row['test'],

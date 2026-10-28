@@ -64,6 +64,7 @@ beforeEach(function () {
     $this->refunded = 0;
     $this->listedPayment = false;
     $this->sourceDefect = null;
+    $this->sourceShopifyOrders = [];
     $this->shopifyScopes = ['write_orders', 'read_customers', 'read_products'];
     $this->paymentDefect = null;
     $this->execution = app(SubscriptionPilotExecutionService::class);
@@ -179,7 +180,7 @@ beforeEach(function () {
                 return Http::response(['data' => ['shop' => ['myshopifyDomain' => $this->store->shop_domain], 'currentAppInstallation' => ['accessScopes' => array_map(fn ($handle) => ['handle' => $handle], $this->shopifyScopes)]]]);
             }
             if (str_contains($query, 'PilotShopifyOrders')) {
-                return Http::response(['data' => ['shop' => ['myshopifyDomain' => $this->store->shop_domain], 'orders' => ['nodes' => [], 'pageInfo' => ['hasNextPage' => false, 'endCursor' => null]]]]);
+                return Http::response(['data' => ['shop' => ['myshopifyDomain' => $this->store->shop_domain], 'orders' => ['nodes' => $this->sourceShopifyOrders, 'pageInfo' => ['hasNextPage' => false, 'endCursor' => null]]]]);
             }
             if (str_contains($query, 'PilotQuote')) {
                 return Http::response(['data' => ['shop' => ['myshopifyDomain' => $this->store->shop_domain, 'currencyCode' => 'USD'],
@@ -553,4 +554,13 @@ test('a genuinely observed extra Stripe payment is reported without replacing or
     $this->listedPayment = false;
     expect(fn () => $this->execution->collect($row->fresh()))->toThrow(\Exception::class);
     expect($this->paymentCreates)->toHaveCount(1);
+});
+
+test('an unlabelled Shopify Payments collection cannot become a clean pilot billing window', function () {
+    $guard = enableRealPilotSourceGuard($this);
+    $this->sourceShopifyOrders = [['id' => 'gid://shopify/Order/777', 'customer' => ['id' => 'gid://shopify/Customer/456'],
+        'processedAt' => '2026-11-02T15:00:00Z', 'createdAt' => '2026-11-02T15:00:00Z', 'updatedAt' => '2026-11-02T15:00:00Z',
+        'transactions' => [['id' => 'gid://shopify/OrderTransaction/777', 'gateway' => 'shopify_payments', 'kind' => 'SALE', 'status' => 'SUCCESS']]]];
+    expect(fn () => $guard->stopped($this->member, $this->connection->id, '2026-11-02', $this->actor))->toThrow(\Exception::class, 'Shopify Payments collection');
+    expect($this->paymentCreates)->toBe([])->and($this->orderCreates)->toBe([]);
 });
