@@ -40,3 +40,5 @@ yarn-error.log
 /shopify.app.wholesale-qa.toml
 
 /extensions/wholesale-order-notes/dist/
+
+/extensions/forestry-marketing-pixel/dist/

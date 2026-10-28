@@ -62,7 +62,11 @@ use verified staff requests. Production remains held until valid artwork approva
 2. Install/verify the pinned tracer, private storage, PDF rendering and processing
    worker. Keep new submissions disabled until the complete development-store
    upload, checkout, ingestion, approval and retrieval flow passes.
-3. Deploy only the directories in `shopify.app.wholesale.toml`. The Function's
+3. Deploy the complete extension set in `shopify.app.wholesale.toml`. App versions
+   replace the previous snapshot, so retain the existing marketing pixel, bundle
+   scent validation and marketing embed along with the two label extensions.
+   Review the release preview and use `--allow-updates`; never approve unrelated
+   removals. The Function's
    custom-label requirement activates only when shop metafield
    `forestry.custom_labels_enabled` is `true`. Quantity protection is independent.
 4. Publish only the reviewed files in `resources/shopify/wholesale-labels/manifest.json`
