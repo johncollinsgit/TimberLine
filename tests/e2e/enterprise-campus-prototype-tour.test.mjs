@@ -50,3 +50,9 @@ test('real tour metadata enters List and New Request, then Jobs with the explici
  const operations=steps.find(step=>step.view==='operations');assert.equal(operations.persona,'admin');
  assert.equal(operations.operationsTab,'jobs');assert.equal(operations.target,'[data-ops-job="J05"]');
 });
+
+test('Update a task explicitly restores Board after a retained Timeline choice',()=>{
+ const f=fixture(),step=steps.find(s=>s.title==='Update a task');assert.equal(step.taskLayout,'board');
+ f.context.layout='timeline';const clicks=[];f.context.document.querySelector=selector=>selector==='[data-layout="board"]'?{click(){clicks.push(selector);f.context.layout='board';}}:null;
+ f.context.enterTourSubview(step);assert.equal(f.context.layout,'board');assert.deepEqual(clicks,['[data-layout="board"]']);assert.deepEqual(f.calls,[]);
+});
